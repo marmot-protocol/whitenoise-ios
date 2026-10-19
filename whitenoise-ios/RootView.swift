@@ -72,18 +72,26 @@ struct RootView: View {
             ) },
             set: { if !$0 { appState.erasureState.needsRecovery = false } }
         )) { EraseAppDataView(isRecovery: true).appAppearance() }
-        // Hosted at the root so a partial-failure wipe report survives the
-        // account teardown (routing to onboarding / switching accounts pops the
-        // Settings screen that started the wipe).
+        // One presenter survives account routing and changes from the form to
+        // the report in place. A second sheet cannot race the form's dismissal.
         .sheet(isPresented: Binding(
-            get: { appState.pendingWipeReport != nil },
-            set: { if !$0 { appState.pendingWipeReport = nil } }
+            get: { appState.showSignOut || appState.pendingWipeReport != nil },
+            set: { presented in
+                if !presented {
+                    appState.showSignOut = false
+                    appState.pendingWipeReport = nil
+                }
+            }
         )) {
             if let report = appState.pendingWipeReport {
                 WipeOutcomeReportView(report: report) {
+                    appState.showSignOut = false
                     appState.pendingWipeReport = nil
                 }
                 .appAppearance()
+            } else {
+                SignOutView()
+                    .appAppearance()
             }
         }
     }

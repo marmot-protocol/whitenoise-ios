@@ -156,15 +156,16 @@ to declare the native SDK audit complete.
 
 ## Other review findings clarified
 
-**R4:** Settings → **Sign Out** opens one sheet with **Wipe Data From This
-Device** selected by default. After exact profile-name confirmation, it leaves
+**R4:** Settings → **Sign Out** opens one sheet with **Wipe Local Data** off
+by default. Turning it on reveals the irreversible-loss warning and requires
+exact profile-name confirmation. Submitting with wiping enabled leaves
 the profile's groups, requests deletion of its outstanding KeyPackages from
 known relays, clears its push registration, and removes its local chats, drafts,
-media, settings, and device key material. Turning wiping off signs out while
+media, settings, and device key material. Leaving wiping off signs out while
 retaining the profile and its local data. Privacy & Security → **Erase App
 Data** deletes every local profile. Reviewer notes should explain this
-non-custodial model, independent relay and recipient copies, and separately
-handled uploaded diagnostics. Do not promise network-wide deletion of a Nostr
+non-custodial model and separately handled uploaded diagnostics. The in-app
+warning explains that copies held by others or relays will not be erased. Do not promise network-wide deletion of a Nostr
 identity.
 Apple's [account deletion guidance](https://developer.apple.com/support/offering-account-deletion-in-your-app/)
 requires an in-app initiation path where account deletion is applicable.

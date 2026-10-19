@@ -2790,67 +2790,68 @@
         }
       }
     },
-    "This profile and all local data will be permanently removed. Signing in again won’t restore previous chats. You’ll need a new invitation to each chat." : {
-      "comment" : "Short explanation of profile removal when signing out with wiping enabled.",
+    "This profile’s data will be erased from this device. Chats can’t be restored. You’ll need new invitations. Copies held by others or relays won’t be erased." : {
+      "comment" : "Warning shown when wiping local profile data during sign out, including the limits of local erasure.",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dieses Profil und alle lokalen Daten werden dauerhaft entfernt. Eine erneute Anmeldung stellt frühere Chats nicht wieder her. Du brauchst eine neue Einladung für jeden Chat."
+            "value" : "Die Daten dieses Profils werden von diesem Gerät gelöscht. Chats lassen sich nicht wiederherstellen. Du brauchst neue Einladungen. Kopien bei anderen Personen oder Relays werden nicht gelöscht."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This profile and all local data will be permanently removed. Signing in again won’t restore previous chats. You’ll need a new invitation to each chat."
+            "value" : "This profile’s data will be erased from this device. Chats can’t be restored. You’ll need new invitations. Copies held by others or relays won’t be erased."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Este perfil y todos sus datos locales se eliminarán permanentemente. Volver a iniciar sesión no restaurará los chats anteriores. Necesitarás una nueva invitación para cada chat."
+            "value" : "Los datos de este perfil se borrarán de este dispositivo. Los chats no se pueden restaurar; necesitarás nuevas invitaciones. Las copias que conserven otras personas o relés no se borrarán."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ce profil et toutes ses données locales seront définitivement supprimés. Vous reconnecter ne restaurera pas les anciennes discussions. Il vous faudra une nouvelle invitation pour chaque discussion."
+            "value" : "Les données de ce profil seront effacées de cet appareil. Les discussions ne pourront pas être restaurées : il vous faudra de nouvelles invitations. Les copies conservées par d’autres personnes ou des relais ne seront pas effacées."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Questo profilo e tutti i dati locali verranno rimossi definitivamente. Accedere di nuovo non ripristinerà le chat precedenti. Avrai bisogno di un nuovo invito per ogni chat."
+            "value" : "I dati di questo profilo verranno cancellati da questo dispositivo. Le chat non potranno essere ripristinate: avrai bisogno di nuovi inviti. Le copie conservate da altre persone o dai relay non verranno cancellate."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Este perfil e todos os dados locais serão removidos permanentemente. Entrar novamente não restaurará as conversas anteriores. Você precisará de um novo convite para cada conversa."
+            "value" : "Os dados deste perfil serão apagados deste dispositivo. As conversas não poderão ser restauradas; você precisará de novos convites. As cópias mantidas por outras pessoas ou por relays não serão apagadas."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Этот профиль и все локальные данные будут удалены безвозвратно. Повторный вход не восстановит прежние чаты. Для каждого чата понадобится новое приглашение."
+            "value" : "Данные этого профиля будут удалены с устройства. Чаты нельзя восстановить. Понадобятся новые приглашения. Копии у других людей или на ретрансляторах не будут удалены."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu profil ve tüm yerel veriler kalıcı olarak kaldırılacak. Tekrar giriş yapmak önceki sohbetleri geri getirmez. Her sohbet için yeni bir davete ihtiyacınız olacak."
+            "value" : "Bu profilin verileri bu cihazdan silinecek. Sohbetler geri yüklenemez; yeni davetlere ihtiyacınız olacak. Diğer kişilerin veya aktarıcıların sakladığı kopyalar silinmez."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此个人资料及所有本地数据将被永久移除。再次登录不会恢复以往的聊天。你需要每个聊天的新邀请。"
+            "value" : "此个人资料的数据将从此设备中清除。聊天记录无法恢复，你需要新的邀请。其他人或中继保存的副本不会被清除。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此個人檔案及所有本機資料將被永久移除。再次登入不會恢復以往的聊天。你需要每個聊天的新邀請。"
+            "value" : "此個人檔案的資料將從此裝置中清除。聊天記錄無法恢復，你需要新的邀請。其他人或中繼保存的副本不會被清除。"
           }
         }
       }
@@ -2981,6 +2982,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "我們正在檢查你的個人資料和連線。"
+          }
+        }
+      }
+    },
+    "Wipe Local Data" : {
+      "comment" : "Sign Out presentation: local data retention and explicit wipe confirmation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lokale Daten löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wipe Local Data"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrar datos locales"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer les données locales"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancella dati locali"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apagar dados locais"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить локальные данные"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yerel Verileri Sil"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除本地数据"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除本機資料"
           }
         }
       }
@@ -3180,6 +3247,72 @@
         }
       }
     },
+    "Your profile and chats will stay on this device." : {
+      "comment" : "Sign Out presentation: local data retention and explicit wipe confirmation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Profil und deine Chats bleiben auf diesem Gerät."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your profile and chats will stay on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu perfil y tus chats permanecerán en este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre profil et vos discussions resteront sur cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il tuo profilo e le tue chat rimarranno su questo dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seu perfil e suas conversas permanecerão neste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваш профиль и чаты останутся на этом устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profiliniz ve sohbetleriniz bu cihazda kalacak."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的个人资料和聊天记录将保留在此设备上。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的個人檔案和聊天記錄將保留在此裝置上。"
+          }
+        }
+      }
+    },
     "Your report and the sender’s public key are sent privately to the White Noise team. The message itself isn’t shared, and the sender isn’t notified." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3241,6 +3374,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的檢舉和傳送者的公鑰會私密地傳送給 White Noise 團隊。訊息本身不會被分享，傳送者也不會收到通知。"
+          }
+        }
+      }
+    },
+    "You’ll lose all chats" : {
+      "comment" : "Warning title before signing out and wiping profile data.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du verlierst alle Chats"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’ll lose all chats"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perderás todos los chats"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous perdrez toutes vos discussions"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perderai tutte le chat"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você perderá todas as conversas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы потеряете все чаты"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tüm sohbetlerinizi kaybedeceksiniz"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你将失去所有聊天记录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你將失去所有聊天記錄"
           }
         }
       }
@@ -38162,65 +38361,6 @@
         }
       }
     },
-    "Delete Profile" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil löschen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminar perfil"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Supprimer le profil"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elimina profilo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminar perfil"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Удалить профиль"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profili Sil"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除个人资料"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刪除個人檔案"
-          }
-        }
-      }
-    },
     "Delete selected messages" : {
       "comment" : "Label for a button that deletes the selected messages.",
       "extractionState" : "manual",
@@ -38477,65 +38617,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在刪除稽核日誌"
-          }
-        }
-      }
-    },
-    "Deleting key packages…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schlüsselpakete werden gelöscht…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminando paquetes de llaves…"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Suppression des paquets de clés…"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminazione dei pacchetti di chiavi…"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Excluindo pacotes de chaves…"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Удаление пакетов ключей…"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anahtar paketleri siliniyor…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在删除密钥包…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在刪除金鑰包…"
           }
         }
       }
@@ -44864,71 +44945,6 @@
         }
       }
     },
-    "Enter %@ exactly to confirm." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gib zur Bestätigung genau %@ ein."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter %@ exactly to confirm."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Introduce exactamente %@ para confirmar."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saisissez exactement %@ pour confirmer."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inserisci esattamente %@ per confermare."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Digite exatamente %@ para confirmar."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Для подтверждения введите %@ в точности."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Onaylamak için %@ ifadesini aynen girin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请输入完全一致的 %@ 以确认。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請輸入完全一致的 %@ 以確認。"
-          }
-        }
-      }
-    },
     "Enter a duration between %@ and %@." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -46031,71 +46047,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "輸入私鑰"
-          }
-        }
-      }
-    },
-    "Enter Profile Name" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profilnamen eingeben"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter Profile Name"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Introduce el nombre del perfil"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saisissez le nom du profil"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inserisci il nome del profilo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Digite o nome do perfil"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Введите имя профиля"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil adını girin"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入个人资料名称"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輸入個人檔案名稱"
           }
         }
       }
@@ -60762,65 +60713,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "離團…"
-          }
-        }
-      }
-    },
-    "Leaving groups…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gruppen werden verlassen…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saliendo de los grupos…"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sortie des groupes…"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uscita dai gruppi…"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saindo dos grupos…"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выход из групп…"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gruplardan çıkılıyor…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在退出群组…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在退出群組…"
           }
         }
       }
@@ -78141,65 +78033,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "其他 Nostr 應用程式會在這些中繼站上找到你的貼文和個人檔案。變更會發布為你的 NIP-65 中繼列表。"
-          }
-        }
-      }
-    },
-    "Outstanding key packages published for this profile on relays." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ausstehende Schlüsselpakete, die für dieses Profil auf Relays veröffentlicht wurden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Paquetes de llaves pendientes publicados para este perfil en los relés."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les paquets de clés en attente publiés pour ce profil sur les relais."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I pacchetti di chiavi in sospeso pubblicati per questo profilo sui relay."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pacotes de chaves pendentes publicados para este perfil nos relays."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ожидающие пакеты ключей, опубликованные для этого профиля на реле."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu profil için relaylerde yayınlanan bekleyen anahtar paketleri."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "为该个人资料在中继上发布的未处理密钥包。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "為此個人資料在中繼上發佈的待處理金鑰包。"
           }
         }
       }
@@ -101818,65 +101651,6 @@
         }
       }
     },
-    "Sign Out & Wipe" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abmelden & löschen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrar sesión y borrar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se déconnecter et effacer"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Disconnetti ed elimina"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sair e apagar"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выйти и стереть"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Çıkış yap ve sil"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "退出并清除"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登出並清除"
-          }
-        }
-      }
-    },
     "Sign Out & Wipe finished with issues" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -102292,65 +102066,6 @@
         }
       }
     },
-    "Signing back in with the same key keeps your identity, but past groups, messages, and media can't be recovered on this device. You'll need to be re-invited to any groups." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wenn du dich mit demselben Schlüssel erneut anmeldest, bleibt deine Identität erhalten, aber frühere Gruppen, Nachrichten und Medien können auf diesem Gerät nicht wiederhergestellt werden. Du musst erneut zu allen Gruppen eingeladen werden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Si vuelves a iniciar sesión con la misma llave, conservarás tu identidad, pero los grupos, mensajes y archivos anteriores no se podrán recuperar en este dispositivo. Tendrás que ser invitado de nuevo a cualquier grupo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vous reconnecter avec la même clé conserve votre identité, mais les anciens groupes, messages et médias ne pourront pas être récupérés sur cet appareil. Vous devrez être réinvité dans chaque groupe."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accedendo di nuovo con la stessa chiave mantieni la tua identità, ma gruppi, messaggi e media precedenti non potranno essere recuperati su questo dispositivo. Dovrai essere invitato di nuovo a ogni gruppo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Entrar novamente com a mesma chave mantém sua identidade, mas grupos, mensagens e mídias anteriores não poderão ser recuperados neste dispositivo. Você precisará ser convidado novamente para quaisquer grupos."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Повторный вход с тем же ключом сохранит вашу личность, но прошлые группы, сообщения и медиа нельзя будет восстановить на этом устройстве. Вам придётся снова получить приглашение в любые группы."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aynı anahtarla yeniden giriş yapmak kimliğinizi korur, ancak geçmiş gruplar, mesajlar ve medya bu cihazda kurtarılamaz. Herhangi bir gruba yeniden davet edilmeniz gerekir."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用相同密钥重新登录可保留你的身份，但过去的群组、消息和媒体无法在此设备上恢复。你需要被重新邀请加入任何群组。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用相同金鑰重新登入可保留你的身分，但過去的群組、訊息和媒體無法在此裝置上復原。你需要被重新邀請加入任何群組。"
-          }
-        }
-      }
-    },
     "Signing In" : {
       "comment" : "A label describing a sign-in process.",
       "isCommentAutoGenerated" : true,
@@ -102407,65 +102122,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在登入"
-          }
-        }
-      }
-    },
-    "Signing out & wiping…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abmelden & löschen…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrando sesión y borrando…"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Déconnexion et effacement…"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Disconnessione ed eliminazione…"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saindo e apagando…"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выход и стирание…"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Çıkış yapılıyor ve siliniyor…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在退出并清除…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在登出並清除…"
           }
         }
       }
@@ -109191,65 +108847,6 @@
         }
       }
     },
-    "The local message database and MLS group state for this profile." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die lokale Nachrichtendatenbank und der MLS-Gruppenstatus dieses Profils."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La base de datos de mensajes local y el estado del grupo MLS de este perfil."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La base de données de messages locale et l’état des groupes MLS de ce profil."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Il database dei messaggi locale e lo stato dei gruppi MLS di questo profilo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O banco de dados de mensagens local e o estado do grupo MLS deste perfil."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Локальная база сообщений и состояние MLS-групп этого профиля."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu profilin yerel mesaj veritabanı ve MLS grup durumu."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "该个人资料的本地消息数据库和 MLS 群组状态。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此個人資料的本機訊息資料庫和 MLS 群組狀態。"
-          }
-        }
-      }
-    },
     "The maximum donation is $5,000." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -114153,65 +113750,6 @@
         }
       }
     },
-    "This permanently removes this profile from this device." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dadurch wird dieses Profil dauerhaft von diesem Gerät entfernt."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esto elimina permanentemente este perfil de este dispositivo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cela supprime définitivement ce profil de cet appareil."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Questa operazione rimuove definitivamente questo profilo da questo dispositivo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Isto remove permanentemente este perfil deste dispositivo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Это навсегда удалит этот профиль с этого устройства."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu, bu profili bu cihazdan kalıcı olarak kaldırır."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这将从此设备永久移除该个人资料。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這將從此裝置永久移除此個人資料。"
-          }
-        }
-      }
-    },
     "This person has no compatible invitation key available. Ask them to open White Noise and try again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -114513,125 +114051,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此個人檔案及所有本機資料將被永久移除。以往的聊天不會恢復。"
-          }
-        }
-      }
-    },
-    "This profile and its local data will stay on this device." : {
-      "comment" : "A description of the effect of not wiping data when signing out.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dieses Profil und seine lokalen Daten bleiben auf diesem Gerät."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Este perfil y sus datos locales permanecerán en este dispositivo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ce profil et ses données locales resteront sur cet appareil."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Questo profilo e i suoi dati locali rimarranno su questo dispositivo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Este perfil e seus dados locais permanecerão neste dispositivo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Этот профиль и его локальные данные останутся на этом устройстве."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu profil ve yerel verileri bu cihazda kalacak."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此个人资料及其本地数据将保留在本设备上。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此個人檔案及其本機資料將保留在本裝置上。"
-          }
-        }
-      }
-    },
-    "This profile's key material stored on this device." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das auf diesem Gerät gespeicherte Schlüsselmaterial dieses Profils."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El material de llaves de este perfil almacenado en este dispositivo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le matériel de clés de ce profil stocké sur cet appareil."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Il materiale delle chiavi di questo profilo memorizzato su questo dispositivo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O material de chaves deste perfil armazenado neste dispositivo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ключевой материал этого профиля, хранящийся на этом устройстве."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu profilin bu cihazda saklanan anahtar materyali."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "该个人资料存储在此设备上的密钥材料。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此個人資料儲存在此裝置上的金鑰材料。"
           }
         }
       }
@@ -123313,65 +122732,6 @@
         }
       }
     },
-    "What gets destroyed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Was gelöscht wird"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Qué se elimina"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ce qui est supprimé"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cosa viene eliminato"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O que é apagado"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Что будет удалено"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neler silinir"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将被清除的内容"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "將被清除的內容"
-          }
-        }
-      }
-    },
     "When enabled, opening a conversation can tell GIPHY your IP address and which GIF was requested. Otherwise, received GIFs load only when you tap them." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -123664,65 +123024,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise · %@"
-          }
-        }
-      }
-    },
-    "White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise kann verschlüsselte Nachrichten, die bereits an andere Mitglieder zugestellt wurden, oder Kopien, die von unabhängigen Relays gespeichert werden, nicht löschen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise no puede eliminar los mensajes cifrados que ya se hayan entregado a otros miembros ni las copias que conserven relés independientes."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise ne peut pas supprimer les messages chiffrés déjà remis à d’autres membres ni les copies conservées par des relais indépendants."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise non può eliminare i messaggi crittografati già consegnati ad altri membri o le copie conservate da relay indipendenti."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O White Noise não pode eliminar mensagens encriptadas já entregues a outros membros nem cópias mantidas por relays independentes."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise не может удалить зашифрованные сообщения, уже доставленные другим участникам, или копии, сохранённые независимыми ретрансляторами."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise, diğer üyelere zaten teslim edilmiş şifreli mesajları veya bağımsız aktarıcıların sakladığı kopyaları silemez."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise 无法删除已送达其他成员的加密消息，也无法删除独立中继保存的副本。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise 無法刪除已傳送給其他成員的加密訊息，也無法刪除獨立中繼站保留的副本。"
           }
         }
       }
@@ -124480,65 +123781,6 @@
         }
       }
     },
-    "WIPE" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WIPE"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WIPE"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WIPE"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WIPE"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WIPE"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WIPE"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WIPE"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WIPE"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WIPE"
-          }
-        }
-      }
-    },
     "Wipe Data From This Device" : {
       "comment" : "A toggle that lets the user wipe data from their device.",
       "isCommentAutoGenerated" : true,
@@ -124595,124 +123837,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清除本裝置上的資料"
-          }
-        }
-      }
-    },
-    "Wipe this profile?" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dieses Profil löschen?"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "¿Borrar este perfil?"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Effacer ce profil ?"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminare questo profilo?"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apagar este perfil?"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Стереть этот профиль?"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu profil silinsin mi?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清除该个人资料？"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清除此個人資料？"
-          }
-        }
-      }
-    },
-    "Wiping local data…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lokale Daten werden gelöscht…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Borrando datos locales…"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Effacement des données locales…"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminazione dei dati locali…"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apagando dados locais…"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Стирание локальных данных…"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Yerel veriler siliniyor…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在清除本地数据…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在清除本機資料…"
           }
         }
       }

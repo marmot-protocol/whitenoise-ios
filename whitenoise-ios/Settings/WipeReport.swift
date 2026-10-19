@@ -96,17 +96,6 @@ nonisolated enum WipeReportProjection {
     }
 }
 
-/// Type-to-confirm gate for the destructive wipe. Pure so the decision is
-/// observable in tests without a view. Matches the confirmation keyword after
-/// trimming, case-insensitively (mirrors the Android gate).
-nonisolated enum WipeConfirmation {
-    static func isConfirmed(_ input: String, keyword: String) -> Bool {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else { return false }
-        return trimmed.caseInsensitiveCompare(keyword) == .orderedSame
-    }
-}
-
 /// Decides whether the destructive Sign Out & Wipe may begin. A destructive
 /// teardown must never start against a released or mid-suspension runtime — it
 /// would reopen the App Group SQLite store after suspension deliberately closed

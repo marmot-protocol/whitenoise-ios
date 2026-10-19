@@ -37,35 +37,44 @@ before every release tag.
 ## Sign Out and profile deletion
 
 - [ ] Settings shows one **Sign Out** row. It opens a large sheet with the active
-      profile, **Wipe Data From This Device** on, and a leading Close button.
+      profile, **Wipe Local Data** off, and a leading Close button.
 - [ ] With wiping on, verify the short disclosure explains permanent local data
       removal, chats not returning after signing in again, and needing a new
-      invitation to each chat.
-      The profile-name field uses the native Form background without glass;
+      invitation to each chat. The same warning explains that copies held by
+      other people or relays are not erased.
+      The warning uses a monochrome outline triangle and the heading **You’ll lose all chats**.
+      The warning, gray profile-name field, and red action share one card;
       the required name in its helper text uses the primary text color.
       The final button uses a flat red fill with white text when enabled and
       native muted colors when disabled.
       **Sign Out** stays disabled until the displayed profile name matches exactly
       (surrounding whitespace is ignored; case and internal spacing must match).
+      Focusing the profile-name field scrolls to the bottom of the card so both
+      the field and Sign Out button are visible above the keyboard.
       For a lowercase profile name, the keyboard must not automatically capitalize it.
 - [ ] Turn wiping off: the name field disappears and its input clears. The footer
       says the profile and local data stay on this device. Turning wiping back on
-      requires entering the name again. The final action stays red in both modes.
+      requires entering the name again. The action uses the normal primary style
+      when keeping data and a flat red fill when wiping.
 - [ ] Close or swipe down before submitting: the profile and local data remain.
-      Reopening starts with wiping on and an empty confirmation field.
+      Reopening starts with wiping off and no retained confirmation.
 - [ ] Sign out with wiping off, then sign back in and verify chats remain.
 - [ ] Sign out with wiping on. Verify groups are left, published KeyPackages are
       removed where reachable, and local chats, drafts, media, settings, push
       registration, and device keys are removed. Remaining signed-in profiles go
       to the profile chooser; with none remaining, the app returns to Welcome.
       Successful completion shows no toast.
-- [ ] During either operation, the button keeps its original size and red fill
-      with a small white spinner, including while the keyboard dismisses. Repeated
-      taps do nothing, inputs are disabled, and the sheet cannot be closed.
+- [ ] During either operation, the button keeps its size and selected treatment
+      with an inline spinner (white on red when wiping), including while the
+      keyboard dismisses. Repeated taps do nothing, inputs are disabled, and the
+      sheet cannot be closed.
       A failed operation keeps the sheet and input with an error so the action can
-      be retried. Successful completion keeps the loading treatment until dismissal.
+      be retried, without a duplicate error toast. Successful completion keeps
+      the loading treatment until dismissal.
 - [ ] Interrupt relay access during wiping and verify local removal still
-      completes while the existing outcome report identifies unfinished relay work.
+      completes while the same root-hosted sheet changes to the outcome report,
+      identifying unfinished relay work. Verify the report remains visible over
+      Welcome or the remaining-profile chooser and closes normally.
 
 ## Apple Pay donations
 

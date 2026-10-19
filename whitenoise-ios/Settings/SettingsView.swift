@@ -52,7 +52,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showAccounts = false
     @State private var showAddProfile = false
-    @State private var showSignOut = false
 
     var body: some View {
         Form {
@@ -76,7 +75,7 @@ struct SettingsView: View {
 
             Section {
                 Button {
-                    showSignOut = true
+                    appState.showSignOut = true
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         .foregroundStyle(.primary)
@@ -105,10 +104,6 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAddProfile) {
             AddProfileSheet()
-        }
-        .sheet(isPresented: $showSignOut) {
-            SignOutView()
-                .appAppearance()
         }
         .onChange(of: appState.activeAccountRef) { oldValue, newValue in
             if oldValue != nil, oldValue != newValue, !appState.appReviewDemo.isRunning {
@@ -315,176 +310,5 @@ nonisolated enum MarmotKitBuildLabel {
         guard tag.hasPrefix(prefix) else { return nil }
         let version = tag.dropFirst(prefix.count)
         return version.isEmpty ? nil : version
-    }
-}
-
-private struct SignOutView: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-    @State private var shouldWipeData = true
-    @State private var confirmation = ""
-    @State private var isBusy = false
-    @State private var profileRef: String?
-    @State private var profileName = ""
-    @State private var error: String?
-    @FocusState private var confirmationFocused: Bool
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    profileSummaryRow
-                    Toggle("Wipe Data From This Device", isOn: $shouldWipeData)
-                        .disabled(isBusy)
-                        .accessibilityIdentifier("sign-out.wipe-data-toggle")
-                } footer: {
-                    if shouldWipeData {
-                        Text("This profile and all local data will be permanently removed. Signing in again won’t restore previous chats. You’ll need a new invitation to each chat.")
-                    } else {
-                        Text("This profile and its local data will stay on this device.")
-                    }
-                }
-
-                if shouldWipeData {
-                    Section {
-                        TextField("Profile name", text: $confirmation)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .submitLabel(.done)
-                            .focused($confirmationFocused)
-                            .disabled(isBusy)
-                            .accessibilityIdentifier("wipe-profile.confirmation-field")
-                    } header: {
-                        Text("Enter Profile Name").wnSectionHeader()
-                    } footer: {
-                        Text(confirmationHint)
-                    }
-                }
-
-                if let error {
-                    Text(error).foregroundStyle(.orange)
-                }
-
-                Section {
-                    Button(role: .destructive, action: signOut) {
-                        Text("Sign Out")
-                            .font(.body.weight(.regular))
-                            .frame(maxWidth: .infinity)
-                            .opacity(isBusy ? 0 : 1)
-                            .overlay {
-                                if isBusy {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .tint(.white)
-                                }
-                            }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .tint(.red)
-                    .frame(maxWidth: .infinity)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .disabled(!isBusy && !canSignOut)
-                    .allowsHitTesting(!isBusy)
-                    .accessibilityLabel(busyTitle)
-                    .accessibilityIdentifier(shouldWipeData ? "wipe-profile.confirm" : "sign-out.keep-data")
-                }
-            }
-            .navigationTitle("Sign Out")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .accessibilityLabel("Close")
-                    .disabled(isBusy)
-                }
-            }
-        }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .interactiveDismissDisabled(isBusy)
-        .onAppear {
-            guard profileRef == nil else { return }
-            profileRef = appState.activeAccountRef
-            if let account = appState.activeAccount {
-                profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
-            }
-        }
-        .onChange(of: shouldWipeData) { _, wiping in
-            error = nil
-            if !wiping {
-                confirmation = ""
-                confirmationFocused = false
-            }
-        }
-    }
-
-    private var canSignOut: Bool {
-        profileRef != nil
-            && profileRef == appState.activeAccountRef
-            && !appState.isAccountExitInProgress
-            && ProfileExitConfirmation.canSignOut(
-                wiping: shouldWipeData,
-                input: confirmation,
-                profileName: profileName,
-                busy: isBusy
-            )
-    }
-
-    private var confirmationHint: AttributedString {
-        // Style the argument, even when a profile name also occurs in the surrounding copy.
-        let placeholder = "\u{FFFC}"
-        var hint = AttributedString(L10n.formatted("Enter %@ exactly to confirm.", placeholder))
-        hint.foregroundColor = .secondary
-        if let range = hint.range(of: placeholder) {
-            var name = AttributedString(profileName)
-            name.foregroundColor = Color(uiColor: .label)
-            hint.replaceSubrange(range, with: name)
-        }
-        return hint
-    }
-
-    /// Keep the action label in the hierarchy while showing its spinner.
-    private var busyTitle: LocalizedStringKey {
-        guard isBusy else { return "Sign Out" }
-        return shouldWipeData ? "Signing out and wiping data…" : "Signing out…"
-    }
-
-    @ViewBuilder
-    private var profileSummaryRow: some View {
-        if let active = appState.activeAccount, active.label == profileRef {
-            AccountIdentitySummary(account: active, avatarSize: 48)
-        } else {
-            Text(profileName).font(.headline)
-        }
-    }
-
-    private func signOut() {
-        guard canSignOut else { return }
-        confirmationFocused = false
-        let wiping = shouldWipeData
-        isBusy = true
-        error = nil
-        Task {
-            let success: Bool
-            if wiping {
-                success = await appState.signOutAndWipeActiveAccount()
-            } else {
-                success = await appState.signOut()
-            }
-            if success {
-                dismiss()
-            } else {
-                isBusy = false
-                error = wiping
-                    ? L10n.string("Couldn't wipe profile")
-                    : L10n.string("Couldn’t sign out. Try again.")
-            }
-        }
     }
 }
