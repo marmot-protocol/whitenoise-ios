@@ -215,7 +215,7 @@ final class ChatsListViewModel {
             AppGroupRecordFfi(
                 groupIdHex: row.groupIdHex,
                 endpoint: "",
-                name: ContentSanitizer.groupName(row.groupName) ?? title,
+                name: ContentSanitizer.groupName(row.groupName) ?? "",
                 description: "",
                 admins: [],
                 relays: [],

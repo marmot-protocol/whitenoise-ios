@@ -12013,18 +12013,21 @@ struct MediaComposerAvailabilityTests {
         #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: false,
+            hasLiveEpoch: false,
             hasWindowSubscription: false,
             isLocallyReset: false
         ))
         #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: false,
+            hasLiveEpoch: false,
             hasWindowSubscription: true,
             isLocallyReset: false
         ))
         #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: true,
+            hasLiveEpoch: true,
             hasWindowSubscription: false,
             isLocallyReset: false
         ))
@@ -12034,12 +12037,14 @@ struct MediaComposerAvailabilityTests {
         #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: true,
+            hasLiveEpoch: true,
             hasWindowSubscription: true,
             isLocallyReset: false
         ))
         #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: false,
             hasWindowSnapshot: false,
+            hasLiveEpoch: false,
             hasWindowSubscription: false,
             isLocallyReset: false
         ))
@@ -12049,8 +12054,19 @@ struct MediaComposerAvailabilityTests {
         #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: false,
+            hasLiveEpoch: false,
             hasWindowSubscription: false,
             isLocallyReset: true
+        ))
+    }
+
+    @Test func cachedConversationKeepsTheComposerWhileLiveCapabilitiesLoad() {
+        #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: true,
+            hasLiveEpoch: false,
+            hasWindowSubscription: true,
+            isLocallyReset: false
         ))
     }
 

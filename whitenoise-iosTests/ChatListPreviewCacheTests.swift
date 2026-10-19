@@ -565,6 +565,26 @@ struct ChatListPreviewCacheTests {
         ) == nil)
     }
 
+    @Test func directChatOpeningKeepsTheContactHeaderBeforeTheWindowArrives() throws {
+        let state = AppState.test(client: try MarmotClient.testClient())
+        let peer = String(repeating: "22", count: 32)
+        var directRow = row(title: "Alice")
+        directRow.groupName = ""
+        directRow.conversationKind = .direct
+        let item = ChatsListViewModel.Item(
+            row: directRow, avatarURL: nil, title: "Alice",
+            isDirectMessage: true, directPeerAccountIdHex: peer
+        )
+        let conversation = ConversationViewModel(
+            appState: state, group: item.projectedGroup, initialTitle: item.title,
+            initialOtherMember: item.directPeerAccountIdHex, initialMemberCount: 2
+        )
+
+        #expect(conversation.displayTitle == "Alice")
+        #expect(conversation.displaySubtitle == nil)
+        #expect(conversation.selectedAvatarSeed == peer)
+    }
+
     @Test func projectedGroupCarriesTheInviterIntoTheConversation() {
         let item = ChatsListViewModel.Item(
             row: row(pendingConfirmation: true),

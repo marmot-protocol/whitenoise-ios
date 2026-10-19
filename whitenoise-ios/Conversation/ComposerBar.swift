@@ -117,11 +117,13 @@ nonisolated enum ComposerAvailabilityPresentation {
     static func awaitsLiveConversationState(
         usesLiveWindow: Bool,
         hasWindowSnapshot: Bool,
+        hasLiveEpoch: Bool,
         hasWindowSubscription: Bool,
         isLocallyReset: Bool
     ) -> Bool {
         guard usesLiveWindow, !isLocallyReset else { return false }
-        return !hasWindowSnapshot || !hasWindowSubscription
+        // Cached rows can arrive before MDK has resolved live send capabilities.
+        return !hasWindowSnapshot || !hasLiveEpoch || !hasWindowSubscription
     }
 }
 

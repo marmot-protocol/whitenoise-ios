@@ -598,6 +598,7 @@ final class ConversationViewModel {
         ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: usesConversationWindow,
             hasWindowSnapshot: conversationWindow != nil,
+            hasLiveEpoch: conversationWindow?.header.epoch != nil,
             hasWindowSubscription: windowSubscription != nil,
             isLocallyReset: isLocallyReset
         )
