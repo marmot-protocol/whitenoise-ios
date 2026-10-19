@@ -70,12 +70,37 @@ struct SupportChatTests {
         await model.start(using: appState) { openedGroupIds.append($0) }
         #expect(openedGroupIds == ["existing-support-dm"])
 
-        // Opening Support again creates a fresh screen after returning to Chats.
+        // Opening Support again creates a fresh screen after returning to Settings.
         let reopenedModel = SupportChatViewModel(chatFlow: flow)
         await reopenedModel.start(using: appState) { openedGroupIds.append($0) }
 
         #expect(openedGroupIds == ["existing-support-dm", "existing-support-dm"])
         #expect(reopenedModel.phase == .routing)
+    }
+
+    @Test func discardedRoutingCanReopenTheCompletedConversation() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "active"
+        let flow = testFlow(existingGroupIdHex: nil)
+        var creations = 0
+        flow.starter.createGroupForTesting = { _, _ in
+            creations += 1
+            return "created-support-dm"
+        }
+        let model = SupportChatViewModel(chatFlow: flow)
+        await model.start(using: appState) { _ in }
+        #expect(model.phase == .routing)
+
+        // The view rejects navigation if the runtime changes during destination preparation.
+        model.resetRouting()
+        #expect(model.phase == .idle)
+        flow.existingDirectChatGroupIdForTesting = { _ in "created-support-dm" }
+        var openedGroupId: String?
+        await model.start(using: appState) { openedGroupId = $0 }
+
+        #expect(openedGroupId == "created-support-dm")
+        #expect(creations == 1)
+        #expect(model.phase == .routing)
     }
 
     @Test func supportChatFailureIsRecoverableWithoutSurfacingEngineCopy() async throws {
@@ -298,6 +323,137 @@ struct SupportChatTests {
         await model.start(using: appState) { openedGroupIds.append($0) }
         #expect(openedGroupIds == ["created-support-dm"])
         #expect(model.phase == .routing)
+    }
+
+    @Test(arguments: [false, true])
+    func settingsEntryOnlyLooksUpSupport(hasExistingChat: Bool) async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "active"
+        let flow = testFlow(existingGroupIdHex: hasExistingChat ? "support-dm" : nil)
+        flow.starter.createGroupForTesting = { _, _ in
+            Issue.record("opening the Settings entry must never create a conversation")
+            return "unexpected"
+        }
+        let entry = SupportChatEntryModel(chatFlow: flow)
+
+        await entry.prepare(using: appState)
+
+        let destination = try #require(entry.destination)
+        #expect(destination.chatTarget?.groupIdHex == (hasExistingChat ? "support-dm" : nil))
+        #expect(!entry.isLoading)
+        #expect(!entry.showsFailure)
+    }
+
+    @Test func settingsKeepsProgressVisibleUntilTheDestinationIsPrepared() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "active"
+        let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
+        let gate = SupportChatCreateGate()
+        let task = Task {
+            await entry.prepare(using: appState) { _ in await gate.hold() }
+        }
+        await gate.waitUntilHeld()
+        #expect(entry.isLoading)
+        #expect(entry.destination == nil)
+
+        await gate.release()
+        await task.value
+        #expect(entry.destination?.chatTarget?.groupIdHex == "support-dm")
+        #expect(!entry.isLoading)
+    }
+
+    @Test(arguments: [false, true])
+    func settingsDiscardsAPreparedDestinationAfterLeavingOrSwitchingAccount(switchAccount: Bool) async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "active"
+        let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
+        let gate = SupportChatCreateGate()
+        let task = Task {
+            await entry.prepare(using: appState) { _ in await gate.hold() }
+        }
+        await gate.waitUntilHeld()
+        if switchAccount { appState.activeAccountRef = "replacement" }
+        else { task.cancel() }
+        await gate.release()
+        await task.value
+
+        #expect(entry.destination == nil)
+        #expect(!entry.isLoading)
+        #expect(!entry.showsFailure)
+    }
+
+    @Test func settingsLookupFailureOffersRetryWithoutShowingStartChat() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "active"
+        let flow = NewChatFlowViewModel()
+        var attempt = 0
+        flow.existingDirectChatGroupIdForTesting = { _ in
+            attempt += 1
+            if attempt == 1 { throw TestFailure.existingChatLookupFailed }
+            return "support-dm"
+        }
+        let entry = SupportChatEntryModel(chatFlow: flow)
+
+        await entry.prepare(using: appState)
+        #expect(entry.showsFailure)
+        #expect(entry.destination == nil)
+
+        await entry.prepare(using: appState)
+        #expect(!entry.showsFailure)
+        #expect(entry.destination?.chatTarget?.groupIdHex == "support-dm")
+    }
+
+    @Test func cancelledSettingsLookupDoesNotNavigateAndCanBeRetried() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "active"
+        let flow = NewChatFlowViewModel()
+        let gate = SupportChatCreateGate()
+        var lookups = 0
+        flow.existingDirectChatGroupIdForTesting = { _ in
+            lookups += 1
+            await gate.hold()
+            return "support-dm"
+        }
+        let entry = SupportChatEntryModel(chatFlow: flow)
+        let task = Task { await entry.prepare(using: appState) }
+        await gate.waitUntilHeld()
+        #expect(entry.isLoading)
+        await entry.prepare(using: appState)
+        #expect(lookups == 1)
+
+        task.cancel()
+        await gate.release()
+        await task.value
+        #expect(entry.destination == nil)
+        #expect(!entry.showsFailure)
+        #expect(!entry.isLoading)
+
+        flow.existingDirectChatGroupIdForTesting = { _ in "support-dm" }
+        await entry.prepare(using: appState)
+        #expect(entry.destination?.chatTarget?.groupIdHex == "support-dm")
+    }
+
+    @Test(arguments: [false, true])
+    func settingsLookupDiscardsResultsAfterAccountChange(lookupFails: Bool) async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "original"
+        let flow = NewChatFlowViewModel()
+        let gate = SupportChatCreateGate()
+        flow.existingDirectChatGroupIdForTesting = { _ in
+            await gate.hold()
+            if lookupFails { throw TestFailure.existingChatLookupFailed }
+            return "original-account-support-dm"
+        }
+        let entry = SupportChatEntryModel(chatFlow: flow)
+        let task = Task { await entry.prepare(using: appState) }
+        await gate.waitUntilHeld()
+        appState.activeAccountRef = "replacement"
+        await gate.release()
+        await task.value
+
+        #expect(entry.destination == nil)
+        #expect(!entry.showsFailure)
+        #expect(!entry.isLoading)
     }
 
     private func testFlow(existingGroupIdHex: String?) -> NewChatFlowViewModel {

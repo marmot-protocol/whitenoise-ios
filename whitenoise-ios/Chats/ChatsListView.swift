@@ -14,8 +14,7 @@ struct ChatsListView: View {
 
     private var canPresentDiagnostics: Bool {
         appState.diagnosticsConsent.canPresent(
-            chatsVisible: chatsVisible && path.isEmpty
-                && supportChatPushTarget == nil && supportTransitionSnapshot == nil,
+            chatsVisible: chatsVisible && path.isEmpty && !showSettings,
             anotherSheetVisible: showNewChat || secondarySheetVisible || showBulkLeaveConfirmation
                 || appState.erasureState.shouldPresentRecovery(
                     activeAccountRef: appState.activeAccountRef,
@@ -34,11 +33,8 @@ struct ChatsListView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel: ChatsListViewModel?
     @State private var showNewChat = false
-    @State private var path = NavigationPath()
-    @State private var presentedChatTarget: ChatNavigationTarget?
-    @State private var supportChatPushTarget: ChatNavigationTarget?
-    @State private var supportTransitionSnapshot: UIImage?
-    @State private var supportTransitionObserver = SupportChatTransitionObserver.Controller()
+    @State private var showSettings = false
+    @State private var path: [ChatNavigationTarget] = []
     @State private var search = ChatListSearchPresentation()
     @State private var identifierQuery = RecipientQueryModel()
     @State private var scope: ChatScope = .active
@@ -105,11 +101,6 @@ struct ChatsListView: View {
             case .left: "rectangle.portrait.and.arrow.right"
             }
         }
-    }
-
-    enum NavigationDestination: Hashable {
-        case settings
-        case support
     }
 
     struct ChatNavigationTarget: Hashable {
@@ -259,30 +250,8 @@ struct ChatsListView: View {
                 await appState.historyNotices.refresh(using: appState)
             }
             .animation(.smooth(duration: 0.2), value: appState.isConnectivityCatchUpInProgress)
-            .overlay {
-                if let supportTransitionSnapshot {
-                    Image(uiImage: supportTransitionSnapshot)
-                        .resizable()
-                        .ignoresSafeArea()
-                        .accessibilityHidden(true)
-                }
-            }
-            .toolbar(supportTransitionSnapshot == nil ? .visible : .hidden, for: .navigationBar)
-            .background {
-                SupportChatTransitionObserver(controller: supportTransitionObserver) {
-                    pushPreparedSupportChat()
-                }
-            }
             // Registered at a stable level so navigation works even when the
             // visible list is empty (e.g. just-created or deep-linked chats).
-            .navigationDestination(for: NavigationDestination.self) { destination in
-                switch destination {
-                case .settings:
-                    SettingsView()
-                case .support:
-                    SupportChatView(onOpen: openSupportChat)
-                }
-            }
             .navigationDestination(for: ChatNavigationTarget.self) { target in
                 if let viewModel {
                     ChatDestination(
@@ -291,18 +260,13 @@ struct ChatsListView: View {
                         appState: appState,
                         onGroupLeft: { groupIdHex in
                             viewModel.markGroupLeft(groupIdHex: groupIdHex)
-                            if presentedChatTarget?.groupIdHex == groupIdHex { path = NavigationPath() }
+                            path.removeAll { $0.groupIdHex == groupIdHex }
                         },
                         onGroupDeleted: { groupIdHex in
                             viewModel.removeChatListRow(groupIdHex: groupIdHex)
-                            if presentedChatTarget?.groupIdHex == groupIdHex { path = NavigationPath() }
+                            path.removeAll { $0.groupIdHex == groupIdHex }
                         }
                     )
-                    .background {
-                        SupportChatTransitionObserver {
-                            finishSupportChatPush(target)
-                        }
-                    }
                 }
             }
             .onAppear {
@@ -315,9 +279,11 @@ struct ChatsListView: View {
                 if canPresentDiagnostics { showDiagnosticsPrompt = true }
             }
             .onDisappear { chatsVisible = false }
-            .onChange(of: presentedChatTarget) { oldTarget, _ in
-                if let oldTarget, appState.navigation.pendingChatPerformance !== oldTarget.performance {
-                    oldTarget.performance?.finish(.cancelled, recorder: appState.productAnalytics)
+            .onChange(of: path) { oldPath, newPath in
+                for target in oldPath where !newPath.contains(target) {
+                    if appState.navigation.pendingChatPerformance !== target.performance {
+                        target.performance?.finish(.cancelled, recorder: appState.productAnalytics)
+                    }
                 }
             }
             .onChange(of: appState.openSettingsAfterProfileSelection) {
@@ -353,6 +319,11 @@ struct ChatsListView: View {
                 NewChatFlowView()
                     .onAppear { secondarySheetVisible = true }
                     .appAppearance()
+            }
+            .navigationDestination(isPresented: $showSettings) {
+                if let viewModel {
+                    SettingsView(chatsViewModel: viewModel)
+                }
             }
             .task(id: subscriptionScope) {
                 // The inbox needs the block list so a direct chat with a
@@ -396,7 +367,6 @@ struct ChatsListView: View {
             // A query typed against the previous profile's chats must not
             // survive into the next one's list.
             .onChange(of: appState.activeAccountRef) { _, _ in
-                cancelSupportChatPush()
                 exitSearch()
                 pendingMute = nil
                 endSelectionMode()
@@ -408,12 +378,10 @@ struct ChatsListView: View {
                 bulkLeaveRequest = nil
             }
             .onChange(of: path.count) { oldCount, count in
-                if (count > 0 && presentedChatTarget != nil) || (oldCount > 0 && count == 0) {
+                if count > 0 || (oldCount > 0 && count == 0) {
                     exitSearch()
                 }
                 if oldCount > 0 && count == 0 {
-                    presentedChatTarget = nil
-                    if supportChatPushTarget == nil { supportTransitionSnapshot = nil }
                     viewModel?.refreshDisplayProjections()
                 }
             }
@@ -438,12 +406,12 @@ struct ChatsListView: View {
     /// observers are guaranteed to see it.
     private func consumePendingChat() {
         guard let newId = appState.pendingChatId else { return }
-        cancelSupportChatPush()
         let performance = appState.navigation.pendingChatPerformance
         showNewChat = false
+        showSettings = false
         exitSearch()
         scope = .active
-        path = NavigationPath()
+        path = []
         Task { @MainActor in
             // Cascaded dismissals (flow sheet → profile → details) each take
             // an animation beat, and a push landing mid-cascade gets
@@ -459,16 +427,15 @@ struct ChatsListView: View {
                     messageIdHex: appState.pendingChatMessageIdHex,
                     performance: performance
                 )
-                presentedChatTarget = target
-                path = NavigationPath([target])
+                path = [target]
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 guard appState.pendingChatId == newId,
                       appState.navigation.pendingChatPerformance === performance else { return }
-                if path == NavigationPath([target]) {
+                if path == [target] {
                     appState.clearPendingChat()
                     return
                 }
-                path = NavigationPath()
+                path = []
             }
             performance?.finish(.cancelled, recorder: appState.productAnalytics)
             appState.clearPendingChat()
@@ -1077,14 +1044,14 @@ struct ChatsListView: View {
         let performance = appState.beginConversationOpenPerformance()
         viewModel?.retainDestination(groupIdHex: item.id)
         exitSearch()
-        let target = ChatNavigationTarget(
-            groupIdHex: item.id,
-            messageIdHex: item.firstUnreadMessageIdHex,
-            unreadMessageIdHex: item.firstUnreadMessageIdHex,
-            performance: performance
+        path.append(
+            ChatNavigationTarget(
+                groupIdHex: item.id,
+                messageIdHex: item.firstUnreadMessageIdHex,
+                unreadMessageIdHex: item.firstUnreadMessageIdHex,
+                performance: performance
+            )
         )
-        presentedChatTarget = target
-        path.append(target)
     }
 
     @ViewBuilder
@@ -1166,54 +1133,17 @@ struct ChatsListView: View {
     }
 
     private func openSettings() {
-        guard path.isEmpty else { return }
         // Profile selection can request Settings before the list's task starts.
         if viewModel == nil {
             viewModel = ChatsListViewModel(appState: appState)
         }
-        path.append(NavigationDestination.settings)
-    }
-
-    private func openSupportChat(groupIdHex: String) {
-        viewModel?.retainDestination(groupIdHex: groupIdHex)
-        let target = ChatNavigationTarget(
-            groupIdHex: groupIdHex,
-            performance: appState.beginConversationOpenPerformance()
-        )
-        exitSearch()
-        scope = .active
-        // Hold the outgoing screen over Chats while resetting its back stack.
-        // The conversation then uses the same native push as a chat-list row.
-        supportTransitionSnapshot = supportTransitionObserver.snapshot()
-        supportChatPushTarget = target
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            path = NavigationPath()
-        }
-    }
-
-    private func pushPreparedSupportChat() {
-        guard let target = supportChatPushTarget, path.isEmpty else { return }
-        // Consume the pending push once; returning to Chats must never replay it.
-        supportChatPushTarget = nil
-        presentedChatTarget = target
-        path.append(target)
-    }
-
-    private func finishSupportChatPush(_ target: ChatNavigationTarget) {
-        guard presentedChatTarget == target else { return }
-        supportTransitionSnapshot = nil
-    }
-
-    private func cancelSupportChatPush() {
-        supportChatPushTarget?.performance?.finish(.cancelled, recorder: appState.productAnalytics)
-        supportChatPushTarget = nil
-        supportTransitionSnapshot = nil
+        showSettings = true
     }
 
     private var settingsButton: some View {
-        Button(action: openSettings) {
+        Button {
+            openSettings()
+        } label: {
             if let active = appState.activeAccount {
                 AvatarBubble(
                     seed: active.accountIdHex,
@@ -1705,7 +1635,7 @@ struct ChatsListView: View {
 /// subscription delivers it. Once the row exists, open from the projected row
 /// immediately; `ConversationViewModel` refreshes authoritative group details
 /// after the local timeline snapshot can render.
-private struct ChatDestination: View {
+struct ChatDestination: View {
     let target: ChatsListView.ChatNavigationTarget
     let viewModel: ChatsListViewModel
     let appState: AppState
