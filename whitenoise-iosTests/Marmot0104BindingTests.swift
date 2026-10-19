@@ -60,7 +60,9 @@ struct Marmot0104BindingTests {
                 _ = try await client.sendTextWithClientToken(accountRef: account.label,
                     groupIdHex: group.groupIdHex, text: "Changed request", clientToken: token)
                 Issue.record("A token must not be reassigned to a different request")
-            } catch MarmotKitError.Runtime {}
+            } catch MarmotKitError.Runtime(let details) {
+                #expect(details.contains("client token is already bound to another submission"))
+            }
             let window = try await client.openConversationWindow(accountRef: account.label, groupIdHex: group.groupIdHex,
                 mode: .automatic, messageIdHex: nil, initialRows: 50, timeoutMs: 0)
             let snapshot = try #require(window.snapshot())
