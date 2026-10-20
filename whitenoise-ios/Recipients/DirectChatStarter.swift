@@ -72,6 +72,10 @@ nonisolated struct StartChatPrompt: Equatable {
 @MainActor
 @Observable
 final class DirectChatStarter {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     enum Outcome: Equatable {
         case opened(groupIdHex: String)
         case created(groupIdHex: String)

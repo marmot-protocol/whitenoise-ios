@@ -3,6 +3,10 @@ import Foundation
 /// Prewarming is advisory; Create and Invite still fetch fresh KeyPackages.
 @MainActor
 final class MemberKeyPackagePrewarmer {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private struct Request: Equatable {
         let accountRef: String?
         let runtimeGeneration: Int

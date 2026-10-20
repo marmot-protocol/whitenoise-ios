@@ -26,6 +26,10 @@ extension PrivacySecuritySettingsViewModelDataSource {
 @MainActor
 @Observable
 final class PrivacySecuritySettingsViewModel {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     var usageEnabled: Bool?
     var auditSettings: PrivacyAuditSettingsProjection?
     var auditFileRows: [AuditFileRow] = [] {

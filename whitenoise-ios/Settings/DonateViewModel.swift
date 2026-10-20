@@ -8,6 +8,10 @@ nonisolated enum DonationSupportLoadState: Equatable, Sendable {
 @MainActor
 @Observable
 final class DonateViewModel {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     var cadence: DonationCadence = .oneTime
     var amountSelection: DonationAmountSelection = .preset(DonatePresentation.defaultAmountCents)
     var customAmountText = ""

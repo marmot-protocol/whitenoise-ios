@@ -4,6 +4,10 @@ import Foundation
 @MainActor
 @Observable
 final class SupportChatEntryModel {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     struct Destination: Hashable, Identifiable {
         let id = UUID()
         let chatTarget: ChatsListView.ChatNavigationTarget?
