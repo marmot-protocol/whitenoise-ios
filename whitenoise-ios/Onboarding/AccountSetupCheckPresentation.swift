@@ -1,3 +1,4 @@
+import Foundation
 import MarmotKit
 
 nonisolated struct AccountSetupCheckPresentation {
