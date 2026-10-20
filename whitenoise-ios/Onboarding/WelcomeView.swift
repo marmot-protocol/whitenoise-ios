@@ -27,7 +27,8 @@ struct WelcomeView: View {
     @State private var showSignIn = false
     @State private var showSignUp = false
     @State private var selectedSheetDetent = PresentationDetent.large
-    @State private var hasAgreedToTerms = false
+    // Shared by profiles on this installation; Erase App Data clears app defaults.
+    @AppStorage("welcome.hasAcceptedTerms") private var hasAcceptedTerms = false
 
     let isAddingProfile: Bool
     let onSheetContentChange: (OnboardingSheetContent) -> Void
@@ -59,40 +60,50 @@ struct WelcomeView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            // Match LaunchScreen's centered, half-width mark independently of the copy and actions.
+            let fullHeight = geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom
+            let markHeight = min(geometry.size.width * 0.5 * (460.0 / 598.0), fullHeight * 0.3)
+            let markTop = max(0, fullHeight / 2 - geometry.safeAreaInsets.top - markHeight / 2)
+
             ScrollView {
                 VStack(spacing: 0) {
-                    Spacer(minLength: 0)
                     Image("WhiteNoiseMark")
                         .resizable()
                         .scaledToFit()
-                        .containerRelativeFrame(.horizontal, count: 2, span: 1, spacing: 0)
-                        .frame(maxHeight: geometry.size.height * 0.3)
+                        .frame(width: markHeight * (598.0 / 460.0), height: markHeight)
                         .accessibilityLabel("White Noise")
                         .anchorPreference(key: WelcomeBrandBoundsKey.self, value: .bounds) { $0 }
-                    Spacer(minLength: 0)
+                        .padding(.top, markTop)
 
-                    VStack(spacing: 24) {
-                        Toggle(isOn: $hasAgreedToTerms) {
-                            Text("By using White Noise, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7).")
-                        }
-                        .toggleStyle(WelcomeTermsCheckboxStyle())
-                        .accessibilityIdentifier("welcome.terms")
+                    if !hasAcceptedTerms {
+                        VStack(spacing: 8) {
+                            Text("Welcome to White Noise")
+                                .font(.title.bold())
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                        actionLayout {
-                            WNButton(title: "Sign In", emphasis: .secondary) { open(.signIn) }
-                                .accessibilityIdentifier("welcome.sign-in")
-                            WNButton(title: "Sign Up") { open(.signUp) }
-                                .accessibilityIdentifier("welcome.sign-up")
+                            Text("By continuing, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7).")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, 16)
+                                .accessibilityIdentifier("welcome.terms")
                         }
-                        .disabled(!hasAgreedToTerms)
+                        .padding(.top, 32)
                     }
                 }
-                .frame(minHeight: geometry.size.height)
+                .padding(.horizontal)
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                welcomeActions
+                    .padding(.horizontal)
+                    .padding(.bottom)
+            }
         }
-        .safeAreaPadding(.horizontal)
-        .safeAreaPadding(.bottom)
         .background(.background)
         .tint(accentColor)
         .navigationDestination(isPresented: $showSignIn) {
@@ -150,6 +161,24 @@ struct WelcomeView: View {
         }
     }
 
+    private var welcomeActions: some View {
+        Group {
+            if hasAcceptedTerms {
+                actionLayout {
+                    WNButton(title: "Sign In", emphasis: .secondary) { open(.signIn) }
+                        .accessibilityIdentifier("welcome.sign-in")
+                    WNButton(title: "Sign Up") { open(.signUp) }
+                        .accessibilityIdentifier("welcome.sign-up")
+                }
+            } else {
+                WNButton(title: "Agree & Continue") {
+                    hasAcceptedTerms = true
+                }
+                .accessibilityIdentifier("welcome.agree-and-continue")
+            }
+        }
+    }
+
     private func open(_ route: SheetRoute) {
         let path: ProductOnboardingPath = route == .signIn ? .import : .create
         appState.beginProductOnboarding(path)
@@ -187,27 +216,5 @@ private struct WelcomeSheetSizing: PresentationSizing {
         isSignUp
             ? PagePresentationSizing.page.proposedSize(for: root, context: context)
             : FormPresentationSizing.form.proposedSize(for: root, context: context)
-    }
-}
-
-/// App Review requires an explicit terms agreement before Sign In or Sign Up.
-/// Tapping the row toggles it; the inline Terms link keeps its own tap.
-private struct WelcomeTermsCheckboxStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: configuration.isOn ? "checkmark.square.fill" : "square")
-                .font(.title2)
-                .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
-                .accessibilityHidden(true)
-            configuration.label
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(.rect)
-        .onTapGesture { configuration.isOn.toggle() }
     }
 }

@@ -131,7 +131,7 @@ struct RootView: View {
                 })
             }
         case .profileSelection:
-            SignedOutProfilesView(canPresentProfiles: canPresentProfiles)
+            SignedOutProfilesView(appState: appState, canPresentProfiles: canPresentProfiles)
         case .main:
             MainView()
         case .failed(let message):

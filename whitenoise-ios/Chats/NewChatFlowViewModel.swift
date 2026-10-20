@@ -270,7 +270,8 @@ final class NewChatFlowViewModel {
         case exact
     }
 
-    private func existingDirectChatGroupIdHex(
+    /// Read-only lookup; callers must keep chat creation behind an explicit action.
+    func existingDirectChatGroupIdHex(
         accountIdHex: String,
         using appState: AppState
     ) async throws -> String? {
