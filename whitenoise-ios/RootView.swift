@@ -77,7 +77,8 @@ struct RootView: View {
         }
         .sheet(isPresented: Binding(
             get: { shouldPresentErasureRecovery },
-            set: { if !$0 { appState.erasureState.needsRecovery = false } }
+            // Recovery state belongs to the erasure operation, not sheet dismissal.
+            set: { _ in }
         ), onDismiss: {
             visibleRootSheets.remove(.erasureRecovery)
         }) {
