@@ -48,10 +48,14 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
 }
 
 struct SettingsView: View {
+    let chatsViewModel: ChatsListViewModel
+
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var showAccounts = false
     @State private var showAddProfile = false
+    @State private var supportEntry = SupportChatEntryModel()
+    @State private var supportRequestID: UUID?
 
     var body: some View {
         Form {
@@ -95,6 +99,28 @@ struct SettingsView: View {
         .task(id: appState.activeAccount?.accountIdHex) {
             guard let id = appState.activeAccount?.accountIdHex else { return }
             await appState.reloadProfileProjection(forAccountIdHex: id)
+        }
+        .task(id: supportRequestID) {
+            guard supportRequestID != nil else { return }
+            await supportEntry.prepare(using: appState) { groupIdHex in
+                if chatsViewModel.item(groupIdHex: groupIdHex) == nil {
+                    await chatsViewModel.refreshRow(groupIdHex: groupIdHex)
+                }
+                chatsViewModel.retainDestination(groupIdHex: groupIdHex)
+            }
+        }
+        .onDisappear { supportRequestID = nil }
+        .navigationDestination(item: $supportEntry.destination) { destination in
+            SupportChatView(chatsViewModel: chatsViewModel, initialTarget: destination.chatTarget)
+        }
+        .onChange(of: supportEntry.destination) { previous, _ in
+            previous?.chatTarget?.performance?.finish(.cancelled, recorder: appState.productAnalytics)
+        }
+        .alert(SupportChatPresentation.failureTitle, isPresented: $supportEntry.showsFailure) {
+            Button("Try Again") { supportRequestID = UUID() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(SupportChatPresentation.failureMessage)
         }
         .sheet(isPresented: $showAccounts) {
             NavigationStack {
@@ -188,15 +214,43 @@ struct SettingsView: View {
     private func destinationSection(_ destinations: [SettingsDestination]) -> some View {
         Section {
             ForEach(destinations, id: \.self) { destination in
-                NavigationLink {
-                    destinationView(destination)
-                } label: {
-                    Label(destination.title, systemImage: destination.symbol)
-                        .foregroundStyle(.primary)
+                Group {
+                    if destination == .support {
+                        supportRow
+                    } else {
+                        NavigationLink {
+                            destinationView(destination)
+                        } label: {
+                            Label(destination.title, systemImage: destination.symbol)
+                                .foregroundStyle(.primary)
+                        }
+                    }
                 }
                 .accessibilityIdentifier("settings.\(destination.rawValue)")
             }
         }
+    }
+
+    private var supportRow: some View {
+        Button {
+            supportRequestID = UUID()
+        } label: {
+            HStack {
+                Label("Chat with support", systemImage: "message")
+                    .foregroundStyle(.primary)
+                Spacer()
+                if supportEntry.isLoading {
+                    ProgressView()
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(supportEntry.isLoading)
     }
 
     @ViewBuilder
@@ -210,7 +264,7 @@ struct SettingsView: View {
         case .dataUsage: DataAndStorageView()
         case .relays: RelaysView()
         case .aiAgents: AIAgentsSettingsView()
-        case .support: SupportChatView()
+        case .support: EmptyView() // Support resolves its destination before pushing.
         case .donate:
             DonateView()
         case .developerTools: DeveloperToolsSettingsView()
