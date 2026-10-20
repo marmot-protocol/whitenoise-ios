@@ -162,6 +162,7 @@ struct SignOutForm<ProfileSummary: View>: View {
                 Text("This signs you out and permanently removes this profile’s data from this device.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             deletionDetail(
                 "Chats and media",
