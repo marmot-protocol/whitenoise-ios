@@ -114,7 +114,7 @@ struct WelcomeView: View {
             )
         }
         .navigationDestination(isPresented: $showSignUp) {
-            CreateIdentityView(isPushed: true)
+            CreateIdentityView(isPushed: true, onCompletion: isAddingProfile ? onChatsOpened : nil)
         }
         .sheet(item: $sheetRoute, onDismiss: {
             appState.cancelProductOnboardingIfAbandoned()

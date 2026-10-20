@@ -5,6 +5,10 @@ import MarmotKit
 @MainActor
 @Observable
 final class AccountUnreadStore {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     /// Cached per-account unread totals keyed by account id hex.
     private(set) var byAccountId: [String: AccountUnreadFfi] = [:]
     private(set) var unavailableAccountIds: Set<String> = []

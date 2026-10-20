@@ -27,12 +27,12 @@ struct ImportIdentityView: View {
 
     let isPushed: Bool
     let onPreferredSheetExpansionChange: (Bool) -> Void
-    let onChatsOpened: () -> Void
+    let onChatsOpened: (() -> Void)?
 
     init(
         isPushed: Bool = false,
         onPreferredSheetExpansionChange: @escaping (Bool) -> Void = { _ in },
-        onChatsOpened: @escaping () -> Void = {}
+        onChatsOpened: (() -> Void)? = nil
     ) {
         self.isPushed = isPushed
         self.onPreferredSheetExpansionChange = onPreferredSheetExpansionChange
@@ -133,7 +133,7 @@ struct ImportIdentityView: View {
             if appState.pendingAccountSetup != nil || appState.activeAccount?.accountIdHex != setup.accountID {
                 openingSetup = nil
             } else {
-                onChatsOpened()
+                onChatsOpened?()
             }
         }
     }
@@ -159,40 +159,38 @@ struct ImportIdentityView: View {
                     .font(.headline)
                     .padding(.leading)
 
-                HStack {
-                    privateKeyField(identity: $model.identity)
+                WNInputWithFooter {
+                    HStack {
+                        privateKeyField(identity: $model.identity)
 
-                    if !isBusy && (isKeyFocused || normalizedIdentity.isEmpty) {
-                        Button {
-                            if isKeyFocused {
-                                isKeyFocused = false
-                            } else {
-                                showScanner = true
+                        if !isBusy && (isKeyFocused || normalizedIdentity.isEmpty) {
+                            Button {
+                                if isKeyFocused {
+                                    isKeyFocused = false
+                                } else {
+                                    showScanner = true
+                                }
+                            } label: {
+                                Image(systemName: isKeyFocused ? "xmark" : "qrcode.viewfinder")
+                                    .contentTransition(.symbolEffect(.replace))
                             }
-                        } label: {
-                            Image(systemName: isKeyFocused ? "xmark" : "qrcode.viewfinder")
-                                .contentTransition(.symbolEffect(.replace))
+                            .compatibleGlassCircleButtonStyle()
+                            .controlSize(.large)
+                            .preservesKeyboardOnTap()
+                            .transition(.opacity)
+                            .accessibilityLabel(isKeyFocused ? "Dismiss Keyboard" : "Scan QR Code")
                         }
-                        .compatibleGlassCircleButtonStyle()
-                        .controlSize(.large)
-                        .preservesKeyboardOnTap()
-                        .transition(.opacity)
-                        .accessibilityLabel(isKeyFocused ? "Dismiss Keyboard" : "Scan QR Code")
                     }
-                }
-                .animation(.default, value: isKeyFocused)
-                .animation(.default, value: normalizedIdentity.isEmpty)
-
-                if keyState == .invalid {
-                    Text("That private key isn't valid. Check it and try again.")
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .padding(.leading)
-                } else {
-                    Text("It starts with nsec.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading)
+                    .animation(.default, value: isKeyFocused)
+                    .animation(.default, value: normalizedIdentity.isEmpty)
+                } footer: {
+                    if keyState == .invalid {
+                        Text("That private key isn't valid. Check it and try again.")
+                            .wnInputFooter(isError: true)
+                    } else {
+                        Text("It starts with nsec.")
+                            .wnInputFooter()
+                    }
                 }
                 signInAction
                     .padding(.top)
@@ -288,11 +286,19 @@ struct ImportIdentityView: View {
         WNOnboardingButton(title: "Sign In", isLoading: model.isImporting) {
             isKeyFocused = false
             Task {
-                await model.runImport(using: appState, dismiss: { dismiss() })
+                await model.runImport(using: appState, dismiss: completeImport)
             }
         }
         .disabled(!canSubmit && !model.isImporting)
         .accessibilityLabel(model.isImporting ? "Signing In" : "Sign In")
+    }
+
+    private func completeImport() {
+        if let onChatsOpened {
+            onChatsOpened()
+        } else {
+            dismiss()
+        }
     }
 
     private func privateKeyField(identity: Binding<String>) -> some View {
@@ -315,7 +321,7 @@ struct ImportIdentityView: View {
                     guard canSubmit else { return }
                     isKeyFocused = false
                     Task {
-                        await model.runImport(using: appState, dismiss: { dismiss() })
+                        await model.runImport(using: appState, dismiss: completeImport)
                     }
                 }
             )

@@ -237,27 +237,25 @@ struct OnboardingAvatarWebImagePicker: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, WNInputMetrics.leadingInset)
-                    WNInput(
-                        placeholder: "https://example.com/image.jpg",
-                        text: $imageURL,
-                        surface: .filled,
-                        showsTextFromBeginning: true,
-                        focus: $isURLFocused
-                    )
-                    .accessibilityLabel("Image URL")
-                    .textContentType(.URL)
-                    .keyboardType(.URL)
-
-                    if !imageURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, validatedURL == nil {
-                        Text("Enter a valid web address.")
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .padding(.horizontal, WNInputMetrics.leadingInset)
-                    } else if let previewFailure, previewFailure.url == validatedURL {
-                        Text(previewFailure.message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .padding(.horizontal, WNInputMetrics.leadingInset)
+                    WNInputWithFooter {
+                        WNInput(
+                            placeholder: "https://example.com/image.jpg",
+                            text: $imageURL,
+                            surface: .filled,
+                            showsTextFromBeginning: true,
+                            focus: $isURLFocused
+                        )
+                        .accessibilityLabel("Image URL")
+                        .textContentType(.URL)
+                        .keyboardType(.URL)
+                    } footer: {
+                        if !imageURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, validatedURL == nil {
+                            Text("Enter a valid web address.")
+                                .wnInputFooter(isError: true)
+                        } else if let previewFailure, previewFailure.url == validatedURL {
+                            Text(previewFailure.message)
+                                .wnInputFooter(isError: true)
+                        }
                     }
                 }
                 .wnInputRow()

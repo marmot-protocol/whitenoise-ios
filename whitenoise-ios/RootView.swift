@@ -1,7 +1,7 @@
 import SwiftUI
 import MarmotKit
 
-nonisolated enum RootPresentation: Equatable {
+nonisolated enum RootPresentation: Hashable {
     case bootstrap
     case onboarding
     case profileSelection
@@ -36,6 +36,9 @@ struct RootView: View {
         )
         ZStack {
             rootContent(presentation)
+                // Each root owns its navigation stack. Never carry a completed
+                // deletion destination through the chooser into the next profile.
+                .id(presentation)
                 .animation(showSignIn ? nil : .smooth(duration: 0.25), value: presentation)
         }
         .toastHost()
@@ -72,10 +75,10 @@ struct RootView: View {
             ) },
             set: { if !$0 { appState.erasureState.needsRecovery = false } }
         )) { EraseAppDataView(isRecovery: true).appAppearance() }
-        // One presenter survives account routing and changes from the form to
-        // the report in place. A second sheet cannot race the form's dismissal.
+        // Results precede profile selection in the same presenter, so the
+        // chooser cannot race either the sign-out sheet or cleanup reporting.
         .sheet(isPresented: Binding(
-            get: { appState.accountExitIntent != nil || appState.pendingWipeReport != nil },
+            get: { accountExitPresentation != nil },
             set: { presented in
                 if !presented {
                     appState.accountExitIntent = nil
@@ -89,12 +92,31 @@ struct RootView: View {
                     appState.pendingWipeReport = nil
                 }
                 .appAppearance()
-            } else if let intent = appState.accountExitIntent {
-                SignOutView(intent: intent)
-                    .id(intent)
+                // Close advances to the chooser without dismissing its presenter.
+                .interactiveDismissDisabled(needsSettingsProfileSelection)
+            } else if accountExitPresentation == .signOut {
+                SignOutView(intent: .signOut)
+                    .appAppearance()
+            } else if accountExitPresentation == .profileSelection {
+                AccountExitProfileChooser()
                     .appAppearance()
             }
         }
+    }
+
+    private var needsSettingsProfileSelection: Bool {
+        appState.phase == .ready
+            && appState.activeAccountRef == nil
+            && appState.accountStore.returnsToSettingsAfterSelection
+    }
+
+    private var accountExitPresentation: AccountExitPresentation? {
+        AccountExitPresentation.resolve(
+            intent: appState.accountExitIntent,
+            hasReport: appState.pendingWipeReport != nil,
+            needsProfileSelection: needsSettingsProfileSelection,
+            isExiting: appState.isAccountExitInProgress
+        )
     }
 
     @ViewBuilder
@@ -110,11 +132,38 @@ struct RootView: View {
                 })
             }
         case .profileSelection:
-            SignedOutProfilesView()
+            if needsSettingsProfileSelection {
+                NavigationStack {
+                    // No profile is active until the user explicitly chooses.
+                    SettingsView(onAddProfile: {})
+                        .disabled(true)
+                }
+            } else {
+                SignedOutProfilesView()
+            }
         case .main:
             MainView()
         case .failed(let message):
             BootstrapFailureView(message: message)
+        }
+    }
+}
+
+private struct AccountExitProfileChooser: View {
+    @Environment(AppState.self) private var appState
+    @State private var showAddProfile = false
+
+    var body: some View {
+        NavigationStack {
+            AccountsView(
+                activeAccountRef: appState.activeAccountRef,
+                signedInAccountCount: appState.accounts.filter { !$0.signedOut }.count,
+                requiresSelection: true,
+                onAddProfile: { showAddProfile = true }
+            )
+        }
+        .sheet(isPresented: $showAddProfile) {
+            AddProfileSheet()
         }
     }
 }

@@ -521,67 +521,67 @@
         }
       }
     },
-    "Your identity comes from a cryptographic key, not an account controlled by White Noise. We can remove it from this device, but cannot erase it across Nostr." : {
+    "You can sign in again with a saved secret key and keep the same Nostr identity. Your deleted chats and media won’t be restored, and you’ll need new invitations to rejoin groups." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deine Identität entsteht aus einem kryptografischen Schlüssel, nicht aus einem von White Noise kontrollierten Konto. Wir können sie von diesem Gerät entfernen, aber nicht im gesamten Nostr-Netzwerk löschen."
+            "value" : "Du kannst dich mit einem gespeicherten geheimen Schlüssel erneut anmelden und dieselbe Nostr-Identität behalten. Deine gelöschten Chats und Medien werden nicht wiederhergestellt. Um Gruppen erneut beizutreten, brauchst du neue Einladungen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your identity comes from a cryptographic key, not an account controlled by White Noise. We can remove it from this device, but cannot erase it across Nostr."
+            "value" : "You can sign in again with a saved secret key and keep the same Nostr identity. Your deleted chats and media won’t be restored, and you’ll need new invitations to rejoin groups."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tu identidad proviene de una clave criptográfica, no de una cuenta controlada por White Noise. Podemos eliminarla de este dispositivo, pero no borrarla de toda la red Nostr."
+            "value" : "Puedes volver a iniciar sesión con una clave secreta guardada y conservar la misma identidad de Nostr. Tus chats y archivos multimedia eliminados no se restaurarán, y necesitarás nuevas invitaciones para volver a unirte a los grupos."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Votre identité provient d’une clé cryptographique, et non d’un compte contrôlé par White Noise. Nous pouvons la supprimer de cet appareil, mais pas l’effacer sur l’ensemble de Nostr."
+            "value" : "Vous pouvez vous reconnecter avec une clé secrète sauvegardée et conserver la même identité Nostr. Vos discussions et médias supprimés ne seront pas restaurés, et vous aurez besoin de nouvelles invitations pour rejoindre les groupes."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La tua identità deriva da una chiave crittografica, non da un account controllato da White Noise. Possiamo rimuoverla da questo dispositivo, ma non cancellarla dall’intera rete Nostr."
+            "value" : "Puoi accedere di nuovo con una chiave segreta salvata e mantenere la stessa identità Nostr. Le chat e i contenuti multimediali eliminati non verranno ripristinati e avrai bisogno di nuovi inviti per rientrare nei gruppi."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A sua identidade provém de uma chave criptográfica, não de uma conta controlada pelo White Noise. Podemos removê-la deste dispositivo, mas não apagá-la de toda a rede Nostr."
+            "value" : "Você pode entrar novamente com uma chave secreta salva e manter a mesma identidade Nostr. Suas conversas e mídias excluídas não serão restauradas, e você precisará de novos convites para voltar aos grupos."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ваша идентичность основана на криптографическом ключе, а не на аккаунте, которым управляет White Noise. Мы можем удалить её с этого устройства, но не из всей сети Nostr."
+            "value" : "Вы можете войти снова с сохранённым секретным ключом и сохранить ту же идентичность Nostr. Удалённые чаты и медиафайлы не восстановятся, а для возвращения в группы потребуются новые приглашения."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kimliğiniz, White Noise tarafından kontrol edilen bir hesaptan değil, kriptografik bir anahtardan oluşur. Kimliğinizi bu cihazdan kaldırabiliriz, ancak Nostr ağının tamamından silemeyiz."
+            "value" : "Kaydedilmiş bir gizli anahtarla tekrar giriş yapabilir ve aynı Nostr kimliğini kullanmaya devam edebilirsiniz. Silinen sohbetleriniz ve medyanız geri yüklenmez; gruplara yeniden katılmak için yeni davetlere ihtiyacınız olur."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的身份源自加密密钥，而不是由 White Noise 控制的账户。我们可以将其从此设备移除，但无法从整个 Nostr 网络抹去。"
+            "value" : "你可以使用已保存的私钥再次登录，并保留同一个 Nostr 身份。已删除的聊天和媒体不会恢复，重新加入群组需要新的邀请。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的身分源自加密金鑰，而不是由 White Noise 控制的帳號。我們可以將其從此裝置移除，但無法從整個 Nostr 網路抹去。"
+            "value" : "你可以使用已儲存的私鑰再次登入，並保留同一個 Nostr 身分。已刪除的聊天和媒體不會復原，重新加入群組需要新的邀請。"
           }
         }
       }
@@ -716,65 +716,6 @@
         }
       }
     },
-    "Delete Profile" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil löschen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminar perfil"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Supprimer le profil"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elimina profilo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminar perfil"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Удалить профиль"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profili Sil"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除个人资料"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刪除個人檔案"
-          }
-        }
-      }
-    },
     "Sign Out and Delete Data" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -836,71 +777,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登出並刪除資料"
-          }
-        }
-      }
-    },
-    "Remove this profile and its data from this device." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dieses Profil und seine Daten von diesem Gerät entfernen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remove this profile and its data from this device."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elimina este perfil y sus datos de este dispositivo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Supprimez ce profil et ses données de cet appareil."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rimuovi questo profilo e i suoi dati da questo dispositivo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remova este perfil e os respetivos dados deste dispositivo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Удалить этот профиль и его данные с этого устройства."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu profili ve verilerini bu cihazdan kaldırın."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从此设备移除此个人资料及其数据。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "從此裝置移除此個人檔案及其資料。"
           }
         }
       }
@@ -1035,67 +911,330 @@
         }
       }
     },
-    "Your Nostr identity remains" : {
+    "If you sign in again" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deine Nostr-Identität bleibt bestehen"
+            "value" : "Wenn du dich erneut anmeldest"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your Nostr identity remains"
+            "value" : "If you sign in again"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tu identidad de Nostr permanece"
+            "value" : "Si vuelves a iniciar sesión"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Votre identité Nostr est conservée"
+            "value" : "Si vous vous reconnectez"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La tua identità Nostr rimane"
+            "value" : "Se accedi di nuovo"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A sua identidade Nostr mantém-se"
+            "value" : "Se você entrar novamente"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ваша идентичность в Nostr сохранится"
+            "value" : "Если вы войдёте снова"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nostr kimliğiniz korunur"
+            "value" : "Tekrar giriş yaparsanız"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的 Nostr 身份仍然保留"
+            "value" : "如果你再次登录"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的 Nostr 身分仍然保留"
+            "value" : "如果你再次登入"
+          }
+        }
+      }
+    },
+    "Wipe Local Data" : {
+      "comment" : "Sign Out presentation: local data retention and explicit wipe confirmation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lokale Daten löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wipe Local Data"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrar datos locales"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer les données locales"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancella dati locali"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apagar dados locais"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить локальные данные"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yerel Verileri Sil"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除本地数据"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除本機資料"
+          }
+        }
+      }
+    },
+    "Your profile and chats will stay on this device." : {
+      "comment" : "Sign Out presentation: local data retention and explicit wipe confirmation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Profil und deine Chats bleiben auf diesem Gerät."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your profile and chats will stay on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu perfil y tus chats permanecerán en este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre profil et vos discussions resteront sur cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il tuo profilo e le tue chat rimarranno su questo dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seu perfil e suas conversas permanecerão neste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваш профиль и чаты останутся на этом устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profiliniz ve sohbetleriniz bu cihazda kalacak."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的个人资料和聊天记录将保留在此设备上。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的個人檔案和聊天記錄將保留在此裝置上。"
+          }
+        }
+      }
+    },
+    "You’ll lose all chats" : {
+      "comment" : "Warning title before signing out and wiping profile data.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du verlierst alle Chats"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’ll lose all chats"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perderás todos los chats"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous perdrez toutes vos discussions"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perderai tutte le chat"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você perderá todas as conversas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы потеряете все чаты"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tüm sohbetlerinizi kaybedeceksiniz"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你将失去所有聊天记录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你將失去所有聊天記錄"
+          }
+        }
+      }
+    },
+    "Some cleanup couldn’t be completed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Bereinigungsschritte konnten nicht abgeschlossen werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some cleanup couldn’t be completed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron completar algunas tareas de limpieza"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certaines étapes du nettoyage n’ont pas pu être terminées"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non è stato possibile completare alcune operazioni di pulizia"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível concluir algumas etapas da limpeza"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось завершить некоторые этапы очистки"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bazı temizleme işlemleri tamamlanamadı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分清理操作未能完成"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分清理操作未能完成"
           }
         }
       }
@@ -1870,6 +2009,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "記錄啟動診斷"
+          }
+        }
+      }
+    },
+    "Change or remove this photo before saving your profile." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ändere oder entferne dieses Foto, bevor du dein Profil speicherst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change or remove this photo before saving your profile."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia o elimina esta foto antes de guardar tu perfil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifiez ou supprimez cette photo avant d’enregistrer votre profil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia o rimuovi questa foto prima di salvare il tuo profilo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altere ou remova esta foto antes de salvar seu perfil."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Замените или удалите это фото перед сохранением профиля."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilinizi kaydetmeden önce bu fotoğrafı değiştirin veya kaldırın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先更换或移除此照片，再保存个人资料。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請先更換或移除此照片，再儲存個人資料。"
           }
         }
       }
@@ -2849,6 +3053,65 @@
         }
       }
     },
+    "QR Code Unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR-Code nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Código QR no disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code QR indisponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codice QR non disponibile"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Código QR indisponível"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR-код недоступен"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR Kodu Kullanılamıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "二维码不可用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR 碼無法使用"
+          }
+        }
+      }
+    },
     "Records how long each step of opening accounts takes, starting at the next launch. It contains no account details and is never uploaded. Turning it off clears what was recorded." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3430,6 +3693,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已儲存；傳送給 White Noise 團隊的投遞正在等待確認。"
+          }
+        }
+      }
+    },
+    "Scan a profile QR code" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scanne einen Profil-QR-Code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escanea el código QR de un perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scannez le code QR d’un profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scansiona il codice QR di un profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leia o código QR de um perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отсканируйте QR-код профиля"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir profil QR kodunu tarayın"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫描个人资料二维码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "掃描個人資料 QR 碼"
           }
         }
       }
@@ -4468,68 +4790,61 @@
         }
       }
     },
-    "Wipe Local Data" : {
-      "comment" : "Sign Out presentation: local data retention and explicit wipe confirmation.",
+    "You can still share your profile link from the Share menu." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lokale Daten löschen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wipe Local Data"
+            "value" : "Du kannst deinen Profillink weiterhin über das Teilen-Menü teilen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Borrar datos locales"
+            "value" : "Puedes compartir el enlace de tu perfil desde el menú Compartir."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Effacer les données locales"
+            "value" : "Vous pouvez toujours partager le lien de votre profil depuis le menu Partager."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cancella dati locali"
+            "value" : "Puoi comunque condividere il link del tuo profilo dal menu Condividi."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apagar dados locais"
+            "value" : "Você ainda pode compartilhar o link do seu perfil pelo menu Compartilhar."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Удалить локальные данные"
+            "value" : "Вы по-прежнему можете поделиться ссылкой на профиль через меню «Поделиться»."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yerel Verileri Sil"
+            "value" : "Paylaş menüsünden profil bağlantınızı paylaşmaya devam edebilirsiniz."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "清除本地数据"
+            "value" : "你仍可通过“分享”菜单分享个人资料链接。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "清除本機資料"
+            "value" : "你仍可透過「分享」選單分享個人資料連結。"
           }
         }
       }
@@ -4729,72 +5044,6 @@
         }
       }
     },
-    "Your profile and chats will stay on this device." : {
-      "comment" : "Sign Out presentation: local data retention and explicit wipe confirmation.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dein Profil und deine Chats bleiben auf diesem Gerät."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your profile and chats will stay on this device."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu perfil y tus chats permanecerán en este dispositivo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Votre profil et vos discussions resteront sur cet appareil."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Il tuo profilo e le tue chat rimarranno su questo dispositivo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seu perfil e suas conversas permanecerão neste dispositivo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ваш профиль и чаты останутся на этом устройстве."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profiliniz ve sohbetleriniz bu cihazda kalacak."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的个人资料和聊天记录将保留在此设备上。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的個人檔案和聊天記錄將保留在此裝置上。"
-          }
-        }
-      }
-    },
     "Your report and the sender’s public key are sent privately to the White Noise team. The message itself isn’t shared, and the sender isn’t notified." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4856,72 +5105,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的檢舉和傳送者的公鑰會私密地傳送給 White Noise 團隊。訊息本身不會被分享，傳送者也不會收到通知。"
-          }
-        }
-      }
-    },
-    "You’ll lose all chats" : {
-      "comment" : "Warning title before signing out and wiping profile data.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Du verlierst alle Chats"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You’ll lose all chats"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Perderás todos los chats"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vous perdrez toutes vos discussions"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Perderai tutte le chat"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Você perderá todas as conversas"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Вы потеряете все чаты"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tüm sohbetlerinizi kaybedeceksiniz"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你将失去所有聊天记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你將失去所有聊天記錄"
           }
         }
       }
@@ -32649,71 +32832,6 @@
         }
       }
     },
-    "Couldn't load your profile. Close and reopen this screen to retry." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dein Profil konnte nicht geladen werden. Schließe diesen Bildschirm und öffne ihn erneut."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't load your profile. Close and reopen this screen to retry."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo cargar tu perfil. Cierra esta pantalla y vuelve a abrirla para reintentar."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de charger votre profil. Fermez cet écran et rouvrez-le pour réessayer."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile caricare il tuo profilo. Chiudi questa schermata e riaprila per riprovare."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível carregar seu perfil. Feche esta tela e abra novamente para tentar de novo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось загрузить ваш профиль. Закройте этот экран и откройте его снова, чтобы повторить попытку."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profiliniz yüklenemedi. Yeniden denemek için bu ekranı kapatıp tekrar açın."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法加载你的个人资料。请关闭此页面后重新打开以重试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法載入你的個人檔案。請關閉此頁面後重新開啟以重試。"
-          }
-        }
-      }
-    },
     "Couldn't mark as read" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33135,65 +33253,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法準備中繼變更"
-          }
-        }
-      }
-    },
-    "Couldn't publish profile" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil konnte nicht veröffentlicht werden"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo publicar el perfil"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de publier le profil"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile pubblicare il profilo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível publicar o perfil"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось опубликовать профиль"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil yayınlanamadı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法发布个人资料"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法發布個人資料"
           }
         }
       }
@@ -39904,6 +39963,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "刪除較早的訊息？"
+          }
+        }
+      }
+    },
+    "Delete Profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil löschen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить профиль"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profili Sil"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除個人檔案"
           }
         }
       }
@@ -46916,65 +47034,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "輸入有效的 Lightning 地址，例如 name@example.com。"
-          }
-        }
-      }
-    },
-    "Enter a valid NIP-05 address like name@example.com." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gib eine gültige NIP-05-Adresse wie name@example.com ein."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Introduce una dirección NIP-05 válida como name@example.com."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saisissez une adresse NIP-05 valide comme name@example.com."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inserisci un indirizzo NIP-05 valido come name@example.com."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Insira um endereço NIP-05 válido como name@example.com."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Введите действительный адрес NIP-05, например name@example.com."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "name@example.com gibi geçerli bir NIP-05 adresi girin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入有效的 NIP-05 地址，例如 name@example.com。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輸入有效的 NIP-05 地址，例如 name@example.com。"
           }
         }
       }
@@ -75439,6 +75498,7 @@
     },
     "Not set" : {
       "comment" : "Displayed name of the user.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
@@ -77258,67 +77318,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "僅提及"
-          }
-        }
-      }
-    },
-    "Only public HTTPS image URLs are allowed." : {
-      "comment" : "Error message displayed when a user tries to add an image URL that is not a valid public HTTPS URL.",
-      "extractionState" : "manual",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nur öffentliche HTTPS-Bild-URLs sind erlaubt."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Solo se permiten URL de imágenes HTTPS públicas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seules les URL d’images HTTPS publiques sont autorisées."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sono consentiti solo URL di immagini HTTPS pubblici."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Somente URLs públicas de imagens HTTPS são permitidas."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Разрешены только общедоступные HTTPS URL изображений."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Yalnızca herkese açık HTTPS görsel URL’lerine izin verilir."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仅允许公开的 HTTPS 图片 URL。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "僅允許公開的 HTTPS 圖片 URL。"
           }
         }
       }
@@ -103458,71 +103457,6 @@
         }
       }
     },
-    "Some cleanup couldn’t be completed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Einige Bereinigungsschritte konnten nicht abgeschlossen werden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Some cleanup couldn’t be completed"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudieron completar algunas tareas de limpieza"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Certaines étapes du nettoyage n’ont pas pu être terminées"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Non è stato possibile completare alcune operazioni di pulizia"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível concluir algumas etapas da limpeza"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось завершить некоторые этапы очистки"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bazı temizleme işlemleri tamamlanamadı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "部分清理操作未能完成"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "部分清理操作未能完成"
-          }
-        }
-      }
-    },
     "Sign out of this profile" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -113390,60 +113324,60 @@
       }
     },
     "This GIF isn't supported." : {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieses GIF wird nicht unterstützt."
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses GIF wird nicht unterstützt."
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este GIF no es compatible."
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este GIF no es compatible."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce GIF n’est pas pris en charge."
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce GIF n’est pas pris en charge."
           }
         },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questa GIF non è supportata."
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa GIF non è supportata."
           }
         },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este GIF não é suportado."
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este GIF não é suportado."
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот GIF не поддерживается."
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот GIF не поддерживается."
           }
         },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bu GIF desteklenmiyor."
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu GIF desteklenmiyor."
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不支持此 GIF。"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支持此 GIF。"
           }
         },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不支援此 GIF。"
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支援此 GIF。"
           }
         }
       }
@@ -119833,67 +119767,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在更新群組名稱..."
-          }
-        }
-      }
-    },
-    "Uploading profile image…" : {
-      "comment" : "Label for the uploading phase of the profile image upload process.",
-      "extractionState" : "manual",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profilbild wird hochgeladen…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Subiendo imagen de perfil…"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Téléchargement de l'image de profil…"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Caricamento immagine del profilo…"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fazendo upload da imagem do perfil…"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Загрузка изображения профиля…"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil resmi yükleniyor…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在上传个人资料图片..."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在上傳個人資料圖片..."
           }
         }
       }

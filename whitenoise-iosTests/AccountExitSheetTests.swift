@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import XCTest
+import MarmotKit
 @testable import whitenoise_ios
 
 // A live sheet needs exclusive use of the test host's window. Swift Testing's
@@ -55,26 +56,48 @@ final class AccountExitSheetTests: XCTestCase {
             previousKeyWindow?.makeKey()
         }
         state.accountExitIntent = intent
-        try await waitUntil("Account exit did not present") { host.presentedViewController != nil }
-        let presenter = try XCTUnwrap(host.presentedViewController)
-        try await waitUntil("Account exit presentation did not finish") { !presenter.isBeingPresented }
+        var signOutPresenter: UIViewController?
+        if intent == .signOut {
+            try await waitUntil("Sign Out did not present") { host.presentedViewController != nil }
+            signOutPresenter = host.presentedViewController
+            try await waitUntil("Sign Out presentation did not finish") {
+                signOutPresenter?.isBeingPresented == false
+            }
+        }
 
-        // Account routing removes Settings before the operation returns its report.
+        if hasRemainingProfiles {
+            state.accountStore.accounts = [
+                AccountSummaryFfi(
+                    label: "remaining-profile", accountIdHex: String(repeating: "a", count: 64),
+                    localSigning: true, signedOut: false, running: false
+                ),
+            ]
+        }
+        state.accountStore.requestProfileSelection()
         state.setPhase(hasRemainingProfiles ? .ready : .onboarding)
         state.pendingWipeReport = WipeReport(stages: [
             WipeStageReport(stage: .deletingKeyPackages, completedCount: 0,
                             failures: [WipeFailureItem(subject: nil, reason: "Relay unavailable")]),
         ])
         state.accountExitIntent = nil
-        // Wait for the report itself to render, not an assumed animation duration.
-        try await waitUntil("The wipe report did not replace account exit") {
-            self.containsReport(in: presenter)
+        try await waitUntil("The cleanup report did not appear") {
+            guard let presenter = host.presentedViewController else { return false }
+            return self.containsTitle("Some cleanup couldn’t be completed", in: presenter)
         }
-        XCTAssertTrue(host.presentedViewController === presenter)
+        let presenter = try XCTUnwrap(host.presentedViewController)
+        if let signOutPresenter { XCTAssertTrue(presenter === signOutPresenter) }
         XCTAssertNotNil(state.pendingWipeReport)
 
         state.pendingWipeReport = nil
-        try await waitUntil("Closing the wipe report did not dismiss its sheet") {
+        if hasRemainingProfiles {
+            try await waitUntil("Closing the report did not reveal profile selection") {
+                self.containsTitle("Choose a profile", in: presenter)
+            }
+            XCTAssertTrue(host.presentedViewController === presenter)
+            // Leave selection to verify teardown without starting a real account.
+            state.setPhase(.onboarding)
+        }
+        try await waitUntil("Account exit did not dismiss above Welcome") {
             host.presentedViewController == nil
         }
         XCTAssertNil(state.accountExitIntent)
@@ -87,12 +110,12 @@ final class AccountExitSheetTests: XCTestCase {
         return (AppState.test(accountDefaults: defaults, erasureDefaults: defaults), defaults, suite)
     }
 
-    private func containsReport(in controller: UIViewController) -> Bool {
+    private func containsTitle(_ title: String.LocalizationValue, in controller: UIViewController) -> Bool {
         if let navigation = controller as? UINavigationController,
-           navigation.navigationBar.topItem?.title == L10n.string("Some cleanup couldn’t be completed") {
+           navigation.navigationBar.topItem?.title == L10n.string(title) {
             return true
         }
-        return controller.children.contains { containsReport(in: $0) }
+        return controller.children.contains { containsTitle(title, in: $0) }
     }
 
     private func waitUntil(

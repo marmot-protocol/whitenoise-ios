@@ -5,6 +5,10 @@ import MarmotKit
 
 @MainActor
 final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     static let shared = AppNotifications()
 
     private let notificationRequestScheduler: ((UNNotificationRequest) async throws -> Void)?

@@ -10,6 +10,10 @@ import MarmotKit
 @MainActor
 @Observable
 final class AccountStore {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     static let activeAccountKey = "marmot.activeAccountRef"
     private static let profileSelectionKey = "marmot.chooseProfileAfterSignOut"
     private(set) var prefersProfileSelection: Bool

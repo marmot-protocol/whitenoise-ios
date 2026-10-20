@@ -156,9 +156,9 @@ to declare the native SDK audit complete.
 
 ## Other review findings clarified
 
-**R4:** Settings → **Profile** → **Delete Profile** opens a dedicated deletion
-sheet with the active profile, a description of what is removed and what remains,
-and exact profile-name confirmation. The entry is visible without tapping Edit.
+**R4:** Settings → **Delete Profile**, above Sign Out, opens a dedicated deletion
+page with the active profile, a description of what is removed and what remains,
+and exact profile-name confirmation. The entry uses a neutral label in Settings.
 Settings → **Sign Out** also offers **Wipe Local Data**, off by default.
 Turning it on shows the loss warning and name confirmation, and changes the final
 action to **Sign Out and Delete Data**. Both destructive paths leave
@@ -172,7 +172,7 @@ warning explains that copies held by others or relays will not be erased. Do not
 identity.
 Apple's [account deletion guidance](https://developer.apple.com/support/offering-account-deletion-in-your-app/)
 requires an in-app initiation path where account deletion is applicable.
-Record the full create-or-sign-in and Profile → Delete Profile flow on a physical
+Record the full create-or-sign-in and Settings → Delete Profile flow on a physical
 device for the App Review Information attachment.
 
 **R7:** The developer already supplied reviewers a walkthrough creating two

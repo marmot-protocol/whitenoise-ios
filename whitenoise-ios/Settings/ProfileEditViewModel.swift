@@ -21,8 +21,12 @@ final class ProfileEditViewModel {
 
     var isPublishing = false
     var isUploadingPicture = false
-    var error: String?
-    var saveError: String?
+    var hasLoadError = false
+    var saveFailure: SaveFailure?
+
+    enum SaveFailure {
+        case publish
+    }
 
     private(set) var loadedAccountIdHex: String?
     // The reset detector must see every attempt: a failed load never moves
@@ -54,9 +58,9 @@ final class ProfileEditViewModel {
         guard currentDraft.validationError == field else { return nil }
         switch field {
         case .picture:
-            return L10n.string("Only public HTTPS image URLs are allowed.")
+            return L10n.string("Change or remove this photo before saving your profile.")
         case .nip05:
-            return L10n.string("Enter a valid NIP-05 address like name@example.com.")
+            return L10n.string("Enter an address like name@example.com.")
         }
     }
 
@@ -115,8 +119,8 @@ final class ProfileEditViewModel {
             about = ""
             picture = ""
             nip05 = ""
-            error = nil
-            saveError = nil
+            hasLoadError = false
+            saveFailure = nil
         }
         return loadTicket
     }
@@ -134,18 +138,18 @@ final class ProfileEditViewModel {
         switch resolution {
         case .loadFailed:
             loadedAccountIdHex = nil
-            error = L10n.string("Couldn't load your profile. Close and reopen this screen to retry.")
+            hasLoadError = true
         case .enableFirstPublish:
             existingBanner = nil
             existingLud16 = nil
             // A same-account retry after a failed read keeps the form (no
             // account change), so the stale failure message must clear here —
             // Save arming under a visible load error reads as a broken screen.
-            error = nil
+            hasLoadError = false
             loadedAccountIdHex = id
         case .seedExisting:
             guard let profile else { return }
-            error = nil
+            hasLoadError = false
             let formFields = ProfileEditFormFields(profile: profile)
             existingBanner = formFields.banner.isEmpty ? nil : formFields.banner
             existingLud16 = formFields.lud16.isEmpty ? nil : formFields.lud16
@@ -246,7 +250,7 @@ final class ProfileEditViewModel {
         }
         let ticket = loadTicket
         isPublishing = true
-        saveError = nil
+        saveFailure = nil
         defer { isPublishing = false }
         do {
             try await operation(metadata)
@@ -260,7 +264,7 @@ final class ProfileEditViewModel {
                 return false
             }
             Haptics.error()
-            saveError = L10n.string("Couldn't publish profile")
+            saveFailure = .publish
             return false
         }
     }

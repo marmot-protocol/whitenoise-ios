@@ -3,9 +3,10 @@ import SwiftUI
 
 struct CreateIdentityView: View {
     var isPushed = false
+    var onCompletion: (() -> Void)?
 
     var body: some View {
-        IdentityProfileSetupView(isPushed: isPushed)
+        IdentityProfileSetupView(isPushed: isPushed, onCompletion: onCompletion)
     }
 }
 
@@ -14,18 +15,11 @@ struct IdentityProfileSetupView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private enum ProfileField: Hashable {
-        case name
-        case about
-    }
 
     @State private var model = CreateIdentityViewModel()
     @State private var isFormReady: Bool
     @State private var submissionTask: Task<Void, Never>?
     @State private var photoMenuAction: WNPhotoMenuAction?
-    @State private var isKeyboardVisible = false
     @State private var confirmsStartOver = false
     @State private var confirmsDiscardDraft = false
     @State private var discardDraftFailed = false
@@ -35,12 +29,13 @@ struct IdentityProfileSetupView: View {
     @State private var failurePresentation = SignUpFailurePresentation()
     @State private var photoRemovalFailure: PhotoSelectionFailure?
     @State private var showPrivacyDetails = false
-    @FocusState private var focusedField: ProfileField?
+    @FocusState private var focusedField: WNProfileField?
     @State private var nameFieldHeight: CGFloat = 0
     @State private var aboutFieldHeight: CGFloat = 0
 
     let isPushed: Bool
     let accountSetup: AccountSetupModel?
+    let onCompletion: (() -> Void)?
     @State private var profileFailure: AccountSetupProfilePresentation.Failure?
     @State private var profileExit: ProfileExit?
     @State private var activeProfileSnapshot: OnboardingSnapshotFfi?
@@ -65,9 +60,14 @@ struct IdentityProfileSetupView: View {
             || model.about != (profile?.about ?? "") || model.avatarDraft != nil
     }
 
-    init(isPushed: Bool = false, accountSetup: AccountSetupModel? = nil) {
+    init(
+        isPushed: Bool = false,
+        accountSetup: AccountSetupModel? = nil,
+        onCompletion: (() -> Void)? = nil
+    ) {
         self.isPushed = isPushed
         self.accountSetup = accountSetup
+        self.onCompletion = onCompletion
         _isFormReady = State(initialValue: accountSetup != nil)
     }
 
@@ -113,32 +113,12 @@ struct IdentityProfileSetupView: View {
     }
 
     private var profileEditor: some View {
-        ScrollViewReader { proxy in
+        WNProfileFormContainer(
+            focusedField: focusedField, nameFieldHeight: nameFieldHeight, aboutFieldHeight: aboutFieldHeight
+        ) {
             profileForm
-                .onChange(of: focusedField) {
-                    revealFocusedField(using: proxy)
-                }
-                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-                    revealFocusedField(using: proxy)
-                }
-                .onScrollGeometryChange(for: CGSize.self) { geometry in
-                    geometry.visibleRect.size
-                } action: { oldSize, newSize in
-                    // Follow keyboard avoidance, without fighting interactive keyboard dismissal.
-                    if newSize.height < oldSize.height || newSize.width != oldSize.width {
-                        revealFocusedField(using: proxy)
-                    }
-                }
-                .onChange(of: nameFieldHeight) {
-                    if focusedField == .name { revealFocusedField(using: proxy) }
-                }
-                .onChange(of: aboutFieldHeight) {
-                    if focusedField == .about { revealFocusedField(using: proxy) }
-                }
         }
         .disabled(isBusy || isSaving)
-        .formStyle(.grouped)
-        .contentMargins(.horizontal, 16, for: .scrollContent)
         .wnPhotoSourceMenu(
             selection: $photoMenuAction,
             confirmsPublicUpload: false,
@@ -214,15 +194,13 @@ struct IdentityProfileSetupView: View {
             message: CreateIdentityViewModel.Failure.draftStorage.message,
             retry: removePhoto, chooseAnother: nil
         )
-        .alert(signUpFailure == .photoUpload ? L10n.string("Couldn’t upload photo") : L10n.string("Couldn’t finish sign-up"), isPresented: Binding(
-            get: { signUpFailure != nil },
-            set: { if !$0 { signUpFailure = nil } }
-        ), presenting: signUpFailure) { failure in
-            Button("Retry") { submitProfile() }
-            Button(failure == .photoUpload ? L10n.string("Cancel") : L10n.string("Close"), role: .cancel) {}
-        } message: { failure in
-            Text(failure.message)
-        }
+        .wnProfileFailureAlert(
+            $signUpFailure,
+            title: signUpFailure == .photoUpload ? L10n.string("Couldn’t upload photo") : L10n.string("Couldn’t finish sign-up"),
+            dismissTitle: { $0 == .photoUpload ? L10n.string("Cancel") : L10n.string("Close") },
+            message: { $0.message },
+            retry: { _ in submitProfile() }
+        )
     }
 
     private var restorationFailureView: some View {
@@ -259,8 +237,6 @@ struct IdentityProfileSetupView: View {
                 flushDraftChanges()
             }
         }
-        // Native keyboard avoidance owns the motion; animating Form updates also morphs its rows.
-        .trackKeyboardVisibility($isKeyboardVisible, animatesChanges: false)
         .onChange(of: shouldDismissProfile) {
             if shouldDismissProfile { dismiss() }
         }
@@ -305,7 +281,7 @@ struct IdentityProfileSetupView: View {
             if isSetupConnectionBlocked { focusedField = nil }
         }
         .sheet(isPresented: $showPrivacyDetails) {
-            ProfilePrivacyDetailsView()
+            WNProfilePrivacyDetailsView()
                 .presentationDetents(accountSetup == nil ? [.medium] : [.large])
                 .presentationDragIndicator(accountSetup == nil ? .visible : .hidden)
                 .presentationContentInteraction(.scrolls)
@@ -405,36 +381,16 @@ struct IdentityProfileSetupView: View {
             if showsProfileFields {
                 avatarSection
                     .disabled(model.isResetPending)
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
 
-                Section("Name") {
-                    TextField("Name", text: $model.displayName)
-                        .disabled(model.isResetPending)
-                        .textContentType(.name)
-                        .textInputAutocapitalization(.words)
-                        .submitLabel(.next)
-                        .focused($focusedField, equals: .name)
-                        .onSubmit { focusedField = .about }
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { nameFieldHeight = $0 }
-                        .id(ProfileField.name)
-                        .listRowBackground(Color(uiColor: .secondarySystemFill))
+                WNProfileNameSection(text: $model.displayName, focus: $focusedField) {
+                    nameFieldHeight = $0
                 }
+                .disabled(model.isResetPending)
 
-                Section {
-                    TextField("A little about you", text: $model.about, axis: .vertical)
-                        .disabled(model.isResetPending)
-                        .lineLimit(3 ... 6)
-                        .textInputAutocapitalization(.sentences)
-                        .focused($focusedField, equals: .about)
-                        .accessibilityLabel("About")
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { aboutFieldHeight = $0 }
-                        .id(ProfileField.about)
-                        .listRowBackground(Color(uiColor: .secondarySystemFill))
-                } header: {
-                    Text("About")
+                WNProfileAboutSection(text: $model.about, focus: $focusedField) {
+                    aboutFieldHeight = $0
                 }
+                .disabled(model.isResetPending)
             } else if let profile = recovery?.profile {
                 Section {
                     AccountSetupProfileSummary(profile: profile)
@@ -446,11 +402,7 @@ struct IdentityProfileSetupView: View {
             }
 
             if accountSetup == nil {
-                Section {
-                    privacyNote
-                        .padding(.vertical, 4)
-                        .listRowBackground(Color(uiColor: .quaternarySystemFill))
-                }
+                WNProfilePrivacySection(onLearnMore: openPrivacyDetails)
             }
 
             if showsInlineActions {
@@ -463,49 +415,15 @@ struct IdentityProfileSetupView: View {
             }
         }
         .scrollIndicatorsFlash(onAppear: true)
-        .safeAreaPadding(.bottom, isKeyboardVisible ? BottomInputChromeLayout.keyboardInset : 0)
-    }
-
-    private func revealFocusedField(using proxy: ScrollViewProxy) {
-        guard let focusedField else { return }
-        withAnimation(reduceMotion ? nil : .default) {
-            // A nil anchor reveals the whole row with the smallest possible scroll.
-            proxy.scrollTo(focusedField)
-        }
-    }
-
-    private var privacyNote: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "eye")
-                .foregroundStyle(.primary)
-                .accessibilityHidden(true)
-            privacyText
-        }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
     }
 
     private var privacyText: some View {
-        Text(privacySummary)
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .tint(.primary)
-            .environment(\.openURL, OpenURLAction { _ in
-                focusedField = nil
-                showPrivacyDetails = true
-                return .handled
-            })
+        WNProfilePrivacyNote(showsIcon: false, onLearnMore: openPrivacyDetails)
     }
 
-    private var privacySummary: AttributedString {
-        var summary = AttributedString(L10n.string("Your name, photo, and bio are public.\nShare only what you’re comfortable with."))
-        var learnMore = AttributedString(L10n.string("Learn more"))
-        learnMore.link = URL(string: "whitenoise:profile-privacy")
-        learnMore.underlineStyle = .single
-        summary += AttributedString("\n")
-        summary += learnMore
-        return summary
+    private func openPrivacyDetails() {
+        focusedField = nil
+        showPrivacyDetails = true
     }
 
     @ViewBuilder private var profileActions: some View {
@@ -673,7 +591,9 @@ struct IdentityProfileSetupView: View {
             if let accountSetup {
                 await saveImportedProfile(using: accountSetup)
             } else {
-                await model.submit(using: appState, dismiss: { dismiss() })
+                await model.submit(using: appState, dismiss: {
+                    if let onCompletion { onCompletion() } else { dismiss() }
+                })
                 guard !Task.isCancelled, !model.isRestorationBlocked, let failure = model.failure else { return }
                 presentFailure(failure)
             }
@@ -681,18 +601,12 @@ struct IdentityProfileSetupView: View {
     }
 
     private var avatarSection: some View {
-        VStack(spacing: 0) {
-            WNAvatarPhotoMenu(
-                hasPhoto: model.avatarDraft != nil,
-                selection: $photoMenuAction,
-                buttonControlSize: .regular
-            ) {
-                WNAvatarPreview(
-                    name: model.displayName,
-                    image: model.avatarDraft?.thumbnail,
-                    pictureURL: ContentSanitizer.imageURL(accountSetup?.snapshot.proposal?.profile?.picture)
-                )
-            }
+        WNProfilePhotoSection(hasPhoto: model.avatarDraft != nil, selection: $photoMenuAction) {
+            WNAvatarPreview(
+                name: model.displayName,
+                image: model.avatarDraft?.thumbnail,
+                pictureURL: ContentSanitizer.imageURL(accountSetup?.snapshot.proposal?.profile?.picture)
+            )
         }
     }
 
@@ -733,45 +647,4 @@ struct IdentityProfileSetupView: View {
         ContentSanitizer.displayName(model.displayName) != nil
     }
 
-}
-
-private struct ProfilePrivacyDetailsView: View {
-    @Environment(\.dismiss) private var dismiss
-    @ScaledMetric(relativeTo: .title) private var iconSize = 48.0
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Image(systemName: "eye")
-                    .font(.system(size: iconSize))
-                    .foregroundStyle(.primary)
-                    .accessibilityHidden(true)
-                Text("Your profile is public")
-                    .font(.title2.bold())
-                    .accessibilityAddTraits(.isHeader)
-                Text("Anyone can see your name, photo, and bio, including people using other apps on the same network. You can use a nickname instead of your real name.")
-                Text("Share only what you’re comfortable making public. Photos may stay online even after you remove them from your profile.")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .multilineTextAlignment(.leading)
-            .padding(.horizontal, 24)
-            .padding(.top, 8)
-            .padding(.bottom, 24)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            HStack {
-                WNIconButton(title: "Close", systemImage: "xmark") {
-                    dismiss()
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-        }
-        .font(.body)
-        .foregroundStyle(.primary)
-        .presentationBackground(Color(uiColor: .systemBackground))
-    }
 }

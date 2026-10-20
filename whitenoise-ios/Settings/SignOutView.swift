@@ -1,13 +1,9 @@
 import SwiftUI
 import MarmotKit
 
-nonisolated enum AccountExitIntent: Hashable {
-    case signOut
-    case deleteProfile
-}
-
 struct SignOutView: View {
     let intent: AccountExitIntent
+    var onCompleted: () -> Void = {}
     @Environment(AppState.self) private var appState
     @State private var shouldWipeData = false
     @State private var confirmation = ""
@@ -92,6 +88,8 @@ struct SignOutView: View {
         let wiping = isWiping
         isBusy = true
         error = nil
+        // Keep the chooser behind the operation until its report is available.
+        appState.accountExitIntent = intent
         Task {
             let success: Bool
             if wiping {
@@ -100,8 +98,11 @@ struct SignOutView: View {
                 success = await appState.signOut(onError: showError)
             }
             if success {
+                isBusy = false
+                onCompleted()
                 appState.accountExitIntent = nil
             } else {
+                if intent == .deleteProfile { appState.accountExitIntent = nil }
                 isBusy = false
                 if error == nil {
                     error = wiping

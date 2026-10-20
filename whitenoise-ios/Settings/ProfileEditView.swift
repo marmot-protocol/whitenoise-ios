@@ -1,6 +1,5 @@
 import SwiftUI
 import MarmotKit
-import UIKit
 
 /// Edit the Nostr kind:0 profile for the currently active account. Marmot
 /// chooses the account relay lists; iOS only supplies the edited metadata.
@@ -9,160 +8,54 @@ struct ProfileEditView: View {
     @State private var model = ProfileEditViewModel()
     @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var photoError: String?
-    @State private var photoProgressPhase: ProfileImageProgressPhase?
+    @State private var photoUploadFailure: PhotoUploadFailure?
+
+    private struct PhotoUploadFailure {
+        let draft: GroupImageUploadDraft
+        let accountID: String?
+        let ticket: Int
+    }
+    @State private var isPhotoUploadPending = false
     @State private var isEditing = false
     @State private var editSnapshot: ProfileEditDraftSnapshot?
-    @FocusState private var nameFocused: Bool
-    @FocusState private var nip05Focused: Bool
-    @FocusState private var aboutFocused: Bool
+    @State private var isReloading = false
+    @State private var addressValidation = ProfileAddressValidation()
+    @FocusState private var focusedField: WNProfileField?
 
     var body: some View {
         @Bindable var model = model
-        return Form {
+        return ProfileEditForm(
+            displayName: $model.displayName,
+            nip05: $model.nip05,
+            about: $model.about,
+            isEditing: isEditing,
+            isLoading: isReloading || (model.loadedAccountIdHex == nil && !model.hasLoadError),
+            isPublishing: model.isPublishing,
+            hasLoadError: model.hasLoadError,
+            saveFailure: $model.saveFailure,
+            addressError: addressValidation.showsError ? model.invalidNip05Message : nil,
+            focusedField: $focusedField,
+            saveDisabled: saveDisabled,
+            onReload: reloadProfile,
+            onRetrySave: saveProfile
+        ) {
             avatarSection
-
-            Section {
-                if isEditing {
-                    WNInput(
-                        placeholder: L10n.string("Name"),
-                        text: $model.displayName,
-                        submitLabel: .next,
-                        autocapitalization: .words,
-                        disablesAutocorrection: false,
-                        focus: $nameFocused,
-                        onSubmit: { nip05Focused = true }
-                    )
-                    .textContentType(.name)
-                    .wnInputRow()
-                } else {
-                    WNFieldValue(value: model.displayName, placeholder: L10n.string("Not set"))
-                        .wnInputRow()
-                }
-            } header: {
-                Text("Name").wnSectionHeader()
-            }
-
-            Section {
-                if isEditing {
-                    WNInput(
-                        placeholder: L10n.string("Verified Nostr Address"),
-                        text: $model.nip05,
-                        submitLabel: .next,
-                        focus: $nip05Focused,
-                        onSubmit: { aboutFocused = true }
-                    )
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .wnInputRow()
-                } else {
-                    WNFieldValue(value: model.nip05, placeholder: L10n.string("Not set"))
-                        .wnInputRow()
-                }
-            } header: {
-                Text("Verified Nostr Address").wnSectionHeader()
-            } footer: {
-                if isEditing && model.invalidNip05Message != nil {
-                    Text("Enter an address like name@example.com.")
-                }
-            }
-
-            Section {
-                if isEditing {
-                    WNInput(
-                        placeholder: L10n.string("A little about you"),
-                        text: $model.about,
-                        kind: .multiline(3 ... 6),
-                        autocapitalization: .sentences,
-                        disablesAutocorrection: false,
-                        focus: $aboutFocused
-                    )
-                    .accessibilityLabel("About")
-                    .wnInputRow()
-                } else {
-                    WNFieldValue(
-                        value: model.about,
-                        placeholder: L10n.string("A little about you"),
-                        kind: .multiline(3 ... 6)
-                    )
-                    .accessibilityLabel("About")
-                    .wnInputRow()
-                }
-            } header: {
-                Text("About").wnSectionHeader()
-            }
-
-            if let saveError = model.saveError, isEditing {
-                Section {
-                    Label(saveError, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                    Button("Retry", action: saveProfile)
-                        .disabled(saveDisabled)
-                }
-            }
-
-            if model.error != nil {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Couldn't load this screen", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                        Button("Retry") {
-                            Task { await model.loadExisting(using: appState) }
-                        }
-                    }
-                }
-            }
         }
-        .disabled(model.isPublishing)
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-        .modifier(WNOnboardingActionBar(isPresented: !isEditing) {
-            VStack(spacing: 8) {
-                WNGrayButton(title: L10n.string("Delete Profile"), isDestructive: true) {
-                    appState.accountExitIntent = .deleteProfile
-                }
-                .disabled(model.isPublishing || appState.activeAccount == nil || appState.isAccountExitInProgress)
-                .accessibilityIdentifier("profile.deleteProfile")
-                Text("Remove this profile and its data from this device.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-        })
         .productScreen(.settings, section: .account)
         .localizedNavigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isEditing)
         .toolbar {
-            if isEditing {
-                ToolbarItem(placement: .cancellationAction) {
-                    WNButton(
-                        title: "Cancel",
-                        emphasis: .secondary,
-                        size: .compact,
-                        action: cancelEditing
-                    )
-                    .disabled(model.isPublishing || model.isUploadingPicture)
-                }
-            }
-
-            ToolbarItem(placement: .primaryAction) {
-                if isEditing {
-                    WNButton(
-                        title: model.isPublishing ? "Publishing…" : "Done",
-                        size: .compact,
-                        isLoading: model.isPublishing
-                    ) {
-                        saveProfile()
-                    }
-                    .disabled(saveDisabled)
-                } else {
-                    WNButton(title: "Edit", emphasis: .secondary, size: .compact, action: beginEditing)
-                        .disabled(model.loadedAccountIdHex == nil)
-                }
-            }
+            ProfileEditToolbar(
+                isEditing: isEditing,
+                isPublishing: model.isPublishing,
+                cancelDisabled: model.isPublishing || model.isUploadingPicture || isPhotoUploadPending,
+                saveDisabled: saveAttemptDisabled,
+                editDisabled: model.loadedAccountIdHex == nil,
+                onCancel: cancelEditing,
+                onSave: saveProfile,
+                onEdit: beginEditing
+            )
         }
         .wnPhotoSourceMenu(
             selection: $photoMenuAction,
@@ -184,57 +77,49 @@ struct ProfileEditView: View {
                 applyUpload(selection)
             }
         )
+        .profilePhotoUploadFailureAlert($photoUploadFailure) { failure in
+            guard isEditing, isCurrent(ticket: failure.ticket, accountID: failure.accountID) else { return }
+            applyUpload(failure.draft)
+        }
+        .alert(L10n.string("Couldn’t upload photo"), isPresented: Binding(
+            get: { photoError != nil },
+            set: { if !$0 { photoError = nil } }
+        )) {
+            Button("Close", role: .cancel) {}
+        } message: {
+            Text(photoError ?? "")
+        }
         .task(id: appState.activeAccount?.accountIdHex) {
-            clearFocus()
             isEditing = false
+            addressValidation = ProfileAddressValidation()
             editSnapshot = nil
             photoError = nil
+            photoUploadFailure = nil
             await model.loadExisting(using: appState)
         }
-        .background(.background)
+        .onChange(of: focusedField) { previous, current in
+            if isEditing, previous == .address, current != .address {
+                addressValidation.validate(isInvalid: model.invalidNip05Message != nil)
+            }
+        }
+        .onChange(of: model.nip05) { _, _ in
+            addressValidation.addressChanged(isInvalid: model.invalidNip05Message != nil)
+        }
     }
 
     @ViewBuilder
     private var avatarSection: some View {
         if let active = appState.activeAccount {
-            Section {
-                VStack(spacing: 0) {
-                    if isEditing {
-                        WNAvatarPhotoMenu(
-                            hasPhoto: !model.picture.isEmpty,
-                            selection: $photoMenuAction
-                        ) {
-                            avatarPreview(accountIdHex: active.accountIdHex)
-                        }
-                        .disabled(
-                            model.isPublishing
-                                || model.isUploadingPicture
-                                || photoProgressPhase != nil
-                                || model.loadedAccountIdHex != active.accountIdHex
-                        )
-
-                        if let photoProgressPhase {
-                            ProgressView(photoProgressPhase.label)
-                                .font(.footnote)
-                                .padding(.top)
-                        }
-
-                        if let photoError {
-                            Text(photoError)
-                                .font(.footnote)
-                                .foregroundStyle(.red)
-                                .multilineTextAlignment(.center)
-                                .padding(.top)
-                        }
-                    } else {
-                        avatarPreview(accountIdHex: active.accountIdHex)
-                            .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
-                    }
-                }
-                .frame(maxWidth: .infinity)
+            WNProfilePhotoSection(
+                hasPhoto: !model.picture.isEmpty,
+                selection: $photoMenuAction,
+                isEditing: isEditing,
+                isBusy: model.isUploadingPicture || isPhotoUploadPending,
+                isDisabled: model.isPublishing || model.loadedAccountIdHex != active.accountIdHex,
+                error: model.invalidPictureMessage
+            ) {
+                avatarPreview(accountIdHex: active.accountIdHex)
             }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
         }
     }
 
@@ -248,7 +133,13 @@ struct ProfileEditView: View {
     }
 
     private func saveProfile() {
-        clearFocus()
+        guard isEditing, !saveAttemptDisabled else { return }
+        addressValidation.validate(isInvalid: model.invalidNip05Message != nil)
+        if addressValidation.showsError {
+            focusedField = .address
+            return
+        }
+        guard !saveDisabled else { return }
         Task {
             guard let savingAccountID = appState.activeAccount?.accountIdHex else { return }
             if await model.publish(using: appState),
@@ -261,32 +152,38 @@ struct ProfileEditView: View {
 
     private func beginEditing() {
         editSnapshot = ProfileEditDraftSnapshot(model: model)
+        addressValidation.validate(isInvalid: model.invalidNip05Message != nil)
         isEditing = true
     }
 
     private func cancelEditing() {
-        clearFocus()
         editSnapshot?.restore(model, activeAccountID: appState.activeAccount?.accountIdHex)
-        model.saveError = nil
+        model.saveFailure = nil
         editSnapshot = nil
         photoError = nil
+        photoUploadFailure = nil
         isEditing = false
+        addressValidation = ProfileAddressValidation()
     }
 
-    private func clearFocus() {
-        nameFocused = false
-        nip05Focused = false
-        aboutFocused = false
+    private func reloadProfile() {
+        guard !isReloading else { return }
+        isReloading = true
+        Task {
+            defer { isReloading = false }
+            await model.loadExisting(using: appState)
+        }
     }
 
     private func applyUpload(_ draft: GroupImageUploadDraft?) {
         let accountID = appState.activeAccount?.accountIdHex
         let ticket = model.loadTicket
         photoError = nil
-        photoProgressPhase = draft == nil ? nil : .uploading
+        photoUploadFailure = nil
+        isPhotoUploadPending = draft != nil
         Task {
             guard isCurrent(ticket: ticket, accountID: accountID) else {
-                photoProgressPhase = nil
+                isPhotoUploadPending = false
                 return
             }
             await save(draft)
@@ -296,13 +193,19 @@ struct ProfileEditView: View {
     private func save(_ draft: GroupImageUploadDraft?) async {
         let accountID = appState.activeAccount?.accountIdHex
         let ticket = model.loadTicket
-        defer { photoProgressPhase = nil }
+        defer { isPhotoUploadPending = false }
         do {
             try await model.updatePicture(with: draft, using: appState)
             Haptics.selection()
         } catch {
             guard !(error is CancellationError), isCurrent(ticket: ticket, accountID: accountID) else { return }
-            photoError = UserFacingError.message(for: error)
+            // Match sign-up for upload failures, including an unusable returned URL.
+            // An unavailable operation has no meaningful Retry until its guards change.
+            if let draft, (error as? ProfileImageUploadError) != .unavailable {
+                photoUploadFailure = PhotoUploadFailure(draft: draft, accountID: accountID, ticket: ticket)
+            } else {
+                photoError = UserFacingError.message(for: error)
+            }
             Haptics.error()
         }
     }
@@ -314,13 +217,17 @@ struct ProfileEditView: View {
     /// Stays in the view because it also reads `appState.activeAccountRef`; the
     /// draft validation it consults lives on the model's `currentDraft`.
     private var saveDisabled: Bool {
+        saveAttemptDisabled || model.currentDraft.validationError != nil
+    }
+
+    private var saveAttemptDisabled: Bool {
         model.isPublishing
             || model.isUploadingPicture
-            || photoProgressPhase != nil
+            || isPhotoUploadPending
             || appState.activeAccountRef == nil
             || model.loadedAccountIdHex != appState.activeAccount?.accountIdHex
             || ContentSanitizer.displayName(model.displayName) == nil
-            || model.currentDraft.validationError != nil
+            || model.currentDraft.validationError == .picture
     }
 }
 
@@ -482,13 +389,15 @@ nonisolated struct ProfileEditMetadata: Equatable {
     }
 }
 
-enum ProfileImageProgressPhase: Equatable {
-    case uploading
+/// Defers address errors until blur or Done, then retains them while the user repairs the value.
+nonisolated struct ProfileAddressValidation {
+    private(set) var showsError = false
 
-    var label: String {
-        switch self {
-        case .uploading:
-            L10n.string("Uploading profile image…")
-        }
+    mutating func validate(isInvalid: Bool) {
+        showsError = isInvalid
+    }
+
+    mutating func addressChanged(isInvalid: Bool) {
+        if !isInvalid { showsError = false }
     }
 }

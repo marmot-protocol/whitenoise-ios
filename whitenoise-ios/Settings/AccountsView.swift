@@ -4,11 +4,24 @@ import MarmotKit
 struct AccountsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    @State private var showAdd = false
+    @State private var initiallyActiveAccountRef: String?
+    @State private var selectedDetent: PresentationDetent
     let showsCloseButton: Bool
+    let requiresSelection: Bool
+    let onAddProfile: () -> Void
 
-    init(showsCloseButton: Bool = false) {
+    init(
+        activeAccountRef: String?,
+        signedInAccountCount: Int,
+        showsCloseButton: Bool = false,
+        requiresSelection: Bool = false,
+        onAddProfile: @escaping () -> Void
+    ) {
+        _initiallyActiveAccountRef = State(initialValue: activeAccountRef)
+        _selectedDetent = State(initialValue: signedInAccountCount >= 4 ? .large : .medium)
         self.showsCloseButton = showsCloseButton
+        self.requiresSelection = requiresSelection
+        self.onAddProfile = onAddProfile
     }
 
     var body: some View {
@@ -17,34 +30,34 @@ struct AccountsView: View {
                 ForEach(orderedAccounts, id: \.label) { account in
                     Button {
                         Task {
+                            let returnsToSettings = requiresSelection
                             await appState.activateAccount(account.label)
-                            if appState.activeAccountRef == account.label, showsCloseButton {
-                                dismiss()
+                            if appState.activeAccountRef == account.label {
+                                if returnsToSettings { appState.openSettingsAfterProfileSelection = true }
+                                if showsCloseButton { dismiss() }
                             }
                         }
                     } label: {
-                        AccountSummaryRow(account: account)
+                        AccountSummaryRow(account: account, usesCompactLayout: true)
                     }
                     .buttonStyle(.plain)
+                    .listRowBackground(Color(uiColor: .tertiarySystemFill))
                     .disabled(appState.isAccountExitInProgress)
                 }
             }
-            Section {
-                WNButton(
-                    title: "Add Profile",
-                    systemImage: "person.crop.circle.badge.plus"
-                ) {
-                    showAdd = true
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            }
         }
+        .modifier(WNOnboardingActionBar {
+            WNButton(
+                title: "Add Profile",
+                systemImage: "person.crop.circle.badge.plus",
+                action: onAddProfile
+            )
+            .padding()
+        })
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color(uiColor: .systemGroupedBackground))
         .productScreen(.settings, section: .account)
-        .localizedNavigationTitle("Switch Profile")
+        .localizedNavigationTitle(requiresSelection ? "Choose a profile" : "Switch Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showsCloseButton {
@@ -60,27 +73,15 @@ struct AccountsView: View {
             }
         }
         .task { await appState.refreshAccountUnreadSummaries() }
-        .sheet(isPresented: $showAdd) {
-            AddProfileSheet()
-        }
-        // A reset profile is still signed out; keep its recovery screen open.
-        .onChange(of: appState.accounts.filter { !$0.signedOut }.count) { _, _ in
-            if showAdd { showAdd = false }
-        }
-        .presentationBackground(Color(uiColor: .systemGroupedBackground))
-        .presentationDetents(accountSheetDetents)
+        .presentationDetents([.medium, .large], selection: $selectedDetent)
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.resizes)
-    }
-
-    private var accountSheetDetents: Set<PresentationDetent> {
-        Self.prefersFullHeight(accountCount: orderedAccounts.count)
-            ? [.large]
-            : [.medium, .large]
+        .interactiveDismissDisabled(requiresSelection)
     }
 
     private var orderedAccounts: [AccountSummaryFfi] {
-        Self.switcherAccounts(appState.accounts, activeAccountRef: appState.activeAccountRef)
+        // Reorder on the next presentation, not while the selected row dismisses.
+        Self.switcherAccounts(appState.accounts, activeAccountRef: initiallyActiveAccountRef)
     }
 
     static func switcherAccounts(
@@ -97,10 +98,6 @@ struct AccountsView: View {
     static func unreadBadgeCount(for summary: AccountUnreadFfi?) -> UInt64? {
         guard let summary, summary.hasUnread else { return nil }
         return max(summary.unreadCount, 1)
-    }
-
-    static func prefersFullHeight(accountCount: Int) -> Bool {
-        accountCount >= 3
     }
 }
 
@@ -127,10 +124,11 @@ struct AccountSummaryRow: View {
 
     @Environment(AppState.self) private var appState
     let account: AccountSummaryFfi
+    var usesCompactLayout = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            AccountIdentitySummary(account: account, avatarSize: 48)
+        HStack(spacing: usesCompactLayout ? nil : 12) {
+            AccountIdentitySummary(account: account, avatarSize: 48, spacing: usesCompactLayout ? nil : 12)
             Spacer()
             HStack(spacing: 8) {
                 if appState.accountUnreadIsUnavailable(forAccountIdHex: account.accountIdHex) {
@@ -145,7 +143,7 @@ struct AccountSummaryRow: View {
                 status
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, usesCompactLayout ? 0 : 4)
         .contentShape(Rectangle())
     }
 
@@ -246,6 +244,7 @@ struct AddProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var content = OnboardingSheetContent.welcome
     @State private var selectedDetent = PresentationDetent.large
+    var onCompletion: (() -> Void)?
 
     var body: some View {
         NavigationStack {
@@ -258,7 +257,9 @@ struct AddProfileSheet: View {
                 onSignInExpansionChange: { isExpanded in
                     selectedDetent = isExpanded ? .large : .medium
                 },
-                onChatsOpened: { dismiss() }
+                onChatsOpened: {
+                    if let onCompletion { onCompletion() } else { dismiss() }
+                }
             )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

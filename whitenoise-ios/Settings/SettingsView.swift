@@ -48,12 +48,14 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
 }
 
 struct SettingsView: View {
-    let chatsViewModel: ChatsListViewModel
+    // Nil only for the disabled Settings background while a profile is being chosen.
+    var chatsViewModel: ChatsListViewModel? = nil
 
     @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
+    @State private var showDeleteProfile = false
     @State private var showAccounts = false
-    @State private var showAddProfile = false
+    @State private var addProfileAfterSwitcherCloses = false
+    let onAddProfile: () -> Void
     @State private var supportEntry = SupportChatEntryModel()
     @State private var supportRequestID: UUID?
 
@@ -79,6 +81,17 @@ struct SettingsView: View {
 
             Section {
                 Button {
+                    showDeleteProfile = true
+                } label: {
+                    Label("Delete Profile", systemImage: "trash")
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                }
+                .disabled(appState.activeAccount == nil || appState.isAccountExitInProgress)
+                .accessibilityIdentifier("settings.deleteProfile")
+
+                Button {
                     appState.accountExitIntent = .signOut
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
@@ -93,15 +106,20 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .navigationDestination(isPresented: $showDeleteProfile) {
+            SignOutView(intent: .deleteProfile) {
+                showDeleteProfile = false
+            }
+        }
         .productScreen(.settings)
         .localizedNavigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: appState.activeAccount?.accountIdHex) {
-            guard let id = appState.activeAccount?.accountIdHex else { return }
+            guard chatsViewModel != nil, let id = appState.activeAccount?.accountIdHex else { return }
             await appState.reloadProfileProjection(forAccountIdHex: id)
         }
         .task(id: supportRequestID) {
-            guard supportRequestID != nil else { return }
+            guard supportRequestID != nil, let chatsViewModel else { return }
             await supportEntry.prepare(using: appState) { groupIdHex in
                 if chatsViewModel.item(groupIdHex: groupIdHex) == nil {
                     await chatsViewModel.refreshRow(groupIdHex: groupIdHex)
@@ -111,7 +129,9 @@ struct SettingsView: View {
         }
         .onDisappear { supportRequestID = nil }
         .navigationDestination(item: $supportEntry.destination) { destination in
-            SupportChatView(chatsViewModel: chatsViewModel, initialTarget: destination.chatTarget)
+            if let chatsViewModel {
+                SupportChatView(chatsViewModel: chatsViewModel, initialTarget: destination.chatTarget)
+            }
         }
         .onChange(of: supportEntry.destination) { previous, _ in
             previous?.chatTarget?.performance?.finish(.cancelled, recorder: appState.productAnalytics)
@@ -122,19 +142,26 @@ struct SettingsView: View {
         } message: {
             Text(SupportChatPresentation.failureMessage)
         }
-        .sheet(isPresented: $showAccounts) {
+        .sheet(isPresented: $showAccounts, onDismiss: {
+            guard addProfileAfterSwitcherCloses else { return }
+            addProfileAfterSwitcherCloses = false
+            onAddProfile()
+        }) {
             NavigationStack {
-                AccountsView(showsCloseButton: true)
+                AccountsView(
+                    activeAccountRef: appState.activeAccountRef,
+                    signedInAccountCount: appState.accounts.filter { !$0.signedOut }.count,
+                    showsCloseButton: true,
+                    onAddProfile: {
+                        addProfileAfterSwitcherCloses = true
+                        showAccounts = false
+                    }
+                )
             }
             .appAppearance()
         }
-        .sheet(isPresented: $showAddProfile) {
-            AddProfileSheet()
-        }
-        .onChange(of: appState.activeAccountRef) { oldValue, newValue in
-            if oldValue != nil, oldValue != newValue, !appState.appReviewDemo.isRunning {
-                dismiss()
-            }
+        .onChange(of: appState.activeAccountRef) { _, _ in
+            showDeleteProfile = false
         }
     }
 
@@ -144,8 +171,8 @@ struct SettingsView: View {
             NavigationLink {
                 ShareAndConnectView(accountIdHex: active.accountIdHex)
             } label: {
-                HStack(spacing: 12) {
-                    AccountIdentitySummary(account: active, avatarSize: 56)
+                HStack {
+                    AccountIdentitySummary(account: active, avatarSize: 56, spacing: nil)
                     Spacer()
                     Image(systemName: "qrcode")
                         .foregroundStyle(.primary)
@@ -165,20 +192,28 @@ struct SettingsView: View {
     private var profileManagementRow: some View {
         if inactiveAccounts.isEmpty {
             Button {
-                showAddProfile = true
+                onAddProfile()
             } label: {
                 Label("Add Profile", systemImage: "person.crop.circle.badge.plus")
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(.rect)
             }
-            .buttonStyle(.plain)
         } else if inactiveAccounts.count == 1, let alternate = inactiveAccounts.first {
             Button {
                 showAccounts = true
             } label: {
-                HStack(spacing: 12) {
-                    AccountIdentitySummary(account: alternate, avatarSize: 56)
+                HStack {
+                    AvatarBubble(
+                        seed: alternate.accountIdHex,
+                        title: appState.displayName(forAccountIdHex: alternate.accountIdHex),
+                        pictureURL: appState.avatarURL(forAccountIdHex: alternate.accountIdHex)
+                    )
+                    .frame(width: 32, height: 32)
+                    .accessibilityHidden(true)
+                    Text(appState.displayName(forAccountIdHex: alternate.accountIdHex))
+                        .lineLimit(1)
+                        .layoutPriority(1)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
@@ -188,7 +223,7 @@ struct SettingsView: View {
                 .foregroundStyle(.primary)
                 .contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .accessibilityValue(appState.shortNpub(forAccountIdHex: alternate.accountIdHex))
         } else {
             Button {
                 showAccounts = true
@@ -207,7 +242,6 @@ struct SettingsView: View {
                 .foregroundStyle(.primary)
                 .contentShape(.rect)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -289,9 +323,10 @@ struct AccountIdentitySummary: View {
     @Environment(AppState.self) private var appState
     let account: AccountSummaryFfi
     let avatarSize: CGFloat
+    var spacing: CGFloat? = 12
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: spacing) {
             AvatarBubble(
                 seed: account.accountIdHex,
                 title: appState.displayName(forAccountIdHex: account.accountIdHex),

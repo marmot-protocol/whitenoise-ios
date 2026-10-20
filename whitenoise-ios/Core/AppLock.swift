@@ -65,6 +65,10 @@ nonisolated struct AppLockCapability {
 @MainActor
 @Observable
 final class AppLockController {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     /// What the overlay window should show right now.
     enum Shield {
         case hidden

@@ -175,8 +175,8 @@ protocol NotificationCoordinatorHost: AnyObject {
 @Observable
 final class NotificationCoordinator {
     @ObservationIgnored private let notificationDriver = NotificationDriver()
-    private var nativePushRegistrationTask: Task<Void, Never>?
-    private var connectivityCatchUpTask: Task<Void, Never>?
+    @ObservationIgnored private var nativePushRegistrationTask: Task<Void, Never>?
+    @ObservationIgnored private var connectivityCatchUpTask: Task<Void, Never>?
     private var connectivityCatchUpTaskID = UUID()
     private var connectivityRestoredPending = false
     private(set) var isForegroundCatchUpRunning = false
@@ -200,8 +200,9 @@ final class NotificationCoordinator {
 
     var notificationSubscriptionActive: Bool { notificationDriver.isRunning }
 
-    @MainActor
-    deinit {
+    // Task cancellation needs no actor hop; avoid the older runtime's isolated-deinit crash.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {
         nativePushRegistrationTask?.cancel()
         connectivityCatchUpTask?.cancel()
     }

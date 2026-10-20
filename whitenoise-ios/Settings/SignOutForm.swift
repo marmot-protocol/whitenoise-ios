@@ -26,48 +26,59 @@ struct SignOutForm<ProfileSummary: View>: View {
     private var navigationTitle: LocalizedStringKey { isDeletingProfile ? "Delete Profile" : "Sign Out" }
 
     var body: some View {
-        NavigationStack {
-            ScrollViewReader { proxy in
-                exitForm
-                    .scrollDismissesKeyboard(.interactively)
-                    .safeAreaPadding(.bottom, isKeyboardVisible ? BottomInputChromeLayout.keyboardInset : 0)
-                    .onChange(of: confirmationFocused) {
-                        revealConfirmation(using: proxy)
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-                        // Focus changes before keyboard avoidance finishes resizing the form.
-                        revealConfirmation(using: proxy)
-                    }
-                    .onScrollGeometryChange(for: CGSize.self) { geometry in
-                        geometry.visibleRect.size
-                    } action: { oldSize, newSize in
-                        if newSize.height < oldSize.height || newSize.width != oldSize.width {
-                            revealConfirmation(using: proxy)
+        Group {
+            if isDeletingProfile {
+                confirmationContent
+                    .navigationBarBackButtonHidden(isBusy)
+            } else {
+                NavigationStack {
+                    confirmationContent
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(action: onClose) {
+                                    Image(systemName: "xmark")
+                                }
+                                .accessibilityLabel("Close")
+                                .disabled(isBusy)
+                            }
                         }
-                    }
-                    .onChange(of: confirmationHeight) {
-                        revealConfirmation(using: proxy)
-                    }
-            }
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                    }
-                    .accessibilityLabel("Close")
-                    .disabled(isBusy)
                 }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .interactiveDismissDisabled(isBusy)
             }
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .interactiveDismissDisabled(isBusy)
         .trackKeyboardVisibility($isKeyboardVisible, animatesChanges: false)
         .onChange(of: shouldWipeData) { _, wiping in
             if !wiping { confirmationFocused = false }
         }
+    }
+
+    private var confirmationContent: some View {
+        ScrollViewReader { proxy in
+            exitForm
+                .scrollDismissesKeyboard(.interactively)
+                .safeAreaPadding(.bottom, isKeyboardVisible ? BottomInputChromeLayout.keyboardInset : 0)
+                .onChange(of: confirmationFocused) {
+                    revealConfirmation(using: proxy)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                    // Focus changes before keyboard avoidance finishes resizing the form.
+                    revealConfirmation(using: proxy)
+                }
+                .onScrollGeometryChange(for: CGSize.self) { geometry in
+                    geometry.visibleRect.size
+                } action: { oldSize, newSize in
+                    if newSize.height < oldSize.height || newSize.width != oldSize.width {
+                        revealConfirmation(using: proxy)
+                    }
+                }
+                .onChange(of: confirmationHeight) {
+                    revealConfirmation(using: proxy)
+                }
+        }
+        .navigationTitle(navigationTitle)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder
@@ -185,8 +196,8 @@ struct SignOutForm<ProfileSummary: View>: View {
                 text: "Messages and profile information held by other people or independent relays may remain."
             )
             deletionDetail(
-                "Your Nostr identity remains",
-                text: "Your identity comes from a cryptographic key, not an account controlled by White Noise. We can remove it from this device, but cannot erase it across Nostr."
+                "If you sign in again",
+                text: "You can sign in again with a saved secret key and keep the same Nostr identity. Your deleted chats and media won’t be restored, and you’ll need new invitations to rejoin groups."
             )
         }
         .foregroundStyle(.primary)
@@ -235,8 +246,7 @@ struct SignOutForm<ProfileSummary: View>: View {
             .disabled(isBusy)
             .accessibilityIdentifier("wipe-profile.confirmation-field")
             Text(confirmationHint)
-                .font(.footnote)
-                .padding(.horizontal, WNInputMetrics.leadingInset)
+                .wnInputFooter()
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
             confirmationHeight = $0

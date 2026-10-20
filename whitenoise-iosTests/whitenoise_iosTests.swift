@@ -6153,7 +6153,7 @@ struct ProfileEditViewTests {
 
         viewModel.picture = "not-a-url"
         #expect(viewModel.currentDraft.validationError == .picture)
-        #expect(viewModel.invalidPictureMessage == L10n.string("Only public HTTPS image URLs are allowed."))
+        #expect(viewModel.invalidPictureMessage == L10n.string("Change or remove this photo before saving your profile."))
 
         viewModel.picture = "https://cdn.example.com/avatar.png"
         #expect(viewModel.currentDraft.validationError == nil)
@@ -6161,7 +6161,7 @@ struct ProfileEditViewTests {
 
         viewModel.nip05 = "alice example.com"
         #expect(viewModel.currentDraft.validationError == .nip05)
-        #expect(viewModel.invalidNip05Message == L10n.string("Enter a valid NIP-05 address like name@example.com."))
+        #expect(viewModel.invalidNip05Message == L10n.string("Enter an address like name@example.com."))
 
         viewModel.nip05 = "alice@example.com"
         #expect(viewModel.currentDraft.validationError == nil)

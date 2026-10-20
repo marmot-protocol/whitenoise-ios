@@ -35,6 +35,42 @@ struct AccountExitPresentationTests {
         state.dismissToast()
     }
 
+    @Test func deletionDoesNotPresentASecondConfirmationSheet() {
+        #expect(AccountExitPresentation.resolve(
+            intent: .deleteProfile, hasReport: false, needsProfileSelection: false, isExiting: false
+        ) == nil)
+        #expect(AccountExitPresentation.resolve(
+            intent: .signOut, hasReport: false, needsProfileSelection: false, isExiting: false
+        ) == .signOut)
+    }
+
+    @Test func chooserWaitsForDeletionCompletionAndReportAcknowledgment() {
+        #expect(AccountExitPresentation.resolve(
+            intent: nil, hasReport: false, needsProfileSelection: true, isExiting: true
+        ) == nil)
+        #expect(AccountExitPresentation.resolve(
+            intent: .deleteProfile, hasReport: false, needsProfileSelection: true, isExiting: true
+        ) == nil)
+        #expect(AccountExitPresentation.resolve(
+            intent: .deleteProfile, hasReport: false, needsProfileSelection: true, isExiting: false
+        ) == nil)
+        #expect(AccountExitPresentation.resolve(
+            intent: nil, hasReport: true, needsProfileSelection: true, isExiting: false
+        ) == .report)
+        #expect(AccountExitPresentation.resolve(
+            intent: nil, hasReport: false, needsProfileSelection: true, isExiting: false
+        ) == .profileSelection)
+    }
+
+    @Test func lastProfileExitHasNoChooserButStillShowsCleanupFailures() {
+        #expect(AccountExitPresentation.resolve(
+            intent: nil, hasReport: true, needsProfileSelection: false, isExiting: false
+        ) == .report)
+        #expect(AccountExitPresentation.resolve(
+            intent: nil, hasReport: false, needsProfileSelection: false, isExiting: false
+        ) == nil)
+    }
+
     private func isolatedState() throws -> (state: AppState, defaults: UserDefaults, suite: String) {
         let suite = "AccountExitPresentationTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))

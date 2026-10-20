@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Shows the mapped outcome without accessing the wiped account or runtime.
-/// RootView keeps this report in the account-exit sheet, above Welcome or
-/// the remaining-profile chooser after account routing changes.
+/// RootView keeps this report above Welcome or Settings, then reveals the
+/// remaining-profile chooser only after the report is closed.
 struct WipeOutcomeReportView: View {
     let report: WipeReport
     let onClose: () -> Void

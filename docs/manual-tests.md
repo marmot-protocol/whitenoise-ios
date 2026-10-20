@@ -38,29 +38,30 @@ before every release tag.
 
 - [ ] Settings shows one **Sign Out** row. It opens a large sheet with the active
       profile, **Wipe Local Data** off, and a leading Close button.
-- [ ] Settings → Profile shows a full-width native gray **Delete Profile** button
-      with red text pinned at the bottom while viewing the profile, hidden while
-      editing. It opens a large sheet titled **Delete Profile**, without a wipe
-      toggle. One continuous white/semantic card contains Share & Connect's
-      centered large avatar, name, and npub, a large **Delete Profile** heading
-      with a short gray subtitle, the explanation, the name field, and the red
-      **Delete Profile** action. The deletion explanation has no warning icon,
-      and its detailed body text uses the primary text color.
-      Short titled sections appear in this order: Chats and media, Secret key,
-      Groups, Profile settings, Copies elsewhere, Your Nostr identity remains.
-      Spacing separates the content without internal dividers or extra cards.
-      The sheet's action scrolls with the content; it is not pinned.
-      Focusing the name field scrolls the field, helper text, and action into view
-      with padding above the keyboard. The sheet identifies the
-      profile, explains local chat/media/key loss, leaving groups and needing new
-      invitations, and says other profiles are unaffected. It explains that the
-      Nostr identity is based on a cryptographic key that White Noise cannot
-      erase across Nostr, saved secret keys still allow sign-in, and messages
-      and profile information held elsewhere may remain.
-      **Delete Profile** requires the same displayed-name confirmation as wiping.
-      Closing and reopening clears the input. A failed operation preserves it
-      with an inline error; partial cleanup keeps the report above the resulting
-      Welcome or profile chooser, using the same flow as sign-out wiping.
+- [ ] Settings shows a neutral **Delete Profile** row immediately above **Sign Out**
+      in the same group. Profile no longer has a deletion button. Delete Profile
+      pushes a full page with a standard Back button, without a wipe toggle or
+      sheet close button. One continuous white/semantic card contains Share &
+      Connect's large avatar, name, and npub, the large title and complete gray
+      summary, short explanations, profile-name input, and red confirmation.
+      Sections appear in this order: Chats and media, Secret key, Groups,
+      Profile settings, Copies elsewhere, If you sign in again.
+      The last section explains that a saved secret key preserves the Nostr
+      identity, but deleted chats/media do not return and groups require new
+      invitations. Copies held elsewhere may remain; other profiles are unaffected.
+      The action scrolls with the page. Focusing the name field reveals the input,
+      helper text, and action with padding above the keyboard.
+      Back and reopening clears the input. Failure preserves it with an inline
+      error. Back is unavailable while deletion is running.
+- [ ] Delete a profile with another signed-in profile remaining: return to the
+      Settings root with **Choose a profile** presented as a sheet. It cannot be
+      dismissed without selection; no remaining profile is automatically activated.
+      Choosing a profile opens its Settings root, never its profile editor or the
+      old deletion page. If cleanup is incomplete, show the report first; closing
+      it reveals the chooser in the same presenter. Swiping down on that report
+      must not dismiss it while a profile still needs to be selected.
+      With no signed-in profiles
+      remaining, return to Welcome (after acknowledging any cleanup report).
 - [ ] With wiping on, verify the short disclosure explains permanent local data
       and secret-key removal, leaving groups, chats not returning after signing in again, and needing a new
       invitation to each chat. The same warning explains that copies held by
@@ -1152,7 +1153,7 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 - [ ] Settings → Sign Out uses the single confirmation sheet. Wiping removes
       the profile and local keys; retaining data keeps them available for sign-in.
       Remaining signed-in profiles go to the chooser; otherwise show Welcome.
-      Settings → Profile → Delete Profile opens a dedicated deletion confirmation
+      Settings → Delete Profile opens a full-page deletion confirmation
       with the same destructive operation and post-deletion routing.
 - [ ] Group Details → Set/Edit group image rejects non-HTTPS, localhost,
       private-address, and invalid URLs; a public HTTPS image URL previews
