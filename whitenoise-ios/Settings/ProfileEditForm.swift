@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The same field geometry is used for viewing, editing and recoverable failures.
+/// Shared profile fields retain their minimum height when switching into editing.
 struct ProfileEditForm<Avatar: View>: View {
     @Binding var displayName: String
     @Binding var nip05: String
@@ -9,15 +9,15 @@ struct ProfileEditForm<Avatar: View>: View {
     let isLoading: Bool
     let isPublishing: Bool
     let hasLoadError: Bool
-    @Binding var saveError: String?
+    @Binding var saveFailure: ProfileEditViewModel.SaveFailure?
     let addressError: String?
+    let focusedField: FocusState<WNProfileField?>.Binding
     let saveDisabled: Bool
     let onReload: () -> Void
     let onRetrySave: () -> Void
     @ViewBuilder var avatar: () -> Avatar
 
     @State private var showPrivacyDetails = false
-    @FocusState private var focusedField: WNProfileField?
     @State private var nameFieldHeight: CGFloat = 0
     @State private var aboutFieldHeight: CGFloat = 0
 
@@ -38,7 +38,7 @@ struct ProfileEditForm<Avatar: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 WNProfileFormContainer(
-                    focusedField: focusedField, nameFieldHeight: nameFieldHeight, aboutFieldHeight: aboutFieldHeight
+                    focusedField: focusedField.wrappedValue, nameFieldHeight: nameFieldHeight, aboutFieldHeight: aboutFieldHeight
                 ) {
                     Form {
                         avatar()
@@ -58,7 +58,7 @@ struct ProfileEditForm<Avatar: View>: View {
         .scrollDismissesKeyboard(.interactively)
         .background(.background)
         .wnProfileFailureAlert(
-            Binding(get: { isEditing ? saveError : nil }, set: { saveError = $0 }),
+            Binding(get: { isEditing ? saveFailure : nil }, set: { saveFailure = $0 }),
             title: L10n.string("Couldn’t save your profile"),
             retryEnabled: !saveDisabled,
             message: { _ in L10n.string("Couldn’t save your profile details. Please try again.") },
@@ -81,7 +81,7 @@ struct ProfileEditForm<Avatar: View>: View {
 
     @ViewBuilder private var fields: some View {
         WNProfileNameSection(
-            text: $displayName, focus: $focusedField, isEditing: isEditing, nextField: .address,
+            text: $displayName, focus: focusedField, isEditing: isEditing, nextField: .address,
             onHeightChange: { nameFieldHeight = $0 }
         )
 
@@ -94,10 +94,10 @@ struct ProfileEditForm<Avatar: View>: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.next)
-                        .focused($focusedField, equals: .address)
-                        .onSubmit { focusedField = .about }
+                        .focused(focusedField, equals: .address)
+                        .onSubmit { focusedField.wrappedValue = .about }
                 } else {
-                    Text(nip05.isEmpty ? L10n.string("Not set") : nip05)
+                    Text(nip05.isEmpty ? L10n.string("Verified Nostr Address") : nip05)
                         .foregroundStyle(nip05.isEmpty ? .secondary : .primary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -113,13 +113,13 @@ struct ProfileEditForm<Avatar: View>: View {
             }
         }
 
-        WNProfileAboutSection(text: $about, focus: $focusedField, isEditing: isEditing) {
+        WNProfileAboutSection(text: $about, focus: focusedField, isEditing: isEditing) {
             aboutFieldHeight = $0
         }
     }
 
     private func clearFocus() {
-        focusedField = nil
+        focusedField.wrappedValue = nil
     }
 }
 
@@ -136,7 +136,7 @@ struct ProfileEditToolbar: ToolbarContent {
     let onEdit: () -> Void
 
     private var primaryContentColor: Color {
-        WNOnboardingButton.contentColor(
+        WNButtonPalette.primaryContent(
             colorScheme: colorScheme, isEnabled: !saveDisabled, isLoading: isPublishing
         )
     }

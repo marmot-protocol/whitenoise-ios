@@ -26,13 +26,13 @@ extension View {
 #Preview("WNSectionHeader") {
     Form {
         Section {
-            WNFieldValue(value: "Marmota").wnInputRow()
+            Text("Marmota")
         } header: {
             Text("Name").wnSectionHeader()
         }
 
         Section {
-            WNFieldValue(value: "marmota@whitenoise.example").wnInputRow()
+            Text("marmota@whitenoise.example")
         } header: {
             Text("Verified Nostr Address").wnSectionHeader()
         }

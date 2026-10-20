@@ -1,6 +1,12 @@
 import SwiftUI
 import UIKit
 
+enum WNButtonPalette {
+    static func primaryContent(colorScheme: ColorScheme, isEnabled: Bool, isLoading: Bool) -> Color {
+        (isEnabled || isLoading) ? (colorScheme == .dark ? .black : .white) : Color(uiColor: .tertiaryLabel)
+    }
+}
+
 struct WNButton: View {
     nonisolated enum Emphasis: Equatable {
         case primary

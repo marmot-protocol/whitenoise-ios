@@ -30968,71 +30968,6 @@
         }
       }
     },
-    "Couldn't load your profile. Close and reopen this screen to retry." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dein Profil konnte nicht geladen werden. Schließe diesen Bildschirm und öffne ihn erneut."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't load your profile. Close and reopen this screen to retry."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo cargar tu perfil. Cierra esta pantalla y vuelve a abrirla para reintentar."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de charger votre profil. Fermez cet écran et rouvrez-le pour réessayer."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile caricare il tuo profilo. Chiudi questa schermata e riaprila per riprovare."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível carregar seu perfil. Feche esta tela e abra novamente para tentar de novo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось загрузить ваш профиль. Закройте этот экран и откройте его снова, чтобы повторить попытку."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profiliniz yüklenemedi. Yeniden denemek için bu ekranı kapatıp tekrar açın."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法加载你的个人资料。请关闭此页面后重新打开以重试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法載入你的個人檔案。請關閉此頁面後重新開啟以重試。"
-          }
-        }
-      }
-    },
     "Couldn't mark as read" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -31454,65 +31389,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法準備中繼變更"
-          }
-        }
-      }
-    },
-    "Couldn't publish profile" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil konnte nicht veröffentlicht werden"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo publicar el perfil"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de publier le profil"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile pubblicare il profilo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível publicar o perfil"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось опубликовать профиль"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil yayınlanamadı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法发布个人资料"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法發布個人資料"
           }
         }
       }

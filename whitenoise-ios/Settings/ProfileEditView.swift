@@ -19,6 +19,8 @@ struct ProfileEditView: View {
     @State private var isEditing = false
     @State private var editSnapshot: ProfileEditDraftSnapshot?
     @State private var isReloading = false
+    @State private var addressValidation = ProfileAddressValidation()
+    @FocusState private var focusedField: WNProfileField?
 
     var body: some View {
         @Bindable var model = model
@@ -27,11 +29,12 @@ struct ProfileEditView: View {
             nip05: $model.nip05,
             about: $model.about,
             isEditing: isEditing,
-            isLoading: isReloading || (model.loadedAccountIdHex == nil && model.error == nil),
+            isLoading: isReloading || (model.loadedAccountIdHex == nil && !model.hasLoadError),
             isPublishing: model.isPublishing,
-            hasLoadError: model.error != nil,
-            saveError: $model.saveError,
-            addressError: model.invalidNip05Message,
+            hasLoadError: model.hasLoadError,
+            saveFailure: $model.saveFailure,
+            addressError: addressValidation.showsError ? model.invalidNip05Message : nil,
+            focusedField: $focusedField,
             saveDisabled: saveDisabled,
             onReload: reloadProfile,
             onRetrySave: saveProfile
@@ -47,7 +50,7 @@ struct ProfileEditView: View {
                 isEditing: isEditing,
                 isPublishing: model.isPublishing,
                 cancelDisabled: model.isPublishing || model.isUploadingPicture || isPhotoUploadPending,
-                saveDisabled: saveDisabled,
+                saveDisabled: saveAttemptDisabled,
                 editDisabled: model.loadedAccountIdHex == nil,
                 onCancel: cancelEditing,
                 onSave: saveProfile,
@@ -88,10 +91,19 @@ struct ProfileEditView: View {
         }
         .task(id: appState.activeAccount?.accountIdHex) {
             isEditing = false
+            addressValidation = ProfileAddressValidation()
             editSnapshot = nil
             photoError = nil
             photoUploadFailure = nil
             await model.loadExisting(using: appState)
+        }
+        .onChange(of: focusedField) { previous, current in
+            if isEditing, previous == .address, current != .address {
+                addressValidation.validate(isInvalid: model.invalidNip05Message != nil)
+            }
+        }
+        .onChange(of: model.nip05) { _, _ in
+            addressValidation.addressChanged(isInvalid: model.invalidNip05Message != nil)
         }
     }
 
@@ -121,6 +133,13 @@ struct ProfileEditView: View {
     }
 
     private func saveProfile() {
+        guard isEditing, !saveAttemptDisabled else { return }
+        addressValidation.validate(isInvalid: model.invalidNip05Message != nil)
+        if addressValidation.showsError {
+            focusedField = .address
+            return
+        }
+        guard !saveDisabled else { return }
         Task {
             guard let savingAccountID = appState.activeAccount?.accountIdHex else { return }
             if await model.publish(using: appState),
@@ -133,16 +152,18 @@ struct ProfileEditView: View {
 
     private func beginEditing() {
         editSnapshot = ProfileEditDraftSnapshot(model: model)
+        addressValidation.validate(isInvalid: model.invalidNip05Message != nil)
         isEditing = true
     }
 
     private func cancelEditing() {
         editSnapshot?.restore(model, activeAccountID: appState.activeAccount?.accountIdHex)
-        model.saveError = nil
+        model.saveFailure = nil
         editSnapshot = nil
         photoError = nil
         photoUploadFailure = nil
         isEditing = false
+        addressValidation = ProfileAddressValidation()
     }
 
     private func reloadProfile() {
@@ -196,13 +217,17 @@ struct ProfileEditView: View {
     /// Stays in the view because it also reads `appState.activeAccountRef`; the
     /// draft validation it consults lives on the model's `currentDraft`.
     private var saveDisabled: Bool {
+        saveAttemptDisabled || model.currentDraft.validationError != nil
+    }
+
+    private var saveAttemptDisabled: Bool {
         model.isPublishing
             || model.isUploadingPicture
             || isPhotoUploadPending
             || appState.activeAccountRef == nil
             || model.loadedAccountIdHex != appState.activeAccount?.accountIdHex
             || ContentSanitizer.displayName(model.displayName) == nil
-            || model.currentDraft.validationError != nil
+            || model.currentDraft.validationError == .picture
     }
 }
 
@@ -361,5 +386,18 @@ nonisolated struct ProfileEditMetadata: Equatable {
             nip05: nip05,
             lud16: lud16
         )
+    }
+}
+
+/// Defers address errors until blur or Done, then retains them while the user repairs the value.
+nonisolated struct ProfileAddressValidation {
+    private(set) var showsError = false
+
+    mutating func validate(isInvalid: Bool) {
+        showsError = isInvalid
+    }
+
+    mutating func addressChanged(isInvalid: Bool) {
+        if !isInvalid { showsError = false }
     }
 }

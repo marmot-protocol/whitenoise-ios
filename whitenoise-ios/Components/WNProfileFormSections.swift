@@ -23,7 +23,7 @@ struct WNProfileNameSection: View {
                         .focused(focus, equals: .name)
                         .onSubmit { focus.wrappedValue = nextField }
                 } else {
-                    Text(text.isEmpty ? L10n.string("Not set") : text)
+                    Text(text.isEmpty ? L10n.string("Name") : text)
                         .foregroundStyle(text.isEmpty ? .secondary : .primary)
                 }
             }
@@ -48,12 +48,15 @@ struct WNProfileAboutSection: View {
                         .lineLimit(3 ... 6)
                         .textInputAutocapitalization(.sentences)
                         .focused(focus, equals: .about)
+                        .accessibilityLabel("About")
                 } else {
                     Text(text.isEmpty ? L10n.string("A little about you") : text)
                         .foregroundStyle(text.isEmpty ? .secondary : .primary)
+                        .lineLimit(3...)
+                        .accessibilityLabel("About")
+                        .accessibilityValue(text.isEmpty ? L10n.string("A little about you") : text)
                 }
             }
-            .accessibilityLabel("About")
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeightChange?($0) }
             .id(WNProfileField.about)
             .listRowBackground(Color(uiColor: .secondarySystemFill))

@@ -21,11 +21,7 @@ struct WNOnboardingButton: View {
     let action: () -> Void
 
     private var contentColor: Color {
-        Self.contentColor(colorScheme: colorScheme, isEnabled: isEnabled, isLoading: isLoading)
-    }
-
-    static func contentColor(colorScheme: ColorScheme, isEnabled: Bool, isLoading: Bool) -> Color {
-        (isEnabled || isLoading) ? (colorScheme == .dark ? .black : .white) : Color(uiColor: .tertiaryLabel)
+        WNButtonPalette.primaryContent(colorScheme: colorScheme, isEnabled: isEnabled, isLoading: isLoading)
     }
 
     var body: some View {
