@@ -3,11 +3,11 @@ import Testing
 @testable import whitenoise_ios
 
 struct AccountSetupRecoveryPresentationTests {
-    @Test(arguments: [OnboardingStatusFfi.passed, .skipped])
-    func completionKeepsReviewedContentUntilDismissal(_ status: OnboardingStatusFfi) {
-        let reviewed = snapshot(status: .needsInput, revision: 1)
+    @Test(arguments: [OnboardingStatusFfi.passed, .skipped], [OnboardingStepFfi.relays, .singleDevice, .keyPackage])
+    func completionKeepsReviewedContentUntilDismissal(_ status: OnboardingStatusFfi, step: OnboardingStepFfi) {
+        let reviewed = snapshot(status: .needsInput, revision: 1, step: step)
         var presentation = AccountSetupRecoveryPresentation(snapshot: reviewed)
-        let shouldDismiss = presentation.update(snapshot(status: status, revision: 2), step: .relays)
+        let shouldDismiss = presentation.update(snapshot(status: status, revision: 2, step: step), step: step)
         #expect(shouldDismiss)
         #expect(presentation.snapshot == reviewed)
     }
@@ -57,17 +57,22 @@ struct AccountSetupRecoveryPresentationTests {
         #expect(presentation.snapshot == refreshed)
     }
 
-    private func snapshot(status: OnboardingStatusFfi, revision: UInt64) -> OnboardingSnapshotFfi {
+    private func snapshot(status: OnboardingStatusFfi, revision: UInt64, step: OnboardingStepFfi = .relays) -> OnboardingSnapshotFfi {
         let actions: [OnboardingActionFfi]
         switch status {
-        case .needsInput: actions = [.editRelays]
+        case .needsInput:
+            switch step {
+            case .singleDevice: actions = [.continueAnyway]
+            case .keyPackage: actions = [.retry]
+            default: actions = [.editRelays]
+            }
         case .retryableFailure: actions = [.retry]
         default: actions = []
         }
         return OnboardingSnapshotFfi(
             accountIdHex: String(repeating: "a", count: 64), recoveryEpoch: "review", revision: revision, ready: false,
             steps: [
-                .init(step: .relays, status: status, findings: [], actions: actions, checkedAt: nil),
+                .init(step: step, status: status, findings: [], actions: actions, checkedAt: nil),
                 .init(step: .inboxRelays, status: .needsInput, findings: [], actions: [.editRelays], checkedAt: nil)
             ],
             proposal: nil, singleDeviceNotice: nil, cancellationPending: false
