@@ -1,11 +1,72 @@
 import SwiftUI
 
 struct SupportChatView: View {
+    let chatsViewModel: ChatsListViewModel
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var chatTarget: ChatsListView.ChatNavigationTarget?
+
     @Environment(AppState.self) private var appState
     @State private var model = SupportChatViewModel()
     @State private var requestID: UUID?
 
+    init(chatsViewModel: ChatsListViewModel, initialTarget: ChatsListView.ChatNavigationTarget?) {
+        self.chatsViewModel = chatsViewModel
+        _chatTarget = State(initialValue: initialTarget)
+    }
+
     var body: some View {
+        Group {
+            if let chatTarget {
+                ChatDestination(
+                    target: chatTarget,
+                    viewModel: chatsViewModel,
+                    appState: appState,
+                    onGroupLeft: { groupIdHex in
+                        chatsViewModel.markGroupLeft(groupIdHex: groupIdHex)
+                        dismiss()
+                    },
+                    onGroupDeleted: { groupIdHex in
+                        chatsViewModel.removeChatListRow(groupIdHex: groupIdHex)
+                        dismiss()
+                    }
+                )
+            } else {
+                introduction
+            }
+        }
+        .task(id: requestID) {
+            guard requestID != nil else { return }
+            let accountRef = appState.activeAccountRef
+            let generation = appState.runtimeGeneration
+            var destinationGroupId: String?
+            await model.start(using: appState) { destinationGroupId = $0 }
+            defer {
+                if chatTarget == nil { model.resetRouting() }
+            }
+            guard let groupIdHex = destinationGroupId, !Task.isCancelled,
+                  appState.activeAccountRef == accountRef,
+                  appState.runtimeGeneration == generation else { return }
+            // Keep Start Chat's progress visible until the destination has its row.
+            if chatsViewModel.item(groupIdHex: groupIdHex) == nil {
+                await chatsViewModel.refreshRow(groupIdHex: groupIdHex)
+            }
+            guard !Task.isCancelled, appState.activeAccountRef == accountRef,
+                  appState.runtimeGeneration == generation, appState.pendingChatId == nil else { return }
+            openChat(groupIdHex: groupIdHex)
+        }
+    }
+
+    private func openChat(groupIdHex: String) {
+        chatsViewModel.retainDestination(groupIdHex: groupIdHex)
+        // Replace the introduction in this navigation entry so Back goes to Settings.
+        chatTarget = ChatsListView.ChatNavigationTarget(
+            groupIdHex: groupIdHex,
+            performance: appState.beginConversationOpenPerformance()
+        )
+    }
+
+    private var introduction: some View {
         Form {
             Section {
                 HStack(spacing: 12) {
@@ -38,12 +99,6 @@ struct SupportChatView: View {
         }
         .localizedNavigationTitle("Chat with support")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: requestID) {
-            guard requestID != nil else { return }
-            await model.start(using: appState) {
-                appState.presentChat(groupIdHex: $0)
-            }
-        }
         .alert(SupportChatPresentation.failureTitle, isPresented: failureBinding) {
             Button("Try Again") { requestID = UUID() }
             Button("Cancel", role: .cancel) { model.dismissFailure() }
@@ -107,10 +162,12 @@ final class SupportChatViewModel {
 
     init() {
         chatFlow = NewChatFlowViewModel()
+        chatFlow.starter.playsSuccessHaptic = false
     }
 
     init(chatFlow: NewChatFlowViewModel) {
         self.chatFlow = chatFlow
+        chatFlow.starter.playsSuccessHaptic = false
     }
 
     var isCreatingChat: Bool {
@@ -134,6 +191,7 @@ final class SupportChatViewModel {
             memberRef: recipient.memberRef,
             using: appState,
             onOpen: { [weak self] groupIdHex in
+                guard !Task.isCancelled else { return }
                 self?.phase = .routing
                 onOpen(groupIdHex)
             }
@@ -153,6 +211,7 @@ final class SupportChatViewModel {
         await chatFlow.retryStart(
             using: appState,
             onOpen: { [weak self] groupIdHex in
+                guard !Task.isCancelled else { return }
                 self?.phase = .routing
                 onOpen(groupIdHex)
             }
@@ -160,6 +219,12 @@ final class SupportChatViewModel {
         if phase != .routing {
             phase = chatFlow.startPrompt == nil ? .idle : .failed
         }
+    }
+
+    /// A stale or cancelled destination must leave Start Chat available for another attempt.
+    func resetRouting() {
+        guard phase == .routing else { return }
+        phase = .idle
     }
 
     func dismissFailure() {

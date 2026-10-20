@@ -12090,6 +12090,24 @@ struct MediaComposerAvailabilityTests {
         ))
     }
 
+    @Test func missingLiveStateStopsHidingTheUnavailableNoticeAfterTheGracePeriod() {
+        // Neither a stalled open nor repeated local-only snapshots may hide
+        // the unavailable notice indefinitely.
+        for hasSnapshot in [false, true] {
+            for hasSubscription in [false, true] {
+                #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+                    usesLiveWindow: true,
+                    hasWindowSnapshot: hasSnapshot,
+                    hasLiveEpoch: false,
+                    hasWindowSubscription: hasSubscription,
+                    isLocallyReset: false,
+                    isActiveParticipant: true,
+                    hasLoadingGraceExpired: true
+                ))
+            }
+        }
+    }
+
     @Test func freshConversationReportsGroupDerivedComposerMessages() throws {
         let appState = AppState.test(client: try MarmotClient.testClient())
         let disbanded = ConversationViewModel(appState: appState, group: group(name: "ended", disbanded: true))

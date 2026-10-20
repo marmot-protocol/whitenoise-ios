@@ -215,6 +215,8 @@ final class ChatsListViewModel {
             AppGroupRecordFfi(
                 groupIdHex: row.groupIdHex,
                 endpoint: "",
+                // The displayed contact title is passed separately to the conversation.
+                // Using it as a group name briefly gives DMs group chrome and avatar seeds.
                 name: ContentSanitizer.groupName(row.groupName) ?? "",
                 description: "",
                 admins: [],

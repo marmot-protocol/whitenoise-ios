@@ -120,10 +120,11 @@ nonisolated enum ComposerAvailabilityPresentation {
         hasLiveEpoch: Bool,
         hasWindowSubscription: Bool,
         isLocallyReset: Bool,
-        isActiveParticipant: Bool
+        isActiveParticipant: Bool,
+        hasLoadingGraceExpired: Bool = false
     ) -> Bool {
         // Local-only snapshots already preserve known inactive membership.
-        guard usesLiveWindow, !isLocallyReset, isActiveParticipant else { return false }
+        guard usesLiveWindow, !isLocallyReset, isActiveParticipant, !hasLoadingGraceExpired else { return false }
         // Cached rows can arrive before MDK has resolved live send capabilities.
         return !hasWindowSnapshot || !hasLiveEpoch || !hasWindowSubscription
     }

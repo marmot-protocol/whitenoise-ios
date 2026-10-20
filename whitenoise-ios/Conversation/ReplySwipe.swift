@@ -187,7 +187,9 @@ private struct ReplySwipePanGesture: UIGestureRecognizerRepresentable {
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
         context.coordinator.gesture = self
         context.coordinator.arbiter.isNavigating = isNavigating
-        recognizer.isEnabled = isEnabled
+        if recognizer.isEnabled != isEnabled {
+            recognizer.isEnabled = isEnabled
+        }
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {

@@ -1201,6 +1201,9 @@ struct ConversationView: View {
 
     private var conversationRuntimeTasks: some View {
         conversationAttachmentSheets
+            .task(id: viewModel?.needsLiveConversationState) {
+                await viewModel?.waitForComposerLoadingGracePeriod()
+            }
             .task(id: ConversationRuntimeStartToken(
                 accountRef: appState.activeAccountRef,
                 runtimeGeneration: appState.runtimeGeneration,
@@ -3059,7 +3062,8 @@ struct ConversationView: View {
     private func handleComposerAvailabilityChange(canSendMessages: Bool) {
         guard !canSendMessages else { return }
         editSession = nil
-        cancelVoiceRecording()
+        // This also runs on chat entry, before any recording interaction.
+        voiceRecorder.cancelIfActive()
         showCameraCapture = false
         showPhotoLibraryPicker = false
         composerMediaSelection = nil

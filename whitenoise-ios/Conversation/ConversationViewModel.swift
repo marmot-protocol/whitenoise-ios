@@ -277,7 +277,8 @@ final class ConversationViewModel {
     private static let liveSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 8_000_000_000
     nonisolated static let maxSystemTimelineItems = 64
 
-    @ObservationIgnored private var usesConversationWindow = false
+    private var usesConversationWindow = false
+    private var hasComposerLoadingGraceExpired = false
     @ObservationIgnored var openingMessageId: String?
     private(set) var openingTargetUnavailable = false
     private(set) var initialWindowUnreadMessageId: String?
@@ -595,13 +596,35 @@ final class ConversationViewModel {
     }
 
     var isAwaitingLiveConversationState: Bool {
+        awaitsLiveConversationState(hasLoadingGraceExpired: hasComposerLoadingGraceExpired)
+    }
+
+    // The task identity must not change when the grace period itself expires.
+    var needsLiveConversationState: Bool {
+        awaitsLiveConversationState(hasLoadingGraceExpired: false)
+    }
+
+    func waitForComposerLoadingGracePeriod() async {
+        hasComposerLoadingGraceExpired = false
+        guard needsLiveConversationState else { return }
+        do {
+            try await Task.sleep(for: .seconds(5))
+        } catch {
+            return
+        }
+        guard !Task.isCancelled else { return }
+        hasComposerLoadingGraceExpired = true
+    }
+
+    private func awaitsLiveConversationState(hasLoadingGraceExpired: Bool) -> Bool {
         ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: usesConversationWindow,
             hasWindowSnapshot: conversationWindow != nil,
             hasLiveEpoch: conversationWindow?.header.epoch != nil,
             hasWindowSubscription: windowSubscription != nil,
             isLocallyReset: isLocallyReset,
-            isActiveParticipant: isActiveParticipant
+            isActiveParticipant: isActiveParticipant,
+            hasLoadingGraceExpired: hasLoadingGraceExpired
         )
     }
 
