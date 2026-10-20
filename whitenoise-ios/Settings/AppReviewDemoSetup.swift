@@ -36,6 +36,10 @@ struct AppReviewDemoCheckpointStore {
 @MainActor
 @Observable
 final class AppReviewDemoCoordinator {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     enum Stage: Equatable {
         case preparing
         case creatingJohnny

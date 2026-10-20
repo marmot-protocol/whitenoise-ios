@@ -66,6 +66,10 @@ nonisolated struct PollVotesWatch: Hashable, Sendable {
 @MainActor
 @Observable
 final class PollVotesInvalidation {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private(set) var revision: UInt64 = 0
     @ObservationIgnored private(set) var watch: PollVotesWatch?
 

@@ -7,6 +7,10 @@ import MarmotKit
 /// client (durable) or a lease-private frozen runtime built while the app's
 /// durable runtime stays suspended.
 final class NotificationActionRuntimeLease {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private var retainedClient: MarmotClient?
     let clientIdentity: ObjectIdentifier
     /// True when the lease owns a private ephemeral frozen runtime. It is
