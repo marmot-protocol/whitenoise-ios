@@ -38,6 +38,11 @@ nonisolated final class QRScannerFrameDetector: NSObject, AVCaptureVideoDataOutp
 
     static func payloads(in handler: VNImageRequestHandler) throws -> [String] {
         let request = VNDetectBarcodesRequest()
+        #if targetEnvironment(simulator)
+        // Newer revisions depend on inference unavailable in Simulator.
+        // Revision 1 still decodes real QR pixels for the frame-to-feedback test.
+        request.revision = VNDetectBarcodesRequestRevision1
+        #endif
         request.symbologies = [.qr]
         try handler.perform([request])
         return request.results?.compactMap(\.payloadStringValue) ?? []

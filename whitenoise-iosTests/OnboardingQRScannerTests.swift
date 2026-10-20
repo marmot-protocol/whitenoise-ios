@@ -166,8 +166,8 @@ struct ContinuousQRScannerTests {
         let empty = try QRScannerFrameDetector.payloads(
             in: VNImageRequestHandler(cgImage: #require(blankImage.cgImage))
         )
-        #expect(code == [profile])
-        #expect(empty.isEmpty)
+        try #require(code == [profile])
+        try #require(empty.isEmpty)
 
         var cleared = 0
         let scanner = QRScannerView.Coordinator(
