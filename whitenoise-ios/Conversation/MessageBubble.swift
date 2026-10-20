@@ -32,6 +32,10 @@ struct TimelineMediaTaskID: Equatable {
 /// each hop a plain reference copy and the call a direct method dispatch.
 @MainActor
 final class ConversationMediaLoader {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private let load: (MessageMediaAttachment) async throws -> Data
 
     init(_ load: @escaping (MessageMediaAttachment) async throws -> Data) {

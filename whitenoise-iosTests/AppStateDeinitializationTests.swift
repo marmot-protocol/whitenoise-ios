@@ -9,8 +9,8 @@ private enum AppStateDeinitializationContext {
 
 @MainActor
 final class AppStateDeinitializationTests: XCTestCase {
-    func testReleaseFromSynchronousTaskLocalScope() async {
-        let released = expectation(description: "AppState and its stores released")
+    func testMediaLoaderAndAppStateReleaseFromSynchronousTaskLocalScope() async {
+        let released = expectation(description: "Media loader, AppState and its stores released")
 
         // SwiftUI can release its environment from a synchronous callback with
         // task-local values but no Swift task. Older runtimes crash on an actor hop here.
@@ -27,6 +27,13 @@ final class AppStateDeinitializationTests: XCTestCase {
                     ready: false, steps: [], proposal: nil, singleDeviceNotice: nil, cancellationPending: false
                 ))
                 state?.conversationOpenPerformance = ConversationOpenPerformance(start: .now, ticket: nil)
+                // Gallery callbacks can retain the environment until SwiftUI releases the loader.
+                var loader: ConversationMediaLoader? = ConversationMediaLoader { [state] _ in
+                    XCTAssertNotNil(state)
+                    XCTFail("Releasing the loader must not request media")
+                    return Data()
+                }
+                weak var releasedLoader = loader
                 weak var releasedState = state
                 weak var releasedErasureState = state?.erasureState
                 weak var releasedDraftStore = state?.conversationDraftStore
@@ -34,7 +41,10 @@ final class AppStateDeinitializationTests: XCTestCase {
                 weak var releasedSetup = state?.pendingAccountSetup
 
                 state = nil
+                XCTAssertNotNil(releasedState)
+                loader = nil
 
+                XCTAssertNil(releasedLoader)
                 XCTAssertNil(releasedState)
                 XCTAssertNil(releasedErasureState)
                 XCTAssertNil(releasedDraftStore)
