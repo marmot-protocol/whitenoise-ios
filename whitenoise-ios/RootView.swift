@@ -75,22 +75,23 @@ struct RootView: View {
         // One presenter survives account routing and changes from the form to
         // the report in place. A second sheet cannot race the form's dismissal.
         .sheet(isPresented: Binding(
-            get: { appState.showSignOut || appState.pendingWipeReport != nil },
+            get: { appState.accountExitIntent != nil || appState.pendingWipeReport != nil },
             set: { presented in
                 if !presented {
-                    appState.showSignOut = false
+                    appState.accountExitIntent = nil
                     appState.pendingWipeReport = nil
                 }
             }
         )) {
             if let report = appState.pendingWipeReport {
                 WipeOutcomeReportView(report: report) {
-                    appState.showSignOut = false
+                    appState.accountExitIntent = nil
                     appState.pendingWipeReport = nil
                 }
                 .appAppearance()
-            } else {
-                SignOutView()
+            } else if let intent = appState.accountExitIntent {
+                SignOutView(intent: intent)
+                    .id(intent)
                     .appAppearance()
             }
         }

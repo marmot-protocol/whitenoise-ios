@@ -1,7 +1,13 @@
 import SwiftUI
 import MarmotKit
 
+nonisolated enum AccountExitIntent: Hashable {
+    case signOut
+    case deleteProfile
+}
+
 struct SignOutView: View {
+    let intent: AccountExitIntent
     @Environment(AppState.self) private var appState
     @State private var shouldWipeData = false
     @State private var confirmation = ""
@@ -10,15 +16,18 @@ struct SignOutView: View {
     @State private var profileName = ""
     @State private var error: String?
 
+    private var isWiping: Bool { intent == .deleteProfile || shouldWipeData }
+
     var body: some View {
         SignOutForm(
+            intent: intent,
             shouldWipeData: $shouldWipeData,
             confirmation: $confirmation,
             profileName: profileName,
             isBusy: isBusy,
             canSignOut: canSignOut,
             error: error,
-            onClose: { appState.showSignOut = false },
+            onClose: { appState.accountExitIntent = nil },
             onSignOut: signOut
         ) {
             profileSummaryRow
@@ -43,7 +52,7 @@ struct SignOutView: View {
             && profileRef == appState.activeAccountRef
             && !appState.isAccountExitInProgress
             && ProfileExitConfirmation.canSignOut(
-                wiping: shouldWipeData,
+                wiping: isWiping,
                 input: confirmation,
                 profileName: profileName,
                 busy: isBusy
@@ -53,7 +62,22 @@ struct SignOutView: View {
     @ViewBuilder
     private var profileSummaryRow: some View {
         if let active = appState.activeAccount, active.label == profileRef {
-            AccountIdentitySummary(account: active, avatarSize: 48)
+            if intent == .deleteProfile {
+                ProfileIdentityHeader(
+                    name: profileName,
+                    npub: appState.npub(forAccountIdHex: active.accountIdHex),
+                    publicKeyUsesFilledStyle: true
+                ) { size in
+                    AvatarBubble(
+                        seed: active.accountIdHex,
+                        title: profileName,
+                        pictureURL: appState.avatarURL(forAccountIdHex: active.accountIdHex)
+                    )
+                    .frame(width: size, height: size)
+                }
+            } else {
+                AccountIdentitySummary(account: active, avatarSize: 48)
+            }
         } else {
             Text(profileName).font(.headline)
         }
@@ -65,7 +89,7 @@ struct SignOutView: View {
 
     private func signOut() {
         guard canSignOut else { return }
-        let wiping = shouldWipeData
+        let wiping = isWiping
         isBusy = true
         error = nil
         Task {
@@ -76,7 +100,7 @@ struct SignOutView: View {
                 success = await appState.signOut(onError: showError)
             }
             if success {
-                appState.showSignOut = false
+                appState.accountExitIntent = nil
             } else {
                 isBusy = false
                 if error == nil {

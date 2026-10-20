@@ -842,7 +842,7 @@ final class AppState {
     var pendingWipeReport: WipeReport?
 
     /// Root-hosted presentation survives Settings disappearing during account exit.
-    var showSignOut = false
+    var accountExitIntent: AccountExitIntent?
 
     /// Non-destructively signs out of the active account: clears its native
     /// push registration, deactivates it in Marmot, and opens profile selection. The account row, keys, encrypted store, media,

@@ -79,7 +79,7 @@ struct SettingsView: View {
 
             Section {
                 Button {
-                    appState.showSignOut = true
+                    appState.accountExitIntent = .signOut
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         .foregroundStyle(.primary)

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Shows the mapped outcome without accessing the wiped account or runtime.
-/// RootView keeps this report in the same sheet as Sign Out, above Welcome or
+/// RootView keeps this report in the account-exit sheet, above Welcome or
 /// the remaining-profile chooser after account routing changes.
 struct WipeOutcomeReportView: View {
     let report: WipeReport
@@ -19,7 +19,7 @@ struct WipeOutcomeReportView: View {
                     }
                 }
             }
-            .localizedNavigationTitle("Sign Out & Wipe finished with issues")
+            .localizedNavigationTitle("Some cleanup couldn’t be completed")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

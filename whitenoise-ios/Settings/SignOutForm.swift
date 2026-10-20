@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Sign-out presentation, confirmation, and keyboard-aware scrolling.
+/// Shared sign-out and profile-deletion confirmation.
 struct SignOutForm<ProfileSummary: View>: View {
+    var intent: AccountExitIntent = .signOut
     @Binding var shouldWipeData: Bool
     @Binding var confirmation: String
     let profileName: String
@@ -11,6 +12,8 @@ struct SignOutForm<ProfileSummary: View>: View {
     let onClose: () -> Void
     let onSignOut: () -> Void
     @ViewBuilder let profileSummary: () -> ProfileSummary
+    @State private var isKeyboardVisible = false
+    @State private var confirmationHeight: CGFloat = 0
     @FocusState private var confirmationFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -18,10 +21,16 @@ struct SignOutForm<ProfileSummary: View>: View {
         case wipeConfirmation
     }
 
+    private var isDeletingProfile: Bool { intent == .deleteProfile }
+    private var isWiping: Bool { isDeletingProfile || shouldWipeData }
+    private var navigationTitle: LocalizedStringKey { isDeletingProfile ? "Delete Profile" : "Sign Out" }
+
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
-                signOutForm
+                exitForm
+                    .scrollDismissesKeyboard(.interactively)
+                    .safeAreaPadding(.bottom, isKeyboardVisible ? BottomInputChromeLayout.keyboardInset : 0)
                     .onChange(of: confirmationFocused) {
                         revealConfirmation(using: proxy)
                     }
@@ -36,8 +45,11 @@ struct SignOutForm<ProfileSummary: View>: View {
                             revealConfirmation(using: proxy)
                         }
                     }
+                    .onChange(of: confirmationHeight) {
+                        revealConfirmation(using: proxy)
+                    }
             }
-            .navigationTitle("Sign Out")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -52,9 +64,49 @@ struct SignOutForm<ProfileSummary: View>: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(isBusy)
+        .trackKeyboardVisibility($isKeyboardVisible, animatesChanges: false)
         .onChange(of: shouldWipeData) { _, wiping in
             if !wiping { confirmationFocused = false }
         }
+    }
+
+    @ViewBuilder
+    private var exitForm: some View {
+        if isDeletingProfile {
+            deletionForm
+        } else {
+            signOutForm
+        }
+    }
+
+    private var deletionForm: some View {
+        Form {
+            Section {
+                profileSummary()
+                    .padding(20)
+                    .listRowInsets(EdgeInsets())
+                    .wnGroupedCardRow(.first)
+                deletionExplanation
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 28)
+                    .listRowInsets(EdgeInsets())
+                    .wnGroupedCardRow(.middle)
+                VStack(alignment: .leading, spacing: 20) {
+                    confirmationInput
+                    inlineError
+                    signOutButton
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
+                .listRowInsets(EdgeInsets())
+                .wnGroupedCardRow(.last)
+                .id(ScrollTarget.wipeConfirmation)
+            }
+            .listRowSeparator(.hidden)
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     private var signOutForm: some View {
@@ -65,12 +117,12 @@ struct SignOutForm<ProfileSummary: View>: View {
                     .disabled(isBusy)
                     .accessibilityIdentifier("sign-out.wipe-data-toggle")
             } footer: {
-                if !shouldWipeData {
+                if !isWiping {
                     Text("Your profile and chats will stay on this device.")
                 }
             }
 
-            if shouldWipeData {
+            if isWiping {
                 Section {
                     VStack(alignment: .leading, spacing: 20) {
                         wipeWarning
@@ -96,9 +148,55 @@ struct SignOutForm<ProfileSummary: View>: View {
     }
 
     private func revealConfirmation(using proxy: ScrollViewProxy) {
-        guard shouldWipeData, confirmationFocused else { return }
+        guard isWiping, confirmationFocused else { return }
         withAnimation(reduceMotion ? nil : .default) {
             proxy.scrollTo(ScrollTarget.wipeConfirmation, anchor: .bottom)
+        }
+    }
+
+    private var deletionExplanation: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Delete Profile")
+                    .font(.title.bold())
+                Text("This signs you out and permanently removes this profile’s data from this device.")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+            deletionDetail(
+                "Chats and media",
+                text: "Your local chats, media, and drafts will be deleted. Signing in again won’t restore them."
+            )
+            deletionDetail(
+                "Secret key",
+                text: "Your secret key will be removed from this device. You’ll need a saved copy to sign in again."
+            )
+            deletionDetail(
+                "Groups",
+                text: "You’ll leave your groups and need new invitations to rejoin."
+            )
+            deletionDetail(
+                "Profile settings",
+                text: "This profile’s local settings will be removed. Your other profiles are unaffected."
+            )
+            deletionDetail(
+                "Copies elsewhere",
+                text: "Messages and profile information held by other people or independent relays may remain."
+            )
+            deletionDetail(
+                "Your Nostr identity remains",
+                text: "Your identity comes from a cryptographic key, not an account controlled by White Noise. We can remove it from this device, but cannot erase it across Nostr."
+            )
+        }
+        .foregroundStyle(.primary)
+    }
+
+    private func deletionDetail(_ title: LocalizedStringKey, text: LocalizedStringKey) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            Text(text)
         }
     }
 
@@ -112,8 +210,10 @@ struct SignOutForm<ProfileSummary: View>: View {
                 .font(.headline)
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(.isHeader)
-            Text("This profile’s data will be erased from this device. Chats can’t be restored. You’ll need new invitations. Copies held by others or relays won’t be erased.")
+            Text("This profile’s chats, media, and secret key will be erased from this device. You’ll leave your groups. Chats can’t be restored, and you’ll need new invitations.")
                 .font(.body)
+                .foregroundStyle(.secondary)
+            Text("Copies held by others or relays won’t be erased.")
                 .foregroundStyle(.secondary)
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -137,6 +237,9 @@ struct SignOutForm<ProfileSummary: View>: View {
                 .font(.footnote)
                 .padding(.horizontal, WNInputMetrics.leadingInset)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+            confirmationHeight = $0
+        }
     }
 
     @ViewBuilder
@@ -148,16 +251,16 @@ struct SignOutForm<ProfileSummary: View>: View {
 
     private var signOutButton: some View {
         WNButton(
-            title: "Sign Out",
-            emphasis: shouldWipeData ? .destructive : .primary,
+            title: actionTitle,
+            emphasis: isWiping ? .destructive : .primary,
             size: .standard,
             isLoading: isBusy,
-            surface: shouldWipeData ? .filled : .automatic,
+            surface: isWiping ? .filled : .automatic,
             action: submit
         )
         .disabled(!isBusy && !canSignOut)
         .accessibilityLabel(busyTitle)
-        .accessibilityIdentifier(shouldWipeData ? "wipe-profile.confirm" : "sign-out.keep-data")
+        .accessibilityIdentifier(isWiping ? "wipe-profile.confirm" : "sign-out.keep-data")
     }
 
     private func submit() {
@@ -165,9 +268,15 @@ struct SignOutForm<ProfileSummary: View>: View {
         onSignOut()
     }
 
+    private var actionTitle: LocalizedStringKey {
+        if isDeletingProfile { return "Delete Profile" }
+        return isWiping ? "Sign Out and Delete Data" : "Sign Out"
+    }
+
     private var busyTitle: LocalizedStringKey {
-        guard isBusy else { return "Sign Out" }
-        return shouldWipeData ? "Signing out and wiping data…" : "Signing out…"
+        guard isBusy else { return actionTitle }
+        if isDeletingProfile { return "Deleting…" }
+        return isWiping ? "Signing out and wiping data…" : "Signing out…"
     }
 
     private var confirmationHint: AttributedString {

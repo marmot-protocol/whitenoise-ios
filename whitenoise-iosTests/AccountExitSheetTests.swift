@@ -9,16 +9,29 @@ import XCTest
 @MainActor
 final class AccountExitSheetTests: XCTestCase {
     func testPartialReportStaysVisibleAndClosesAboveWelcome() async throws {
-        let fixtureReleased = try await checkPartialReport(hasRemainingProfiles: false)
+        let fixtureReleased = try await checkPartialReport(intent: .signOut, hasRemainingProfiles: false)
         try await waitUntil("The Welcome fixture was not released", fixtureReleased)
     }
 
     func testPartialReportStaysVisibleAndClosesAboveProfileChooser() async throws {
-        let fixtureReleased = try await checkPartialReport(hasRemainingProfiles: true)
+        let fixtureReleased = try await checkPartialReport(intent: .signOut, hasRemainingProfiles: true)
         try await waitUntil("The profile chooser fixture was not released", fixtureReleased)
     }
 
-    private func checkPartialReport(hasRemainingProfiles: Bool) async throws -> () -> Bool {
+    func testDeletionReportStaysVisibleAndClosesAboveWelcome() async throws {
+        let fixtureReleased = try await checkPartialReport(intent: .deleteProfile, hasRemainingProfiles: false)
+        try await waitUntil("The deletion Welcome fixture was not released", fixtureReleased)
+    }
+
+    func testDeletionReportStaysVisibleAndClosesAboveProfileChooser() async throws {
+        let fixtureReleased = try await checkPartialReport(intent: .deleteProfile, hasRemainingProfiles: true)
+        try await waitUntil("The deletion chooser fixture was not released", fixtureReleased)
+    }
+
+    private func checkPartialReport(
+        intent: AccountExitIntent,
+        hasRemainingProfiles: Bool
+    ) async throws -> () -> Bool {
         let fixture = try isolatedState()
         defer { fixture.defaults.removePersistentDomain(forName: fixture.suite) }
         let state = fixture.state
@@ -41,10 +54,10 @@ final class AccountExitSheetTests: XCTestCase {
             window.rootViewController = nil
             previousKeyWindow?.makeKey()
         }
-        state.showSignOut = true
-        try await waitUntil("Sign Out did not present") { host.presentedViewController != nil }
+        state.accountExitIntent = intent
+        try await waitUntil("Account exit did not present") { host.presentedViewController != nil }
         let presenter = try XCTUnwrap(host.presentedViewController)
-        try await waitUntil("Sign Out presentation did not finish") { !presenter.isBeingPresented }
+        try await waitUntil("Account exit presentation did not finish") { !presenter.isBeingPresented }
 
         // Account routing removes Settings before the operation returns its report.
         state.setPhase(hasRemainingProfiles ? .ready : .onboarding)
@@ -52,9 +65,9 @@ final class AccountExitSheetTests: XCTestCase {
             WipeStageReport(stage: .deletingKeyPackages, completedCount: 0,
                             failures: [WipeFailureItem(subject: nil, reason: "Relay unavailable")]),
         ])
-        state.showSignOut = false
+        state.accountExitIntent = nil
         // Wait for the report itself to render, not an assumed animation duration.
-        try await waitUntil("The wipe report did not replace Sign Out") {
+        try await waitUntil("The wipe report did not replace account exit") {
             self.containsReport(in: presenter)
         }
         XCTAssertTrue(host.presentedViewController === presenter)
@@ -64,7 +77,7 @@ final class AccountExitSheetTests: XCTestCase {
         try await waitUntil("Closing the wipe report did not dismiss its sheet") {
             host.presentedViewController == nil
         }
-        XCTAssertFalse(state.showSignOut)
+        XCTAssertNil(state.accountExitIntent)
         return { [weak state, weak appearance] in state == nil && appearance == nil }
     }
 
@@ -76,7 +89,7 @@ final class AccountExitSheetTests: XCTestCase {
 
     private func containsReport(in controller: UIViewController) -> Bool {
         if let navigation = controller as? UINavigationController,
-           navigation.navigationBar.topItem?.title == L10n.string("Sign Out & Wipe finished with issues") {
+           navigation.navigationBar.topItem?.title == L10n.string("Some cleanup couldn’t be completed") {
             return true
         }
         return controller.children.contains { containsReport(in: $0) }

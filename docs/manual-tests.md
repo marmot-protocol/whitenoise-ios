@@ -38,8 +38,31 @@ before every release tag.
 
 - [ ] Settings shows one **Sign Out** row. It opens a large sheet with the active
       profile, **Wipe Local Data** off, and a leading Close button.
+- [ ] Settings → Profile shows a full-width native gray **Delete Profile** button
+      with red text pinned at the bottom while viewing the profile, hidden while
+      editing. It opens a large sheet titled **Delete Profile**, without a wipe
+      toggle. One continuous white/semantic card contains Share & Connect's
+      centered large avatar, name, and npub, a large **Delete Profile** heading
+      with a short gray subtitle, the explanation, the name field, and the red
+      **Delete Profile** action. The deletion explanation has no warning icon,
+      and its detailed body text uses the primary text color.
+      Short titled sections appear in this order: Chats and media, Secret key,
+      Groups, Profile settings, Copies elsewhere, Your Nostr identity remains.
+      Spacing separates the content without internal dividers or extra cards.
+      The sheet's action scrolls with the content; it is not pinned.
+      Focusing the name field scrolls the field, helper text, and action into view
+      with padding above the keyboard. The sheet identifies the
+      profile, explains local chat/media/key loss, leaving groups and needing new
+      invitations, and says other profiles are unaffected. It explains that the
+      Nostr identity is based on a cryptographic key that White Noise cannot
+      erase across Nostr, saved secret keys still allow sign-in, and messages
+      and profile information held elsewhere may remain.
+      **Delete Profile** requires the same displayed-name confirmation as wiping.
+      Closing and reopening clears the input. A failed operation preserves it
+      with an inline error; partial cleanup keeps the report above the resulting
+      Welcome or profile chooser, using the same flow as sign-out wiping.
 - [ ] With wiping on, verify the short disclosure explains permanent local data
-      removal, chats not returning after signing in again, and needing a new
+      and secret-key removal, leaving groups, chats not returning after signing in again, and needing a new
       invitation to each chat. The same warning explains that copies held by
       other people or relays are not erased.
       The warning uses a monochrome outline triangle and the heading **You’ll lose all chats**.
@@ -47,10 +70,10 @@ before every release tag.
       the required name in its helper text uses the primary text color.
       The final button uses a flat red fill with white text when enabled and
       native muted colors when disabled.
-      **Sign Out** stays disabled until the displayed profile name matches exactly
+      **Sign Out and Delete Data** stays disabled until the displayed profile name matches exactly
       (surrounding whitespace is ignored; case and internal spacing must match).
       Focusing the profile-name field scrolls to the bottom of the card so both
-      the field and Sign Out button are visible above the keyboard.
+      the field and destructive button are visible above the keyboard in both flows.
       For a lowercase profile name, the keyboard must not automatically capitalize it.
 - [ ] Turn wiping off: the name field disappears and its input clears. The footer
       says the profile and local data stay on this device. Turning wiping back on
@@ -418,7 +441,7 @@ simulator clone.
       `xcrun devicectl`, not TestFlight. It must refuse the store,
       either with the startup failure screen or with the affected profiles
       unavailable. It must not open chats, show empty history, or rewrite data.
-      Do not use Sign Out, Erase App Data or nsec re-import
+      Do not use Sign Out, Delete Profile, Erase App Data or nsec re-import
       while the old build is installed.
 - [ ] Reinstall the new build. It opens the upgraded store unchanged.
 - [ ] Confirm the only way back to the old build is the pre-upgrade backup.
@@ -743,8 +766,8 @@ only from custom emoji already shown in that chat.
       Logging remains off for users who have it disabled. On upgrade/startup,
       MDK removes legacy v1-v3 audit files and segments even with recording off;
       existing v4 files remain. The app implements no cleanup or filtering.
-- [ ] Sign Out defaults Wipe Data From This Device on. Exact profile-name entry
-      enables Sign Out in the same sheet; mismatched case/name stays disabled.
+- [ ] Sign Out defaults **Wipe Local Data** off. With wiping on, exact profile-name entry
+      enables **Sign Out and Delete Data** in the same sheet; mismatched case/name stays disabled.
       Turning wiping off requires no typed confirmation and preserves local data.
 - [ ] Sign-out failures retain the sheet. With surviving signed-in profiles, show
       their chooser; choosing one opens its Settings. Otherwise show Welcome.
@@ -1129,6 +1152,8 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 - [ ] Settings → Sign Out uses the single confirmation sheet. Wiping removes
       the profile and local keys; retaining data keeps them available for sign-in.
       Remaining signed-in profiles go to the chooser; otherwise show Welcome.
+      Settings → Profile → Delete Profile opens a dedicated deletion confirmation
+      with the same destructive operation and post-deletion routing.
 - [ ] Group Details → Set/Edit group image rejects non-HTTPS, localhost,
       private-address, and invalid URLs; a public HTTPS image URL previews
       and saves.

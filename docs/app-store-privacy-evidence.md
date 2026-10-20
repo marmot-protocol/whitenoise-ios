@@ -156,11 +156,14 @@ to declare the native SDK audit complete.
 
 ## Other review findings clarified
 
-**R4:** Settings → **Sign Out** opens one sheet with **Wipe Local Data** off
-by default. Turning it on reveals the irreversible-loss warning and requires
-exact profile-name confirmation. Submitting with wiping enabled leaves
-the profile's groups, requests deletion of its outstanding KeyPackages from
-known relays, clears its push registration, and removes its local chats, drafts,
+**R4:** Settings → **Profile** → **Delete Profile** opens a dedicated deletion
+sheet with the active profile, a description of what is removed and what remains,
+and exact profile-name confirmation. The entry is visible without tapping Edit.
+Settings → **Sign Out** also offers **Wipe Local Data**, off by default.
+Turning it on shows the loss warning and name confirmation, and changes the final
+action to **Sign Out and Delete Data**. Both destructive paths leave
+the profile's groups, request deletion of its outstanding KeyPackages from
+known relays, clear its push registration, and remove its local chats, drafts,
 media, settings, and device key material. Leaving wiping off signs out while
 retaining the profile and its local data. Privacy & Security → **Erase App
 Data** deletes every local profile. Reviewer notes should explain this
@@ -169,7 +172,7 @@ warning explains that copies held by others or relays will not be erased. Do not
 identity.
 Apple's [account deletion guidance](https://developer.apple.com/support/offering-account-deletion-in-your-app/)
 requires an in-app initiation path where account deletion is applicable.
-Record the full create-or-sign-in and Sign Out with wiping flow on a physical
+Record the full create-or-sign-in and Profile → Delete Profile flow on a physical
 device for the App Review Information attachment.
 
 **R7:** The developer already supplied reviewers a walkthrough creating two

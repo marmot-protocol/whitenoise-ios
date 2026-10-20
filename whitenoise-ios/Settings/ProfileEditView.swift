@@ -116,6 +116,21 @@ struct ProfileEditView: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
+        .modifier(WNOnboardingActionBar(isPresented: !isEditing) {
+            VStack(spacing: 8) {
+                WNGrayButton(title: L10n.string("Delete Profile"), isDestructive: true) {
+                    appState.accountExitIntent = .deleteProfile
+                }
+                .disabled(model.isPublishing || appState.activeAccount == nil || appState.isAccountExitInProgress)
+                .accessibilityIdentifier("profile.deleteProfile")
+                Text("Remove this profile and its data from this device.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        })
         .productScreen(.settings, section: .account)
         .localizedNavigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
