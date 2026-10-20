@@ -5,6 +5,7 @@ struct PasteAwareSecureField: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
     let showsAccessory: Bool
+    var placeholder: String = L10n.string("Enter private key")
     var onFocusRequest: () -> Void = {}
     let onPaste: (SensitiveClipboard.Token?, String) -> Void
     let onSubmit: () -> Void
@@ -24,7 +25,7 @@ struct PasteAwareSecureField: UIViewRepresentable {
         field.pasteDelegate = field
         field.configureAccessory()
         field.onPaste = onPaste
-        field.placeholder = L10n.string("Enter private key")
+        field.placeholder = placeholder
         field.autocapitalizationType = .none
         field.autocorrectionType = .no
         field.spellCheckingType = .no
@@ -55,6 +56,7 @@ struct PasteAwareSecureField: UIViewRepresentable {
         let coordinator = context.coordinator
         coordinator.update(text: $text, isFocused: $isFocused, onSubmit: onSubmit, onFocusRequest: onFocusRequest)
         field.onPaste = onPaste
+        field.placeholder = placeholder
         if text != coordinator.syncedText {
             coordinator.syncedText = text
             if field.text != text { field.text = text }

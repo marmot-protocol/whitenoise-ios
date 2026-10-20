@@ -5,15 +5,18 @@ struct AccountsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var initiallyActiveAccountRef: String?
+    @State private var selectedDetent: PresentationDetent
     let showsCloseButton: Bool
     let onAddProfile: () -> Void
 
     init(
         activeAccountRef: String?,
+        signedInAccountCount: Int,
         showsCloseButton: Bool = false,
         onAddProfile: @escaping () -> Void
     ) {
         _initiallyActiveAccountRef = State(initialValue: activeAccountRef)
+        _selectedDetent = State(initialValue: signedInAccountCount >= 4 ? .large : .medium)
         self.showsCloseButton = showsCloseButton
         self.onAddProfile = onAddProfile
     }
@@ -65,7 +68,7 @@ struct AccountsView: View {
             }
         }
         .task { await appState.refreshAccountUnreadSummaries() }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $selectedDetent)
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.resizes)
     }
@@ -224,7 +227,7 @@ struct SignedOutProfilesView: View {
         .sheet(isPresented: $showAdd) {
             AddProfileSheet()
         }
-        .onChange(of: appState.accounts.count) { _, _ in
+        .onChange(of: appState.accounts.filter { !$0.signedOut }.count) { _, _ in
             if showAdd { showAdd = false }
         }
     }

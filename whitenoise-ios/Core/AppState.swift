@@ -1791,6 +1791,69 @@ final class AppState {
         pendingAccountSetupReadiness.removeValue(forKey: account.label)
     }
 
+    func recoverOnboardingSetup(accountID: String) async throws {
+        guard !isSigningOut else { throw MarmotKitError.OnboardingActionUnavailable }
+        let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        guard try await lease.client.onboardingRecoveryRequired(accountRef: accountID) else {
+            throw MarmotKitError.OnboardingActionUnavailable
+        }
+        if let model = pendingAccountSetup, model.accountID == accountID {
+            model.suspend()
+            await model.drain()
+        }
+        guard !isSigningOut else { throw MarmotKitError.OnboardingActionUnavailable }
+        _ = try await lease.client.recoverOnboarding(accountRef: accountID)
+        signInAttempts.finish(accountID)
+        if pendingAccountSetup?.accountID == accountID { pendingAccountSetup = nil }
+        onboardingRecoveryAccounts.removeAll { $0.accountIdHex == accountID }
+        // Recovery has committed; a later refresh failure must not report it as failed.
+        try? await refreshAccounts(refreshUnreadSummaries: false)
+    }
+
+    /// Remove only an explicitly selected, inactive profile with a broken setup.
+    @MainActor
+    func removeOnboardingRecoveryAccount(_ account: AccountSummaryFfi) async throws {
+        guard !isSigningOut, account.localSigning,
+              activeAccountRef != account.label,
+              onboardingRecoveryAccounts.contains(where: { $0.accountIdHex == account.accountIdHex }) else {
+            throw MarmotKitError.OnboardingActionUnavailable
+        }
+        let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        guard try await lease.client.onboardingRecoveryRequired(accountRef: account.accountIdHex) else {
+            throw MarmotKitError.OnboardingActionUnavailable
+        }
+        guard !isSigningOut, activeAccountRef != account.label else {
+            throw MarmotKitError.OnboardingActionUnavailable
+        }
+        isSigningOut = true
+        defer {
+            finishAccountExit()
+            scheduleNativePushRegistrationIfEnabled()
+        }
+        if let model = pendingAccountSetup, model.accountID == account.accountIdHex {
+            model.suspend()
+            await model.drain()
+        }
+        await notificationCoordinator.cancelNativePushRegistrationTask()
+        _ = try? await lease.client.marmot.clearPushRegistration(accountRef: account.label)
+        try await lease.client.marmot.removeAccount(accountRef: account.label)
+        signInAttempts.finish(account.accountIdHex)
+        if pendingAccountSetup?.accountID == account.accountIdHex { pendingAccountSetup = nil }
+        onboardingRecoveryAccounts.removeAll { $0.accountIdHex == account.accountIdHex }
+        accountSetupSnapshots.removeAll { $0.accountIdHex == account.accountIdHex }
+        pendingAccountSetupReadiness.removeValue(forKey: account.label)
+        conversationDraftStore.removeDrafts(accountRef: account.label)
+        await conversationDraftStore.flush()
+        MessageHideStore.clearAll(accountRef: account.label)
+        ChatMuteStore.clearAll(accountIdHex: account.accountIdHex)
+        profileStore.clearContactNicknames(ownerAccountIdHex: account.accountIdHex)
+        profileStore.clearForAccountRemoval(accountIdHex: account.accountIdHex)
+        // Removal has committed; a later refresh failure must not report it as failed.
+        try? await refreshAccounts(refreshUnreadSummaries: false)
+    }
+
     @MainActor
     func completeIdentityProfileSetup(_ summary: AccountSummaryFfi) async {
         restoreSignUpPresentation = false
