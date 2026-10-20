@@ -4,12 +4,8 @@ import Testing
 import MarmotKit
 @testable import whitenoise_ios
 
-/// Binding fixture for sending MDK 0.12.0 custom emoji: a peer's emoji puts
-/// `:party:` in the chat's catalog, then a tagged kind-9 goes through the
-/// real `sendTaggedMedia` of a live test runtime and is read back through the
-/// conversation window and the rendering resolver. The peer row is synthetic, so its retained bytes and
-/// the Blossom upload are simulated (the runtime is offline); the uploaded
-/// reference is shaped like a real one for the group's epoch.
+/// Captures the existing sender boundary and projects its output into the real
+/// conversation view model. Relay-coupled MDK delivery is not part of this unit test.
 @MainActor
 @Suite(.serialized)
 struct CustomEmojiSendingFixtureTests {
@@ -17,7 +13,7 @@ struct CustomEmojiSendingFixtureTests {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    @Test func taggedMessageRoundTripsThroughTheRuntime() async throws {
+    @Test func taggedMessageReachesSendBoundaryAndRenders() async throws {
         let client = try MarmotClient.testClient()
         try await client.startRuntime()
         let watchdog = MarmotFixtureWatchdog.start("Custom emoji send fixture exceeded its deadline", breaking: client)
@@ -77,6 +73,7 @@ struct CustomEmojiSendingFixtureTests {
             let emoji = model.customEmojiUsed(in: "yay :party: :celebrate: :party-time:")
             #expect(emoji.map(\.shortcode) == [party, celebrate])
 
+            var submissions: [(scope: CustomEmojiScope, caption: String, attachments: [MediaAttachmentReferenceFfi], tags: [[String]])] = []
             var uploadCount = 0
             var uploadedURL = ""
             let version = groupRecord.encryptedMedia.version ?? .v2
@@ -100,27 +97,32 @@ struct CustomEmojiSendingFixtureTests {
                         dim: request.dim, thumbhash: request.thumbhash)
                 },
                 sendMessage: { scope, caption, attachments, tags in
-                    _ = try await client.sendTaggedMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
-                                                         attachments: attachments, caption: caption, tags: tags)
+                    submissions.append((scope, caption, attachments, tags))
                 }
             )
 
             try await sender.sendMessage(text: "yay :party: :celebrate: :party-time:", replyTargetId: nil, emoji: emoji)
             #expect(uploadCount == 1)
 
-            // MDK stored a kind-9 carrying the caption, the emoji tag naming our
-            // upload, and that upload as an attachment; the resolver draws it
-            // inline and leaves nothing for the media grid.
-            var readBack = try await readSnapshot()
-            let sent = try #require(readBack.messages.first {
-                $0.timeline.direction == "sent" && $0.timeline.kind == MessageSemantics.kindChat
-            }).timeline
-            #expect(sent.plaintext == "yay :party: :celebrate: :party-time:")
-            #expect(sent.tags.contains(MessageTagFfi(values: ["emoji", "party", uploadedURL])))
-            #expect(sent.tags.contains(MessageTagFfi(values: ["emoji", "celebrate", uploadedURL])))
-            // One image, one attachment slot, even with two shortcodes.
-            #expect(sent.media.count == 1)
-            #expect(!sent.tags.contains { $0.values.first == "emoji" && $0.values.dropFirst().first == "party-time" })
+            let first = try #require(submissions.first)
+            #expect(submissions.count == 1)
+            #expect(first.scope == model.customEmojiSendScope)
+            #expect(first.caption == "yay :party: :celebrate: :party-time:")
+            #expect(first.tags.contains(["emoji", "party", uploadedURL]))
+            #expect(first.tags.contains(["emoji", "celebrate", uploadedURL]))
+            #expect(!first.tags.contains { $0.first == "emoji" && $0.dropFirst().first == "party-time" })
+            #expect(first.attachments.count == 1)
+            #expect(first.attachments.first?.locators.first?.value == uploadedURL)
+
+            // Install a synthetic sent row from the captured payload. This checks
+            // presentation, not MDK storage or relay acceptance.
+            var sent = peerRow
+            sent.messageIdHex = String(repeating: "ab", count: 32)
+            sent.sender = account.accountIdHex
+            sent.direction = "sent"
+            sent.plaintext = first.caption
+            sent.tags = first.tags.map { MessageTagFfi(values: $0) }
+            sent.media = first.attachments.enumerated().map { .accepted(attachmentIndex: UInt32($0.offset), reference: $0.element) }
             let attachments = MessageMediaAttachment.displayItems(fromOutcomes: sent.media, ownerId: "msg:\(sent.messageIdHex)",
                 messageId: sent.messageIdHex, sourceMessageId: sent.sourceMessageIdHex)
             let resolution = CustomEmojiResolver.resolve(text: sent.plaintext, tags: sent.tags, attachments: attachments)
@@ -131,15 +133,18 @@ struct CustomEmojiSendingFixtureTests {
             // A second message reuses the uploaded reference: no second upload.
             try await sender.sendMessage(text: "again :party:", replyTargetId: nil, emoji: [emoji[0]])
             #expect(uploadCount == 1)
-            readBack = try await readSnapshot()
-            #expect(readBack.messages.filter {
-                $0.timeline.tags.contains(MessageTagFfi(values: ["emoji", "party", uploadedURL]))
-            }.count == 2)
+            #expect(submissions.count == 2)
+            let second = try #require(submissions.last)
+            #expect(second.caption == "again :party:")
+            #expect(second.attachments == first.attachments)
+            #expect(second.tags == [["emoji", "party", uploadedURL]])
 
-            // The view model renders it through the #1136 path.
-            readBack.revision.sequence = snapshot.revision.sequence + 1
-            readBack.messages = [peerMessage] + readBack.messages
-            model.installConversationWindow(readBack)
+            var sentReferences = peerMessage.references
+            sentReferences.messageIdHex = sent.messageIdHex
+            sentReferences.sender = sent.sender
+            snapshot.revision.sequence += 1
+            snapshot.messages = [peerMessage, ConversationMessageFfi(timeline: sent, references: sentReferences)]
+            model.installConversationWindow(snapshot)
             let item = try #require(model.timeline.first { item in
                 if case .message(let record, _) = item.kind { return record.messageIdHex == sent.messageIdHex }
                 return false

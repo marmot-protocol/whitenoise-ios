@@ -3057,7 +3057,8 @@ struct ConversationView: View {
     private func handleComposerAvailabilityChange(canSendMessages: Bool) {
         guard !canSendMessages else { return }
         editSession = nil
-        cancelVoiceRecording()
+        // This also runs on chat entry, before any recording interaction.
+        voiceRecorder.cancelIfActive()
         showCameraCapture = false
         showPhotoLibraryPicker = false
         composerMediaSelection = nil

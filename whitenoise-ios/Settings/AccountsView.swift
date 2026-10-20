@@ -5,17 +5,20 @@ struct AccountsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var initiallyActiveAccountRef: String?
+    @State private var selectedDetent: PresentationDetent
     let showsCloseButton: Bool
     let requiresSelection: Bool
     let onAddProfile: () -> Void
 
     init(
         activeAccountRef: String?,
+        signedInAccountCount: Int,
         showsCloseButton: Bool = false,
         requiresSelection: Bool = false,
         onAddProfile: @escaping () -> Void
     ) {
         _initiallyActiveAccountRef = State(initialValue: activeAccountRef)
+        _selectedDetent = State(initialValue: requiresSelection || signedInAccountCount >= 4 ? .large : .medium)
         self.showsCloseButton = showsCloseButton
         self.requiresSelection = requiresSelection
         self.onAddProfile = onAddProfile
@@ -88,7 +91,7 @@ struct AccountsView: View {
             }
         }
         .task { await appState.refreshAccountUnreadSummaries() }
-        .presentationDetents(requiresSelection ? [.large] : [.medium, .large])
+        .presentationDetents(requiresSelection ? [.large] : [.medium, .large], selection: $selectedDetent)
         .presentationDragIndicator(requiresSelection ? .hidden : .visible)
         .interactiveDismissDisabled(requiresSelection)
         .presentationContentInteraction(.resizes)
@@ -190,14 +193,26 @@ struct AccountSummaryRow: View {
 
 /// Settings stays behind the required switcher until a profile is activated.
 struct SignedOutProfilesView: View {
+    @Environment(AppState.self) private var appState
     let canPresentProfiles: Bool
+    @State private var chatsViewModel: ChatsListViewModel
     @State private var showProfiles = false
     @State private var showAdd = false
 
+    init(appState: AppState, canPresentProfiles: Bool) {
+        self.canPresentProfiles = canPresentProfiles
+        // The disabled Settings backdrop needs a model, but never binds its chat list.
+        _chatsViewModel = State(initialValue: ChatsListViewModel(appState: appState))
+    }
+
     var body: some View {
         NavigationStack {
-            SettingsView(onAddProfile: { showAdd = true }, recordsScreenView: false)
-                .disabled(true)
+            SettingsView(
+                chatsViewModel: chatsViewModel,
+                onAddProfile: { showAdd = true },
+                recordsScreenView: false
+            )
+            .disabled(true)
         }
         .onChange(of: canPresentProfiles, initial: true) { _, canPresent in
             showProfiles = canPresent
@@ -206,6 +221,7 @@ struct SignedOutProfilesView: View {
             NavigationStack {
                 AccountsView(
                     activeAccountRef: nil,
+                    signedInAccountCount: appState.accounts.filter { !$0.signedOut }.count,
                     requiresSelection: true,
                     onAddProfile: { showAdd = true }
                 )
