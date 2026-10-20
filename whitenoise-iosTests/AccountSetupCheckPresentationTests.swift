@@ -1,3 +1,4 @@
+import Foundation
 import MarmotKit
 import Testing
 @testable import whitenoise_ios
