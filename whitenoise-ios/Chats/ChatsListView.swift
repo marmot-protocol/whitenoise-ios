@@ -274,7 +274,7 @@ struct ChatsListView: View {
                 appState.productAnalytics.record(.screen(.inbox))
                 if appState.openSettingsAfterProfileSelection {
                     appState.openSettingsAfterProfileSelection = false
-                    showSettings = true
+                    openSettings()
                 }
                 if canPresentDiagnostics { showDiagnosticsPrompt = true }
             }
@@ -289,7 +289,7 @@ struct ChatsListView: View {
             .onChange(of: appState.openSettingsAfterProfileSelection) {
                 if appState.openSettingsAfterProfileSelection {
                     appState.openSettingsAfterProfileSelection = false
-                    showSettings = true
+                    openSettings()
                 }
             }
             .onChange(of: canPresentDiagnostics) {
@@ -321,7 +321,9 @@ struct ChatsListView: View {
                     .appAppearance()
             }
             .navigationDestination(isPresented: $showSettings) {
-                SettingsView()
+                if let viewModel {
+                    SettingsView(chatsViewModel: viewModel)
+                }
             }
             .task(id: subscriptionScope) {
                 // The inbox needs the block list so a direct chat with a
@@ -1130,9 +1132,17 @@ struct ChatsListView: View {
         }
     }
 
+    private func openSettings() {
+        // Profile selection can request Settings before the list's task starts.
+        if viewModel == nil {
+            viewModel = ChatsListViewModel(appState: appState)
+        }
+        showSettings = true
+    }
+
     private var settingsButton: some View {
         Button {
-            showSettings = true
+            openSettings()
         } label: {
             if let active = appState.activeAccount {
                 AvatarBubble(
@@ -1625,7 +1635,7 @@ struct ChatsListView: View {
 /// subscription delivers it. Once the row exists, open from the projected row
 /// immediately; `ConversationViewModel` refreshes authoritative group details
 /// after the local timeline snapshot can render.
-private struct ChatDestination: View {
+struct ChatDestination: View {
     let target: ChatsListView.ChatNavigationTarget
     let viewModel: ChatsListViewModel
     let appState: AppState

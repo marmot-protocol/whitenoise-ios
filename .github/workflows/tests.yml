@@ -31,8 +31,8 @@ concurrency:
 jobs:
   test:
     runs-on: macos-15
-    # Cold compilation can take 18 minutes before the test suite starts.
-    timeout-minutes: 45
+    # Allow runner setup and artifact upload around the bounded 40-minute test step.
+    timeout-minutes: 55
 
     env:
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData

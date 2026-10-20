@@ -10,16 +10,14 @@ struct ProfileIdentityHeader<Avatar: View>: View {
     var bottomPadding: CGFloat = 14
     var showsIdentityValues = true
     var compactPublicKey = false
+    var publicKeyUsesFilledStyle = false
+    var avatarDiameter: CGFloat?
     @ViewBuilder let avatar: (CGFloat) -> Avatar
 
     var body: some View {
         VStack(spacing: 8) {
-            GeometryReader { geometry in
-                avatar(geometry.size.width)
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
-            .accessibilityHidden(true)
+            profileAvatar
+                .accessibilityHidden(true)
 
             VStack(spacing: 3) {
                 Text(name)
@@ -38,12 +36,27 @@ struct ProfileIdentityHeader<Avatar: View>: View {
             }
 
             if showsIdentityValues {
-                ProfilePublicKeyValue(npub: npub, compact: compactPublicKey)
+                ProfilePublicKeyValue(
+                    npub: npub, compact: compactPublicKey, usesFilledStyle: publicKeyUsesFilledStyle
+                )
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.top)
         .padding(.bottom, bottomPadding)
+    }
+
+    @ViewBuilder private var profileAvatar: some View {
+        if let avatarDiameter {
+            avatar(avatarDiameter)
+                .frame(width: avatarDiameter, height: avatarDiameter)
+        } else {
+            GeometryReader { geometry in
+                avatar(geometry.size.width)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
+        }
     }
 }
 
@@ -66,6 +79,7 @@ struct ProfileIdentityValues: View {
 private struct ProfilePublicKeyValue: View {
     let npub: String?
     var compact = false
+    var usesFilledStyle = false
 
     var body: some View {
         if let npub {
@@ -73,7 +87,8 @@ private struct ProfilePublicKeyValue: View {
                 display: IdentityFormatter.short(npub, head: 14, tail: 4),
                 copyValue: npub,
                 valueName: L10n.string("npub"),
-                compact: compact
+                compact: compact,
+                usesFilledStyle: usesFilledStyle
             )
         }
     }

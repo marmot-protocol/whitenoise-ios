@@ -12,16 +12,15 @@ struct ShareAndConnectView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
     @State private var mode = Mode.share
     @State private var qrImage: UIImage?
     @State private var qrUnavailable = false
     @State private var scannedNpub: String?
     @State private var previouslyScannedPayload: String?
     @State private var scanHint: String?
-    @State private var scanHintID = UUID()
     @State private var cameraFailure: QRScannerFailure?
     @State private var scanSession = UUID()
-    @State private var scanAttempt = 0
     @State private var pictureTask: Task<Void, Never>?
     @State private var pictureRequestID: UUID?
     @State private var sharedPicture: SharedProfilePicture?
@@ -98,23 +97,11 @@ struct ShareAndConnectView: View {
             }
         }
         .modifier(ShareAndConnectNavigationChrome(
-            isScanning: mode == .connect && scannedNpub == nil && cameraFailureReason == nil
+            isScanning: mode == .connect && cameraFailureReason == nil
         ))
         .task(id: deepLink) {
             qrImage = deepLink.flatMap { QRCode.image(from: $0) }
             qrUnavailable = deepLink != nil && qrImage == nil
-        }
-        .task(id: scanHintID) {
-            guard scanHint != nil else { return }
-            do {
-                try await Task.sleep(for: .seconds(3))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled, scanHint != nil, scannedNpub == nil else { return }
-            scanHint = nil
-            // Allow the same invalid code to show feedback again after this message expires.
-            scanAttempt &+= 1
         }
         .onChange(of: mode) { _, newValue in
             cancelPicture()
@@ -143,6 +130,10 @@ struct ShareAndConnectView: View {
             ProfileContentView(npub: npub)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarRole(.editor)
+                .toolbarBackground(.automatic, for: .navigationBar)
+                .toolbarColorScheme(nil, for: .navigationBar)
+                .environment(\.colorScheme, colorScheme)
+                .tint(WNNeutralAccent.color(for: colorScheme))
         }
     }
 
@@ -212,7 +203,7 @@ struct ShareAndConnectView: View {
     private var scannerContent: some View {
         if let cameraFailureReason {
             QRScannerUnavailableView(failure: cameraFailureReason, retry: restartScanner, usesSystemActions: true)
-        } else if scenePhase == .active, scannedNpub == nil {
+        } else if scenePhase == .active {
             liveScanner
         }
     }
@@ -226,7 +217,8 @@ struct ShareAndConnectView: View {
                     if case .profile = DeepLink.parse(string: raw) { true } else { false }
                 },
                 onInvalidPayload: showInvalidScanHint,
-                scanAttempt: scanAttempt,
+                onInvalidPayloadCleared: { scanHint = nil },
+                isScanningEnabled: scannedNpub == nil,
                 continuesAfterInvalidPayload: true,
                 previouslyScannedPayload: previouslyScannedPayload,
                 onPreviousPayloadCleared: { previouslyScannedPayload = nil }
@@ -237,8 +229,8 @@ struct ShareAndConnectView: View {
 
     private func showInvalidScanHint() {
         guard scanHint == nil else { return }
-        scanHintID = UUID()
         scanHint = L10n.string("That QR code isn't a White Noise profile.")
+        Haptics.error()
     }
 
     private func handleScan(_ raw: String) {

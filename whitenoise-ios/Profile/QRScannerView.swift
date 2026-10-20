@@ -10,7 +10,9 @@ struct QRScannerView: UIViewControllerRepresentable {
     let onError: (QRScannerFailure) -> Void
     var validate: (String) -> Bool = { _ in true }
     var onInvalidPayload: () -> Void = {}
+    var onInvalidPayloadCleared: () -> Void = {}
     var scanAttempt = 0
+    var isScanningEnabled = true
     var continuesAfterInvalidPayload = false
     var previouslyScannedPayload: String?
     var onPreviousPayloadCleared: () -> Void = {}
@@ -18,6 +20,7 @@ struct QRScannerView: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator {
         Coordinator(
             onScan: onScan, onError: onError, validate: validate, onInvalidPayload: onInvalidPayload,
+            onInvalidPayloadCleared: onInvalidPayloadCleared,
             continuesAfterInvalidPayload: continuesAfterInvalidPayload,
             previouslyScannedPayload: previouslyScannedPayload,
             onPreviousPayloadCleared: onPreviousPayloadCleared
@@ -27,25 +30,31 @@ struct QRScannerView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> ScannerViewController {
         let controller = ScannerViewController()
         controller.coordinator = context.coordinator
+        controller.observesEmptyFrames = continuesAfterInvalidPayload
         return controller
     }
 
     func updateUIViewController(_ uiViewController: ScannerViewController, context: Context) {
         context.coordinator.resumeScanning(attempt: scanAttempt)
+        context.coordinator.setScanningEnabled(isScanningEnabled)
     }
 
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         let onScan: (String) -> Void
         let onError: (QRScannerFailure) -> Void
         private var didScan = false
+        private var isScanningEnabled = true
         private var scanAttempt = 0
         private let validate: (String) -> Bool
         private let onInvalidPayload: () -> Void
+        private let onInvalidPayloadCleared: () -> Void
         private let continuesAfterInvalidPayload: Bool
         private var lastRejectedPayload: String?
         private var hasReportedInvalidPayload = false
+        private var invalidPayloadAbsentSince: ContinuousClock.Instant?
+        private var earliestFrameTime: ContinuousClock.Instant?
         private var previouslyScannedPayload: String?
-        private var previousPayloadAbsentSince: ContinuousClock.Instant?
+        private var previousPayloadRearmAt: ContinuousClock.Instant?
         private let onPreviousPayloadCleared: () -> Void
 
         init(
@@ -53,17 +62,21 @@ struct QRScannerView: UIViewControllerRepresentable {
             onError: @escaping (QRScannerFailure) -> Void,
             validate: @escaping (String) -> Bool = { _ in true },
             onInvalidPayload: @escaping () -> Void = {},
+            onInvalidPayloadCleared: @escaping () -> Void = {},
             continuesAfterInvalidPayload: Bool = false,
             previouslyScannedPayload: String? = nil,
-            onPreviousPayloadCleared: @escaping () -> Void = {}
+            onPreviousPayloadCleared: @escaping () -> Void = {},
+            at now: ContinuousClock.Instant = .now
         ) {
             self.onScan = onScan
             self.onError = onError
             self.validate = validate
             self.onInvalidPayload = onInvalidPayload
+            self.onInvalidPayloadCleared = onInvalidPayloadCleared
             self.continuesAfterInvalidPayload = continuesAfterInvalidPayload
             self.previouslyScannedPayload = previouslyScannedPayload
             self.onPreviousPayloadCleared = onPreviousPayloadCleared
+            previousPayloadRearmAt = previouslyScannedPayload == nil ? nil : now.advanced(by: .seconds(1))
         }
 
         func metadataOutput(
@@ -71,10 +84,12 @@ struct QRScannerView: UIViewControllerRepresentable {
             didOutput metadataObjects: [AVMetadataObject],
             from connection: AVCaptureConnection
         ) {
+            guard isScanningEnabled, !didScan else { return }
             let payloads = metadataObjects.compactMap {
                 ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue
             }
-            DispatchQueue.main.async { self.receiveFrame(payloads) }
+            // The capture output delivers these callbacks on .main, in order.
+            receiveFrame(payloads)
         }
 
         func receive(_ payload: String) {
@@ -82,25 +97,29 @@ struct QRScannerView: UIViewControllerRepresentable {
         }
 
         func receiveFrame(_ payloads: [String], at now: ContinuousClock.Instant = .now) {
-            guard !didScan else { return }
-            if let previouslyScannedPayload {
-                if payloads.contains(previouslyScannedPayload) {
-                    previousPayloadAbsentSince = nil
-                } else if let absentSince = previousPayloadAbsentSince,
-                          absentSince.duration(to: now) >= .seconds(1) {
-                    // Only an observed absence can rearm this code; a callback gap cannot.
-                    self.previouslyScannedPayload = nil
-                    previousPayloadAbsentSince = nil
-                    onPreviousPayloadCleared()
-                } else if previousPayloadAbsentSince == nil {
-                    previousPayloadAbsentSince = now
-                }
+            guard isScanningEnabled, !didScan else { return }
+            if let earliestFrameTime, now < earliestFrameTime { return }
+            if let absentSince = invalidPayloadAbsentSince, absentSince.duration(to: now) >= .seconds(1) {
+                invalidPayloadAbsentSince = nil
+                lastRejectedPayload = nil
+                hasReportedInvalidPayload = false
+                onInvalidPayloadCleared()
+            }
+            if let previousPayloadRearmAt, now >= previousPayloadRearmAt {
+                previouslyScannedPayload = nil
+                self.previousPayloadRearmAt = nil
+                onPreviousPayloadCleared()
             }
             var rejectedPayload: String?
             for payload in payloads where payload != previouslyScannedPayload {
                 let alreadyRejected = continuesAfterInvalidPayload && payload == lastRejectedPayload
                 if !alreadyRejected, validate(payload) {
                     didScan = true
+                    invalidPayloadAbsentSince = nil
+                    if continuesAfterInvalidPayload {
+                        previouslyScannedPayload = payload
+                        previousPayloadRearmAt = nil
+                    }
                     onScan(payload)
                     return
                 }
@@ -108,7 +127,13 @@ struct QRScannerView: UIViewControllerRepresentable {
                 // Explicit-retry scanners retain their first-code behavior.
                 if !continuesAfterInvalidPayload { break }
             }
-            guard let rejectedPayload else { return }
+            guard let rejectedPayload else {
+                if continuesAfterInvalidPayload, hasReportedInvalidPayload, invalidPayloadAbsentSince == nil {
+                    invalidPayloadAbsentSince = now
+                }
+                return
+            }
+            invalidPayloadAbsentSince = nil
             didScan = !continuesAfterInvalidPayload
             lastRejectedPayload = rejectedPayload
             if !hasReportedInvalidPayload {
@@ -120,9 +145,24 @@ struct QRScannerView: UIViewControllerRepresentable {
         func resumeScanning(attempt: Int) {
             guard scanAttempt != attempt else { return }
             scanAttempt = attempt
+            invalidPayloadAbsentSince = nil
             lastRejectedPayload = nil
             hasReportedInvalidPayload = false
             didScan = false
+        }
+
+        func setScanningEnabled(_ enabled: Bool, at now: ContinuousClock.Instant = .now) {
+            guard isScanningEnabled != enabled else { return }
+            isScanningEnabled = enabled
+            invalidPayloadAbsentSince = nil
+            earliestFrameTime = now
+            // Start a fresh cooldown on Back, regardless of how long the profile was open.
+            previousPayloadRearmAt = enabled && previouslyScannedPayload != nil ? now.advanced(by: .seconds(1)) : nil
+            if enabled {
+                didScan = false
+                lastRejectedPayload = nil
+                hasReportedInvalidPayload = false
+            }
         }
 
     }
@@ -131,6 +171,7 @@ struct QRScannerView: UIViewControllerRepresentable {
 /// UIKit host for the capture session.
 final class ScannerViewController: UIViewController {
     weak var coordinator: QRScannerView.Coordinator?
+    var observesEmptyFrames = false
     private let session = AVCaptureSession()
     private var preview: AVCaptureVideoPreviewLayer?
     /// Serializes `startRunning()` / `stopRunning()` so a stop enqueued after a
@@ -139,6 +180,8 @@ final class ScannerViewController: UIViewController {
     private let sessionQueue = DispatchQueue(label: "dev.ipf.whitenoise.qr-scanner.session")
 
     private var permissionTask: Task<Void, Never>?
+    private var frameDetector: QRScannerFrameDetector?
+    private var frameTask: Task<Void, Never>?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -205,18 +248,10 @@ final class ScannerViewController: UIViewController {
         }
         session.addInput(input)
 
-        let output = AVCaptureMetadataOutput()
-        guard session.canAddOutput(output) else {
+        guard configureOutput() else {
             coordinator?.onError(.configurationFailed)
             return
         }
-        session.addOutput(output)
-        output.setMetadataObjectsDelegate(coordinator, queue: .main)
-        guard output.availableMetadataObjectTypes.contains(.qr) else {
-            coordinator?.onError(.configurationFailed)
-            return
-        }
-        output.metadataObjectTypes = [.qr]
 
         let layer = AVCaptureVideoPreviewLayer(session: session)
         layer.videoGravity = .resizeAspectFill
@@ -224,9 +259,42 @@ final class ScannerViewController: UIViewController {
         view.layer.addSublayer(layer)
         preview = layer
 
-        // Start on the dedicated serial queue so any stop enqueued later (e.g.
-        // a fast dismiss) is guaranteed to run after this start completes.
+        // Serialize start and stop so a fast dismiss cannot leave the camera running.
         sessionQueue.async { [session] in session.startRunning() }
+    }
+
+    private func configureOutput() -> Bool {
+        if observesEmptyFrames {
+            let output = AVCaptureVideoDataOutput()
+            output.alwaysDiscardsLateVideoFrames = true
+            guard session.canAddOutput(output) else { return false }
+            if session.canSetSessionPreset(.hd1280x720) { session.sessionPreset = .hd1280x720 }
+            session.addOutput(output)
+            let detector = QRScannerFrameDetector()
+            output.setSampleBufferDelegate(detector, queue: detector.queue)
+            frameDetector = detector
+            let frames = detector.frames
+            frameTask = Task { @MainActor [weak self] in
+                for await frame in frames {
+                    guard !Task.isCancelled else { return }
+                    self?.coordinator?.receiveFrame(frame.payloads, at: frame.observedAt)
+                }
+            }
+            return true
+        }
+
+        let output = AVCaptureMetadataOutput()
+        guard session.canAddOutput(output) else {
+            return false
+        }
+        session.addOutput(output)
+        output.setMetadataObjectsDelegate(coordinator, queue: .main)
+        guard output.availableMetadataObjectTypes.contains(.qr) else {
+            return false
+        }
+        output.metadataObjectTypes = [.qr]
+
+        return true
     }
 
     override func viewDidLayoutSubviews() {
@@ -250,6 +318,7 @@ final class ScannerViewController: UIViewController {
 
     deinit {
         permissionTask?.cancel()
+        frameTask?.cancel()
         // Backstop: ensure the capture session is torn down even if a lifecycle
         // callback is skipped, so the camera hardware never leaks.
         sessionQueue.async { [session] in
