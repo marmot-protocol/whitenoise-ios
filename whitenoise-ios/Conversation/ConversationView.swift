@@ -1201,7 +1201,7 @@ struct ConversationView: View {
 
     private var conversationRuntimeTasks: some View {
         conversationAttachmentSheets
-            .task(id: viewModel?.needsLiveConversationState) {
+            .task(id: viewModel?.composerLoadingTaskID) {
                 await viewModel?.waitForComposerLoadingGracePeriod()
             }
             .task(id: ConversationRuntimeStartToken(

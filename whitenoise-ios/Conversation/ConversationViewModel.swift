@@ -286,7 +286,7 @@ final class ConversationViewModel {
     private var windowSubscription: ConversationWindowSubscription?
     @ObservationIgnored private var windowCursor: ProjectionSequenceCursor?
     @ObservationIgnored private var windowLifetime = UUID()
-    @ObservationIgnored private var startRequest = UUID()
+    private var startRequest = UUID()
     @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
     private(set) var viewportIntent: ConversationViewportIntent = .followingLatest
     private(set) var paginationRetryToken = 0
@@ -599,20 +599,24 @@ final class ConversationViewModel {
         awaitsLiveConversationState(hasLoadingGraceExpired: hasComposerLoadingGraceExpired)
     }
 
-    // The task identity must not change when the grace period itself expires.
-    var needsLiveConversationState: Bool {
+    private var needsLiveConversationState: Bool {
         awaitsLiveConversationState(hasLoadingGraceExpired: false)
+    }
+
+    // Explicit starts renew the grace period; automatic subscription retries do not.
+    var composerLoadingTaskID: UUID? {
+        needsLiveConversationState ? startRequest : nil
     }
 
     func waitForComposerLoadingGracePeriod() async {
         hasComposerLoadingGraceExpired = false
-        guard needsLiveConversationState else { return }
+        guard let attempt = composerLoadingTaskID else { return }
         do {
             try await Task.sleep(for: .seconds(5))
         } catch {
             return
         }
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, composerLoadingTaskID == attempt else { return }
         hasComposerLoadingGraceExpired = true
     }
 
