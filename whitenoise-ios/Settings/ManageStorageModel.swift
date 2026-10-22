@@ -38,8 +38,7 @@ final class ManageStorageModel {
         let client: ObjectIdentifier
     }
 
-    private(set) var usage: ManageStoragePresentation.Usage?
-    private(set) var usageFailed = false
+    private(set) var usageRefresh = ManageStoragePresentation.UsageRefresh()
     private(set) var chats = ChatPages(id: \.groupIdHex)
     private(set) var chatsFailed = false
     private(set) var isLoadingChats = false
@@ -49,16 +48,17 @@ final class ManageStorageModel {
     private(set) var operation: Operation?
     /// The last operation that failed, shown beside the control that started it.
     private(set) var failedOperation: Operation?
-    /// Advances on every usage read, so a poll continues while figures stay the same.
-    private(set) var usageRevision = 0
     /// Advances whenever the listings start over, so views can re-request pages.
     private(set) var epoch = 0
+    /// Observed so presented updates re-render titles and avatars as they resolve.
+    private var identities: [String: ChatIdentity] = [:]
 
-    @ObservationIgnored private var identities: [String: ChatIdentity] = [:]
     @ObservationIgnored private var context: Context?
     #if DEBUG
     @ObservationIgnored private var isFixture = false
     #endif
+
+    var usage: ManageStoragePresentation.Usage? { usageRefresh.usage }
 
     func identity(for groupIdHex: String) -> ChatIdentity {
         identities[groupIdHex]
@@ -99,13 +99,63 @@ final class ManageStorageModel {
         do {
             let value = try await client.attachmentStorageUsage(accountRef: context.accountRef)
             guard isCurrent(context, epoch: epoch, appState) else { return }
-            usage = ManageStoragePresentation.Usage(value)
-            usageFailed = false
-            usageRevision &+= 1
+            usageRefresh.succeeded(ManageStoragePresentation.Usage(value))
         } catch {
             guard !(error is CancellationError), isCurrent(context, epoch: epoch, appState) else { return }
-            usageFailed = true
+            usageRefresh.failedToRefresh()
         }
+    }
+
+    /// Follows the profile's presented chat list so listed chats pick up avatars
+    /// once MDK acquires them, and renamed chats or nicknames. Runs until cancelled.
+    func followPresentedRows(using appState: AppState) async {
+        guard let context, let client = client(for: context, appState) else { return }
+        var retryDelay = Duration.milliseconds(500)
+        while !Task.isCancelled, currentContext(appState) == context {
+            do {
+                let subscription = try await client.openPresentedChatList(accountRef: context.accountRef,
+                                                                          includeArchived: true)
+                guard let initial = await client.presentedChatListSubscriptionSnapshot(subscription) else {
+                    throw CancellationError()
+                }
+                guard !Task.isCancelled, currentContext(appState) == context else { return }
+                var cursor = PresentedChatListCursor(initial: initial)
+                applyPresentedRows(initial.snapshot.rows, using: appState)
+                retryDelay = .milliseconds(500)
+                while let update = try await subscription.nextCancellable() {
+                    guard !Task.isCancelled, currentContext(appState) == context else { return }
+                    // A new account-store epoch or generation needs a fresh subscription.
+                    if cursor.requiresReopen(update) { break }
+                    guard cursor.accept(update) else { continue }
+                    applyPresentedRows(update.snapshot.rows, using: appState)
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                // Titles and avatars stay as last read; try the subscription again.
+            }
+            guard (try? await Task.sleep(for: retryDelay)) != nil else { return }
+            retryDelay = min(retryDelay * 2, .seconds(8))
+        }
+    }
+
+    /// Updates only chats this screen lists, so avatar requests stay with rows on screen.
+    func applyPresentedRows(_ rows: [PresentedChatRowFfi], using appState: AppState) {
+        let listed = listedGroupIds
+        for prepared in rows where listed.contains(prepared.row.groupIdHex) {
+            let next = identity(for: prepared, appState)
+            if identities[prepared.row.groupIdHex] != next {
+                identities[prepared.row.groupIdHex] = next
+            }
+        }
+    }
+
+    private var listedGroupIds: Set<String> {
+        var ids = Set(chats.items.map(\.groupIdHex))
+        for pages in attachments.values {
+            ids.formUnion(pages.items.map(\.groupIdHex))
+        }
+        return ids
     }
 
     func loadMoreChats(using appState: AppState) async {
@@ -158,9 +208,10 @@ final class ManageStorageModel {
         }
     }
 
-    func removeOlder(_ age: ManageStoragePresentation.RemovalAge, in scope: Scope, now: Date = Date(),
+    /// Removes before the exact cutoff the confirmation named.
+    func removeOlder(than cutoff: ManageStoragePresentation.RemovalCutoff, in scope: Scope,
                      using appState: AppState) async {
-        let receivedBefore = age.receivedBefore(now: now, calendar: .current)
+        let receivedBefore = cutoff.receivedBefore
         await perform(.removeOlder(scope), using: appState) { client, accountRef in
             _ = try await client.removeAttachmentsOlderThan(accountRef: accountRef,
                 receivedBefore: receivedBefore, groupIdHex: scope.groupIdHex)
@@ -218,8 +269,7 @@ final class ManageStorageModel {
 
     private func reset() {
         epoch &+= 1
-        usage = nil
-        usageFailed = false
+        usageRefresh = ManageStoragePresentation.UsageRefresh()
         chats = ChatPages(id: \.groupIdHex)
         chatsFailed = false
         isLoadingChats = false
@@ -283,7 +333,7 @@ extension ManageStorageModel {
                         attachments: [RetainedAttachmentSummaryFfi]) -> ManageStorageModel {
         let model = ManageStorageModel()
         model.isFixture = true
-        model.usage = ManageStoragePresentation.Usage(usage)
+        model.usageRefresh.succeeded(ManageStoragePresentation.Usage(usage))
         for chat in chats {
             model.identities[chat.usage.groupIdHex] = ChatIdentity(title: chat.title, seed: chat.usage.groupIdHex,
                                                                    avatarAsset: nil)

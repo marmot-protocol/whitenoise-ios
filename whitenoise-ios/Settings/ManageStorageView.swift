@@ -6,7 +6,7 @@ import MarmotKit
 struct ManageStorageView: View {
     @Environment(AppState.self) private var appState
     @State private var model: ManageStorageModel
-    @State private var pendingAge: ManageStoragePresentation.RemovalAge?
+    @State private var pendingRemoval: ManageStoragePresentation.RemovalCutoff?
 
     init(model: ManageStorageModel? = nil) {
         _model = State(initialValue: model ?? ManageStorageModel())
@@ -27,14 +27,17 @@ struct ManageStorageView: View {
         .localizedNavigationTitle("Manage Storage")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await model.bind(using: appState) }
-        .task(id: bindingKey) { await model.bind(using: appState) }
+        .task(id: bindingKey) {
+            await model.bind(using: appState)
+            await model.followPresentedRows(using: appState)
+        }
         .task(id: usageRefreshKey) {
-            guard let delay = ManageStoragePresentation.usageRefreshDelay(for: model.usage?.migration) else { return }
+            guard let delay = model.usageRefresh.nextDelay else { return }
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             await model.refreshUsage(using: appState)
         }
-        .removeOlderConfirmation($pendingAge, scope: .account, model: model)
+        .removeOlderConfirmation($pendingRemoval, scope: .account, model: model)
     }
 
     private var bindingKey: String {
@@ -42,7 +45,7 @@ struct ManageStorageView: View {
     }
 
     private var usageRefreshKey: String {
-        "\(model.epoch)/\(model.usageRevision)"
+        "\(model.epoch)/\(model.usageRefresh.revision)"
     }
 
     @ViewBuilder
@@ -57,7 +60,13 @@ struct ManageStorageView: View {
                 }
                 LabeledContent("Messages and Chat Data",
                                value: ManageStoragePresentation.byteText(usage.chatDataBytes))
-            } else if model.usageFailed {
+                // Stale figures stay visible, but not as if they were current.
+                if model.usageRefresh.failed {
+                    ManageStorageRetryRow(message: L10n.string("Couldn't load storage usage")) {
+                        Task { await model.refreshUsage(using: appState) }
+                    }
+                }
+            } else if model.usageRefresh.failed {
                 ManageStorageRetryRow(message: L10n.string("Couldn't load storage usage")) {
                     Task { await model.bind(using: appState) }
                 }
@@ -99,7 +108,7 @@ struct ManageStorageView: View {
             } label: {
                 Text("Largest Attachments")
             }
-            ManageStorageRemoveOlderMenu(pendingAge: $pendingAge,
+            ManageStorageRemoveOlderMenu(pendingRemoval: $pendingRemoval,
                                          inProgress: model.operation == .removeOlder(.account))
                 .disabled(model.usage == nil || model.usage?.attachmentCount == 0)
             if model.failedOperation == .removeOlder(.account) {
@@ -150,7 +159,7 @@ struct ChatStorageView: View {
     @Environment(AppState.self) private var appState
     let model: ManageStorageModel
     let groupIdHex: String
-    @State private var pendingAge: ManageStoragePresentation.RemovalAge?
+    @State private var pendingRemoval: ManageStoragePresentation.RemovalCutoff?
     @State private var confirmsRemoveAll = false
 
     var body: some View {
@@ -169,7 +178,7 @@ struct ChatStorageView: View {
                     ManageStorageActionLabel(title: L10n.string("Remove All Attachments"),
                                              inProgress: model.operation == .removeChat(groupIdHex))
                 }
-                ManageStorageRemoveOlderMenu(pendingAge: $pendingAge,
+                ManageStorageRemoveOlderMenu(pendingRemoval: $pendingRemoval,
                                              inProgress: model.operation == .removeOlder(scope))
                 if model.failedOperation == .removeChat(groupIdHex) || model.failedOperation == .removeOlder(scope) {
                     ManageStorageFailureRow(message: L10n.string("Couldn't remove attachments. Try again."))
@@ -194,7 +203,7 @@ struct ChatStorageView: View {
         } message: {
             Text("Every downloaded attachment in this chat is removed from this device. Messages stay, and you can download attachments again while they're still available.")
         }
-        .removeOlderConfirmation($pendingAge, scope: scope, model: model)
+        .removeOlderConfirmation($pendingRemoval, scope: scope, model: model)
     }
 }
 
@@ -384,13 +393,15 @@ private struct ManageStorageAttachmentRow: View {
 }
 
 private struct ManageStorageRemoveOlderMenu: View {
-    @Binding var pendingAge: ManageStoragePresentation.RemovalAge?
+    @Binding var pendingRemoval: ManageStoragePresentation.RemovalCutoff?
     let inProgress: Bool
 
     var body: some View {
         Menu {
             ForEach(ManageStoragePresentation.RemovalAge.allCases, id: \.self) { age in
-                Button(age.title) { pendingAge = age }
+                Button(age.title) {
+                    pendingRemoval = ManageStoragePresentation.RemovalCutoff(age: age, now: Date(), calendar: .current)
+                }
             }
         } label: {
             ManageStorageActionLabel(title: L10n.string("Remove Older Attachments"), inProgress: inProgress)
@@ -450,35 +461,35 @@ private struct ManageStorageFailureRow: View {
 }
 
 private extension View {
-    func removeOlderConfirmation(_ age: Binding<ManageStoragePresentation.RemovalAge?>,
+    func removeOlderConfirmation(_ cutoff: Binding<ManageStoragePresentation.RemovalCutoff?>,
                                  scope: ManageStorageModel.Scope,
                                  model: ManageStorageModel) -> some View {
-        modifier(RemoveOlderConfirmation(age: age, scope: scope, model: model))
+        modifier(RemoveOlderConfirmation(cutoff: cutoff, scope: scope, model: model))
     }
 }
 
 private struct RemoveOlderConfirmation: ViewModifier {
     @Environment(AppState.self) private var appState
-    @Binding var age: ManageStoragePresentation.RemovalAge?
+    @Binding var cutoff: ManageStoragePresentation.RemovalCutoff?
     let scope: ManageStorageModel.Scope
     let model: ManageStorageModel
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
             L10n.string("Remove Older Attachments?"),
-            isPresented: Binding(get: { age != nil }, set: { if !$0 { age = nil } }),
+            isPresented: Binding(get: { cutoff != nil }, set: { if !$0 { cutoff = nil } }),
             titleVisibility: .visible,
-            presenting: age
-        ) { age in
+            presenting: cutoff
+        ) { cutoff in
             Button("Remove Attachments", role: .destructive) {
-                Task { await model.removeOlder(age, in: scope, using: appState) }
+                Task { await model.removeOlder(than: cutoff, in: scope, using: appState) }
             }
             Button("Cancel", role: .cancel) {}
-        } message: { age in
-            let cutoff = ManageStoragePresentation.cutoffText(age.cutoffDate(now: Date(), calendar: .current))
+        } message: { cutoff in
+            let day = cutoff.text()
             Text(scope == .account
-                ? L10n.formatted("Attachments received before %@ are removed from this device in every chat. Messages stay, and you can download attachments again while they're still available.", cutoff)
-                : L10n.formatted("Attachments in this chat received before %@ are removed from this device. Messages stay, and you can download attachments again while they're still available.", cutoff))
+                ? L10n.formatted("Attachments received before %@ are removed from this device in every chat. Messages stay, and you can download attachments again while they're still available.", day)
+                : L10n.formatted("Attachments in this chat received before %@ are removed from this device. Messages stay, and you can download attachments again while they're still available.", day))
         }
     }
 }

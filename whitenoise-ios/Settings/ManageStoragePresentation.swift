@@ -38,13 +38,36 @@ enum ManageStoragePresentation {
         }
     }
 
-    /// Usage has no observer, so re-read it while it is still changing on its own.
-    /// MDK moves a batch every 15 seconds; compaction typically ends within a second.
+    /// Usage has no observer, so re-read it while it can still change on its own.
+    /// MDK moves a batch, or rechecks free space for a paused move, every 15
+    /// seconds; compaction typically ends within a second.
     static func usageRefreshDelay(for notice: MigrationNotice?) -> Duration? {
         switch notice {
-        case .moving: .seconds(15)
+        case .moving, .paused: .seconds(15)
         case .compacting: .seconds(2)
-        case .paused, nil: nil
+        case nil: nil
+        }
+    }
+
+    /// The figures on screen and whether the latest read of them failed. Every
+    /// read, failed or not, advances `revision` so a running poll reschedules.
+    struct UsageRefresh: Equatable {
+        private(set) var usage: Usage?
+        private(set) var failed = false
+        private(set) var revision = 0
+
+        /// Keeps polling stale figures while they were still changing on their own.
+        var nextDelay: Duration? { ManageStoragePresentation.usageRefreshDelay(for: usage?.migration) }
+
+        mutating func succeeded(_ usage: Usage) {
+            self.usage = usage
+            failed = false
+            revision &+= 1
+        }
+
+        mutating func failedToRefresh() {
+            failed = true
+            revision &+= 1
         }
     }
 
@@ -65,6 +88,7 @@ enum ManageStoragePresentation {
             }
         }
 
+        /// The start of the day the confirmation names, so nothing received on it goes.
         func cutoffDate(now: Date, calendar: Calendar) -> Date {
             let (component, value): (Calendar.Component, Int) = switch self {
             case .oneWeek: (.day, -7)
@@ -73,18 +97,33 @@ enum ManageStoragePresentation {
             case .sixMonths: (.month, -6)
             case .oneYear: (.year, -1)
             }
-            return calendar.date(byAdding: component, value: value, to: now) ?? now
-        }
-
-        /// `removeAttachmentsOlderThan` takes the message's received time in Unix seconds.
-        func receivedBefore(now: Date, calendar: Calendar) -> UInt64 {
-            let seconds = cutoffDate(now: now, calendar: calendar).timeIntervalSince1970.rounded(.down)
-            return seconds > 0 ? UInt64(seconds) : 0
+            return calendar.startOfDay(for: calendar.date(byAdding: component, value: value, to: now) ?? now)
         }
     }
 
-    static func cutoffText(_ date: Date, locale: Locale = AppLanguage.currentLocale) -> String {
-        date.formatted(.dateTime.year().month(.wide).day().locale(locale))
+    /// Captured once when an age is chosen; the confirmation names this day and
+    /// the removal uses this instant, however long the dialog stays up.
+    struct RemovalCutoff: Equatable {
+        let age: RemovalAge
+        let date: Date
+        let calendar: Calendar
+
+        init(age: RemovalAge, now: Date, calendar: Calendar) {
+            self.age = age
+            self.calendar = calendar
+            date = age.cutoffDate(now: now, calendar: calendar)
+        }
+
+        /// `removeAttachmentsOlderThan` removes messages received strictly before these Unix seconds.
+        var receivedBefore: UInt64 {
+            let seconds = date.timeIntervalSince1970.rounded(.down)
+            return seconds > 0 ? UInt64(seconds) : 0
+        }
+
+        func text(locale: Locale = AppLanguage.currentLocale) -> String {
+            date.formatted(Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+                .year().month(.wide).day())
+        }
     }
 
     /// Stable across pages and removals: the original message and slot.

@@ -30,10 +30,6 @@ struct ManageStoragePresentationTests {
         return calendar
     }
 
-    private static func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-        utc.date(from: DateComponents(year: year, month: month, day: day, hour: 12))!
-    }
-
     // MARK: Usage
 
     /// Attachments live in both layouts until the background move finishes, so
@@ -63,33 +59,106 @@ struct ManageStoragePresentationTests {
             == .paused(neededBytes: 77))
     }
 
-    /// A paused move waits for the person to free space; only moving and
-    /// compacting change on their own.
-    @Test func usageIsReReadOnlyWhileItChangesOnItsOwn() {
+    /// MDK rechecks free space for a paused move on its 15-second tick, so a
+    /// paused move can resume without anything happening on this screen.
+    @Test func usageIsReReadWhileItCanChangeOnItsOwn() {
         #expect(ManageStoragePresentation.usageRefreshDelay(for: .moving(remainingBytes: 1)) == .seconds(15))
+        #expect(ManageStoragePresentation.usageRefreshDelay(for: .paused(neededBytes: 1)) == .seconds(15))
         #expect(ManageStoragePresentation.usageRefreshDelay(for: .compacting) == .seconds(2))
-        #expect(ManageStoragePresentation.usageRefreshDelay(for: .paused(neededBytes: 1)) == nil)
         #expect(ManageStoragePresentation.usageRefreshDelay(for: nil) == nil)
+    }
+
+    @Test func pausedMoveKeepsPollingUntilItResumesAndFinishes() {
+        var refresh = ManageStoragePresentation.UsageRefresh()
+        #expect(refresh.nextDelay == nil)
+
+        refresh.succeeded(.init(Self.usage(migration: .paused, migrationBytes: 9_000)))
+        #expect(refresh.usage?.migration == .paused(neededBytes: 9_000))
+        #expect(refresh.nextDelay == .seconds(15))
+
+        refresh.succeeded(.init(Self.usage(migration: .running, migrationBytes: 4_000)))
+        #expect(refresh.usage?.migration == .moving(remainingBytes: 4_000))
+        #expect(refresh.nextDelay == .seconds(15))
+
+        refresh.succeeded(.init(Self.usage(migration: .complete)))
+        #expect(refresh.usage?.migration == nil)
+        #expect(refresh.nextDelay == nil)
+    }
+
+    /// A failed read keeps the last figures but says so, and the poll goes on
+    /// because those figures were still changing.
+    @Test func failedRefreshKeepsPollingAndIsShownUntilAReadSucceeds() {
+        var refresh = ManageStoragePresentation.UsageRefresh()
+        refresh.succeeded(.init(Self.usage(media: 10, migration: .running, migrationBytes: 4_000)))
+        let revision = refresh.revision
+
+        refresh.failedToRefresh()
+        #expect(refresh.failed)
+        #expect(refresh.revision != revision)
+        #expect(refresh.usage?.attachmentBytes == 10)
+        #expect(refresh.nextDelay == .seconds(15))
+
+        refresh.failedToRefresh()
+        refresh.succeeded(.init(Self.usage(media: 10, migration: .compacting)))
+        #expect(!refresh.failed)
+        #expect(refresh.nextDelay == .seconds(2))
+    }
+
+    @Test func failedFirstReadHasNothingToPoll() {
+        var refresh = ManageStoragePresentation.UsageRefresh()
+        refresh.failedToRefresh()
+        #expect(refresh.failed)
+        #expect(refresh.usage == nil)
+        #expect(refresh.nextDelay == nil)
     }
 
     // MARK: Removal ages
 
-    @Test func removalCutoffsUseCalendarArithmetic() {
-        let now = Self.date(2026, 3, 31)
-        typealias Age = ManageStoragePresentation.RemovalAge
-        #expect(Age.oneWeek.cutoffDate(now: now, calendar: Self.utc) == Self.date(2026, 3, 24))
-        #expect(Age.oneMonth.cutoffDate(now: now, calendar: Self.utc) == Self.date(2026, 2, 28))
-        #expect(Age.threeMonths.cutoffDate(now: now, calendar: Self.utc) == Self.date(2025, 12, 31))
-        #expect(Age.sixMonths.cutoffDate(now: now, calendar: Self.utc) == Self.date(2025, 9, 30))
-        #expect(Age.oneYear.cutoffDate(now: now, calendar: Self.utc) == Self.date(2025, 3, 31))
+    private static var losAngeles: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        return calendar
     }
 
-    @Test func receivedBeforeIsWholeUnixSecondsAndNeverNegative() {
-        let now = Date(timeIntervalSince1970: 1_800_000_000.75)
-        let cutoff = ManageStoragePresentation.RemovalAge.oneWeek.receivedBefore(now: now, calendar: Self.utc)
-        #expect(cutoff == 1_800_000_000 - 7 * 86_400)
-        #expect(ManageStoragePresentation.RemovalAge.oneYear
-            .receivedBefore(now: Date(timeIntervalSince1970: 0), calendar: Self.utc) == 0)
+    private static func midnight(_ year: Int, _ month: Int, _ day: Int, in calendar: Calendar) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    /// Cutoffs start the named day, so attachments received on it stay.
+    @Test func removalCutoffsStartTheNamedDay() {
+        let calendar = Self.losAngeles
+        let now = calendar.date(from: DateComponents(year: 2026, month: 3, day: 31, hour: 21, minute: 30))!
+        typealias Age = ManageStoragePresentation.RemovalAge
+        #expect(Age.oneWeek.cutoffDate(now: now, calendar: calendar) == Self.midnight(2026, 3, 24, in: calendar))
+        #expect(Age.oneMonth.cutoffDate(now: now, calendar: calendar) == Self.midnight(2026, 2, 28, in: calendar))
+        #expect(Age.threeMonths.cutoffDate(now: now, calendar: calendar) == Self.midnight(2025, 12, 31, in: calendar))
+        #expect(Age.sixMonths.cutoffDate(now: now, calendar: calendar) == Self.midnight(2025, 9, 30, in: calendar))
+        #expect(Age.oneYear.cutoffDate(now: now, calendar: calendar) == Self.midnight(2025, 3, 31, in: calendar))
+    }
+
+    /// The confirmation's day and the instant passed to MDK come from one capture,
+    /// late in the evening and across a daylight-saving change alike.
+    @Test func capturedCutoffNamesTheInstantItRemovesBefore() {
+        let calendar = Self.losAngeles
+        let locale = Locale(identifier: "en_US")
+        let lateEvening = calendar.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 23, minute: 59))!
+        let cutoff = ManageStoragePresentation.RemovalCutoff(age: .oneWeek, now: lateEvening, calendar: calendar)
+        #expect(cutoff.text(locale: locale) == "October 15, 2026")
+        #expect(cutoff.receivedBefore == UInt64(Self.midnight(2026, 10, 15, in: calendar).timeIntervalSince1970))
+
+        let afterSpringForward = calendar.date(from: DateComponents(year: 2026, month: 3, day: 12, hour: 21))!
+        let acrossChange = ManageStoragePresentation.RemovalCutoff(age: .oneWeek, now: afterSpringForward,
+                                                                   calendar: calendar)
+        #expect(acrossChange.text(locale: locale) == "March 5, 2026")
+        let removedBefore = Date(timeIntervalSince1970: TimeInterval(acrossChange.receivedBefore))
+        #expect(calendar.dateComponents([.year, .month, .day, .hour, .minute], from: removedBefore)
+            == DateComponents(year: 2026, month: 3, day: 5, hour: 0, minute: 0))
+    }
+
+    @Test func receivedBeforeIsNeverNegative() {
+        let cutoff = ManageStoragePresentation.RemovalCutoff(age: .oneYear, now: Date(timeIntervalSince1970: 0),
+                                                             calendar: Self.utc)
+        #expect(cutoff.receivedBefore == 0)
     }
 
     @Test func everyAgeHasItsOwnTitle() {

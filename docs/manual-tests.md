@@ -379,7 +379,9 @@ before every release tag.
       Attachments (with a count) and Messages and Chat Data; Cache shows Profile
       and Group Pictures. Chats are listed largest first with their real names
       and avatars (a direct chat with a nickname shows the nickname), never a
-      group ID. Pull to refresh reloads every figure.
+      group ID. A chat whose picture was not downloaded yet shows it once it
+      arrives, and renaming a chat elsewhere updates its row, without leaving
+      the screen. Pull to refresh reloads every figure.
 - [ ] With more than 50 chats or attachments holding files, scroll to the end
       of Chats and of Largest Attachments: further pages load once, with no
       duplicate rows, and the spinner disappears at the end.
@@ -394,15 +396,19 @@ before every release tag.
       stale thumbnails). Cancel leaves everything in place.
 - [ ] Remove Older Attachments → Older Than 1 Week (account-wide and inside one
       chat). The confirmation names the cutoff date; only attachments received
-      before it go, and newer ones stay.
+      before that day go, and ones received on it or later stay. Leave the
+      dialog open past midnight before confirming: it still removes before the
+      date it shows.
 - [ ] Switch to another profile while Manage Storage is open: figures and chats
       reload for the new profile and never mix profiles. Background and
       foreground the app: the screen reloads after the runtime resumes.
 - [ ] Upgrade an install whose attachments predate the media store (MarmotKit
       0.13 or earlier). While bodies move, Updating Attachment Storage shows the
       remaining size and refreshes on its own; it disappears when done. If the
-      device is nearly full, the paused row says how much space is needed and a
-      removal lets the move resume. Reclaiming Space may appear briefly.
+      device is nearly full, the paused row says how much space is needed.
+      After a removal or freeing space elsewhere, the row switches back to
+      updating within about 15 seconds without pull to refresh. Reclaiming
+      Space may appear briefly.
 - [ ] Turn on airplane mode and remove attachments: removals still work
       because they are local.
 - [ ] Check VoiceOver on chat and attachment rows (name, count/date and size
