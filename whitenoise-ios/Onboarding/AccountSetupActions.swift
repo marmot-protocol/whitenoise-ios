@@ -21,9 +21,9 @@ struct AccountSetupActions: View {
         } else if selectedStep == .relays || selectedStep == .inboxRelays {
             AccountSetupRelayStepView(model: model, selectedStep: selectedStep)
         } else if selectedStep == .singleDevice {
-            AccountSetupDeviceView(model: model)
+            AccountSetupCheckView(model: model, check: .device)
         } else if selectedStep == .keyPackage {
-            AccountSetupSecureMessagingView(model: model)
+            AccountSetupCheckView(model: model, check: .secureMessaging)
         } else {
             decisionContent
         }

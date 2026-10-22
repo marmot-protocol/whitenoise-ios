@@ -48,19 +48,14 @@ struct AccountsView: View {
                 }
             } header: {
                 if requiresSelection {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Choose a profile")
-                            .font(.title.bold())
-                            .foregroundStyle(Color(uiColor: .label))
-                        Text("You’ve signed out of your previous profile. Choose another profile to continue, or tap Add Profile to sign in or create a new account.")
-                            .font(.body)
-                            .foregroundStyle(Color(uiColor: .secondaryLabel))
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textCase(nil)
-                    .padding(.vertical, 16)
-                    .listRowInsets(EdgeInsets())
+                    Text("You’ve signed out of your previous profile. Choose another profile to continue, or tap Add Profile to sign in or create a new account.")
+                        .font(.body)
+                        .foregroundStyle(Color(uiColor: .secondaryLabel))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textCase(nil)
+                        .padding(.vertical, 16)
+                        .listRowInsets(EdgeInsets())
                 }
             }
         }
