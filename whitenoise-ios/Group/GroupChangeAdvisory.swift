@@ -102,6 +102,10 @@ enum GroupChangeAdvisoryRetry {
 @MainActor
 @Observable
 final class GroupChangeAdvisoryPrompter {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     struct Prompt: Identifiable, Equatable {
         let id = UUID()
         let advisory: GroupChangeAdvisory
