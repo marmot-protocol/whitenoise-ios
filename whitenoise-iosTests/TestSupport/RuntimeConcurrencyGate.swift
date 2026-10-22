@@ -54,7 +54,46 @@ struct MarmotRuntimeConcurrencyLimit: SuiteTrait, TestTrait, TestScoping {
         performing function: @concurrent @Sendable () async throws -> Void
     ) async throws {
         guard testCase != nil else { return try await function() }
-        try await marmotRuntimeTestGate.withLock { try await function() }
+        let trace = GateTrace.shared
+        let requested = Date()
+        try await marmotRuntimeTestGate.withLock {
+            let acquired = Date()
+            defer { trace?.record(test: test, requested: requested, acquired: acquired, released: Date()) }
+            try await function()
+        }
+    }
+}
+
+/// Opt-in JSONL trace of gate waits, for the audit's critical-path analysis
+/// (`scripts/audit/gate-critical-path.py`). Enabled by `WN_TEST_GATE_TRACE=1`
+/// in the host environment (pass `TEST_RUNNER_WN_TEST_GATE_TRACE=1` to
+/// xcodebuild); writes `gate-trace.jsonl` in the host's temporary directory.
+final class GateTrace: Sendable {
+    static let shared: GateTrace? = {
+        guard ProcessInfo.processInfo.environment["WN_TEST_GATE_TRACE"] == "1" else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("gate-trace.jsonl")
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        guard let handle = try? FileHandle(forWritingTo: url) else { return nil }
+        return GateTrace(handle: handle, path: url.path)
+    }()
+
+    let path: String
+    private let handle: FileHandle
+    private let lock = NSLock()
+
+    private init(handle: FileHandle, path: String) {
+        self.handle = handle
+        self.path = path
+    }
+
+    func record(test: Test, requested: Date, acquired: Date, released: Date) {
+        let name = String(describing: test.id).replacingOccurrences(of: "\"", with: "'")
+        let line = "{\"test\":\"\(name)\",\"requested\":\(requested.timeIntervalSince1970),"
+            + "\"acquired\":\(acquired.timeIntervalSince1970),\"released\":\(released.timeIntervalSince1970)}\n"
+        lock.lock()
+        defer { lock.unlock() }
+        handle.seekToEndOfFile()
+        handle.write(Data(line.utf8))
     }
 }
 
