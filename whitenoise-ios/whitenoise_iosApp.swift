@@ -21,6 +21,29 @@ enum SceneRuntimeAction: Equatable {
     }
 }
 
+/// The runtime side of a scene-phase change, after the app-lock handling that
+/// every phase runs regardless. In the unit-test host (`startsRuntime` false)
+/// foreground activation would re-enter bootstrap from the never-bootstrapped
+/// `.bootstrapping` phase and suspension would park on bootstrap registration
+/// holding the UIKit background assertion, so both collapse to the flag.
+enum SceneRuntimeStep: Equatable {
+    case markSceneActive
+    case startForegroundActivation
+    case markSceneInactive
+    case suspendRuntime
+
+    static func resolve(_ action: SceneRuntimeAction, isInitial: Bool, startsRuntime: Bool) -> Self {
+        switch action {
+        case .activate:
+            isInitial || !startsRuntime ? .markSceneActive : .startForegroundActivation
+        case .remainInactive:
+            .markSceneInactive
+        case .suspend:
+            startsRuntime ? .suspendRuntime : .markSceneInactive
+        }
+    }
+}
+
 @MainActor
 final class BackgroundRuntimeSuspensionTask {
     typealias BeginBackgroundTask = @MainActor (
@@ -96,7 +119,7 @@ struct whitenoise_iosApp: App {
     @State private var appearance: AppAppearanceStore
     @State private var appLockOverlay = AppLockOverlayPresenter()
     /// False only while the app is hosting a unit-test bundle without the
-    /// `WN_TEST_HOST_BOOTSTRAP=1` opt-in; see `AppLaunchPolicy`.
+    /// `WN_RUN_HOST_BOOTSTRAP=1` opt-in; see `AppLaunchPolicy`.
     private let startsRuntime = AppLaunchPolicy.shouldStartRuntime()
 
     init() {
@@ -125,6 +148,8 @@ struct whitenoise_iosApp: App {
                 .appAppearance(appearance)
                 .dismissesKeyboardOnTap()
                 .task {
+                    // Deliberately ahead of the test-host guard so the
+                    // production ordering below stays literally unchanged.
                     appState.noteHostWindowInitialized()
                     if startsRuntime {
                         // The path monitor lives in this lazy singleton; touch it
@@ -180,27 +205,25 @@ struct whitenoise_iosApp: App {
 
     @MainActor
     private func handleScenePhase(_ phase: ScenePhase, isInitial: Bool) {
-        switch SceneRuntimeAction.resolve(phase) {
+        let action = SceneRuntimeAction.resolve(phase)
+        switch action {
         case .activate:
             appState.appLock.handleScenePhaseActive()
             Task { await appState.appLock.requestUnlock() }
-            if isInitial || !startsRuntime {
-                // Foreground activation would (re)build the runtime, including
-                // from the never-bootstrapped `.bootstrapping` phase.
-                appState.setAppSceneActive(true)
-            } else {
-                appState.startForegroundActivation()
-            }
         case .remainInactive:
             appState.appLock.handleScenePhaseInactive()
-            appState.setAppSceneActive(false)
         case .suspend:
             appState.appLock.handleScenePhaseBackground()
-            if startsRuntime {
-                beginBackgroundRuntimeSuspension()
-            } else {
-                appState.setAppSceneActive(false)
-            }
+        }
+        switch SceneRuntimeStep.resolve(action, isInitial: isInitial, startsRuntime: startsRuntime) {
+        case .markSceneActive:
+            appState.setAppSceneActive(true)
+        case .startForegroundActivation:
+            appState.startForegroundActivation()
+        case .markSceneInactive:
+            appState.setAppSceneActive(false)
+        case .suspendRuntime:
+            beginBackgroundRuntimeSuspension()
         }
     }
 
