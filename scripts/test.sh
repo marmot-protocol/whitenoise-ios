@@ -72,13 +72,39 @@ run() {
   fi
 }
 
+# Measurement runs (WN_TEST_RAW_LOG=1) keep xcodebuild's raw test output with a
+# wall-clock prefix per line, plus the simulator log around it, under
+# build/audit/. scripts/audit/phases.py and report-run.sh read them. xcbeautify
+# buffers, so its output cannot place the test phase's markers in time.
+RAW_LOG=""
+if [ "${WN_TEST_RAW_LOG:-}" = "1" ]; then
+  RAW_LOG=1
+  audit_stamp="$(date +%Y%m%dT%H%M%S)"
+  export WN_AUDIT_LOG="${WN_AUDIT_LOG:-build/audit/xcodebuild-${audit_stamp}.log}"
+  mkdir -p "$(dirname "$WN_AUDIT_LOG")" build/audit
+  # Tell scripts/audit/report-run.sh which log this run wrote instead of
+  # letting it guess from file ages.
+  echo "$WN_AUDIT_LOG" > build/audit/latest-log
+  if [ -n "${GITHUB_ENV:-}" ]; then
+    echo "WN_AUDIT_LOG=$WN_AUDIT_LOG" >> "$GITHUB_ENV"
+  fi
+fi
+
+run_timed() {
+  scripts/audit/timed-xcodebuild.sh "$@"
+}
+
 phase() {
   local label="$1"
   shift
   local start=$SECONDS
   local status=0
   "$@" || status=$?
-  echo "==> ${label}: $((SECONDS - start))s"
+  local marker="==> ${label}: $((SECONDS - start))s"
+  echo "$marker"
+  if [ -n "$RAW_LOG" ]; then
+    echo "$(date +%Y-%m-%dT%H:%M:%S) $marker" >> "$WN_AUDIT_LOG"
+  fi
   return "$status"
 }
 
@@ -103,6 +129,25 @@ if [ -n "$boot_pid" ]; then
   wait "$boot_pid" || true
 fi
 
-phase "test-without-building" run test-without-building \
+test_runner=run
+simlog_pid=""
+stop_simlog() {
+  if [ -n "$simlog_pid" ]; then
+    scripts/audit/simlog-capture.sh stop "$simlog_pid" || true
+    simlog_pid=""
+  fi
+}
+if [ -n "$RAW_LOG" ]; then
+  test_runner=run_timed
+  if [ -n "$udid" ]; then
+    simlog_pid="$(scripts/audit/simlog-capture.sh start "$udid" "$(dirname "$WN_AUDIT_LOG")/simulator-${audit_stamp}.log")" || simlog_pid=""
+    trap stop_simlog EXIT INT TERM
+  fi
+fi
+
+test_status=0
+phase "test-without-building" "$test_runner" test-without-building \
   "${xcodebuild_args[@]}" \
-  -resultBundlePath "$RESULT_BUNDLE"
+  -resultBundlePath "$RESULT_BUNDLE" || test_status=$?
+stop_simlog
+exit "$test_status"

@@ -17,9 +17,16 @@ on:
       - "scripts/tests/**"
       - "scripts/test.sh"
       - "scripts/pick-simulator.sh"
+      - "scripts/audit/**"
       - ".github/workflows/tests.yml"
   push:
     branches: [master]
+  workflow_dispatch:
+    inputs:
+      raw_log:
+        description: "Measurement run: keep xcodebuild's raw timestamped test log and the simulator log (WN_TEST_RAW_LOG=1)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,6 +45,9 @@ jobs:
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
       WN_TEST_SOURCE_PACKAGES: ${{ github.workspace }}/build/SourcePackages
       WN_TEST_COMPILATION_CACHE: ${{ github.workspace }}/build/CompilationCache
+      # Opt-in raw timing capture for scripts/audit; empty on every event but a
+      # manual dispatch that asked for it.
+      WN_TEST_RAW_LOG: ${{ inputs.raw_log && '1' || '' }}
 
     steps:
       - name: Checkout
@@ -104,6 +114,10 @@ jobs:
         timeout-minutes: 40
         run: ./scripts/test.sh
 
+      - name: Report test phases
+        if: always()
+        run: ./scripts/audit/report-run.sh build/TestResults.xcresult
+
       - name: Save compilation cache
         if: always() && github.ref == 'refs/heads/master'
         uses: actions/cache/save@v4
@@ -112,9 +126,19 @@ jobs:
           key: cas-${{ runner.os }}-xcode26-${{ github.sha }}
 
       - name: Upload test results
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: TestResults
           path: build/TestResults.xcresult
           if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload audit logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestAudit
+          path: build/audit
+          if-no-files-found: ignore
+          retention-days: 7
