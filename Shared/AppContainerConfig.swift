@@ -87,7 +87,19 @@ nonisolated enum AppContainerConfig {
 
         let sharedRoot = marmotRoot(in: sharedBase)
         try ensureDirectoryExists(sharedRoot, fileManager: fileManager)
+        excludeFromBackup(sharedRoot)
         return sharedRoot
+    }
+
+    /// MDK keeps account databases and encrypted `media/` files here with
+    /// device-bound keys, so a restored copy is unreadable; MDK requires hosts
+    /// to keep the account directory out of iCloud and device backups.
+    /// Best-effort: a failure must not block opening the store.
+    static func excludeFromBackup(_ url: URL) {
+        var url = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? url.setResourceValues(values)
     }
 
     static func ensureDirectoryExists(_ url: URL, fileManager: FileManager = .default) throws {

@@ -166,6 +166,7 @@ struct AddToGroupSheet: View {
     @State private var loadedKey: String?
     @State private var busyGroupIdHex: String?
     @State private var error: String?
+    @State private var advisoryPrompter = GroupChangeAdvisoryPrompter()
 
     var body: some View {
         NavigationStack {
@@ -229,6 +230,8 @@ struct AddToGroupSheet: View {
             }
             .interactiveDismissDisabled(busyGroupIdHex != nil)
         }
+        .groupChangeAdvisoryAlert(advisoryPrompter)
+        .onDisappear { advisoryPrompter.cancelPending() }
     }
 
     private var reloadKey: String {
@@ -255,11 +258,14 @@ struct AddToGroupSheet: View {
         error = nil
         do {
             let client = try appState.currentMarmotClient()
-            _ = try await client.inviteMembersDetailed(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex,
-                memberRefs: [contactNpub]
-            )
+            _ = try await GroupChangeAdvisoryRetry.perform({
+                try await client.inviteMembersDetailed(
+                    accountRef: accountRef,
+                    groupIdHex: group.groupIdHex,
+                    memberRefs: [contactNpub]
+                )
+            }, prompter: advisoryPrompter, isInvite: true, client: { client },
+               accountRef: accountRef, groupIdHex: group.groupIdHex)
             guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
             await onAdded()
             guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
@@ -268,12 +274,16 @@ struct AddToGroupSheet: View {
             dismiss()
         } catch {
             guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
+            if error is GroupChangeAdvisoryDeclined {
+                self.error = UserFacingError.message(for: error)
+                return
+            }
             Haptics.error()
             let title = L10n.string("Invite failed")
-            if let account = MissingKeyPackageInvitationPresentation.accountIdHex(for: error) {
+            if let recipient = MissingKeyPackageInvitationPresentation.recipient(for: error) {
                 let message = MissingKeyPackageInvitationPresentation.message(
-                    accountIdHex: account,
-                    knownName: appState.knownDisplayName(forAccountIdHex: account)
+                    for: recipient,
+                    knownName: appState.knownDisplayName(forAccountIdHex: recipient.accountIdHex)
                 )
                 self.error = message
                 appState.present(.error(title, message: message))

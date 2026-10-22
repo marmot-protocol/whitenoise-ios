@@ -24,6 +24,8 @@ final class GroupDetailsViewModel {
     var maintenanceStatus: GroupMaintenanceStatusFfi?
     var maintenanceStatusError: String?
     var pendingConfirmation: GroupDetailsConfirmation?
+    /// Asks before acknowledging MDK's advisory refusals of a group change.
+    @ObservationIgnored let advisoryPrompter = GroupChangeAdvisoryPrompter()
     var membershipActionInFlight = false
     private var localResetCompleted = false
     var isExportingTranscript = false
@@ -96,11 +98,13 @@ final class GroupDetailsViewModel {
         do {
             let client = try appState.currentMarmotClient()
             appState.present(.warning(L10n.string("Inviting members…"), message: L10n.string("Publishing group update.")))
-            let result = try await client.inviteMembersDetailed(
-                accountRef: accountRef,
-                groupIdHex: conversation.group.groupIdHex,
-                memberRefs: refs
-            )
+            let result = try await performGroupChange(accountRef: accountRef, isInvite: true, using: appState) {
+                try await client.inviteMembersDetailed(
+                    accountRef: accountRef,
+                    groupIdHex: conversation.group.groupIdHex,
+                    memberRefs: refs
+                )
+            }
             conversation.applyGroupMutation(result)
             await refreshVisibleDebugState(using: appState)
             Haptics.success()
@@ -124,11 +128,13 @@ final class GroupDetailsViewModel {
         do {
             let client = try appState.currentMarmotClient()
             appState.present(.warning(L10n.string("Removing member…"), message: L10n.string("Publishing group update.")))
-            let result = try await client.removeMembersDetailed(
-                accountRef: accountRef,
-                groupIdHex: conversation.group.groupIdHex,
-                memberRefs: [member.memberIdHex]
-            )
+            let result = try await performGroupChange(accountRef: accountRef, using: appState) {
+                try await client.removeMembersDetailed(
+                    accountRef: accountRef,
+                    groupIdHex: conversation.group.groupIdHex,
+                    memberRefs: [member.memberIdHex]
+                )
+            }
             conversation.applyGroupMutation(result)
             await refreshVisibleDebugState(using: appState)
             Haptics.success()
@@ -151,19 +157,20 @@ final class GroupDetailsViewModel {
         ))
         do {
             let client = try appState.currentMarmotClient()
-            let result: GroupMutationResultFfi
-            if admin {
-                result = try await client.promoteAdminDetailed(
-                    accountRef: accountRef,
-                    groupIdHex: conversation.group.groupIdHex,
-                    memberRef: member.memberIdHex
-                )
-            } else {
-                result = try await client.demoteAdminDetailed(
-                    accountRef: accountRef,
-                    groupIdHex: conversation.group.groupIdHex,
-                    memberRef: member.memberIdHex
-                )
+            let result = try await performGroupChange(accountRef: accountRef, using: appState) {
+                if admin {
+                    try await client.promoteAdminDetailed(
+                        accountRef: accountRef,
+                        groupIdHex: conversation.group.groupIdHex,
+                        memberRef: member.memberIdHex
+                    )
+                } else {
+                    try await client.demoteAdminDetailed(
+                        accountRef: accountRef,
+                        groupIdHex: conversation.group.groupIdHex,
+                        memberRef: member.memberIdHex
+                    )
+                }
             }
             conversation.applyGroupMutation(result)
             await refreshVisibleDebugState(using: appState)
@@ -190,10 +197,12 @@ final class GroupDetailsViewModel {
         appState.present(.warning(L10n.string("Stepping down…"), message: L10n.string("Publishing group update.")))
         do {
             let client = try appState.currentMarmotClient()
-            let result = try await client.selfDemoteAdminDetailed(
-                accountRef: accountRef,
-                groupIdHex: conversation.group.groupIdHex
-            )
+            let result = try await performGroupChange(accountRef: accountRef, using: appState) {
+                try await client.selfDemoteAdminDetailed(
+                    accountRef: accountRef,
+                    groupIdHex: conversation.group.groupIdHex
+                )
+            }
             conversation.applyGroupMutation(result)
             await refreshVisibleDebugState(using: appState)
             Haptics.success()
@@ -268,33 +277,24 @@ final class GroupDetailsViewModel {
         defer { membershipActionInFlight = false }
         do {
             appState.present(.warning(L10n.string("Updating group info…"), message: L10n.string("Publishing group update.")))
-            let summary: SendSummaryFfi
+            let summary = try await performGroupChange(accountRef: accountRef, using: appState) {
 #if DEBUG
-            if let updateGroupProfileForTesting {
-                summary = try await updateGroupProfileForTesting(
-                    accountRef,
-                    conversation.group.groupIdHex,
-                    name,
-                    description
-                )
-            } else {
-                let client = try appState.currentMarmotClient()
-                summary = try await client.updateGroupProfile(
+                if let updateGroupProfileForTesting {
+                    return try await updateGroupProfileForTesting(
+                        accountRef,
+                        conversation.group.groupIdHex,
+                        name,
+                        description
+                    )
+                }
+#endif
+                return try await appState.currentMarmotClient().updateGroupProfile(
                     accountRef: accountRef,
                     groupIdHex: conversation.group.groupIdHex,
                     name: name,
                     description: description
                 )
             }
-#else
-            let client = try appState.currentMarmotClient()
-            summary = try await client.updateGroupProfile(
-                accountRef: accountRef,
-                groupIdHex: conversation.group.groupIdHex,
-                name: name,
-                description: description
-            )
-#endif
             await refreshGroupManagementAndNotify()
             await refreshVisibleDebugState(using: appState)
             Haptics.success()
@@ -302,8 +302,9 @@ final class GroupDetailsViewModel {
             return true
         } catch {
             await refreshAfterFailedMutation(using: appState)
-            Haptics.error()
             actionError = UserFacingError.message(for: error)
+            guard !(error is GroupChangeAdvisoryDeclined) else { return false }
+            Haptics.error()
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't update group info"), error: error))
             return false
         }
@@ -378,18 +379,20 @@ final class GroupDetailsViewModel {
             let client = try appState.currentMarmotClient()
             var summary: SendSummaryFfi?
             var publishedEncryptedImage = false
-#if DEBUG
             if let draft {
                 if !pendingLegacyAvatarClearAfterImageMutation {
-                    if let updateGroupImageForTesting {
-                        summary = try await updateGroupImageForTesting(
-                            accountRef,
-                            conversation.group.groupIdHex,
-                            draft.data,
-                            draft.mediaType
-                        )
-                    } else {
-                        summary = try await client.updateGroupImage(
+                    summary = try await performGroupChange(accountRef: accountRef, using: appState) {
+#if DEBUG
+                        if let updateGroupImageForTesting {
+                            return try await updateGroupImageForTesting(
+                                accountRef,
+                                conversation.group.groupIdHex,
+                                draft.data,
+                                draft.mediaType
+                            )
+                        }
+#endif
+                        return try await client.updateGroupImage(
                             accountRef: accountRef,
                             groupIdHex: conversation.group.groupIdHex,
                             plaintext: draft.data,
@@ -400,37 +403,21 @@ final class GroupDetailsViewModel {
                 }
             } else if conversation.group.imageHashHex != nil,
                       !pendingLegacyAvatarClearAfterImageMutation {
-                if let clearGroupImageForTesting {
-                    summary = try await clearGroupImageForTesting(
-                        accountRef,
-                        conversation.group.groupIdHex
-                    )
-                } else {
-                    summary = try await client.clearGroupImage(
+                summary = try await performGroupChange(accountRef: accountRef, using: appState) {
+#if DEBUG
+                    if let clearGroupImageForTesting {
+                        return try await clearGroupImageForTesting(
+                            accountRef,
+                            conversation.group.groupIdHex
+                        )
+                    }
+#endif
+                    return try await client.clearGroupImage(
                         accountRef: accountRef,
                         groupIdHex: conversation.group.groupIdHex
                     )
                 }
             }
-#else
-            if let draft {
-                if !pendingLegacyAvatarClearAfterImageMutation {
-                    summary = try await client.updateGroupImage(
-                        accountRef: accountRef,
-                        groupIdHex: conversation.group.groupIdHex,
-                        plaintext: draft.data,
-                        mediaType: draft.mediaType
-                    )
-                    publishedEncryptedImage = true
-                }
-            } else if conversation.group.imageHashHex != nil,
-                      !pendingLegacyAvatarClearAfterImageMutation {
-                summary = try await client.clearGroupImage(
-                    accountRef: accountRef,
-                    groupIdHex: conversation.group.groupIdHex
-                )
-            }
-#endif
 
             onProgress(.finishing)
 
@@ -439,15 +426,17 @@ final class GroupDetailsViewModel {
             // upload succeeds, so a partial migration keeps the old image.
             if conversation.group.avatarUrl != nil {
                 pendingLegacyAvatarClearAfterImageMutation = true
+                summary = try await performGroupChange(accountRef: accountRef, using: appState) {
 #if DEBUG
-                if let updateGroupAvatarUrlForTesting {
-                    summary = try await updateGroupAvatarUrlForTesting(
-                        accountRef,
-                        conversation.group.groupIdHex,
-                        nil
-                    )
-                } else {
-                    summary = try await client.updateGroupAvatarUrl(
+                    if let updateGroupAvatarUrlForTesting {
+                        return try await updateGroupAvatarUrlForTesting(
+                            accountRef,
+                            conversation.group.groupIdHex,
+                            nil
+                        )
+                    }
+#endif
+                    return try await client.updateGroupAvatarUrl(
                         accountRef: accountRef,
                         groupIdHex: conversation.group.groupIdHex,
                         url: nil,
@@ -455,15 +444,6 @@ final class GroupDetailsViewModel {
                         thumbhash: nil
                     )
                 }
-#else
-                summary = try await client.updateGroupAvatarUrl(
-                    accountRef: accountRef,
-                    groupIdHex: conversation.group.groupIdHex,
-                    url: nil,
-                    dim: nil,
-                    thumbhash: nil
-                )
-#endif
                 pendingLegacyAvatarClearAfterImageMutation = false
             } else if pendingLegacyAvatarClearAfterImageMutation {
                 pendingLegacyAvatarClearAfterImageMutation = false
@@ -492,10 +472,12 @@ final class GroupDetailsViewModel {
         } catch {
             onProgress(.finishing)
             await refreshAfterFailedMutation(using: appState)
-            Haptics.error()
             actionError = UserFacingError.message(for: error)
             onProgress(nil)
-            appState.present(UserFacingError.toast(title: L10n.string("Couldn't update group image"), error: error))
+            if !(error is GroupChangeAdvisoryDeclined) {
+                Haptics.error()
+                appState.present(UserFacingError.toast(title: L10n.string("Couldn't update group image"), error: error))
+            }
             throw error
         }
     }
@@ -516,11 +498,13 @@ final class GroupDetailsViewModel {
                 message: L10n.string("Publishing group update.")
             ))
             let client = try appState.currentMarmotClient()
-            let summary = try await client.updateMessageRetention(
-                accountRef: accountRef,
-                groupIdHex: conversation.group.groupIdHex,
-                disappearingMessageSecs: seconds
-            )
+            let summary = try await performGroupChange(accountRef: accountRef, using: appState) {
+                try await client.updateMessageRetention(
+                    accountRef: accountRef,
+                    groupIdHex: conversation.group.groupIdHex,
+                    disappearingMessageSecs: seconds
+                )
+            }
             await refreshGroupManagementAndNotify()
             await refreshVisibleDebugState(using: appState)
             await conversation.refreshTimelineWindowAfterLocalPrune()
@@ -697,10 +681,12 @@ final class GroupDetailsViewModel {
                     conversation.applyOptimisticAdminStatus(memberIdHex: myAccountId, isAdmin: false)
                 }
                 appState.present(.warning(L10n.string("Stepping down before leaving…"), message: L10n.string("Publishing group update.")))
-                let result = try await client.selfDemoteAdminDetailed(
-                    accountRef: accountRef,
-                    groupIdHex: conversation.group.groupIdHex
-                )
+                let result = try await performGroupChange(accountRef: accountRef, using: appState) {
+                    try await client.selfDemoteAdminDetailed(
+                        accountRef: accountRef,
+                        groupIdHex: conversation.group.groupIdHex
+                    )
+                }
                 conversation.applyGroupMutation(result)
                 await refreshVisibleDebugState(using: appState)
             }
@@ -762,24 +748,17 @@ final class GroupDetailsViewModel {
                     L10n.string("Preparing to end group…"),
                     message: L10n.string("Publishing group update.")
                 ))
-                let result: GroupMutationResultFfi
+                let result = try await performGroupChange(accountRef: accountRef, using: appState) {
 #if DEBUG
-                if let enableGroupDisbandingForTesting {
-                    result = try await enableGroupDisbandingForTesting(accountRef, groupIdHex)
-                } else {
-                    let client = try appState.currentMarmotClient()
-                    result = try await client.enableGroupDisbanding(
+                    if let enableGroupDisbandingForTesting {
+                        return try await enableGroupDisbandingForTesting(accountRef, groupIdHex)
+                    }
+#endif
+                    return try await appState.currentMarmotClient().enableGroupDisbanding(
                         accountRef: accountRef,
                         groupIdHex: groupIdHex
                     )
                 }
-#else
-                let client = try appState.currentMarmotClient()
-                result = try await client.enableGroupDisbanding(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex
-                )
-#endif
                 conversation.applyGroupMutation(result)
                 state = result.managementState
                 onGroupChanged(conversation.group)
@@ -795,24 +774,17 @@ final class GroupDetailsViewModel {
                 L10n.string("Ending group…"),
                 message: L10n.string("Removing everyone and publishing the final group update.")
             ))
-            let request: DisbandRequestFfi
+            let request = try await performGroupChange(accountRef: accountRef, using: appState) {
 #if DEBUG
-            if let disbandGroupForTesting {
-                request = try await disbandGroupForTesting(accountRef, groupIdHex)
-            } else {
-                let client = try appState.currentMarmotClient()
-                request = try await client.disbandGroup(
+                if let disbandGroupForTesting {
+                    return try await disbandGroupForTesting(accountRef, groupIdHex)
+                }
+#endif
+                return try await appState.currentMarmotClient().disbandGroup(
                     accountRef: accountRef,
                     groupIdHex: groupIdHex
                 )
             }
-#else
-            let client = try appState.currentMarmotClient()
-            request = try await client.disbandGroup(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex
-            )
-#endif
             conversation.markDisbandRequested(request)
             onGroupChanged(conversation.group)
             await refreshVisibleDebugState(using: appState)
@@ -971,9 +943,30 @@ final class GroupDetailsViewModel {
 
     private func handleActionError(_ error: Error, title: String, using appState: AppState) {
         let message = actionMessage(for: error, using: appState)
-        Haptics.error()
         actionError = message
+        // Choosing Wait is not a failure; the inline note says nothing changed.
+        guard !(error is GroupChangeAdvisoryDeclined) else { return }
+        Haptics.error()
         appState.present(.error(title, message: message))
+    }
+
+    /// Runs one group change, asking before acknowledging MDK's advisory
+    /// `GroupCatchingUp`/`GroupCommitUndelivered` refusals and retrying.
+    private func performGroupChange<Result>(
+        accountRef: String,
+        isInvite: Bool = false,
+        using appState: AppState,
+        _ change: () async throws -> Result
+    ) async throws -> Result {
+        guard let groupIdHex = conversation?.group.groupIdHex else { throw GroupDetailsActionError.noActiveAccount }
+        return try await GroupChangeAdvisoryRetry.perform(
+            change,
+            prompter: advisoryPrompter,
+            isInvite: isInvite,
+            client: { try appState.currentMarmotClient() },
+            accountRef: accountRef,
+            groupIdHex: groupIdHex
+        )
     }
 
     private func actionMessage(for error: Error, using appState: AppState) -> String {
@@ -1004,10 +997,11 @@ final class GroupDetailsViewModel {
             return L10n.string("That member is already an admin.")
         case .NotAdmin:
             return L10n.string("That member is not an admin.")
-        case .MissingKeyPackage(let account):
+        case .MissingKeyPackage(let account, let reason):
             return MissingKeyPackageInvitationPresentation.message(
                 accountIdHex: account,
-                knownName: appState.knownDisplayName(forAccountIdHex: account)
+                knownName: appState.knownDisplayName(forAccountIdHex: account),
+                reason: reason
             )
         default:
             return UserFacingError.message(for: marmotError)

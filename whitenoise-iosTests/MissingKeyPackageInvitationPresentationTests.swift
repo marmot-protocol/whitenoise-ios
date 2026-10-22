@@ -21,23 +21,40 @@ struct MissingKeyPackageInvitationPresentationTests {
         )
     }
 
+    @Test func outdatedRecipientIsAskedToUpdateRatherThanInstall() {
+        #expect(
+            MissingKeyPackageInvitationPresentation.message(accountIdHex: account, knownName: "Alex", reason: .obsoleteOnly)
+                == "Alex needs to update their app before they can be invited."
+        )
+        #expect(
+            MissingKeyPackageInvitationPresentation.message(accountIdHex: account, knownName: nil, reason: .obsoleteOnly)
+                == "This user needs to update their app before they can be invited."
+        )
+    }
+
     @Test func copyNeverMentionsProtocolTerms() {
         for name in ["Alex", nil] {
-            let message = MissingKeyPackageInvitationPresentation.message(accountIdHex: account, knownName: name)
-                .lowercased()
-            #expect(!message.contains("key package"))
-            #expect(!message.contains("compatible"))
-            #expect(!message.contains("npub"))
+            for reason in [MissingKeyPackageReasonFfi.notFound, .obsoleteOnly] {
+                let message = MissingKeyPackageInvitationPresentation.message(
+                    accountIdHex: account, knownName: name, reason: reason
+                ).lowercased()
+                #expect(!message.contains("key package"))
+                #expect(!message.contains("compatible"))
+                #expect(!message.contains("npub"))
+            }
         }
     }
 
-    @Test func extractsAccountOnlyFromMissingKeyPackage() {
+    @Test func extractsRecipientOnlyFromMissingKeyPackage() {
         #expect(
-            MissingKeyPackageInvitationPresentation.accountIdHex(for: MarmotKitError.MissingKeyPackage(account: account))
-                == account
+            MissingKeyPackageInvitationPresentation.recipient(
+                for: MarmotKitError.MissingKeyPackage(account: account, reason: .obsoleteOnly)
+            ) == .init(accountIdHex: account, reason: .obsoleteOnly)
         )
-        #expect(MissingKeyPackageInvitationPresentation.accountIdHex(for: MarmotKitError.Runtime(details: "offline")) == nil)
-        #expect(MissingKeyPackageInvitationPresentation.accountIdHex(for: CancellationError()) == nil)
+        #expect(MissingKeyPackageInvitationPresentation.recipient(
+            for: MarmotKitError.DirectoryLookupIncomplete(account: account)) == nil)
+        #expect(MissingKeyPackageInvitationPresentation.recipient(for: MarmotKitError.Runtime(details: "offline")) == nil)
+        #expect(MissingKeyPackageInvitationPresentation.recipient(for: CancellationError()) == nil)
     }
 }
 
@@ -67,7 +84,7 @@ struct NewGroupMissingKeyPackageTests {
         model.groupSelection.add(member)
         let peerHex = peerHex
         model.createGroupForTesting = { _, _, _, _ in
-            throw MarmotKitError.MissingKeyPackage(account: peerHex)
+            throw MarmotKitError.MissingKeyPackage(account: peerHex, reason: .notFound)
         }
         return (model, member)
     }

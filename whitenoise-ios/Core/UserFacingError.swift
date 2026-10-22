@@ -34,6 +34,9 @@ struct UserFacingError: Equatable {
         if let marmotError = error as? MarmotKitError, case .FollowListUnavailable = marmotError {
             return L10n.string("Your follow list is unavailable from relays. Check your connection and relay settings, then try again. No follows were changed.")
         }
+        if let marmotError = error as? MarmotKitError, case .FollowListTooLarge = marmotError {
+            return L10n.string("Your follow list is too large to change here. No follows were changed.")
+        }
         if let setupMessage = accountSetupMessage(for: error) { return capitalizingFirstLetter(setupMessage) }
         if let reportMessage = moderationReportMessage(for: error) { return reportMessage }
         if let sendMessage = sendMessage(for: error) { return capitalizingFirstLetter(sendMessage) }
@@ -64,7 +67,7 @@ struct UserFacingError: Equatable {
              .InvalidIdentity(let details), .InvalidKeyPackageEvent(let details),
              .StorageBusy(let details), .StorageClosed(let details),
              .SecretNotFound(let details), .KeystoreUnavailable(let details),
-             .EncryptionFailed(let details), .Io(let details):
+             .EncryptionFailed(let details), .Io(let details), .StorageFull(let details):
             return details
         case .MediaAttachmentRejected(_, let details), .MediaUnfetchable(let details),
              .MediaDownloadFailed(let details), .ChatWindowQuery(let details):
@@ -119,8 +122,20 @@ struct UserFacingError: Equatable {
     private nonisolated static func sendMessage(for error: Error) -> String? {
         guard let marmotError = error as? MarmotKitError else { return nil }
         switch marmotError {
+        case .MissingKeyPackage(_, .obsoleteOnly):
+            return L10n.string("This person's app is out of date. Ask them to update it and open it, then try again.")
         case .MissingKeyPackage:
             return L10n.string("This person has no compatible invitation key available. Ask them to open White Noise and try again.")
+        case .DirectoryLookupIncomplete:
+            return L10n.string("Couldn't finish looking this person up on relays. Check your connection and try again.")
+        case .GroupCatchingUp:
+            return L10n.string("This chat may be out of date on this device. Wait for it to sync, then try again.")
+        case .GroupCommitUndelivered:
+            return L10n.string("The group's last change hasn't reached all of its relays yet. Try again in a moment.")
+        case .InvalidEditTarget:
+            return L10n.string("This message can't be edited.")
+        case .StorageFull:
+            return L10n.string("This device is out of storage. Free up some space and try again.")
         case .UserBlocked:
             return L10n.string("Unblock this person before sending a message.")
         case .BlockListUnavailable:

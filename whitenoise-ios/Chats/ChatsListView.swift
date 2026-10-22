@@ -49,6 +49,8 @@ struct ChatsListView: View {
     @State private var updatingChatIds = Set<String>()
     @State private var leaveActionState = ChatListLeaveActionState()
     @State private var leaveConfirmationContext: ChatLeaveOperation.Context?
+    /// An admin's step-down before leaving is a group change MDK can refuse.
+    @State private var leaveAdvisoryPrompter = GroupChangeAdvisoryPrompter()
     @State private var bulkDeleteInProgress = false
     @State private var bulkLeave = ChatListBulkLeaveState()
     @State private var showBulkLeaveConfirmation = false
@@ -172,6 +174,7 @@ struct ChatsListView: View {
             .task(id: visibleRowsKey) {
                 selectedChatIds = ChatListSelection.reconcile(selectedChatIds, visibleIds: visibleRowIds)
             }
+            .groupChangeAdvisoryAlert(leaveAdvisoryPrompter)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1501,9 +1504,11 @@ struct ChatsListView: View {
         }, readState: {
             try await readLeaveState(groupIdHex: groupIdHex, context: context)
         }, selfDemote: {
-            _ = try await appState.currentMarmotClient().selfDemoteAdminDetailed(
-                accountRef: context.accountRef, groupIdHex: groupIdHex
-            )
+            let client = try appState.currentMarmotClient()
+            _ = try await GroupChangeAdvisoryRetry.perform({
+                try await client.selfDemoteAdminDetailed(accountRef: context.accountRef, groupIdHex: groupIdHex)
+            }, prompter: leaveAdvisoryPrompter, client: { client },
+               accountRef: context.accountRef, groupIdHex: groupIdHex)
         }, leave: {
             _ = try await appState.currentMarmotClient().leaveGroup(
                 accountRef: context.accountRef, groupIdHex: groupIdHex

@@ -127,6 +127,7 @@ nonisolated enum AttachmentTransferPresentation {
         case .completedUnretained: L10n.string("Download not saved")
         case .retryExhausted: L10n.string("Download retry limit reached")
         case .policyBlocked: L10n.string("Download limit reached")
+        case .storageBlocked: L10n.string("Not enough storage. Free up space to download.")
         }
     }
 }

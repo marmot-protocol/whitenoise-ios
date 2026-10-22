@@ -346,6 +346,29 @@ before every release tag.
       tap surfaces the failure, and only the following Retry tap starts a fresh
       download.
 
+## MarmotKit 0.14.0 nightly integration
+
+- [ ] Upgrade a signed-in install in place. Accounts, chats and notifications
+      keep working (the deployment keeps the existing keychain service), and a
+      new group can still send photos and set a group image.
+- [ ] Make a group change while the group is catching up (for example, admin
+      device offline while two other admins change the group, then reconnect
+      and immediately rename). The "This chat may be out of date" alert appears
+      over whichever screen made the change (Group Info, Edit, Add Members,
+      Disappearing Messages, or a member's profile). Wait changes nothing and
+      shows an inline note without an error toast; Continue anyway publishes.
+      An invite uses the stronger invitation warning.
+- [ ] Block one group relay right after a group change, wait two minutes, then
+      make another change. "Last group change not delivered" appears; Continue
+      anyway publishes the change.
+- [ ] Invite someone whose only KeyPackages are outdated: the copy asks them to
+      update their app instead of saying they aren't on White Noise.
+- [ ] Fill the device until a tapped download can't fit. The bubble shows Retry
+      with a "Not enough storage" toast, Info → Downloads says "Not enough
+      storage", and after freeing space a Retry tap downloads it.
+- [ ] In Settings → Apple Account → iCloud → Manage Storage → Backups, the
+      device backup size does not include White Noise attachments.
+
 ## In-place MarmotKit upgrade
 
 Run this before releasing any MarmotKit bump that advances the account storage
