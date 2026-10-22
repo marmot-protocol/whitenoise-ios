@@ -20,6 +20,13 @@ Markers (emitted by scripts/test.sh, xcodebuild, XCTest or Swift Testing):
 Logs that went through xcbeautify lose most of these lines, and a log without
 the wall-clock prefix cannot place Swift Testing's start. Both degrade to empty
 cells rather than estimates; the slowest-suite list still comes out.
+
+Clocks: every log clock is the runner's local time, while the xcresult summary
+stores epoch seconds that this script converts in the *analyst's* local time
+zone. Analysing CI artifacts on a machine in another zone therefore skews any
+cell that mixes the two by the zone difference. When a raw log is present its
+own markers win for testing_started_at and run_end_at and the summary only
+fills gaps; a disagreement over a minute is reported on stderr.
 """
 import argparse
 import csv
@@ -50,8 +57,9 @@ XCTEST_STARTED = re.compile(r"^Test Suite 'All tests' started at (" + CLOCK + r"
 XCTEST_ENDED = re.compile(r"^Test Suite 'All tests' (?:passed|failed) at (" + CLOCK + r")\.")
 ST_STARTED = re.compile(r"^(?:\S )?Test run started\.")
 ST_ENDED = re.compile(
-    r"^(?:\S )?Test run with (\d+) tests? in (\d+) suites? (passed|failed) after ([\d.]+) seconds"
+    r"^(?:\S )?Test run with (\d+) tests?(?: in (\d+) suites?)? (passed|failed) after ([\d.]+) seconds"
 )
+ANSI_SGR = re.compile(r"\x1b\[[0-9;]*m")
 ST_SUITE = re.compile(r"^(?:\S )?Suite (.+?) (passed|failed) after ([\d.]+) seconds")
 IDE_ELAPSED = re.compile(
     r"^(" + CLOCK + r") xcodebuild\[.*IDETestOperationsObserverDebug: ([\d.]+) elapsed -- Testing started completed"
@@ -89,7 +97,7 @@ def parse_log(lines):
         "suites": [],
     }
     for raw in lines:
-        raw = raw.rstrip("\n")
+        raw = ANSI_SGR.sub("", raw.rstrip("\n"))
         stamp = None
         match = PREFIX.match(raw)
         if match:
@@ -123,7 +131,7 @@ def parse_log(lines):
         match = ST_ENDED.match(line)
         if match:
             parsed["swift_testing_tests"] = int(match.group(1))
-            parsed["swift_testing_suites"] = int(match.group(2))
+            parsed["swift_testing_suites"] = int(match.group(2)) if match.group(2) else None
             parsed["swift_testing_s"] = float(match.group(4))
             parsed["swift_testing_end_line_at"] = stamp
             continue
@@ -193,17 +201,28 @@ def seconds_between(start, end):
     return (end - start).total_seconds()
 
 
-def compute_phases(parsed, summary=None, run_id="run"):
-    """Combine log markers and an optional xcresult summary into the CSV row."""
+def compute_phases(parsed, summary=None, run_id="run", warn=None):
+    """Combine log markers and an optional xcresult summary into the CSV row.
+
+    Log markers win over the summary (see the module docstring on clocks);
+    `warn` receives a message when the two disagree by more than a minute.
+    """
     summary = summary or {}
     summary_start = summary.get("startTime")
     summary_finish = summary.get("finishTime")
     summary_start = datetime.datetime.fromtimestamp(summary_start) if summary_start else None
     summary_finish = datetime.datetime.fromtimestamp(summary_finish) if summary_finish else None
 
-    testing_started_at = summary_start
-    if testing_started_at is None and parsed["ide_line_at"] and parsed["ide_elapsed_s"] is not None:
+    testing_started_at = None
+    if parsed["ide_line_at"] and parsed["ide_elapsed_s"] is not None:
         testing_started_at = parsed["ide_line_at"] - datetime.timedelta(seconds=parsed["ide_elapsed_s"])
+    if testing_started_at is not None and summary_start is not None and warn is not None:
+        skew = abs((testing_started_at - summary_start).total_seconds())
+        if skew > 60:
+            warn(f"log and xcresult disagree on the test start by {skew:.0f}s; "
+                 "the xcresult epoch is shown in this machine's time zone, the log in the runner's")
+    if testing_started_at is None:
+        testing_started_at = summary_start
     if testing_started_at is None:
         testing_started_at = parsed["testing_started_line_at"]
 
@@ -222,7 +241,7 @@ def compute_phases(parsed, summary=None, run_id="run"):
     first_test = min((t for t in (xctest_started, st_started) if t is not None), default=None)
     gap_s = seconds_between(phase_start, first_test)
 
-    run_end = summary_finish or parsed["session_results_at"] or parsed["ide_line_at"]
+    run_end = parsed["session_results_at"] or parsed["ide_line_at"] or summary_finish
     tests_end = None
     xctest_ran = xctest_started is not None
     st_ran = st_s is not None or st_started is not None
@@ -282,17 +301,19 @@ def slowest(suites, top, seconds_index=1):
 PHASE_NOTES = [
     ("build_for_testing_s", "`==> build-for-testing` marker from scripts/test.sh"),
     ("test_without_building_s", "`==> test-without-building` marker from scripts/test.sh"),
-    ("gap_build_end_to_first_test_s", "build end (or log start) to the first XCTest suite or Swift Testing run"),
+    ("gap_build_end_to_first_test_s",
+     "build end (or log start) to the first XCTest suite or Swift Testing run; "
+     "includes the remaining simulator-boot wait, test-host install and the discovery launch"),
     ("xctest_s", "XCTest `All tests` started to passed/failed"),
     ("swift_testing_s", "Swift Testing `Test run with N tests` duration"),
-    ("finalize_s", "last test end to the run end (xcresult finish, else `Test session results`)"),
+    ("finalize_s", "last test end to the run end (`Test session results`, else IDE clock, else xcresult finish)"),
     ("ide_elapsed_s", "`IDETestOperationsObserverDebug` elapsed: xcodebuild's own test-phase total"),
 ]
 TIMESTAMP_NOTES = [
-    ("testing_started_at", "xcresult startTime, else IDE elapsed back-dated, else `Testing started`"),
+    ("testing_started_at", "IDE elapsed back-dated from its clock, else xcresult startTime, else `Testing started`"),
     ("first_xctest_suite_at", "`Test Suite 'All tests' started at`"),
     ("swift_testing_started_at", "`Test run started.` wall-clock prefix"),
-    ("run_end_at", "xcresult finishTime, else `Test session results`, else IDE line clock"),
+    ("run_end_at", "`Test session results` prefix, else IDE line clock, else xcresult finishTime"),
 ]
 
 
@@ -312,7 +333,8 @@ def render(row, log_suites, xcresult_suites, top, markdown):
             out.append(f"| {key} | {format_cell(row[key])} | {note} |")
         if row["swift_testing_tests"] is not None:
             out.append("")
-            out.append(f"Swift Testing ran {row['swift_testing_tests']} tests in {row['swift_testing_suites']} suites.")
+            suites = f" in {row['swift_testing_suites']} suites" if row["swift_testing_suites"] is not None else ""
+            out.append(f"Swift Testing ran {row['swift_testing_tests']} tests{suites}.")
     else:
         out.append(f"Test phases: {row['run_id']}")
         for key, note in PHASE_NOTES:
@@ -362,6 +384,16 @@ def xcresulttool(subcommand, bundle):
     return json.loads(result.stdout)
 
 
+def load_xcresult(bundle, warn):
+    """Read the summary and tests tree; a partial or unreadable bundle gives (None, None)."""
+    try:
+        return xcresulttool("summary", bundle), xcresulttool("tests", bundle)
+    except (subprocess.CalledProcessError, OSError, ValueError) as error:
+        detail = getattr(error, "stderr", None) or str(error)
+        warn(f"could not read {bundle}: {detail.strip()}")
+        return None, None
+
+
 def main(argv=None):
     root = pathlib.Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -384,14 +416,18 @@ def main(argv=None):
         with open(log_path, encoding="utf-8", errors="replace") as handle:
             parsed = parse_log(handle)
 
+    def warn(message):
+        print(f"phases: {message}", file=sys.stderr)
+
     summary = None
     xcresult_suites = []
     if args.xcresult:
-        summary = xcresulttool("summary", args.xcresult)
-        xcresult_suites = slowest(suite_durations_from_xcresult(xcresulttool("tests", args.xcresult)), args.top)
+        summary, tests = load_xcresult(args.xcresult, warn)
+        if tests is not None:
+            xcresult_suites = slowest(suite_durations_from_xcresult(tests), args.top)
 
     run_id = args.run_id or pathlib.Path(log_path or args.xcresult).stem
-    row = compute_phases(parsed, summary, run_id)
+    row = compute_phases(parsed, summary, run_id, warn)
     if not args.no_csv:
         append_csv(args.csv, row)
     log_suites = slowest(parsed["suites"], args.top, seconds_index=2)

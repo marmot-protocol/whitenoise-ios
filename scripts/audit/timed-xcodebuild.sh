@@ -24,13 +24,9 @@ log="${WN_AUDIT_LOG:-$root/build/audit/xcodebuild-$(date +%Y%m%dT%H%M%S).log}"
 mkdir -p "$(dirname "$log")"
 
 stamp() {
-  # macOS ships BWK awk, which has no strftime; gawk does. Fall back to perl,
-  # present on every macOS and GitHub runner image, with autoflush on.
-  if awk 'BEGIN { strftime("%Y") }' >/dev/null 2>&1; then
-    awk '{ print strftime("%Y-%m-%dT%H:%M:%S"), $0; fflush() }'
-  else
-    perl -MPOSIX -ne 'BEGIN { $| = 1 } print strftime("%Y-%m-%dT%H:%M:%S", localtime), " ", $_'
-  fi
+  # macOS ships BWK awk, which has no strftime, so stamp with perl (present on
+  # every macOS and GitHub runner image) with autoflush on.
+  perl -MPOSIX -ne 'BEGIN { $| = 1 } print strftime("%Y-%m-%dT%H:%M:%S", localtime), " ", $_'
 }
 
 echo "timed-xcodebuild: raw log at $log" >&2

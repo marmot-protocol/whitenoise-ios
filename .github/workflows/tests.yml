@@ -132,6 +132,7 @@ jobs:
           name: TestResults
           path: build/TestResults.xcresult
           if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload audit logs
         if: always()
@@ -140,3 +141,4 @@ jobs:
           name: TestAudit
           path: build/audit
           if-no-files-found: ignore
+          retention-days: 7

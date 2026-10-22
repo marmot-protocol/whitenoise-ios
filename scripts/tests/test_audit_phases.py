@@ -2,9 +2,12 @@
 import datetime
 import importlib.util
 import io
+import os
 import pathlib
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 
 script = pathlib.Path(__file__).resolve().parents[1] / "audit" / "phases.py"
@@ -120,22 +123,39 @@ class ComputePhasesTests(unittest.TestCase):
         self.assertAlmostEqual(row["finalize_s"], 18.0)
         self.assertEqual(row["ide_elapsed_s"], 894.0)
 
-    def test_xcresult_summary_sets_start_and_finish(self):
+    def test_log_markers_win_over_xcresult_summary(self):
         start = dt("2026-10-22T10:00:08.500").timestamp()
         finish = dt("2026-10-22T10:15:10.250").timestamp()
+        warnings = []
         row = phases.compute_phases(
-            phases.parse_log(io.StringIO(TIMED_LOG)), {"startTime": start, "finishTime": finish}
+            phases.parse_log(io.StringIO(TIMED_LOG)), {"startTime": start, "finishTime": finish}, warn=warnings.append
         )
+        self.assertEqual(row["testing_started_at"], dt("2026-10-22T10:00:09"))
+        self.assertEqual(row["run_end_at"], dt("2026-10-22T10:15:20"))
+        self.assertEqual(warnings, [])
+
+    def test_xcresult_summary_fills_gaps_and_flags_zone_skew(self):
+        log = "\n".join(line for line in TIMED_LOG.splitlines()
+                        if "IDETestOperationsObserverDebug" not in line and "Test session results" not in line) + "\n"
+        start = dt("2026-10-22T10:00:08.500").timestamp()
+        finish = dt("2026-10-22T10:15:10.250").timestamp()
+        row = phases.compute_phases(phases.parse_log(io.StringIO(log)), {"startTime": start, "finishTime": finish})
         self.assertEqual(row["testing_started_at"], dt("2026-10-22T10:00:08.500"))
         self.assertEqual(row["run_end_at"], dt("2026-10-22T10:15:10.250"))
         self.assertAlmostEqual(row["finalize_s"], 8.25)
+
+        warnings = []
+        skewed = dt("2026-10-22T12:00:09").timestamp()
+        phases.compute_phases(phases.parse_log(io.StringIO(TIMED_LOG)), {"startTime": skewed}, warn=warnings.append)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("7200s", warnings[0])
 
     def test_raw_log_degrades_to_empty_cells(self):
         row = phases.compute_phases(phases.parse_log(io.StringIO(RAW_LOG)))
         self.assertIsNone(row["build_for_testing_s"])
         self.assertEqual(row["testing_started_at"], dt("2026-09-16T15:02:42.313") - datetime.timedelta(seconds=163.283))
         self.assertAlmostEqual(row["xctest_s"], 0.002)
-        # Build end is unknown, so the gap counts from `Testing started`.
+        # Build end is unknown, so the gap counts from the back-dated IDE elapsed.
         self.assertAlmostEqual(row["gap_build_end_to_first_test_s"], 43.707, places=3)
         self.assertEqual(row["swift_testing_s"], 107.552)
         self.assertIsNone(row["swift_testing_started_at"])
@@ -147,6 +167,17 @@ class ComputePhasesTests(unittest.TestCase):
         self.assertEqual(row["swift_testing_started_at"], dt("2026-10-22T10:08:20"))
         self.assertEqual(row["run_end_at"], None)
         self.assertIsNone(row["finalize_s"])
+
+    def test_ansi_codes_and_missing_suite_count_are_tolerated(self):
+        log = ("2026-10-22T10:08:20 \x1b[1m\u25c7 Test run started.\x1b[0m\n"
+               "2026-10-22T10:08:21 \x1b[32m\u2714\x1b[0m Suite \x1b[1mFastTests\x1b[0m passed after 0.393 seconds.\n"
+               "2026-10-22T10:10:00 \x1b[32m\u2714 Test run with 3 tests passed after 100.000 seconds.\x1b[0m\n")
+        parsed = phases.parse_log(io.StringIO(log))
+        self.assertEqual(parsed["suites"], [("FastTests", "passed", 0.393)])
+        self.assertEqual(parsed["swift_testing_tests"], 3)
+        self.assertIsNone(parsed["swift_testing_suites"])
+        self.assertEqual(parsed["swift_testing_s"], 100.0)
+        self.assertEqual(parsed["swift_testing_started_at"], dt("2026-10-22T10:08:20"))
 
     def test_finalize_needs_every_ran_framework_to_end(self):
         log = TIMED_LOG.replace("✘ Test run with 2952 tests in 300 suites failed after 402.000 seconds with 1 issue.", "")
@@ -218,6 +249,58 @@ class CsvAndSuiteTests(unittest.TestCase):
         self.assertIn("| SlowTests | 338.500 | failed |", text)
         plain = phases.render(row, [], [], 20, markdown=False)
         self.assertIn("No per-suite durations found", plain)
+
+
+class CommandLineTests(unittest.TestCase):
+    def write_log(self, directory, name, text):
+        path = pathlib.Path(directory) / name
+        path.write_text(text)
+        return path
+
+    def test_unreadable_xcresult_keeps_log_table_and_exit_zero(self):
+        error = subprocess.CalledProcessError(1, ["xcrun"], stderr="Error: bundle is incomplete\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self.write_log(tmp, "xcodebuild-a.log", TIMED_LOG)
+            with mock.patch.object(phases.subprocess, "run", side_effect=error), \
+                    mock.patch("sys.stdout", new_callable=io.StringIO) as out, \
+                    mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+                status = phases.main([str(log), "--xcresult", f"{tmp}/Partial.xcresult", "--no-csv", "--markdown"])
+        self.assertEqual(status, 0)
+        self.assertIn("bundle is incomplete", err.getvalue())
+        self.assertIn("| swift_testing_s | 402.000 |", out.getvalue())
+        self.assertNotIn("xcresult)", out.getvalue())
+
+    def test_report_run_prefers_pointer_then_xcodebuild_log_over_simulator_capture(self):
+        script = pathlib.Path(__file__).resolve().parents[1] / "audit" / "report-run.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_log(tmp, "xcodebuild-a.log", TIMED_LOG)
+            older_style = self.write_log(tmp, "xcodebuild-a-simulator.log", "Filtering the log data\n")
+            newest = self.write_log(tmp, "simulator-a.log", "Child process terminated\n")
+            for path in (older_style, newest):
+                os.utime(path, (2_000_000_000, 2_000_000_000))
+            env = {**os.environ, "WN_AUDIT_DIR": tmp, "GITHUB_RUN_ID": "7", "GITHUB_RUN_ATTEMPT": "2"}
+            env.pop("WN_AUDIT_LOG", None)
+            env.pop("GITHUB_STEP_SUMMARY", None)
+            result = subprocess.run([str(script), f"{tmp}/Missing.xcresult"], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Test phases: 7-2", result.stdout)
+            self.assertIn("| build_for_testing_s | 767 |", result.stdout)
+            self.assertTrue((pathlib.Path(tmp) / "phases.csv").exists())
+
+            other = self.write_log(tmp, "xcodebuild-b.log", TIMED_LOG.replace("767s", "111s"))
+            (pathlib.Path(tmp) / "latest-log").write_text(f"{other}\n")
+            result = subprocess.run([str(script), f"{tmp}/Missing.xcresult"], env=env, capture_output=True, text=True)
+            self.assertIn("| build_for_testing_s | 111 |", result.stdout)
+
+    def test_report_run_without_inputs_or_without_log_writes_no_csv(self):
+        script = pathlib.Path(__file__).resolve().parents[1] / "audit" / "report-run.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, "WN_AUDIT_DIR": tmp, "GITHUB_STEP_SUMMARY": f"{tmp}/summary.md"}
+            env.pop("WN_AUDIT_LOG", None)
+            result = subprocess.run([str(script), f"{tmp}/Missing.xcresult"], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("nothing to report", pathlib.Path(tmp, "summary.md").read_text())
+            self.assertFalse((pathlib.Path(tmp) / "phases.csv").exists())
 
 
 if __name__ == "__main__":
