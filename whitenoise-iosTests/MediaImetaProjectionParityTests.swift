@@ -262,7 +262,7 @@ struct MediaImetaProjectionParityTests {
     // drop-bad behavior expected from the Rust row path (`record.media`).
 }
 
-// MARK: - Fixtures (file-private; mirror encryptedMediaTag in whitenoise_iosTests)
+// MARK: - Fixtures (file-private; mirror encryptedMediaTag in MessageSemanticsTests)
 
 /// 32-byte hex (64 chars) by repeating a byte, matching the suite's `hex(_:)`.
 private func hex32(_ byte: String) -> String { String(repeating: byte, count: 32) }

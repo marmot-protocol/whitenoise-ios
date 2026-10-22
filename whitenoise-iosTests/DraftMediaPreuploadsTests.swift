@@ -232,7 +232,3 @@ private func reference(_ fileName: String, sourceEpoch: UInt64 = 1) -> MediaAtta
         thumbhash: nil
     )
 }
-
-private func hex(_ byte: String) -> String {
-    String(repeating: byte, count: 32)
-}

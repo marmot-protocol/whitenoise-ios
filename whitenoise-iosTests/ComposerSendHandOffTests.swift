@@ -131,7 +131,3 @@ struct ComposerSendHandOffTests {
         #expect(stagedRowsDuringPublish == [2])
     }
 }
-
-private func hex(_ byte: String) -> String {
-    String(repeating: byte, count: 32)
-}

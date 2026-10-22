@@ -693,7 +693,3 @@ private func testGroup() -> AppGroupRecordFfi {
         viaWelcomeMessageIdHex: nil
     )
 }
-
-private func hex(_ byte: String) -> String {
-    String(repeating: byte, count: 32)
-}

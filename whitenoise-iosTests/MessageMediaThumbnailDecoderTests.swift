@@ -1,155 +1,158 @@
-import Foundation
-import ImageIO
 import Testing
+import Foundation
+import SwiftUI
 import UIKit
-import UniformTypeIdentifiers
-
+import AVFoundation
+import Combine
+import Synchronization
 @testable import whitenoise_ios
+@testable import MarmotKit
 
 @MainActor
-struct MessageMediaThumbnailDecoderCoreTests {
-    @Test func decoderDownsamplesLargeImages() async throws {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 80))
-        let sourceImage = renderer.image { context in
-            UIColor.red.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 120, height: 80))
+struct MessageMediaThumbnailDecoderTests {
+
+    @Test func decoderDownsamplesImageToPixelBudget() async throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 120))
+        let data = renderer.jpegData(withCompressionQuality: 0.9) { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 240, height: 120))
         }
-        let data = try #require(sourceImage.pngData())
 
-        let decoded = await MessageMediaThumbnailDecoder.image(data: data, maxPixelSize: 24, scale: 1)
-
-        let image = try #require(decoded)
-        #expect(max(image.size.width * image.scale, image.size.height * image.scale) <= 24)
-    }
-
-    @Test func decoderFailsClosedWhenImageIOSourceCreationFails() throws {
-        let data = try sampleImageData()
-        #expect(UIImage(data: data) != nil)
-
-        var createThumbnailCalled = false
-        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
+        let image = try #require(await MessageMediaThumbnailDecoder.image(
             data: data,
-            targetPixelSize: 24,
-            imageScale: 1,
-            createSource: { _, _ in nil },
-            createThumbnail: { _, _ in
-                createThumbnailCalled = true
-                return nil
-            }
-        )
+            maxPixelSize: 48,
+            scale: 1
+        ))
+        let largestPixelEdge = max(image.size.width * image.scale, image.size.height * image.scale)
 
-        #expect(decoded == nil)
-        #expect(!createThumbnailCalled)
+        #expect(largestPixelEdge <= 48)
     }
 
-    @Test func decoderFailsClosedWhenImageIOThumbnailCreationFails() throws {
-        let data = try sampleImageData()
-        #expect(UIImage(data: data) != nil)
+    @Test func videoDecoderExtractsAndCachesPreviewFrame() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MessageVideoThumbnail-\(UUID().uuidString).mov")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try await writeTestVideo(to: url, size: CGSize(width: 96, height: 54))
 
-        var thumbnailMaxPixelSize: Int?
-        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
-            data: data,
-            targetPixelSize: 24,
-            imageScale: 1,
-            createSource: { data, options in
-                CGImageSourceCreateWithData(data as CFData, options)
-            },
-            createThumbnail: { _, options in
-                thumbnailMaxPixelSize = (options as NSDictionary)[kCGImageSourceThumbnailMaxPixelSize] as? Int
-                return nil
-            }
-        )
+        let image = try #require(await MessageVideoThumbnailDecoder.thumbnail(
+            url: url,
+            maxPixelSize: 48,
+            scale: 1
+        ))
+        let largestPixelEdge = max(image.size.width * image.scale, image.size.height * image.scale)
+        let itemID = "video-thumbnail-\(UUID().uuidString)"
 
-        #expect(decoded == nil)
-        #expect(thumbnailMaxPixelSize == 24)
+        MessageVideoThumbnailDecoder.store(image, for: itemID, maxPixelSize: 48)
+        let cached = try #require(MessageVideoThumbnailDecoder.cachedThumbnail(for: itemID, maxPixelSize: 48))
+
+        #expect(largestPixelEdge <= 48)
+        #expect(cached.size.width > 0)
     }
 
-    @Test func thumbnailCacheCostIncludesDecodedBitmapAndSourceBytes() throws {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 7))
-        let image = renderer.image { context in
-            UIColor.blue.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 12, height: 7))
+    private func writeTestVideo(to url: URL, size: CGSize) async throws {
+        let width = max(1, Int(size.width.rounded()))
+        let height = max(1, Int(size.height.rounded()))
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let input = AVAssetWriterInput(
+            mediaType: .video,
+            outputSettings: [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: width,
+                AVVideoHeightKey: height,
+            ]
+        )
+        input.expectsMediaDataInRealTime = false
+        guard writer.canAdd(input) else {
+            throw VideoThumbnailFixtureError.cannotAddInput
         }
-        let sourceData = Data(repeating: 0x7f, count: 13)
-        let cgImage = try #require(image.cgImage)
-        let expectedCost = cgImage.bytesPerRow * cgImage.height + sourceData.count
-
-        #expect(MessageMediaThumbnailDecoder.thumbnailCacheCost(for: image, sourceData: sourceData) == expectedCost)
-    }
-
-    @Test func decoderRejectsDisallowedSourceTypeBeforeThumbnailing() throws {
-        let data = try sampleImageData()
-        #expect(UIImage(data: data) != nil)
-
-        var createThumbnailCalled = false
-        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
-            data: data,
-            targetPixelSize: 24,
-            imageScale: 1,
-            createSource: { data, options in
-                CGImageSourceCreateWithData(data as CFData, options)
-            },
-            sourceType: { _ in UTType.svg.identifier as CFString },
-            createThumbnail: { _, _ in
-                createThumbnailCalled = true
-                return nil
-            }
+        writer.add(input)
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: width,
+                kCVPixelBufferHeightKey as String: height,
+            ]
         )
-
-        #expect(decoded == nil)
-        #expect(!createThumbnailCalled)
-    }
-
-    @Test func decoderRejectsNilSourceTypeBeforeThumbnailing() throws {
-        let data = try sampleImageData()
-
-        var createThumbnailCalled = false
-        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
-            data: data,
-            targetPixelSize: 24,
-            imageScale: 1,
-            createSource: { data, options in
-                CGImageSourceCreateWithData(data as CFData, options)
-            },
-            sourceType: { _ in nil },
-            createThumbnail: { _, _ in
-                createThumbnailCalled = true
-                return nil
-            }
-        )
-
-        #expect(decoded == nil)
-        #expect(!createThumbnailCalled)
-    }
-
-    @Test func decoderThumbnailsAllowedRasterSourceType() throws {
-        let data = try sampleImageData()
-
-        var createThumbnailCalled = false
-        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
-            data: data,
-            targetPixelSize: 24,
-            imageScale: 1,
-            createSource: { data, options in
-                CGImageSourceCreateWithData(data as CFData, options)
-            },
-            sourceType: { _ in UTType.png.identifier as CFString },
-            createThumbnail: { source, options in
-                createThumbnailCalled = true
-                return CGImageSourceCreateThumbnailAtIndex(source, 0, options)
-            }
-        )
-
-        #expect(decoded != nil)
-        #expect(createThumbnailCalled)
-    }
-
-    private func sampleImageData() throws -> Data {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 20))
-        let image = renderer.image { context in
-            UIColor.green.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 32, height: 20))
+        guard writer.startWriting() else {
+            throw writer.error ?? VideoThumbnailFixtureError.writerFailed
         }
-        return try #require(image.pngData())
+        writer.startSession(atSourceTime: .zero)
+        for _ in 0..<50 where !input.isReadyForMoreMediaData {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        guard input.isReadyForMoreMediaData else {
+            throw VideoThumbnailFixtureError.inputNotReady
+        }
+        let firstBuffer = try makePixelBuffer(
+            adaptor: adaptor,
+            width: width,
+            height: height
+        )
+        guard adaptor.append(firstBuffer, withPresentationTime: .zero) else {
+            throw writer.error ?? VideoThumbnailFixtureError.writerFailed
+        }
+        let secondBuffer = try makePixelBuffer(
+            adaptor: adaptor,
+            width: width,
+            height: height
+        )
+        guard adaptor.append(secondBuffer, withPresentationTime: CMTime(value: 1, timescale: 30)) else {
+            throw writer.error ?? VideoThumbnailFixtureError.writerFailed
+        }
+        input.markAsFinished()
+        nonisolated(unsafe) let completionWriter = writer
+        try await withCheckedThrowingContinuation { continuation in
+            writer.finishWriting {
+                if completionWriter.status == AVAssetWriter.Status.completed {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: completionWriter.error ?? VideoThumbnailFixtureError.writerFailed)
+                }
+            }
+        }
+    }
+
+    private func makePixelBuffer(
+        adaptor: AVAssetWriterInputPixelBufferAdaptor,
+        width: Int,
+        height: Int
+    ) throws -> CVPixelBuffer {
+        guard let pool = adaptor.pixelBufferPool else {
+            throw VideoThumbnailFixtureError.missingPixelBufferPool
+        }
+        var maybeBuffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &maybeBuffer)
+        guard let buffer = maybeBuffer else {
+            throw VideoThumbnailFixtureError.missingPixelBuffer
+        }
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+        guard let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(buffer),
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+                | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else {
+            throw VideoThumbnailFixtureError.missingContext
+        }
+        UIColor.systemTeal.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        UIColor.systemIndigo.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: width / 2, height: height))
+        return buffer
+    }
+
+    private enum VideoThumbnailFixtureError: Error {
+        case cannotAddInput
+        case inputNotReady
+        case missingContext
+        case missingPixelBuffer
+        case missingPixelBufferPool
+        case writerFailed
     }
 }
