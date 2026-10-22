@@ -67,14 +67,14 @@ struct ProfileEditMetadataDraftTests {
         let model = ProfileEditViewModel()
         let failedTicket = model.beginLoadAttempt(accountIdHex: "account-a")
         model.applyLoadOutcome(.loadFailed, accountIdHex: "account-a", profile: nil, ticket: failedTicket)
-        #expect(model.error != nil)
+        #expect(model.hasLoadError)
 
         // The screen's task restarts for the same account and the retry
         // resolves as a fresh identity: Save arms, so the failure message
         // from the superseded window must not linger.
         let retryTicket = model.beginLoadAttempt(accountIdHex: "account-a")
         model.applyLoadOutcome(.enableFirstPublish, accountIdHex: "account-a", profile: nil, ticket: retryTicket)
-        #expect(model.error == nil)
+        #expect(!model.hasLoadError)
         #expect(model.loadedAccountIdHex == "account-a")
     }
 
@@ -86,7 +86,7 @@ struct ProfileEditMetadataDraftTests {
 
         let ticketB = model.beginLoadAttempt(accountIdHex: "account-b")
         model.applyLoadOutcome(.loadFailed, accountIdHex: "account-b", profile: nil, ticket: ticketB)
-        #expect(model.error != nil)
+        #expect(model.hasLoadError)
         // A failed load revokes authorization entirely — a stale grant from
         // the previously loaded account would re-arm Save the moment the
         // active account switches back, with whatever the form then holds.

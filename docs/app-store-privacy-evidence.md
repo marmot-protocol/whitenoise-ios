@@ -156,18 +156,24 @@ to declare the native SDK audit complete.
 
 ## Other review findings clarified
 
-**R4:** Settings now presents **Delete Profile** directly below **Sign Out**.
-After exact profile-name confirmation, it leaves the profile's groups, requests
-deletion of its outstanding KeyPackages from known relays, clears its push
-registration, and removes its local chats, drafts, media, settings, and device key
-material. **Sign Out** remains non-destructive, while Privacy & Security →
-**Erase App Data** deletes every local profile. Reviewer notes should explain this
-non-custodial model, independent relay and recipient copies, and separately handled
-uploaded diagnostics. Do not promise network-wide deletion of a Nostr identity.
+**R4:** Settings → **Delete Profile**, above Sign Out, opens a dedicated deletion
+page with the active profile, a description of what is removed and what remains,
+and exact profile-name confirmation. The entry uses a neutral label in Settings.
+Settings → **Sign Out** also offers **Wipe Local Data**, off by default.
+Turning it on shows the loss warning and name confirmation, and changes the final
+action to **Sign Out and Delete Data**. Both destructive paths leave
+the profile's groups, request deletion of its outstanding KeyPackages from
+known relays, clear its push registration, and remove its local chats, drafts,
+media, settings, and device key material. Leaving wiping off signs out while
+retaining the profile and its local data. Privacy & Security → **Erase App
+Data** deletes every local profile. Reviewer notes should explain this
+non-custodial model and separately handled uploaded diagnostics. The in-app
+warning explains that copies held by others or relays will not be erased. Do not promise network-wide deletion of a Nostr
+identity.
 Apple's [account deletion guidance](https://developer.apple.com/support/offering-account-deletion-in-your-app/)
 requires an in-app initiation path where account deletion is applicable.
-Record the full create-or-sign-in and Delete Profile flow on a physical device for
-the App Review Information attachment.
+Record the full create-or-sign-in and Settings → Delete Profile flow on a physical
+device for the App Review Information attachment.
 
 **R7:** The developer already supplied reviewers a walkthrough creating two
 identities and exchanging messages between them. The missing-instructions concern

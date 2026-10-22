@@ -111,6 +111,10 @@ nonisolated struct OnboardingProfileMetadataDraft: Equatable {
 @MainActor
 @Observable
 final class CreateIdentityViewModel {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     enum Phase: Equatable {
         case editing
         case creating

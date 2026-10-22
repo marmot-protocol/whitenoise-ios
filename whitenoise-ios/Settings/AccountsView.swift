@@ -75,7 +75,7 @@ struct AccountsView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .productScreen(.settings, section: .account, isEnabled: !requiresSelection)
-        .localizedNavigationTitle("Switch Profile")
+        .localizedNavigationTitle(requiresSelection ? "Choose a profile" : "Switch Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showsCloseButton, !requiresSelection {
@@ -191,45 +191,68 @@ struct AccountSummaryRow: View {
     }
 }
 
-/// Settings stays behind the required switcher until a profile is activated.
 struct SignedOutProfilesView: View {
     @Environment(AppState.self) private var appState
-    let canPresentProfiles: Bool
-    @State private var chatsViewModel: ChatsListViewModel
-    @State private var showProfiles = false
     @State private var showAdd = false
-
-    init(appState: AppState, canPresentProfiles: Bool) {
-        self.canPresentProfiles = canPresentProfiles
-        // The disabled Settings backdrop needs a model, but never binds its chat list.
-        _chatsViewModel = State(initialValue: ChatsListViewModel(appState: appState))
-    }
 
     var body: some View {
         NavigationStack {
-            SettingsView(
-                chatsViewModel: chatsViewModel,
-                onAddProfile: { showAdd = true },
-                recordsScreenView: false
-            )
-            .disabled(true)
-        }
-        .onChange(of: canPresentProfiles, initial: true) { _, canPresent in
-            showProfiles = canPresent
-        }
-        .sheet(isPresented: $showProfiles) {
-            NavigationStack {
-                AccountsView(
-                    activeAccountRef: nil,
-                    signedInAccountCount: appState.accounts.filter { !$0.signedOut }.count,
-                    requiresSelection: true,
-                    onAddProfile: { showAdd = true }
-                )
+            List {
+                Section {
+                    VStack(spacing: 12) {
+                        Image(systemName: "person.crop.circle.badge.checkmark")
+                            .font(.system(size: 42, weight: .medium))
+                            .foregroundStyle(.tint)
+                            .accessibilityHidden(true)
+                        Text("Choose a profile")
+                            .font(.title2.weight(.bold))
+                        Text("Choose a signed-in profile, or add a new one.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .listRowBackground(Color.clear)
+                }
+
+                Section("Profiles") {
+                    ForEach(appState.accounts.filter { !$0.signedOut }, id: \.label) { account in
+                        Button {
+                            Task {
+                                let returnsToSettings = appState.accountStore.returnsToSettingsAfterSelection
+                                await appState.activateAccount(account.label)
+                                if appState.activeAccountRef == account.label, returnsToSettings {
+                                    appState.openSettingsAfterProfileSelection = true
+                                }
+                            }
+                        } label: {
+                            AccountSummaryRow(account: account)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(appState.isAccountExitInProgress)
+                    }
+                }
+
+                Section {
+                    WNButton(
+                        title: "Add Profile",
+                        systemImage: "person.crop.circle.badge.plus"
+                    ) {
+                        showAdd = true
+                    }
+                    .listRowBackground(Color.clear)
+                }
             }
-            .appAppearance()
-            .sheet(isPresented: $showAdd) {
-                AddProfileSheet()
-            }
+            .localizedNavigationTitle("White Noise")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .task { await appState.refreshAccountUnreadSummaries() }
+        .sheet(isPresented: $showAdd) {
+            AddProfileSheet()
+        }
+        .onChange(of: appState.accounts.filter { !$0.signedOut }.count) { _, _ in
+            if showAdd { showAdd = false }
         }
     }
 }

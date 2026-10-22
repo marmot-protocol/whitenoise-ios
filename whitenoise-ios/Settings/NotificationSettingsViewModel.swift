@@ -61,6 +61,10 @@ nonisolated enum NotificationSettingsActionApplyPolicy {
 @MainActor
 @Observable
 final class NotificationSettingsViewModel {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     var settings: NotificationSettingsFfi?
     var registration: PushRegistrationFfi?
     var authorizationStatus: UNAuthorizationStatus = .notDetermined

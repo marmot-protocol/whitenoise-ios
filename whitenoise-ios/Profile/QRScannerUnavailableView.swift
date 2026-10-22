@@ -2,10 +2,13 @@ import SwiftUI
 
 struct QRScannerUnavailableView: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
     @State private var settingsFeedback: String?
 
     let failure: QRScannerFailure
     let retry: () -> Void
+    var usesSystemActions = false
 
     var body: some View {
         ContentUnavailableView {
@@ -16,9 +19,9 @@ struct QRScannerUnavailableView: View {
             VStack(spacing: 12) {
                 switch failure.recovery {
                 case .settings:
-                    WNButton(title: "Open Settings", size: .standard, action: openSettings)
+                    recoveryButton("Open Settings", action: openSettings)
                 case .retry:
-                    WNButton(title: "Try Again", size: .standard, action: retry)
+                    recoveryButton("Try Again", action: retry)
                 case .none:
                     EmptyView()
                 }
@@ -32,6 +35,22 @@ struct QRScannerUnavailableView: View {
             .frame(maxWidth: 320)
         }
         .onChange(of: failure) { _, _ in settingsFeedback = nil }
+    }
+
+    @ViewBuilder
+    private func recoveryButton(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+        if usesSystemActions {
+            Button(action: action) {
+                Text(title)
+                    .foregroundStyle(WNButton.Metrics.contentColor(
+                        emphasis: .primary, colorScheme: colorScheme, isEnabled: isEnabled
+                    ))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+        } else {
+            WNButton(title: title, size: .standard, action: action)
+        }
     }
 
     private var message: String {

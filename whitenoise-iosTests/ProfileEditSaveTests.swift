@@ -19,8 +19,8 @@ struct ProfileEditSaveTests {
             throw URLError(.notConnectedToInternet)
         }
         #expect(!failed)
-        #expect(model.saveError != nil)
-        #expect(model.error == nil)
+        #expect(model.saveFailure != nil)
+        #expect(!model.hasLoadError)
         #expect(model.displayName == "Edited name")
         #expect(model.about == "Unsaved about text")
         #expect(!model.isPublishing)
@@ -30,7 +30,7 @@ struct ProfileEditSaveTests {
             #expect(metadata.about == "Unsaved about text")
         }
         #expect(saved)
-        #expect(model.saveError == nil)
+        #expect(model.saveFailure == nil)
     }
 
     @Test func invalidOrUnloadedDraftCannotReportSaveSuccess() async {
@@ -63,7 +63,7 @@ struct ProfileEditSaveTests {
         #expect(model.loadTicket == originalTicket)
         #expect(model.loadedAccountIdHex == "account")
         #expect(!saved)
-        #expect(model.saveError == nil)
+        #expect(model.saveFailure == nil)
         #expect(model.displayName == "Edited name")
         #expect(!model.isPublishing)
     }
@@ -125,6 +125,35 @@ struct ProfileEditSaveTests {
         }
         #expect(!saved)
         #expect(model.displayName == "Other account draft")
-        #expect(model.saveError == nil)
+        #expect(model.saveFailure == nil)
+    }
+}
+
+struct ProfileAddressValidationTests {
+    @Test func firstTypingWaitsForBlurOrDoneAndCorrectionClearsTheError() {
+        var validation = ProfileAddressValidation()
+        validation.addressChanged(isInvalid: true)
+        #expect(!validation.showsError)
+
+        validation.validate(isInvalid: true)
+        #expect(validation.showsError)
+        validation.addressChanged(isInvalid: true)
+        #expect(validation.showsError)
+
+        validation.addressChanged(isInvalid: false)
+        #expect(!validation.showsError)
+        validation.addressChanged(isInvalid: true)
+        #expect(!validation.showsError)
+        validation.validate(isInvalid: true)
+        #expect(validation.showsError)
+    }
+
+    @Test func invalidSavedAddressIsVisibleAtEntryButAnEmptyAddressIsAllowed() {
+        var validation = ProfileAddressValidation()
+        validation.validate(isInvalid: true)
+        #expect(validation.showsError)
+        validation.addressChanged(isInvalid: false)
+        validation.validate(isInvalid: false)
+        #expect(!validation.showsError)
     }
 }

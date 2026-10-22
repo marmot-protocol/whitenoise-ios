@@ -69,38 +69,38 @@ private struct ReplySwipeModifier: ViewModifier {
     @State private var resetTask: Task<Void, Never>?
 
     func body(content: Content) -> some View {
-        if isEnabled {
-            ZStack(alignment: .leading) {
-                if offset > 0 {
-                    Image(systemName: "arrowshape.turn.up.left.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: ReplySwipe.maximumFeedbackOffset)
-                        .opacity(min(1, offset / ReplySwipe.maximumFeedbackOffset))
-                        .scaleEffect(offset >= ReplySwipe.maximumFeedbackOffset ? 1 : 0.82)
-                        .accessibilityHidden(true)
-                }
-
-                content
-                    .offset(x: offset)
+        // Keep the bubble mounted while a cached window gains live reply permission.
+        ZStack(alignment: .leading) {
+            if offset > 0 {
+                Image(systemName: "arrowshape.turn.up.left.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: ReplySwipe.maximumFeedbackOffset)
+                    .opacity(min(1, offset / ReplySwipe.maximumFeedbackOffset))
+                    .scaleEffect(offset >= ReplySwipe.maximumFeedbackOffset ? 1 : 0.82)
+                    .accessibilityHidden(true)
             }
-                .contentShape(.rect)
-                .gesture(
-                    ReplySwipePanGesture(
-                        isNavigating: isNavigating,
-                        onChanged: handleSwipeChange,
-                        onEnded: handleSwipeEnd,
-                        onCancelled: resetReplySwipe
-                    )
-                )
-                .onDisappear { resetTask?.cancel() }
-                .onChange(of: isNavigating) { _, navigating in
-                    // The pop owns the touch now; a queued reply must not land
-                    // behind the transition.
-                    if navigating { resetReplySwipe() }
-                }
-        } else {
+
             content
+                .offset(x: offset)
+        }
+        .contentShape(.rect)
+        .gesture(
+            ReplySwipePanGesture(
+                isEnabled: isEnabled,
+                isNavigating: isNavigating,
+                onChanged: handleSwipeChange,
+                onEnded: handleSwipeEnd,
+                onCancelled: resetReplySwipe
+            )
+        )
+        .onDisappear { resetTask?.cancel() }
+        .onChange(of: isEnabled) { _, enabled in
+            if !enabled { resetReplySwipe() }
+        }
+        .onChange(of: isNavigating) { _, navigating in
+            // The pop owns the touch now; a queued reply must not land behind it.
+            if navigating { resetReplySwipe() }
         }
     }
 
@@ -120,7 +120,7 @@ private struct ReplySwipeModifier: ViewModifier {
     }
 
     private func completeReplySwipe() {
-        guard !isNavigating else {
+        guard isEnabled, !isNavigating else {
             resetReplySwipe()
             return
         }
@@ -139,7 +139,7 @@ private struct ReplySwipeModifier: ViewModifier {
                 offset = 0
             }
             resetTask = nil
-            guard !isNavigating else { return }
+            guard isEnabled, !isNavigating else { return }
             onReply()
         }
     }
@@ -154,6 +154,7 @@ private struct ReplySwipeModifier: ViewModifier {
 }
 
 private struct ReplySwipePanGesture: UIGestureRecognizerRepresentable {
+    let isEnabled: Bool
     let isNavigating: Bool
     let onChanged: (CGSize) -> Void
     let onEnded: (CGSize) -> Void
@@ -176,15 +177,19 @@ private struct ReplySwipePanGesture: UIGestureRecognizerRepresentable {
 
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
         let gesture = UIPanGestureRecognizer()
+        gesture.isEnabled = isEnabled
         gesture.cancelsTouchesInView = false
         gesture.maximumNumberOfTouches = 1
         gesture.delegate = context.coordinator.arbiter
         return gesture
     }
 
-    func updateUIGestureRecognizer(_: UIPanGestureRecognizer, context: Context) {
+    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
         context.coordinator.gesture = self
         context.coordinator.arbiter.isNavigating = isNavigating
+        if recognizer.isEnabled != isEnabled {
+            recognizer.isEnabled = isEnabled
+        }
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {

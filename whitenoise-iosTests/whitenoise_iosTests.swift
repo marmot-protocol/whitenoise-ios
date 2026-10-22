@@ -6153,7 +6153,7 @@ struct ProfileEditViewTests {
 
         viewModel.picture = "not-a-url"
         #expect(viewModel.currentDraft.validationError == .picture)
-        #expect(viewModel.invalidPictureMessage == L10n.string("Only public HTTPS image URLs are allowed."))
+        #expect(viewModel.invalidPictureMessage == L10n.string("Change or remove this photo before saving your profile."))
 
         viewModel.picture = "https://cdn.example.com/avatar.png"
         #expect(viewModel.currentDraft.validationError == nil)
@@ -6161,7 +6161,7 @@ struct ProfileEditViewTests {
 
         viewModel.nip05 = "alice example.com"
         #expect(viewModel.currentDraft.validationError == .nip05)
-        #expect(viewModel.invalidNip05Message == L10n.string("Enter a valid NIP-05 address like name@example.com."))
+        #expect(viewModel.invalidNip05Message == L10n.string("Enter an address like name@example.com."))
 
         viewModel.nip05 = "alice@example.com"
         #expect(viewModel.currentDraft.validationError == nil)
@@ -12013,20 +12013,26 @@ struct MediaComposerAvailabilityTests {
         #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: false,
+            hasLiveEpoch: false,
             hasWindowSubscription: false,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
         #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: false,
+            hasLiveEpoch: false,
             hasWindowSubscription: true,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
         #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: true,
+            hasLiveEpoch: true,
             hasWindowSubscription: false,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
     }
 
@@ -12034,14 +12040,18 @@ struct MediaComposerAvailabilityTests {
         #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: true,
+            hasLiveEpoch: true,
             hasWindowSubscription: true,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
         #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: false,
             hasWindowSnapshot: false,
+            hasLiveEpoch: false,
             hasWindowSubscription: false,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
     }
 
@@ -12049,9 +12059,53 @@ struct MediaComposerAvailabilityTests {
         #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: false,
+            hasLiveEpoch: false,
             hasWindowSubscription: false,
-            isLocallyReset: true
+            isLocallyReset: true,
+            isActiveParticipant: true
         ))
+    }
+
+    @Test func cachedConversationKeepsTheComposerWhileLiveCapabilitiesLoad() {
+        #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: true,
+            hasLiveEpoch: false,
+            hasWindowSubscription: true,
+            isLocallyReset: false,
+            isActiveParticipant: true
+        ))
+    }
+
+    @Test func inactiveMembershipDoesNotWaitForLiveCapabilities() {
+        // MDK preserves departed membership in its local-only snapshot even
+        // while the epoch and live send permissions are unavailable.
+        #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: true,
+            hasLiveEpoch: false,
+            hasWindowSubscription: true,
+            isLocallyReset: false,
+            isActiveParticipant: false
+        ))
+    }
+
+    @Test func missingLiveStateStopsHidingTheUnavailableNoticeAfterTheGracePeriod() {
+        // Neither a stalled open nor repeated local-only snapshots may hide
+        // the unavailable notice indefinitely.
+        for hasSnapshot in [false, true] {
+            for hasSubscription in [false, true] {
+                #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+                    usesLiveWindow: true,
+                    hasWindowSnapshot: hasSnapshot,
+                    hasLiveEpoch: false,
+                    hasWindowSubscription: hasSubscription,
+                    isLocallyReset: false,
+                    isActiveParticipant: true,
+                    hasLoadingGraceExpired: true
+                ))
+            }
+        }
     }
 
     @Test func freshConversationReportsGroupDerivedComposerMessages() throws {

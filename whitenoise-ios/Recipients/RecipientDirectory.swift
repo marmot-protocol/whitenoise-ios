@@ -91,6 +91,10 @@ nonisolated enum GroupMembershipPageLoader {
 @MainActor
 @Observable
 final class RecipientDirectory {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     nonisolated private static let loadLog = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.whitenoise.ios",
         category: "recipient-directory"

@@ -222,7 +222,7 @@ struct DonateView: View {
     }
 
     private var customAmountField: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        WNInputWithFooter {
             DonationAmountInput(
                 text: model.customAmountText,
                 focused: $customAmountFocused,
@@ -230,9 +230,10 @@ struct DonateView: View {
                 onChange: model.updateCustomAmount
             )
             .disabled(model.isProcessing)
-
+        } footer: {
             if let message = model.customAmountErrorMessage {
-                supportingText(message, isError: true)
+                Text(message)
+                    .wnInputFooter(isError: true)
                     .accessibilityIdentifier("donate.amount.error")
             }
         }

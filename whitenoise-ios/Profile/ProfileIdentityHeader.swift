@@ -9,6 +9,7 @@ struct ProfileIdentityHeader<Avatar: View>: View {
     var isAddressVerified = false
     var bottomPadding: CGFloat = 14
     var showsIdentityValues = true
+    var compactPublicKey = false
     var publicKeyUsesFilledStyle = false
     var avatarDiameter: CGFloat?
     @ViewBuilder let avatar: (CGFloat) -> Avatar
@@ -35,7 +36,9 @@ struct ProfileIdentityHeader<Avatar: View>: View {
             }
 
             if showsIdentityValues {
-                ProfilePublicKeyValue(npub: npub, usesFilledStyle: publicKeyUsesFilledStyle)
+                ProfilePublicKeyValue(
+                    npub: npub, compact: compactPublicKey, usesFilledStyle: publicKeyUsesFilledStyle
+                )
             }
         }
         .frame(maxWidth: .infinity)
@@ -75,6 +78,7 @@ struct ProfileIdentityValues: View {
 
 private struct ProfilePublicKeyValue: View {
     let npub: String?
+    var compact = false
     var usesFilledStyle = false
 
     var body: some View {
@@ -83,6 +87,7 @@ private struct ProfilePublicKeyValue: View {
                 display: IdentityFormatter.short(npub, head: 14, tail: 4),
                 copyValue: npub,
                 valueName: L10n.string("npub"),
+                compact: compact,
                 usesFilledStyle: usesFilledStyle
             )
         }

@@ -841,6 +841,9 @@ final class AppState {
     /// screen that started the wipe. Hosted by `RootView`. Observed by SwiftUI.
     var pendingWipeReport: WipeReport?
 
+    /// Root-hosted presentation survives Settings disappearing during account exit.
+    var accountExitIntent: AccountExitIntent?
+
     /// Non-destructively signs out of the active account: clears its native
     /// push registration, deactivates it in Marmot, and opens profile selection. The account row, keys, encrypted store, media,
     /// and drafts stay on device so the Profiles screen can sign it back in.
@@ -849,7 +852,7 @@ final class AppState {
     /// block the user from signing out.
     @MainActor
     @discardableResult
-    func signOut() async -> Bool {
+    func signOut(onError: ((Toast) -> Void)? = nil) async -> Bool {
         guard let signingOut = activeAccountRef else { return false }
         guard AccountExitGate.canBegin(
             isReady: phase == .ready,
@@ -858,7 +861,7 @@ final class AppState {
             isRuntimeSuspending: isRuntimeSuspending,
             hasRuntimeClient: client != nil
         ), !isSigningOut else {
-            present(.error(L10n.string("Couldn't sign out")))
+            (onError ?? present)(.error(L10n.string("Couldn't sign out")))
             return false
         }
         let signingOutAccountIdHex = accounts
@@ -879,7 +882,7 @@ final class AppState {
         notifications.cancelForegroundBatches(accountRef: signingOut)
         defer { finishAccountExit() }
         guard let exitingClient = client else {
-            present(.error(L10n.string("Couldn't sign out")))
+            (onError ?? present)(.error(L10n.string("Couldn't sign out")))
             return false
         }
         let nativePushWasEnabled = (
@@ -906,7 +909,7 @@ final class AppState {
                     accountRef: signingOut,
                     wasEnabled: nativePushWasEnabled
                 )
-                present(.error(L10n.string("Couldn't sign out"), message: message))
+                (onError ?? present)(.error(L10n.string("Couldn't sign out"), message: message))
                 return false
             }
         } catch {
@@ -915,7 +918,7 @@ final class AppState {
                 accountRef: signingOut,
                 wasEnabled: nativePushWasEnabled
             )
-            present(UserFacingError.toast(title: L10n.string("Couldn't sign out"), error: error))
+            (onError ?? present)(UserFacingError.toast(title: L10n.string("Couldn't sign out"), error: error))
             return false
         }
 
@@ -1040,7 +1043,7 @@ final class AppState {
     /// settings-read gate and the `.ready` gate the audit-log delete uses.
     @MainActor
     @discardableResult
-    func signOutAndWipeActiveAccount() async -> Bool {
+    func signOutAndWipeActiveAccount(onError: ((Toast) -> Void)? = nil) async -> Bool {
         guard let wipingRef = activeAccountRef else { return false }
         guard DestructiveWipeGate.canBegin(
             isReady: phase == .ready,
@@ -1049,7 +1052,7 @@ final class AppState {
             isRuntimeSuspending: isRuntimeSuspending,
             hasRuntimeClient: client != nil
         ), !isSigningOut else {
-            present(.error(L10n.string("Couldn't wipe profile")))
+            (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
             return false
         }
         let wipingAccountIdHex = accounts
@@ -1063,7 +1066,7 @@ final class AppState {
         notifications.cancelForegroundBatches(accountRef: wipingRef)
         defer { finishAccountExit() }
         guard let exitingClient = client else {
-            present(.error(L10n.string("Couldn't wipe profile")))
+            (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
             return false
         }
         let nativePushWasEnabled = (
@@ -1092,7 +1095,7 @@ final class AppState {
                 accountRef: wipingRef,
                 wasEnabled: nativePushWasEnabled
             )
-            present(UserFacingError.toast(title: L10n.string("Couldn't wipe profile"), error: error))
+            (onError ?? present)(UserFacingError.toast(title: L10n.string("Couldn't wipe profile"), error: error))
             return false
         }
 
@@ -1109,9 +1112,7 @@ final class AppState {
             from: outcome,
             additionalLocalFailures: localCleanupFailures
         )
-        if report.clean {
-            present(.success(L10n.string("Profile wiped from this device")))
-        } else {
+        if !report.clean {
             pendingWipeReport = report
         }
         return true

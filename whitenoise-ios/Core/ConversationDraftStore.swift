@@ -466,7 +466,9 @@ final class ConversationDraftStore {
         )
     }
 
-    isolated deinit {
+    // Task cancellation needs no actor hop; avoid the older runtime's isolated-deinit crash.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {
         for task in loadTasks.values {
             task.cancel()
         }

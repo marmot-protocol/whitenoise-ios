@@ -48,9 +48,11 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
 }
 
 struct SettingsView: View {
-    let chatsViewModel: ChatsListViewModel
+    // Nil only for the disabled Settings background while a profile is being chosen.
+    var chatsViewModel: ChatsListViewModel? = nil
 
     @Environment(AppState.self) private var appState
+    @State private var showDeleteProfile = false
     @State private var showAccounts = false
     @State private var addProfileAfterSwitcherCloses = false
     let onAddProfile: () -> Void
@@ -79,40 +81,46 @@ struct SettingsView: View {
             destinationSection([.support, .donate, .developerTools])
 
             Section {
-                NavigationLink {
-                    SignOutView()
+                Button {
+                    showDeleteProfile = true
+                } label: {
+                    Label("Delete Profile", systemImage: "trash")
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                }
+                .disabled(appState.activeAccount == nil || appState.isAccountExitInProgress)
+                .accessibilityIdentifier("settings.deleteProfile")
+
+                Button {
+                    appState.accountExitIntent = .signOut
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
                 }
-                .disabled(appState.activeAccount == nil)
-
-                NavigationLink {
-                    DeleteProfileView()
-                } label: {
-                    Label("Delete Profile", systemImage: "trash")
-                        .foregroundStyle(.red)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
-                }
-                .disabled(appState.activeAccount == nil)
-                .accessibilityIdentifier("settings.deleteProfile")
+                .disabled(appState.activeAccount == nil || appState.isAccountExitInProgress)
+                .accessibilityIdentifier("settings.signOut")
             } footer: {
                 Text("White Noise · \(appVersion)")
                     .frame(maxWidth: .infinity)
+            }
+        }
+        .navigationDestination(isPresented: $showDeleteProfile) {
+            SignOutView(intent: .deleteProfile) {
+                showDeleteProfile = false
             }
         }
         .productScreen(.settings, isEnabled: recordsScreenView)
         .localizedNavigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: appState.activeAccount?.accountIdHex) {
-            guard let id = appState.activeAccount?.accountIdHex else { return }
+            guard chatsViewModel != nil, let id = appState.activeAccount?.accountIdHex else { return }
             await appState.reloadProfileProjection(forAccountIdHex: id)
         }
         .task(id: supportRequestID) {
-            guard supportRequestID != nil else { return }
+            guard supportRequestID != nil, let chatsViewModel else { return }
             await supportEntry.prepare(using: appState) { groupIdHex in
                 if chatsViewModel.item(groupIdHex: groupIdHex) == nil {
                     await chatsViewModel.refreshRow(groupIdHex: groupIdHex)
@@ -122,7 +130,9 @@ struct SettingsView: View {
         }
         .onDisappear { supportRequestID = nil }
         .navigationDestination(item: $supportEntry.destination) { destination in
-            SupportChatView(chatsViewModel: chatsViewModel, initialTarget: destination.chatTarget)
+            if let chatsViewModel {
+                SupportChatView(chatsViewModel: chatsViewModel, initialTarget: destination.chatTarget)
+            }
         }
         .onChange(of: supportEntry.destination) { previous, _ in
             previous?.chatTarget?.performance?.finish(.cancelled, recorder: appState.productAnalytics)
@@ -150,6 +160,9 @@ struct SettingsView: View {
                 )
             }
             .appAppearance()
+        }
+        .onChange(of: appState.activeAccountRef) { _, _ in
+            showDeleteProfile = false
         }
     }
 
@@ -387,189 +400,5 @@ nonisolated enum MarmotKitBuildLabel {
         guard tag.hasPrefix(prefix) else { return nil }
         let version = tag.dropFirst(prefix.count)
         return version.isEmpty ? nil : version
-    }
-}
-
-private struct SignOutView: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-    @State private var isBusy = false
-    @State private var profileRef: String?
-    @State private var profileName = ""
-    @State private var error: String?
-
-    var body: some View {
-        Form {
-            Section {
-                profileSummaryRow
-            } footer: {
-                Text("This profile and its local data will stay on this device.")
-            }
-            if let error { Text(error).foregroundStyle(.orange) }
-            Section {
-                WNButton(
-                    title: busyTitle,
-                    emphasis: .destructive,
-                    size: .standard,
-                    isLoading: isBusy,
-                    action: signOut
-                )
-                .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
-                .disabled(isBusy || appState.isAccountExitInProgress || profileRef != appState.activeAccountRef)
-            }
-        }
-        .disabled(isBusy)
-        .navigationTitle("Sign Out")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isBusy)
-        .onAppear {
-            profileRef = appState.activeAccountRef
-            if let account = appState.activeAccount {
-                profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
-            }
-        }
-    }
-
-    /// The spinner hides the label, but it stays in the hierarchy for
-    /// VoiceOver, so the busy wording still has to be accurate.
-    private var busyTitle: LocalizedStringKey {
-        guard isBusy else { return "Sign Out" }
-        return "Signing out…"
-    }
-
-    @ViewBuilder
-    private var profileSummaryRow: some View {
-        if let active = appState.activeAccount, active.label == profileRef {
-            AccountIdentitySummary(account: active, avatarSize: 48)
-        } else {
-            Text(profileName).font(.headline)
-        }
-    }
-
-    private func signOut() {
-        guard profileRef == appState.activeAccountRef,
-              !isBusy, !appState.isAccountExitInProgress else { return }
-        isBusy = true
-        error = nil
-        Task {
-            let success = await appState.signOut()
-            isBusy = false
-            if success { dismiss() } else { error = L10n.string("Couldn’t sign out. Try again.") }
-        }
-    }
-}
-
-private struct DeleteProfileView: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-    @State private var confirmation = ""
-    @State private var isBusy = false
-    @State private var profileRef: String?
-    @State private var profileName = ""
-    @State private var error: String?
-    @FocusState private var confirmationFocused: Bool
-
-    var body: some View {
-        Form {
-            Section {
-                profileSummaryRow
-                Text("This permanently removes this profile from this device.")
-            }
-
-            Section {
-                deletionRow("The local message database and MLS group state for this profile.")
-                deletionRow("This profile's key material stored on this device.")
-                deletionRow("Outstanding key packages published for this profile on relays.")
-            } header: {
-                Text("What gets destroyed").wnSectionHeader()
-            } footer: {
-                Text("Signing back in with the same key keeps your identity, but past groups, messages, and media can't be recovered on this device. You'll need to be re-invited to any groups.")
-            }
-
-            Section {
-                Text("White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays.")
-            }
-
-            Section {
-                WNInput(
-                    placeholder: L10n.string("Profile name"),
-                    text: $confirmation,
-                    fill: WNInputMetrics.groupedFill,
-                    submitLabel: .done,
-                    focus: $confirmationFocused
-                )
-                .wnInputRow()
-            } header: {
-                Text("Enter Profile Name").wnSectionHeader()
-            } footer: {
-                Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
-            }
-
-            if let error {
-                Text(error).foregroundStyle(.orange)
-            }
-
-            Section {
-                WNButton(
-                    title: isBusy ? "Deleting…" : "Delete Profile",
-                    emphasis: .destructive,
-                    size: .standard,
-                    isLoading: isBusy,
-                    action: deleteProfile
-                )
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .disabled(!ProfileExitConfirmation.matches(confirmation, expected: profileName)
-                          || isBusy
-                          || appState.isAccountExitInProgress
-                          || profileRef != appState.activeAccountRef)
-            }
-        }
-        .disabled(isBusy)
-        .navigationTitle("Delete Profile")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isBusy)
-        .onAppear {
-            profileRef = appState.activeAccountRef
-            if let account = appState.activeAccount {
-                profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var profileSummaryRow: some View {
-        if let active = appState.activeAccount, active.label == profileRef {
-            AccountIdentitySummary(account: active, avatarSize: 48)
-        } else {
-            Text(profileName).font(.headline)
-        }
-    }
-
-    private func deletionRow(_ text: LocalizedStringKey) -> some View {
-        Label {
-            Text(text)
-        } icon: {
-            Image(systemName: "minus.circle.fill")
-                .foregroundStyle(.red)
-        }
-    }
-
-    private func deleteProfile() {
-        guard profileRef == appState.activeAccountRef,
-              ProfileExitConfirmation.matches(confirmation, expected: profileName),
-              !isBusy, !appState.isAccountExitInProgress else { return }
-        confirmationFocused = false
-        isBusy = true
-        error = nil
-        Task {
-            let success = await appState.signOutAndWipeActiveAccount()
-            isBusy = false
-            if success {
-                dismiss()
-            } else {
-                error = L10n.string("Couldn't wipe profile")
-            }
-        }
     }
 }

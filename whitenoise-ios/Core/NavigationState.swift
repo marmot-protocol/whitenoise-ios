@@ -8,6 +8,10 @@ struct AppProfileLink: Identifiable, Equatable {
 
 @Observable
 final class NavigationState {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private(set) var pendingProfile: AppProfileLink?
     private(set) var pendingChatPerformance: ConversationOpenPerformance?
     private(set) var pendingChatId: String?

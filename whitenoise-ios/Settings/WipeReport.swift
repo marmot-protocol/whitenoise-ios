@@ -31,7 +31,7 @@ nonisolated struct WipeStageReport: Equatable {
     var hasIssues: Bool { !failures.isEmpty }
 }
 
-/// UI model of a finished Sign Out & Wipe. A `clean` wipe just toasts; a report
+/// UI model of a finished Sign Out & Wipe. A `clean` wipe just navigates back; a report
 /// with issues drives the outcome sheet. The account ref is invalid by the time
 /// this exists, so the sheet renders only this snapshot and never reaches back
 /// into the FFI.
@@ -93,17 +93,6 @@ nonisolated enum WipeReportProjection {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count > maxReasonLength else { return trimmed }
         return String(trimmed.prefix(maxReasonLength)) + "…"
-    }
-}
-
-/// Type-to-confirm gate for the destructive wipe. Pure so the decision is
-/// observable in tests without a view. Matches the confirmation keyword after
-/// trimming, case-insensitively (mirrors the Android gate).
-nonisolated enum WipeConfirmation {
-    static func isConfirmed(_ input: String, keyword: String) -> Bool {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else { return false }
-        return trimmed.caseInsensitiveCompare(keyword) == .orderedSame
     }
 }
 

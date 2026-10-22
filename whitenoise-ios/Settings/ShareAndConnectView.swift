@@ -1,4 +1,5 @@
 import AVFoundation
+import MarmotKit
 import SwiftUI
 
 struct ShareAndConnectView: View {
@@ -11,9 +12,12 @@ struct ShareAndConnectView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
     @State private var mode = Mode.share
     @State private var qrImage: UIImage?
+    @State private var qrUnavailable = false
     @State private var scannedNpub: String?
+    @State private var previouslyScannedPayload: String?
     @State private var scanHint: String?
     @State private var cameraFailure: QRScannerFailure?
     @State private var scanSession = UUID()
@@ -40,7 +44,11 @@ struct ShareAndConnectView: View {
                     displayName: appState.displayName(forAccountIdHex: accountIdHex),
                     avatarURL: appState.avatarURL(forAccountIdHex: accountIdHex),
                     npub: npub,
-                    qrImage: qrImage
+                    qrImage: qrImage,
+                    qrUnavailable: qrUnavailable,
+                    nostrAddress: ContentSanitizer.profileAddress(
+                        appState.cachedProfile(forAccountIdHex: accountIdHex)?.nip05
+                    )
                 )
                 .transition(.opacity)
             } else {
@@ -49,7 +57,7 @@ struct ShareAndConnectView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ShareAndConnectChrome.pageBackdrop.ignoresSafeArea())
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .animation(.default, value: mode)
         .localizedNavigationTitle("Share & Connect")
         .navigationBarTitleDisplayMode(.inline)
@@ -88,15 +96,19 @@ struct ShareAndConnectView: View {
                 }
             }
         }
+        .modifier(ShareAndConnectNavigationChrome(
+            isScanning: mode == .connect && cameraFailureReason == nil
+        ))
         .task(id: deepLink) {
             qrImage = deepLink.flatMap { QRCode.image(from: $0) }
+            qrUnavailable = deepLink != nil && qrImage == nil
         }
         .onChange(of: mode) { _, newValue in
             cancelPicture()
             if newValue == .connect { restartScanner() }
         }
         .onChange(of: scenePhase) { _, newValue in
-            if newValue == .active, mode == .connect { restartScanner() }
+            if newValue == .active, mode == .connect, scannedNpub == nil { restartScanner() }
         }
         .sheet(item: $sharedPicture) { picture in
             ActivityShareSheet(items: [picture.image])
@@ -113,10 +125,15 @@ struct ShareAndConnectView: View {
         .onChange(of: appState.isErasingAppData) { _, erasing in
             if erasing { cancelPicture() }
         }
-        .navigationDestination(isPresented: scannedProfileIsPresented) {
-            if let scannedNpub {
-                ProfileView(npub: scannedNpub)
-            }
+        .navigationDestination(item: $scannedNpub) { npub in
+            // Reuse the current stack; ProfileView owns a stack for sheet presentation.
+            ProfileContentView(npub: npub)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarRole(.editor)
+                .toolbarBackground(.automatic, for: .navigationBar)
+                .toolbarColorScheme(nil, for: .navigationBar)
+                .environment(\.colorScheme, colorScheme)
+                .tint(WNNeutralAccent.color(for: colorScheme))
         }
     }
 
@@ -185,44 +202,43 @@ struct ShareAndConnectView: View {
     @ViewBuilder
     private var scannerContent: some View {
         if let cameraFailureReason {
-            QRScannerUnavailableView(failure: cameraFailureReason, retry: restartScanner)
+            QRScannerUnavailableView(failure: cameraFailureReason, retry: restartScanner, usesSystemActions: true)
         } else if scenePhase == .active {
             liveScanner
         }
     }
 
     private var liveScanner: some View {
-        ZStack(alignment: .bottom) {
-            ShareAndConnectChrome.viewfinderBackdrop
+        ProfileScannerSurface(hint: scanHint) {
             QRScannerView(
                 onScan: handleScan,
-                onError: { cameraFailure = $0 }
+                onError: { cameraFailure = $0 },
+                validate: { raw in
+                    if case .profile = DeepLink.parse(string: raw) { true } else { false }
+                },
+                onInvalidPayload: showInvalidScanHint,
+                onInvalidPayloadCleared: { scanHint = nil },
+                isScanningEnabled: scannedNpub == nil,
+                continuesAfterInvalidPayload: true,
+                previouslyScannedPayload: previouslyScannedPayload,
+                onPreviousPayloadCleared: { previouslyScannedPayload = nil }
             )
             .id(scanSession)
-
-            Text(scanHint ?? L10n.string("Point the camera at a White Noise profile QR"))
-                .font(.callout)
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-                .padding(12)
-                .background(.black.opacity(0.55), in: Capsule())
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
         }
-        .clipShape(.rect(cornerRadius: ShareAndConnectChrome.viewfinderCornerRadius, style: .continuous))
-        .padding(ShareAndConnectChrome.viewfinderInset)
+    }
+
+    private func showInvalidScanHint() {
+        guard scanHint == nil else { return }
+        scanHint = L10n.string("That QR code isn't a White Noise profile.")
+        Haptics.error()
     }
 
     private func handleScan(_ raw: String) {
-        guard case let .profile(scannedNpub) = DeepLink.parse(string: raw) else {
-            scanHint = L10n.string("That QR code isn't a White Noise profile.")
-            scanSession = UUID()
-            Haptics.error()
-            return
-        }
+        guard case let .profile(scannedNpub) = DeepLink.parse(string: raw) else { return }
 
         Haptics.success()
-        mode = .share
+        scanHint = nil
+        previouslyScannedPayload = raw
         self.scannedNpub = scannedNpub
     }
 
@@ -231,22 +247,45 @@ struct ShareAndConnectView: View {
         cameraFailure = nil
         scanSession = UUID()
     }
+}
 
-    private var scannedProfileIsPresented: Binding<Bool> {
-        Binding(
-            get: { scannedNpub != nil },
-            set: { if !$0 { scannedNpub = nil } }
-        )
+private struct ShareAndConnectNavigationChrome: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    let isScanning: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .toolbarBackground(isScanning ? .hidden : .automatic, for: .navigationBar)
+            .toolbarColorScheme(isScanning ? .dark : nil, for: .navigationBar)
+            .environment(\.colorScheme, isScanning ? .dark : colorScheme)
+            .tint(WNNeutralAccent.color(for: isScanning ? .dark : colorScheme))
     }
 }
 
-nonisolated enum ShareAndConnectChrome {
-    static let viewfinderCornerRadius: CGFloat = WNQRCodeCard.Metrics.cornerRadius
-    static let viewfinderInset: CGFloat = 16
-    static let viewfinderBackdrop = Color.black
+private struct ProfileScannerSurface<Camera: View>: View {
+    var hint: String?
+    @ViewBuilder let camera: () -> Camera
 
-    static let pageBackdrop = Color(uiColor: .systemGroupedBackground)
-    static let barBackdrop = pageBackdrop
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.ignoresSafeArea()
+            camera().ignoresSafeArea()
+            // Keep the floating controls readable over a bright camera image.
+            LinearGradient(colors: [.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 160)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
+            Label(hint ?? L10n.string("Scan a profile QR code"), systemImage: "qrcode.viewfinder")
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .padding()
+                .background(.black.opacity(0.4), in: Capsule())
+                .padding()
+        }
+    }
 }
 
 private struct ShareProfileContent: View {
@@ -255,11 +294,17 @@ private struct ShareProfileContent: View {
     let avatarURL: URL?
     let npub: String?
     let qrImage: UIImage?
+    var qrUnavailable = false
+    var nostrAddress: String?
 
     var body: some View {
         Form {
             Section {
-                ProfileIdentityHeader(name: displayName, npub: npub) { size in
+                ProfileIdentityHeader(
+                    name: displayName, npub: npub,
+                    nostrAddress: nostrAddress,
+                    compactPublicKey: true
+                ) { size in
                     AvatarBubble(seed: accountIdHex, title: displayName, pictureURL: avatarURL)
                         .frame(width: size, height: size)
                 }
@@ -271,7 +316,7 @@ private struct ShareProfileContent: View {
             // rather than left spinning on a load that can never finish.
             if npub != nil {
                 Section {
-                    ShareProfileQRCode(image: qrImage)
+                    ShareProfileQRCode(image: qrImage, unavailable: qrUnavailable)
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
@@ -282,15 +327,23 @@ private struct ShareProfileContent: View {
 
 private struct ShareProfileQRCode: View {
     let image: UIImage?
+    var unavailable = false
 
     var body: some View {
         VStack(spacing: 6) {
-            WNQRCodeCard(image: image, accessibilityLabel: "Profile QR code")
+            WNQRCodeCard(
+                image: image,
+                accessibilityLabel: unavailable ? "QR Code Unavailable" : "Profile QR code",
+                unavailableDescription: unavailable
+                    ? "You can still share your profile link from the Share menu." : nil
+            )
 
-            Text("Scan to connect.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            if !unavailable {
+                Text("Scan to connect.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, 32)
@@ -299,7 +352,7 @@ private struct ShareProfileQRCode: View {
 
 #Preview("Scanner unavailable") {
     NavigationStack {
-        QRScannerUnavailableView(failure: .denied, retry: {})
+        QRScannerUnavailableView(failure: .denied, retry: {}, usesSystemActions: true)
         .navigationTitle("Share & Connect")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -3,8 +3,8 @@ import Foundation
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-/// Pure decisions behind the destructive Sign Out & Wipe: the type-to-confirm
-/// gate, the engine-outcome → report projection, and the suspension-safety gate
+/// Pure decisions behind the destructive Sign Out & Wipe: the engine-outcome
+/// report projection and the suspension-safety gate
 /// that decides whether the teardown may begin.
 struct SignOutAndWipeTests {
 
@@ -12,30 +12,6 @@ struct SignOutAndWipeTests {
         #expect(RootPresentation.resolve(phase: .ready, activeAccountRef: nil) == .profileSelection)
         #expect(RootPresentation.resolve(phase: .ready, activeAccountRef: "profile-a") == .main)
         #expect(RootPresentation.resolve(phase: .onboarding, activeAccountRef: nil) == .onboarding)
-    }
-
-    // MARK: - Confirm gate
-
-    @Test func confirmGateAcceptsExactKeyword() {
-        #expect(WipeConfirmation.isConfirmed("WIPE", keyword: "WIPE"))
-    }
-
-    @Test func confirmGateIsCaseInsensitiveAndTrimsWhitespace() {
-        #expect(WipeConfirmation.isConfirmed("wipe", keyword: "WIPE"))
-        #expect(WipeConfirmation.isConfirmed("  WIPE  ", keyword: "WIPE"))
-        #expect(WipeConfirmation.isConfirmed("\tWipe\n", keyword: "WIPE"))
-    }
-
-    @Test func confirmGateRejectsPartialOrWrongInput() {
-        #expect(!WipeConfirmation.isConfirmed("", keyword: "WIPE"))
-        #expect(!WipeConfirmation.isConfirmed("WIP", keyword: "WIPE"))
-        #expect(!WipeConfirmation.isConfirmed("WIPE!", keyword: "WIPE"))
-        #expect(!WipeConfirmation.isConfirmed("delete", keyword: "WIPE"))
-    }
-
-    @Test func confirmGateRejectsEverythingWhenKeywordEmpty() {
-        #expect(!WipeConfirmation.isConfirmed("", keyword: ""))
-        #expect(!WipeConfirmation.isConfirmed("WIPE", keyword: ""))
     }
 
     // MARK: - Report projection

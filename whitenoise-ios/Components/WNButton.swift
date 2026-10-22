@@ -1,6 +1,12 @@
 import SwiftUI
 import UIKit
 
+enum WNButtonPalette {
+    static func primaryContent(colorScheme: ColorScheme, isEnabled: Bool, isLoading: Bool) -> Color {
+        (isEnabled || isLoading) ? (colorScheme == .dark ? .black : .white) : Color(uiColor: .tertiaryLabel)
+    }
+}
+
 struct WNButton: View {
     nonisolated enum Emphasis: Equatable {
         case primary
@@ -8,6 +14,12 @@ struct WNButton: View {
         /// A filled red action that destroys data. Carries `ButtonRole` so the
         /// intent survives for assistive technology, not just the fill.
         case destructive
+    }
+
+    /// Content cards can opt into a native solid fill instead of glass.
+    nonisolated enum Surface {
+        case automatic
+        case filled
     }
 
     /// `large` is the full-width call to action at the bottom of a screen.
@@ -30,7 +42,8 @@ struct WNButton: View {
         static func contentColor(
             emphasis: Emphasis,
             colorScheme: ColorScheme,
-            isEnabled: Bool
+            isEnabled: Bool,
+            surface: Surface = .automatic
         ) -> Color {
             guard isEnabled else { return .secondary }
 
@@ -40,6 +53,7 @@ struct WNButton: View {
             case .secondary:
                 return accent(for: colorScheme)
             case .destructive:
+                if surface == .filled { return .white }
                 return Color(uiColor: UIColor { traits in
                     let red = WCAGContrast.relativeLuminance(UIColor.systemRed.resolvedColor(with: traits))
                     let white = WCAGContrast.relativeLuminance(.white)
@@ -88,13 +102,15 @@ struct WNButton: View {
     var emphasis = Emphasis.primary
     var size = Size.large
     var isLoading = false
+    var surface = Surface.automatic
     let action: () -> Void
 
     var body: some View {
         let contentColor = Metrics.contentColor(
             emphasis: emphasis,
             colorScheme: colorScheme,
-            isEnabled: isEnabled
+            isEnabled: isEnabled,
+            surface: surface
         )
 
         return Button(role: Metrics.role(for: emphasis), action: action) {
@@ -113,12 +129,13 @@ struct WNButton: View {
                 emphasis,
                 size: size,
                 colorScheme: colorScheme,
-                isEnabled: isEnabled
+                isEnabled: isEnabled,
+                surface: surface
             )
             .animation(.default, value: isLoading)
             .wnButtonLabelSizing(size)
         }
-        .wnButtonStyle(emphasis, size: size)
+        .wnButtonStyle(emphasis, size: size, surface: surface)
         .wnButtonChrome(emphasis: emphasis)
         .controlSize(Metrics.controlSize(for: size))
         .wnButtonSizing(size)
@@ -225,7 +242,8 @@ extension View {
         _ emphasis: WNButton.Emphasis,
         size: WNButton.Size,
         colorScheme: ColorScheme,
-        isEnabled: Bool
+        isEnabled: Bool,
+        surface: WNButton.Surface = .automatic
     ) -> some View {
         if #available(iOS 26.0, *),
            emphasis == .secondary,
@@ -236,7 +254,8 @@ extension View {
                 WNButton.Metrics.contentColor(
                     emphasis: emphasis,
                     colorScheme: colorScheme,
-                    isEnabled: isEnabled
+                    isEnabled: isEnabled,
+                    surface: surface
                 )
             )
         }
@@ -245,9 +264,12 @@ extension View {
     @ViewBuilder
     func wnButtonStyle(
         _ emphasis: WNButton.Emphasis,
-        size: WNButton.Size
+        size: WNButton.Size,
+        surface: WNButton.Surface = .automatic
     ) -> some View {
-        if #available(iOS 26.0, *),
+        if surface == .filled {
+            buttonStyle(.borderedProminent)
+        } else if #available(iOS 26.0, *),
            !WNButton.Metrics.drawsOwnSurface(emphasis: emphasis, size: size) {
             self
         } else {
