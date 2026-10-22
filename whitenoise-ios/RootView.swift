@@ -26,6 +26,9 @@ nonisolated enum RootPresentation: Hashable {
 /// flow (when no accounts exist), and the main app once at least one
 /// identity is set up.
 struct RootView: View {
+    // Observe the report's actual appearance independently of its shared Sign Out title.
+    var onWipeReportAppear: () -> Void = {}
+
     private enum RootSheet: Hashable {
         case signIn, signUp, erasureRecovery
     }
@@ -105,6 +108,7 @@ struct RootView: View {
                     appState.accountExitIntent = nil
                     appState.pendingWipeReport = nil
                 }
+                .onAppear(perform: onWipeReportAppear)
                 .appAppearance()
                 // Close advances to the chooser without dismissing its presenter.
                 .interactiveDismissDisabled(needsSettingsProfileSelection)

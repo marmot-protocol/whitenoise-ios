@@ -40,7 +40,8 @@ final class AccountExitSheetTests: XCTestCase {
         let lifetime = AccountExitFixtureLifetime(state: state, appearance: appearance)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previousKeyWindow = scene.keyWindow
-        let host = UIHostingController(rootView: RootView()
+        var reportAppeared = false
+        let host = UIHostingController(rootView: RootView(onWipeReportAppear: { reportAppeared = true })
             .environment(state)
             .environment(state.toastState)
             .environment(state.navigation)
@@ -82,7 +83,7 @@ final class AccountExitSheetTests: XCTestCase {
         state.accountExitIntent = nil
         try await waitUntil("The cleanup report did not appear") {
             guard let presenter = host.presentedViewController else { return false }
-            return self.containsRenderedText("Some cleanup couldn’t finish", in: presenter.view)
+            return reportAppeared && self.containsTitle("Sign Out", in: presenter)
         }
         let presenter = try XCTUnwrap(host.presentedViewController)
         if let signOutPresenter { XCTAssertTrue(presenter === signOutPresenter) }
@@ -116,27 +117,6 @@ final class AccountExitSheetTests: XCTestCase {
             return true
         }
         return controller.children.contains { containsTitle(title, in: $0) }
-    }
-
-    // The report now shares Sign Out's navigation title; wait for its own heading.
-    private func containsRenderedText(_ text: String.LocalizationValue, in view: UIView) -> Bool {
-        let expected = L10n.string(text)
-        var pending: [NSObject] = [view]
-        var visited: Set<ObjectIdentifier> = []
-        while let element = pending.popLast(), visited.count < 1_000 {
-            guard visited.insert(ObjectIdentifier(element)).inserted else { continue }
-            if element.accessibilityLabel?.contains(expected) == true { return true }
-            if let view = element as? UIView { pending.append(contentsOf: view.subviews) }
-            let count = element.accessibilityElementCount()
-            if count > 0, count < 256 {
-                for index in 0..<count {
-                    if let child = element.accessibilityElement(at: index) as? NSObject {
-                        pending.append(child)
-                    }
-                }
-            }
-        }
-        return false
     }
 
     private func waitUntil(
