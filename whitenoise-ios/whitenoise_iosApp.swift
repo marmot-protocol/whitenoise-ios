@@ -95,6 +95,9 @@ struct whitenoise_iosApp: App {
     @State private var appState: AppState
     @State private var appearance: AppAppearanceStore
     @State private var appLockOverlay = AppLockOverlayPresenter()
+    /// False only while the app is hosting a unit-test bundle without the
+    /// `WN_TEST_HOST_BOOTSTRAP=1` opt-in; see `AppLaunchPolicy`.
+    private let startsRuntime = AppLaunchPolicy.shouldStartRuntime()
 
     init() {
         let windowInitStartedAt = ContinuousClock.now
@@ -123,20 +126,24 @@ struct whitenoise_iosApp: App {
                 .dismissesKeyboardOnTap()
                 .task {
                     appState.noteHostWindowInitialized()
-                    // The path monitor lives in this lazy singleton; touch it
-                    // at launch so connectivity-restored events fire even in
-                    // sessions that never read a media setting.
-                    _ = MediaAutoDownloadStore.shared
+                    if startsRuntime {
+                        // The path monitor lives in this lazy singleton; touch it
+                        // at launch so connectivity-restored events fire even in
+                        // sessions that never read a media setting.
+                        _ = MediaAutoDownloadStore.shared
+                    }
                     handleScenePhase(scenePhase, isInitial: true)
                     appLockOverlay.update(
                         for: appState.appLock.shield,
                         controller: appState.appLock,
                         appearance: appearance
                     )
+                    guard startsRuntime else { return }
                     await appState.bootstrap()
                 }
                 .task(id: "\(appState.runtimeGeneration)/\(appState.canUseRuntimeForLocalForegroundWork)/\(appState.accounts.map { "\($0.accountIdHex):\($0.signedOut)" }.joined())") {
-                    guard appState.canUseRuntimeForLocalForegroundWork,
+                    guard startsRuntime,
+                          appState.canUseRuntimeForLocalForegroundWork,
                           let client = try? appState.currentMarmotClient() else { return }
                     do { try await AttachmentPolicyBridge.synchronize(client) }
                     catch is CancellationError { return }
@@ -154,6 +161,7 @@ struct whitenoise_iosApp: App {
                     appState.scheduleConnectivityCatchUp(connectivityRestored: true)
                 }
                 .onChange(of: appState.activeAccount?.accountIdHex, initial: true) { _, accountIdHex in
+                    guard startsRuntime else { return }
                     MediaAutoDownloadStore.shared.setActiveAccount(accountIdHex)
                 }
                 .onChange(of: appState.appLock.shield) { _, shield in
@@ -176,7 +184,9 @@ struct whitenoise_iosApp: App {
         case .activate:
             appState.appLock.handleScenePhaseActive()
             Task { await appState.appLock.requestUnlock() }
-            if isInitial {
+            if isInitial || !startsRuntime {
+                // Foreground activation would (re)build the runtime, including
+                // from the never-bootstrapped `.bootstrapping` phase.
                 appState.setAppSceneActive(true)
             } else {
                 appState.startForegroundActivation()
@@ -186,7 +196,11 @@ struct whitenoise_iosApp: App {
             appState.setAppSceneActive(false)
         case .suspend:
             appState.appLock.handleScenePhaseBackground()
-            beginBackgroundRuntimeSuspension()
+            if startsRuntime {
+                beginBackgroundRuntimeSuspension()
+            } else {
+                appState.setAppSceneActive(false)
+            }
         }
     }
 
