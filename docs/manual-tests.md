@@ -372,6 +372,43 @@ before every release tag.
 - [ ] In Settings → Apple Account → iCloud → Manage Storage → Backups, the
       device backup size does not include White Noise attachments.
 
+### Manage Storage
+
+- [ ] Open Settings → Manage Storage with a profile that has downloaded photos,
+      videos, voice notes and files in several chats. Storage Used shows
+      Attachments (with a count) and Messages and Chat Data; Cache shows Profile
+      and Group Pictures. Chats are listed largest first with their real names
+      and avatars (a direct chat with a nickname shows the nickname), never a
+      group ID. Pull to refresh reloads every figure.
+- [ ] With more than 50 chats or attachments holding files, scroll to the end
+      of Chats and of Largest Attachments: further pages load once, with no
+      duplicate rows, and the spinner disappears at the end.
+- [ ] Clear Cache: progress shows in the button, the cache figure drops, and
+      avatars in Chats and Settings reappear on demand.
+- [ ] In Largest Attachments, swipe a row and tap Remove. The row disappears,
+      Storage Used drops, and the message in its chat shows the attachment as
+      removed with Download again. Download again restores it.
+- [ ] Open a chat's row, tap Remove All Attachments and confirm. The dialog
+      names the chat; afterwards the chat's list is empty, the chat leaves the
+      main list, and its media in the open conversation shows as removed (no
+      stale thumbnails). Cancel leaves everything in place.
+- [ ] Remove Older Attachments → Older Than 1 Week (account-wide and inside one
+      chat). The confirmation names the cutoff date; only attachments received
+      before it go, and newer ones stay.
+- [ ] Switch to another profile while Manage Storage is open: figures and chats
+      reload for the new profile and never mix profiles. Background and
+      foreground the app: the screen reloads after the runtime resumes.
+- [ ] Upgrade an install whose attachments predate the media store (MarmotKit
+      0.13 or earlier). While bodies move, Updating Attachment Storage shows the
+      remaining size and refreshes on its own; it disappears when done. If the
+      device is nearly full, the paused row says how much space is needed and a
+      removal lets the move resume. Reclaiming Space may appear briefly.
+- [ ] Turn on airplane mode and remove attachments: removals still work
+      because they are local.
+- [ ] Check VoiceOver on chat and attachment rows (name, count/date and size
+      read together; Remove is offered as an action), Dynamic Type at an
+      accessibility size, and light and dark appearance.
+
 ## In-place MarmotKit upgrade
 
 Run this before releasing any MarmotKit bump that advances the account storage
