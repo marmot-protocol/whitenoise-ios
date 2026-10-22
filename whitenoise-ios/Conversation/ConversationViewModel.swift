@@ -2269,6 +2269,12 @@ final class ConversationViewModel {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
+    func openHandoff(for media: MessageMediaAttachment,
+                     control: MediaFileTransferControlFfi) async throws -> AttachmentHandoffLease? {
+        try await mediaDownloader.openHandoff(for: media, groupIdHex: group.groupIdHex, appState: appState,
+                                              control: control)
+    }
+
     /// The account, runtime and chat custom emoji images belong to; nil once
     /// the active account is no longer the one this conversation opened under.
     var customEmojiScope: CustomEmojiScope? {

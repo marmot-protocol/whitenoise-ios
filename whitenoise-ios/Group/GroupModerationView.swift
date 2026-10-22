@@ -387,7 +387,8 @@ struct GroupModerationView: View {
                                     markdownBlocks: entry.markdownBlocks,
                                     identityName: conversation.windowDisplayName,
                                     identityAvatarAsset: { conversation.windowIdentities[$0]?.avatarAsset },
-                                    onLoadMedia: ConversationMediaLoader { try await conversation.data(for: $0) }
+                                    onLoadMedia: ConversationMediaLoader({ try await conversation.data(for: $0) },
+                                        openHandoff: { try await conversation.openHandoff(for: $0, control: $1) })
                                 )
                                 .messageLinkCopyAccessibilityActions(for: entry.markdownBlocks, appState: appState)
                                 Text(Date(timeIntervalSince1970: TimeInterval(message.timelineAt)), format: .dateTime.day().month().year())

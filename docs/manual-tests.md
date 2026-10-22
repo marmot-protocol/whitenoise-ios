@@ -422,6 +422,35 @@ before every release tag.
       read together; Remove is offered as an action), Dynamic Type at an
       accessibility size, and light and dark appearance.
 
+### Document sharing through MDK handoff leases
+
+Tapping a received document, or its share button in View Shared Media → Files,
+shares MDK's leased copy under the account's `handoff/` folder. In the
+simulator, find that folder with
+`find "$(xcrun simctl get_app_container booted dev.ipf.whitenoise.ios groups | awk '/group.dev.ipf.whitenoise.ios/ {print $2}')" -path '*handoff*'`.
+
+- [ ] Tap a received PDF that has already downloaded. The share sheet names the
+      file by its original name (not a hash), and Save to Files and AirDrop
+      each deliver an intact, openable PDF.
+- [ ] While the share sheet is up, `<account>/handoff/<lease>/<name>.pdf`
+      exists. Close the sheet with its close button, by swiping it down, and by
+      completing an action: each time the lease folder is gone within a second.
+- [ ] Tap a received PDF that has not downloaded yet (Documents auto-download
+      set to Never). It downloads, then the share sheet opens; nothing is left
+      under `handoff/` after dismissal.
+- [ ] Share a large document, then background the app for a minute and return
+      before dismissing. The share still completes, and dismissal still removes
+      the copy.
+- [ ] Fill the device so the attachment fits but a copy of it does not. The tap
+      shows a "Not enough storage" toast, no share sheet and no Retry state, and
+      leaves nothing under `handoff/`. After freeing space a tap shares it.
+- [ ] Remove a document (Info → Downloads → Remove), then tap it. It shows the
+      Retry state instead of a share sheet; Retry downloads it again and shares.
+- [ ] A document still uploading from this device (before it sends) can still
+      be shared from its bubble.
+- [ ] Force-quit with a share sheet open, relaunch and open the account. The
+      leftover copy under `handoff/` is removed.
+
 ## In-place MarmotKit upgrade
 
 Run this before releasing any MarmotKit bump that advances the account storage
