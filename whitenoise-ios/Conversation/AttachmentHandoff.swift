@@ -4,13 +4,25 @@ import os
 import Synchronization
 
 /// MDK's handoff release, narrowed so release retries can be tested without a runtime.
-/// Leases are process-wide, so the instance that opened one can release it after a
-/// runtime suspend or rebuild.
 nonisolated protocol AttachmentHandoffReleasing: Sendable {
     func releaseAttachmentHandoff(lease: String) async throws
 }
 
 extension Marmot: AttachmentHandoffReleasing {}
+
+/// Releases through whichever runtime is open when the release runs. Leases are
+/// process-wide, but a background suspend closes the runtime that opened one.
+nonisolated struct LiveRuntimeHandoffReleaser: AttachmentHandoffReleasing {
+    /// No open runtime yet, as while the app is suspended; a later attempt finds one.
+    struct Unavailable: Error {}
+
+    let live: @Sendable () async -> (any AttachmentHandoffReleasing)?
+
+    func releaseAttachmentHandoff(lease: String) async throws {
+        guard let runtime = await live() else { throw Unavailable() }
+        try await runtime.releaseAttachmentHandoff(lease: lease)
+    }
+}
 
 /// A private plaintext copy MDK lent for an OS surface such as the share sheet.
 /// Release it when the surface completes or dismisses. Release is idempotent, and
@@ -54,25 +66,29 @@ nonisolated enum AttachmentHandoffRelease {
         case released
         /// A malformed lease, which no retry fixes.
         case rejected
-        /// Still undeletable after every attempt; MDK wipes it on the next process start.
+        /// Still not released after every attempt; MDK wipes it on the next process start.
         case abandoned
     }
 
-    static let maxAttempts = 5
+    static let maxAttempts = 10
 
     private static let log = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.whitenoise",
         category: "attachment-handoff"
     )
 
-    /// MDK keeps a copy it could not delete leased and asks for another release.
+    /// MDK keeps a copy it could not delete leased (`Io`). A runtime that closed under
+    /// the call, or none open yet, is retried against the next open runtime.
     static func isRetryable(_ error: Error) -> Bool {
         if case MarmotKitError.Io = error { return true }
-        return false
+        if case MarmotKitError.StorageClosed = error { return true }
+        return error is LiveRuntimeHandoffReleaser.Unavailable
     }
 
+    /// Doubles from 250 ms up to 30 s, about 90 s of foreground time in all, long
+    /// enough for a resumed app to reopen its runtime.
     static func retryDelay(afterAttempt attempt: Int) -> Duration {
-        .milliseconds(250 * (1 << min(max(attempt - 1, 0), 4)))
+        min(.milliseconds(250 * (1 << min(max(attempt - 1, 0), 7))), .seconds(30))
     }
 
     static func run(
@@ -92,7 +108,7 @@ nonisolated enum AttachmentHandoffRelease {
                 if attempt < maxAttempts { await sleep(retryDelay(afterAttempt: attempt)) }
             }
         }
-        log.error("Attachment handoff copy still undeletable after \(maxAttempts, privacy: .public) attempts")
+        log.error("Attachment handoff copy still not released after \(maxAttempts, privacy: .public) attempts")
         return .abandoned
     }
 }
@@ -112,14 +128,36 @@ nonisolated enum AttachmentHandoffFailure: LocalizedError, Equatable {
     }
 }
 
+/// Where a shared document's file comes from. The original slot wins whenever the row
+/// has one, even while the host still holds this device's own send in memory.
+nonisolated enum AttachmentHandoffSource: Equatable {
+    case target(AttachmentLocalTargetFfi)
+    case hint(AttachmentSourceHint)
+    /// No slot: an unsent draft, whose bytes only the host has.
+    case none
+
+    init(_ media: MessageMediaAttachment) {
+        if let target = media.localTarget {
+            self = .target(target)
+        } else if let hint = media.sourceHint {
+            self = .hint(hint)
+        } else {
+            self = .none
+        }
+    }
+}
+
 nonisolated enum AttachmentHandoffOpening {
     /// Opens from retained bytes first so a held document never passes through app
-    /// memory; only a miss waits for the tap's download before one more attempt.
+    /// memory. A miss returns nil when the host still has the bytes (this device's
+    /// own send), and otherwise waits for the tap's download before one more attempt.
     static func open<Handoff>(
         handoff: () async throws -> Handoff?,
+        hostHasBytes: Bool,
         acquire: () async throws -> Void
-    ) async throws -> Handoff {
+    ) async throws -> Handoff? {
         if let opened = try await handoff() { return opened }
+        if hostHasBytes { return nil }
         try await acquire()
         guard let opened = try await handoff() else { throw AttachmentHandoffFailure.notHeldLocally }
         return opened
@@ -148,8 +186,8 @@ nonisolated enum AttachmentHandoffOpening {
     }
 }
 
-/// A file for the share sheet: MDK's leased copy, or the host's own export of
-/// bytes MDK has no source slot for (an outgoing draft).
+/// A file for the share sheet: MDK's leased copy, or the host's own export of bytes
+/// MDK has no slot for or does not hold (an outgoing draft or send).
 struct AttachmentShareFile: Identifiable {
     let id = UUID()
     let url: URL

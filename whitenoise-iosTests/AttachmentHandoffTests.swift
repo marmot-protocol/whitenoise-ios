@@ -1,5 +1,6 @@
 import Foundation
 import MarmotKit
+import Synchronization
 import Testing
 @testable import whitenoise_ios
 
@@ -30,14 +31,28 @@ struct AttachmentHandoffTests {
 
     // MARK: Release
 
-    @Test func releaseRetriesOnlyIoUntilItSucceeds() async {
-        let releaser = FakeReleaser([MarmotKitError.Io(details: "busy"), MarmotKitError.Io(details: "busy"), nil])
+    @Test func releaseRetriesIoAndClosedRuntimesUntilItSucceeds() async {
+        let releaser = FakeReleaser([MarmotKitError.Io(details: "busy"),
+                                     MarmotKitError.StorageClosed(details: "suspended"), nil])
         var sleeps: [Duration] = []
         let outcome = await AttachmentHandoffRelease.run(lease: lease, using: releaser) { sleeps.append($0) }
         #expect(outcome == .released)
         #expect(await releaser.leases == [lease, lease, lease])
         #expect(sleeps == [AttachmentHandoffRelease.retryDelay(afterAttempt: 1),
                            AttachmentHandoffRelease.retryDelay(afterAttempt: 2)])
+    }
+
+    @Test func releaseWaitsForAnOpenRuntimeAndUsesTheOneOpenThen() async {
+        let resumed = FakeReleaser()
+        let runtimes = Mutex<[FakeReleaser?]>([nil, nil, resumed])
+        let releaser = LiveRuntimeHandoffReleaser {
+            runtimes.withLock { $0.isEmpty ? resumed : $0.removeFirst() }
+        }
+        var sleeps = 0
+        let outcome = await AttachmentHandoffRelease.run(lease: lease, using: releaser) { _ in sleeps += 1 }
+        #expect(outcome == .released)
+        #expect(sleeps == 2)
+        #expect(await resumed.leases == [lease])
     }
 
     @Test func malformedLeaseIsNeverRetried() async {
@@ -50,7 +65,8 @@ struct AttachmentHandoffTests {
     }
 
     @Test func persistentIoFailureStopsAfterTheAttemptBudget() async {
-        let failures = Array(repeating: MarmotKitError.Io(details: "busy") as Error?, count: 10)
+        let failures = Array(repeating: MarmotKitError.Io(details: "busy") as Error?,
+                             count: AttachmentHandoffRelease.maxAttempts + 2)
         let releaser = FakeReleaser(failures)
         var sleeps = 0
         let outcome = await AttachmentHandoffRelease.run(lease: lease, using: releaser) { _ in sleeps += 1 }
@@ -60,10 +76,10 @@ struct AttachmentHandoffTests {
     }
 
     @Test func retryDelayGrowsAndStaysBounded() {
-        let delays = (1...8).map(AttachmentHandoffRelease.retryDelay(afterAttempt:))
+        let delays = (1...12).map(AttachmentHandoffRelease.retryDelay(afterAttempt:))
         #expect(delays.first == .milliseconds(250))
         #expect(zip(delays, delays.dropFirst()).allSatisfy { $0 <= $1 })
-        #expect(delays.last == .seconds(4))
+        #expect(delays.last == .seconds(30))
     }
 
     @Test func completionAndDismissalReleaseTheLeaseOnce() async {
@@ -105,6 +121,7 @@ struct AttachmentHandoffTests {
         var acquires = 0
         let opened = try await AttachmentHandoffOpening.open(
             handoff: { opens += 1; return "lease" },
+            hostHasBytes: false,
             acquire: { acquires += 1 }
         )
         #expect(opened == "lease")
@@ -117,6 +134,7 @@ struct AttachmentHandoffTests {
         var acquires = 0
         let opened = try await AttachmentHandoffOpening.open(
             handoff: { results.removeFirst() },
+            hostHasBytes: false,
             acquire: { acquires += 1 }
         )
         #expect(opened == "lease")
@@ -128,7 +146,7 @@ struct AttachmentHandoffTests {
         var opens = 0
         await #expect(throws: AttachmentHandoffFailure.notHeldLocally) {
             _ = try await AttachmentHandoffOpening.open(handoff: { () -> String? in opens += 1; return nil },
-                                                        acquire: {})
+                                                        hostHasBytes: false, acquire: {})
         }
         #expect(opens == 2)
     }
@@ -137,9 +155,80 @@ struct AttachmentHandoffTests {
         var opens = 0
         await #expect(throws: AttachmentReadError.self) {
             _ = try await AttachmentHandoffOpening.open(handoff: { () -> String? in opens += 1; return nil },
+                                                        hostHasBytes: false,
                                                         acquire: { throw AttachmentReadError.unavailable })
         }
         #expect(opens == 1)
+    }
+
+    @Test func ownSendMDKDoesNotHoldFallsBackToTheHostBytes() async throws {
+        var opens = 0
+        var acquires = 0
+        let opened = try await AttachmentHandoffOpening.open(
+            handoff: { () -> String? in opens += 1; return nil },
+            hostHasBytes: true,
+            acquire: { acquires += 1 }
+        )
+        #expect(opened == nil)
+        #expect(opens == 1)
+        #expect(acquires == 0)
+    }
+
+    @Test func ownSendMDKHoldsStillOpensTheHandoff() async throws {
+        let opened = try await AttachmentHandoffOpening.open(handoff: { "lease" }, hostHasBytes: true, acquire: {})
+        #expect(opened == "lease")
+    }
+
+    // MARK: Routing
+
+    private static let target = AttachmentLocalTargetFfi(messageIdHex: String(repeating: "1", count: 64),
+        sourceMessageIdHex: String(repeating: "2", count: 64), attachmentIndex: 0)
+
+    private func document(localData: Data? = nil, localTarget: AttachmentLocalTargetFfi? = nil,
+                          sourceHint: AttachmentSourceHint? = nil) -> MessageMediaAttachment {
+        var item = MessageMediaAttachment(id: "row:0", reference: nil, fileName: "Report.pdf",
+            mediaType: "application/pdf", dim: nil, localData: localData, localTarget: localTarget)
+        item.sourceHint = sourceHint
+        return item
+    }
+
+    @Test func confirmedOwnSendWithHostBytesStillUsesItsSlot() {
+        let item = document(localData: Data("%PDF".utf8), localTarget: Self.target)
+        #expect(AttachmentHandoffSource(item) == .target(Self.target))
+    }
+
+    @Test func slotlessDraftKeepsTheHostExport() {
+        #expect(AttachmentHandoffSource(document(localData: Data("%PDF".utf8))) == .none)
+    }
+
+    @Test func hintIsResolvedWhenTheRowHasNoTarget() {
+        let hint = AttachmentSourceHint(messageID: String(repeating: "1", count: 64), slot: 2)
+        #expect(AttachmentHandoffSource(document(sourceHint: hint)) == .hint(hint))
+        #expect(AttachmentHandoffSource(document(localTarget: Self.target, sourceHint: hint)) == .target(Self.target))
+    }
+
+    @Test func reportedMessageMediaKeepsItsOriginalSlot() {
+        let messageID = String(repeating: "3", count: 64)
+        let sourceID = String(repeating: "4", count: 64)
+        let reference = MediaAttachmentReferenceFfi(
+            locators: [MediaLocatorFfi(kind: "blossom-v1", value: "https://example.com/report.pdf")],
+            ciphertextSha256: String(repeating: "a", count: 64), plaintextSha256: String(repeating: "b", count: 64),
+            nonceHex: String(repeating: "2", count: 24), fileName: "Report.pdf", mediaType: "application/pdf",
+            version: .v1, sourceEpoch: 1, dim: nil, thumbhash: nil)
+        let message = TimelineMessageRecordFfi(
+            messageIdHex: messageID, sourceMessageIdHex: sourceID, direction: "received",
+            groupIdHex: String(repeating: "5", count: 64), sender: String(repeating: "6", count: 64),
+            plaintext: "", contentTokens: .emptyDocument, kind: 9, tags: [],
+            timelineAt: 1, receivedAt: 1, replyToMessageIdHex: nil, replyPreview: nil,
+            mediaJson: nil, media: [reference], agentTextStreamJson: nil,
+            groupSystem: nil, poll: nil, reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
+            edit: nil, deleted: false, deletedByMessageIdHex: nil, invalidationStatus: nil)
+        let items = GroupModerationModel.mediaItems(for: message, reportIdHex: "r1")
+        #expect(items.count == 1)
+        let slot = AttachmentLocalTargetFfi(messageIdHex: messageID, sourceMessageIdHex: sourceID,
+                                            attachmentIndex: 0)
+        #expect(items.first?.localTarget == slot)
+        #expect(items.first.map(AttachmentHandoffSource.init) == .target(slot))
     }
 
     @Test func storageFullAndControlCancellationMapToUserStates() {

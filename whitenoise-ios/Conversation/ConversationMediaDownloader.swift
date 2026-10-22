@@ -267,34 +267,50 @@ final class ConversationMediaDownloader {
     }
 
     /// MDK's leased plaintext copy of the item's original source slot, for the share
-    /// sheet. Nil when MDK has no slot for it (an outgoing draft's own bytes), so the
-    /// caller exports those itself. A slot MDK does not hold yet is acquired with the
-    /// item's demand first; cancel only through `control`.
+    /// sheet. Nil when MDK has no slot for it (an unsent draft) or does not hold this
+    /// device's own send yet, so the caller exports the host's bytes. A slot MDK does
+    /// not hold yet is otherwise acquired with the item's demand first; cancel only
+    /// through `control`.
     func openHandoff(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?,
                      control: MediaFileTransferControlFfi) async throws -> AttachmentHandoffLease? {
         guard !isStopped else { throw CancellationError() }
-        guard media.localData == nil, media.localTarget != nil || media.sourceHint != nil else { return nil }
+        let source = AttachmentHandoffSource(media)
+        guard source != .none else { return nil }
+        let hostHasBytes = media.localData != nil
         guard let appState, let account = appState.activeAccountRef else { throw MediaDataError.missingAccount }
         let client = try appState.currentMarmotClient()
         let marmot = client.marmot
+        let releaser = LiveRuntimeHandoffReleaser { @MainActor [weak appState] in
+            guard let live = appState?.client?.marmot, !live.storageIsClosed() else { return nil }
+            return live
+        }
         let controlID = ObjectIdentifier(control)
         handoffControls[controlID] = control
         defer { handoffControls[controlID] = nil }
         do {
-            var target = media.localTarget
-            if target == nil, let hint = media.sourceHint {
-                target = try await client.resolveAttachmentTarget(accountRef: account, groupID: groupIdHex, hint: hint)
+            let target: AttachmentLocalTargetFfi
+            switch source {
+            case .target(let slot):
+                target = slot
+            case .hint(let hint):
+                do {
+                    target = try await client.resolveAttachmentTarget(accountRef: account, groupID: groupIdHex, hint: hint)
+                } catch AttachmentReadError.unavailable where hostHasBytes {
+                    return nil
+                }
+            case .none:
+                return nil
             }
-            guard let target else { return nil }
-            let lease = try await AttachmentHandoffOpening.open(
+            guard let lease = try await AttachmentHandoffOpening.open(
                 handoff: {
                     try await AttachmentHandoffOpening.shielded(cancel: { control.cancel() }) {
                         try await marmot.openAttachmentHandoff(accountRef: account, groupIdHex: groupIdHex,
-                            target: target, control: control).map { AttachmentHandoffLease($0, releaser: marmot) }
+                            target: target, control: control).map { AttachmentHandoffLease($0, releaser: releaser) }
                     }
                 },
+                hostHasBytes: hostHasBytes,
                 acquire: { _ = try await self.data(for: media, groupIdHex: groupIdHex, appState: appState) }
-            )
+            ) else { return nil }
             guard !Task.isCancelled, !isStopped, appState.activeAccountRef == account, appState.client === client else {
                 lease.release()
                 throw CancellationError()

@@ -440,14 +440,19 @@ simulator, find that folder with
       under `handoff/` after dismissal.
 - [ ] Share a large document, then background the app for a minute and return
       before dismissing. The share still completes, and dismissal still removes
-      the copy.
+      the copy (released through the reopened runtime, not the suspended one).
 - [ ] Fill the device so the attachment fits but a copy of it does not. The tap
       shows a "Not enough storage" toast, no share sheet and no Retry state, and
       leaves nothing under `handoff/`. After freeing space a tap shares it.
 - [ ] Remove a document (Info → Downloads → Remove), then tap it. It shows the
       Retry state instead of a share sheet; Retry downloads it again and shares.
+- [ ] Send a PDF, wait for its delivered check, then tap your own bubble in the
+      same conversation. The share sheet shows the original name from a lease
+      under `handoff/`, not a hash-named file under `Caches/EncryptedMediaPlayback`.
 - [ ] A document still uploading from this device (before it sends) can still
       be shared from its bubble.
+- [ ] As a group admin, open Group Info → Moderation and tap a reported PDF.
+      It shares through a lease under `handoff/` with its original name.
 - [ ] Force-quit with a share sheet open, relaunch and open the account. The
       leftover copy under `handoff/` is removed.
 
