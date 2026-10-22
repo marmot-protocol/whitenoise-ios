@@ -353,6 +353,8 @@ Do not add a second storage path for data Marmot already owns.
 
 Use the smallest test set that covers your change, then broaden when lifecycle, notification, or binding behavior changes.
 
+The unit-test host does not bootstrap the production Marmot runtime (`AppLaunchPolicy`); a test that needs the real launch path sets `WN_RUN_HOST_BOOTSTRAP=1` in the scheme's Test environment or passes `TEST_RUNNER_WN_RUN_HOST_BOOTSTRAP=1` to xcodebuild.
+
 Useful commands:
 
 ```sh

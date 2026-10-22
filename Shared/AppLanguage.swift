@@ -85,8 +85,7 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     }
 
     private static let testDefaults: UserDefaults? = {
-        let environment = ProcessInfo.processInfo.environment
-        guard environment["XCTestConfigurationFilePath"] != nil
+        guard ProcessEnvironment.isUnitTestHost()
             || NSClassFromString("XCTestCase") != nil
         else { return nil }
 
