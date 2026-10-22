@@ -1459,10 +1459,12 @@ struct ChatsListView: View {
               confirmation.targets == request.targets,
               bulkLeave.approve(confirmation, isCurrent: leaveContextIsCurrent(context))
         else { return nil }
+        // Follows a consented retry onto a replacement runtime; account changes still stop the batch.
+        var batchContext = context
         guard let result = await bulkLeave.runApproved(isCurrent: {
-            leaveContextIsCurrent(context)
+            leaveContextIsCurrent(batchContext)
         }, leave: { target in
-            await performChatLeave(groupIdHex: target.groupIdHex, context: context)
+            await performChatLeave(groupIdHex: target.groupIdHex, context: &batchContext)
         }) else { return nil }
         guard result.failedIDs.isEmpty else {
             Haptics.error()
@@ -1496,27 +1498,30 @@ struct ChatsListView: View {
         )
     }
 
+    /// `context` advances when a consented step-down runs on a runtime that
+    /// replaced the one that refused it, so callers keep following it.
     private func performChatLeave(
         groupIdHex: String,
-        context: ChatLeaveOperation.Context
+        context: inout ChatLeaveOperation.Context
     ) async -> ChatLeaveOperation.Result {
         var didLeave = false
-        // A consented step-down may run on a runtime that replaced the one that refused it.
+        let accountRef = context.accountRef
         var liveContext = context
+        defer { context = liveContext }
         let result = await ChatLeaveOperation.perform(isCurrent: {
             leaveContextIsCurrent(liveContext)
         }, readState: {
             try await readLeaveState(groupIdHex: groupIdHex, context: liveContext)
         }, selfDemote: {
             _ = try await GroupChangeAdvisoryRetry.perform(prompter: leaveAdvisoryPrompter, client: {
-                liveContext = .init(accountRef: context.accountRef, runtimeGeneration: appState.runtimeGeneration)
+                liveContext = .init(accountRef: accountRef, runtimeGeneration: appState.runtimeGeneration)
                 return try appState.currentMarmotClient()
-            }, accountRef: context.accountRef, groupIdHex: groupIdHex) { client in
-                try await client.selfDemoteAdminDetailed(accountRef: context.accountRef, groupIdHex: groupIdHex)
+            }, accountRef: accountRef, groupIdHex: groupIdHex) { client in
+                try await client.selfDemoteAdminDetailed(accountRef: accountRef, groupIdHex: groupIdHex)
             }
         }, leave: {
             _ = try await appState.currentMarmotClient().leaveGroup(
-                accountRef: context.accountRef, groupIdHex: groupIdHex
+                accountRef: accountRef, groupIdHex: groupIdHex
             )
             didLeave = true
         })
@@ -1575,7 +1580,8 @@ struct ChatsListView: View {
         leaveConfirmationContext = nil
         Task { @MainActor in
             defer { leaveActionState.finishLeave(groupIdHex: target.groupIdHex) }
-            switch await performChatLeave(groupIdHex: target.groupIdHex, context: context) {
+            var liveContext = context
+            switch await performChatLeave(groupIdHex: target.groupIdHex, context: &liveContext) {
             case .left, .pending:
                 Haptics.warning()
             case .blocked(let message):

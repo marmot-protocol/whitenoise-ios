@@ -669,7 +669,6 @@ final class GroupDetailsViewModel {
         defer { membershipActionInFlight = false }
         do {
             let groupIdHex = conversation.group.groupIdHex
-            let client = try appState.currentMarmotClient()
             if GroupManagementPresentation.shouldSelfDemoteBeforeLeave(state: conversation.managementState) {
                 if let myAccountId = conversation.managementState?.myAccountIdHex {
                     conversation.applyOptimisticAdminStatus(memberIdHex: myAccountId, isAdmin: false)
@@ -684,6 +683,9 @@ final class GroupDetailsViewModel {
                 conversation.applyGroupMutation(result)
                 await refreshVisibleDebugState(using: appState)
             }
+            // A consented step-down may have run on a runtime that replaced an earlier one.
+            guard appState.activeAccountRef == accountRef else { return }
+            let client = try appState.currentMarmotClient()
             appState.present(.warning(L10n.string("Leaving group…"), message: L10n.string("Publishing group update.")))
 #if DEBUG
             if let leaveGroupForTesting {
