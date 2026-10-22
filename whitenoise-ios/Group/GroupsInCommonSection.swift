@@ -252,20 +252,23 @@ struct AddToGroupSheet: View {
     private func add(to group: SharedGroupsProjection.SharedGroup) async {
         guard !isRefreshing, loadError == nil,
               busyGroupIdHex == nil, let accountRef = appState.activeAccountRef else { return }
-        let runtimeGeneration = appState.runtimeGeneration
+        // Advanced to the runtime each attempt ran on, so a consented retry after a
+        // runtime restart is judged against its own runtime.
+        var runtimeGeneration = appState.runtimeGeneration
         busyGroupIdHex = group.groupIdHex
         defer { busyGroupIdHex = nil }
         error = nil
         do {
-            let client = try appState.currentMarmotClient()
-            _ = try await GroupChangeAdvisoryRetry.perform({
+            _ = try await GroupChangeAdvisoryRetry.perform(prompter: advisoryPrompter, isInvite: true, client: {
+                runtimeGeneration = appState.runtimeGeneration
+                return try appState.currentMarmotClient()
+            }, accountRef: accountRef, groupIdHex: group.groupIdHex) { client in
                 try await client.inviteMembersDetailed(
                     accountRef: accountRef,
                     groupIdHex: group.groupIdHex,
                     memberRefs: [contactNpub]
                 )
-            }, prompter: advisoryPrompter, isInvite: true, client: { client },
-               accountRef: accountRef, groupIdHex: group.groupIdHex)
+            }
             guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
             await onAdded()
             guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }

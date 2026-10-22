@@ -78,16 +78,17 @@ enum GroupChangeAdvisoryRetry {
         }
     }
 
-    /// `client` is resolved only to acknowledge, after the user has consented.
+    /// Every attempt and acknowledgement takes the live runtime from `client`, so a
+    /// consented retry after a runtime restart runs where it was acknowledged.
     static func perform<Result>(
-        _ change: () async throws -> Result,
         prompter: GroupChangeAdvisoryPrompter,
         isInvite: Bool = false,
         client: () throws -> MarmotClient,
         accountRef: String,
-        groupIdHex: String
+        groupIdHex: String,
+        _ change: (MarmotClient) async throws -> Result
     ) async throws -> Result {
-        try await perform(change, consent: { advisory in
+        try await perform({ try await change(client()) }, consent: { advisory in
             await prompter.requestConsent(for: advisory, isInvite: isInvite)
         }, acknowledge: { advisory in
             _ = try await client().acknowledgeGroupChangeAdvisory(

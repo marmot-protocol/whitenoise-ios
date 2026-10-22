@@ -24,6 +24,8 @@ enum ChatLeaveOperation {
     enum Result: Equatable {
         case left, pending, failed, cancelled
         case blocked(String)
+        /// The user chose Wait on an advisory refusal of the step-down; nothing was published.
+        case waited(String)
     }
 
     static func perform(
@@ -47,6 +49,8 @@ enum ChatLeaveOperation {
             guard canContinue() else { return .cancelled }
             // A successful SDK leave durably records local membership as left.
             return .left
+        } catch let declined as GroupChangeAdvisoryDeclined {
+            return canContinue() ? .waited(declined.advisory.declinedMessage) : .cancelled
         } catch {
             guard canContinue() else { return .cancelled }
             // Publishing can throw after recording a request. Read durable state

@@ -76,6 +76,21 @@ struct ChatListBulkLeaveStateTests {
         #expect(state.retainedIDs.isEmpty)
     }
 
+    @Test func waitingOnOneChatIsReportedWithoutCountingAsAFailure() async throws {
+        let state = ChatListBulkLeaveState()
+        try await state.prepare(context: context, targets: targets, isCurrent: { true }) { _ in true }
+        let confirmation = try #require(state.confirmation)
+        #expect(state.approve(confirmation, isCurrent: true))
+        var calls: [String] = []
+        let result = await state.runApproved(isCurrent: { true }) { target in
+            calls.append(target.groupIdHex)
+            return target.groupIdHex == "b" ? .waited("Group not changed.") : .left
+        }
+        #expect(calls == ["a", "b", "c"])
+        #expect(result?.failedIDs.isEmpty == true)
+        #expect(result?.waitMessage == "Group not changed.")
+    }
+
     @Test func contextChangeStopsTheRemainingMutations() async throws {
         let state = ChatListBulkLeaveState()
         try await state.prepare(context: context, targets: targets, isCurrent: { true }) { _ in false }

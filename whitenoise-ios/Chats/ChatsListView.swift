@@ -174,7 +174,8 @@ struct ChatsListView: View {
             .task(id: visibleRowsKey) {
                 selectedChatIds = ChatListSelection.reconcile(selectedChatIds, visibleIds: visibleRowIds)
             }
-            .groupChangeAdvisoryAlert(leaveAdvisoryPrompter)
+            // The bulk-leave sheet stays up while it waits, so it shows the prompt itself.
+            .groupChangeAdvisoryAlert(leaveAdvisoryPrompter, isEnabled: !showBulkLeaveConfirmation)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -945,6 +946,7 @@ struct ChatsListView: View {
                 ChatListLeaveConfirmationSheet(count: request.targets.count) {
                     await confirmBulkLeave(request)
                 }
+                .groupChangeAdvisoryAlert(leaveAdvisoryPrompter)
             }
         }
     }
@@ -1467,7 +1469,7 @@ struct ChatsListView: View {
             return L10n.plural("Couldn't leave %lld chats. Try again.", Int64(result.failedIDs.count))
         }
         Haptics.warning()
-        return nil
+        return result.waitMessage
     }
 
     private func readLeaveState(
@@ -1499,23 +1501,26 @@ struct ChatsListView: View {
         context: ChatLeaveOperation.Context
     ) async -> ChatLeaveOperation.Result {
         var didLeave = false
+        // A consented step-down may run on a runtime that replaced the one that refused it.
+        var liveContext = context
         let result = await ChatLeaveOperation.perform(isCurrent: {
-            leaveContextIsCurrent(context)
+            leaveContextIsCurrent(liveContext)
         }, readState: {
-            try await readLeaveState(groupIdHex: groupIdHex, context: context)
+            try await readLeaveState(groupIdHex: groupIdHex, context: liveContext)
         }, selfDemote: {
-            let client = try appState.currentMarmotClient()
-            _ = try await GroupChangeAdvisoryRetry.perform({
+            _ = try await GroupChangeAdvisoryRetry.perform(prompter: leaveAdvisoryPrompter, client: {
+                liveContext = .init(accountRef: context.accountRef, runtimeGeneration: appState.runtimeGeneration)
+                return try appState.currentMarmotClient()
+            }, accountRef: context.accountRef, groupIdHex: groupIdHex) { client in
                 try await client.selfDemoteAdminDetailed(accountRef: context.accountRef, groupIdHex: groupIdHex)
-            }, prompter: leaveAdvisoryPrompter, client: { client },
-               accountRef: context.accountRef, groupIdHex: groupIdHex)
+            }
         }, leave: {
             _ = try await appState.currentMarmotClient().leaveGroup(
                 accountRef: context.accountRef, groupIdHex: groupIdHex
             )
             didLeave = true
         })
-        guard leaveContextIsCurrent(context), !Task.isCancelled else { return .cancelled }
+        guard leaveContextIsCurrent(liveContext), !Task.isCancelled else { return .cancelled }
         switch result {
         case .left:
             if didLeave { viewModel?.markGroupLeft(groupIdHex: groupIdHex) }
@@ -1523,9 +1528,9 @@ struct ChatsListView: View {
         case .pending:
             viewModel?.markGroupLeavePending(groupIdHex: groupIdHex)
             await viewModel?.refreshRow(groupIdHex: groupIdHex)
-        case .failed, .blocked, .cancelled: break
+        case .failed, .blocked, .waited, .cancelled: break
         }
-        guard leaveContextIsCurrent(context), !Task.isCancelled else { return .cancelled }
+        guard leaveContextIsCurrent(liveContext), !Task.isCancelled else { return .cancelled }
         return result
     }
 
@@ -1576,6 +1581,8 @@ struct ChatsListView: View {
             case .blocked(let message):
                 Haptics.error()
                 appState.present(.error(ChatListLeavePresentation.failureTitle, message: message))
+            case .waited(let message):
+                appState.present(.warning(message))
             case .failed:
                 presentLeaveFailure()
             case .cancelled:
