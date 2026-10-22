@@ -10,18 +10,23 @@ inventory = audit_support.load("inventory")
 
 APP_SOURCES = {
     "whitenoise-ios/Core/AppThing.swift": (
-        "struct AppThing {\n    static let limit = 3\n    func run() -> Int { 1 }\n"
+        "struct AppThing {\n    static let limit = 3\n    func run() -> Int { 1 }\n    func contains(_ x: Int) -> Bool { true }\n"
         "    override class var layerClass: AnyClass { Layer.self }\n}\n"
         "nonisolated enum BrowseState { case idle\n    static func resolve() -> BrowseState { .idle } }\n"
+        "enum Connector { case claude\n    func prompt() -> String { \"\" } }\n"
         "func appFreeFunction() {}\n"
+        "extension MarmotKitError {\n    var isTransientStartupReadinessFailure: Bool { true }\n    var label: String { \"\" }\n}\n"
+        "extension Marmot {\n    func createGroup(name: String) -> RecordFfi { createGroup(name: name, options: nil) }\n}\n"
     ),
     "Shared/L10n.swift": "enum L10n {\n    static func string(_ key: String) -> String { key }\n}\n",
 }
 MDK_SOURCES = {
     "Packages/MarmotKit/Sources/MarmotKit/MarmotKit.swift": (
-        "public struct RecordFfi {\n    public var id: String\n}\n"
+        "public struct RecordFfi {\n    public var id: String\n    public var label: String\n}\n"
+        "public enum MarmotKitError: Error {\n    case RuntimeBusy\n}\n"
         "public class Marmot {\n    public func listAccounts() -> [RecordFfi] { [] }\n"
-        "    public func run() {}\n}\n"
+        "    public func createGroup(name: String, options: Int?) -> RecordFfi { RecordFfi(id: \"\", label: \"\") }\n"
+        "    public func shutdown() {}\n    public func run() {}\n}\n"
         "public func generateKeypair() -> String { \"\" }\n"
     ),
 }
@@ -36,18 +41,25 @@ TEST_SOURCES = {
         "    private typealias State = BrowseState\n"
         "    private static let shared = State.resolve()\n"
         "    private func state() -> State { .resolve() }\n"
-        "    @Test func viaAlias() { #expect(Self.shared == .idle) }\n"
         "    @Test func direct() { #expect(AppThing().run() == 1) }\n"
         "    @Test func viaHelper() { let t = makeThing(); #expect(t.run() == 1) }\n"
         "    @Test func viaMember() { let t = AppThing.test(); #expect(t.run() == 1) }\n"
         "    @Test func viaSignature() { #expect(state() == .idle) }\n"
-        "    @Test func mdk() { let r = RecordFfi(id: \"a\"); let m = Marmot(); #expect(m.listAccounts().isEmpty); _ = generateKeypair() }\n"
+        "    @Test func viaAlias() { #expect(Self.shared == .idle) }\n"
+        "    @Test func viaExtensionMember() { #expect(MarmotKitError.RuntimeBusy.isTransientStartupReadinessFailure) }\n"
+        "    @Test(arguments: [(Connector.claude, \"claude\")])\n"
+        "    func parameterised(connector: Connector, name: String) { #expect(connector.prompt().contains(name)) }\n"
+        "    @Test func mdk() { let r = RecordFfi(id: \"a\", label: \"b\"); let m = Marmot(); #expect(m.listAccounts().isEmpty); _ = generateKeypair() }\n"
+        "    @Test func mdkWrappedName() { let m = Marmot(); _ = m.createGroup(name: \"a\"); #expect(client.marmot.createGroup(name: \"b\").id == \"\") }\n"
         "    @Test func mdkRun() { let m = Marmot(); m.run(); #expect(true) }\n"
+        "    @Test func viaDouble() { let h = try! SendHarness(); h.shutdown(); #expect(h.appState != nil) }\n"
         "    @Test func helperOnly() { let s = Stub(); s.calls += 1; #expect(s.calls == 1) }\n"
-        "    @Test func platform() { let d = Date(); var x = 1; x += 1; #expect(d.timeIntervalSince1970 > 0) }\n"
+        "    @Test func platform() { let d = Date(); var x = [1]; x.append(2); #expect(d.timeIntervalSince1970 > 0 && x.contains(2)) }\n"
         "    @Test func catalog() { let url = Bundle.main.url(forResource: \"Localizable\", withExtension: \"xcstrings\"); #expect(url != nil) }\n"
         "    @Test func catalogText() { let path = \"Shared/Localizable.xcstrings\"; #expect(!path.isEmpty) }\n"
         "}\n"
+        "private final class SendHarness {\n    let appState: AppThing\n    init() throws { appState = AppThing() }\n"
+        "    func shutdown() {}\n}\n"
     ),
 }
 
@@ -60,14 +72,8 @@ class ClassifierTests(unittest.TestCase):
         audit_support.write_tree(root, {**APP_SOURCES, **MDK_SOURCES, **TEST_SOURCES})
         cls.root = root
         cls.tests_dir = root / "whitenoise-iosTests"
-        suites, masks = classify.swiftscan.collect_suites(cls.tests_dir)
-        suite_names = {s.name for s in suites}
         app_dirs = [str(root / "whitenoise-ios"), str(root / "Shared")]
-        mdk_dir = str(root / "Packages/MarmotKit")
-        cls.classifier = classify.Classifier(
-            classify.names_in_dirs(app_dirs), classify.names_in_dirs([mdk_dir]),
-            classify.helper_names(masks, suite_names), classify.helper_bodies(masks, suite_names),
-            classify.func_names_in_dirs([mdk_dir]) - classify.func_names_in_dirs(app_dirs))
+        suites, cls.classifier = classify.build_classifier(str(cls.tests_dir), app_dirs, str(root / "Packages/MarmotKit"))
         cls.rows = {row["test"]: row for row in classify.classify_tests(suites, cls.classifier)}
 
     @classmethod
@@ -75,27 +81,34 @@ class ClassifierTests(unittest.TestCase):
         cls.temp.cleanup()
 
     def test_identifier_sets(self):
-        self.assertIn("AppThing", self.classifier.app)
-        self.assertIn("BrowseState", self.classifier.app)
-        self.assertIn("appFreeFunction", self.classifier.app)
-        self.assertNotIn("var", self.classifier.app)
-        self.assertIn("RecordFfi", self.classifier.mdk)
+        app = self.classifier.app
+        self.assertTrue({"AppThing", "BrowseState", "Connector", "appFreeFunction", "isTransientStartupReadinessFailure"} <= app)
+        self.assertNotIn("var", app)
+        self.assertNotIn("contains", app)  # method inside a type body
+        self.assertNotIn("label", app)  # extension member MDK also declares
+        self.assertNotIn("createGroup", app)  # app wrapper over an MDK method
+        self.assertIn("createGroup", self.classifier.mdk_funcs)
         self.assertIn("listAccounts", self.classifier.mdk_calls)
         self.assertIn("generateKeypair", self.classifier.mdk_calls)
         self.assertNotIn("run", self.classifier.mdk_calls)  # also declared by the app
-        self.assertEqual(self.classifier.helper, {"Stub"})
+        self.assertNotIn("shutdown", self.classifier.mdk_calls)  # also declared by a test double
+        self.assertEqual(self.classifier.helper, {"Stub", "SendHarness"})
 
     def test_subjects(self):
         expected = {
             "direct()": "app", "viaHelper()": "app", "viaMember()": "app", "viaSignature()": "app",
-            "viaAlias()": "app",
-            "mdk()": "mdk", "mdkRun()": "platform", "helperOnly()": "test-helper",
-            "platform()": "platform", "catalog()": "catalog", "catalogText()": "catalog",
+            "viaAlias()": "app", "viaExtensionMember()": "app", "parameterised(connector:name:)": "app",
+            "mdk()": "mdk", "mdkWrappedName()": "mdk", "mdkRun()": "platform", "viaDouble()": "app",
+            "helperOnly()": "test-helper", "platform()": "platform", "catalog()": "catalog", "catalogText()": "catalog",
         }
         self.assertEqual({name: self.rows[name]["subject"] for name in expected}, expected)
         self.assertEqual(self.rows["mdk()"]["mdk_refs"], 2)
+        self.assertEqual(self.rows["mdkWrappedName()"]["mdk_refs"], 1)  # only the marmot.-qualified call
         self.assertEqual(self.rows["viaHelper()"]["app_refs"], 2)
-        self.assertEqual(self.rows["helperOnly()"]["helper_refs"], 1)
+        self.assertGreaterEqual(self.rows["viaDouble()"]["helper_refs"], 1)
+        self.assertGreaterEqual(self.rows["viaDouble()"]["app_refs"], 1)  # through the double's body
+        self.assertGreaterEqual(self.rows["helperOnly()"]["helper_refs"], 1)
+        self.assertEqual(self.rows["helperOnly()"]["app_refs"], 0)
 
     def test_rollup_prefers_app_on_ties_and_reports_mix(self):
         rolled = classify.rollup([
@@ -119,13 +132,13 @@ class ClassifierTests(unittest.TestCase):
             with (out_dir / "subjects.csv").open(newline="") as handle:
                 subjects = list(csv.DictReader(handle))
             self.assertEqual(list(subjects[0]), classify.COLUMNS)
-            self.assertEqual(len(subjects), 11)
+            self.assertEqual(len(subjects), 15)
             with inv.open(newline="") as handle:
                 merged = list(csv.DictReader(handle))
             self.assertEqual(merged[0]["suite"], "ThingTests")
             self.assertEqual(merged[0]["subject"], "app")
-            self.assertEqual(merged[0]["subject_mix"], "app:5;mdk:1;test-helper:1;catalog:2;platform:2")
-            self.assertEqual(merged[0]["tests"], "11")
+            self.assertEqual(merged[0]["subject_mix"], "app:8;mdk:2;test-helper:1;catalog:2;platform:2")
+            self.assertEqual(merged[0]["tests"], "15")
             code = classify.main(["--tests-dir", str(self.tests_dir), "--app-dir", str(self.root / "Shared"),
                                   "--mdk-dir", str(self.root / "Packages/MarmotKit"),
                                   "--out", str(out_dir / "s2.csv"), "--inventory", str(out_dir / "missing.csv"), "--merge"])

@@ -74,6 +74,12 @@ class DeclarationTests(unittest.TestCase):
         self.assertEqual(swiftscan.signature_of(masked, members[1]), "first(value:)")
         self.assertEqual(swiftscan.signature_of(masked, members[3]), "helper(_:b:)")
 
+    def test_signature_keeps_labels_after_closure_typed_parameters(self):
+        masked = swiftscan.mask("struct T {\n    func t(handler: (Int) -> Void, b: Int, c: [String: () -> Bool]) {}\n}\n")
+        suite = next(swiftscan.declarations(masked))
+        func = next(swiftscan.declarations(masked, suite.body_start + 1, suite.body_end, 1))
+        self.assertEqual(swiftscan.signature_of(masked, func), "t(handler:b:c:)")
+
     def test_nested_types_do_not_count_as_top_level(self):
         masked = swiftscan.mask("struct Outer {\n    struct Inner {}\n    enum Mode { case a }\n}\nenum Top {}\n")
         self.assertEqual([d.name for d in swiftscan.declarations(masked)], ["Outer", "Top"])
@@ -92,19 +98,29 @@ class SuiteTests(unittest.TestCase):
                               "extension Fixture {\n    @Test func ignored() {}\n}\n",
             "Legacy.swift": "final class LegacyTests: XCTestCase {\n    func testOld() {}\n"
                             "    func helper() {}\n    static func testNotInstance() {}\n}\n",
-            "Named.swift": '@Suite("Media viewer")\nstruct MediaViewerChecks {\n    @Test func shows() {}\n}\n',
+            "Base.swift": "class LayoutCase: XCTestCase {\n    func measure() {}\n}\n"
+                          "final class ControlLayoutChecks: LayoutCase {\n    func testFits() {}\n}\n",
+            "Named.swift": '@Suite("Media viewer")\nstruct MediaViewerChecks {\n    @Test func shows() {}\n}\n'
+                           "struct ImplicitChecks {\n    @Test func implied() {}\n}\n"
+                           "struct NotASuite {\n    func plain() {}\n}\n",
         }
         with tempfile.TemporaryDirectory() as root:
             audit_support.write_tree(root, files)
             warnings = []
             suites, masks = swiftscan.collect_suites(root, warnings.append)
-        self.assertEqual([s.name for s in suites], ["AlphaTests", "LegacyTests", "MediaViewerChecks"])
+        self.assertEqual([s.name for s in suites], ["AlphaTests", "ControlLayoutChecks", "ImplicitChecks",
+                                                    "LayoutCase", "LegacyTests", "MediaViewerChecks"])
+        by_name = {s.name: s for s in suites}
+        self.assertEqual(by_name["ControlLayoutChecks"].framework, "XCTest")
+        self.assertEqual([t.signature for t in by_name["ControlLayoutChecks"].tests], ["testFits()"])
+        self.assertEqual(by_name["LayoutCase"].tests, [])
+        self.assertEqual([t.signature for t in by_name["ImplicitChecks"].tests], ["implied()"])
         alpha = suites[0]
         self.assertEqual(sorted(t.qualified_name for t in alpha.tests), ["Nested/inner()", "one()", "two(_:)"])
         self.assertEqual(len(alpha.parts), 2)
         self.assertEqual(alpha.framework, "SwiftTesting")
         self.assertEqual(alpha.line, 1)
-        legacy = suites[1]
+        legacy = by_name["LegacyTests"]
         self.assertEqual(legacy.framework, "XCTest")
         self.assertEqual([t.signature for t in legacy.tests], ["testOld()"])
         self.assertEqual(warnings, [])

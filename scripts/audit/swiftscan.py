@@ -6,6 +6,7 @@ top-level declarations, test suites and the test functions inside them.
 Standard library only.
 """
 import bisect
+import csv
 import dataclasses
 import pathlib
 import re
@@ -439,32 +440,61 @@ def signature_of(masked, decl):
 
 def _split_top_level(text, separator):
     parts, depth, current = [], 0, []
+    previous = ""
     for c in text:
         if c in "([{<":
             depth += 1
-        elif c in ")]}>":
+        elif c in ")]}" or (c == ">" and previous != "-"):
             depth -= 1
         if c == separator and depth == 0:
             parts.append("".join(current))
             current = []
         else:
             current.append(c)
+        previous = c
     parts.append("".join(current))
     return parts
 
 
-def is_suite(decl):
+TEST_ATTRIBUTE = re.compile(r"@Test\b")
+
+
+def is_suite(decl, masked=None, xctest_bases=("XCTestCase",)):
     if decl.keyword not in ("struct", "class", "enum", "actor"):
         return False
-    if decl.has_attribute("Suite"):
+    if decl.has_attribute("Suite") or decl.name.endswith("Tests"):
         return True
-    if "XCTestCase" in decl.inheritance.split(",")[0]:
+    if base_class(decl) in xctest_bases:
         return True
-    return decl.name.endswith("Tests")
+    return bool(masked and decl.body_start >= 0
+                and TEST_ATTRIBUTE.search(masked.code, decl.body_start, decl.body_end))
 
 
-def framework_of(decl):
-    return "XCTest" if "XCTestCase" in decl.inheritance else "SwiftTesting"
+def base_class(decl):
+    first = decl.inheritance.split(",")[0].strip()
+    return first.split("<")[0].strip() if first else ""
+
+
+def xctest_bases_in(masks):
+    """XCTestCase plus every class in ``masks`` that descends from it."""
+    parents = {}
+    for masked in masks.values():
+        for decl in declarations(masked):
+            if decl.keyword == "class":
+                parents[decl.name] = base_class(decl)
+    bases = {"XCTestCase"}
+    changed = True
+    while changed:
+        changed = False
+        for name, parent in parents.items():
+            if parent in bases and name not in bases:
+                bases.add(name)
+                changed = True
+    return bases
+
+
+def framework_of(decl, xctest_bases=("XCTestCase",)):
+    return "XCTest" if base_class(decl) in xctest_bases else "SwiftTesting"
 
 
 def tests_in(masked, decl, framework, path="", nesting=""):
@@ -487,15 +517,15 @@ def tests_in(masked, decl, framework, path="", nesting=""):
     return found
 
 
-def suites_in_file(path, masked=None):
+def suites_in_file(path, masked=None, xctest_bases=("XCTestCase",)):
     """Suites declared in one file (extensions are attached by ``collect_suites``)."""
     path = pathlib.Path(path)
     masked = masked or mask(path.read_text(encoding="utf-8"))
     suites = []
     for decl in declarations(masked):
-        if not is_suite(decl):
+        if not is_suite(decl, masked, xctest_bases):
             continue
-        framework = framework_of(decl)
+        framework = framework_of(decl, xctest_bases)
         suite = Suite(decl.name, decl.keyword, framework, decl,
                       tests_in(masked, decl, framework, str(path)), str(path),
                       masked.line(decl.start))
@@ -518,9 +548,10 @@ def collect_suites(directory, warn=None):
     """
     suites, extensions, masks = [], [], {}
     for path in swift_files(directory):
-        masked = mask(path.read_text(encoding="utf-8"))
-        masks[str(path)] = masked
-        suites.extend(suites_in_file(path, masked))
+        masks[str(path)] = mask(path.read_text(encoding="utf-8"))
+    xctest_bases = xctest_bases_in(masks)
+    for path, masked in masks.items():
+        suites.extend(suites_in_file(path, masked, xctest_bases))
         extensions.extend(extensions_in_file(path, masked))
     by_name = {}
     for suite in suites:
@@ -559,3 +590,30 @@ def all_type_names(masked, start=0, end=None, depth=0, names=None):
         if decl.body_start >= 0 and decl.keyword in TYPE_KEYWORDS:
             all_type_names(masked, decl.body_start + 1, decl.body_end, depth + 1, names)
     return names
+
+
+def write_csv(path, rows, columns):
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({c: row.get(c, "") for c in columns})
+
+
+def merge_columns(csv_path, values_by_suite, columns):
+    """Add or replace ``columns`` in a suite-keyed CSV from {suite: tuple}."""
+    csv_path = pathlib.Path(csv_path)
+    with csv_path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+        fields = list(reader.fieldnames)
+    for column in columns:
+        if column not in fields:
+            fields.append(column)
+    for row in rows:
+        values = values_by_suite.get(row["suite"], ("",) * len(columns))
+        for column, value in zip(columns, values):
+            row[column] = value
+    write_csv(csv_path, rows, fields)

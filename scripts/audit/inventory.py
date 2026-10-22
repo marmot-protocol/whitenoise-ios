@@ -3,15 +3,20 @@
 
 Counts call sites that matter for test cost (runtime construction, UI
 hosting, sleeps, polling loops) inside each suite's brace ranges, including
-any ``extension <Suite>`` blocks in the test directory. Audit tooling, not a
-test; it reads test sources on purpose.
+``extension <Suite>`` blocks, plus the non-suite declarations the suite
+reaches: file-private harness types, file-level helper funcs and properties,
+and shared helpers in other files (same file first; cross-file only for
+non-private declarations and extension members). Each helper declaration is
+counted once per suite; ``helper_sites`` shows the share that came from
+helpers so both numbers stay visible. Audit tooling, not a test; it reads
+test sources on purpose.
 
     python3 scripts/audit/inventory.py                  # writes build/audit/inventory.csv
     python3 scripts/audit/inventory.py --emit-tier-lists
-    python3 scripts/audit/inventory.py --check --rule testClient-requires-tag=runtime
+    python3 scripts/audit/inventory.py --rule testClient-requires-tag=runtime   # exits 1 on violations
 """
 import argparse
-import csv
+import collections
 import os
 import pathlib
 import re
@@ -24,12 +29,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_TESTS_DIR = "whitenoise-iosTests"
 DEFAULT_OUT = "build/audit/inventory.csv"
 
-COLUMNS = [
-    "suite", "file", "line", "tests", "framework", "traits", "main_actor",
+COUNT_COLUMNS = [
     "testClient_sites", "start_sites", "shutdown_sites", "app_state_test_sites",
     "ui_hosting", "image_renderer", "layout_if_needed", "sleep_sites", "poll_loops",
     "run_loop", "l10n_asserts", "xcstrings_reads",
 ]
+COLUMNS = ["suite", "file", "line", "tests", "framework", "traits", "main_actor"] + COUNT_COLUMNS + ["helper_sites"]
 
 # Patterns counted on the code view (comments and string contents blanked).
 CODE_PATTERNS = {
@@ -43,6 +48,13 @@ CODE_PATTERNS = {
     "sleep_sites": r"\bTask\.sleep\b",
     "run_loop": r"\bRunLoop\.\w+\.run\b",
 }
+# Inside an extension member such as `MarmotClient.testClient()` or
+# `AppState.test()` the construction it wraps is what the call site already
+# counted, so only nested call sites count there.
+MEMBER_PATTERNS = dict(CODE_PATTERNS, **{
+    "testClient_sites": r"MarmotClient\.testClient\(",
+    "app_state_test_sites": r"AppState\.test\(",
+})
 # Counted on the text view (comments blanked, strings kept): resource paths
 # live inside string literals.
 TEXT_PATTERNS = {
@@ -54,11 +66,60 @@ LOOP_KEYWORD = re.compile(r"(?<![\w.])(for|while|repeat)\b(?!\s*:)")
 POLL_BODY = re.compile(r"\bTask\.yield\(|\bTask\.sleep\b")
 RUNTIME_COLUMNS = ("testClient_sites", "start_sites", "app_state_test_sites")
 UI_COLUMNS = ("ui_hosting", "image_renderer", "layout_if_needed")
+HELPER_KEYWORDS = ("struct", "class", "enum", "actor", "func", "let", "var")
 
 COLUMN_ALIASES = {
     "testClient": "testClient_sites", "start": "start_sites", "shutdown": "shutdown_sites",
     "app_state_test": "app_state_test_sites", "sleep": "sleep_sites",
 }
+
+
+class HelperDecl(collections.namedtuple("HelperDecl", "path masked start end member shared")):
+    """A non-suite declaration a suite may reach. ``member`` marks extension
+    members; ``shared`` ones (not private/fileprivate) resolve across files."""
+
+
+def helper_index(masks, suite_names):
+    index = collections.defaultdict(list)
+    for path, masked in masks.items():
+        for decl in swiftscan.declarations(masked):
+            if decl.name in suite_names:
+                continue
+            if decl.keyword == "extension" and decl.body_start >= 0:
+                for member in swiftscan.declarations(masked, decl.body_start + 1, decl.body_end, 1):
+                    if member.keyword in ("func", "let", "var"):
+                        index[member.name].append(HelperDecl(path, masked, member.start, member.body_end,
+                                                             True, _is_shared(member)))
+            elif decl.keyword in HELPER_KEYWORDS:
+                index[decl.name].append(HelperDecl(path, masked, decl.start, decl.body_end, False, _is_shared(decl)))
+    return index
+
+
+def _is_shared(decl):
+    return not (decl.modifiers & {"private", "fileprivate"})
+
+
+def resolve_helper(index, name, path):
+    candidates = index.get(name, ())
+    local = [c for c in candidates if c.path == path]
+    return local or [c for c in candidates if c.shared]
+
+
+def reached_helpers(suite, index):
+    """Helper declarations the suite references, transitively, each once."""
+    seen, found = set(), []
+    queue = [(part.path, part.masked, part.start, part.end) for part in suite.parts]
+    while queue:
+        path, masked, start, end = queue.pop()
+        for name in sorted(set(swiftscan.identifiers(masked.code, start, end))):
+            for helper in resolve_helper(index, name, path):
+                key = (helper.path, helper.start)
+                if key in seen:
+                    continue
+                seen.add(key)
+                found.append(helper)
+                queue.append((helper.path, helper.masked, helper.start, helper.end))
+    return found
 
 
 def traits_of(decl):
@@ -78,8 +139,7 @@ def tags_of(traits):
     tags = set()
     for trait in traits:
         if trait.startswith(".tags("):
-            inner = trait[len(".tags("):-1]
-            for tag in inner.split(","):
+            for tag in trait[len(".tags("):-1].split(","):
                 tags.add(tag.strip().lstrip(".").split(".")[-1])
     return tags
 
@@ -93,14 +153,29 @@ def count_l10n_asserts(code, start, end):
     return count
 
 
+def _is_repeat_tail(code, at):
+    """True when the `while` at ``at`` closes a `repeat { } while` loop."""
+    before = code[:at].rstrip()
+    if not before.endswith("}"):
+        return False
+    depth = 0
+    for k in range(len(before) - 1, -1, -1):
+        if code[k] == "}":
+            depth += 1
+        elif code[k] == "{":
+            depth -= 1
+            if depth == 0:
+                return code[:k].rstrip().endswith("repeat")
+    return False
+
+
 def count_poll_loops(code, start, end):
     count = 0
     for match in LOOP_KEYWORD.finditer(code, start, end):
+        if match.group(1) == "while" and _is_repeat_tail(code, match.start()):
+            continue  # already counted at its `repeat`
         brace = code.find("{", match.end(), end)
         if brace < 0:
-            continue
-        # The loop header must not cross a statement boundary.
-        if "\n" in code[match.end():brace].strip("\n ") and ";" in code[match.end():brace]:
             continue
         close = swiftscan.match_close(code, brace)
         if POLL_BODY.search(code, brace, close):
@@ -108,35 +183,44 @@ def count_poll_loops(code, start, end):
     return count
 
 
-def suite_row(suite, tests_dir):
+def count_range(masked, start, end, patterns):
+    counts = collections.Counter()
+    for column, pattern in patterns.items():
+        counts[column] += swiftscan.count_pattern(pattern, masked.code, start, end)
+    for column, pattern in TEXT_PATTERNS.items():
+        counts[column] += swiftscan.count_pattern(pattern, masked.text, start, end)
+    counts["l10n_asserts"] += count_l10n_asserts(masked.code, start, end)
+    counts["poll_loops"] += count_poll_loops(masked.code, start, end)
+    return counts
+
+
+def suite_row(suite, tests_dir, index):
     decl = suite.declaration
-    traits = traits_of(decl)
     row = {
         "suite": suite.name,
         "file": os.path.relpath(suite.path, tests_dir),
         "line": suite.line,
         "tests": len(suite.tests),
         "framework": suite.framework,
-        "traits": ";".join(traits),
+        "traits": ";".join(traits_of(decl)),
         "main_actor": int(decl.has_attribute("MainActor")),
     }
-    for column in list(CODE_PATTERNS) + list(TEXT_PATTERNS) + ["l10n_asserts", "poll_loops"]:
-        row[column] = 0
+    own, via_helpers = collections.Counter(), collections.Counter()
     for part in suite.parts:
-        code, text = part.masked.code, part.masked.text
-        start, end = part.start, part.end
-        for column, pattern in CODE_PATTERNS.items():
-            row[column] += swiftscan.count_pattern(pattern, code, start, end)
-        for column, pattern in TEXT_PATTERNS.items():
-            row[column] += swiftscan.count_pattern(pattern, text, start, end)
-        row["l10n_asserts"] += count_l10n_asserts(code, start, end)
-        row["poll_loops"] += count_poll_loops(code, start, end)
+        own += count_range(part.masked, part.start, part.end, CODE_PATTERNS)
+    for helper in reached_helpers(suite, index):
+        via_helpers += count_range(helper.masked, helper.start, helper.end,
+                                   MEMBER_PATTERNS if helper.member else CODE_PATTERNS)
+    for column in COUNT_COLUMNS:
+        row[column] = own[column] + via_helpers[column]
+    row["helper_sites"] = ";".join("%s:%d" % (c, via_helpers[c]) for c in COUNT_COLUMNS if via_helpers[c])
     return row
 
 
 def build_rows(tests_dir, warn=None):
-    suites, _ = swiftscan.collect_suites(tests_dir, warn)
-    return [suite_row(suite, tests_dir) for suite in suites]
+    suites, masks = swiftscan.collect_suites(tests_dir, warn)
+    index = helper_index(masks, {s.name for s in suites})
+    return [suite_row(suite, tests_dir, index) for suite in suites]
 
 
 def is_runtime_tier(row):
@@ -154,13 +238,6 @@ def tier_lists(rows, tests_dir_name):
     return runtime, ui
 
 
-def resolve_column(name):
-    column = COLUMN_ALIASES.get(name, name)
-    if column not in COLUMNS:
-        raise ValueError("unknown inventory column: %s" % name)
-    return column
-
-
 RULE_RE = re.compile(r"^(?P<column>[A-Za-z_]+)-(?P<kind>requires-tag|requires-trait|max)=(?P<value>.+)$")
 
 
@@ -169,9 +246,13 @@ def parse_rule(rule):
     if not match:
         raise ValueError("rule must look like <column>-requires-tag=<tag>, "
                          "<column>-requires-trait=<trait> or <column>-max=<n>: %s" % rule)
-    column = resolve_column(match.group("column"))
+    column = COLUMN_ALIASES.get(match.group("column"), match.group("column"))
+    if column not in COUNT_COLUMNS + ["tests", "main_actor"]:
+        raise ValueError("unknown inventory column in rule: %s" % rule)
     kind, value = match.group("kind"), match.group("value").strip().lstrip(".")
     if kind == "max":
+        if not value.isdigit():
+            raise ValueError("max rule needs an integer: %s" % rule)
         value = int(value)
     return column, kind, value
 
@@ -195,31 +276,25 @@ def check_rules(rows, rules):
     return violations
 
 
-def write_csv(path, rows, columns):
-    path = pathlib.Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({c: row.get(c, "") for c in columns})
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--tests-dir", default=str(ROOT / DEFAULT_TESTS_DIR))
     parser.add_argument("--out", default=str(ROOT / DEFAULT_OUT))
-    parser.add_argument("--check", action="store_true", help="exit non-zero when a --rule is violated")
-    parser.add_argument("--rule", action="append", default=[], help="e.g. testClient-requires-tag=runtime")
+    parser.add_argument("--rule", action="append", default=[],
+                        help="check a rule and exit 1 on violations, e.g. testClient-requires-tag=runtime")
+    parser.add_argument("--check", action="store_true", help="implied by --rule")
     parser.add_argument("--emit-tier-lists", action="store_true",
                         help="write tier-runtime.txt and tier-ui.txt next to the CSV")
     args = parser.parse_args(argv)
 
-    rules = [parse_rule(rule) for rule in args.rule]
+    try:
+        rules = [parse_rule(rule) for rule in args.rule]
+    except ValueError as error:
+        parser.error(str(error))
     if args.check and not rules:
         parser.error("--check needs at least one --rule")
     rows = build_rows(args.tests_dir, warn=lambda message: print("warning: " + message, file=sys.stderr))
-    write_csv(args.out, rows, COLUMNS)
+    swiftscan.write_csv(args.out, rows, COLUMNS)
     print("wrote %s (%d suites, %d tests)" % (args.out, len(rows), sum(r["tests"] for r in rows)))
 
     if args.emit_tier_lists:
@@ -229,7 +304,7 @@ def main(argv=None):
             (out_dir / name).write_text("".join(line + "\n" for line in lines), encoding="utf-8")
             print("wrote %s (%d suites)" % (out_dir / name, len(lines)))
 
-    if args.check:
+    if rules:
         violations = check_rules(rows, rules)
         for violation in violations:
             print(violation)

@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
 """Classify what each test actually exercises: app, mdk, test-helper, catalog or platform.
 
-Builds three identifier sets (app types from the app sources, MDK types from
-the MarmotKit package, test-support declarations from the test directory)
-and labels each test body by the set it references most: app identifier
-occurrences, test-support type occurrences, MDK func/method invocations (MDK
-record types are fixture inputs in app tests, so only calls count), plus
-whatever the non-test helper funcs, properties and typealiases it names
-reference, one level deep. Ties go app > mdk > test-helper. Audit tooling,
-not a test; it reads test sources on purpose.
+Builds identifier sets (app types and API from the app sources, MDK funcs
+from the MarmotKit package, test-support types from the test directory) and
+labels each test from its header, signature and body:
+
+  catalog      reads an .xcstrings file or a Bundle resource
+  app          references app code (directly, or through the helper funcs,
+               properties, typealiases and test doubles it names, one level)
+  mdk          invokes MDK funcs/methods more often than it references app
+               code; `marmot.<name>(` always counts, an unqualified name only
+               when neither the app nor the test tree declares it
+  test-helper  references no app code, only test-support types
+  platform     references none of the above (Foundation/SwiftUI/UIKit only)
+
+MDK record types (`*Ffi`) are fixture inputs in app tests, so naming one is
+not MDK evidence; calling MDK is. Audit tooling, not a test; it reads test
+sources on purpose.
 
     python3 scripts/audit/subject-classify.py           # writes build/audit/subjects.csv
-    python3 scripts/audit/subject-classify.py --merge   # also adds `subject` to inventory.csv
+    python3 scripts/audit/subject-classify.py --merge   # also adds subject columns to inventory.csv
 """
 import argparse
 import collections
-import csv
 import os
 import pathlib
 import re
@@ -32,88 +39,18 @@ DEFAULT_OUT = "build/audit/subjects.csv"
 DEFAULT_INVENTORY = "build/audit/inventory.csv"
 COLUMNS = ["suite", "test", "subject", "app_refs", "mdk_refs", "helper_refs"]
 SUBJECTS = ("app", "mdk", "test-helper", "catalog", "platform")
+MERGED_COLUMNS = ["subject", "subject_mix"]
 
 CATALOG_TEXT = re.compile(r"\.xcstrings\b")
 CATALOG_CODE = re.compile(r"\bBundle\b[^\n]*\b(forResource|forInfoDictionaryKey|builtInPlugInsURL|bundleURL|resourceURL)\b")
-
-
-def declared_names(masked, include_members=False):
-    """Type names at any depth plus top-level func/let/var names.
-
-    With ``include_members`` the funcs and properties declared directly in
-    top-level extensions are added too (that is how the test support layer
-    adds ``MarmotClient.testClient`` and ``AppState.test``).
-    """
-    names = swiftscan.all_type_names(masked)
-    for decl in swiftscan.declarations(masked):
-        if decl.keyword in ("func", "let", "var", "typealias"):
-            names.add(decl.name)
-        elif include_members and decl.keyword == "extension" and decl.body_start >= 0:
-            for member in swiftscan.declarations(masked, decl.body_start + 1, decl.body_end, 1):
-                if member.keyword in ("func", "let", "var"):
-                    names.add(member.name)
-    return names
-
-
-def names_in_dirs(directories, include_members=False):
-    names = set()
-    for directory in directories:
-        for path in swiftscan.swift_files(directory):
-            names |= declared_names(swiftscan.mask(path.read_text(encoding="utf-8")), include_members)
-    return names
-
-
-def func_names_in_dirs(directories):
-    """Names of every func declared at any depth under the directories."""
-    names = set()
-    for directory in directories:
-        for path in swiftscan.swift_files(directory):
-            masked = swiftscan.mask(path.read_text(encoding="utf-8"))
-            names |= {decl.name for decl in _all_funcs(masked, 0, None, 0)}
-    return names
-
-
-def helper_names(masks, suite_names):
-    """Test-support type names: every type declared in the test tree, at any
-    depth, that is not itself a suite. Helper *funcs* are not counted as
-    references; what their bodies reference is attributed instead."""
-    names = set()
-    for masked in masks.values():
-        names |= swiftscan.all_type_names(masked)
-    return names - set(suite_names)
-
-
 SWIFT_KEYWORDS = {
     "let", "var", "func", "struct", "class", "enum", "actor", "protocol", "extension", "typealias",
     "if", "else", "for", "in", "while", "repeat", "return", "self", "Self", "true", "false", "nil",
     "import", "case", "switch", "default", "guard", "defer", "throw", "throws", "try", "await", "async",
     "init", "deinit", "subscript",
 }
-
-
-def helper_bodies(masks, suite_names):
-    """{name: [(masked, start, end)]} for every non-test member declaration
-    in the test tree: funcs (signature and body), typealiases and stored
-    properties at top level or directly inside a type. A test that reaches
-    the app only through one of these is attributed what it references."""
-    bodies = collections.defaultdict(list)
-    for masked in masks.values():
-        for decl, parent in _member_declarations(masked, 0, None, 0, None):
-            if decl.keyword == "func":
-                xctest = parent is not None and "XCTestCase" in parent.inheritance
-                if decl.has_attribute("Test") or (xctest and decl.name.startswith("test")):
-                    continue
-            elif decl.keyword not in ("typealias", "let", "var"):
-                continue
-            shared = decl.depth == 0 or (parent is not None and parent.keyword == "extension")
-            bodies[decl.name].append(HelperRange(masked, decl.start, decl.body_end, shared))
-    return bodies
-
-
-class HelperRange(collections.namedtuple("HelperRange", "masked start end shared")):
-    """A helper declaration's source range. ``shared`` helpers (top-level
-    funcs and extension members) resolve from any file; type members resolve
-    only from their own file, since suites reuse names like `model`."""
+CALL = re.compile(r"(?<![\w])(marmot\s*\.\s*)?(%s)\s*\(" % swiftscan.IDENTIFIER)
+VALUE_TYPES = ("struct", "class", "enum", "actor")
 
 
 def _member_declarations(masked, start, end, depth, parent):
@@ -123,35 +60,93 @@ def _member_declarations(masked, start, end, depth, parent):
             yield from _member_declarations(masked, decl.body_start + 1, decl.body_end, depth + 1, decl)
 
 
-def _all_funcs(masked, start, end, depth):
-    for decl, _ in _member_declarations(masked, start, end, depth, None):
-        if decl.keyword == "func":
-            yield decl
+def app_names(directories, foreign_members=frozenset()):
+    """Types at any depth, top-level funcs/properties and every member an
+    `extension` adds (API the app grafts onto MDK or platform types, which a
+    test reaches without naming an app type), except members that MDK also
+    declares (`label`, wrapper methods), since those name MDK as much as the
+    app. Methods inside type bodies are not added: a test reaches them
+    through the type name, and their names (`contains`, `append`) are too
+    generic to be evidence."""
+    names = set()
+    for directory in directories:
+        for path in swiftscan.swift_files(directory):
+            masked = swiftscan.mask(path.read_text(encoding="utf-8"))
+            for decl, parent in _member_declarations(masked, 0, None, 0, None):
+                in_extension = parent is not None and parent.keyword == "extension"
+                if decl.keyword in VALUE_TYPES or decl.keyword in ("protocol", "typealias"):
+                    names.add(decl.name)
+                elif decl.keyword in ("func", "let", "var") and (decl.depth == 0 or in_extension):
+                    if decl.name not in foreign_members:
+                        names.add(decl.name)
+    return names - SWIFT_KEYWORDS
 
 
-CALL = re.compile(r"(?<![\w])(%s)\s*\(" % swiftscan.IDENTIFIER)
+def member_names(directories):
+    """Every func/property name declared at any depth under the directories."""
+    names = set()
+    for directory in directories:
+        for path in swiftscan.swift_files(directory):
+            masked = swiftscan.mask(path.read_text(encoding="utf-8"))
+            names |= {d.name for d, _ in _member_declarations(masked, 0, None, 0, None)
+                      if d.keyword in ("func", "let", "var")}
+    return names - SWIFT_KEYWORDS
+
+
+def func_names(directories):
+    names = set()
+    for directory in directories:
+        for path in swiftscan.swift_files(directory):
+            masked = swiftscan.mask(path.read_text(encoding="utf-8"))
+            names |= {d.name for d, _ in _member_declarations(masked, 0, None, 0, None) if d.keyword == "func"}
+    return names - SWIFT_KEYWORDS
+
+
+def helper_names(masks, suite_names):
+    """Test-support type names: every type declared in the test tree, at any
+    depth, that is not itself a suite."""
+    names = set()
+    for masked in masks.values():
+        names |= swiftscan.all_type_names(masked)
+    return names - set(suite_names) - SWIFT_KEYWORDS
+
+
+class HelperRange(collections.namedtuple("HelperRange", "masked start end shared")):
+    """A helper declaration's source range. ``shared`` helpers (non-private
+    top-level declarations and extension members) resolve from any file;
+    others resolve only from their own file, since suites reuse names."""
+
+
+def helper_bodies(masks, suite_names):
+    """{name: [HelperRange]} for every non-test declaration in the test tree
+    a test may name: helper funcs (signature and body), typealiases, stored
+    properties and test-double types, at top level or directly in a type."""
+    bodies = collections.defaultdict(list)
+    for masked in masks.values():
+        for decl, parent in _member_declarations(masked, 0, None, 0, None):
+            if decl.name in suite_names or decl.keyword in ("extension", "protocol"):
+                continue
+            if decl.keyword == "func":
+                xctest = parent is not None and "XCTestCase" in parent.inheritance
+                if decl.has_attribute("Test") or (xctest and decl.name.startswith("test")):
+                    continue
+            in_extension = parent is not None and parent.keyword == "extension"
+            if decl.depth > 0 and not in_extension and parent is not None and parent.name in suite_names:
+                shared = False
+            else:
+                shared = (decl.depth == 0 or in_extension) and not (decl.modifiers & {"private", "fileprivate"})
+            bodies[decl.name].append(HelperRange(masked, decl.start, decl.body_end, shared))
+    return bodies
 
 
 class Classifier:
-    """Counts references per set and labels a body by the dominant one.
-
-    ``app`` counts occurrences of app identifiers (types, top-level funcs).
-    ``helper`` counts occurrences of test-support type names (doubles,
-    harnesses, fixtures). ``mdk`` counts *invocations* of MarmotKit funcs and
-    methods whose names the app does not also declare: MDK record types
-    appear in app tests as fixture inputs, so naming one is not evidence the
-    test exercises MDK, calling one is. A call to a non-test helper func is
-    instrumental: it adds that helper's own references (one level deep)
-    instead of counting as a reference itself.
-    """
-
-    def __init__(self, app_names, mdk_names, helper_names, helper_bodies=None, mdk_calls=()):
-        # A name declared in several sets counts as the one closest to the
-        # app: helper > app > mdk (helper names are local to the test tree).
-        self.helper = set(helper_names) - SWIFT_KEYWORDS
-        self.app = set(app_names) - self.helper - SWIFT_KEYWORDS
-        self.mdk = set(mdk_names) - self.helper - self.app - SWIFT_KEYWORDS
-        self.mdk_calls = set(mdk_calls) - self.helper - self.app - SWIFT_KEYWORDS
+    def __init__(self, app, mdk_funcs, helpers, helper_bodies=None, other_funcs=()):
+        self.helper = set(helpers)
+        self.app = set(app) - self.helper
+        self.mdk_funcs = set(mdk_funcs)
+        # Unqualified call names count as MDK only when neither the app nor
+        # the test tree declares a func of that name.
+        self.mdk_calls = self.mdk_funcs - self.app - set(other_funcs) - self.helper
         self.helper_bodies = helper_bodies or {}
 
     def _count(self, masked, start, end, counts):
@@ -161,14 +156,23 @@ class Classifier:
             elif identifier in self.app:
                 counts["app"] += 1
         for match in CALL.finditer(masked.code, start, end):
-            if match.group(1) in self.mdk_calls:
+            qualified, name = match.group(1), match.group(2)
+            if name in self.mdk_calls or (qualified and name in self.mdk_funcs):
                 counts["mdk"] += 1
 
-    def count(self, masked, start, end):
+    def resolve(self, identifier, masked):
+        candidates = self.helper_bodies.get(identifier, ())
+        local = [h for h in candidates if h.masked is masked]
+        return local or [h for h in candidates if h.shared]
+
+    def count(self, masked, start, end, header=""):
         counts = collections.Counter()
         self._count(masked, start, end, counts)
+        for identifier in swiftscan.identifiers(header):
+            if identifier in self.app:
+                counts["app"] += 1
         seen = {(id(masked), start, end)}
-        frontier = set(swiftscan.identifiers(masked.code, start, end))
+        frontier = set(swiftscan.identifiers(masked.code, start, end)) | set(swiftscan.identifiers(header))
         # Helpers one level deep, then the aliases those helpers name: a
         # suite-private `typealias Placement = AppPlacement` is how a helper
         # signature reaches the app type.
@@ -187,26 +191,19 @@ class Classifier:
             frontier = next_frontier
         return counts
 
-    def resolve(self, identifier, masked):
-        """Same-file helpers first; otherwise only shared (top-level) ones."""
-        candidates = self.helper_bodies.get(identifier, ())
-        local = [h for h in candidates if h.masked is masked]
-        return local or [h for h in candidates if h.shared]
-
-    def classify(self, masked, start, end):
+    def classify(self, masked, start, end, header=""):
         if CATALOG_TEXT.search(masked.text, start, end) or CATALOG_CODE.search(masked.code, start, end):
             return "catalog", 0, 0, 0
-        counts = self.count(masked, start, end)
+        counts = self.count(masked, start, end, header)
         app, mdk, helper = counts["app"], counts["mdk"], counts["helper"]
-        if app == mdk == helper == 0:
-            return "platform", 0, 0, 0
-        best = max(app, mdk, helper)
-        if app == best:
-            subject = "app"
-        elif mdk == best:
+        if mdk > app:
             subject = "mdk"
-        else:
+        elif app:
+            subject = "app"
+        elif helper:
             subject = "test-helper"
+        else:
+            subject = "platform"
         return subject, app, mdk, helper
 
 
@@ -215,7 +212,8 @@ def classify_tests(suites, classifier):
     for suite in suites:
         for test in suite.tests:
             masked = next(part.masked for part in suite.parts if part.path == test.path)
-            subject, app, mdk, helper = classifier.classify(masked, test.body_start, test.body_end)
+            subject, app, mdk, helper = classifier.classify(masked, test.declaration.start, test.body_end,
+                                                            test.declaration.header)
             rows.append({"suite": suite.name, "test": test.qualified_name, "subject": subject,
                          "app_refs": app, "mdk_refs": mdk, "helper_refs": helper})
     return rows
@@ -230,37 +228,17 @@ def rollup(rows):
     for suite, counts in by_suite.items():
         best = max(counts.values())
         subject = next(s for s in SUBJECTS if counts[s] == best)
-        mix = ";".join("%s:%d" % (s, counts[s]) for s in SUBJECTS if counts[s])
-        result[suite] = (subject, mix)
+        result[suite] = (subject, ";".join("%s:%d" % (s, counts[s]) for s in SUBJECTS if counts[s]))
     return result
 
 
-def merge_into_inventory(inventory_path, rolled, columns):
-    inventory_path = pathlib.Path(inventory_path)
-    with inventory_path.open(newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        rows = list(reader)
-        fields = list(reader.fieldnames)
-    for column in columns:
-        if column not in fields:
-            fields.append(column)
-    for row in rows:
-        values = rolled.get(row["suite"])
-        for column, value in zip(columns, values if values else [""] * len(columns)):
-            row[column] = value
-    with inventory_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def write_csv(path, rows, columns):
-    path = pathlib.Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
+def build_classifier(tests_dir, app_dirs, mdk_dir):
+    suites, masks = swiftscan.collect_suites(tests_dir)
+    suite_names = {s.name for s in suites}
+    classifier = Classifier(app_names(app_dirs, member_names([mdk_dir])), func_names([mdk_dir]),
+                            helper_names(masks, suite_names), helper_bodies(masks, suite_names),
+                            func_names(app_dirs) | func_names([tests_dir]))
+    return suites, classifier
 
 
 def main(argv=None):
@@ -275,20 +253,16 @@ def main(argv=None):
     args = parser.parse_args(argv)
     app_dirs = args.app_dir or [str(ROOT / d) for d in DEFAULT_APP_DIRS]
 
-    suites, masks = swiftscan.collect_suites(args.tests_dir)
-    suite_names = {s.name for s in suites}
-    mdk_calls = func_names_in_dirs([args.mdk_dir]) - func_names_in_dirs(app_dirs)
-    classifier = Classifier(names_in_dirs(app_dirs), names_in_dirs([args.mdk_dir]),
-                            helper_names(masks, suite_names), helper_bodies(masks, suite_names), mdk_calls)
+    suites, classifier = build_classifier(args.tests_dir, app_dirs, args.mdk_dir)
     rows = classify_tests(suites, classifier)
-    write_csv(args.out, rows, COLUMNS)
+    swiftscan.write_csv(args.out, rows, COLUMNS)
     totals = collections.Counter(row["subject"] for row in rows)
     print("wrote %s (%d tests: %s)" % (args.out, len(rows), ", ".join("%s=%d" % kv for kv in sorted(totals.items()))))
     if args.merge:
         if not pathlib.Path(args.inventory).exists():
             print("no inventory at %s; run inventory.py first" % args.inventory, file=sys.stderr)
             return 1
-        merge_into_inventory(args.inventory, rollup(rows), ["subject", "subject_mix"])
+        swiftscan.merge_columns(args.inventory, rollup(rows), MERGED_COLUMNS)
         print("merged subject columns into %s" % args.inventory)
     return 0
 
