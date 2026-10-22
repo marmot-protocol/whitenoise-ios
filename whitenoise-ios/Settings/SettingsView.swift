@@ -48,12 +48,13 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
 }
 
 struct SettingsView: View {
-    let chatsViewModel: ChatsListViewModel
+    // Nil only for the disabled Settings background while a profile is being chosen.
+    var chatsViewModel: ChatsListViewModel? = nil
 
     @Environment(AppState.self) private var appState
+    @State private var showDeleteProfile = false
     @State private var showAccounts = false
     @State private var addProfileAfterSwitcherCloses = false
-    @State private var showSignOut = false
     let onAddProfile: () -> Void
     var recordsScreenView = true
     @State private var supportEntry = SupportChatEntryModel()
@@ -81,7 +82,18 @@ struct SettingsView: View {
 
             Section {
                 Button {
-                    showSignOut = true
+                    showDeleteProfile = true
+                } label: {
+                    Label("Delete Profile", systemImage: "trash")
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                }
+                .disabled(appState.activeAccount == nil || appState.isAccountExitInProgress)
+                .accessibilityIdentifier("settings.deleteProfile")
+
+                Button {
+                    appState.accountExitIntent = .signOut
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         .foregroundStyle(.primary)
@@ -95,15 +107,20 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .navigationDestination(isPresented: $showDeleteProfile) {
+            SignOutView(intent: .deleteProfile) {
+                showDeleteProfile = false
+            }
+        }
         .productScreen(.settings, isEnabled: recordsScreenView)
         .localizedNavigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: appState.activeAccount?.accountIdHex) {
-            guard let id = appState.activeAccount?.accountIdHex else { return }
+            guard chatsViewModel != nil, let id = appState.activeAccount?.accountIdHex else { return }
             await appState.reloadProfileProjection(forAccountIdHex: id)
         }
         .task(id: supportRequestID) {
-            guard supportRequestID != nil else { return }
+            guard supportRequestID != nil, let chatsViewModel else { return }
             await supportEntry.prepare(using: appState) { groupIdHex in
                 if chatsViewModel.item(groupIdHex: groupIdHex) == nil {
                     await chatsViewModel.refreshRow(groupIdHex: groupIdHex)
@@ -113,7 +130,9 @@ struct SettingsView: View {
         }
         .onDisappear { supportRequestID = nil }
         .navigationDestination(item: $supportEntry.destination) { destination in
-            SupportChatView(chatsViewModel: chatsViewModel, initialTarget: destination.chatTarget)
+            if let chatsViewModel {
+                SupportChatView(chatsViewModel: chatsViewModel, initialTarget: destination.chatTarget)
+            }
         }
         .onChange(of: supportEntry.destination) { previous, _ in
             previous?.chatTarget?.performance?.finish(.cancelled, recorder: appState.productAnalytics)
@@ -142,9 +161,8 @@ struct SettingsView: View {
             }
             .appAppearance()
         }
-        .sheet(isPresented: $showSignOut) {
-            SignOutView()
-                .appAppearance()
+        .onChange(of: appState.activeAccountRef) { _, _ in
+            showDeleteProfile = false
         }
     }
 
@@ -307,24 +325,18 @@ struct AccountIdentitySummary: View {
     let account: AccountSummaryFfi
     let avatarSize: CGFloat
     var spacing: CGFloat? = 12
-    /// Confirmation flows can keep the displayed and required name identical.
-    var displayName: String?
-
-    private var resolvedDisplayName: String {
-        displayName ?? appState.displayName(forAccountIdHex: account.accountIdHex)
-    }
 
     var body: some View {
         HStack(spacing: spacing) {
             AvatarBubble(
                 seed: account.accountIdHex,
-                title: resolvedDisplayName,
+                title: appState.displayName(forAccountIdHex: account.accountIdHex),
                 pictureURL: appState.avatarURL(forAccountIdHex: account.accountIdHex)
             )
             .frame(width: avatarSize, height: avatarSize)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(resolvedDisplayName)
+                Text(appState.displayName(forAccountIdHex: account.accountIdHex))
                     .font(.headline)
                     .foregroundStyle(.primary)
                 Text(appState.shortNpub(forAccountIdHex: account.accountIdHex))
@@ -388,87 +400,5 @@ nonisolated enum MarmotKitBuildLabel {
         guard tag.hasPrefix(prefix) else { return nil }
         let version = tag.dropFirst(prefix.count)
         return version.isEmpty ? nil : version
-    }
-}
-
-private struct SignOutView: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-    @State private var shouldWipeData = true
-    @State private var confirmation = ""
-    @State private var isBusy = false
-    @State private var profileRef: String?
-    @State private var profileName = ""
-    @State private var feedback = AccountExitFeedback()
-
-    var body: some View {
-        SignOutForm(
-            shouldWipeData: $shouldWipeData,
-            confirmation: $confirmation,
-            profileName: profileName,
-            isBusy: isBusy,
-            canSignOut: canSignOut,
-            error: feedback.error,
-            onSignOut: signOut,
-            onClose: { dismiss() }
-        ) {
-            profileSummaryRow
-        }
-        .onAppear {
-            guard profileRef == nil else { return }
-            profileRef = appState.activeAccountRef
-            if let account = appState.activeAccount {
-                profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
-            }
-        }
-        .onChange(of: shouldWipeData) { _, _ in
-            feedback.error = nil
-        }
-    }
-
-    private var canSignOut: Bool {
-        profileRef != nil
-            && profileRef == appState.activeAccountRef
-            && !appState.isAccountExitInProgress
-            && ProfileExitConfirmation.canSignOut(
-                wiping: shouldWipeData,
-                input: confirmation,
-                profileName: profileName,
-                busy: isBusy
-            )
-    }
-
-    @ViewBuilder
-    private var profileSummaryRow: some View {
-        if let active = appState.activeAccount, active.label == profileRef {
-            AccountIdentitySummary(account: active, avatarSize: 48, displayName: profileName)
-        } else {
-            Text(profileName).font(.headline)
-        }
-    }
-
-    private func signOut() {
-        guard canSignOut else { return }
-        let wiping = shouldWipeData
-        isBusy = true
-        feedback.error = nil
-        Task {
-            let success: Bool
-            if wiping {
-                success = await appState.signOutAndWipeActiveAccount(feedback: feedback)
-            } else {
-                success = await appState.signOut(feedback: feedback)
-            }
-            if success {
-                dismiss()
-            } else {
-                isBusy = false
-                if feedback.error == nil {
-                    feedback.error = AccountExitError(
-                        title: L10n.string("Couldn’t sign out. Try again."), message: nil
-                    )
-                }
-            }
-        }
     }
 }

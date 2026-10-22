@@ -53,13 +53,15 @@ struct EraseAppDataView: View {
             .navigationTitle("Erase App Data")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Close").disabled(busy)
+                if !isRecovery {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button { dismiss() } label: { Image(systemName: "xmark") }
+                            .accessibilityLabel("Close").disabled(busy)
+                    }
                 }
             }
         }
         .presentationDetents([.large])
-        .interactiveDismissDisabled(busy)
+        .interactiveDismissDisabled(isRecovery || busy)
     }
 }

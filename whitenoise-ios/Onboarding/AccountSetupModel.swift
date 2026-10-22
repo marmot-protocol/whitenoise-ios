@@ -128,6 +128,10 @@ nonisolated enum AccountSetupFailure: Equatable, Sendable {
 
 @MainActor @Observable
 final class AccountSetupModel {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private(set) var snapshot: OnboardingSnapshotFfi
     private(set) var isBusy = false
     private(set) var isConnected = false

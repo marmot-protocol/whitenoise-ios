@@ -8,6 +8,10 @@ import MarmotKit
 @MainActor
 @Observable
 final class RecipientSelection {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private(set) var members: [MemberRefFfi] = []
     var count: Int { members.count }
     var isEmpty: Bool { members.isEmpty }

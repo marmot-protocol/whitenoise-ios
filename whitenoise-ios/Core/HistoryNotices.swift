@@ -32,6 +32,10 @@ nonisolated enum HistoryNoticePresentation {
 /// mirrors it for presentation and routes the user's dismissal back.
 @MainActor @Observable
 final class HistoryNoticeStore {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private(set) var notices: [HistoryNoticeFfi] = []
     private(set) var dismissing: Set<String> = []
     private var accountRef: String?

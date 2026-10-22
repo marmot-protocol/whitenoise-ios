@@ -135,14 +135,35 @@ struct WNQRCodeCardRenderingTests {
         }
     }
 
+    @Test func theFailureKeepsTheSameQRCodeCard() throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let width = scene.screen.bounds.width
+        let readyImage = try Self.renderCard(containerWidth: width, image: QRCode.image(from: Self.payload))
+        let failedImage = try Self.renderCard(
+            containerWidth: width, image: nil,
+            unavailableDescription: "You can still share your profile link from the Share menu."
+        )
+        let ready = try #require(Self.bitmap(of: readyImage))
+        let failed = try #require(Self.bitmap(of: failedImage))
+        let isWhiteCard: (UInt8) -> Bool = { $0 >= 250 }
+        let readyWidth = try #require(ready.horizontalExtent(where: isWhiteCard))
+        let readyHeight = try #require(ready.verticalExtent(where: isWhiteCard))
+        #expect(failed.horizontalExtent(where: isWhiteCard) == readyWidth)
+        #expect(failed.verticalExtent(where: isWhiteCard) == readyHeight)
+        #expect(Self.decodedPayloads(in: readyImage).contains(Self.payload))
+        #expect(Self.decodedPayloads(in: failedImage).isEmpty)
+    }
+
     private static func renderCard(
         containerWidth: CGFloat,
-        image: UIImage?
+        image: UIImage?,
+        unavailableDescription: LocalizedStringKey? = nil
     ) throws -> UIImage {
         let controller = UIHostingController(
             rootView: WNQRCodeCard(
                 image: image,
-                accessibilityLabel: "Profile QR code"
+                accessibilityLabel: "Profile QR code",
+                unavailableDescription: unavailableDescription
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(uiColor: .systemGroupedBackground))
@@ -245,44 +266,5 @@ struct WNNeutralAccentTests {
     @Test func accentNeverFallsBackToTheSystemTint() {
         #expect(WNNeutralAccent.color(for: .light) != .accentColor)
         #expect(WNNeutralAccent.color(for: .dark) != .accentColor)
-    }
-}
-
-struct ShareAndConnectChromeTests {
-    private static let minimumTextContrast = 4.5
-
-    private func barContrast(page: ColorScheme) -> Double {
-        ContrastProbe.ratio(
-            foreground: WNNeutralAccent.color(for: page),
-            background: ShareAndConnectChrome.barBackdrop,
-            style: page == .dark ? .dark : .light
-        )
-    }
-
-    @Test func barItemsStayLegibleInBothAppearances() {
-        for page in [ColorScheme.light, .dark] {
-            #expect(
-                barContrast(page: page) >= Self.minimumTextContrast,
-                "bar items are unreadable on a \(page) page"
-            )
-        }
-    }
-
-    @Test func aFullBleedViewfinderWouldHaveHiddenTheLightModeBarItems() {
-        let ratio = ContrastProbe.ratio(
-            foreground: WNNeutralAccent.color(for: .light),
-            background: ShareAndConnectChrome.viewfinderBackdrop,
-            style: .light
-        )
-
-        #expect(ratio < Self.minimumTextContrast)
-    }
-
-    @Test func theViewfinderIsInsetSoItNeverReachesTheBar() {
-        #expect(ShareAndConnectChrome.viewfinderInset > 0)
-    }
-
-    @Test func theViewfinderMatchesTheShareTabCardShape() {
-        #expect(ShareAndConnectChrome.viewfinderCornerRadius == WNQRCodeCard.Metrics.cornerRadius)
     }
 }

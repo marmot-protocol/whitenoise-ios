@@ -74,6 +74,10 @@ enum DonationDonorFactory {
 
 @MainActor
 final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, ApplePayContextDelegate {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private let config: DonationBuildConfig
     private let client: any DonationClient
     private let accessStore: (any DonationAccessStoring)?

@@ -36,6 +36,10 @@ protocol DeviceDiagnosticsDataSource: AnyObject {
 
 @MainActor @Observable
 final class DeviceDiagnosticsConsent {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private(set) var snapshot: DeviceDiagnosticsSnapshot?
     private(set) var loading = false
     private(set) var saving = false

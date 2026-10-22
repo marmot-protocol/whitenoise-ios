@@ -37,35 +37,77 @@ before every release tag.
 ## Sign Out and profile deletion
 
 - [ ] Settings shows one **Sign Out** row. It opens a large sheet with the active
-      profile, **Wipe Data From This Device** on, and a leading Close button.
+      profile, **Wipe Local Data** off, and a leading Close button.
+- [ ] Settings shows a neutral **Delete Profile** row immediately above **Sign Out**
+      in the same group. Profile no longer has a deletion button. Delete Profile
+      pushes a full page with a standard Back button, without a wipe toggle or
+      sheet close button. One continuous white/semantic card contains Share &
+      Connect's large avatar, name, and npub, the large title and complete gray
+      summary, short explanations, profile-name input, and red confirmation.
+      Sections appear in this order: Chats and media, Secret key, Groups,
+      Profile settings, Copies elsewhere, If you sign in again.
+      The last section explains that a saved secret key preserves the Nostr
+      identity, but deleted chats/media do not return and groups require new
+      invitations. Copies held elsewhere may remain; other profiles are unaffected.
+      The action scrolls with the page. Focusing the name field reveals the input,
+      helper text, and action with padding above the keyboard.
+      Back and reopening clears the input. Failure preserves it with an inline
+      error. Back is unavailable while deletion is running.
+- [ ] Delete a profile with another signed-in profile remaining: return to the
+      Settings root with **Choose a profile** presented as a sheet. It cannot be
+      dismissed without selection; no remaining profile is automatically activated.
+      Choosing a profile opens its Settings root, never its profile editor or the
+      old deletion page. If cleanup is incomplete, show the report first; closing
+      it reveals the chooser in the same presenter. Swiping down on that report
+      must not dismiss it while a profile still needs to be selected.
+      With no signed-in profiles
+      remaining, return to Welcome (after acknowledging any cleanup report).
 - [ ] With wiping on, verify the short disclosure explains permanent local data
-      removal, chats not returning after signing in again, and needing a new
-      invitation to each chat.
-      The profile-name field uses the native Form background without glass;
+      and secret-key removal, leaving groups, chats not returning after signing in again, and needing a new
+      invitation to each chat. The same warning explains that copies held by
+      other people or relays are not erased.
+      The warning uses a monochrome outline triangle and the heading **You’ll lose all chats**.
+      The warning, gray profile-name field, and red action share one card;
       the required name in its helper text uses the primary text color.
       The final button uses a flat red fill with white text when enabled and
       native muted colors when disabled.
-      **Sign Out** stays disabled until the displayed profile name matches exactly
-      (surrounding whitespace is ignored; case and internal spacing must match).
+      **Sign Out and Delete Data** stays disabled until the displayed profile name matches exactly
+      (case and all spacing, including surrounding whitespace, must match).
+      Focusing the profile-name field scrolls to the bottom of the card so both
+      the field and destructive button are visible above the keyboard in both flows.
       For a lowercase profile name, the keyboard must not automatically capitalize it.
 - [ ] Turn wiping off: the name field disappears and its input clears. The footer
       says the profile and local data stay on this device. Turning wiping back on
-      requires entering the name again. The final action stays red in both modes.
+      requires entering the name again. The action uses the normal primary style
+      when keeping data and a flat red fill when wiping.
 - [ ] Close or swipe down before submitting: the profile and local data remain.
-      Reopening starts with wiping on and an empty confirmation field.
+      Reopening starts with wiping off and no retained confirmation.
 - [ ] Sign out with wiping off, then sign back in and verify chats remain.
 - [ ] Sign out with wiping on. Verify groups are left, published KeyPackages are
       removed where reachable, and local chats, drafts, media, settings, push
       registration, and device keys are removed. Remaining signed-in profiles go
       to the profile chooser; with none remaining, the app returns to Welcome.
       Successful completion shows no toast.
-- [ ] During either operation, the button keeps its original size and red fill
-      with a small white spinner, including while the keyboard dismisses. Repeated
-      taps do nothing, inputs are disabled, and the sheet cannot be closed.
+- [ ] During either operation, the button keeps its size and selected treatment
+      with an inline spinner (white on red when wiping), including while the
+      keyboard dismisses. Repeated taps do nothing, inputs are disabled, and the
+      sheet cannot be closed.
       A failed operation keeps the sheet and input with an error so the action can
-      be retried. Successful completion keeps the loading treatment until dismissal.
+      be retried, without a duplicate error toast. Successful completion keeps
+      the loading treatment until dismissal.
 - [ ] Interrupt relay access during wiping and verify local removal still
-      completes while the existing outcome report identifies unfinished relay work.
+      completes while the same root-hosted sheet changes to the outcome report,
+      identifying unfinished relay work. Verify the report remains visible over
+      Welcome or the remaining-profile chooser and closes normally.
+
+- [ ] In a cleanup report, verify Groups, Key Packages, and On This Device show
+      completed counts and failures. Each section previews at most three failures;
+      Show N More opens a separate full list, which remains open until closed.
+      Closing it returns to the report and allows reopening it.
+- [ ] When local cleanup succeeds but refreshing profiles fails, the report says
+      Couldn’t refresh profiles and retains the successful local-cleanup checkmark.
+      A refresh failure after signing out without wiping says local data was kept.
+      Cleanup failures still show warnings when a profile-refresh failure also occurs.
 
 ## Apple Pay donations
 
@@ -409,7 +451,7 @@ simulator clone.
       `xcrun devicectl`, not TestFlight. It must refuse the store,
       either with the startup failure screen or with the affected profiles
       unavailable. It must not open chats, show empty history, or rewrite data.
-      Do not use Sign Out, Erase App Data or nsec re-import
+      Do not use Sign Out, Delete Profile, Erase App Data or nsec re-import
       while the old build is installed.
 - [ ] Reinstall the new build. It opens the upgraded store unchanged.
 - [ ] Confirm the only way back to the old build is the pre-upgrade backup.
@@ -734,8 +776,8 @@ only from custom emoji already shown in that chat.
       Logging remains off for users who have it disabled. On upgrade/startup,
       MDK removes legacy v1-v3 audit files and segments even with recording off;
       existing v4 files remain. The app implements no cleanup or filtering.
-- [ ] Sign Out defaults Wipe Data From This Device on. Exact profile-name entry
-      enables Sign Out in the same sheet; mismatched case/name stays disabled.
+- [ ] Sign Out defaults **Wipe Local Data** off. With wiping on, exact profile-name entry
+      enables **Sign Out and Delete Data** in the same sheet; mismatched case/name stays disabled.
       Turning wiping off requires no typed confirmation and preserves local data.
 - [ ] Sign-out failures retain the sheet. With surviving signed-in profiles, show
       their chooser; choosing one opens its Settings. Otherwise show Welcome.
@@ -1120,6 +1162,8 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 - [ ] Settings → Sign Out uses the single confirmation sheet. Wiping removes
       the profile and local keys; retaining data keeps them available for sign-in.
       Remaining signed-in profiles go to the chooser; otherwise show Welcome.
+      Settings → Delete Profile opens a full-page deletion confirmation
+      with the same destructive operation and post-deletion routing.
 - [ ] Group Details → Set/Edit group image rejects non-HTTPS, localhost,
       private-address, and invalid URLs; a public HTTPS image URL previews
       and saves.

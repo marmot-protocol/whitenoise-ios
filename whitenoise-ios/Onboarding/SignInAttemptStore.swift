@@ -15,6 +15,10 @@ enum AccountSetupRecovery {
 
 @MainActor
 final class SignInAttemptStore {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private static let key = "marmot.signInAwaitingOpenChats"
     private let defaults: UserDefaults
     private(set) var accountIDs: Set<String>

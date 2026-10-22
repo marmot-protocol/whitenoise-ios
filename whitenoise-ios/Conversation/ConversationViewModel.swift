@@ -277,7 +277,8 @@ final class ConversationViewModel {
     private static let liveSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 8_000_000_000
     nonisolated static let maxSystemTimelineItems = 64
 
-    @ObservationIgnored private var usesConversationWindow = false
+    private var usesConversationWindow = false
+    private var hasComposerLoadingGraceExpired = false
     @ObservationIgnored var openingMessageId: String?
     private(set) var openingTargetUnavailable = false
     private(set) var initialWindowUnreadMessageId: String?
@@ -285,7 +286,7 @@ final class ConversationViewModel {
     private var windowSubscription: ConversationWindowSubscription?
     @ObservationIgnored private var windowCursor: ProjectionSequenceCursor?
     @ObservationIgnored private var windowLifetime = UUID()
-    @ObservationIgnored private var startRequest = UUID()
+    private var startRequest = UUID()
     @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
     private(set) var viewportIntent: ConversationViewportIntent = .followingLatest
     private(set) var paginationRetryToken = 0
@@ -595,11 +596,39 @@ final class ConversationViewModel {
     }
 
     var isAwaitingLiveConversationState: Bool {
+        awaitsLiveConversationState(hasLoadingGraceExpired: hasComposerLoadingGraceExpired)
+    }
+
+    private var needsLiveConversationState: Bool {
+        awaitsLiveConversationState(hasLoadingGraceExpired: false)
+    }
+
+    // Explicit starts renew the grace period; automatic subscription retries do not.
+    var composerLoadingTaskID: UUID? {
+        needsLiveConversationState ? startRequest : nil
+    }
+
+    func waitForComposerLoadingGracePeriod() async {
+        hasComposerLoadingGraceExpired = false
+        guard let attempt = composerLoadingTaskID else { return }
+        do {
+            try await Task.sleep(for: .seconds(5))
+        } catch {
+            return
+        }
+        guard !Task.isCancelled, composerLoadingTaskID == attempt else { return }
+        hasComposerLoadingGraceExpired = true
+    }
+
+    private func awaitsLiveConversationState(hasLoadingGraceExpired: Bool) -> Bool {
         ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: usesConversationWindow,
             hasWindowSnapshot: conversationWindow != nil,
+            hasLiveEpoch: conversationWindow?.header.epoch != nil,
             hasWindowSubscription: windowSubscription != nil,
-            isLocallyReset: isLocallyReset
+            isLocallyReset: isLocallyReset,
+            isActiveParticipant: isActiveParticipant,
+            hasLoadingGraceExpired: hasLoadingGraceExpired
         )
     }
 

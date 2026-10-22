@@ -18,6 +18,10 @@ private enum RecipientUserSearchError: Error {
 @MainActor
 @Observable
 final class RecipientUserSearch {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     private(set) var results: [UserDirectorySearchResultFfi] = []
     private(set) var followedAccountIds: Set<String> = []
     private(set) var isSearching = false

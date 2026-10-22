@@ -2,6 +2,10 @@ import Foundation
 
 @MainActor @Observable
 final class AppDataErasureState {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     static let persistentDefaults: UserDefaults = {
         let suite = (Bundle.main.bundleIdentifier ?? "dev.ipf.whitenoise.ios") + ".erasure-recovery"
         guard let defaults = UserDefaults(suiteName: suite) else {

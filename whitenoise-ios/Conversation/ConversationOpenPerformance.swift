@@ -3,6 +3,10 @@ import MarmotKit
 
 @MainActor
 final class ConversationOpenPerformance: Hashable {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
     nonisolated let id = UUID()
     nonisolated static func == (lhs: ConversationOpenPerformance, rhs: ConversationOpenPerformance) -> Bool { lhs.id == rhs.id }
     nonisolated func hash(into hasher: inout Hasher) { hasher.combine(id) }

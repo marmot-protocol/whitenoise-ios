@@ -137,22 +137,6 @@ struct SignOutAndWipeTests {
         #expect(report.stages[2].failures.map(\.kind) == [.decryptedMedia, .accountRefresh])
     }
 
-    @MainActor
-    @Test(arguments: [false, true])
-    func unavailableRuntimeKeepsFailureInTheSignOutSheet(_ wiping: Bool) async {
-        let appState = AppState.test(accountDefaults: IsolatedAccountDefaults.make())
-        appState.activeAccountRef = "sample-profile"
-        let feedback = AccountExitFeedback()
-        let succeeded = if wiping {
-            await appState.signOutAndWipeActiveAccount(feedback: feedback)
-        } else {
-            await appState.signOut(feedback: feedback)
-        }
-        #expect(!succeeded)
-        #expect(feedback.error != nil)
-        #expect(appState.activeToast == nil)
-    }
-
     // MARK: - Suspension-safety gate
 
     @Test func wipeMayBeginOnlyWithALiveForegroundRuntime() {
