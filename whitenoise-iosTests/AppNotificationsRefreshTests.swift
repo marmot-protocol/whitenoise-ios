@@ -1,4 +1,6 @@
 import Foundation
+import MarmotKit
+import Synchronization
 import Testing
 @testable import whitenoise_ios
 import UserNotifications
@@ -32,10 +34,12 @@ struct AppNotificationsRefreshTests {
     }
 
     @Test func deliveredNotificationReconciliationUsesSystemRequestIdentifiers() async {
-        var removedIdentifiers: [String] = []
+        let removedIdentifiers = Mutex<[String]>([])
         let notifications = AppNotifications(
             deliveredNotificationDescriptorsProvider: { Self.deliveredDescriptors() },
-            deliveredNotificationIdentifiersRemover: { removedIdentifiers = $0 }
+            deliveredNotificationIdentifiersRemover: { identifiers in
+                removedIdentifiers.withLock { $0 = identifiers }
+            }
         )
 
         await notifications.reconcileDeliveredNotificationsAfterRead(
@@ -44,8 +48,76 @@ struct AppNotificationsRefreshTests {
             readMessageIdHexes: ["message-2"],
             conversationStillHasUnread: false
         )
+        await notifications.drainNotificationCenterMutations()
 
-        #expect(removedIdentifiers == ["request-1", "request-2"])
+        #expect(removedIdentifiers.withLock { $0 } == ["request-1", "request-2"])
+    }
+
+    /// The pending-request removal is a blocking XPC round trip; sign-out calls
+    /// this on the main actor, so it must return while the removal is stuck.
+    @Test func cancellingForegroundBatchesDoesNotBlockTheMainActorOnNotificationCenter() async {
+        let release = DispatchSemaphore(value: 0)
+        let removals = Mutex<[(identifiers: [String], onMainThread: Bool, timedOut: Bool)]>([])
+        var scheduled: [String] = []
+        let notifications = AppNotifications(
+            pendingNotificationRequestsRemover: { identifiers in
+                let onMainThread = Thread.isMainThread
+                let timedOut = release.wait(timeout: .now() + 5) == .timedOut
+                removals.withLock { $0.append((identifiers, onMainThread, timedOut)) }
+            },
+            notificationRequestScheduler: { scheduled.append($0.identifier) },
+            notificationClock: { 10 }
+        )
+        await notifications.present(update: Self.messageUpdate("message-1"))
+        let batchIdentifier = ForegroundNotificationBatch.identifier(account: "account-a", group: "group-a")
+
+        notifications.cancelForegroundBatches(accountRef: "account-a")
+        release.signal()
+        await notifications.drainNotificationCenterMutations()
+
+        let recorded = removals.withLock { $0 }
+        #expect(recorded.count == 1)
+        #expect(recorded.first?.identifiers == [batchIdentifier])
+        #expect(recorded.first?.onMainThread == false)
+        #expect(recorded.first?.timedOut == false)
+        #expect(scheduled == [batchIdentifier])
+    }
+
+    @Test func requestsScheduledAfterCancellationLandAfterTheRemoval() async {
+        let events = Mutex<[String]>([])
+        let notifications = AppNotifications(
+            pendingNotificationRequestsRemover: { identifiers in
+                Thread.sleep(forTimeInterval: 0.05)
+                events.withLock { $0.append(contentsOf: identifiers.map { "remove \($0)" }) }
+            },
+            notificationRequestScheduler: { request in
+                events.withLock { $0.append("add \(request.identifier)") }
+            },
+            notificationClock: { 10 }
+        )
+        let batchIdentifier = ForegroundNotificationBatch.identifier(account: "account-a", group: "group-a")
+
+        await notifications.present(update: Self.messageUpdate("message-1"))
+        notifications.cancelForegroundBatches(accountRef: "account-a")
+        await notifications.present(update: Self.messageUpdate("message-2"))
+
+        #expect(events.withLock { $0 } == [
+            "add \(batchIdentifier)",
+            "remove \(batchIdentifier)",
+            "add \(batchIdentifier)",
+        ])
+    }
+
+    @Test func cancellingWithoutPendingBatchesSkipsNotificationCenter() async {
+        let removals = Mutex(0)
+        let notifications = AppNotifications(
+            pendingNotificationRequestsRemover: { _ in removals.withLock { $0 += 1 } }
+        )
+
+        notifications.cancelForegroundBatches(accountRef: "account-a")
+        await notifications.drainNotificationCenterMutations()
+
+        #expect(removals.withLock { $0 } == 0)
     }
 
     @Test func applicationBadgeWritesRemainInUnreadProjectionOrder() async {
@@ -186,6 +258,15 @@ struct AppNotificationsRefreshTests {
             Issue.record("unexpected error: \(error)")
         }
         #expect(notifications.apnsTokenHex == nil)
+    }
+
+    private static func messageUpdate(_ messageIdHex: String) -> NotificationUpdateFfi {
+        NotificationUpdateFfi(notificationKey: messageIdHex, conversationKey: "chat", trigger: .newMessage,
+            accountRef: "account-a", accountIdHex: "owner", groupIdHex: "group-a", groupName: "Group", isDm: false,
+            isMention: false, messageIdHex: messageIdHex,
+            sender: NotificationUserFfi(accountIdHex: "sender", displayName: "Alice", pictureUrl: nil),
+            receiver: NotificationUserFfi(accountIdHex: "owner", displayName: "Me", pictureUrl: nil),
+            previewText: "Hi", reactionEmoji: nil, reactedToPreview: nil, timestampMs: 1, isFromSelf: false)
     }
 
     private static func deliveredDescriptors() -> [DeliveredNotificationDescriptor] {
