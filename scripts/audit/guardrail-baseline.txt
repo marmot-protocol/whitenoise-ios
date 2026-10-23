@@ -6,4 +6,3 @@
 
 sleep AppStateBootstrapTests 2
 
-unowned-runtime RuntimeOwnershipTests 6

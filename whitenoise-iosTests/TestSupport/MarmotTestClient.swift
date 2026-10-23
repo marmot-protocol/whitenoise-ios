@@ -101,6 +101,7 @@ final class TestRuntimeScope: Sendable {
 
     private struct Owned {
         var clients: [MarmotClient] = []
+        var runtimes: [Marmot] = []
         var appStates: [AppState] = []
         var roots: Set<String> = []
     }
@@ -117,11 +118,21 @@ final class TestRuntimeScope: Sendable {
     }
 
     /// Registers `client` with the running test's scope. `ownsRoot` removes
-    /// its root directory once every runtime is closed.
-    static func own(_ client: MarmotClient, ownsRoot: Bool = false) throws -> MarmotClient {
+    /// its root directory once every runtime is closed. With
+    /// `retainingClient: false` the scope keeps only `client.marmot`, so a
+    /// test can still assert that the client itself is released.
+    static func own(
+        _ client: MarmotClient,
+        ownsRoot: Bool = false,
+        retainingClient: Bool = true
+    ) throws -> MarmotClient {
         let scope = try requireCurrent()
         scope.owned.withLock { owned in
-            owned.clients.append(client)
+            if retainingClient {
+                owned.clients.append(client)
+            } else {
+                owned.runtimes.append(client.marmot)
+            }
             if ownsRoot { owned.roots.insert(client.rootPath) }
         }
         return client
@@ -144,9 +155,9 @@ final class TestRuntimeScope: Sendable {
         }
         let live = await Self.suspend(snapshot.appStates)
         var errors: [any Error] = []
-        for client in live + snapshot.clients {
+        for runtime in live.map(\.marmot) + snapshot.clients.map(\.marmot) + snapshot.runtimes {
             do {
-                try await client.marmot.shutdownAndClose()
+                try await runtime.shutdownAndClose()
             } catch {
                 errors.append(error)
             }
