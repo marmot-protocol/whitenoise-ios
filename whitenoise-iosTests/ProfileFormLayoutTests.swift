@@ -5,15 +5,12 @@ import XCTest
 @MainActor
 final class ProfileFormLayoutTests: XCTestCase {
     func testAboutKeepsMinimumHeightWhenEditingWithoutTruncatingLongBios() async throws {
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let previousKeyWindow = scene.keyWindow
-        let window = UIWindow(windowScene: scene)
-        window.frame = scene.coordinateSpace.bounds
-        defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
-
         for text in ["", "A short bio", (1...8).map { "Bio line \($0)" }.joined(separator: "\n")] {
             var heights = [CGFloat]()
             for isEditing in [false, true] {
+                // One hosted render per configuration; the section reports its
+                // height through its own callback (SwiftUI reports geometry
+                // only for a hierarchy in a window).
                 let ready = expectation(description: "About laid out in \(isEditing ? "edit" : "view") mode")
                 var measured = false
                 let host = UIHostingController(rootView: ProfileAboutFixture(text: text, isEditing: isEditing) { height in
@@ -22,17 +19,9 @@ final class ProfileFormLayoutTests: XCTestCase {
                     heights.append(height)
                     ready.fulfill()
                 })
-                window.rootViewController = host
-                window.makeKeyAndVisible()
-                host.view.layoutIfNeeded()
-                await fulfillment(of: [ready], timeout: 10)
-                let rendered = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
-                    window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+                try await withHostedWindow(host) { _ in
+                    await fulfillment(of: [ready], timeout: 10)
                 }
-                let attachment = XCTAttachment(image: rendered)
-                attachment.name = "about-\(text.isEmpty ? "empty" : text.contains("\n") ? "long" : "short")-\(isEditing ? "edit" : "view")"
-                attachment.lifetime = .keepAlways
-                add(attachment)
             }
             XCTAssertEqual(heights.count, 2)
             guard heights.count == 2 else { continue }
