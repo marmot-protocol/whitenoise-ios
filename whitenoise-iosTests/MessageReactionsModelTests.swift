@@ -359,6 +359,7 @@ private nonisolated final class GatedMessageReactionsSource: MessageReactionsDat
         var failures: [MessageReactionsSubject: any Error] = [:]
         var waiters: [MessageReactionsSubject: CheckedContinuation<[TimelineUserReactionFfi], any Error>] = [:]
         var requests: [MessageReactionsSubject] = []
+        var arrivals: [MessageReactionsSubject: [TestLatch]] = [:]
     }
 
     private let state = Mutex(State())
@@ -394,12 +395,15 @@ private nonisolated final class GatedMessageReactionsSource: MessageReactionsDat
         waiter?.resume(returning: reactions)
     }
 
+    /// Returns once a gated read of `subject` is parked; the read signals it.
     func waitUntilWaiting(_ subject: MessageReactionsSubject) async throws {
-        for _ in 0..<10_000 {
-            if state.withLock({ $0.waiters[subject] != nil }) { return }
-            try await Task.sleep(nanoseconds: 1_000_000)
+        let arrival = TestLatch()
+        let parked = state.withLock { state -> Bool in
+            if state.waiters[subject] != nil { return true }
+            state.arrivals[subject, default: []].append(arrival)
+            return false
         }
-        Issue.record("Timed out waiting for a read of \(subject.accountRef)")
+        if !parked { try await arrival.wait() }
     }
 
     func messageReactions(for subject: MessageReactionsSubject) async throws -> [TimelineUserReactionFfi] {
@@ -415,7 +419,11 @@ private nonisolated final class GatedMessageReactionsSource: MessageReactionsDat
         case .failure(let error): throw error
         case .gated:
             return try await withCheckedThrowingContinuation { continuation in
-                state.withLock { $0.waiters[subject] = continuation }
+                let arrivals = state.withLock { state -> [TestLatch] in
+                    state.waiters[subject] = continuation
+                    return state.arrivals.removeValue(forKey: subject) ?? []
+                }
+                for arrival in arrivals { arrival.signal() }
             }
         }
     }

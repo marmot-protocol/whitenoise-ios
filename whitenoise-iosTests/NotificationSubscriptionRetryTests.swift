@@ -26,11 +26,9 @@ struct NotificationSubscriptionRetryTests {
         driver.start(runner: runner)
         #expect(driver.isRunning)
 
-        for _ in 0..<1000 where driver.isRunning {
-            try await Task.sleep(nanoseconds: 1_000_000)
-        }
-
-        #expect(!driver.isRunning)
+        // The driver clears its task after the runner returns and offers no
+        // completion hook short of stopping it, so this is a bounded poll.
+        try await eventually { !driver.isRunning }
     }
 
     @MainActor
