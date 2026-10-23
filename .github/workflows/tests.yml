@@ -18,9 +18,13 @@ on:
       - "scripts/test.sh"
       - "scripts/pick-simulator.sh"
       - "scripts/audit/**"
+      - "TestPlans/**"
       - ".github/workflows/tests.yml"
   push:
     branches: [master]
+  # Nightly full-tier run on master.
+  schedule:
+    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       raw_log:
@@ -112,7 +116,10 @@ jobs:
       - name: Run tests
         # End the step before the job deadline so failure artifacts can upload.
         timeout-minutes: 40
-        run: ./scripts/test.sh
+        # Pull requests run the PR tier (no tests tagged runtime or uiHosting);
+        # master pushes, the nightly schedule and manual runs run everything.
+        # To run the full suite on pull requests too, make this `--tier full`.
+        run: ./scripts/test.sh --tier ${{ github.event_name == 'pull_request' && 'pr' || 'full' }}
 
       - name: Report test phases
         if: always()

@@ -49,6 +49,26 @@ if [ -n "${GITHUB_RUN_ID:-}" ]; then
 fi
 
 out="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+
+# Tier written by scripts/test.sh --tier; the PR plan's skippedTests names
+# whole suites, or Suite/test() for individually tagged tests.
+tier="$(head -n 1 build/test-tier 2>/dev/null || echo unknown)"
+case "$tier" in
+  pr)
+    python3 - TestPlans/PR.xctestplan >> "$out" <<'PY' || echo "**Tier:** pr" >> "$out"
+import json, sys
+plan = json.load(open(sys.argv[1]))
+entries = [e for t in plan["testTargets"] for e in t.get("skippedTests", [])]
+suites = sorted({e for e in entries if "/" not in e})
+tests = [e for e in entries if "/" in e]
+print("**Tier:** pr (`TestPlans/PR.xctestplan`): %d suites skipped, plus %d tests in otherwise running suites\n"
+      % (len(suites), len(tests)))
+PY
+    ;;
+  full) printf '**Tier:** full (`TestPlans/Full.xctestplan`): 0 suites skipped\n\n' >> "$out" ;;
+  *) printf '**Tier:** %s (scheme default plan)\n\n' "$tier" >> "$out" ;;
+esac
+
 if [ ! -e "$xcresult" ] && [ -z "$log" ]; then
   note="report-run: no $xcresult and no raw log; nothing to report"
   echo "$note" >&2
