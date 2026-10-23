@@ -515,7 +515,7 @@ struct AccountSetupTests {
         let (reads, readSignal) = AsyncStream.makeStream(of: Void.self)
         let poller = AccountSetupSnapshotPoller(snapshot: quiet) {
             readSignal.yield()
-            try? await readGate.wait()
+            try await readGate.wait()
             // Cancelled mid-read: dropping this newer revision is the post-read check's job.
             var read = quiet
             read.revision += 1

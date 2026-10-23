@@ -9,7 +9,7 @@ struct ReplySwipeIdentityTests {
     @Test func changingReplyAvailabilityPreservesTheDisplayedBubble() async throws {
         let probe = Probe()
         let host = UIHostingController(rootView: row(enabled: false, probe: probe))
-        try await withHostedWindow(host) { window in
+        try await withHostedWindow(host, awaitingFirstUpdate: false) { window in
             let original = try #require(probe.view)
 
             // A cached conversation becomes replyable when its live capabilities arrive.

@@ -275,7 +275,7 @@ struct RecipientSearchTests {
                 searchUsers: { subscription },
                 accountFollows: {
                     follows.entered.signal()
-                    try? await follows.released.wait()
+                    try await follows.released.wait()
                     return [self.alice]
                 }
             )

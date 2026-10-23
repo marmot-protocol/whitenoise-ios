@@ -111,7 +111,7 @@ struct CreateIdentityOnboardingTests {
     @Test func lateSuggestionDoesNotOverwriteTyping() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeSuggestionReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeSuggestionReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         let preparation = Task { await model.prepare(using: service) }
         try await gate.entered.wait()
@@ -125,7 +125,7 @@ struct CreateIdentityOnboardingTests {
     @Test func cancelledPreparationCannotChangeDraftOrCreateAccount() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeSuggestionReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeSuggestionReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         let preparation = Task { await model.prepare(using: service) }
         try await gate.entered.wait()
@@ -149,7 +149,7 @@ struct CreateIdentityOnboardingTests {
     @Test func repeatedSubmissionDuringCreationDoesNotCreateOrCompleteTwice() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeCreateReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeCreateReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         model.displayName = "Alice"
         model.setAvatarDraft(Self.avatarDraft)
@@ -270,7 +270,7 @@ struct CreateIdentityOnboardingTests {
     @Test func submitWaitsForNetworkSetupBeforeUploadingOrPublishing() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeReadinessReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeReadinessReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         model.displayName = "Alice"
         model.setAvatarDraft(Self.avatarDraft)
@@ -319,7 +319,7 @@ struct CreateIdentityOnboardingTests {
     @Test func cancellationDuringAccountReadDoesNotCreateAnIdentity() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeAccountsReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeAccountsReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         model.displayName = "Alice"
         let submission = Task { await model.submit(using: service) {} }
@@ -341,7 +341,7 @@ struct CreateIdentityOnboardingTests {
     @Test func cancellationDuringSetupDoesNotSaveOrActivateAndCanRetry() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeReadinessReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeReadinessReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         model.displayName = "Alice"
         let submission = Task { await model.submit(using: service) {} }
@@ -440,7 +440,7 @@ struct CreateIdentityOnboardingTests {
         let waiting = Task {
             try await IdentitySetupReadinessWaiter.wait {
                 gate.entered.signal()
-                try? await gate.released.wait()
+                try await gate.released.wait()
                 return .networkReady
             }
         }
