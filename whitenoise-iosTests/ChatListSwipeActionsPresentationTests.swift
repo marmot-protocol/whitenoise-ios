@@ -70,4 +70,14 @@ struct ChatListSwipeActionsPresentationTests {
         #expect(!ChatListSelection.canDeleteLocally([nil]))
         #expect(!ChatListSelection.canDeleteLocally([.deleteLocally, nil]))
     }
+
+    @Test func projectedActionsControlGestures() {
+        let hints = PresentedChatRowFfi.testActions(unpin: true, mute: true, restore: true, delete: true)
+        #expect(ChatListSwipeActionsPresentation.leadingActions(hints) == [.unpin])
+        #expect(ChatListSwipeActionsPresentation.trailingActions(hints, isMuted: false) == [.unarchive, .mute, .delete])
+        #expect(ChatListSwipeActionsPresentation.trailingActions(hints, isMuted: true) == [.unarchive, .unmute, .delete])
+        let pending = PresentedChatRowFfi.testActions(archive: true)
+        #expect(ChatListSwipeActionsPresentation.leadingActions(pending).isEmpty)
+        #expect(ChatListSwipeActionsPresentation.trailingActions(pending, isMuted: false) == [.archive])
+    }
 }

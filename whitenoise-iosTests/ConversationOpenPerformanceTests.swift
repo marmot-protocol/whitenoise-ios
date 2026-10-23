@@ -179,4 +179,21 @@ struct ConversationOpenPerformanceTests {
             wasAtTail: true, isAtTail: true).isEmpty)
     }
 
+    @Test func conversationMilestonesAreOnceOnlyAndRespectConsentRevocation() async throws {
+        let recorder = ProductAnalyticsRecorder()
+        let samples = Mutex<[(HostPerformanceOperationFfi, HostPerformanceOutcomeFfi)]>([])
+        recorder.activateSink(performance: { operation, _, outcome in
+            samples.withLock { $0.append((operation, outcome)) }
+        }) { _ in }
+        let tracker = ConversationOpenPerformance(start: .now, ticket: recorder.ticket())
+        tracker.rendered(local: true, composer: nil, recorder: recorder)
+        tracker.rendered(local: true, composer: false, recorder: recorder)
+        tracker.finish(.cancelled, recorder: recorder)
+        #expect(samples.withLock { $0.count } == 2)
+        #expect(samples.withLock { $0.contains { $0.0 == .conversationComposerReady && $0.1 == .unavailable } })
+        let revoked = ConversationOpenPerformance(start: .now, ticket: recorder.ticket())
+        recorder.replaceSink(nil)
+        revoked.rendered(local: true, composer: true, recorder: recorder)
+        #expect(samples.withLock { $0.count } == 2)
+    }
 }

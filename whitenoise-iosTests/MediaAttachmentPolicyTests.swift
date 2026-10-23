@@ -135,4 +135,14 @@ struct MediaAttachmentPolicyTests {
         #expect(!VoiceRecordingGesturePolicy.shouldLock(translation: CGSize(width: 0, height: -40)))
         #expect(VoiceRecordingGesturePolicy.shouldLock(translation: CGSize(width: 0, height: -90)))
     }
+
+    @Test func terminalAttachmentStatesDoNotWaitOrRetryAutomatically() {
+        for state in [AttachmentTransferStateFfi.previouslyAcquiredUnavailable, .completedUnretained,
+                      .retryExhausted, .removed, .cancelled, .failed, .policyBlocked, .paused, .unavailable] {
+            #expect(!AttachmentAcquisitionPresentation.canAwait(state))
+        }
+        for state in [AttachmentTransferStateFfi.queued, .downloading, .ready, .retryScheduled] {
+            #expect(AttachmentAcquisitionPresentation.canAwait(state))
+        }
+    }
 }

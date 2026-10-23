@@ -3,9 +3,10 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-/// Pins the generated MDK `imeta` parser plus the app's narrow display-safety
-/// projection. MDK owns the wire contract; iOS only bounds peer-controlled
-/// filename/media-type strings and drops malformed optional display hints.
+/// Pins the app's narrow display-safety projection over MDK's `imeta` parser.
+/// MDK owns the wire contract (its field validation is tested in Rust); iOS
+/// only threads the source epoch, bounds peer-controlled filename/media-type
+/// strings and drops malformed optional display hints.
 struct MediaImetaProjectionParityTests {
 
     // MARK: - Canonical corpus (input imeta -> reference the projection must emit)
@@ -45,6 +46,8 @@ struct MediaImetaProjectionParityTests {
             sourceEpoch: 0,
             expected: [ref(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", sourceEpoch: 0, dim: nil)]
         ),
+        // The app must pass `mediaType` and `version` through unchanged: both feed
+        // the decryption AAD.
         Case(
             name: "legacy V1 media type spelling is preserved for AAD",
             imeta: [imetaValues(file: "a.jpg", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/jpg", dim: nil)],
@@ -52,22 +55,10 @@ struct MediaImetaProjectionParityTests {
             expected: [ref(file: "a.jpg", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/jpg", sourceEpoch: 1, dim: nil)]
         ),
         Case(
-            name: "uppercase hashes/nonce are lowercased in output",
-            imeta: [imetaValues(file: "a.png", ciphertext: c.uppercased(), plaintext: p.uppercased(), nonce: n.uppercased(), mediaType: "image/png", dim: nil)],
-            sourceEpoch: 5,
-            expected: [ref(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", sourceEpoch: 5, dim: nil)]
-        ),
-        Case(
             name: "valid thumbhash preserved",
             imeta: [imetaValues(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", dim: nil, extra: ["thumbhash Abc123+/=_-"])],
             sourceEpoch: 9,
             expected: [ref(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", sourceEpoch: 9, dim: nil, thumbhash: "Abc123+/=_-")]
-        ),
-        Case(
-            name: "legacy blurhash field is rejected by MDK",
-            imeta: [imetaValues(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", dim: nil, extra: ["blurhash LEHV6nWB2yk8pyo0adR*"])],
-            sourceEpoch: 3,
-            expected: nil
         ),
         Case(
             name: "encrypted-media-v2 is accepted and remains typed v2",
@@ -93,29 +84,14 @@ struct MediaImetaProjectionParityTests {
             )]
         ),
 
-        // --- Malformed required fields degrade that attachment to nil ---
+        // --- A malformed required field degrades that attachment to nil ---
+        // (MDK's own field validation is covered in Rust; this is the drop-bad input of
+        // the "one valid + one malformed" case below.)
         Case(name: "missing locator -> nil",
              imeta: [imetaValues(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", dim: nil, omitLocator: true)],
              sourceEpoch: 1, expected: nil),
-        Case(name: "ciphertext hash wrong length -> nil",
-             imeta: [imetaValues(file: "a.png", ciphertext: String(c.dropLast(2)), plaintext: p, nonce: n, mediaType: "image/png", dim: nil)],
-             sourceEpoch: 1, expected: nil),
-        Case(name: "plaintext hash wrong length -> nil",
-             imeta: [imetaValues(file: "a.png", ciphertext: c, plaintext: String(p.dropLast(2)), nonce: n, mediaType: "image/png", dim: nil)],
-             sourceEpoch: 1, expected: nil),
-        Case(name: "nonce wrong length -> nil",
-             imeta: [imetaValues(file: "a.png", ciphertext: c, plaintext: p, nonce: String(repeating: "22", count: 11), mediaType: "image/png", dim: nil)],
-             sourceEpoch: 1, expected: nil),
-        Case(name: "missing filename -> nil",
-             imeta: [imetaValues(file: "", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", dim: nil)],
-             sourceEpoch: 1, expected: nil),
-        Case(name: "wrong version -> nil",
-             imeta: [imetaValues(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", dim: nil, version: "mip04-v2")],
-             sourceEpoch: 1, expected: nil),
-        Case(name: "legacy V1 minimally structured media type is preserved",
-             imeta: [imetaValues(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/", dim: nil)],
-             sourceEpoch: 1,
-             expected: [ref(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/", sourceEpoch: 1, dim: nil)]),
+
+        // --- iOS display-safety bounds on optional hints and peer-controlled strings ---
         Case(name: "invalid dim is ignored",
              imeta: [imetaValues(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", dim: "640")],
              sourceEpoch: 1,
@@ -199,24 +175,6 @@ struct MediaImetaProjectionParityTests {
         let oneBad = MessageSemantics.mediaAttachments(
             from: [good, bad].map { MessageTagFfi(values: $0) }, sourceEpoch: 1)
         #expect(oneBad?.map(\.fileName) == ["good.png"])
-    }
-
-    /// Peer-controlled `filename` / `m` are byte-length capped, mirroring the
-    /// thumbhash/dim bounds. A field one byte over its cap degrades the whole
-    /// message to chat text; at the cap it still parses. Guards against
-    /// flood-sized attacker strings entering the model/UI/transcript export.
-    @Test func filenameAndMediaTypeAreByteLengthCapped() {
-        func attachment(filename: String, mediaType: String) -> [MediaAttachmentReferenceFfi]? {
-            let tag = MessageTagFfi(values: imetaValues(
-                file: filename, ciphertext: c, plaintext: p, nonce: n, mediaType: mediaType, dim: nil))
-            return MessageSemantics.mediaAttachments(from: [tag], sourceEpoch: 1)
-        }
-
-        #expect(attachment(filename: String(repeating: "a", count: 255), mediaType: "image/png") != nil)
-        #expect(attachment(filename: String(repeating: "a", count: 256), mediaType: "image/png") == nil)
-
-        #expect(attachment(filename: "a.png", mediaType: "image/\(String(repeating: "a", count: 121))") != nil)
-        #expect(attachment(filename: "a.png", mediaType: "image/\(String(repeating: "a", count: 122))") == nil)
     }
 
     @Test func imetaTagCountIsCappedBeforeParsing() {

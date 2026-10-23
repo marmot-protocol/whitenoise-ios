@@ -170,6 +170,57 @@ struct MediaAcquisitionIntentTests {
             target: target, with: failed))
         #expect((live.calls + failed.calls).map(\.kind) == [.automatic, .automatic])
     }
+
+    // A local miss whose demand MDK does not queue must surface `.unavailable`
+    // rather than wait on a transfer that will never start.
+    @Test func explicitAcquisitionOfAnUnknownSlotThrowsUnavailable() async throws {
+        let client = try MarmotClient.testClient()
+        let watchdog = MarmotFixtureWatchdog.start("Attachment acquisition guard did not finish", breaking: client)
+        defer { watchdog.cancel() }
+        do {
+            try await client.startRuntime()
+            let account = try await client.marmot.createIdentityWithProfile(
+                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]).account
+            let group = try await client.createGroupWithOptionsDetailed(accountRef: account.label,
+                name: "Attachment acquisition", memberRefs: [], options: CreateGroupOptionsFfi(
+                    description: nil, initialImage: nil, disappearingMessageSecs: 0))
+            let target = AttachmentLocalTargetFfi(messageIdHex: String(repeating: "a", count: 64),
+                sourceMessageIdHex: String(repeating: "b", count: 64), attachmentIndex: 2)
+            await #expect(throws: AttachmentReadError.unavailable) {
+                _ = try await client.acquireAttachmentData(accountRef: account.label,
+                    groupID: group.groupIdHex, target: target, demand: .explicit)
+            }
+            try await client.marmot.shutdownAndClose()
+        } catch {
+            try? await client.marmot.shutdownAndClose()
+            throw error
+        }
+    }
+
+    @Test func retainedReadsRespectOffsetsAndRevocation() async throws {
+        let offsets = Mutex<[UInt64]>([])
+        let data = try await RetainedAttachmentReader.read(byteCount: 3) { offset, limit in
+            #expect(limit <= 1_048_576)
+            offsets.withLock { $0.append(offset) }
+            return AttachmentLocalBytesFfi(available: true, bytes: offset == 0 ? Data([1, 2]) : offset == 2 ? Data([3]) : Data())
+        }
+        #expect(data == Data([1, 2, 3]))
+        #expect(offsets.withLock { $0 } == [0, 2, 3])
+        await #expect(throws: AttachmentReadError.self) {
+            try await RetainedAttachmentReader.read(byteCount: 2) { offset, _ in
+                AttachmentLocalBytesFfi(available: offset == 0, bytes: offset == 0 ? Data([1]) : Data())
+            }
+        }
+        let empty = try await RetainedAttachmentReader.read(byteCount: 0) { _, _ in
+            AttachmentLocalBytesFfi(available: true, bytes: Data())
+        }
+        #expect(empty.isEmpty)
+        await #expect(throws: AttachmentReadError.self) {
+            try await RetainedAttachmentReader.read(byteCount: 2) { _, _ in
+                AttachmentLocalBytesFfi(available: true, bytes: Data())
+            }
+        }
+    }
 }
 
 private nonisolated final class RecordingAttachmentDemandRequester: AttachmentDemandRequesting {

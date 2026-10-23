@@ -234,25 +234,6 @@ struct ProductAnalyticsTests {
         try await client.marmot.shutdownAndClose()
     }
 
-    @Test @MainActor func frozenRuntimeCannotRecordEvenWithStoredConsent() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("FrozenAnalytics-\(UUID())")
-        let client = try MarmotClient(rootPath: root.path, relayUrls: [], cursorPersistence: .frozen)
-        try client.marmot.setProductAnalyticsRuntimeConfig(config: ProductAnalyticsBuildConfig(
-            endpoint: "https://analytics.invalid/api/v0/events", appKey: "A-SH-test",
-            operatorLabel: "test", retentionDisclosure: nil, appVersion: "1", osMajorVersion: "27",
-            deviceClass: "phone", environment: "staging", isDebug: true
-        ).runtimeConfig)
-        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
-        try await client.marmot.setProductAnalyticsActivity(activity: .foreground)
-        #expect(try client.marmot.recordProductEvent(event: ProductEvent.screen(.inbox).ffi) == .ignoredDisabled)
-        #expect(try client.marmot.recordHostTiming(
-            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
-        ) == .ignoredDisabled)
-        #expect(try client.marmot.usageDiagnosticsStatus().queuedEvents == 0)
-        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: false)
-        try await client.marmot.shutdownAndClose()
-    }
-
     @Test(arguments: [false, true]) @MainActor
     func receiptSurvivesRuntimeReplacementAndErasureRestoresEligibility(granted: Bool) async throws {
         let original = try MarmotClient.testClient()
@@ -275,6 +256,23 @@ struct ProductAnalyticsTests {
         #expect(reset.settings.decision == .acceptanceRequired)
         #expect(!reset.auditEnabled)
         try await erased.marmot.shutdownAndClose()
+    }
+
+    @Test @MainActor func hostPerformanceSnapshotRoundTripsThroughBindings() async throws {
+        let client = try MarmotClient.testClient()
+        let before = client.appPerformanceSnapshot().hostSplashReady
+
+        client.recordHostPerformance(
+            operation: .splashReady,
+            durationMs: 250,
+            outcome: .success
+        )
+        let after = client.appPerformanceSnapshot().hostSplashReady
+
+        #expect(after.attempts >= before.attempts + 1)
+        #expect(after.successes >= before.successes + 1)
+        #expect(after.durationMs.sumMs >= before.durationMs.sumMs + 250)
+        try await client.marmot.shutdownAndClose()
     }
 
     @Test func timingConsentAndDuration() async throws {

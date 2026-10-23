@@ -79,4 +79,26 @@ struct AddMembersSheetViewModelTests {
             npub: npub
         )
     }
+
+    @Test func namedGroupsCanBeCreatedWithoutInvitees() {
+        #expect(AddMembersPresentation.canCreate(
+            stagedCount: 0,
+            hasUsableName: true,
+            isCreating: false,
+            hasActiveAccount: true
+        ))
+        #expect(!AddMembersPresentation.canCreate(
+            stagedCount: 0,
+            hasUsableName: false,
+            isCreating: false,
+            hasActiveAccount: true
+        ))
+        #expect(AddMembersPresentation.canCreate(
+            stagedCount: 1,
+            hasUsableName: false,
+            isCreating: false,
+            hasActiveAccount: true
+        ))
+        #expect(!AddMembersPresentation.canInvite(stagedCount: 0, isInviting: false))
+    }
 }

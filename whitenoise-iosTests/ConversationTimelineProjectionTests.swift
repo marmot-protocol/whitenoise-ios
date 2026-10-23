@@ -499,6 +499,33 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.replyPreview(for: replyRecord)?.text == "the parent text")
     }
 
+    @Test func deletionProvenanceChangesWithoutChangingTombstone() {
+        let projection = ConversationDeletedMessageProjection()
+        projection.setProjected(deleted: true, source: .unknown, forMessageId: "message")
+        #expect(projection.rebuild())
+        projection.setProjected(deleted: true, source: .admin, forMessageId: "message")
+        #expect(projection.rebuild())
+        #expect(projection.source(for: "message") == .admin)
+        projection.removeProjected(forMessageId: "message")
+        #expect(projection.rebuild())
+        #expect(projection.source(for: "message") == .unknown)
+        projection.insertOptimistic("pending")
+        projection.rebuild()
+        #expect(projection.source(for: "pending") == .unknown)
+    }
+
+    @Test func convergenceRetryPolicyRefreshesAmbiguousResultsAndStopsUnrecoverableGroups() {
+        #expect(DurableConvergenceRetryPolicy.action(
+            for: MarmotKitError.AccountWorkerBusy
+        ) == .retry)
+        #expect(DurableConvergenceRetryPolicy.action(
+            for: MarmotKitError.AccountWorkerResponseTimedOut
+        ) == .refreshBeforeRetry)
+        #expect(DurableConvergenceRetryPolicy.action(
+            for: MarmotKitError.GroupUnrecoverableRepairRequired(groupIdHex: "group")
+        ) == .stop)
+    }
+
     @Test func replyResponseStaysBelowParentWhenSameTimestampWouldSortByIdFirst() throws {
         let viewModel = ConversationViewModel(
             appState: AppState.test(client: try MarmotClient.testClient()),
