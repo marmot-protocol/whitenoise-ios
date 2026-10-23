@@ -11,6 +11,12 @@ on:
       - 'scripts/lint.sh'
       - 'scripts/check-localization-catalog.py'
       - 'scripts/tests/test_localization_catalog.py'
+      - 'scripts/audit/inventory.py'
+      - 'scripts/audit/guardrails.py'
+      - 'scripts/audit/swiftscan.py'
+      - 'scripts/audit/guardrail-baseline.txt'
+      - 'scripts/tests/test_audit_guardrails.py'
+      - 'TestPlans/**'
       - 'justfile'
       - '.github/workflows/lint.yml'
   push:
@@ -35,6 +41,10 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+
+      # The guardrail check itself runs inside scripts/lint.sh below.
+      - name: Test the test-suite guardrails
+        run: python3 -m unittest discover -s scripts/tests -p 'test_audit_guardrails.py'
 
       # The catalog check itself runs inside scripts/lint.sh below.
       - name: Test the localization catalog check

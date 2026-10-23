@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct NotificationServiceProjectionTests {
 
     @Test func newDataCollectionUsesNewestPresentableNotification() {
@@ -556,7 +555,8 @@ struct NotificationServiceProjectionTests {
         })
     }
 
-    @Test func notificationServiceStorageReaderProjectsSmallValuesOffMain() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func notificationServiceStorageReaderProjectsSmallValuesOffMain() async throws {
         try await withTestClient { client in
             try await client.startRuntime()
             let account = try await client.marmot.createIdentityWithProfile(

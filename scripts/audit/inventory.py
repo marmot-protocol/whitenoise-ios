@@ -14,6 +14,7 @@ test sources on purpose.
     python3 scripts/audit/inventory.py                  # writes build/audit/inventory.csv
     python3 scripts/audit/inventory.py --emit-tier-lists
     python3 scripts/audit/inventory.py --rule testClient-requires-tag=runtime   # exits 1 on violations
+    python3 scripts/audit/inventory.py --check          # the guardrails in guardrails.py; exits 1 on new violations
 """
 import argparse
 import collections
@@ -23,11 +24,14 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import guardrails  # noqa: E402
 import swiftscan  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_TESTS_DIR = "whitenoise-iosTests"
 DEFAULT_OUT = "build/audit/inventory.csv"
+DEFAULT_PR_PLAN = "TestPlans/PR.xctestplan"
+DEFAULT_BASELINE = "scripts/audit/guardrail-baseline.txt"
 
 COUNT_COLUMNS = [
     "testClient_sites", "start_sites", "shutdown_sites", "app_state_test_sites",
@@ -67,7 +71,9 @@ POLL_BODY = re.compile(r"\bTask\.yield\(|\bTask\.sleep\b")
 # `AppState.test()` alone builds no runtime: one exists only once a client is
 # passed (counted as testClient_sites) or bootstrap starts one (start_sites).
 RUNTIME_COLUMNS = ("testClient_sites", "start_sites")
-UI_COLUMNS = ("ui_hosting", "image_renderer", "layout_if_needed")
+# ImageRenderer and layoutIfNeeded run offscreen; only a hosted window or
+# hosting controller puts a suite in the hosting tier.
+UI_COLUMNS = ("ui_hosting",)
 HELPER_KEYWORDS = ("struct", "class", "enum", "actor", "func", "let", "var")
 
 COLUMN_ALIASES = {
@@ -235,9 +241,29 @@ def suite_row(suite, tests_dir, index):
 
 
 def build_rows(tests_dir, warn=None):
+    return scan(tests_dir, warn)[0]
+
+
+def scan(tests_dir, warn=None):
+    """(rows, suites, helper index) for one tests directory."""
     suites, masks = swiftscan.collect_suites(tests_dir, warn)
     index = helper_index(masks, {s.name for s in suites})
-    return [suite_row(suite, tests_dir, index) for suite in suites]
+    return [suite_row(suite, tests_dir, index) for suite in suites], suites, index
+
+
+def run_guardrails(suites, index, pr_plan, baseline_path):
+    """Print the guardrail report; return 1 when a violation is not baselined."""
+    found = guardrails.violations(suites, index, resolve_helper, guardrails.pr_plan_skips(pr_plan),
+                                  guardrails.pr_plan_entries(pr_plan))
+    new, known, stale = guardrails.split_by_baseline(found, guardrails.read_baseline(baseline_path))
+    for violation in new:
+        print("error: " + violation)
+    for violation in known:
+        print("baselined: " + violation)
+    for rule, suite in stale:
+        print("stale baseline entry (fixed; remove it from %s): %s %s" % (baseline_path, rule, suite))
+    print("guardrails: %d new, %d baselined, %d stale" % (len(new), len(known), len(stale)))
+    return 1 if new else 0
 
 
 def is_runtime_tier(row):
@@ -247,6 +273,13 @@ def is_runtime_tier(row):
 def is_ui_tier(row):
     tags = tags_of(row["traits"].split(";"))
     return any(int(row[c]) > 0 for c in UI_COLUMNS) or bool(tags & {"ui", "uiHosting"})
+
+
+def xctest_skips(rows):
+    """XCTest classes in either tier. XCTest has no tags, so the PR test plan
+    lists these by name in ``skippedTests``."""
+    return sorted(r["suite"] for r in rows
+                  if r.get("framework") == "XCTest" and (is_runtime_tier(r) or is_ui_tier(r)))
 
 
 def tier_lists(rows, tests_dir_name):
@@ -300,27 +333,37 @@ def main(argv=None):
     parser.add_argument("--out", default=str(ROOT / DEFAULT_OUT))
     parser.add_argument("--rule", action="append", default=[],
                         help="check a rule and exit 1 on violations, e.g. testClient-requires-tag=runtime")
-    parser.add_argument("--check", action="store_true", help="implied by --rule")
+    parser.add_argument("--check", action="store_true",
+                        help="run the fixed guardrails (see guardrails.py); exits 1 on a new violation")
+    parser.add_argument("--pr-plan", default=str(ROOT / DEFAULT_PR_PLAN),
+                        help="PR test plan: its skippedTests must name every tagged test and hosting XCTest class")
+    parser.add_argument("--write-pr-plan", action="store_true",
+                        help="regenerate the PR plan's skippedTests from the tags and XCTest tier classes")
+    parser.add_argument("--baseline", default=str(ROOT / DEFAULT_BASELINE),
+                        help="known guardrail violations (\"<rule> <Suite>\" per line)")
     parser.add_argument("--emit-tier-lists", action="store_true",
-                        help="write tier-runtime.txt and tier-ui.txt next to the CSV")
+                        help="write tier-runtime.txt, tier-ui.txt and tier-xctest-skips.txt next to the CSV")
     args = parser.parse_args(argv)
 
     try:
         rules = [parse_rule(rule) for rule in args.rule]
     except ValueError as error:
         parser.error(str(error))
-    if args.check and not rules:
-        parser.error("--check needs at least one --rule")
-    rows = build_rows(args.tests_dir, warn=lambda message: print("warning: " + message, file=sys.stderr))
+    rows, suites, index = scan(args.tests_dir, warn=lambda message: print("warning: " + message, file=sys.stderr))
     swiftscan.write_csv(args.out, rows, COLUMNS)
     print("wrote %s (%d suites, %d tests)" % (args.out, len(rows), sum(r["tests"] for r in rows)))
 
     if args.emit_tier_lists:
         out_dir = pathlib.Path(args.out).parent
         runtime, ui = tier_lists(rows, pathlib.Path(args.tests_dir).name)
-        for name, lines in (("tier-runtime.txt", runtime), ("tier-ui.txt", ui)):
+        for name, lines in (("tier-runtime.txt", runtime), ("tier-ui.txt", ui),
+                            ("tier-xctest-skips.txt", xctest_skips(rows))):
             (out_dir / name).write_text("".join(line + "\n" for line in lines), encoding="utf-8")
             print("wrote %s (%d suites)" % (out_dir / name, len(lines)))
+
+    if args.write_pr_plan:
+        count = guardrails.write_pr_plan(args.pr_plan, suites, xctest_skips(rows))
+        print("wrote %s (%d tagged identifiers)" % (args.pr_plan, count))
 
     if rules:
         violations = check_rules(rows, rules)
@@ -330,6 +373,8 @@ def main(argv=None):
             print("%d violation(s)" % len(violations), file=sys.stderr)
             return 1
         print("all rules satisfied")
+    if args.check:
+        return run_guardrails(suites, index, args.pr_plan, args.baseline)
     return 0
 
 
