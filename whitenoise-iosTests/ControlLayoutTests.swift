@@ -3,8 +3,9 @@ import XCTest
 @testable import whitenoise_ios
 
 /// Measures the shared controls through their own geometry callbacks: each
-/// configuration renders once and is read when every control has reported,
-/// with no fixed wait and no screenshots.
+/// configuration renders once, waits until every control has reported and
+/// the reported frames stop changing, and is asserted while still on screen.
+/// The screenshots stay as visual evidence in the result bundle.
 @MainActor
 final class ControlLayoutTests: XCTestCase {
     func testAvatarFormKeepsItsGeometryWhenAppearanceChangesWhileVisible() async throws {
@@ -35,7 +36,7 @@ final class ControlLayoutTests: XCTestCase {
                 host.view.layoutIfNeeded()
                 fulfilIfLaidOut()
                 await fulfillment(of: [ready], timeout: 30)
-                host.view.layoutIfNeeded()
+                try await settleLayout(host.view) { frames }
                 for name in names {
                     let frame = try XCTUnwrap(frames[name])
                     if let expected = baseline[name] {
@@ -45,6 +46,7 @@ final class ControlLayoutTests: XCTestCase {
                         XCTAssertEqual(frame.minY, expected.minY, accuracy: 0.5, name)
                     } else { baseline[name] = frame }
                 }
+                attachScreenshot(of: window, named: "avatar-form-\(style.rawValue)")
             }
         }
     }
@@ -70,6 +72,7 @@ final class ControlLayoutTests: XCTestCase {
         "disabledPhoto", "primary", "secondary", "destructive", "loading",
     ]
 
+    /// Returns the settled frames, measured and asserted while the window is live.
     private func checkControls(width: CGFloat, scheme: ColorScheme, textSize: DynamicTypeSize) async throws -> [String: CGRect] {
         var frames = [String: CGRect]()
         let ready = expectation(description: "Controls laid out at \(Int(width)) \(scheme) \(textSize)")
@@ -85,28 +88,42 @@ final class ControlLayoutTests: XCTestCase {
             .environment(\.dynamicTypeSize, textSize)
         let host = UIHostingController(rootView: fixture)
         // SwiftUI reports geometry only for a hierarchy in a window.
-        try await withHostedWindow(host, frame: CGRect(x: 0, y: 0, width: width, height: 1100),
-                                   style: scheme == .dark ? .dark : .light) { _ in
+        return try await withHostedWindow(host, frame: CGRect(x: 0, y: 0, width: width, height: 1100),
+                                          style: scheme == .dark ? .dark : .light) { window in
+            window.tintColor = UIColor(named: "AccentColor")
             await fulfillment(of: [ready], timeout: 30)
-            // Settle any follow-up pass the first geometry reports triggered.
-            host.view.layoutIfNeeded()
+            // Compare settled frames, not the first ones each control reported.
+            try await settleLayout(host.view) { frames }
+            for name in Self.measuredControls {
+                let frame = try XCTUnwrap(frames[name], name)
+                XCTAssertGreaterThanOrEqual(frame.height, 44 - 0.01, name)
+                XCTAssertGreaterThanOrEqual(frame.width, 44 - 0.01, name)
+                XCTAssertGreaterThanOrEqual(frame.minX, 0, name)
+                XCTAssertLessThanOrEqual(frame.maxX, width, name)
+            }
+            let close = try XCTUnwrap(frames["close"])
+            for name in ["share", "add", "disabled"] {
+                let frame = try XCTUnwrap(frames[name])
+                XCTAssertEqual(frame.width, frame.height, accuracy: 1, name)
+                XCTAssertEqual(frame.height, close.height, accuracy: 1, name)
+            }
+            XCTAssertEqual(try XCTUnwrap(frames["empty"]).height,
+                           try XCTUnwrap(frames["filled"]).height, accuracy: 1)
+            attachScreenshot(of: host.view, named: "controls-\(Int(width))-\(scheme)-\(textSize)")
+            return frames
         }
-        for name in Self.measuredControls {
-            let frame = try XCTUnwrap(frames[name], name)
-            XCTAssertGreaterThanOrEqual(frame.height, 44 - 0.01, name)
-            XCTAssertGreaterThanOrEqual(frame.width, 44 - 0.01, name)
-            XCTAssertGreaterThanOrEqual(frame.minX, 0, name)
-            XCTAssertLessThanOrEqual(frame.maxX, width, name)
+    }
+
+    /// Keeps a rendering of the settled layout in the result bundle as visual
+    /// evidence; it is taken after the geometry wait, never instead of one.
+    private func attachScreenshot(of view: UIView, named name: String) {
+        let rendered = UIGraphicsImageRenderer(size: view.bounds.size).image { _ in
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
         }
-        let close = try XCTUnwrap(frames["close"])
-        for name in ["share", "add", "disabled"] {
-            let frame = try XCTUnwrap(frames[name])
-            XCTAssertEqual(frame.width, frame.height, accuracy: 1, name)
-            XCTAssertEqual(frame.height, close.height, accuracy: 1, name)
-        }
-        XCTAssertEqual(try XCTUnwrap(frames["empty"]).height,
-                       try XCTUnwrap(frames["filled"]).height, accuracy: 1)
-        return frames
+        let attachment = XCTAttachment(image: rendered)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
 

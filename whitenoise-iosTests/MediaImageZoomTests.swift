@@ -169,6 +169,10 @@ final class MediaImageZoomTests: XCTestCase {
                 let rendered = UIGraphicsImageRenderer(size: size).image { context in
                     container.layer.render(in: context.cgContext)
                 }
+                let attachment = XCTAttachment(image: rendered)
+                attachment.name = "media-zoom-\(Int(size.width))-\(scale)"
+                attachment.lifetime = .keepAlways
+                add(attachment)
                 XCTAssertEqual(rendered.size, size)
             }
         }
@@ -202,6 +206,13 @@ final class MediaImageZoomTests: XCTestCase {
             XCTAssertEqual(Set(requestedIDs), ["selected"])
             try await toggleChromeAndAwaitRepresentableUpdate(zoom, host: host)
             XCTAssertEqual(zoom.zoomScale, 2.5)
+            let rendered = UIGraphicsImageRenderer(size: host.view.bounds.size).image { _ in
+                host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+            }
+            let attachment = XCTAttachment(image: rendered)
+            attachment.name = "hosted-fullscreen-gallery-zoomed"
+            attachment.lifetime = .keepAlways
+            add(attachment)
         }
     }
 
