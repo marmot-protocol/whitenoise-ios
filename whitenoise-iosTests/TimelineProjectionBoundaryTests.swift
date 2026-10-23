@@ -261,7 +261,7 @@ struct TimelineProjectionBoundaryTests {
         #expect(cache.cachedDataCalls == 0)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() async throws {
         let downloadedData = Data([0x09, 0x0a, 0x0b])
         let reference = mediaReference(sourceEpoch: 7, plaintext: downloadedData)
@@ -306,7 +306,7 @@ struct TimelineProjectionBoundaryTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func mediaDownloaderRejectsPlaintextHashMismatchBeforeCaching() async throws {
         let reference = mediaReference(sourceEpoch: 7, plaintext: Data([0x01]))
         var media = MessageMediaAttachment(
@@ -431,7 +431,7 @@ struct TimelineProjectionBoundaryTests {
         #expect(verified.map(\.reference.plaintextSha256) == [acceptedReference.plaintextSha256])
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func mediaDownloaderIgnoresHashMismatchedCacheHit() async throws {
         let downloadedData = Data([0x0c, 0x0d, 0x0e])
         let reference = mediaReference(sourceEpoch: 7, plaintext: downloadedData)
@@ -509,7 +509,7 @@ struct TimelineProjectionBoundaryTests {
         #expect(cached.storedPayloads.isEmpty)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func mediaDownloaderRejectsDownloadWhenCacheIsPurgedDuringStore() async throws {
         let data = Data([0x03, 0x04])
         let reference = mediaReference(sourceEpoch: 7, plaintext: data)

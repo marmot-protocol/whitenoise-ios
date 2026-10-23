@@ -106,7 +106,7 @@ struct GroupDetailsArchiveActionTests {
         #expect(!model.membershipActionInFlight)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func updateGroupImageRejectsConcurrentPublishUntilFirstCompletes() async throws {
+    @Test(.tags(.runtime)) func updateGroupImageRejectsConcurrentPublishUntilFirstCompletes() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -173,7 +173,7 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func encryptedImageUploadClearsLegacyURLOnlyAfterUploadSucceeds() async throws {
+    @Test(.tags(.runtime)) func encryptedImageUploadClearsLegacyURLOnlyAfterUploadSucceeds() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -212,7 +212,7 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func legacyURLClearRetryDoesNotUploadEncryptedImageAgain() async throws {
+    @Test(.tags(.runtime)) func legacyURLClearRetryDoesNotUploadEncryptedImageAgain() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -291,7 +291,7 @@ struct GroupDetailsArchiveActionTests {
         #expect(!model.membershipActionInFlight)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func groupInfoSavePublishesTextThenImageAndClearsTheImageEdit() async throws {
+    @Test(.tags(.runtime)) func groupInfoSavePublishesTextThenImageAndClearsTheImageEdit() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -333,7 +333,7 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func groupInfoSaveKeepsTheImageEditWhenTheTextPublishFails() async throws {
+    @Test(.tags(.runtime)) func groupInfoSaveKeepsTheImageEditWhenTheTextPublishFails() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -366,7 +366,7 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func groupInfoSaveSaysTheTextWasSavedWhenOnlyTheImageFails() async throws {
+    @Test(.tags(.runtime)) func groupInfoSaveSaysTheTextWasSavedWhenOnlyTheImageFails() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -402,7 +402,7 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func groupInfoSaveSetsAnUnnamedGroupImageWithoutPublishingText() async throws {
+    @Test(.tags(.runtime)) func groupInfoSaveSetsAnUnnamedGroupImageWithoutPublishingText() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -475,7 +475,7 @@ struct GroupDetailsArchiveActionTests {
         #expect(!model.canSaveGroupInfo)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func sharedMediaProjectionLoadsOnceUnlessExplicitlyRefreshed() async throws {
+    @Test(.tags(.runtime)) func sharedMediaProjectionLoadsOnceUnlessExplicitlyRefreshed() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -502,7 +502,7 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func leaveMarksConversationInactiveAndNotifiesParent() async throws {
+    @Test(.tags(.runtime)) func leaveMarksConversationInactiveAndNotifiesParent() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -615,7 +615,7 @@ struct GroupDetailsArchiveActionTests {
         #expect(conversation.group.disbandRequest == .pending(requestedAtMs: 2_000))
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func alreadyRequestedLeaveIsPresentedAsDurableProgress() async throws {
+    @Test(.tags(.runtime)) func alreadyRequestedLeaveIsPresentedAsDurableProgress() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
@@ -646,7 +646,7 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func developerResetAllowsAnActiveGroupAndRemovesItOnlyAfterSuccess() async throws {
+    @Test(.tags(.runtime)) func developerResetAllowsAnActiveGroupAndRemovesItOnlyAfterSuccess() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.setPhase(.ready)
@@ -678,7 +678,7 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func resetFailureKeepsTheGroupAndDeveloperModeIsRequired() async throws {
+    @Test(.tags(.runtime)) func resetFailureKeepsTheGroupAndDeveloperModeIsRequired() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.setPhase(.ready)

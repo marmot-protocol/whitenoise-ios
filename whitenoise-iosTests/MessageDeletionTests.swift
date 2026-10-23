@@ -88,7 +88,7 @@ struct MessageDeletionTests {
         #expect(MessageTombstonePresentation.showsDeliveryStatus(isDeleted: false))
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func viewModelCapabilityIsAvailableForIngestedMessages() async throws {
         // Positive regression coverage for delete availability through the
         // full view-model wiring: an ingested message must surface delete
@@ -136,7 +136,7 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func deviceLocalMembershipEventsRefreshOnlyTheOpenConversation() async throws {
         try await withTestClient { client in
             let state = try appState(accountRef: "members", accountIdHex: hex("11"), client: client)
@@ -161,7 +161,7 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func moderationRefreshSurvivesNavigationAwayFromTheVisibleTimeline() async throws {
         try await withTestClient { client in
             let state = try appState(accountRef: "reports", accountIdHex: hex("11"), client: client)
@@ -490,7 +490,7 @@ struct MessageDeletionTests {
         #expect(store.replyPreview(for: replyRecord)?.text == "This message was deleted")
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func deleteForMePublishesNothingAndSurvivesViewModelRecreation() async throws {
         let accountRef = "delete-local-\(UUID().uuidString)"
         let me = hex("11")
@@ -531,7 +531,7 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func directMessageAdminCannotDeleteAnotherSendersMessageForEveryone() async throws {
         let accountRef = "delete-dm-\(UUID().uuidString)"
         let me = hex("11")
@@ -571,7 +571,7 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func canonicalTimelineRecordPreventsSpoofedSenderAuthorization() async throws {
         let accountRef = "delete-spoof-\(UUID().uuidString)"
         let me = hex("11")
@@ -613,7 +613,7 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func failedRemoteDeleteRollsBackAndCanBeRetried() async throws {
         let accountRef = "delete-failure-\(UUID().uuidString)"
         let me = hex("11")
@@ -648,7 +648,7 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func repeatedRemoteDeleteStartsOnlyOneMutation() async throws {
         let accountRef = "delete-repeat-\(UUID().uuidString)"
         let me = hex("11")

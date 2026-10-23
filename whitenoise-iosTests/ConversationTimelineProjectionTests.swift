@@ -917,7 +917,7 @@ struct ConversationTimelineProjectionTests {
         #expect(MessageFooterPresentation.value(for: try #require(status), isFromMe: true).isFailure)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func unsuccessfulDurableRetryRestoresInvalidatedFailureOutsideRefreshedTail() async throws {
         var attempts = 0
         try await withTestClient { client in
@@ -968,7 +968,7 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.error == L10n.string("Send failed"))
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func exhaustedDurableRetryKeepsNonInvalidatedRowSending() async throws {
         var attempts = 0
         var sleeps = 0
@@ -991,7 +991,7 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func publishedDurableRetryMarksRowSentWhenRefreshedTailOmitsIt() async throws {
         let messageIdHex = hex("d1")
         try await withTestClient { client in
@@ -1016,7 +1016,7 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func cancelledDurableRetryRestoresPriorFailure() async throws {
         var enteredRetrySleep = false
         try await withTestClient { client in
@@ -1046,7 +1046,7 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func cancelledDuringFinalRefreshRestoresPriorFailureWithoutError() async throws {
         var enteredFinalRefresh = false
         try await withTestClient { client in
@@ -1071,7 +1071,7 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func authoritativeDeliveryDuringRetryIsNotOverwrittenByCleanup() async throws {
         let groupIdHex = hex("aa")
         let messageIdHex = hex("d1")
@@ -1106,7 +1106,7 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func authoritativePendingRefreshDuringRetryIsNotOverwrittenByCleanup() async throws {
         let groupIdHex = hex("aa")
         let messageIdHex = hex("d1")

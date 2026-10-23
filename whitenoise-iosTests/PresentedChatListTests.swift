@@ -166,7 +166,7 @@ struct PresentedChatListTests {
         appState.productAnalytics.replaceSink(nil)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.tags(.runtime))
     func createdChatResolvesBeforeAndAfterMissingPresentedRowRead() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
@@ -189,7 +189,7 @@ struct PresentedChatListTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit, arguments: [false, true])
+    @Test(.tags(.runtime), arguments: [false, true])
     func targetedReadSurvivesUnrelatedRowsButPreservesNewerTarget(targetChanges: Bool) async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
