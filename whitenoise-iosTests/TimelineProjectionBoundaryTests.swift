@@ -5,7 +5,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+@Suite(.tags(.runtime))
 struct TimelineProjectionBoundaryTests {
     @Test func rejectedSiblingsKeepTheirSlotAndCannotBecomeDownloadable() {
         let reference = mediaReference(sourceEpoch: 42)
@@ -47,7 +47,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func timelineDoesNotRenderTagMediaWhenRowProjectionIsEmpty() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let reference = mediaReference(sourceEpoch: 7)
@@ -70,7 +70,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func mirroredNilReplyTargetDoesNotFallBackToTags() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let target = timelineRecord(messageIdHex: hexId(3), plaintext: "target body")
@@ -98,7 +98,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func projectedReplyTargetCanUseLoadedTargetAsPreviewFallback() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let target = timelineRecord(messageIdHex: hexId(5), plaintext: "target body")
@@ -121,7 +121,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func projectedReplyPreviewCarriesResolvedMediaWithoutAnotherLookup() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let targetID = hexId(11)
@@ -156,7 +156,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func markdownProjectionCacheSkipsUnchangedWindowRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let tokens = doc([.paragraph(inlines: [.text(content: "hello **world**")])])
@@ -192,7 +192,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func mediaProjectionCacheSkipsUnchangedWindowRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let reference = mediaReference(sourceEpoch: 7)
@@ -231,7 +231,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func authoritativeWindowSkipsDiscardedReactionTargetCollection() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let record = timelineRecord(messageIdHex: hexId(9), plaintext: "hello")
@@ -262,7 +262,7 @@ struct TimelineProjectionBoundaryTests {
         #expect(cache.cachedDataCalls == 0)
     }
 
-    @Test func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() async throws {
         let downloadedData = Data([0x09, 0x0a, 0x0b])
         let reference = mediaReference(sourceEpoch: 7, plaintext: downloadedData)
         var media = MessageMediaAttachment(
@@ -288,23 +288,25 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-a"
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-a"
 
-        let data = try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
+            let data = try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
 
-        #expect(data == downloaded.data)
-        #expect(cached.cachedDataCalls == 1)
-        #expect(cached.storedPayloads == [downloaded.data])
-        #expect(cached.storedReferenceHashes == [reference.plaintextSha256])
-        #expect(cached.storedSourceEpochs == [reference.sourceEpoch])
-        #expect(downloaded.accountRefs == ["account-a"])
-        #expect(downloaded.groupIds == [testGroupId])
-        #expect(downloaded.referenceHashes == [reference.plaintextSha256])
-        #expect(downloaded.sourceEpochs == [reference.sourceEpoch])
+            #expect(data == downloaded.data)
+            #expect(cached.cachedDataCalls == 1)
+            #expect(cached.storedPayloads == [downloaded.data])
+            #expect(cached.storedReferenceHashes == [reference.plaintextSha256])
+            #expect(cached.storedSourceEpochs == [reference.sourceEpoch])
+            #expect(downloaded.accountRefs == ["account-a"])
+            #expect(downloaded.groupIds == [testGroupId])
+            #expect(downloaded.referenceHashes == [reference.plaintextSha256])
+            #expect(downloaded.sourceEpochs == [reference.sourceEpoch])
+        }
     }
 
-    @Test func mediaDownloaderRejectsPlaintextHashMismatchBeforeCaching() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func mediaDownloaderRejectsPlaintextHashMismatchBeforeCaching() async throws {
         let reference = mediaReference(sourceEpoch: 7, plaintext: Data([0x01]))
         var media = MessageMediaAttachment(
             id: "message-a:\(reference.plaintextSha256):0:0",
@@ -329,13 +331,15 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-a"
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-a"
 
-        await #expect(throws: ConversationMediaDownloader.MediaDataError.plaintextHashMismatch) {
-            _ = try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
+            await #expect(throws: ConversationMediaDownloader.MediaDataError.plaintextHashMismatch) {
+                _ = try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
+            }
+            #expect(cached.storedPayloads.isEmpty)
         }
-        #expect(cached.storedPayloads.isEmpty)
     }
 
     @Test func mediaDownloaderRejectsUnsafeStaticLocatorBeforeCacheOrNativeDownload() async throws {
@@ -366,7 +370,7 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-a"
 
         await #expect(throws: ConversationMediaDownloader.MediaDataError.unsafeLocator) {
@@ -401,7 +405,7 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-a"
 
         await #expect(throws: ConversationMediaDownloader.MediaDataError.unsafeLocator) {
@@ -426,7 +430,7 @@ struct TimelineProjectionBoundaryTests {
         #expect(verified.map(\.reference.plaintextSha256) == [acceptedReference.plaintextSha256])
     }
 
-    @Test func mediaDownloaderIgnoresHashMismatchedCacheHit() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func mediaDownloaderIgnoresHashMismatchedCacheHit() async throws {
         let downloadedData = Data([0x0c, 0x0d, 0x0e])
         let reference = mediaReference(sourceEpoch: 7, plaintext: downloadedData)
         var media = MessageMediaAttachment(
@@ -453,15 +457,17 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-a"
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-a"
 
-        let data = try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
+            let data = try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
 
-        #expect(data == downloadedData)
-        #expect(cached.cachedDataCalls == 1)
-        #expect(cached.storedPayloads == [downloadedData])
-        #expect(downloaded.referenceHashes == [reference.plaintextSha256])
+            #expect(data == downloadedData)
+            #expect(cached.cachedDataCalls == 1)
+            #expect(cached.storedPayloads == [downloadedData])
+            #expect(downloaded.referenceHashes == [reference.plaintextSha256])
+        }
     }
 
     @Test(arguments: [false, true])
@@ -501,7 +507,7 @@ struct TimelineProjectionBoundaryTests {
         #expect(cached.storedPayloads.isEmpty)
     }
 
-    @Test func mediaDownloaderRejectsDownloadWhenCacheIsPurgedDuringStore() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func mediaDownloaderRejectsDownloadWhenCacheIsPurgedDuringStore() async throws {
         let data = Data([0x03, 0x04])
         let reference = mediaReference(sourceEpoch: 7, plaintext: data)
         var media = MessageMediaAttachment(
@@ -521,14 +527,16 @@ struct TimelineProjectionBoundaryTests {
             locatorResolver: { _ in ["93.184.216.34"] },
             downloadMedia: downloaded.download
         )
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-a"
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-a"
 
-        await #expect(throws: CancellationError.self) {
-            try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
+            await #expect(throws: CancellationError.self) {
+                try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
+            }
+            #expect(cached.storedPayloads.isEmpty)
+            #expect(downloaded.referenceHashes == [reference.plaintextSha256])
         }
-        #expect(cached.storedPayloads.isEmpty)
-        #expect(downloaded.referenceHashes == [reference.plaintextSha256])
     }
 
     @Test func mediaDownloaderCoalescesConcurrentCacheVerification() async throws {

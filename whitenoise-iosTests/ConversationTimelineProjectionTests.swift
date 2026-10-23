@@ -9,10 +9,11 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+@Suite(.tags(.runtime))
 struct ConversationTimelineProjectionTests {
 
     private func durableRetryFixture(
+        client: MarmotClient,
         invalidationStatus: String? = nil,
         catchUp: @escaping @MainActor (MarmotClient) async throws -> Void = { _ in },
         converge: @escaping @MainActor (MarmotClient, String, String) async throws -> SendSummaryFfi,
@@ -25,7 +26,7 @@ struct ConversationTimelineProjectionTests {
         rowId: String
     ) {
         let groupIdHex = hex("aa")
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: client)
         appState.activeAccountRef = "account-ref"
         let viewModel = ConversationViewModel(
             appState: appState,
@@ -420,7 +421,7 @@ struct ConversationTimelineProjectionTests {
         ) == .loadLocalSnapshot(startLiveWork: true))
 
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let message = timelineRecord(messageIdHex: hex("44"), timelineAt: 1)
@@ -446,7 +447,7 @@ struct ConversationTimelineProjectionTests {
     }
 
     @Test func timelinePageHydratesReplyPreviewReactionsAndDeletedState() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let parentSender = hex("11")
         let viewModel = ConversationViewModel(appState: appState, group: group(name: ""))
         let parent = timelineRecord(
@@ -529,7 +530,7 @@ struct ConversationTimelineProjectionTests {
 
     @Test func replyResponseStaysBelowParentWhenSameTimestampWouldSortByIdFirst() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let approve = timelineRecord(
@@ -571,7 +572,7 @@ struct ConversationTimelineProjectionTests {
 
     @Test func windowReplyResponseStaysBelowParentWhenSameTimestampWouldInsertAbove() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let approve = timelineRecord(
@@ -671,7 +672,7 @@ struct ConversationTimelineProjectionTests {
 
     @Test func timelineWindowPageReplacesRowsOutsideAuthoritativeWindow() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let latest = timelineRecord(messageIdHex: hex("f2"), plaintext: "latest", timelineAt: 20)
@@ -694,7 +695,7 @@ struct ConversationTimelineProjectionTests {
 
     @Test func tailRefreshWhileDetachedOnlyUpdatesLoadedRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let loaded = timelineRecord(messageIdHex: hex("e1"), plaintext: "loaded", timelineAt: 10)
@@ -729,7 +730,7 @@ struct ConversationTimelineProjectionTests {
     @Test func liveProjectionUpdateMaintainsTimelineWithoutFullRebuild() throws {
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let first = timelineRecord(messageIdHex: hex("e1"), groupIdHex: groupIdHex, timelineAt: 10)
@@ -760,7 +761,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let pending = AppMessageRecordFfi(
@@ -806,7 +807,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let pending = AppMessageRecordFfi(
@@ -888,7 +889,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let invalidated = timelineRecord(
@@ -917,21 +918,24 @@ struct ConversationTimelineProjectionTests {
         #expect(MessageFooterPresentation.value(for: try #require(status), isFromMe: true).isFailure)
     }
 
-    @Test func unsuccessfulDurableRetryRestoresInvalidatedFailureOutsideRefreshedTail() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func unsuccessfulDurableRetryRestoresInvalidatedFailureOutsideRefreshedTail() async throws {
         var attempts = 0
-        let fixture = try durableRetryFixture(
-            invalidationStatus: "local_publish_failed",
-            converge: { _, _, groupIdHex in
-                attempts += 1
-                throw MarmotKitError.GroupUnrecoverableRepairRequired(groupIdHex: groupIdHex)
-            }
-        )
+        try await withTestClient { client in
+            let fixture = try durableRetryFixture(
+                client: client,
+                invalidationStatus: "local_publish_failed",
+                converge: { _, _, groupIdHex in
+                    attempts += 1
+                    throw MarmotKitError.GroupUnrecoverableRepairRequired(groupIdHex: groupIdHex)
+                }
+            )
 
-        await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
+            await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
 
-        #expect(attempts == 1)
-        #expect(status(of: fixture.rowId, in: fixture.viewModel) == .failed)
-        #expect(fixture.viewModel.error != nil)
+            #expect(attempts == 1)
+            #expect(status(of: fixture.rowId, in: fixture.viewModel) == .failed)
+            #expect(fixture.viewModel.error != nil)
+        }
     }
 
     @Test func durableRetryReportsUnavailableRuntime() async throws {
@@ -964,94 +968,106 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.error == L10n.string("Send failed"))
     }
 
-    @Test func exhaustedDurableRetryKeepsNonInvalidatedRowSending() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func exhaustedDurableRetryKeepsNonInvalidatedRowSending() async throws {
         var attempts = 0
         var sleeps = 0
-        let fixture = try durableRetryFixture(
-            converge: { _, _, _ in
-                attempts += 1
-                return unpublishedRetrySummary()
-            },
-            sleep: { _ in sleeps += 1 }
-        )
+        try await withTestClient { client in
+            let fixture = try durableRetryFixture(
+                client: client,
+                converge: { _, _, _ in
+                    attempts += 1
+                    return unpublishedRetrySummary()
+                },
+                sleep: { _ in sleeps += 1 }
+            )
 
-        await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
+            await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
 
-        #expect(attempts == 6)
-        #expect(sleeps == 5)
-        #expect(status(of: fixture.rowId, in: fixture.viewModel) == .sending)
-        #expect(fixture.viewModel.error != nil)
+            #expect(attempts == 6)
+            #expect(sleeps == 5)
+            #expect(status(of: fixture.rowId, in: fixture.viewModel) == .sending)
+            #expect(fixture.viewModel.error != nil)
+        }
     }
 
-    @Test func publishedDurableRetryMarksRowSentWhenRefreshedTailOmitsIt() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func publishedDurableRetryMarksRowSentWhenRefreshedTailOmitsIt() async throws {
         let messageIdHex = hex("d1")
-        let fixture = try durableRetryFixture(
-            invalidationStatus: "local_publish_failed",
-            converge: { _, _, _ in
-                SendSummaryFfi(
-                    published: 1,
-                    messageIds: [messageIdHex],
-                    acceptDisposition: .published,
-                    maintenanceDisposition: .ready
-                )
-            }
-        )
+        try await withTestClient { client in
+            let fixture = try durableRetryFixture(
+                client: client,
+                invalidationStatus: "local_publish_failed",
+                converge: { _, _, _ in
+                    SendSummaryFfi(
+                        published: 1,
+                        messageIds: [messageIdHex],
+                        acceptDisposition: .published,
+                        maintenanceDisposition: .ready
+                    )
+                }
+            )
 
-        await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
+            await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
 
-        #expect(status(of: fixture.rowId, in: fixture.viewModel) == .sent)
-        #expect(!fixture.viewModel.canRetryFailedSend(rowId: fixture.rowId))
-        #expect(fixture.viewModel.error == nil)
+            #expect(status(of: fixture.rowId, in: fixture.viewModel) == .sent)
+            #expect(!fixture.viewModel.canRetryFailedSend(rowId: fixture.rowId))
+            #expect(fixture.viewModel.error == nil)
+        }
     }
 
-    @Test func cancelledDurableRetryRestoresPriorFailure() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func cancelledDurableRetryRestoresPriorFailure() async throws {
         var enteredRetrySleep = false
-        let fixture = try durableRetryFixture(
-            invalidationStatus: "local_publish_failed",
-            converge: { _, _, _ in
-                return unpublishedRetrySummary()
-            },
-            sleep: { _ in
-                enteredRetrySleep = true
-                try await Task.sleep(nanoseconds: 60_000_000_000)
+        try await withTestClient { client in
+            let fixture = try durableRetryFixture(
+                client: client,
+                invalidationStatus: "local_publish_failed",
+                converge: { _, _, _ in
+                    return unpublishedRetrySummary()
+                },
+                sleep: { _ in
+                    enteredRetrySleep = true
+                    try await Task.sleep(nanoseconds: 60_000_000_000)
+                }
+            )
+            let retryTask = Task { @MainActor in
+                await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
             }
-        )
-        let retryTask = Task { @MainActor in
-            await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
-        }
-        try await waitForExpectation {
-            enteredRetrySleep
-        }
+            try await waitForExpectation {
+                enteredRetrySleep
+            }
 
-        retryTask.cancel()
-        await retryTask.value
+            retryTask.cancel()
+            await retryTask.value
 
-        #expect(status(of: fixture.rowId, in: fixture.viewModel) == .failed)
-        #expect(fixture.viewModel.error == nil)
+            #expect(status(of: fixture.rowId, in: fixture.viewModel) == .failed)
+            #expect(fixture.viewModel.error == nil)
+        }
     }
 
-    @Test func cancelledDuringFinalRefreshRestoresPriorFailureWithoutError() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func cancelledDuringFinalRefreshRestoresPriorFailureWithoutError() async throws {
         var enteredFinalRefresh = false
-        let fixture = try durableRetryFixture(
-            invalidationStatus: "local_publish_failed",
-            converge: { _, _, _ in unpublishedRetrySummary() },
-            refresh: { _ in
-                enteredFinalRefresh = true
-                withUnsafeCurrentTask { $0?.cancel() }
+        try await withTestClient { client in
+            let fixture = try durableRetryFixture(
+                client: client,
+                invalidationStatus: "local_publish_failed",
+                converge: { _, _, _ in unpublishedRetrySummary() },
+                refresh: { _ in
+                    enteredFinalRefresh = true
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+            )
+            let retryTask = Task { @MainActor in
+                await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
             }
-        )
-        let retryTask = Task { @MainActor in
-            await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
+
+            await retryTask.value
+
+            #expect(enteredFinalRefresh)
+            #expect(status(of: fixture.rowId, in: fixture.viewModel) == .failed)
+            #expect(fixture.viewModel.error == nil)
         }
-
-        await retryTask.value
-
-        #expect(enteredFinalRefresh)
-        #expect(status(of: fixture.rowId, in: fixture.viewModel) == .failed)
-        #expect(fixture.viewModel.error == nil)
     }
 
-    @Test func authoritativeDeliveryDuringRetryIsNotOverwrittenByCleanup() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func authoritativeDeliveryDuringRetryIsNotOverwrittenByCleanup() async throws {
         let groupIdHex = hex("aa")
         let messageIdHex = hex("d1")
         let delivered = timelineRecord(
@@ -1062,27 +1078,30 @@ struct ConversationTimelineProjectionTests {
             plaintext: "durable retry",
             timelineAt: 20
         )
-        let fixture = try durableRetryFixture(
-            invalidationStatus: "local_publish_failed",
-            converge: { _, _, groupIdHex in
-                throw MarmotKitError.GroupUnrecoverableRepairRequired(groupIdHex: groupIdHex)
-            },
-            refresh: { viewModel in
-                viewModel.applyTimelinePage(
-                    TimelinePageFfi(messages: [delivered], hasMoreBefore: true, hasMoreAfter: false),
-                    placement: .tailRefresh
-                )
-            }
-        )
+        try await withTestClient { client in
+            let fixture = try durableRetryFixture(
+                client: client,
+                invalidationStatus: "local_publish_failed",
+                converge: { _, _, groupIdHex in
+                    throw MarmotKitError.GroupUnrecoverableRepairRequired(groupIdHex: groupIdHex)
+                },
+                refresh: { viewModel in
+                    viewModel.applyTimelinePage(
+                        TimelinePageFfi(messages: [delivered], hasMoreBefore: true, hasMoreAfter: false),
+                        placement: .tailRefresh
+                    )
+                }
+            )
 
-        await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
+            await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
 
-        #expect(status(of: fixture.rowId, in: fixture.viewModel) == .sent)
-        #expect(!fixture.viewModel.canRetryFailedSend(rowId: fixture.rowId))
-        #expect(fixture.viewModel.error == nil)
+            #expect(status(of: fixture.rowId, in: fixture.viewModel) == .sent)
+            #expect(!fixture.viewModel.canRetryFailedSend(rowId: fixture.rowId))
+            #expect(fixture.viewModel.error == nil)
+        }
     }
 
-    @Test func authoritativePendingRefreshDuringRetryIsNotOverwrittenByCleanup() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func authoritativePendingRefreshDuringRetryIsNotOverwrittenByCleanup() async throws {
         let groupIdHex = hex("aa")
         let messageIdHex = hex("d1")
         let revalidatedPending = timelineRecord(
@@ -1094,24 +1113,27 @@ struct ConversationTimelineProjectionTests {
             plaintext: "durable retry",
             timelineAt: 20
         )
-        let fixture = try durableRetryFixture(
-            invalidationStatus: "local_publish_failed",
-            converge: { _, _, groupIdHex in
-                throw MarmotKitError.GroupUnrecoverableRepairRequired(groupIdHex: groupIdHex)
-            },
-            refresh: { viewModel in
-                viewModel.applyTimelinePage(
-                    TimelinePageFfi(messages: [revalidatedPending], hasMoreBefore: true, hasMoreAfter: false),
-                    placement: .tailRefresh
-                )
-            }
-        )
+        try await withTestClient { client in
+            let fixture = try durableRetryFixture(
+                client: client,
+                invalidationStatus: "local_publish_failed",
+                converge: { _, _, groupIdHex in
+                    throw MarmotKitError.GroupUnrecoverableRepairRequired(groupIdHex: groupIdHex)
+                },
+                refresh: { viewModel in
+                    viewModel.applyTimelinePage(
+                        TimelinePageFfi(messages: [revalidatedPending], hasMoreBefore: true, hasMoreAfter: false),
+                        placement: .tailRefresh
+                    )
+                }
+            )
 
-        await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
+            await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
 
-        #expect(status(of: fixture.rowId, in: fixture.viewModel) == .sending)
-        #expect(fixture.viewModel.canRetryFailedSend(rowId: fixture.rowId))
-        #expect(fixture.viewModel.error != nil)
+            #expect(status(of: fixture.rowId, in: fixture.viewModel) == .sending)
+            #expect(fixture.viewModel.canRetryFailedSend(rowId: fixture.rowId))
+            #expect(fixture.viewModel.error != nil)
+        }
     }
 
     @Test func successfulSendAckDoesNotFlashFailedWhileDeliveredProjectionCatchesUp() throws {
@@ -1119,7 +1141,7 @@ struct ConversationTimelineProjectionTests {
         let groupIdHex = hex("aa")
         let messageId = hex("b8")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let pending = AppMessageRecordFfi(
@@ -1187,7 +1209,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let tempId = "retry-1"
@@ -1243,7 +1265,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let tempId = "pending-1"
@@ -1300,7 +1322,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let pending = AppMessageRecordFfi(
@@ -1348,7 +1370,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let tempId = "pending-media-1"
@@ -1423,7 +1445,7 @@ struct ConversationTimelineProjectionTests {
             localData: Data([0xDE, 0xAD, 0xBE, 0xEF])
         )
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
 
@@ -1456,7 +1478,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let plaintext = "same text twice"
@@ -1522,7 +1544,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let caption = "hi"
@@ -1604,7 +1626,7 @@ struct ConversationTimelineProjectionTests {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: groupIdHex)
         )
         let caption = "hi"

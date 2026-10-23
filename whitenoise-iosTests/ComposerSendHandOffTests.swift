@@ -9,11 +9,9 @@ private final class SendOrderRecorder {
 }
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ComposerSendHandOffTests {
     @Test func admittedTimeoutKeepsAnUnresolvedBubbleWithoutFreshSendRetry() async throws {
-        let client = try MarmotClient.testClient()
-        let state = AppState.test(client: client)
+        let state = AppState.test()
         state.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
         let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
@@ -25,12 +23,10 @@ struct ComposerSendHandOffTests {
         #expect(store.localSendPhase(rowID: row.id) == .completionUnknown)
         #expect(store.failedTransientRecord(rowId: row.id) == nil)
         #expect(state.activeToast == nil)
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func lateSendResultAfterTeardownCannotRecreateItsBubble() async throws {
-        let client = try MarmotClient.testClient()
-        let state = AppState.test(client: client)
+        let state = AppState.test()
         state.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
         let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
@@ -42,12 +38,10 @@ struct ComposerSendHandOffTests {
         }
         await composer.send("retired send")
         #expect(store.timeline.isEmpty)
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func queuedSendFailureUsesReadableInlineAndToastMessages() async throws {
-        let client = try MarmotClient.testClient()
-        let appState = AppState.test(client: client)
+        let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
         let composer = ComposerModel(appState: appState, groupIdHex: hex("aa"), timelineStore: timelineStore)
@@ -64,7 +58,6 @@ struct ComposerSendHandOffTests {
         #expect(inlineError == "Relay disconnected")
         #expect(appState.activeToast?.title == "Send failed")
         #expect(appState.activeToast?.message == "Relay disconnected")
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func queuedSendsPublishInTheOrderTheyWereEnqueued() async {
@@ -106,7 +99,7 @@ struct ComposerSendHandOffTests {
     }
 
     @Test func composerIsFreeToStageAgainWhileTheRelayRoundTripIsStillRunning() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
         let composer = ComposerModel(
@@ -133,8 +126,7 @@ struct ComposerSendHandOffTests {
     }
 
     @Test func durablyAcceptedComposerOutcomesKeepClockWithoutFailureUI() async throws {
-        let client = try MarmotClient.testClient()
-        let appState = AppState.test(client: client)
+        let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
         let composer = ComposerModel(
@@ -158,12 +150,10 @@ struct ComposerSendHandOffTests {
         #expect(statuses == [.sending])
         #expect(surfacedErrors.isEmpty)
         #expect(appState.activeToast == nil)
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func thrownTransientComposerSendRendersFailedAndSurfacesFailure() async throws {
-        let client = try MarmotClient.testClient()
-        let appState = AppState.test(client: client)
+        let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
         let composer = ComposerModel(
@@ -188,6 +178,5 @@ struct ComposerSendHandOffTests {
         #expect(statuses == [.failed])
         #expect(surfacedErrors.count == 1)
         #expect(appState.activeToast != nil)
-        try await client.marmot.shutdownAndClose()
     }
 }

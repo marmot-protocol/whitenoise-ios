@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AgentStreamTests {
 
     @Test func streamIdIsDecodedFromStartTags() {
@@ -149,7 +148,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func historicalStreamStartsRenderNoBlankBubble() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -173,7 +172,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func finalizedStreamProjectionRemovesSyntheticPreview() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -213,7 +212,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func recordFinalizedStreamsSkipsAlreadyScannedRecordsAcrossPages() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -245,7 +244,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func scannedFinalizedCacheIsBoundedToLoadedWindowButGuardPersists() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -290,7 +289,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func streamChunksRenderIntoOnePreviewBubble() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -320,7 +319,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func streamStatusAndProgressDoNotChangePreviewText() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -355,7 +354,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func checkpointRecordReplacesPreviewText() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -387,7 +386,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func finishedUpdateKeepsCheckpointPreviewWhenBrokerTextIsDeltaOnly() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -433,7 +432,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func streamChunksAreCappedToMessageBodyLimit() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -470,7 +469,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func finishedUpdateReplacesPreviewAndIgnoresLateChunks() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -506,7 +505,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func normalMessageAfterFinishedStreamKeepsFinalizedTranscript() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -552,7 +551,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func emptyFinishedUpdateDoesNotCreateBlankBubble() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -579,7 +578,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func abortRecordDropsLivePreview() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")
@@ -601,7 +600,7 @@ struct AgentStreamTests {
     @MainActor
     @Test func failedUpdateDropsEmptyLivePreview() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         let streamId = hex("ab")

@@ -5,7 +5,6 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationCustomEmojiSenderTests {
     typealias F = CustomEmojiFixtures
 
@@ -333,7 +332,7 @@ struct ConversationCustomEmojiSenderTests {
     }
 
     @Test func everyConversationScreenForTheChatSeesTheInFlightSend() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let group = Self.group()
         let first = ConversationViewModel(appState: appState, group: group)

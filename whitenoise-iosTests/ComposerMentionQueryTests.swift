@@ -4,7 +4,6 @@ import Testing
 
 @testable import whitenoise_ios
 
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ComposerMentionQueryTests {
     private let jeffNpub = "npub1" + String(repeating: "q", count: 58)
     private let aliceNpub = "npub1" + String(repeating: "a", count: 58)
@@ -44,7 +43,7 @@ struct ComposerMentionQueryTests {
 
     @MainActor
     @Test func detailedRosterCandidatePrefersLocalContactNickname() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let suiteName = "dev.ipf.WhiteNoise.mention-nickname.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }

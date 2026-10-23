@@ -7,7 +7,6 @@ import Testing
 /// view model's record conversions must not drop them on the floor (they did,
 /// via the `.emptyDocument` compatibility initializers).
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct MarkdownTokenThreadingTests {
 
     private let tokens = MarkdownDocumentFfi(blocks: [
@@ -56,7 +55,7 @@ struct MarkdownTokenThreadingTests {
     /// optimistically and snapped back to plain text on send confirmation.
     @Test func confirmSentKeepsContentTokensOnTheTimelineRecord() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let pending = AppMessageRecordFfi(
@@ -85,7 +84,7 @@ struct MarkdownTokenThreadingTests {
 
     @Test func durableTimelineUpsertPublishesPinnedRetentionMetadata() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         viewModel.applyTimelinePage(
@@ -126,7 +125,7 @@ struct MarkdownTokenThreadingTests {
 
     @Test func timelinePagePrecomputesMarkdownBlocksForMessageRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let record = TimelineMessageRecordFfi(

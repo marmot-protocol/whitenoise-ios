@@ -160,7 +160,6 @@ struct OptimisticReactionRemovalPruneTests {
 
 /// #380 — target-local reaction tally recomputation should only need the
 /// changed target's summary plus optimistic edits that actually point at it.
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ReactionTargetTallyTests {
     private let me = String(repeating: "1", count: 64)
     private let other = String(repeating: "2", count: 64)
@@ -279,7 +278,7 @@ struct ReactionTargetTallyTests {
     @MainActor
     @Test func projectionDeltaRecomputeMatchesFullRebuildAndKeepsUnrelatedTarget() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let unrelatedTally = [ConversationViewModel.ReactionTally(emoji: "👀", count: 1, mine: false)]
@@ -336,7 +335,7 @@ struct ReactionTargetTallyTests {
 
     @MainActor
     @Test func toggleRecomputesOnlyItsOwnTargetNotUnrelatedSummaries() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "no-such-account"
         let viewModel = ConversationViewModel(appState: appState, group: testGroup())
 
@@ -365,7 +364,7 @@ struct ReactionTargetTallyTests {
     @MainActor
     @Test func multiRecordProjectionUpdateRebuildsTimelineOnce() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         viewModel.applyTimelinePage(

@@ -7,7 +7,6 @@ import Testing
 /// before draft persistence and MDK, and is reconciled with MDK's authoritative
 /// row without duplicating, dropping or reordering it.
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct OutgoingSendResponsivenessTests {
 
     // MARK: - Follow-latest command suppression
@@ -42,7 +41,7 @@ struct OutgoingSendResponsivenessTests {
     }
 
     @Test func aSendOnTheLiveTailDoesNotDependOnAFollowLatestCommand() throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         // No conversation window is installed in this harness, so a follow-latest
         // request would be issued rather than skipped — the bubble must be up
@@ -57,7 +56,7 @@ struct OutgoingSendResponsivenessTests {
     // MARK: - Staging
 
     @Test func sendTapParksItsBubbleBeforeAnyAwait() throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
 
         let staged = try #require(harness.composer.stage(text: "  hello  "))
@@ -69,7 +68,7 @@ struct OutgoingSendResponsivenessTests {
     }
 
     @Test func aBlockedDraftSaveStillShowsTheBubbleAndSettlesItAsFailed() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         let gate = TestLatch()
 
@@ -87,11 +86,10 @@ struct OutgoingSendResponsivenessTests {
         try await submission.value
         #expect(harness.statuses == [.failed])
         #expect(harness.store.failedTransientRecord(rowId: "msg:\(staged.tempId)") != nil)
-        try await harness.shutdown()
     }
 
     @Test func aBlockedPublicationKeepsTheBubbleVisible() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         let gate = TestLatch()
         harness.composer.sendTextForTesting = { _, _, _, _, token in
@@ -106,13 +104,12 @@ struct OutgoingSendResponsivenessTests {
         gate.signal()
         await send.value
         #expect(harness.rowIDs.count == 1)
-        try await harness.shutdown()
     }
 
     // MARK: - Reconciliation
 
     @Test func aProjectionArrivingBeforeTheSendResponseReusesTheSameRow() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         let gate = TestLatch()
         harness.composer.sendTextForTesting = { _, _, _, _, token in
@@ -135,11 +132,10 @@ struct OutgoingSendResponsivenessTests {
         harness.installWindow([harness.ownRecord(id: hexId(1), text: "hi", timelineAt: 10, delivered: true, token: String(rowID.dropFirst(4)))])
         #expect(harness.rowIDs == [rowID])
         #expect(harness.statuses == [.sent])
-        try await harness.shutdown()
     }
 
     @Test func aProjectionArrivingAfterAcceptanceReusesTheSameRow() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         harness.composer.sendTextForTesting = { _, _, _, _, token in accepted(hexId(2), token: token) }
         let staged = try #require(harness.composer.stage(text: "hi"))
@@ -151,11 +147,10 @@ struct OutgoingSendResponsivenessTests {
             delivered: true, token: staged.clientToken)])
         #expect(harness.rowIDs == [rowID])
         #expect(harness.statuses == [.sent])
-        try await harness.shutdown()
     }
 
     @Test func identicalBackToBackSendsProduceOneRowEach() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         harness.composer.sendTextForTesting = { _, _, _, _, token in accepted("unused", token: token) }
 
@@ -172,11 +167,10 @@ struct OutgoingSendResponsivenessTests {
         #expect(harness.rowIDs == ["msg:\(first.tempId)", "msg:\(second.tempId)"])
         #expect(harness.store.protocolID(forDisplayID: "msg:\(first.tempId)") == hexId(3))
         #expect(harness.store.protocolID(forDisplayID: "msg:\(second.tempId)") == hexId(4))
-        try await harness.shutdown()
     }
 
     @Test func exactTokensDisambiguateIdenticalSendsInReverseOrder() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         let first = try #require(harness.composer.stage(text: "same"))
         let second = try #require(harness.composer.stage(text: "same"))
@@ -187,11 +181,10 @@ struct OutgoingSendResponsivenessTests {
         #expect(harness.store.protocolID(forDisplayID: "msg:\(second.tempId)") == hexId(5))
         #expect(harness.store.protocolID(forDisplayID: "msg:\(first.tempId)") == nil)
         #expect(harness.rowIDs.count == 2)
-        try await harness.shutdown()
     }
 
     @Test func aSubmittedBubbleNeverClaimsAnotherDevicesTokenlessRow() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         let staged = try #require(harness.composer.stage(text: "same"))
         harness.store.markLocalSendSubmitted(tempId: staged.tempId)
@@ -200,11 +193,10 @@ struct OutgoingSendResponsivenessTests {
 
         #expect(harness.store.protocolID(forDisplayID: "msg:\(staged.tempId)") == nil)
         #expect(harness.rowIDs == ["msg:\(hexId(6))", "msg:\(staged.tempId)"])
-        try await harness.shutdown()
     }
 
     @Test func aReplyBubbleOnlyClaimsARowWithTheSameParent() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         let parent = hexId(7)
         let staged = try #require(harness.composer.stage(text: "answer", replyTargetId: parent))
@@ -220,11 +212,10 @@ struct OutgoingSendResponsivenessTests {
         reply.clientToken = staged.clientToken
         harness.installWindow([unrelated, reply])
         #expect(harness.store.protocolID(forDisplayID: "msg:\(staged.tempId)") == hexId(9))
-        try await harness.shutdown()
     }
 
     @Test func anAttachmentBubbleKeepsItsPickedBytesUntilTheDurableRowArrives() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         let attachment = MessageMediaAttachment(id: "local", reference: nil, fileName: "local.jpg",
             mediaType: "image/jpeg", dim: nil, localData: Data([1, 2, 3]))
@@ -238,12 +229,11 @@ struct OutgoingSendResponsivenessTests {
         harness.installWindow([harness.ownRecord(id: hexId(10), text: "caption", timelineAt: 50, delivered: false)])
         #expect(harness.store.protocolID(forDisplayID: rowID) == nil)
         #expect(harness.store.mediaProjections.pending(forRowId: rowID)?.count == 1)
-        try await harness.shutdown()
     }
 
     @Test(arguments: [true, false])
     func aJustSentAttachmentRendersFromItsOwnBytesOnceTheDurableRowArrives(retained: Bool) async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         let draft = MediaDraftAttachment(fileName: "photo.jpg", mediaType: "image/jpeg", data: Data([4, 5, 6]), dim: nil)
         let rowID = "msg:photo"
@@ -266,11 +256,10 @@ struct OutgoingSendResponsivenessTests {
         let items = harness.store.mediaItems(for: row)
         #expect(items.first?.reference?.plaintextSha256 == plaintextSha256)
         #expect(items.first?.localData == (retained ? Data([4, 5, 6]) : nil))
-        try await harness.shutdown()
     }
 
     @Test func ownSendBytesRetainedAfterTheRowIsCachedAppearOnTheNextRead() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         let plaintextSha256 = String(repeating: "e", count: 64)
         var durable = harness.ownRecord(id: hexId(13), text: "", timelineAt: 70, delivered: true, token: "late")
         durable.media = [.accepted(attachmentIndex: 0, reference: mediaReference(plaintextSha256: plaintextSha256))]
@@ -284,11 +273,10 @@ struct OutgoingSendResponsivenessTests {
 
         harness.store.mediaProjections.removeAllPending()
         #expect(harness.store.mediaItems(for: row).first?.localData == nil)
-        try await harness.shutdown()
     }
 
     @Test func anAmbiguousCompletionKeepsTheBubbleClaimableRatherThanFailed() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         harness.composer.sendTextForTesting = { _, _, _, _, token in throw MarmotKitError.AccountWorkerResponseTimedOut }
 
@@ -300,11 +288,10 @@ struct OutgoingSendResponsivenessTests {
         harness.installWindow([harness.ownRecord(id: hexId(11), text: "maybe landed", timelineAt: 60, delivered: true, token: String(rowID.dropFirst(4)))])
         #expect(harness.rowIDs == [rowID])
         #expect(harness.store.protocolID(forDisplayID: rowID) == hexId(11))
-        try await harness.shutdown()
     }
 
     @Test func aDefinitiveFailureCannotPaintOverAnAlreadyProjectedRow() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         harness.composer.sendTextForTesting = { _, _, _, _, token in
             harness.installWindow([harness.ownRecord(id: hexId(12), text: "landed", timelineAt: 70, delivered: false, token: token)])
@@ -317,11 +304,10 @@ struct OutgoingSendResponsivenessTests {
         #expect(harness.rowIDs == [rowID])
         #expect(harness.statuses == [.sending])
         #expect(harness.store.failedTransientRecord(rowId: rowID) == nil)
-        try await harness.shutdown()
     }
 
     @Test func aConversationResetDuringPreparationRetiresTheStagedSend() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         harness.composer.sendTextForTesting = { _, _, _, _, token in
             Issue.record("A retired conversation must not reach the SDK")
@@ -334,11 +320,10 @@ struct OutgoingSendResponsivenessTests {
         await harness.composer.submit(staged)
 
         #expect(harness.rowIDs.isEmpty)
-        try await harness.shutdown()
     }
 
     @Test func anAccountSwitchDuringPreparationRetiresTheStagedSend() async throws {
-        let harness = try SendHarness()
+        let harness = SendHarness()
         harness.installWindow([])
         harness.composer.sendTextForTesting = { _, _, _, _, token in
             Issue.record("A retired account must not reach the SDK")
@@ -351,7 +336,6 @@ struct OutgoingSendResponsivenessTests {
         await harness.composer.submit(staged) { submitAccepted = $0 }
 
         #expect(submitAccepted == false)
-        try await harness.shutdown()
     }
 }
 
@@ -359,15 +343,13 @@ struct OutgoingSendResponsivenessTests {
 
 @MainActor
 private final class SendHarness {
-    let client: MarmotClient
     let appState: AppState
     let viewModel: ConversationViewModel
     let store: TimelineStore
     let composer: ComposerModel
 
-    init() throws {
-        client = try MarmotClient.testClient()
-        appState = AppState.test(client: client)
+    init() {
+        appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         viewModel = ConversationViewModel(appState: appState, group: harnessGroup())
         store = viewModel.timelineStore
@@ -415,9 +397,6 @@ private final class SendHarness {
         )
     }
 
-    func shutdown() async throws {
-        try await client.marmot.shutdownAndClose()
-    }
 }
 
 private extension StagedOutgoingSend {

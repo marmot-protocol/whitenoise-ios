@@ -3,11 +3,10 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct TimelineWindowEvictionTests {
     @MainActor
     @Test func completeConversationReplacementRemovesFilteredAndEvictedRows() throws {
-        let viewModel = ConversationViewModel(appState: AppState.test(client: try MarmotClient.testClient()), group: testGroup())
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: testGroup())
         let hidden = timelineRecord(
             messageIdHex: hexId(1),
             sourceMessageIdHex: .absent,
@@ -34,7 +33,7 @@ struct TimelineWindowEvictionTests {
     @MainActor
     @Test func boundedWindowPageKeepsPreviouslyLoadedHistory() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let older = timelineRecord(
@@ -71,7 +70,7 @@ struct TimelineWindowEvictionTests {
     @MainActor
     @Test func visibleRowFrameLookupTouchesOnlyRequestedRecords() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let first = timelineRecord(
@@ -107,7 +106,7 @@ struct TimelineWindowEvictionTests {
     @MainActor
     @Test func projectionRemoveEvictsOnlyAuthoritativelyRemovedRecord() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let removed = timelineRecord(
@@ -151,7 +150,7 @@ struct TimelineWindowEvictionTests {
     @MainActor
     @Test func confirmedSentMessageSurvivesAnyAbsentWindowUntilMirrored() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let retained = timelineRecord(
@@ -217,7 +216,7 @@ struct TimelineWindowEvictionTests {
     @MainActor
     @Test func confirmedSentMessageSurvivesEdgeFlagChangeUntilMirrored() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let retained = timelineRecord(
@@ -274,7 +273,7 @@ struct TimelineWindowEvictionTests {
     @MainActor
     @Test func confirmSentDoesNotOverwriteAlreadyLoadedDurableRow() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let tempId = "pending-race"

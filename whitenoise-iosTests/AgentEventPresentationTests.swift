@@ -3,7 +3,6 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AgentEventPresentationTests {
     @Test func oversizedPayloadIsRejectedBeforeParsing() {
         // The cap runs before JSONSerialization materializes anything — a
@@ -136,7 +135,7 @@ struct AgentEventPresentationTests {
     @MainActor
     @Test func agentOperationTimelineRowIsVisibleWithoutStreamingDebug() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testAgentGroup()
         )
         let operation = timelineRecord(

@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationChromeTests {
 
     @Test func initialChromeUsesChatListTitleBeforeViewModelLoads() {
@@ -60,7 +59,7 @@ struct ConversationChromeTests {
     }
 
     @Test func directMessageTitleUsesInitialChatListHintsBeforeRosterLoads() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let other = hex("22")
 
         let viewModel = ConversationViewModel(
