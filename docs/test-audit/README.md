@@ -86,3 +86,39 @@ python3 scripts/audit/build-ledger.py --render
 
 Measurements are machine-specific; compare runs from the same Mac, and treat
 CI numbers (3-vCPU runner) as a separate series produced by the step summary.
+
+## Measured findings (2026-10-23, Apple Silicon Mac, Xcode 27.1, iPhone SE 3rd gen simulator)
+
+- **Serialized cost of the whole suite: 211 s** (2,977 tests, 378 suites, parallel
+  execution off). `AppStateBootstrapTests` alone is **141 s, 67%**; the next suites
+  are `ConversationWindowBindingTests` 10.2 s, `RuntimeOwnershipTests` 9.4 s,
+  `OnboardingRecoveryRemovalTests` 6.4 s, `ControlLayoutTests` 5.8 s,
+  `WNQRCodeCardRenderingTests` 5.4 s. Everything else together is about 30 s.
+- **Per-file processes** (one `test-without-building` per test file, 324 files,
+  11 s fixed overhead each): same ranking; `AppStateBootstrapTests` 139 s net.
+- **Runtime gate**: 95 gated test cases hold the single permit for 139.9 s in total
+  (median 1.2 s, p90 3.3 s, max 8.0 s). That hold time is real work (each test boots
+  a runtime and creates an identity), so on the 3-vCPU CI runner it stretches to the
+  300–650 s critical path observed in CI logs.
+- **Open-only runtime constructions** (~300 tests that call `MarmotClient.testClient()`
+  and never start it) cost little here: `ChatsListProjectionTests` with 30 of them
+  runs in 0.09 s. They still leak ~190 unclosed runtimes per run and are removed
+  by the `purify` verdicts for hygiene, not for speed.
+- **Coverage overlap**: after subtracting the 966 lines every process executes at
+  host launch, 38 of 324 files cover no line that another file does not also cover.
+  Zero unique lines is a redundancy input, never a deletion by itself.
+- **Mutation probes: 9 of 9 killed.** Each `AGENTS.md` invariant probed has at least
+  one suite that fails when it is broken: generic preview drops the sender (3
+  suites), hex normalization (1), identity never renders raw hex (2), private IPv4
+  image hosts rejected (1), mention gate honours the muted-chat preference (1),
+  injected `now` in relative time (1), background suspends the runtime (1), and the
+  two host-guard probes (1). In every case most of the suites that reference the
+  symbol passed the mutant; only the named suites protect it.
+- **CI failure history (last 200 runs, 27 failed)**: `Marmot0104BindingTests` 4,
+  `PrivateKeyAutoFillTests` 3, `CustomEmojiSendingFixtureTests` 3,
+  `LocalizationCatalogTests` 2, then single failures in `AccountExitPresentationTests`,
+  `GroupModerationBindingTests`, `ContinuousQRScannerTests` and four XCTest cases
+  of `AccountExitSheetTests`.
+- **Ledger** (`ledger.csv`): 378 suites → 220 keep, 66 purify, 48 merge, 24 trim,
+  12 delete, 6 re-tier, 2 moved to a lint script. 85 suites carry a hand verdict
+  from `verdicts.csv`; the rest are the automatic proposal.
