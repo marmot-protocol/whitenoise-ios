@@ -3,7 +3,6 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct GroupSystemEventPresentationTests {
     @Test func structuredBindingProjectionAvoidsJsonFallbackAndNamesCurrentAccountAsYou() {
         let me = hex("aa")
@@ -509,7 +508,7 @@ struct GroupSystemEventPresentationTests {
     @MainActor
     @Test func groupSystemTimelineRowIsVisibleWithoutStreamingDebug() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let row = timelineRecord(
@@ -552,7 +551,7 @@ struct GroupSystemEventPresentationTests {
     @MainActor
     @Test func groupSystemTimelineDisplayTextIsCachedPerProjectionGeneration() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let row = timelineRecord(

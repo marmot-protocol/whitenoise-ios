@@ -4,14 +4,14 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
+@Suite(.tags(.runtime))
 struct GroupDetailsArchiveActionTests {
 
     /// #446 — the Archive/Unarchive row already disables itself from
     /// `membershipActionInFlight`; `setArchived` must take that gate before the
     /// awaited publish so a fast double-tap cannot start a second archive publish.
     @Test func setArchivedRejectsConcurrentPublishUntilFirstCompletes() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -58,7 +58,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func profileUpdateRejectsConcurrentPublishUntilFirstCompletes() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -107,154 +107,160 @@ struct GroupDetailsArchiveActionTests {
         #expect(!model.membershipActionInFlight)
     }
 
-    @Test func updateGroupImageRejectsConcurrentPublishUntilFirstCompletes() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
-        )
-        let model = GroupDetailsViewModel()
-        let publisher = GroupAvatarPublishProbe()
-        var progressPhases: [GroupImageProgressPhase?] = []
-        let draft = GroupImageUploadDraft(
-            data: Data([1, 2, 3]),
-            mediaType: "image/jpeg",
-            sourceURL: nil,
-            dim: nil,
-            thumbhash: nil
-        )
-
-        model.conversation = conversation
-        model.updateGroupImageForTesting = { accountRef, groupIdHex, data, mediaType in
-            try await publisher.publish(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                data: data,
-                mediaType: mediaType
+    @Test(.marmotRuntimeConcurrencyLimit) func updateGroupImageRejectsConcurrentPublishUntilFirstCompletes() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
             )
-        }
-
-        let first = Task { @MainActor in
-            try await model.updateGroupImage(
-                draft: draft,
-                using: appState,
-                onProgress: { progressPhases.append($0) }
+            let model = GroupDetailsViewModel()
+            let publisher = GroupAvatarPublishProbe()
+            var progressPhases: [GroupImageProgressPhase?] = []
+            let draft = GroupImageUploadDraft(
+                data: Data([1, 2, 3]),
+                mediaType: "image/jpeg",
+                sourceURL: nil,
+                dim: nil,
+                thumbhash: nil
             )
-        }
-        await publisher.waitUntilStarted()
 
-        #expect(model.membershipActionInFlight)
-        #expect(progressPhases == [.updating])
-        #expect(appState.activeToast == nil)
-
-        let second = Task { @MainActor in
-            try await model.updateGroupImage(draft: draft, using: appState)
-        }
-        await #expect(throws: GroupDetailsActionError.operationInFlight) {
-            try await second.value
-        }
-
-        #expect(publisher.requests == [
-            GroupAvatarPublishProbe.Request(
-                accountRef: "account-1",
-                groupIdHex: groupIdHex,
-                data: draft.data,
-                mediaType: draft.mediaType
-            ),
-        ])
-
-        publisher.completeFirst()
-        try await first.value
-
-        #expect(!model.membershipActionInFlight)
-        #expect(progressPhases == [.updating, .finishing, nil])
-    }
-
-    @Test func encryptedImageUploadClearsLegacyURLOnlyAfterUploadSucceeds() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(
-                groupIdHex: groupIdHex,
-                archived: false,
-                avatarUrl: "https://legacy.example/group.jpg"
-            )
-        )
-        let model = GroupDetailsViewModel()
-        let draft = GroupImageUploadDraft(
-            data: Data([7, 8, 9]),
-            mediaType: "image/jpeg",
-            sourceURL: nil,
-            dim: nil,
-            thumbhash: nil
-        )
-        var operations: [String] = []
-        model.conversation = conversation
-        model.updateGroupImageForTesting = { _, _, _, _ in
-            operations.append("upload")
-            return SendSummaryFfi(published: 1, messageIds: ["upload"])
-        }
-        model.updateGroupAvatarUrlForTesting = { _, _, url in
-            #expect(url == nil)
-            operations.append("clear-url")
-            return SendSummaryFfi(published: 1, messageIds: ["clear"])
-        }
-
-        try await model.updateGroupImage(draft: draft, using: appState)
-
-        #expect(operations == ["upload", "clear-url"])
-    }
-
-    @Test func legacyURLClearRetryDoesNotUploadEncryptedImageAgain() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(
-                groupIdHex: groupIdHex,
-                archived: false,
-                avatarUrl: "https://legacy.example/group.jpg"
-            )
-        )
-        let model = GroupDetailsViewModel()
-        let draft = GroupImageUploadDraft(
-            data: Data([1]),
-            mediaType: "image/jpeg",
-            sourceURL: nil,
-            dim: nil,
-            thumbhash: nil
-        )
-        var uploadCount = 0
-        var clearCount = 0
-        model.conversation = conversation
-        model.updateGroupImageForTesting = { _, _, _, _ in
-            uploadCount += 1
-            return SendSummaryFfi(published: 1, messageIds: ["upload"])
-        }
-        model.updateGroupAvatarUrlForTesting = { _, _, _ in
-            clearCount += 1
-            if clearCount == 1 {
-                throw GroupImageTestError.clearFailed
+            model.conversation = conversation
+            model.updateGroupImageForTesting = { accountRef, groupIdHex, data, mediaType in
+                try await publisher.publish(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    data: data,
+                    mediaType: mediaType
+                )
             }
-            return SendSummaryFfi(published: 1, messageIds: ["clear"])
-        }
 
-        await #expect(throws: GroupImageTestError.self) {
+            let first = Task { @MainActor in
+                try await model.updateGroupImage(
+                    draft: draft,
+                    using: appState,
+                    onProgress: { progressPhases.append($0) }
+                )
+            }
+            await publisher.waitUntilStarted()
+
+            #expect(model.membershipActionInFlight)
+            #expect(progressPhases == [.updating])
+            #expect(appState.activeToast == nil)
+
+            let second = Task { @MainActor in
+                try await model.updateGroupImage(draft: draft, using: appState)
+            }
+            await #expect(throws: GroupDetailsActionError.operationInFlight) {
+                try await second.value
+            }
+
+            #expect(publisher.requests == [
+                GroupAvatarPublishProbe.Request(
+                    accountRef: "account-1",
+                    groupIdHex: groupIdHex,
+                    data: draft.data,
+                    mediaType: draft.mediaType
+                ),
+            ])
+
+            publisher.completeFirst()
+            try await first.value
+
+            #expect(!model.membershipActionInFlight)
+            #expect(progressPhases == [.updating, .finishing, nil])
+        }
+    }
+
+    @Test(.marmotRuntimeConcurrencyLimit) func encryptedImageUploadClearsLegacyURLOnlyAfterUploadSucceeds() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(
+                    groupIdHex: groupIdHex,
+                    archived: false,
+                    avatarUrl: "https://legacy.example/group.jpg"
+                )
+            )
+            let model = GroupDetailsViewModel()
+            let draft = GroupImageUploadDraft(
+                data: Data([7, 8, 9]),
+                mediaType: "image/jpeg",
+                sourceURL: nil,
+                dim: nil,
+                thumbhash: nil
+            )
+            var operations: [String] = []
+            model.conversation = conversation
+            model.updateGroupImageForTesting = { _, _, _, _ in
+                operations.append("upload")
+                return SendSummaryFfi(published: 1, messageIds: ["upload"])
+            }
+            model.updateGroupAvatarUrlForTesting = { _, _, url in
+                #expect(url == nil)
+                operations.append("clear-url")
+                return SendSummaryFfi(published: 1, messageIds: ["clear"])
+            }
+
             try await model.updateGroupImage(draft: draft, using: appState)
-        }
-        try await model.updateGroupImage(draft: draft, using: appState)
 
-        #expect(uploadCount == 1)
-        #expect(clearCount == 2)
+            #expect(operations == ["upload", "clear-url"])
+        }
+    }
+
+    @Test(.marmotRuntimeConcurrencyLimit) func legacyURLClearRetryDoesNotUploadEncryptedImageAgain() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(
+                    groupIdHex: groupIdHex,
+                    archived: false,
+                    avatarUrl: "https://legacy.example/group.jpg"
+                )
+            )
+            let model = GroupDetailsViewModel()
+            let draft = GroupImageUploadDraft(
+                data: Data([1]),
+                mediaType: "image/jpeg",
+                sourceURL: nil,
+                dim: nil,
+                thumbhash: nil
+            )
+            var uploadCount = 0
+            var clearCount = 0
+            model.conversation = conversation
+            model.updateGroupImageForTesting = { _, _, _, _ in
+                uploadCount += 1
+                return SendSummaryFfi(published: 1, messageIds: ["upload"])
+            }
+            model.updateGroupAvatarUrlForTesting = { _, _, _ in
+                clearCount += 1
+                if clearCount == 1 {
+                    throw GroupImageTestError.clearFailed
+                }
+                return SendSummaryFfi(published: 1, messageIds: ["clear"])
+            }
+
+            await #expect(throws: GroupImageTestError.self) {
+                try await model.updateGroupImage(draft: draft, using: appState)
+            }
+            try await model.updateGroupImage(draft: draft, using: appState)
+
+            #expect(uploadCount == 1)
+            #expect(clearCount == 2)
+        }
     }
 
     @Test func clearingDescriptionPublishesTheExplicitEmptyStringSentinel() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -286,48 +292,50 @@ struct GroupDetailsArchiveActionTests {
         #expect(!model.membershipActionInFlight)
     }
 
-    @Test func groupInfoSavePublishesTextThenImageAndClearsTheImageEdit() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
-        )
-        let model = GroupDetailsViewModel()
-        let draft = GroupImageUploadDraft(
-            data: Data([4, 5, 6]),
-            mediaType: "image/jpeg",
-            sourceURL: nil,
-            dim: nil,
-            thumbhash: nil
-        )
-        var operations: [String] = []
+    @Test(.marmotRuntimeConcurrencyLimit) func groupInfoSavePublishesTextThenImageAndClearsTheImageEdit() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
+            )
+            let model = GroupDetailsViewModel()
+            let draft = GroupImageUploadDraft(
+                data: Data([4, 5, 6]),
+                mediaType: "image/jpeg",
+                sourceURL: nil,
+                dim: nil,
+                thumbhash: nil
+            )
+            var operations: [String] = []
 
-        model.conversation = conversation
-        model.prepareProfileDrafts()
-        model.renameDraft = "Renamed group"
-        model.imageEdit = .replaced(draft)
-        model.updateGroupProfileForTesting = { _, _, name, _ in
-            operations.append("profile:\(name)")
-            return SendSummaryFfi(published: 1, messageIds: ["profile"])
+            model.conversation = conversation
+            model.prepareProfileDrafts()
+            model.renameDraft = "Renamed group"
+            model.imageEdit = .replaced(draft)
+            model.updateGroupProfileForTesting = { _, _, name, _ in
+                operations.append("profile:\(name)")
+                return SendSummaryFfi(published: 1, messageIds: ["profile"])
+            }
+            model.updateGroupImageForTesting = { _, _, data, _ in
+                operations.append("image:\(data.count)")
+                return SendSummaryFfi(published: 1, messageIds: ["image"])
+            }
+
+            #expect(model.canSaveGroupInfo)
+            let succeeded = await model.saveGroupInfo(using: appState)
+
+            #expect(succeeded)
+            #expect(operations == ["profile:Renamed group", "image:3"])
+            #expect(model.imageEdit == .unchanged)
+            #expect(!model.membershipActionInFlight)
         }
-        model.updateGroupImageForTesting = { _, _, data, _ in
-            operations.append("image:\(data.count)")
-            return SendSummaryFfi(published: 1, messageIds: ["image"])
-        }
-
-        #expect(model.canSaveGroupInfo)
-        let succeeded = await model.saveGroupInfo(using: appState)
-
-        #expect(succeeded)
-        #expect(operations == ["profile:Renamed group", "image:3"])
-        #expect(model.imageEdit == .unchanged)
-        #expect(!model.membershipActionInFlight)
     }
 
     @Test func groupInfoSaveKeepsTheImageEditWhenTheTextPublishFails() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -358,7 +366,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func groupInfoSaveSaysTheTextWasSavedWhenOnlyTheImageFails() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let conversation = ConversationViewModel(
             appState: appState,
@@ -388,43 +396,45 @@ struct GroupDetailsArchiveActionTests {
         #expect(model.actionError?.hasPrefix("Name and description saved.") == true)
     }
 
-    @Test func groupInfoSaveSetsAnUnnamedGroupImageWithoutPublishingText() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-1"
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(groupIdHex: String(repeating: "ab", count: 32), archived: false, name: "")
-        )
-        let model = GroupDetailsViewModel()
-        var operations: [String] = []
+    @Test(.marmotRuntimeConcurrencyLimit) func groupInfoSaveSetsAnUnnamedGroupImageWithoutPublishingText() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(groupIdHex: String(repeating: "ab", count: 32), archived: false, name: "")
+            )
+            let model = GroupDetailsViewModel()
+            var operations: [String] = []
 
-        model.conversation = conversation
-        model.prepareProfileDrafts()
-        model.imageEdit = .replaced(GroupImageUploadDraft(
-            data: Data([7, 8]),
-            mediaType: "image/jpeg",
-            sourceURL: nil,
-            dim: nil,
-            thumbhash: nil
-        ))
-        model.updateGroupProfileForTesting = { _, _, name, _ in
-            operations.append("profile:\(name)")
-            return SendSummaryFfi(published: 1, messageIds: ["profile"])
+            model.conversation = conversation
+            model.prepareProfileDrafts()
+            model.imageEdit = .replaced(GroupImageUploadDraft(
+                data: Data([7, 8]),
+                mediaType: "image/jpeg",
+                sourceURL: nil,
+                dim: nil,
+                thumbhash: nil
+            ))
+            model.updateGroupProfileForTesting = { _, _, name, _ in
+                operations.append("profile:\(name)")
+                return SendSummaryFfi(published: 1, messageIds: ["profile"])
+            }
+            model.updateGroupImageForTesting = { _, _, data, _ in
+                operations.append("image:\(data.count)")
+                return SendSummaryFfi(published: 1, messageIds: ["image"])
+            }
+
+            #expect(model.canSaveGroupInfo)
+            let succeeded = await model.saveGroupInfo(using: appState)
+
+            #expect(succeeded)
+            #expect(operations == ["image:2"])
         }
-        model.updateGroupImageForTesting = { _, _, data, _ in
-            operations.append("image:\(data.count)")
-            return SendSummaryFfi(published: 1, messageIds: ["image"])
-        }
-
-        #expect(model.canSaveGroupInfo)
-        let succeeded = await model.saveGroupInfo(using: appState)
-
-        #expect(succeeded)
-        #expect(operations == ["image:2"])
     }
 
     @Test func groupInfoTextEditsOnAnUnnamedGroupStillNeedAName() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let conversation = ConversationViewModel(
             appState: appState,
             group: archiveTestGroup(groupIdHex: String(repeating: "ab", count: 32), archived: false, name: "")
@@ -441,7 +451,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func groupInfoCanSaveOnlyAValidChangedDraft() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let conversation = ConversationViewModel(
             appState: appState,
             group: archiveTestGroup(groupIdHex: String(repeating: "ab", count: 32), archived: false)
@@ -459,68 +469,72 @@ struct GroupDetailsArchiveActionTests {
         #expect(!model.canSaveGroupInfo)
     }
 
-    @Test func sharedMediaProjectionLoadsOnceUnlessExplicitlyRefreshed() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
-        )
-        let model = GroupDetailsViewModel()
-        var requestCount = 0
+    @Test(.marmotRuntimeConcurrencyLimit) func sharedMediaProjectionLoadsOnceUnlessExplicitlyRefreshed() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
+            )
+            let model = GroupDetailsViewModel()
+            var requestCount = 0
 
-        model.conversation = conversation
-        model.listMediaForTesting = { _, _ in
-            requestCount += 1
-            return []
+            model.conversation = conversation
+            model.listMediaForTesting = { _, _ in
+                requestCount += 1
+                return []
+            }
+
+            await model.loadSharedMedia(using: appState)
+            await model.loadSharedMedia(using: appState)
+            #expect(requestCount == 1)
+
+            await model.loadSharedMedia(using: appState, force: true)
+            #expect(requestCount == 2)
         }
-
-        await model.loadSharedMedia(using: appState)
-        await model.loadSharedMedia(using: appState)
-        #expect(requestCount == 1)
-
-        await model.loadSharedMedia(using: appState, force: true)
-        #expect(requestCount == 2)
     }
 
-    @Test func leaveMarksConversationInactiveAndNotifiesParent() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
-        )
-        let model = GroupDetailsViewModel()
-        var changedRecords: [AppGroupRecordFfi] = []
-        var leftGroupIds: [String] = []
-        var dismissed = false
-        var leaveRequests: [(String, String)] = []
+    @Test(.marmotRuntimeConcurrencyLimit) func leaveMarksConversationInactiveAndNotifiesParent() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
+            )
+            let model = GroupDetailsViewModel()
+            var changedRecords: [AppGroupRecordFfi] = []
+            var leftGroupIds: [String] = []
+            var dismissed = false
+            var leaveRequests: [(String, String)] = []
 
-        model.conversation = conversation
-        model.onGroupChanged = { changedRecords.append($0) }
-        model.onGroupLeft = { leftGroupIds.append($0) }
-        model.leaveGroupForTesting = { accountRef, groupIdHex in
-            leaveRequests.append((accountRef, groupIdHex))
-            return SendSummaryFfi(published: 1, messageIds: ["leave-message"])
+            model.conversation = conversation
+            model.onGroupChanged = { changedRecords.append($0) }
+            model.onGroupLeft = { leftGroupIds.append($0) }
+            model.leaveGroupForTesting = { accountRef, groupIdHex in
+                leaveRequests.append((accountRef, groupIdHex))
+                return SendSummaryFfi(published: 1, messageIds: ["leave-message"])
+            }
+
+            await model.leave(using: appState, dismiss: { dismissed = true })
+
+            #expect(leaveRequests.count == 1)
+            #expect(leaveRequests.first?.0 == "account-1")
+            #expect(leaveRequests.first?.1 == groupIdHex)
+            #expect(conversation.group.selfMembership == .left)
+            #expect(conversation.group.leaveRequestPending)
+            #expect(changedRecords.map(\.selfMembership) == [.left])
+            #expect(changedRecords.map(\.leaveRequestPending) == [true])
+            #expect(leftGroupIds == [groupIdHex])
+            #expect(dismissed)
         }
-
-        await model.leave(using: appState, dismiss: { dismissed = true })
-
-        #expect(leaveRequests.count == 1)
-        #expect(leaveRequests.first?.0 == "account-1")
-        #expect(leaveRequests.first?.1 == groupIdHex)
-        #expect(conversation.group.selfMembership == .left)
-        #expect(conversation.group.leaveRequestPending)
-        #expect(changedRecords.map(\.selfMembership) == [.left])
-        #expect(changedRecords.map(\.leaveRequestPending) == [true])
-        #expect(leftGroupIds == [groupIdHex])
-        #expect(dismissed)
     }
 
     @Test func endGroupRecordsDurableIntentAndDisablesMessagingImmediately() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -558,7 +572,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func endGroupEnablesLifecycleAndDisbandsFromOneConfirmation() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let group = archiveTestGroup(groupIdHex: groupIdHex, archived: false)
@@ -595,96 +609,102 @@ struct GroupDetailsArchiveActionTests {
         #expect(conversation.group.disbandRequest == .pending(requestedAtMs: 2_000))
     }
 
-    @Test func alreadyRequestedLeaveIsPresentedAsDurableProgress() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
-        )
-        let model = GroupDetailsViewModel()
-        var changedRecords: [AppGroupRecordFfi] = []
-        var leftGroupIds: [String] = []
-        var dismissed = false
+    @Test(.marmotRuntimeConcurrencyLimit) func alreadyRequestedLeaveIsPresentedAsDurableProgress() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
+            )
+            let model = GroupDetailsViewModel()
+            var changedRecords: [AppGroupRecordFfi] = []
+            var leftGroupIds: [String] = []
+            var dismissed = false
 
-        model.conversation = conversation
-        model.onGroupChanged = { changedRecords.append($0) }
-        model.onGroupLeft = { leftGroupIds.append($0) }
-        model.leaveGroupForTesting = { _, _ in
-            throw MarmotKitError.LeaveAlreadyRequested(groupIdHex: groupIdHex)
+            model.conversation = conversation
+            model.onGroupChanged = { changedRecords.append($0) }
+            model.onGroupLeft = { leftGroupIds.append($0) }
+            model.leaveGroupForTesting = { _, _ in
+                throw MarmotKitError.LeaveAlreadyRequested(groupIdHex: groupIdHex)
+            }
+
+            await model.leave(using: appState, dismiss: { dismissed = true })
+
+            #expect(conversation.group.selfMembership == .member)
+            #expect(conversation.group.leaveRequestPending)
+            #expect(changedRecords.map(\.leaveRequestPending) == [true])
+            #expect(leftGroupIds == [groupIdHex])
+            #expect(dismissed)
         }
-
-        await model.leave(using: appState, dismiss: { dismissed = true })
-
-        #expect(conversation.group.selfMembership == .member)
-        #expect(conversation.group.leaveRequestPending)
-        #expect(changedRecords.map(\.leaveRequestPending) == [true])
-        #expect(leftGroupIds == [groupIdHex])
-        #expect(dismissed)
     }
 
-    @Test func developerResetAllowsAnActiveGroupAndRemovesItOnlyAfterSuccess() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.setPhase(.ready)
-        appState.isAppSceneActive = true
-        appState.activeAccountRef = "account-1"
-        let previousMode = appState.developerMode
-        appState.developerMode = true
-        defer { appState.developerMode = previousMode }
-        let conversation = ConversationViewModel(appState: appState, group: archiveTestGroup(groupIdHex: "group", archived: false))
-        let model = GroupDetailsViewModel()
-        model.conversation = conversation
-        var deleted: [String] = []
-        var calls = 0
-        model.onGroupDeleted = { deleted.append($0) }
-        model.clearResetMediaForTesting = { true }
-        model.forgetGroupLocalForTesting = { account, group in
-            #expect(account == "account-1" && group == "group")
+    @Test(.marmotRuntimeConcurrencyLimit) func developerResetAllowsAnActiveGroupAndRemovesItOnlyAfterSuccess() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.setPhase(.ready)
+            appState.isAppSceneActive = true
+            appState.activeAccountRef = "account-1"
+            let previousMode = appState.developerMode
+            appState.developerMode = true
+            defer { appState.developerMode = previousMode }
+            let conversation = ConversationViewModel(appState: appState, group: archiveTestGroup(groupIdHex: "group", archived: false))
+            let model = GroupDetailsViewModel()
+            model.conversation = conversation
+            var deleted: [String] = []
+            var calls = 0
+            model.onGroupDeleted = { deleted.append($0) }
+            model.clearResetMediaForTesting = { true }
+            model.forgetGroupLocalForTesting = { account, group in
+                #expect(account == "account-1" && group == "group")
+                #expect(conversation.isLocallyReset)
+                calls += 1
+                return false // Already awaiting a fresh invitation is also a successful local reset.
+            }
+            await model.resetLocal(using: appState, dismiss: {})
+            #expect(calls == 1)
+            #expect(deleted == ["group"])
             #expect(conversation.isLocallyReset)
-            calls += 1
-            return false // Already awaiting a fresh invitation is also a successful local reset.
+            #expect(!model.membershipActionInFlight)
+            await model.resetLocal(using: appState, dismiss: {})
+            #expect(calls == 1)
         }
-        await model.resetLocal(using: appState, dismiss: {})
-        #expect(calls == 1)
-        #expect(deleted == ["group"])
-        #expect(conversation.isLocallyReset)
-        #expect(!model.membershipActionInFlight)
-        await model.resetLocal(using: appState, dismiss: {})
-        #expect(calls == 1)
     }
 
-    @Test func resetFailureKeepsTheGroupAndDeveloperModeIsRequired() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        appState.setPhase(.ready)
-        appState.isAppSceneActive = true
-        appState.activeAccountRef = "account-1"
-        let previousMode = appState.developerMode
-        defer { appState.developerMode = previousMode }
-        let conversation = ConversationViewModel(appState: appState, group: archiveTestGroup(groupIdHex: "group", archived: false))
-        let model = GroupDetailsViewModel()
-        model.conversation = conversation
-        var calls = 0
-        model.onGroupDeleted = { _ in Issue.record("Failed reset must not remove the group") }
-        model.forgetGroupLocalForTesting = { _, _ in
-            calls += 1
-            throw MarmotKitError.Runtime(details: "reset failed")
+    @Test(.marmotRuntimeConcurrencyLimit) func resetFailureKeepsTheGroupAndDeveloperModeIsRequired() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.setPhase(.ready)
+            appState.isAppSceneActive = true
+            appState.activeAccountRef = "account-1"
+            let previousMode = appState.developerMode
+            defer { appState.developerMode = previousMode }
+            let conversation = ConversationViewModel(appState: appState, group: archiveTestGroup(groupIdHex: "group", archived: false))
+            let model = GroupDetailsViewModel()
+            model.conversation = conversation
+            var calls = 0
+            model.onGroupDeleted = { _ in Issue.record("Failed reset must not remove the group") }
+            model.forgetGroupLocalForTesting = { _, _ in
+                calls += 1
+                throw MarmotKitError.Runtime(details: "reset failed")
+            }
+            appState.developerMode = false
+            await model.resetLocal(using: appState, dismiss: {})
+            #expect(calls == 0)
+            appState.developerMode = true
+            await model.resetLocal(using: appState, dismiss: {})
+            #expect(calls == 1)
+            #expect(model.actionError == "Reset failed")
+            #expect(!conversation.isLocallyReset)
+            #expect(!model.membershipActionInFlight)
+            appState.isAppSceneActive = false
+            await conversation.start()
         }
-        appState.developerMode = false
-        await model.resetLocal(using: appState, dismiss: {})
-        #expect(calls == 0)
-        appState.developerMode = true
-        await model.resetLocal(using: appState, dismiss: {})
-        #expect(calls == 1)
-        #expect(model.actionError == "Reset failed")
-        #expect(!conversation.isLocallyReset)
-        #expect(!model.membershipActionInFlight)
-        appState.isAppSceneActive = false
-        await conversation.start()
     }
 
     @Test func deleteLocalIsGatedUntilMembershipIsInactive() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -707,7 +727,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func deleteLocalRemovesInactiveGroupFromParent() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -736,7 +756,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func deleteLocalIsUnavailableWhileStillAMemberWithALeaveInFlight() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -767,7 +787,7 @@ struct GroupDetailsArchiveActionTests {
     /// commits the removal, which may never happen. Withholding the local delete
     /// there left the chat with no action that could clear its "Leaving" state.
     @Test func deleteLocalStaysAvailableAfterDepartureWithAnUncommittedLeave() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(

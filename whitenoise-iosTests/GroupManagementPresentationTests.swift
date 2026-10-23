@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct GroupManagementPresentationTests {
 
     @Test func adminCanPromoteAndRemoveNonAdminMember() {
@@ -174,7 +173,7 @@ struct GroupManagementPresentationTests {
     }
 
     @Test func pendingAndTerminalDisbandStatesDisableTheComposer() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let pending = group(
             name: "Ending",
             disbanding: true,
@@ -306,7 +305,7 @@ struct GroupManagementPresentationTests {
     }
 
     @Test func stagedMembersFallBackToNpubWithNpubSubtitle() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let account = hex("33")
         let member = stagedMember(accountIdHex: account)
 
@@ -332,7 +331,7 @@ struct GroupManagementPresentationTests {
             local: false
         )
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", admins: [admin])
         )
 
@@ -343,7 +342,7 @@ struct GroupManagementPresentationTests {
         let me = hex("11")
         let other = hex("22")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         viewModel.applyGroupMutation(
@@ -390,7 +389,7 @@ struct GroupManagementPresentationTests {
         let me = hex("11")
         let other = hex("22")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
         viewModel.applyGroupMutation(
@@ -428,7 +427,7 @@ struct GroupManagementPresentationTests {
         let me = hex("11")
         let other = hex("22")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", admins: [me])
         )
         let initialGeneration = viewModel.groupMlsRefreshGeneration
