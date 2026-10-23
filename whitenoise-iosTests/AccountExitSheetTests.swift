@@ -82,7 +82,7 @@ final class AccountExitSheetTests: XCTestCase {
         state.accountExitIntent = nil
         try await waitUntil("The cleanup report did not appear") {
             guard let presenter = host.presentedViewController else { return false }
-            return self.containsTitle("Some cleanup couldn’t be completed", in: presenter)
+            return self.containsTitle("Cleanup Details", in: presenter)
         }
         let presenter = try XCTUnwrap(host.presentedViewController)
         if let signOutPresenter { XCTAssertTrue(presenter === signOutPresenter) }
