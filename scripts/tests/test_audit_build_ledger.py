@@ -1,5 +1,7 @@
+import csv
 import importlib.util
 import pathlib
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -59,6 +61,10 @@ class ScoreTests(unittest.TestCase):
         self.assertEqual((decision, target), ("merge", "SurvivorTests"))
         *_, decision_dup, _, _ = score(row(), serial(2.5), cov(0, 0.95))
         self.assertEqual(decision_dup, "delete")
+        *_, decision_cheap_dup, _, _ = score(row(), serial(0.5), cov(0, 0.95))
+        self.assertEqual(decision_cheap_dup, "merge")  # under the 1 s deletion threshold
+        *_, decision_unmeasured, _, _ = score(row(), None, cov(0, 0.95))
+        self.assertEqual(decision_unmeasured, "merge")
         *_, decision_loose, _, _ = score(row(), serial(0.01), cov(0, 0.20))
         self.assertEqual(decision_loose, "keep")
 
@@ -82,7 +88,9 @@ class ScoreTests(unittest.TestCase):
     def test_fragility_distinguishes_master_and_crashes_from_a_single_pr_failure(self):
         one_pr = {"S": {"failures": "1", "master_failures": "0", "branches": "1", "kinds": "failed"}}
         _, _, fragility, *_ = score(row(), serial(0.2), cov(40), hist=one_pr)
-        self.assertEqual(fragility, 2)
+        self.assertEqual(fragility, 0)  # likely the test catching that PR's regression
+        _, _, fragility_sleeping, *_ = score(row(sleep_sites="1"), serial(0.2), cov(40), hist=one_pr)
+        self.assertEqual(fragility_sleeping, 2)
         crash = {"S": {"failures": "1", "master_failures": "0", "branches": "1", "kinds": "crashed"}}
         _, _, fragility_crash, *_ = score(row(), serial(0.2), cov(40), hist=crash)
         self.assertEqual(fragility_crash, 3)
@@ -113,10 +121,63 @@ class SurvivorResolutionTests(unittest.TestCase):
         ledger.resolve_survivors(rows, {}, {"A", "B"})
         self.assertEqual(rows[0]["decision"], "review")
 
+    def test_approved_verdict_is_never_rewritten(self):
+        rows = [dict(self.make("A", "merge", "B"), owner_verdict="approve"), self.make("B", "delete")]
+        with self.assertRaises(SystemExit):
+            ledger.resolve_survivors(rows, {}, {"A", "B"})
+        self.assertEqual(rows[0]["decision"], "merge")
+
     def test_unknown_survivor_turns_into_review(self):
         rows = [self.make("A", "merge", "NotASuite")]
         ledger.resolve_survivors(rows, {}, {"A"})
         self.assertEqual((rows[0]["decision"], rows[0]["merge_into"]), ("review", ""))
+
+
+class MainInputTests(unittest.TestCase):
+    def write(self, path, header, rows=()):
+        with open(path, "w", newline="") as fh:
+            writer = csv.writer(fh)
+            writer.writerow(header)
+            writer.writerows(rows)
+
+    def build(self, root, verdict_rows=(), skip=()):
+        data = pathlib.Path(root) / "data"
+        data.mkdir()
+        inputs = {
+            "inventory.csv": (["suite", "tests"], [["A", "1"], ["B", "1"]]),
+            "serial-costs.csv": (["suite", "wall_s"], []),
+            "coverage-unique.csv": (["suite", "unique_lines"], []),
+            "mutations.csv": (["suite", "killed"], []),
+            "ci-history.csv": (["suite", "failures"], []),
+            "assertions.csv": (["suite", "flags"], []),
+        }
+        for name, (header, rows) in inputs.items():
+            if name not in skip:
+                self.write(data / name, header, rows)
+        verdicts = pathlib.Path(root) / "verdicts.csv"
+        if "verdicts.csv" not in skip:
+            self.write(verdicts, ["suite", "decision", "merge_into", "rationale", "owner_verdict"], verdict_rows)
+        return ["--audit-dir", str(data), "--out-dir", str(pathlib.Path(root) / "out"), "--verdicts", str(verdicts)]
+
+    def test_missing_scoring_inputs_or_verdicts_stop_the_build(self):
+        for missing in ("mutations.csv", "verdicts.csv"):
+            with tempfile.TemporaryDirectory() as root:
+                with self.assertRaises(SystemExit):
+                    ledger.main(self.build(root, skip=(missing,)))
+                self.assertFalse((pathlib.Path(root) / "out" / "ledger.csv").exists())
+
+    def test_unknown_verdict_decision_stops_the_build(self):
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaises(SystemExit):
+                ledger.main(self.build(root, [["A", "kepe", "", "typo", "proposed"]]))
+            self.assertFalse((pathlib.Path(root) / "out" / "ledger.csv").exists())
+
+    def test_rendered_ledger_shows_the_owner_verdict(self):
+        with tempfile.TemporaryDirectory() as root:
+            ledger.main(self.build(root, [["A", "keep", "", "fine", "approve"]]) + ["--render"])
+            rendered = (pathlib.Path(root) / "out" / "ledger.md").read_text()
+        self.assertIn("| into | owner | rationale |", rendered)
+        self.assertIn("| approve | fine |", rendered)
 
 
 if __name__ == "__main__":

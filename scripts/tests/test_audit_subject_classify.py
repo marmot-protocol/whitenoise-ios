@@ -63,6 +63,26 @@ TEST_SOURCES = {
     ),
 }
 
+OWNED_SOURCES = {
+    "whitenoise-iosTests/OwnedTests.swift": (
+        "struct OwnedTests {\n"
+        "    func makeSubject() -> AppThing { AppThing() }\n"
+        "    @Test func viaExtensionHelper() { let t = sharedSubject(); #expect(t != nil) }\n"
+        "}\n"
+    ),
+    "whitenoise-iosTests/OwnedTests+More.swift": (
+        "extension OwnedTests {\n"
+        "    func sharedSubject() -> AppThing { AppThing() }\n"
+        "    @Test func viaBodyHelper() { let t = makeSubject(); #expect(t != nil) }\n"
+        "}\n"
+    ),
+    "whitenoise-iosTests/OtherTests.swift": (
+        "struct OtherTests {\n"
+        "    @Test func sameNames() { let a = sharedSubject(); let b = makeSubject(); #expect(a == b) }\n"
+        "}\n"
+    ),
+}
+
 
 class ClassifierTests(unittest.TestCase):
     @classmethod
@@ -109,6 +129,17 @@ class ClassifierTests(unittest.TestCase):
         self.assertGreaterEqual(self.rows["viaDouble()"]["app_refs"], 1)  # through the double's body
         self.assertGreaterEqual(self.rows["helperOnly()"]["helper_refs"], 1)
         self.assertEqual(self.rows["helperOnly()"]["app_refs"], 0)
+
+    def test_suite_members_resolve_by_owning_suite_not_by_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            audit_support.write_tree(root, {**APP_SOURCES, **MDK_SOURCES, **OWNED_SOURCES})
+            suites, classifier = classify.build_classifier(
+                str(root / "whitenoise-iosTests"), [str(root / "whitenoise-ios")], str(root / "Packages/MarmotKit"))
+            rows = {row["test"]: row["subject"] for row in classify.classify_tests(suites, classifier)}
+        self.assertEqual(rows["viaBodyHelper()"], "app")  # body helper reached from an extension in another file
+        self.assertEqual(rows["viaExtensionHelper()"], "app")  # extension helper reached from the suite body
+        self.assertEqual(rows["sameNames()"], "platform")  # another suite's members do not leak
 
     def test_rollup_prefers_app_on_ties_and_reports_mix(self):
         rolled = classify.rollup([

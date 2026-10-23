@@ -1,5 +1,11 @@
+import contextlib
+import csv
 import importlib.util
+import io
+import json
+import os
 import pathlib
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -60,6 +66,30 @@ class AttributeTests(unittest.TestCase):
     def test_startup_crash_without_a_running_class_is_execute_failure(self):
         kind, suites = ci.attribute(STARTUP_CRASH_LOG, METHODS)
         self.assertEqual((kind, suites), ("execute-failure", {}))
+
+
+class MainWindowTests(unittest.TestCase):
+    def test_attributes_only_current_failed_runs_and_reports_missing_logs(self):
+        with tempfile.TemporaryDirectory() as out:
+            runs = [
+                {"databaseId": 1, "conclusion": "failure", "event": "push", "headBranch": "master"},
+                {"databaseId": 2, "conclusion": "failure", "event": "pull_request", "headBranch": "feature"},
+                {"databaseId": 3, "conclusion": "success", "event": "push", "headBranch": "master"},
+            ]
+            with open(os.path.join(out, "ci-runs.json"), "w") as fh:
+                json.dump(runs, fh)
+            os.makedirs(os.path.join(out, "ci-logs"))
+            for run_id in ("1", "99"):  # 99 is a stale log from an older window
+                with open(os.path.join(out, "ci-logs", run_id + ".log"), "w") as fh:
+                    fh.write(FAIL_LOG)
+            with contextlib.redirect_stdout(io.StringIO()):
+                ci.main(["--out-dir", out, "--tests-dir", os.path.join(out, "no-tests")])
+            with open(os.path.join(out, "ci-history.csv"), newline="") as fh:
+                history = list(csv.DictReader(fh))
+            with open(os.path.join(out, "ci-unattributed.csv"), newline="") as fh:
+                unattributed = list(csv.DictReader(fh))
+        self.assertEqual({row["runs"] for row in history}, {"1"})
+        self.assertEqual([(r["run_id"], r["kind"]) for r in unattributed], [("2", "log-unavailable")])
 
 
 if __name__ == "__main__":

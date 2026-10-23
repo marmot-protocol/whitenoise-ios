@@ -296,7 +296,7 @@ def tier_lists(rows, tests_dir_name):
     return runtime, ui
 
 
-RULE_RE = re.compile(r"^(?P<column>[A-Za-z_]+)-(?P<kind>requires-tag|requires-trait|max)=(?P<value>.+)$")
+RULE_RE = re.compile(r"^(?P<column>[A-Za-z_][A-Za-z0-9_]*)-(?P<kind>requires-tag|requires-trait|max)=(?P<value>.+)$")
 
 
 def parse_rule(rule):
@@ -315,6 +315,10 @@ def parse_rule(rule):
     return column, kind, value
 
 
+# `.uiHosting` replaced `.ui`; is_ui_tier accepts both, so the rules do too.
+TAG_SYNONYMS = {"ui": {"ui", "uiHosting"}, "uiHosting": {"ui", "uiHosting"}}
+
+
 def check_rules(rows, rules):
     """Return violation strings for the parsed rules."""
     violations = []
@@ -327,7 +331,7 @@ def check_rules(rows, rules):
             if kind == "max":
                 if count > value:
                     violations.append("%s: %s=%d exceeds %d" % (row["suite"], column, count, value))
-            elif count > 0 and kind == "requires-tag" and value not in tags:
+            elif count > 0 and kind == "requires-tag" and not (TAG_SYNONYMS.get(value, {value}) & tags):
                 violations.append("%s: %s=%d but suite lacks .tags(.%s)" % (row["suite"], column, count, value))
             elif count > 0 and kind == "requires-trait" and value not in trait_names:
                 violations.append("%s: %s=%d but suite lacks .%s" % (row["suite"], column, count, value))
@@ -358,7 +362,13 @@ def main(argv=None):
         rules = [parse_rule(rule) for rule in args.rule]
     except ValueError as error:
         parser.error(str(error))
+    if not pathlib.Path(args.tests_dir).is_dir():
+        parser.error("tests directory not found: %s" % args.tests_dir)
     rows, suites, index = scan(args.tests_dir, warn=lambda message: print("warning: " + message, file=sys.stderr))
+    if not rows and (rules or args.check or args.write_baseline or args.write_pr_plan):
+        print("no suites found under %s; refusing to check or rewrite the guardrails" % args.tests_dir,
+              file=sys.stderr)
+        return 1
     swiftscan.write_csv(args.out, rows, COLUMNS)
     print("wrote %s (%d suites, %d tests)" % (args.out, len(rows), sum(r["tests"] for r in rows)))
 

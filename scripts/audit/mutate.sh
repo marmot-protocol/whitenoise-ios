@@ -14,10 +14,14 @@
 # build/audit/mutations.csv, and revert the file with `git checkout --`. A trap
 # reverts on any exit, including Ctrl-C during the build.
 #
-# `killed` is 1 when the suite had a failing case, 0 when it ran and passed,
-# `na` when no result bundle could be read (host crash, launch failure): never
-# read `na` or an unselected suite as "survived". The probe files are not
-# modified by a run.
+# `killed` is 1 when the suite had a failing case, 0 when it ran a case that
+# passed and its selection shows it executed the mutated lines, `unverified`
+# when it passed but was selected only by file-level evidence (see
+# probe-suites.py), `na` when no case of it ran (all skipped, host crash,
+# launch failure, no bundle): never read `na`, `unverified` or an unselected
+# suite as "survived". On exit (also after Ctrl-C) the source is reverted and,
+# if a mutant was built, the clean tree is rebuilt; a failed rebuild fails the
+# script. The probe files are not modified by a run.
 #
 # Usage: scripts/audit/mutate.sh scripts/audit/mutations/<probe>.json [...]
 #        scripts/audit/mutate.sh --all
@@ -47,13 +51,40 @@ if [ "${1:-}" = "--all" ]; then
 fi
 
 mutated_path=""
+mutant_built=0
 revert() {
   if [ -n "$mutated_path" ]; then
     git checkout -- "$mutated_path"
     mutated_path=""
   fi
 }
-trap revert EXIT INT TERM
+
+# The source is reverted after each probe but the built products are not;
+# after a mutant build DerivedData holds that mutant. Rebuild, with coverage
+# instrumentation, so later test-without-building runs (measurements,
+# per-file coverage) match the tree.
+restore_build() {
+  echo "==> restoring built products from the clean tree"
+  if xcodebuild build-for-testing "${xcodebuild_args[@]}" "${build_settings[@]}" -enableCodeCoverage YES \
+    > "$OUT/mutations/restore-build.log" 2>&1; then
+    mutant_built=0
+    return 0
+  fi
+  echo "mutate: restore build failed; the built products may still be a mutant; see $OUT/mutations/restore-build.log" >&2
+  return 1
+}
+
+cleanup() {
+  local code=$?
+  trap - EXIT
+  revert || code=1
+  if [ "$mutant_built" -ne 0 ]; then
+    restore_build || code=1
+  fi
+  exit "$code"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
 
 for probe in "$@"; do
   name="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["name"])' "$probe")"
@@ -92,6 +123,7 @@ EOF
   bundle="$OUT/mutations/$name.xcresult"
   rm -rf "$bundle"
   status=0
+  mutant_built=1
   if xcodebuild build-for-testing "${xcodebuild_args[@]}" "${build_settings[@]}" > "$OUT/mutations/$name.build.log" 2>&1; then
     xcodebuild test-without-building "${xcodebuild_args[@]}" -resultBundlePath "$bundle" "${only[@]}" \
       > "$OUT/mutations/$name.test.log" 2>&1 || status=$?
@@ -112,13 +144,19 @@ if status != "build":
                                             check=True, capture_output=True, text=True).stdout)
     except Exception as exc:
         print(f"mutate: no results for {name}: {exc}", file=sys.stderr)
+unverified = set()
+for line in open(suites_path):
+    if line.startswith("# unverified:"):
+        unverified |= set(line.split(":", 1)[1].split())
 ran, failed = set(), set()
 def walk(node, suite):
     kind = node.get("nodeType"); nm = node.get("name", "")
     if kind == "Test Suite": suite = nm
     if kind == "Test Case":
-        ran.add(suite)
-        if node.get("result") not in ("Passed", "Skipped", None): failed.add(suite)
+        result = node.get("result")
+        # A skipped case checked nothing; Expected Failure is a pass.
+        if result not in ("Skipped", None): ran.add(suite)
+        if result == "Failed": failed.add(suite)
     for c in node.get("children") or []: walk(c, suite)
 if results:
     for root in results.get("testNodes", []): walk(root, None)
@@ -132,16 +170,15 @@ with open(csv_path, "w", newline="") as fh:
     w.writeheader()
     w.writerows(rows)
     for suite in suites:
-        killed = "1" if suite in failed else ("0" if suite in ran else "na")
+        if suite in failed:
+            killed = "1"
+        elif suite not in ran:
+            killed = "na"
+        else:
+            killed = "unverified" if suite in unverified else "0"
         w.writerow({"suite": suite, "probe": name, "killed": killed, "selection": method, "result_bundle": bundle})
 print(f"probe {name} [{method}]: killed by {sorted(failed) or 'nobody'}; ran {len(ran & set(suites))} of {len(suites)} selected suites")
 EOF
 done
 
-# The source is reverted after each probe but the built products are not; the
-# last build in DerivedData is the last mutant. Rebuild once, with coverage
-# instrumentation, so later test-without-building runs (measurements,
-# per-file coverage) match the tree.
-echo "==> restoring built products from the clean tree"
-xcodebuild build-for-testing "${xcodebuild_args[@]}" "${build_settings[@]}" -enableCodeCoverage YES \
-  > "$OUT/mutations/restore-build.log" 2>&1 || echo "mutate: restore build failed; see $OUT/mutations/restore-build.log" >&2
+# cleanup (the EXIT trap) restores the built products when a mutant was built.

@@ -73,6 +73,25 @@ def suite_walls_from_log(path):
     return walls
 
 
+def failed_cases(data):
+    """{suite: failed case count}. Only `Failed` counts: `Expected Failure`
+    (withKnownIssue, XCTExpectFailure) is a pass."""
+    failed = {}
+
+    def walk(node, suite):
+        kind = node.get("nodeType")
+        if kind == "Test Suite":
+            suite = node.get("name")
+        if kind == "Test Case" and node.get("result") == "Failed":
+            failed[suite] = failed.get(suite, 0) + 1
+        for child in node.get("children") or []:
+            walk(child, suite)
+
+    for root in data.get("testNodes", []):
+        walk(root, None)
+    return failed
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("bundle")
@@ -93,20 +112,7 @@ def main():
     display_to_type, frameworks = per_file_costs.scan_suites(args.tests_dir)
     suite_wall = {display_to_type.get(k, k): v for k, v in (suite_walls_from_log(args.log).items() if args.log else [])}
     durations = per_file_costs.per_suite_durations(data)
-    failed = {}
-
-    def walk(node, suite):
-        kind = node.get("nodeType")
-        if kind == "Test Suite":
-            suite = node.get("name")
-        if kind == "Test Case":
-            if node.get("result") not in ("Passed", "Skipped", None):
-                failed[suite] = failed.get(suite, 0) + 1
-        for child in node.get("children") or []:
-            walk(child, suite)
-
-    for root in data.get("testNodes", []):
-        walk(root, None)
+    failed = failed_cases(data)
 
     rows = []
     for suite, ds in sorted(durations.items()):

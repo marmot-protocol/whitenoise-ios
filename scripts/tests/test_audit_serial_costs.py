@@ -85,5 +85,21 @@ class DisplayNameTests(unittest.TestCase):
         self.assertIsNone(names.display_name(suites[0].declaration, names.swiftscan.mask(source)))
 
 
+class FailedCasesTests(unittest.TestCase):
+    def test_only_failed_results_count(self):
+        data = {"testNodes": [{"nodeType": "Test Plan", "children": [
+            {"nodeType": "Test Suite", "name": "AlphaTests", "children": [
+                {"nodeType": "Test Case", "result": "Passed"},
+                {"nodeType": "Test Case", "result": "Expected Failure"},
+                {"nodeType": "Test Case", "result": "Skipped"},
+                {"nodeType": "Test Case", "result": "Failed"},
+            ]},
+            {"nodeType": "Test Suite", "name": "BetaTests", "children": [
+                {"nodeType": "Test Case", "result": "Expected Failure"},
+            ]},
+        ]}]}
+        self.assertEqual(serial.failed_cases(data), {"AlphaTests": 1})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -33,7 +33,6 @@ import csv
 import glob
 import json
 import os
-import re
 import subprocess
 import sys
 from collections import defaultdict
@@ -46,14 +45,22 @@ FIRST_PARTY = ("whitenoise-ios/", "Shared/", "NotificationServiceExtension/")
 
 
 def relative_to_root(path):
-    """Repo-relative path for an absolute xccov path, anchored on the repo root
-    (falls back to the last first-party directory marker for foreign roots)."""
+    """Repo-relative path for an absolute xccov path, anchored on the repo root.
+    For a foreign root (another checkout or worktree) the first suffix that
+    starts at a first-party directory and exists under ROOT wins, so a checkout
+    directory named `whitenoise-ios` is not mistaken for the app target;
+    otherwise the suffix at the last marker."""
     root = os.path.realpath(ROOT) + os.sep
     real = os.path.realpath(path)
     if real.startswith(root):
         return real[len(root):]
-    m = re.search(r"/(whitenoise-ios|Shared|NotificationServiceExtension)/(?!.*/(whitenoise-ios|Shared|NotificationServiceExtension)/)", path)
-    return path[m.start() + 1:] if m else path
+    parts = path.split("/")
+    markers = {m.rstrip("/") for m in FIRST_PARTY}
+    candidates = ["/".join(parts[i:]) for i, part in enumerate(parts[:-1]) if part in markers]
+    for candidate in candidates:
+        if os.path.exists(os.path.join(ROOT, candidate)):
+            return candidate
+    return candidates[-1] if candidates else path
 
 
 def newest_mtime(bundle):
@@ -75,7 +82,8 @@ def covered_lines(bundle, cache):
         out = subprocess.run(["xcrun", "xccov", "view", "--archive", "--json", bundle],
                              check=True, capture_output=True, text=True).stdout
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        print(f"warning: no coverage in {bundle}: {exc}", file=sys.stderr)
+        detail = (getattr(exc, "stderr", None) or "").strip()
+        print(f"warning: no coverage in {bundle}: {exc}" + (f": {detail}" if detail else ""), file=sys.stderr)
         return None
     data = json.loads(out)
     lines = set()
@@ -93,7 +101,7 @@ def covered_lines(bundle, cache):
     return lines
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dir", default="build/audit/per-file")
     ap.add_argument("--out", default="build/audit/coverage-unique.csv")
@@ -101,21 +109,31 @@ def main():
     ap.add_argument("--top", type=int, default=3, help="how many overlapping files to list")
     ap.add_argument("--ubiquity", type=float, default=0.15,
                     help="exclude lines covered by more than this fraction of files from unique/overlap")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     os.chdir(ROOT)
 
     baseline = set()
     overhead_bundle = os.path.join(args.dir, "overhead.xcresult")
+    unreadable = []
     if os.path.isdir(overhead_bundle):
-        baseline = covered_lines(overhead_bundle, os.path.join(args.dir, "overhead.coverage.json")) or set()
+        baseline = covered_lines(overhead_bundle, os.path.join(args.dir, "overhead.coverage.json"))
+        if baseline is None:
+            unreadable.append("overhead")
     raw = {}
     for bundle in sorted(glob.glob(os.path.join(args.dir, "*.xcresult"))):
         label = os.path.basename(bundle)[:-len(".xcresult")]
         if label == "overhead":
             continue
         lines = covered_lines(bundle, os.path.join(args.dir, label + ".coverage.json"))
-        if lines is not None:
-            raw[label] = lines - baseline
+        if lines is None:
+            unreadable.append(label)
+        else:
+            raw[label] = lines - (baseline or set())
+    # A dropped file would silently shrink the file count and skew the
+    # overlap; an empty set (no app line covered) is still a measurement.
+    if unreadable:
+        raise SystemExit("cannot read coverage from: " + ", ".join(unreadable)
+                         + " (re-measure with scripts/audit/measure-per-file.sh)")
     if not raw:
         raise SystemExit("no coverage sets found")
 

@@ -205,6 +205,7 @@ class InventoryRowTests(unittest.TestCase):
         rows = list(self.rows.values())
         self.assertEqual(inventory.parse_rule("testClient-requires-tag=runtime"), ("testClient_sites", "requires-tag", "runtime"))
         self.assertEqual(inventory.parse_rule("sleep_sites-max=0"), ("sleep_sites", "max", 0))
+        self.assertEqual(inventory.parse_rule("l10n_asserts-max=0"), ("l10n_asserts", "max", 0))
         for bad in ("bogus-requires-tag=x", "testClient=runtime", "sleep-max=abc"):
             with self.assertRaises(ValueError):
                 inventory.parse_rule(bad)
@@ -217,6 +218,8 @@ class InventoryRowTests(unittest.TestCase):
         self.assertTrue(any(v.startswith("RuntimeTests: sleep_sites=5") for v in violations))
         self.assertTrue(any(v.startswith("HarnessTests: testClient_sites=1 but suite lacks .timeLimit") for v in violations))
         self.assertFalse(any(v.startswith("RuntimeTests: testClient_sites") for v in violations))
+        hosting = dict(self.rows["LayoutTests"], traits=".tags(.uiHosting)")
+        self.assertEqual(inventory.check_rules([hosting], [inventory.parse_rule("ui_hosting-requires-tag=ui")]), [])
 
     def test_main_writes_csv_tier_lists_and_exit_code(self):
         with tempfile.TemporaryDirectory() as out_root:
@@ -236,6 +239,17 @@ class InventoryRowTests(unittest.TestCase):
             self.assertEqual(code, 1)
             with self.assertRaises(SystemExit):
                 inventory.main(["--tests-dir", str(self.tests_dir), "--out", str(out), "--rule", "sleep-max=abc"])
+
+    def test_gate_modes_fail_on_a_missing_or_empty_tests_directory(self):
+        with tempfile.TemporaryDirectory() as root:
+            out = pathlib.Path(root) / "inventory.csv"
+            with self.assertRaises(SystemExit):
+                inventory.main(["--tests-dir", str(pathlib.Path(root) / "missing"), "--out", str(out),
+                                "--rule", "sleep-max=0"])
+            empty = pathlib.Path(root) / "empty"
+            empty.mkdir()
+            for mode in (["--rule", "sleep-max=0"], ["--check"]):
+                self.assertEqual(inventory.main(["--tests-dir", str(empty), "--out", str(out)] + mode), 1)
 
 
 WAIT_HELPERS_FILE = '''import Foundation

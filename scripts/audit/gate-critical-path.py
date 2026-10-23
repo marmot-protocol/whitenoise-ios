@@ -14,6 +14,7 @@ path at one permit), total wait time, hold-time distribution, and the longest
 holders. Usage: python3 scripts/audit/gate-critical-path.py <gate-trace.jsonl> (concatenated)
 """
 import json
+import math
 import statistics
 import sys
 
@@ -41,7 +42,7 @@ def main(path):
     print(f"gated tests: {len(rows)}  span {span:.1f}s  permits observed: {peak}")
     print(f"total hold {total_hold:.1f}s (critical-path floor at 1 permit)  total wait {sum(waits):.1f}s")
     hs = sorted(h for h, _ in holds)
-    print(f"hold median {statistics.median(hs):.2f}s  p90 {hs[int(len(hs) * 0.9) - 1]:.2f}s  max {hs[-1]:.2f}s")
+    print(f"hold median {statistics.median(hs):.2f}s  p90 {hs[math.ceil(len(hs) * 0.9) - 1]:.2f}s  max {hs[-1]:.2f}s")
     print("longest holders:")
     for h, name in sorted(holds, reverse=True)[:15]:
         print(f"  {h:7.2f}s  {name}")
