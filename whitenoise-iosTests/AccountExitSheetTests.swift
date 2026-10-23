@@ -40,8 +40,7 @@ final class AccountExitSheetTests: XCTestCase {
         let lifetime = AccountExitFixtureLifetime(state: state, appearance: appearance)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previousKeyWindow = scene.keyWindow
-        var reportAppeared = false
-        let host = UIHostingController(rootView: RootView(onWipeReportAppear: { reportAppeared = true })
+        let host = UIHostingController(rootView: RootView()
             .environment(state)
             .environment(state.toastState)
             .environment(state.navigation)
@@ -83,7 +82,7 @@ final class AccountExitSheetTests: XCTestCase {
         state.accountExitIntent = nil
         try await waitUntil("The cleanup report did not appear") {
             guard let presenter = host.presentedViewController else { return false }
-            return reportAppeared && self.containsTitle("Sign Out", in: presenter)
+            return self.containsTitle("Cleanup Details", in: presenter)
         }
         let presenter = try XCTUnwrap(host.presentedViewController)
         if let signOutPresenter { XCTAssertTrue(presenter === signOutPresenter) }

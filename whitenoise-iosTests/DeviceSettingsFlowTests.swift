@@ -100,6 +100,19 @@ struct DeviceSettingsFlowTests {
         #expect(ProfileExitConfirmation.erasePhrase().split(separator: " ").count == 3)
     }
 
+    @Test func profileNameWhitespaceHintOnlyExplainsAnOtherwiseMatchingName() {
+        for input in [" Alice", "Alice ", "\nAlice\t"] {
+            #expect(ProfileExitConfirmation.hasExtraSurroundingWhitespace(input, profileName: "Alice"))
+            #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: input, profileName: "Alice", busy: false))
+        }
+        for input in ["Alice", "", " ", "alice ", "Bob ", "Ali ce"] {
+            #expect(!ProfileExitConfirmation.hasExtraSurroundingWhitespace(input, profileName: "Alice"))
+        }
+        #expect(!ProfileExitConfirmation.hasExtraSurroundingWhitespace(" ", profileName: ""))
+        #expect(!ProfileExitConfirmation.hasExtraSurroundingWhitespace(" Alice ", profileName: " Alice "))
+        #expect(ProfileExitConfirmation.canSignOut(wiping: true, input: " Alice ", profileName: " Alice ", busy: false))
+    }
+
     @Test func erasurePreservesLockInodeAndRefusesAConcurrentOwner() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

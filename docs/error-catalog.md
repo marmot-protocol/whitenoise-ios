@@ -837,7 +837,6 @@ Calls using `message(for:)` supply inline text; their heading comes from the enc
 | `.error(L10n.string("Couldn't sign out"), message: message)` | [whitenoise-ios/Core/AppState.swift:811](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Core/AppState.swift:811) |
 | `UserFacingError.toast(title: L10n.string("Couldn't sign out"), error: error)` | [whitenoise-ios/Core/AppState.swift:820](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Core/AppState.swift:820) |
 | `UserFacingError.message(for: error)` | [whitenoise-ios/Core/AppState.swift:884](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Core/AppState.swift:884) |
-| `UserFacingError.toast(title: L10n.string("Couldn't refresh accounts"), error: error)` | [whitenoise-ios/Core/AppState.swift:887](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Core/AppState.swift:887) |
 | `.error(L10n.string("Couldn't wipe profile"))` | [whitenoise-ios/Core/AppState.swift:954](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Core/AppState.swift:954) |
 | `.error(L10n.string("Couldn't wipe profile"))` | [whitenoise-ios/Core/AppState.swift:967](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Core/AppState.swift:967) |
 | `UserFacingError.toast(title: L10n.string("Couldn't wipe profile"), error: error)` | [whitenoise-ios/Core/AppState.swift:996](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Core/AppState.swift:996) |

@@ -73,6 +73,8 @@ before every release tag.
       native muted colors when disabled.
       **Sign Out and Delete Data** stays disabled until the displayed profile name matches exactly
       (case and all spacing, including surrounding whitespace, must match).
+      Extra spaces before or after an otherwise matching name show a hint;
+      removing them enables confirmation.
       Focusing the profile-name field scrolls to the bottom of the card so both
       the field and destructive button are visible above the keyboard in both flows.
       For a lowercase profile name, the keyboard must not automatically capitalize it.
@@ -100,8 +102,10 @@ before every release tag.
       identifying unfinished relay work. Verify the report remains visible over
       Welcome or the remaining-profile chooser and closes normally.
 
-- [ ] In a cleanup report, verify Groups, Key Packages, and On This Device show
-      completed counts and failures. Each section previews at most three failures;
+- [ ] After either Sign Out or Delete Profile, verify the report is titled Cleanup Details.
+      Groups and Key Packages show completed counts and failures; On This Device
+      shows whether data was wiped, kept, or incompletely cleaned, and any failures.
+      Each section previews at most three failures;
       Show N More opens a separate full list, which remains open until closed.
       Closing it returns to the report and allows reopening it.
 - [ ] When local cleanup succeeds but refreshing profiles fails, the report says

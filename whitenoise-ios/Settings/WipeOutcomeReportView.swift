@@ -34,7 +34,7 @@ struct WipeOutcomeReportView: View {
                     }
                 }
             }
-            .navigationTitle("Sign Out")
+            .navigationTitle("Cleanup Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
