@@ -23,6 +23,7 @@ extension AppState {
     ///   `runtimeRetrySleeper: AppStateTestResources.immediateRetry` only
     ///   when the test does not exercise ownership contention or
     ///   background/resume timing.
+    @MainActor
     static func test(
         client: MarmotClient? = nil,
         notifications: AppNotifications? = nil,
@@ -63,7 +64,7 @@ extension AppState {
 
 /// Owns the isolated defaults suites and directories of one `AppState.test()`
 /// instance and removes them when that instance is deallocated.
-final class AppStateTestResources: @unchecked Sendable {
+final class AppStateTestResources {
     nonisolated(unsafe) static var key: UInt8 = 0
 
     /// Opt-in retry sleeper that skips the backoff delay.
