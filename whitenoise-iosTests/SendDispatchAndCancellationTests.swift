@@ -3,6 +3,7 @@ import Foundation
 @testable import whitenoise_ios
 @testable import MarmotKit
 
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct SendDispatchAndCancellationTests {
 
     /// #49 — send() must confirm it has a view model before clearing the draft,
@@ -182,7 +183,7 @@ struct SendDispatchAndCancellationTests {
     @MainActor
     @Test func composerSendReportsADefinitiveTextSizeRejectionInsteadOfTheGenericToast() async throws {
         let client = try MarmotClient.testClient()
-        let appState = AppState(client: client)
+        let appState = AppState.test(client: client)
         appState.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: appState, groupIdHex: groupId)
         let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store)
@@ -202,7 +203,7 @@ struct SendDispatchAndCancellationTests {
     @MainActor
     @Test func sendsOutsideTheComposerKeepTheGenericFailureToast() async throws {
         let client = try MarmotClient.testClient()
-        let appState = AppState(client: client)
+        let appState = AppState.test(client: client)
         appState.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: appState, groupIdHex: groupId)
         let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store)
@@ -221,7 +222,7 @@ struct SendDispatchAndCancellationTests {
     @MainActor
     @Test func uncertainAdmissionIsNeverReportedAsARecoverableRejection() async throws {
         let client = try MarmotClient.testClient()
-        let appState = AppState(client: client)
+        let appState = AppState.test(client: client)
         appState.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: appState, groupIdHex: groupId)
         let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store)

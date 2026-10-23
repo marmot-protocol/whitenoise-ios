@@ -206,7 +206,7 @@ struct MediaFileUploadTests {
         #expect(recorded.allSatisfy { !FileManager.default.fileExists(atPath: $0) })
     }
 
-    @Test func runnerRejectsAnOversizedBatchBeforeWritingAnything() async {
+    @Test func runnerRejectsAnOversizedBatchBeforeWritingAnything() async throws {
         let directory = Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let seen = PathsSeen()
@@ -222,7 +222,7 @@ struct MediaFileUploadTests {
         #expect(!FileManager.default.fileExists(atPath: directory.path))
     }
 
-    @Test func runnerReportsAnErrorAfterCancelAsCancelledAndCleansUp() async {
+    @Test func runnerReportsAnErrorAfterCancelAsCancelledAndCleansUp() async throws {
         let directory = Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let control = MediaFileTransferControlFfi()
@@ -240,7 +240,7 @@ struct MediaFileUploadTests {
         #expect(await seen.paths.allSatisfy { !FileManager.default.fileExists(atPath: $0) })
     }
 
-    @Test func runnerPassesFailuresThroughWhenNothingWasCancelled() async {
+    @Test func runnerPassesFailuresThroughWhenNothingWasCancelled() async throws {
         let directory = Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let failure = MarmotKitError.Runtime(details: "relay disconnected")
@@ -254,17 +254,17 @@ struct MediaFileUploadTests {
         }
     }
 
-    @Test func cancellingTheTaskCancelsTheTransferControl() async {
+    @Test func cancellingTheTaskCancelsTheTransferControl() async throws {
         let directory = Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let control = MediaFileTransferControlFfi()
-        let started = AsyncFlag()
+        let started = TestLatch()
 
         let task = Task {
             try await MediaFileUploadRunner.run(
                 [Self.attachment()], control: control, limit: .max, directory: directory
             ) { _ in
-                await started.set()
+                started.signal()
                 // Stands in for MDK: it returns only once its control is cancelled.
                 while !control.isCancelled() {
                     try? await Task.sleep(for: .milliseconds(5))
@@ -272,7 +272,7 @@ struct MediaFileUploadTests {
                 throw MarmotKitError.InvalidMediaReference(details: "media transfer cancelled")
             }
         }
-        await started.wait()
+        try await started.wait()
         task.cancel()
 
         let result = await task.result
@@ -335,21 +335,5 @@ private actor PathsSeen {
     func record(_ paths: [String], existing: Bool) {
         self.paths.append(contentsOf: paths)
         allExisted = allExisted && existing
-    }
-}
-
-private actor AsyncFlag {
-    private var isSet = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func set() {
-        isSet = true
-        waiters.forEach { $0.resume() }
-        waiters.removeAll()
-    }
-
-    func wait() async {
-        guard !isSet else { return }
-        await withCheckedContinuation { waiters.append($0) }
     }
 }

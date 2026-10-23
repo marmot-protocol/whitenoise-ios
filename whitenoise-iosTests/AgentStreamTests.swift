@@ -9,6 +9,7 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AgentStreamTests {
 
     @Test func streamIdIsDecodedFromStartTags() {

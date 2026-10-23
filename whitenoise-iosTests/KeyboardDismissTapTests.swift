@@ -3,6 +3,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.uiHosting))
 struct KeyboardDismissTapTests {
     @Test func dismissesWhenNothingWasTouched() {
         #expect(KeyboardDismissTap.resignsKeyboard(touching: nil))

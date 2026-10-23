@@ -4,6 +4,7 @@ import Testing
 
 @testable import whitenoise_ios
 
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ComposerMentionQueryTests {
     private let jeffNpub = "npub1" + String(repeating: "q", count: 58)
     private let aliceNpub = "npub1" + String(repeating: "a", count: 58)

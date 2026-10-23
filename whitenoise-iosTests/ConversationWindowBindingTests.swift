@@ -4,7 +4,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationWindowBindingTests {
     @Test func draftStorePreservesTypingDuringSendAndRequiresConflictResolution() async throws {
         let client = try MarmotClient.testClient()

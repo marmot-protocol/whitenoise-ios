@@ -7,6 +7,7 @@ import Testing
 /// long-lived stream can't accumulate `streamDebugTimelineItems` (and re-walk
 /// them on every MainActor rebuild) for the conversation's lifetime.
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct StreamDebugTimelineWindowTests {
     private func debugRow(sequence: UInt64, timestamp: UInt64) -> TimelineItem {
         TimelineItem.streamDebugEvent(

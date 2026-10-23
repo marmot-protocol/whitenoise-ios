@@ -4,6 +4,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AuditV5AdoptionTests {
     @Test func auditOtlpConfigIsDisabledWithoutAToken() {
         let config = Self.telemetry(auditToken: nil).auditOtlpConfig()

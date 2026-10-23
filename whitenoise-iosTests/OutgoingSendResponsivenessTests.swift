@@ -7,6 +7,7 @@ import Testing
 /// before draft persistence and MDK, and is reconciled with MDK's authoritative
 /// row without duplicating, dropping or reordering it.
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct OutgoingSendResponsivenessTests {
 
     // MARK: - Follow-latest command suppression
@@ -70,20 +71,20 @@ struct OutgoingSendResponsivenessTests {
     @Test func aBlockedDraftSaveStillShowsTheBubbleAndSettlesItAsFailed() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
-        let gate = AsyncGate()
+        let gate = TestLatch()
 
         let staged = try #require(harness.composer.stage(text: "waiting on the draft store"))
         #expect(harness.rowIDs.count == 1)
 
         let submission = Task { @MainActor in
-            await gate.wait()
+            try await gate.wait()
             harness.viewModel.failStagedSend(staged)
         }
         // The bubble is up while the "draft save" is still blocked.
         #expect(harness.rowIDs == ["msg:\(staged.tempId)"])
         #expect(harness.statuses == [.sending])
-        gate.open()
-        await submission.value
+        gate.signal()
+        try await submission.value
         #expect(harness.statuses == [.failed])
         #expect(harness.store.failedTransientRecord(rowId: "msg:\(staged.tempId)") != nil)
         try await harness.shutdown()
@@ -92,9 +93,9 @@ struct OutgoingSendResponsivenessTests {
     @Test func aBlockedPublicationKeepsTheBubbleVisible() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
-        let gate = AsyncGate()
+        let gate = TestLatch()
         harness.composer.sendTextForTesting = { _, _, _, _, token in
-            await gate.wait()
+            try await gate.wait()
             return accepted("a", token: token)
         }
 
@@ -102,7 +103,7 @@ struct OutgoingSendResponsivenessTests {
         await Task.yield()
         #expect(harness.rowIDs.count == 1)
         #expect(harness.statuses == [.sending])
-        gate.open()
+        gate.signal()
         await send.value
         #expect(harness.rowIDs.count == 1)
         try await harness.shutdown()
@@ -113,24 +114,22 @@ struct OutgoingSendResponsivenessTests {
     @Test func aProjectionArrivingBeforeTheSendResponseReusesTheSameRow() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
-        let gate = AsyncGate()
+        let gate = TestLatch()
         harness.composer.sendTextForTesting = { _, _, _, _, token in
             // MDK commits its pending row before this call returns.
             harness.installWindow([harness.ownRecord(id: hexId(1), text: "hi", timelineAt: 10, delivered: false, token: token)])
-            await gate.wait()
+            try await gate.wait()
             return accepted(hexId(1), token: token)
         }
 
         let send = Task { @MainActor in await harness.composer.send("hi") }
-        while harness.store.protocolID(forDisplayID: harness.rowIDs.first ?? "") == nil, !send.isCancelled {
-            await Task.yield()
-        }
+        try await eventually { harness.store.protocolID(forDisplayID: harness.rowIDs.first ?? "") != nil }
         let rowID = try #require(harness.rowIDs.first)
         #expect(harness.rowIDs == [rowID])
         #expect(harness.store.protocolID(forDisplayID: rowID) == hexId(1))
         #expect(harness.statuses == [.sending])
 
-        gate.open()
+        gate.signal()
         await send.value
         #expect(harness.rowIDs == [rowID])
         harness.installWindow([harness.ownRecord(id: hexId(1), text: "hi", timelineAt: 10, delivered: true, token: String(rowID.dropFirst(4)))])
@@ -431,32 +430,6 @@ private extension StagedOutgoingSend {
 }
 
 /// A latch a test can hold a send behind.
-// NSLock guards all mutable state; the compiler cannot verify that synchronization.
-// swiftlint:disable:next no_unchecked_sendable
-private final class AsyncGate: @unchecked Sendable {
-    private var continuations: [CheckedContinuation<Void, Never>] = []
-    private var opened = false
-    private let lock = NSLock()
-
-    func wait() async {
-        await withCheckedContinuation { continuation in
-            lock.lock()
-            if opened { lock.unlock(); continuation.resume(); return }
-            continuations.append(continuation)
-            lock.unlock()
-        }
-    }
-
-    func open() {
-        lock.lock()
-        opened = true
-        let pending = continuations
-        continuations = []
-        lock.unlock()
-        pending.forEach { $0.resume() }
-    }
-}
-
 private func accepted(_ id: String, token: String) -> LocalSendAcceptanceFfi {
     LocalSendAcceptanceFfi(clientToken: token, messageIdHex: id)
 }

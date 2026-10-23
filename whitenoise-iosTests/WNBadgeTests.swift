@@ -23,6 +23,7 @@ struct WNBadgeTests {
 /// the same marker in a list. These render the real view and measure it rather
 /// than restating the constants.
 @MainActor
+@Suite(.tags(.uiHosting))
 struct WNBadgeGeometryTests {
     @Test func aGlyphBadgeRendersAsACircle() {
         let size = renderedSize(WNBadge(symbol: "plus"))

@@ -253,9 +253,9 @@ struct RecipientSearchTests {
     // Full-suite native fixtures can delay MainActor scheduling beyond one minute on CI.
     @MainActor
     @Test(.timeLimit(.minutes(5)), arguments: [SearchUpdateTriggerFfi.resultsFound(radius: 1), .cachedResultsFound])
-    func streamedResultsDoNotWaitForFollowEnrichment(trigger: SearchUpdateTriggerFfi) async {
+    func streamedResultsDoNotWaitForFollowEnrichment(trigger: SearchUpdateTriggerFfi) async throws {
         let model = RecipientUserSearch()
-        let follows = RecipientSearchFollowsGate()
+        let follows = (entered: TestLatch(), released: TestLatch())
         let result = searchResult(alice, radius: 1, field: .name, quality: .exact)
         let subscription = RecipientSearchSubscriptionStub(updates: [
             UserSearchUpdateFfi(
@@ -274,19 +274,20 @@ struct RecipientSearchTests {
             RecipientUserSearchOperations(
                 searchUsers: { subscription },
                 accountFollows: {
-                    await follows.suspendUntilReleased()
+                    follows.entered.signal()
+                    try? await follows.released.wait()
                     return [self.alice]
                 }
             )
         }
 
-        await follows.waitUntilStarted()
+        try await follows.entered.wait()
         await model.awaitSearchForTesting()
 
         #expect(model.results == [result])
         #expect(!model.isSearching)
 
-        await follows.release()
+        follows.released.signal()
         await waitForRecipientSearch {
             model.followedAccountIds == [self.alice]
                 && model.candidates.first?.isFollowedBySearcher == true
@@ -452,38 +453,6 @@ private actor RecipientSearchSubscriptionStub: UserSearchSubscriptionProtocol {
     func nextUpdate() async -> UserSearchUpdateFfi? {
         guard !updates.isEmpty else { return nil }
         return updates.removeFirst()
-    }
-}
-
-private actor RecipientSearchFollowsGate {
-    private var started = false
-    private var released = false
-    private var startedWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseWaiter: CheckedContinuation<Void, Never>?
-
-    func suspendUntilReleased() async {
-        started = true
-        for waiter in startedWaiters {
-            waiter.resume()
-        }
-        startedWaiters.removeAll()
-        guard !released else { return }
-        await withCheckedContinuation { continuation in
-            releaseWaiter = continuation
-        }
-    }
-
-    func waitUntilStarted() async {
-        guard !started else { return }
-        await withCheckedContinuation { continuation in
-            startedWaiters.append(continuation)
-        }
-    }
-
-    func release() {
-        released = true
-        releaseWaiter?.resume()
-        releaseWaiter = nil
     }
 }
 

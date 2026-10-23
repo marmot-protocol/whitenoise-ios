@@ -5,14 +5,14 @@ import Testing
 
 @MainActor
 struct ConversationDraftStoreTests {
-    @Test func groupResetDrainsWritesAndBlocksLateComposerPersistence() async {
+    @Test func groupResetDrainsWritesAndBlocksLateComposerPersistence() async throws {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)
         var release: CheckedContinuation<Void, Never>?
         persistence.beforePersist = { await withCheckedContinuation { release = $0 } }
         store.setDraft(textSnapshot("before reset"), accountRef: "account", groupIdHex: "group")
         let write = Task { await store.flush() }
-        while release == nil { await Task.yield() }
+        try await eventually { release != nil }
         var prepared = false
         let reset = Task {
             await store.pauseForGroupReset(accountRef: "account", groupIdHex: "group")
@@ -451,7 +451,7 @@ struct ConversationDraftStoreTests {
                                   replyTargetId: draft.replyToMessageIdHex, draft: draft)
     }
 
-    @Test func acceptedCustomEmojiSendClearsTheSavedDraftEvenAfterTheChatClosed() async {
+    @Test func acceptedCustomEmojiSendClearsTheSavedDraftEvenAfterTheChatClosed() async throws {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)
         let typed = textSnapshot("yay :party: ")
@@ -459,7 +459,7 @@ struct ConversationDraftStoreTests {
         var release: CheckedContinuation<Void, Never>?
         let submitter = customEmojiSubmitter(store: store) { release = $0 }
         let send = Task { await submitter.submit(customEmojiSubmission(typed), emoji: []) }
-        while release == nil { await Task.yield() }
+        try await eventually { release != nil }
         // Leaving the chat mid-upload persists the still-visible draft.
         await store.flush()
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "yay :party: ")
@@ -472,7 +472,7 @@ struct ConversationDraftStoreTests {
         #expect(await reopened.snapshot(accountRef: "account", groupIdHex: "group") == nil)
     }
 
-    @Test func aChatReopenedMidSendCannotSendAgainAndDoesNotResaveTheAcceptedText() async {
+    @Test func aChatReopenedMidSendCannotSendAgainAndDoesNotResaveTheAcceptedText() async throws {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)
         let typed = textSnapshot("yay :party:")
@@ -482,7 +482,7 @@ struct ConversationDraftStoreTests {
         var release: CheckedContinuation<Void, Never>?
         let first = customEmojiSubmitter(store: store, sent: { sends += 1 }) { release = $0 }
         let send = Task { await first.submit(customEmojiSubmission(typed), emoji: []) }
-        while release == nil { await Task.yield() }
+        try await eventually { release != nil }
 
         // The chat was closed and reopened: a new screen restores the draft
         // while the first send is still uploading.
@@ -511,7 +511,7 @@ struct ConversationDraftStoreTests {
         #expect(store.acceptedUnrevisionedSend(accountRef: "account", groupIdHex: "group") == nil)
     }
 
-    @Test func draftEditedAfterACustomEmojiSubmitSurvivesAcceptance() async {
+    @Test func draftEditedAfterACustomEmojiSubmitSurvivesAcceptance() async throws {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)
         let typed = textSnapshot("yay :party:")
@@ -520,7 +520,7 @@ struct ConversationDraftStoreTests {
         var release: CheckedContinuation<Void, Never>?
         let submitter = customEmojiSubmitter(store: store) { release = $0 }
         let send = Task { await submitter.submit(customEmojiSubmission(typed), emoji: []) }
-        while release == nil { await Task.yield() }
+        try await eventually { release != nil }
         store.setDraft(textSnapshot("yay :party: and more"), accountRef: "account", groupIdHex: "group")
         release?.resume()
         #expect(await send.value)
@@ -528,7 +528,7 @@ struct ConversationDraftStoreTests {
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "yay :party: and more")
     }
 
-    @Test func replyChangedDuringACustomEmojiSendKeepsTheSavedDraft() async {
+    @Test func replyChangedDuringACustomEmojiSendKeepsTheSavedDraft() async throws {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)
         let parent = String(repeating: "ab", count: 32)
@@ -538,7 +538,7 @@ struct ConversationDraftStoreTests {
         var release: CheckedContinuation<Void, Never>?
         let submitter = customEmojiSubmitter(store: store) { release = $0 }
         let send = Task { await submitter.submit(customEmojiSubmission(typed), emoji: []) }
-        while release == nil { await Task.yield() }
+        try await eventually { release != nil }
         // The reply was cancelled while uploading; the text is unchanged.
         store.setDraft(textSnapshot("yay :party:"), accountRef: "account", groupIdHex: "group")
         release?.resume()
@@ -555,10 +555,6 @@ struct ConversationDraftStoreTests {
             replyToMessageIdHex: nil,
             mediaAttachments: []
         )
-    }
-
-    private func hex(_ byte: String) -> String {
-        String(repeating: byte, count: 32)
     }
 
     private func makeFixture() -> (root: URL, file: URL) {

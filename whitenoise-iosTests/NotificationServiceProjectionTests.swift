@@ -9,6 +9,7 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct NotificationServiceProjectionTests {
 
     @Test func newDataCollectionUsesNewestPresentableNotification() {
@@ -556,8 +557,7 @@ struct NotificationServiceProjectionTests {
     }
 
     @Test func notificationServiceStorageReaderProjectsSmallValuesOffMain() async throws {
-        let client = try MarmotClient.testClient()
-        do {
+        try await withTestClient { client in
             try await client.startRuntime()
             let account = try await client.marmot.createIdentityWithProfile(
                 defaultRelays: client.relayUrls,
@@ -575,10 +575,6 @@ struct NotificationServiceProjectionTests {
 
             #expect(enabled[account.label] == expected.localNotificationsEnabled)
             #expect(badgeCount == 0)
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
     }
 

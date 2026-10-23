@@ -4,7 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct LaunchBrandLayoutTests {
     private static let markIdentifier = "launch.mark"
 

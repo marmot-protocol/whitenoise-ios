@@ -3,6 +3,7 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AgentEventPresentationTests {
     @Test func oversizedPayloadIsRejectedBeforeParsing() {
         // The cap runs before JSONSerialization materializes anything — a
@@ -140,6 +141,8 @@ struct AgentEventPresentationTests {
         )
         let operation = timelineRecord(
             messageIdHex: hex("aa"),
+            sourceMessageIdHex: .absent,
+            groupIdHex: hex("bb"),
             sender: hex("11"),
             plaintext: #"{"v":1,"status":"started","text":"Searching"}"#,
             kind: MessageSemantics.kindAgentOperation,
@@ -165,6 +168,8 @@ struct AgentEventPresentationTests {
 
         let updated = timelineRecord(
             messageIdHex: operation.messageIdHex,
+            sourceMessageIdHex: .absent,
+            groupIdHex: hex("bb"),
             sender: operation.sender,
             plaintext: operation.plaintext,
             kind: operation.kind,
@@ -242,40 +247,6 @@ private func agentRecord(
         tags: tags,
         recordedAt: 1,
         receivedAt: 1
-    )
-}
-
-private func timelineRecord(
-    messageIdHex: String,
-    sender: String,
-    plaintext: String,
-    kind: UInt64,
-    tags: [MessageTagFfi],
-    timelineAt: UInt64
-) -> TimelineMessageRecordFfi {
-    TimelineMessageRecordFfi(
-        messageIdHex: messageIdHex,
-        sourceMessageIdHex: nil,
-        direction: "received",
-        groupIdHex: hex("bb"),
-        sender: sender,
-        plaintext: plaintext,
-        contentTokens: MarkdownDocumentFfi.emptyDocument,
-        kind: kind,
-        tags: tags,
-        timelineAt: timelineAt,
-        receivedAt: timelineAt,
-        replyToMessageIdHex: nil,
-        replyPreview: nil,
-        mediaJson: nil,
-        media: [],
-        agentTextStreamJson: nil,
-        groupSystem: nil,
-        reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
-        edit: nil,
-        deleted: false,
-        deletedByMessageIdHex: nil,
-        invalidationStatus: nil
     )
 }
 

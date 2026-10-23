@@ -9,6 +9,7 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct GroupDisplayTests {
 
     @Test func otherMemberUsesMemberIdNotLocalAccountLabel() {

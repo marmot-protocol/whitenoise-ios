@@ -3,6 +3,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct SupportChatTests {
     @Test func canonicalSupportContactResolvesToAUsableRecipient() throws {
         #expect(WhiteNoiseSupportContact.npub.hasPrefix("npub1"))
@@ -229,9 +230,10 @@ struct SupportChatTests {
         let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         flow.starter.createGroupForTesting = { _, _ in
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             return "support-dm"
         }
         let model = SupportChatViewModel(chatFlow: flow)
@@ -239,12 +241,12 @@ struct SupportChatTests {
         let task = Task {
             await model.start(using: appState) { _ in }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
 
         #expect(model.phase == .loading)
         #expect(model.isCreatingChat)
 
-        await gate.release()
+        gate.released.signal()
         await task.value
         #expect(model.phase == .routing)
     }
@@ -253,9 +255,10 @@ struct SupportChatTests {
         let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         flow.existingDirectChatGroupIdForTesting = { _ in
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             return nil
         }
         var didCreate = false
@@ -268,9 +271,9 @@ struct SupportChatTests {
         let task = Task {
             await model.start(using: appState) { _ in }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         task.cancel()
-        await gate.release()
+        gate.released.signal()
         await task.value
 
         #expect(!didCreate)
@@ -291,11 +294,12 @@ struct SupportChatTests {
             #expect(model.phase == .failed)
         }
 
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         var creationCompleted = false
         flow.starter.createGroupForTesting = { _, _ in
             // Like the native operation, this completion can arrive after cancellation.
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             creationCompleted = true
             return "created-support-dm"
         }
@@ -306,9 +310,9 @@ struct SupportChatTests {
                 await model.start(using: appState) { openedGroupIds.append($0) }
             }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         task.cancel()
-        await gate.release()
+        gate.released.signal()
         await task.value
 
         #expect(creationCompleted)
@@ -348,15 +352,15 @@ struct SupportChatTests {
         let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         let task = Task {
-            await entry.prepare(using: appState) { _ in await gate.hold() }
+            await entry.prepare(using: appState) { _ in gate.entered.signal(); try? await gate.released.wait() }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         #expect(entry.isLoading)
         #expect(entry.destination == nil)
 
-        await gate.release()
+        gate.released.signal()
         await task.value
         #expect(entry.destination?.chatTarget?.groupIdHex == "support-dm")
         #expect(!entry.isLoading)
@@ -367,14 +371,14 @@ struct SupportChatTests {
         let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         let task = Task {
-            await entry.prepare(using: appState) { _ in await gate.hold() }
+            await entry.prepare(using: appState) { _ in gate.entered.signal(); try? await gate.released.wait() }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         if switchAccount { appState.activeAccountRef = "replacement" }
         else { task.cancel() }
-        await gate.release()
+        gate.released.signal()
         await task.value
 
         #expect(entry.destination == nil)
@@ -407,22 +411,23 @@ struct SupportChatTests {
         let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         var lookups = 0
         flow.existingDirectChatGroupIdForTesting = { _ in
             lookups += 1
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             return "support-dm"
         }
         let entry = SupportChatEntryModel(chatFlow: flow)
         let task = Task { await entry.prepare(using: appState) }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         #expect(entry.isLoading)
         await entry.prepare(using: appState)
         #expect(lookups == 1)
 
         task.cancel()
-        await gate.release()
+        gate.released.signal()
         await task.value
         #expect(entry.destination == nil)
         #expect(!entry.showsFailure)
@@ -438,17 +443,18 @@ struct SupportChatTests {
         let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "original"
         let flow = NewChatFlowViewModel()
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         flow.existingDirectChatGroupIdForTesting = { _ in
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             if lookupFails { throw TestFailure.existingChatLookupFailed }
             return "original-account-support-dm"
         }
         let entry = SupportChatEntryModel(chatFlow: flow)
         let task = Task { await entry.prepare(using: appState) }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         appState.activeAccountRef = "replacement"
-        await gate.release()
+        gate.released.signal()
         await task.value
 
         #expect(entry.destination == nil)
@@ -485,32 +491,5 @@ struct SupportChatTests {
     private enum TestFailure: Error {
         case sensitiveEngineDetail
         case existingChatLookupFailed
-    }
-}
-
-private actor SupportChatCreateGate {
-    private var isHeld = false
-    private var heldWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseContinuation: CheckedContinuation<Void, Never>?
-
-    func hold() async {
-        isHeld = true
-        heldWaiters.forEach { $0.resume() }
-        heldWaiters.removeAll()
-        await withCheckedContinuation { continuation in
-            releaseContinuation = continuation
-        }
-    }
-
-    func waitUntilHeld() async {
-        guard !isHeld else { return }
-        await withCheckedContinuation { continuation in
-            heldWaiters.append(continuation)
-        }
-    }
-
-    func release() {
-        releaseContinuation?.resume()
-        releaseContinuation = nil
     }
 }

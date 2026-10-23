@@ -5,6 +5,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct TimelineProjectionBoundaryTests {
     @Test func rejectedSiblingsKeepTheirSlotAndCannotBecomeDownloadable() {
         let reference = mediaReference(sourceEpoch: 42)
@@ -481,7 +482,7 @@ struct TimelineProjectionBoundaryTests {
         cached.blocksCachedDataRead = true
         let downloader = ConversationMediaDownloader(cache: cached)
         let request = Task { try await downloader.data(for: media, groupIdHex: testGroupId, appState: nil) }
-        await cached.waitForCachedDataRead()
+        try await cached.waitForCachedDataRead()
 
         if purgeInjectedCache {
             cached.producerGeneration += 1
@@ -550,13 +551,13 @@ struct TimelineProjectionBoundaryTests {
         let first = Task {
             try await downloader.data(for: media, groupIdHex: testGroupId, appState: nil)
         }
-        await cached.waitForCachedDataRead()
-        let secondRequestStarted = AsyncTestSignal()
+        try await cached.waitForCachedDataRead()
+        let secondRequestStarted = TestLatch()
         let second = Task<Data, Error> {
             secondRequestStarted.signal()
             return try await downloader.data(for: media, groupIdHex: testGroupId, appState: nil)
         }
-        await secondRequestStarted.wait()
+        try await secondRequestStarted.wait()
         cached.releaseCachedDataRead()
 
         let firstResult = try await first.value
@@ -690,20 +691,20 @@ private final class CountingConversationMediaCache: ConversationMediaCacheAccess
     private(set) var storedSourceEpochs: [UInt64] = []
     var cachedDataToReturn: Data?
     var blocksCachedDataRead = false
-    private let cachedDataReadStarted = AsyncTestSignal()
-    private let cachedDataReadReleased = AsyncTestSignal()
+    private let cachedDataReadStarted = TestLatch()
+    private let cachedDataReadReleased = TestLatch()
 
     func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data? {
         cachedDataCalls += 1
         if blocksCachedDataRead {
             cachedDataReadStarted.signal()
-            await cachedDataReadReleased.wait()
+            try? await cachedDataReadReleased.wait()
         }
         return cachedDataToReturn
     }
 
-    func waitForCachedDataRead() async {
-        await cachedDataReadStarted.wait()
+    func waitForCachedDataRead() async throws {
+        try await cachedDataReadStarted.wait()
     }
 
     func releaseCachedDataRead() {
@@ -716,27 +717,6 @@ private final class CountingConversationMediaCache: ConversationMediaCacheAccess
         storedPayloads.append(data)
         storedReferenceHashes.append(reference.plaintextSha256)
         storedSourceEpochs.append(reference.sourceEpoch)
-    }
-}
-
-@MainActor
-private final class AsyncTestSignal {
-    private var isSignalled = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func wait() async {
-        guard !isSignalled else { return }
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-        }
-    }
-
-    func signal() {
-        guard !isSignalled else { return }
-        isSignalled = true
-        let pendingWaiters = waiters
-        waiters.removeAll()
-        pendingWaiters.forEach { $0.resume() }
     }
 }
 

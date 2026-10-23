@@ -322,17 +322,18 @@ private struct LongChatScrollHarness: View {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationLongChatScrollTests {
     private static let settleTimeout = Duration.seconds(20)
 
-    private func settle(_ window: UIWindow, until isSettled: () -> Bool) async throws {
-        let deadline = ContinuousClock.now.advanced(by: Self.settleTimeout)
-        while true {
+    private func settle(
+        _ window: UIWindow,
+        sourceLocation: SourceLocation = #_sourceLocation,
+        until isSettled: () -> Bool
+    ) async throws {
+        try await eventually(timeout: Self.settleTimeout, sourceLocation: sourceLocation) {
             window.layoutIfNeeded()
-            if isSettled() { return }
-            guard ContinuousClock.now < deadline else { return }
-            try await Task.sleep(for: .milliseconds(10))
+            return isSettled()
         }
     }
 

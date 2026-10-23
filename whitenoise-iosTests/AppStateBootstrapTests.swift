@@ -16,7 +16,7 @@ private let notificationDefaultsTestGate = AsyncTestGate()
 /// `marmot-uniffi`'s Rust integration tests). These tests just exercise the
 /// boundary between MarmotKit and the iOS code, plus pure-Swift helpers.
 @MainActor
-@Suite(.marmotRuntimeConcurrencyLimit)
+@Suite(.marmotRuntimeConcurrencyLimit, .tags(.runtime))
 struct AppStateBootstrapTests {
 
     private let accountDefaults = IsolatedAccountDefaults.make()

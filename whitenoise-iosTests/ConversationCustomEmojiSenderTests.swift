@@ -5,6 +5,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationCustomEmojiSenderTests {
     typealias F = CustomEmojiFixtures
 
@@ -140,7 +141,7 @@ struct ConversationCustomEmojiSenderTests {
         harness.holdsUpload = true
         let first = Task { try await harness.sender.sendMessage(text: "a :party:", replyTargetId: nil, emoji: [party]) }
         let second = Task { try await harness.sender.sendMessage(text: "b :party:", replyTargetId: nil, emoji: [party]) }
-        while harness.uploadGate == nil { await Task.yield() }
+        try await eventually { harness.uploadGate != nil }
         for _ in 0..<5 { await Task.yield() }
         harness.uploadGate?.resume()
         _ = try await first.value
@@ -200,7 +201,7 @@ struct ConversationCustomEmojiSenderTests {
         #expect(harness.uploads.count == 2)
     }
 
-    @Test func unreadableOrMismatchedBytesFailWithoutUploading() async {
+    @Test func unreadableOrMismatchedBytesFailWithoutUploading() async throws {
         let harness = Harness()
         let party = harness.sendable("party", bytes: "party-png")
         harness.payloads[party.reference.plaintextSha256] = Data("tampered".utf8)
@@ -214,7 +215,7 @@ struct ConversationCustomEmojiSenderTests {
         #expect(harness.uploads.isEmpty)
     }
 
-    @Test func overLimitMessagesFailBeforeAnyUpload() async {
+    @Test func overLimitMessagesFailBeforeAnyUpload() async throws {
         let harness = Harness()
         let emoji = (0..<63).map { harness.sendable("e\($0)", bytes: "png-\($0)") }
         await #expect(throws: CustomEmojiSendError.tooManyTags(count: 65)) {
@@ -281,11 +282,11 @@ struct ConversationCustomEmojiSenderTests {
             draft: ConversationDraftSnapshot(canonicalText: "yay :party:", replyToMessageIdHex: nil, mediaAttachments: []))
     }
 
-    @Test func claimIsHeldUntilDraftCleanupFinishesAndCacheWritesComeLast() async {
+    @Test func claimIsHeldUntilDraftCleanupFinishesAndCacheWritesComeLast() async throws {
         let harness = SubmitterHarness()
         harness.holdsFinish = true
         let first = Task { await harness.submitter.submit(harness.submission, emoji: []) }
-        while harness.finishGate == nil { await Task.yield() }
+        try await eventually { harness.finishGate != nil }
 
         // Accepted by MDK, cleanup pending: the claim still refuses a second send.
         #expect(harness.claimed != nil)

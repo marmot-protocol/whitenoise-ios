@@ -131,7 +131,7 @@ struct ChatListDraftHandoffTests {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ChatListDraftHandoffBindingTests {
     @Test func publishedBinaryCorrelatesSendRevisionWithChatListDraftVersion() async throws {
         let client = try MarmotClient.testClient()
@@ -145,7 +145,7 @@ struct ChatListDraftHandoffBindingTests {
         func draft(_ text: String) -> ConversationDraftSnapshot {
             ConversationDraftSnapshot(canonicalText: text, replyToMessageIdHex: nil, mediaAttachments: [])
         }
-        do {
+        try await closing(client) {
             try await client.startRuntime()
             let account = try await client.marmot.createIdentityWithProfile(
                 defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
@@ -204,10 +204,6 @@ struct ChatListDraftHandoffBindingTests {
                                                              sentRevision: retained.revision))
             #expect(ChatsListViewModel.Item(row: next.row, avatarURL: nil, title: "Accepted", prepared: next,
                                             pendingSend: retained).draftPreview == "next thought")
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
     }
 }

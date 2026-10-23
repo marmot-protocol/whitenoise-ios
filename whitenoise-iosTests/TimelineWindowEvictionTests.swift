@@ -3,12 +3,27 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct TimelineWindowEvictionTests {
     @MainActor
     @Test func completeConversationReplacementRemovesFilteredAndEvictedRows() throws {
         let viewModel = ConversationViewModel(appState: AppState.test(client: try MarmotClient.testClient()), group: testGroup())
-        let hidden = timelineRecord(messageIdHex: hexId(1), timelineAt: 1)
-        let retained = timelineRecord(messageIdHex: hexId(2), timelineAt: 2)
+        let hidden = timelineRecord(
+            messageIdHex: hexId(1),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 1",
+            timelineAt: 1
+        )
+        let retained = timelineRecord(
+            messageIdHex: hexId(2),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 2",
+            timelineAt: 2
+        )
         viewModel.timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: [hidden, retained], hasMoreBefore: true, hasMoreAfter: true))
         viewModel.timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: [retained], hasMoreBefore: true, hasMoreAfter: true))
         #expect(timelineMessageIds(in: viewModel) == [retained.messageIdHex])
@@ -22,8 +37,22 @@ struct TimelineWindowEvictionTests {
             appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
-        let older = timelineRecord(messageIdHex: hexId(1), timelineAt: 1)
-        let newest = timelineRecord(messageIdHex: hexId(2), timelineAt: 2)
+        let older = timelineRecord(
+            messageIdHex: hexId(1),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 1",
+            timelineAt: 1
+        )
+        let newest = timelineRecord(
+            messageIdHex: hexId(2),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 2",
+            timelineAt: 2
+        )
 
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [older, newest], hasMoreBefore: true, hasMoreAfter: false),
@@ -45,8 +74,22 @@ struct TimelineWindowEvictionTests {
             appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
-        let first = timelineRecord(messageIdHex: hexId(11), timelineAt: 1)
-        let second = timelineRecord(messageIdHex: hexId(12), timelineAt: 2)
+        let first = timelineRecord(
+            messageIdHex: hexId(11),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 1",
+            timelineAt: 1
+        )
+        let second = timelineRecord(
+            messageIdHex: hexId(12),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 2",
+            timelineAt: 2
+        )
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [first, second], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -67,8 +110,22 @@ struct TimelineWindowEvictionTests {
             appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
-        let removed = timelineRecord(messageIdHex: hexId(1), timelineAt: 1)
-        let retained = timelineRecord(messageIdHex: hexId(2), timelineAt: 2)
+        let removed = timelineRecord(
+            messageIdHex: hexId(1),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 1",
+            timelineAt: 1
+        )
+        let retained = timelineRecord(
+            messageIdHex: hexId(2),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 2",
+            timelineAt: 2
+        )
 
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [removed, retained], hasMoreBefore: true, hasMoreAfter: false),
@@ -97,7 +154,14 @@ struct TimelineWindowEvictionTests {
             appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
-        let retained = timelineRecord(messageIdHex: hexId(1), timelineAt: 1)
+        let retained = timelineRecord(
+            messageIdHex: hexId(1),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 1",
+            timelineAt: 1
+        )
         let tempId = "pending-1"
         let confirmedId = hexId(2)
         let pending = pendingSentRecord(timelineAt: 2)
@@ -129,8 +193,12 @@ struct TimelineWindowEvictionTests {
 
         let mirrored = timelineRecord(
             messageIdHex: confirmedId,
-            timelineAt: 2,
-            direction: "sent"
+            sourceMessageIdHex: .absent,
+            direction: "sent",
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 2",
+            timelineAt: 2
         )
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [retained, mirrored], hasMoreBefore: false, hasMoreAfter: false),
@@ -152,7 +220,14 @@ struct TimelineWindowEvictionTests {
             appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
-        let retained = timelineRecord(messageIdHex: hexId(1), timelineAt: 1)
+        let retained = timelineRecord(
+            messageIdHex: hexId(1),
+            sourceMessageIdHex: .absent,
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 1",
+            timelineAt: 1
+        )
         let tempId = "pending-edge"
         let confirmedId = hexId(3)
         let pending = pendingSentRecord(timelineAt: 2)
@@ -175,8 +250,12 @@ struct TimelineWindowEvictionTests {
 
         let mirrored = timelineRecord(
             messageIdHex: confirmedId,
-            timelineAt: 2,
-            direction: "sent"
+            sourceMessageIdHex: .absent,
+            direction: "sent",
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "message 2",
+            timelineAt: 2
         )
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [retained, mirrored], hasMoreBefore: false, hasMoreAfter: true),
@@ -203,9 +282,12 @@ struct TimelineWindowEvictionTests {
         let pending = pendingSentRecord(timelineAt: 4, plaintext: "optimistic echo")
         let durable = timelineRecord(
             messageIdHex: confirmedId,
-            timelineAt: 4,
+            sourceMessageIdHex: .absent,
             direction: "sent",
-            plaintext: "durable row"
+            groupIdHex: testGroupId,
+            sender: hex("aa"),
+            plaintext: "durable row",
+            timelineAt: 4
         )
 
         viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
@@ -222,38 +304,6 @@ struct TimelineWindowEvictionTests {
 }
 
 private let testGroupId = String(repeating: "b", count: 64)
-
-private func timelineRecord(
-    messageIdHex: String,
-    timelineAt: UInt64,
-    direction: String = "received",
-    plaintext: String? = nil
-) -> TimelineMessageRecordFfi {
-    TimelineMessageRecordFfi(
-        messageIdHex: messageIdHex,
-        sourceMessageIdHex: nil,
-        direction: direction,
-        groupIdHex: testGroupId,
-        sender: String(repeating: "a", count: 64),
-        plaintext: plaintext ?? "message \(timelineAt)",
-        contentTokens: MarkdownDocumentFfi.emptyDocument,
-        kind: MessageSemantics.kindChat,
-        tags: [],
-        timelineAt: timelineAt,
-        receivedAt: timelineAt,
-        replyToMessageIdHex: nil,
-        replyPreview: nil,
-        mediaJson: nil,
-        media: [],
-        agentTextStreamJson: nil,
-        groupSystem: nil,
-        reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
-        edit: nil,
-        deleted: false,
-        deletedByMessageIdHex: nil,
-        invalidationStatus: nil
-    )
-}
 
 private func pendingSentRecord(timelineAt: UInt64, plaintext: String = "just sent") -> AppMessageRecordFfi {
     AppMessageRecordFfi(

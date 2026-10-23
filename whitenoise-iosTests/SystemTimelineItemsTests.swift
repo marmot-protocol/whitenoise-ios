@@ -4,6 +4,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct SystemTimelineItemsTests {
     @Test func retainedSystemTimelineItemsDeduplicateConsecutiveEvents() {
         let first = TimelineItem.systemEvent(id: "first", event: .rosterChanged, timestamp: 1)

@@ -314,7 +314,7 @@ struct AccountSetupTests {
         #expect(AppContainerConfig.accountRelays(runtimeRelays: local) == local)
     }
 
-    @Test func failedRestartCannotReuseACancelledCheckpoint() async {
+    @Test func failedRestartCannotReuseACancelledCheckpoint() async throws {
         let original = snapshot()
         await #expect(throws: MarmotKitError.OnboardingActionUnavailable) {
             try await AccountSetupRecovery.restartIfPossible(snapshot: original, cancel: {}, begin: {
@@ -334,7 +334,7 @@ struct AccountSetupTests {
         #expect(!restarted)
     }
 
-    @Test func cancellationDuringCheckpointRecoveryPropagates() async {
+    @Test func cancellationDuringCheckpointRecoveryPropagates() async throws {
         await #expect(throws: CancellationError.self) {
             try await AccountSetupRecovery.restartIfPossible(snapshot: snapshot(), cancel: {
                 throw CancellationError()
@@ -454,12 +454,12 @@ struct AccountSetupTests {
         }
     }
 
-    @Test(arguments: [false, true]) func streamEndOnlyBlocksAnUnfinishedAccount(ready: Bool) async {
+    @Test(arguments: [false, true]) func streamEndOnlyBlocksAnUnfinishedAccount(ready: Bool) async throws {
         let initial = snapshot()
         let client = SetupTestClient(initial: initial)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { model.isConnected && !model.isBusy }
+        try await settle { model.isConnected && !model.isBusy }
         client.emit(snapshot(revision: 2, status: ready ? .passed : .needsInput, ready: ready))
         client.continuation.finish()
         await model.drain()
@@ -470,11 +470,11 @@ struct AccountSetupTests {
         #expect(!model.hasConnectionFailure)
     }
 
-    @Test func suspendingAfterAnActionFailureDoesNotReportAConnectionFailure() async {
+    @Test func suspendingAfterAnActionFailureDoesNotReportAConnectionFailure() async throws {
         let initial = snapshot()
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(SetupTestClient(initial: initial))
-        await settle { model.isConnected && !model.isBusy }
+        try await settle { model.isConnected && !model.isBusy }
         await model.send(.approve(0))?.value
         #expect(model.errorMessage != nil)
         #expect(!model.hasConnectionFailure)
@@ -484,7 +484,7 @@ struct AccountSetupTests {
         #expect(!model.hasConnectionFailure)
 
         await model.connect(SetupTestClient(initial: initial))
-        await settle { model.isConnected && !model.isBusy }
+        try await settle { model.isConnected && !model.isBusy }
         #expect(model.isConnected)
         #expect(model.errorMessage == nil)
         #expect(!model.hasConnectionFailure)
@@ -492,7 +492,7 @@ struct AccountSetupTests {
         await model.drain()
     }
 
-    @Test(arguments: [UInt64(4), 5]) func automaticSkipStopsOnUnchangedOrOlderResults(revision: UInt64) async {
+    @Test(arguments: [UInt64(4), 5]) func automaticSkipStopsOnUnchangedOrOlderResults(revision: UInt64) async throws {
         var initial = snapshot(revision: 5)
         initial.steps[0].step = .follows
         initial.steps[0].actions = [.continueWithout]
@@ -501,7 +501,7 @@ struct AccountSetupTests {
         let client = SetupTestClient(initial: initial, skipResult: unchanged)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { model.errorMessage != nil }
+        try await settle { model.errorMessage != nil }
         #expect(model.errorMessage != nil)
         #expect(await client.skipCount == 1)
         #expect(!model.isBusy)
@@ -509,13 +509,13 @@ struct AccountSetupTests {
         await model.drain()
     }
 
-    @Test func quietSnapshotPollerCancelsWithoutEmitting() async {
+    @Test func quietSnapshotPollerCancelsWithoutEmitting() async throws {
         let quiet = snapshot(revision: 3)
-        let readGate = SetupOperationGate()
+        let readGate = TestLatch()
         let (reads, readSignal) = AsyncStream.makeStream(of: Void.self)
         let poller = AccountSetupSnapshotPoller(snapshot: quiet) {
             readSignal.yield()
-            await readGate.wait()
+            try? await readGate.wait()
             // Cancelled mid-read: dropping this newer revision is the post-read check's job.
             var read = quiet
             read.revision += 1
@@ -525,18 +525,18 @@ struct AccountSetupTests {
         var iterator = reads.makeAsyncIterator()
         await iterator.next()
         waiting.cancel()
-        await readGate.release()
+        readGate.signal()
         await #expect(throws: CancellationError.self) { _ = try await waiting.value }
     }
 
-    @Test func missingFollowsAreSkippedWithoutPublishing() async {
+    @Test func missingFollowsAreSkippedWithoutPublishing() async throws {
         var initial = snapshot()
         initial.steps[0].step = .follows
         initial.steps[0].actions = [.continueWithout, .editFollows]
         let client = SetupTestClient(initial: initial)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { model.snapshot.steps[0].status == .skipped }
+        try await settle { model.snapshot.steps[0].status == .skipped }
         #expect(model.snapshot.steps[0].status == .skipped)
         #expect(await client.skipCount == 1)
         #expect(await client.approvalCount == 0)
@@ -554,7 +554,7 @@ struct AccountSetupTests {
     @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays], [false, true])
     func anotherRelayLookupPreservesTheReturnedRecoveryChoices(
         step: OnboardingStepFfi, lookupFailed: Bool
-    ) async {
+    ) async throws {
         var initial = snapshot()
         initial.steps[0].step = step
         initial.steps[0].actions = [.editDiscoveryRelays, .useRecommendedRelays]
@@ -569,7 +569,7 @@ struct AccountSetupTests {
         let client = SetupTestClient(initial: initial, discoveryResult: result)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { model.isConnected && !model.isBusy }
+        try await settle { model.isConnected && !model.isBusy }
 
         let lookup = model.send(.discovery(["wss://another.example"]))
         #expect(lookup != nil)
@@ -632,14 +632,14 @@ struct AccountSetupTests {
     }
 
     @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
-    func relayEditorRequiresApproval(_ step: OnboardingStepFfi) async {
+    func relayEditorRequiresApproval(_ step: OnboardingStepFfi) async throws {
         var initial = snapshot()
         initial.steps[0].step = step
         initial.steps[0].actions = [.editRelays, .retry]
         let client = SetupTestClient(initial: initial)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { model.isConnected && !model.isBusy }
+        try await settle { model.isConnected && !model.isBusy }
         #expect(!model.offeredActions.contains(.useRecommendedRelays))
         #expect(await client.approvalCount == 0)
 
@@ -660,14 +660,14 @@ struct AccountSetupTests {
     }
 
     @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
-    func suggestedRelayFixOnlyPreviewsAndManualReviewIsNeverApproved(_ step: OnboardingStepFfi) async {
+    func suggestedRelayFixOnlyPreviewsAndManualReviewIsNeverApproved(_ step: OnboardingStepFfi) async throws {
         var initial = snapshot()
         initial.steps[0].step = step
         initial.steps[0].actions = [.retry, .editDiscoveryRelays, .editRelays]
         let client = SetupTestClient(initial: initial)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { model.isConnected && !model.isBusy }
+        try await settle { model.isConnected && !model.isBusy }
         // Connecting never requests a preview on the user's behalf.
         #expect(await client.relayRepairPreviews.isEmpty)
 
@@ -715,7 +715,7 @@ struct AccountSetupTests {
         #expect(model.isResumingProfilePublication)
     }
 
-    @Test func mismatchedProposalIsNeverApproved() async {
+    @Test func mismatchedProposalIsNeverApproved() async throws {
         let proposed = proposalSnapshot(step: .relays)
         var approved = false
         await #expect(throws: MarmotKitError.self) {
@@ -727,7 +727,7 @@ struct AccountSetupTests {
         #expect(!approved)
     }
 
-    @Test func interruptedSaveDoesNotApproveAnUnpublishedProposal() async {
+    @Test func interruptedSaveDoesNotApproveAnUnpublishedProposal() async throws {
         let proposed = proposalSnapshot(step: .profile)
         var approved = false
         let task = Task {
@@ -743,13 +743,13 @@ struct AccountSetupTests {
         #expect(!approved)
     }
 
-    @Test(arguments: [false, true]) func profileSheetOnlyClosesAfterSuccessfulSave(fails: Bool) async {
+    @Test(arguments: [false, true]) func profileSheetOnlyClosesAfterSuccessfulSave(fails: Bool) async throws {
         var initial = snapshot()
         initial.steps[0].step = .profile
         let client = SetupTestClient(initial: initial, profileSaveFails: fails)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { model.isConnected && !model.isBusy }
+        try await settle { model.isConnected && !model.isBusy }
         let profile = UserProfileMetadataFfi(name: "Alex", displayName: "Alex", about: nil, picture: nil, nip05: nil, lud16: nil)
         let saved = await model.saveProfile(profile, avatar: nil)
         #expect(saved == !fails)
@@ -766,33 +766,33 @@ struct AccountSetupTests {
         return value
     }
 
-    @Test func connectionRunsChecksButNeverAcknowledgesNoticeAutomatically() async {
+    @Test func connectionRunsChecksButNeverAcknowledgesNoticeAutomatically() async throws {
         let initial = snapshot()
         let client = SetupTestClient(initial: initial)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { await client.runCount == 1 && !model.isBusy }
+        try await settle { await client.runCount == 1 && !model.isBusy }
         #expect(await client.runCount == 1)
         #expect(await client.acknowledgments.isEmpty)
         #expect(!model.snapshot.ready)
         model.send(.acknowledge(1))
-        await settle { model.snapshot.ready }
+        try await settle { model.snapshot.ready }
         #expect(await client.acknowledgments == [1])
         #expect(model.snapshot.ready)
         model.suspend()
         await model.drain()
     }
 
-    @Test func reconnectReplacesSubscriptionAndResumesPersistedSnapshot() async {
+    @Test func reconnectReplacesSubscriptionAndResumesPersistedSnapshot() async throws {
         let old = SetupTestClient(initial: snapshot())
         let fresh = SetupTestClient(initial: snapshot(revision: 9, status: .passed, ready: true))
         let model = AccountSetupModel(snapshot: snapshot())
         await model.connect(old)
-        await settle { model.isConnected && !model.isBusy }
+        try await settle { model.isConnected && !model.isBusy }
         model.suspend()
         await model.drain()
         await model.connect(fresh)
-        await settle { model.snapshot.revision == 9 }
+        try await settle { model.snapshot.revision == 9 }
         #expect(model.snapshot.ready)
         old.emit(snapshot(revision: 10, ready: false))
         await Task.yield()
@@ -801,12 +801,12 @@ struct AccountSetupTests {
         await model.drain()
     }
 
-    @Test func interruptedCancellationResumesCancellationRatherThanChecks() async {
+    @Test func interruptedCancellationResumesCancellationRatherThanChecks() async throws {
         let initial = snapshot(cancellationPending: true)
         let client = SetupTestClient(initial: initial)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { model.cancelled }
+        try await settle { model.cancelled }
         #expect(model.cancelled)
         #expect(await client.runCount == 0)
         #expect(await client.cancelCount == 1)
@@ -814,19 +814,19 @@ struct AccountSetupTests {
         await model.drain()
     }
 
-    @Test func suspensionWaitsForWorkAlreadyBeingDrainedByReconnect() async {
-        let gate = SetupOperationGate()
+    @Test func suspensionWaitsForWorkAlreadyBeingDrainedByReconnect() async throws {
+        let gate = TestLatch()
         let old = SetupTestClient(initial: snapshot(), runGate: gate)
         let fresh = SetupTestClient(initial: snapshot())
         let model = AccountSetupModel(snapshot: snapshot())
         await model.connect(old)
-        await settle { await old.runCount == 1 }
+        try await settle { await old.runCount == 1 }
         var reconnectStarted = false
         let reconnect = Task {
             reconnectStarted = true
             await model.connect(fresh)
         }
-        await settle { reconnectStarted }
+        try await settle { reconnectStarted }
         var suspensionDrained = false
         let suspension = Task {
             model.suspend()
@@ -835,7 +835,7 @@ struct AccountSetupTests {
         }
         for _ in 0..<20 { await Task.yield() }
         #expect(!suspensionDrained)
-        await gate.release()
+        gate.signal()
         await reconnect.value
         await suspension.value
         #expect(suspensionDrained)
@@ -843,15 +843,15 @@ struct AccountSetupTests {
         #expect(await fresh.runCount == 0)
     }
 
-    @Test func staleApprovalDoesNotAdvanceOrRepeatPublication() async {
+    @Test func staleApprovalDoesNotAdvanceOrRepeatPublication() async throws {
         let initial = snapshot()
         let client = SetupTestClient(initial: initial)
         let model = AccountSetupModel(snapshot: initial)
         await model.connect(client)
-        await settle { await client.runCount == 1 && !model.isBusy }
+        try await settle { await client.runCount == 1 && !model.isBusy }
         model.send(.approve(0))
         model.send(.approve(0))
-        await settle { model.errorMessage != nil && !model.isBusy }
+        try await settle { model.errorMessage != nil && !model.isBusy }
         #expect(await client.approvalCount == 1)
         #expect(model.failure == .settingsChanged)
         #expect(!model.snapshot.ready)
@@ -864,36 +864,37 @@ struct AccountSetupTests {
         await model.drain()
     }
 
-    private func settle(_ predicate: () async -> Bool) async {
-        for _ in 0..<1_000 {
-            if await predicate() { return }
-            await Task.yield()
-        }
+    private func settle(
+        sourceLocation: SourceLocation = #_sourceLocation,
+        _ predicate: () async -> Bool
+    ) async throws {
+        try await eventually(sourceLocation: sourceLocation, predicate)
     }
 }
 
 /// Runs off the MainActor so the real runtime's hops do not queue behind the
 /// rest of the in-process parallel suite on a starved CI runner.
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AccountSetupRuntimeTests {
     // The poller's cancellation semantics are covered deterministically above;
     // this limit only turns an uncancellable wait into a failure instead of a
     // stalled job. Starved CI runners have taken 357s for a single real-runtime
     // test, so keep it well above that.
     @Test(.timeLimit(.minutes(10))) func realSnapshotSubscriptionCancelsWhileMDKIsQuiet() async throws {
-        let client = try MarmotClient.testClient()
-        try await client.startRuntime()
-        let initial = try await client.marmot.beginOnboarding(
-            nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
-            options: OnboardingOptionsFfi(defaultRelays: ["wss://relay.invalid.test"], discoveryRelays: ["wss://relay.invalid.test"])
-        )
-        let subscription = try await MarmotAccountSetupClient(client: client, accountID: initial.accountIdHex).subscribe()
-        let waiting = Task { try await subscription.next() }
-        await Task.yield()
-        waiting.cancel()
-        await #expect(throws: CancellationError.self) { _ = try await waiting.value }
-        // Cancellation must finish without closing the live runtime or emitting another snapshot.
-        #expect(try await client.onboardingSnapshot(accountID: initial.accountIdHex)?.revision == initial.revision)
-        try await client.marmot.shutdownAndClose()
+        try await withTestClient { client in
+            try await client.startRuntime()
+            let initial = try await client.marmot.beginOnboarding(
+                nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
+                options: OnboardingOptionsFfi(defaultRelays: ["wss://relay.invalid.test"], discoveryRelays: ["wss://relay.invalid.test"])
+            )
+            let subscription = try await MarmotAccountSetupClient(client: client, accountID: initial.accountIdHex).subscribe()
+            let waiting = Task { try await subscription.next() }
+            await Task.yield()
+            waiting.cancel()
+            await #expect(throws: CancellationError.self) { _ = try await waiting.value }
+            // Cancellation must finish without closing the live runtime or emitting another snapshot.
+            #expect(try await client.onboardingSnapshot(accountID: initial.accountIdHex)?.revision == initial.revision)
+        }
     }
 }
 
@@ -911,10 +912,10 @@ private actor SetupTestClient: AccountSetupClient {
     let discoveryResult: OnboardingSnapshotFfi?
     let skipResult: OnboardingSnapshotFfi?
     var acknowledgments: [UInt64] = []
-    let runGate: SetupOperationGate?
+    let runGate: TestLatch?
 
     init(
-        initial: OnboardingSnapshotFfi, runGate: SetupOperationGate? = nil,
+        initial: OnboardingSnapshotFfi, runGate: TestLatch? = nil,
         profileSaveFails: Bool = false, discoveryResult: OnboardingSnapshotFfi? = nil,
         skipResult: OnboardingSnapshotFfi? = nil
     ) {
@@ -939,7 +940,7 @@ private actor SetupTestClient: AccountSetupClient {
         switch command {
         case .run:
             runCount += 1
-            await runGate?.wait()
+            try await runGate?.wait()
         case .discovery: return discoveryResult ?? initial
         case .suggestRelayRepair(let step):
             relayRepairPreviews.append(step)
@@ -998,21 +999,5 @@ private actor SetupTestClient: AccountSetupClient {
         default: break
         }
         return initial
-    }
-}
-
-private actor SetupOperationGate {
-    private var released = false
-    private var continuation: CheckedContinuation<Void, Never>?
-
-    func wait() async {
-        guard !released else { return }
-        await withCheckedContinuation { continuation = $0 }
-    }
-
-    func release() {
-        released = true
-        continuation?.resume()
-        continuation = nil
     }
 }

@@ -240,6 +240,7 @@ struct IdentityPresentationContractTests {
 /// calls, so the assertion is about behavior rather than how the call site is
 /// spelled.
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct IdentityPresentationAdapterTests {
 
     @Test func groupSystemEventsNameParticipantsByNpubWithoutAResolver() throws {
@@ -398,39 +399,6 @@ struct IdentityPresentationAdapterTests {
         #expect(hydrated == "Hydrated Name")
         #expect(!containsHex(hydrated, Fixture.hex))
     }
-}
-
-private func notificationUpdate(
-    senderAccountIdHex: String,
-    senderName: String?
-) -> NotificationUpdateFfi {
-    NotificationUpdateFfi(
-        notificationKey: "notif-identity",
-        conversationKey: "conv-identity",
-        trigger: .newMessage,
-        accountRef: "account-identity",
-        accountIdHex: String(repeating: "11", count: 32),
-        groupIdHex: "group-identity",
-        groupName: nil,
-        isDm: true,
-        isMention: false,
-        messageIdHex: "message-identity",
-        sender: NotificationUserFfi(
-            accountIdHex: senderAccountIdHex,
-            displayName: senderName,
-            pictureUrl: nil
-        ),
-        receiver: NotificationUserFfi(
-            accountIdHex: String(repeating: "11", count: 32),
-            displayName: "Me",
-            pictureUrl: nil
-        ),
-        previewText: "Hello",
-        reactionEmoji: nil,
-        reactedToPreview: nil,
-        timestampMs: 1_700_000_000_123,
-        isFromSelf: false
-    )
 }
 
 /// The npub a recipient row prints *under* a name. The row also titles itself
