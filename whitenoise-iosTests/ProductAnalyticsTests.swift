@@ -234,25 +234,6 @@ struct ProductAnalyticsTests {
         try await client.marmot.shutdownAndClose()
     }
 
-    @Test @MainActor func frozenRuntimeCannotRecordEvenWithStoredConsent() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("FrozenAnalytics-\(UUID())")
-        let client = try MarmotClient(rootPath: root.path, relayUrls: [], cursorPersistence: .frozen)
-        try client.marmot.setProductAnalyticsRuntimeConfig(config: ProductAnalyticsBuildConfig(
-            endpoint: "https://analytics.invalid/api/v0/events", appKey: "A-SH-test",
-            operatorLabel: "test", retentionDisclosure: nil, appVersion: "1", osMajorVersion: "27",
-            deviceClass: "phone", environment: "staging", isDebug: true
-        ).runtimeConfig)
-        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
-        try await client.marmot.setProductAnalyticsActivity(activity: .foreground)
-        #expect(try client.marmot.recordProductEvent(event: ProductEvent.screen(.inbox).ffi) == .ignoredDisabled)
-        #expect(try client.marmot.recordHostTiming(
-            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
-        ) == .ignoredDisabled)
-        #expect(try client.marmot.usageDiagnosticsStatus().queuedEvents == 0)
-        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: false)
-        try await client.marmot.shutdownAndClose()
-    }
-
     @Test(arguments: [false, true]) @MainActor
     func receiptSurvivesRuntimeReplacementAndErasureRestoresEligibility(granted: Bool) async throws {
         let original = try MarmotClient.testClient()

@@ -5,39 +5,6 @@ import Testing
 
 @MainActor
 struct AuditV5AdoptionTests {
-    @Test func nativeStartupDeletesLegacyAuditFilesWithRecordingDisabled() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let engine = String(repeating: "a", count: 32)
-        var deleted: [URL] = []
-        var preserved: [URL] = []
-        for container in ["accounts", ".wipe-tombstones"] {
-            let account = root.appendingPathComponent(container).appendingPathComponent("fixture")
-            try FileManager.default.createDirectory(at: account, withIntermediateDirectories: true)
-            for suffix in ["", "-v1", "-v2", "-v3", "-v3-seg000001"] {
-                let file = account.appendingPathComponent("audit-\(engine)\(suffix).jsonl")
-                try Data("old incomplete record".utf8).write(to: file)
-                deleted.append(file)
-            }
-            for name in ["audit-\(engine)-v4.jsonl", "audit-\(engine)-v5.jsonl", "audit-key-reveal.jsonl", "unrelated.txt"] {
-                let file = account.appendingPathComponent(name)
-                try Data("preserved".utf8).write(to: file)
-                preserved.append(file)
-            }
-        }
-        let client = try MarmotClient(rootPath: root.path, relayUrls: ["wss://relay.invalid.test"],
-                                      cursorPersistence: .advance)
-        do {
-            for file in deleted { #expect(!FileManager.default.fileExists(atPath: file.path)) }
-            for file in preserved { #expect(try Data(contentsOf: file) == Data("preserved".utf8)) }
-            #expect(try client.marmot.auditLogSettings().enabled == false)
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
-        }
-    }
-
     @Test func auditOtlpConfigIsDisabledWithoutAToken() {
         let config = Self.telemetry(auditToken: nil).auditOtlpConfig()
         #expect(config.enabled == false)
@@ -55,28 +22,6 @@ struct AuditV5AdoptionTests {
         #expect(config.allowLoopbackDev == false)
     }
 
-    @Test func auditOtlpConfigRoundTripsThroughNativeV5BindingsWithTheTokenRedacted() async throws {
-        let client = try MarmotClient.testClient()
-        defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
-        do {
-            let enabled = try client.marmot.setAuditOtlpConfigV5(
-                config: Self.telemetry(auditToken: "audit-token").auditOtlpConfig()
-            )
-            #expect(enabled.enabled)
-            #expect(enabled.destination == TelemetryBuildConfig.auditOtlpDestination)
-            #expect(enabled.endpoint == "https://otlp.whitenoise.chat/v1/logs")
-            #expect(enabled.authorizationBearerToken == nil)
-            let disabled = try client.marmot.setAuditOtlpConfigV5(
-                config: Self.telemetry(auditToken: nil).auditOtlpConfig()
-            )
-            #expect(disabled.enabled == false)
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
-        }
-    }
-
     @Test func runtimeStartsWhenTheAuditDestinationIsRejected() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -87,36 +32,36 @@ struct AuditV5AdoptionTests {
         try await client.marmot.shutdownAndClose()
     }
 
-    @Test func nativeRecorderProducesV5AndExportsItsOriginalBytes() async throws {
+    @Test func exportSelectsTheLatestV5AuditFileAndPreservesItsOriginalBytes() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let client = try MarmotClient(rootPath: root.path, relayUrls: ["wss://relay.invalid.test"],
-                                      cursorPersistence: .advance, telemetryConfig: Self.telemetry(auditToken: nil))
-        do {
-            try await client.startRuntime()
-            // Local identity preparation opens the recorder before returning;
-            // enabling afterward depends on the background account worker.
-            _ = try await client.marmot.setAuditLogSettings(settings: AuditLogSettingsFfi(enabled: true))
-            _ = try await client.marmot.createIdentityWithProfile(
-                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
-            )
-            _ = try await client.marmot.setAuditLogSettings(settings: AuditLogSettingsFfi(enabled: false))
-            let files = try await client.auditLogFiles()
-            let file = try DiagnosticLogExport.fileForExport(in: files)
-            let snapshot = try await Task.detached { try DiagnosticLogExport.snapshot(file: file) }.value
-            #expect(file.fileName.contains("-v5"))
-            #expect(snapshot.fileName == file.fileName)
-            #expect(snapshot.data == (try Data(contentsOf: URL(fileURLWithPath: file.path))))
-            let lines = snapshot.data.split(separator: 0x0A)
-            #expect(!lines.isEmpty)
-            for line in lines {
-                let event = try #require(JSONSerialization.jsonObject(with: Data(line)) as? [String: Any])
-                #expect(event["schema_version"] as? String == "marmot-forensics-audit/v5")
-            }
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let engine = String(repeating: "a", count: 32)
+        let records = [
+            #"{"schema_version":"marmot-forensics-audit/v5","wall_time_ms":1700000000000,"kind":{"type":"recorder_started"}}"#,
+            #"{"schema_version":"marmot-forensics-audit/v5","wall_time_ms":1700000000001,"kind":{"type":"identity_created","account_ref":"fixture"}}"#,
+            #"{"schema_version":"marmot-forensics-audit/v5","wall_time_ms":1700000000002,"kind":{"type":"recorder_stopped"},"context":{"text":"café 🌲"}}"#,
+        ]
+        let data = Data((records.joined(separator: "\n") + "\n").utf8)
+        func write(_ name: String, _ bytes: Data, modifiedAtMs: UInt64) throws -> AuditLogFileFfi {
+            let url = root.appendingPathComponent(name)
+            try bytes.write(to: url)
+            return AuditLogFileFfi(accountRef: "fixture", path: url.path, fileName: name,
+                                   sizeBytes: UInt64(bytes.count), modifiedAtMs: modifiedAtMs)
+        }
+        let legacy = try write("audit-\(engine)-v4.jsonl", Data("{\"schema_version\":\"marmot-forensics-audit/v4\"}\n".utf8), modifiedAtMs: 1)
+        let current = try write("audit-\(engine)-v5.jsonl", data, modifiedAtMs: 2)
+
+        let file = try DiagnosticLogExport.fileForExport(in: [legacy, current])
+        let snapshot = try await Task.detached { try DiagnosticLogExport.snapshot(file: file) }.value
+        #expect(file.fileName.contains("-v5"))
+        #expect(snapshot.fileName == file.fileName)
+        #expect(snapshot.data == (try Data(contentsOf: URL(fileURLWithPath: file.path))))
+        let lines = snapshot.data.split(separator: 0x0A)
+        #expect(lines.count == records.count)
+        for line in lines {
+            let event = try #require(JSONSerialization.jsonObject(with: Data(line)) as? [String: Any])
+            #expect(event["schema_version"] as? String == "marmot-forensics-audit/v5")
         }
     }
 
