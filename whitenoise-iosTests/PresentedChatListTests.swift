@@ -163,7 +163,7 @@ struct PresentedChatListTests {
         model.applyPresentedSnapshot(snapshot)
         #expect(stages.withLock { $0.isEmpty })
         #expect(model.finishPinOrderUITransition(transitionID: transition, orderedGroupIds: nil))
-        try await waitForExpectation { stages.withLock { $0.contains(.inboxSnapshot) } }
+        try await eventually { stages.withLock { $0.contains(.inboxSnapshot) } }
         #expect(stages.withLock { $0.filter { $0 == .inboxSnapshot }.count } == 1)
         appState.productAnalytics.replaceSink(nil)
     }

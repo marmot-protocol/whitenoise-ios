@@ -902,7 +902,7 @@ struct ChatsListProjectionTests {
         viewModel.enqueueChatListRowUpdate(newer)
 
         #expect(viewModel.items.isEmpty)
-        try await waitForExpectation { viewModel.items.count == 2 }
+        try await eventually { viewModel.items.count == 2 }
         #expect(viewModel.items.map(\.id) == [newer.groupIdHex, older.groupIdHex])
     }
 
@@ -918,7 +918,7 @@ struct ChatsListProjectionTests {
         viewModel.enqueueChatListRowUpdate(row)
 
         #expect(viewModel.items.isEmpty)
-        try await waitForExpectation { viewModel.items.map(\.id) == [row.groupIdHex] }
+        try await eventually { viewModel.items.map(\.id) == [row.groupIdHex] }
     }
 
     @Test func identicalProjectedRowDoesNotRepublishObservedLists() throws {

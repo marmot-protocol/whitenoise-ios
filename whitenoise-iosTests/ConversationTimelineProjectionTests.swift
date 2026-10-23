@@ -1034,7 +1034,7 @@ struct ConversationTimelineProjectionTests {
             let retryTask = Task { @MainActor in
                 await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
             }
-            try await waitForExpectation {
+            try await eventually {
                 enteredRetrySleep
             }
 

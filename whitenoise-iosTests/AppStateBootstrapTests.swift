@@ -1259,7 +1259,7 @@ struct AppStateBootstrapTests {
         await checkpoint.waitUntilPaused()
 
         let suspensionTask = appState.startRuntimeSuspension()
-        try await waitForExpectation {
+        try await eventually {
             marmot.storageIsClosed()
         }
         #expect(appState.client == nil)
@@ -1659,7 +1659,7 @@ struct AppStateBootstrapTests {
             suspensionCompleted = true
         }
 
-        try await waitForExpectation {
+        try await eventually {
             marmot.storageIsClosed()
         }
 
@@ -1698,7 +1698,7 @@ struct AppStateBootstrapTests {
             await suspension.value
             suspensionCompleted = true
         }
-        try await waitForExpectation {
+        try await eventually {
             marmot.storageIsClosed()
         }
 
@@ -1963,7 +1963,7 @@ struct AppStateBootstrapTests {
         await checkpoint.waitUntilPaused()
 
         let suspension = appState.startRuntimeSuspension()
-        try await waitForExpectation {
+        try await eventually {
             marmot.storageIsClosed() && appState.client == nil
         }
         await checkpoint.release()

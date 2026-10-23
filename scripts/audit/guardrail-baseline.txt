@@ -4,15 +4,13 @@
 # `python3 scripts/audit/inventory.py --write-baseline`; never raise a count to
 # land new code, fix the suite instead.
 
-sleep AppStateBootstrapTests 8
-sleep BackgroundRuntimeSuspensionTaskTests 1
-sleep ChatsListProjectionTests 1
+sleep AppStateBootstrapTests 7
 sleep ConversationHeaderBarLayoutTests 1
 sleep ConversationTailVisibilityTests 1
-sleep ConversationTimelineProjectionTests 2
+sleep ConversationTimelineProjectionTests 1
 sleep LaunchBrandLayoutTests 1
 sleep PollVotesModelTests 1
-sleep PresentedChatListTests 2
+sleep PresentedChatListTests 1
 sleep PrivateKeyPasteTests 1
 sleep TimelineTailRefreshTaskLifetimeTests 3
 
