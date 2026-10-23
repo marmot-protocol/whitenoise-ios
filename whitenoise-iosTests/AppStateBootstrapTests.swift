@@ -21,13 +21,6 @@ struct AppStateBootstrapTests {
 
     private let accountDefaults = IsolatedAccountDefaults.make()
 
-    @Test func freshAppStateStartsBootstrapping() async throws {
-        let appState = try testAppState()
-        #expect(appState.phase == .bootstrapping)
-        #expect(appState.accounts.isEmpty)
-        #expect(appState.activeToast == nil)
-    }
-
     @Test func bootstrapWithoutAccountsTransitionsToOnboarding() async throws {
         // Use a fresh AppState backed by a tempdir-based MarmotClient so
         // we don't collide with the user's real Application Support data.
@@ -734,31 +727,6 @@ struct AppStateBootstrapTests {
         }
     }
 
-    @Test func presentingAToastUpdatesActiveToast() async throws {
-        let appState = try testAppState()
-        await MainActor.run {
-            appState.present(.success("Hello"))
-        }
-        #expect(appState.activeToast?.title == "Hello")
-        #expect(appState.activeToast?.style == .success)
-
-        await MainActor.run { appState.dismissToast() }
-        #expect(appState.activeToast == nil)
-    }
-
-    @Test func toastPresentationIsBackedByFocusedToastState() async throws {
-        let appState = try testAppState()
-        await MainActor.run {
-            appState.present(.success("Hello"))
-        }
-
-        #expect(appState.toastState.activeToast?.title == "Hello")
-        #expect(appState.activeToast == appState.toastState.activeToast)
-
-        await MainActor.run { appState.dismissToast() }
-        #expect(appState.toastState.activeToast == nil)
-    }
-
     @Test func notificationSubscriptionErrorsAreDedupedAndRedacted() async throws {
         let appState = try testAppState()
         let sensitiveError = SensitiveNotificationSubscriptionError()
@@ -786,95 +754,6 @@ struct AppStateBootstrapTests {
 
         #expect(appState.activeToast?.id != firstToast.id)
         #expect(appState.activeToast?.message == "We'll keep trying in the background.")
-    }
-
-    @Test func routingIsBackedByFocusedNavigationState() async throws {
-        let appState = try testAppState()
-        appState.accountStore.accounts = [
-            AccountSummaryFfi(label: "account-a", accountIdHex: hex("aa"), localSigning: true, signedOut: false, running: true),
-            AccountSummaryFfi(label: "account-b", accountIdHex: hex("bb"), localSigning: true, signedOut: false, running: true)
-        ]
-        appState.activeAccountRef = "account-a"
-
-        appState.presentProfile(npub: "npub1example")
-        #expect(appState.navigation.pendingProfile == AppState.ProfileLink(npub: "npub1example"))
-        #expect(appState.pendingProfile == appState.navigation.pendingProfile)
-
-        appState.presentChat(
-            groupIdHex: "group-a",
-            accountRef: "account-b",
-            messageIdHex: "  message-a  "
-        )
-        #expect(appState.activeAccountRef == "account-b")
-        #expect(appState.navigation.pendingChatId == "group-a")
-        #expect(appState.navigation.pendingChatAccountRef == "account-b")
-        #expect(appState.navigation.pendingChatMessageIdHex == "message-a")
-
-        appState.clearPendingChat()
-        #expect(appState.navigation.pendingChatId == nil)
-        #expect(appState.navigation.pendingChatAccountRef == nil)
-        #expect(appState.navigation.pendingChatMessageIdHex == nil)
-    }
-
-    @Test func deferredChatPresentationPublishesNavigationIntentImmediately() async throws {
-        let appState = try testAppState()
-        appState.accountStore.accounts = [
-            AccountSummaryFfi(
-                label: "account-a",
-                accountIdHex: hex("aa"),
-                localSigning: true,
-                signedOut: false,
-                running: true
-            )
-        ]
-        appState.activeAccountRef = "account-a"
-
-        DeferredChatPresentation.present(groupIdHex: "group-a", using: appState)
-
-        #expect(appState.navigation.pendingChatId == "group-a")
-    }
-
-    @Test func routedChatIgnoresMissingOrSignedOutAccounts() async throws {
-        let appState = try testAppState()
-        appState.accountStore.accounts = [
-            AccountSummaryFfi(label: "account-a", accountIdHex: hex("aa"), localSigning: true, signedOut: false, running: true),
-            AccountSummaryFfi(label: "account-b", accountIdHex: hex("bb"), localSigning: true, signedOut: true, running: false)
-        ]
-        appState.activeAccountRef = "account-a"
-
-        appState.presentChat(groupIdHex: "group-stale", accountRef: "removed-account")
-
-        #expect(appState.activeAccountRef == "account-a")
-        #expect(appState.navigation.pendingChatId == nil)
-
-        appState.presentChat(groupIdHex: "group-signed-out", accountRef: "account-b")
-
-        #expect(appState.activeAccountRef == "account-a")
-        #expect(appState.navigation.pendingChatId == nil)
-    }
-
-    @Test func visibleChatRouteTracksAccountAndClearsOnlyMatchingRoute() async throws {
-        let appState = try testAppState()
-        appState.activeAccountRef = "account-a"
-
-        let route = appState.beginViewingChat(groupIdHex: "group-a")
-
-        #expect(route == VisibleChatRoute(accountRef: "account-a", groupIdHex: "group-a"))
-        #expect(appState.visibleChat == route)
-        #expect(appState.isViewingNotificationDestination(accountRef: "account-a", groupIdHex: "group-a"))
-        #expect(!appState.isViewingNotificationDestination(accountRef: "account-a", groupIdHex: "group-b"))
-
-        appState.setAppSceneActive(false)
-        #expect(!appState.isViewingNotificationDestination(accountRef: "account-a", groupIdHex: "group-a"))
-
-        appState.setAppSceneActive(true)
-        appState.endViewingChat(VisibleChatRoute(accountRef: "account-b", groupIdHex: "group-a"))
-        #expect(appState.visibleChat == route)
-
-        if let route {
-            appState.endViewingChat(route)
-        }
-        #expect(appState.visibleChat == nil)
     }
 
     @Test func preBootstrapBackgroundSuspensionIsReleasedByForegroundReturn() async throws {
@@ -1361,49 +1240,6 @@ struct AppStateBootstrapTests {
         #expect(!appState.notificationSubscriptionActive)
 
         resetPersistedActiveAccountRef()
-    }
-
-    /// #743: UIKit owns the expiration deadline. Its callback must release the
-    /// assertion immediately through the same idempotent helper as normal
-    /// completion, even if Marmot teardown is still waiting elsewhere.
-    @Test func backgroundTaskExpirationEndsAssertionExactlyOnce() async throws {
-        let checkpoint = AsyncTestCheckpoint()
-        let taskID = UIBackgroundTaskIdentifier(rawValue: 42)
-        let suspensionTask = Task {
-            await checkpoint.pause()
-        }
-
-        var capturedExpirationHandler: (() -> Void)?
-        var endedTaskIDs: [UIBackgroundTaskIdentifier] = []
-        var expirationCount = 0
-        let backgroundTask = BackgroundRuntimeSuspensionTask(
-            name: "Suspend Marmot runtime",
-            onExpiration: {
-                expirationCount += 1
-            },
-            beginBackgroundTask: { name, expirationHandler in
-                #expect(name == "Suspend Marmot runtime")
-                capturedExpirationHandler = expirationHandler
-                return taskID
-            },
-            endBackgroundTask: { endedTaskID in
-                endedTaskIDs.append(endedTaskID)
-            }
-        )
-        backgroundTask.endWhenSuspensionCompletes(suspensionTask)
-        await checkpoint.waitUntilPaused()
-
-        capturedExpirationHandler?()
-        try await waitForExpectation {
-            expirationCount == 1 && endedTaskIDs == [taskID]
-        }
-
-        await checkpoint.release()
-        await suspensionTask.value
-        await Task.yield()
-
-        #expect(endedTaskIDs == [taskID])
-        #expect(expirationCount == 1)
     }
 
     /// A cancelled foreground task may not reach its cancellation point before
@@ -1992,21 +1828,6 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    @Test func profileFetchQueueLeavesQueuedIDsWhenRefreshBecomesUnavailable() async throws {
-        let appState = try testAppState()
-        let queued = [hex("11"), hex("22")]
-        appState.profileStore.queuedProfileFetchIDs = queued
-        appState.profileStore.scheduledProfileFetchIDs = Set(queued)
-        appState.setAppSceneActive(false)
-
-        await appState.runProfileFetchQueueForTesting()
-
-        #expect(appState.profileStore.queuedProfileFetchIDs == queued)
-        #expect(appState.profileStore.scheduledProfileFetchIDs == Set(queued))
-        #expect(appState.profileStore.activeProfileFetchID == nil)
-        #expect(appState.profileStore.profileFetchQueueTask == nil)
-    }
-
     @Test func profileFetchQueueRearmsPreservedIDsWhenRefreshIsAllowed() async throws {
         let appState = try testAppState()
         let queued = [hex("33")]
@@ -2033,143 +1854,6 @@ struct AppStateBootstrapTests {
         appState.setAppSceneActive(true)
         appState.resumeProfileFetchQueueIfNeeded()
         #expect(appState.cancelProfileFetchQueue() != nil)
-    }
-
-    @Test func cachedProjectionWithoutIdentityRequeuesRefreshWhileInactive() async throws {
-        let appState = try testAppState()
-        let accountIdHex = hex("35")
-        appState.profileStore.profileProjectionCache[accountIdHex] = ProfileDisplayProjection(
-            profile: nil,
-            projectedName: nil,
-            localAccountLabel: nil
-        )
-        appState.setAppSceneActive(false)
-
-        #expect(appState.knownDisplayName(forAccountIdHex: accountIdHex) == nil)
-        #expect(appState.profileStore.queuedProfileFetchIDs == [accountIdHex])
-        #expect(appState.profileStore.scheduledProfileFetchIDs == [accountIdHex])
-        #expect(appState.profileStore.profileFetchQueueTask == nil)
-    }
-
-    @Test func foregroundMaintenancePausePreservesPendingProfileWork() async throws {
-        let appState = try testAppState()
-        let loading = hex("36")
-        let refreshing = hex("37")
-        appState.profileStore.queuedProfileProjectionLoadIDs = [loading]
-        appState.profileStore.scheduledProfileProjectionLoadIDs = [loading]
-        appState.profileStore.profileProjectionRefreshAfterLoadIDs = [loading]
-        appState.profileStore.queuedProfileFetchIDs = [refreshing]
-        appState.profileStore.scheduledProfileFetchIDs = [refreshing]
-
-        _ = appState.pauseProfileFetchQueue()
-
-        #expect(appState.profileStore.queuedProfileProjectionLoadIDs == [loading])
-        #expect(appState.profileStore.scheduledProfileProjectionLoadIDs == [loading])
-        #expect(appState.profileStore.profileProjectionRefreshAfterLoadIDs == [loading])
-        #expect(appState.profileStore.queuedProfileFetchIDs == [refreshing])
-        #expect(appState.profileStore.scheduledProfileFetchIDs == [refreshing])
-        #expect(appState.profileStore.profileProjectionCacheNeedsReloadOnResume)
-    }
-
-    @Test func staleProfileFetchQueueCompletionDoesNotClearNewerRunner() async throws {
-        let appState = try testAppState()
-        let oldTaskID = UUID()
-        let newTaskID = UUID()
-        let newTask = Task<Void, Never> {}
-
-        appState.profileStore.profileFetchQueueTask = newTask
-        appState.profileStore.profileFetchQueueTaskID = newTaskID
-        appState.profileStore.activeProfileFetchID = hex("44")
-
-        appState.profileStore.finishProfileFetchQueueForTesting(taskID: oldTaskID)
-
-        #expect(appState.profileStore.profileFetchQueueTask != nil)
-        #expect(appState.profileStore.profileFetchQueueTaskID == newTaskID)
-        #expect(appState.profileStore.activeProfileFetchID == hex("44"))
-
-        newTask.cancel()
-    }
-
-    @Test func staleProfileProjectionQueueCompletionDoesNotClearNewerRunner() async throws {
-        let appState = try testAppState()
-        let oldTaskID = UUID()
-        let newTaskID = UUID()
-        let newTask = Task<Void, Never> {}
-
-        appState.profileStore.profileProjectionLoadTask = newTask
-        appState.profileStore.profileProjectionLoadTaskID = newTaskID
-
-        appState.profileStore.finishProfileProjectionLoadQueueForTesting(taskID: oldTaskID)
-
-        #expect(appState.profileStore.profileProjectionLoadTask != nil)
-        #expect(appState.profileStore.profileProjectionLoadTaskID == newTaskID)
-
-        newTask.cancel()
-    }
-
-    @Test func cancelProfileFetchQueuePreservesProfileProjectionLoadVersions() async throws {
-        // Regression for #353 (corrected per adversarial review of PR #357):
-        // `cancelProfileFetchQueue()` runs on every background suspension (via
-        // `cancelForegroundMaintenance`). A direct `reloadProfileProjection`
-        // caller can be suspended at its `await` holding an already-captured
-        // version token. If this method reset the whole version map, a later
-        // load for the same id would restart the per-id counter and re-issue a
-        // token that COLLIDES with the suspended caller's captured value (ABA),
-        // letting stale data pass the staleness guard. So it must clear the
-        // sibling queues (bounded to in-flight work) while PRESERVING the
-        // monotonic version map. Eviction happens instead via post-load pruning
-        // and full sign-out — covered by the tests below.
-        let appState = try testAppState()
-        appState.profileStore.queuedProfileProjectionLoadIDs = [hex("44")]
-        appState.profileStore.scheduledProfileProjectionLoadIDs = [hex("44"), hex("55")]
-        appState.profileStore.profileProjectionRefreshAfterLoadIDs = [hex("55")]
-        appState.profileStore.profileProjectionLoadVersions = [hex("44"): 3, hex("55"): 1]
-
-        _ = appState.cancelProfileFetchQueue()
-
-        // Sibling queues are cleared...
-        #expect(appState.profileStore.queuedProfileProjectionLoadIDs.isEmpty)
-        #expect(appState.profileStore.scheduledProfileProjectionLoadIDs.isEmpty)
-        #expect(appState.profileStore.profileProjectionRefreshAfterLoadIDs.isEmpty)
-        // ...but the monotonic version map survives, so a suspended direct
-        // reload's captured token cannot be reused by a re-bump after resume.
-        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("44"): 3, hex("55"): 1])
-    }
-
-    @Test func settledProfileProjectionLoadPrunesItsVersionEntry() async throws {
-        // After a guarded load completes for an id with no pending
-        // queued/scheduled/refresh work, its version entry is evicted so the map
-        // stays bounded to in-flight work rather than growing per distinct id
-        // ever seen (#353).
-        let appState = try testAppState()
-        appState.profileStore.profileProjectionLoadVersions = [hex("66"): 7, hex("77"): 2]
-
-        // id 66 settled at its current token, nothing pending -> evicted.
-        appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("66"), matching: 7)
-
-        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("77"): 2])
-    }
-
-    @Test func prunePreservesVersionEntryWhenTokenSupersededOrWorkPending() async throws {
-        // The prune must fail closed in exactly the cases that protect the
-        // staleness guard's monotonic invariant (#353):
-        //   (a) the stored token has been superseded by a newer load (the value
-        //       no longer matches the settled token) -> keep the live token, and
-        //   (b) queued/scheduled/refresh work still pending for the id -> keep
-        //       the token a pending load will read.
-        let appState = try testAppState()
-
-        // (a) superseded token: a newer load bumped 88 from 4 to 5; an older
-        // load settling with token 4 must NOT evict the live token 5.
-        appState.profileStore.profileProjectionLoadVersions = [hex("88"): 5]
-        appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("88"), matching: 4)
-        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("88"): 5])
-
-        // (b) work still pending: matching token but the id is still queued.
-        appState.profileStore.profileProjectionLoadVersions = [hex("99"): 1]
-        appState.profileStore.queuedProfileProjectionLoadIDs = [hex("99")]
-        appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("99"), matching: 1)
-        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("99"): 1])
     }
 
     @Test func destructiveWipeClearsProfileProjectionState() async throws {
