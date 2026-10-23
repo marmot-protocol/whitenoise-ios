@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import whitenoise_ios
 
+@MainActor
 struct QuickReactionChoicesTests {
     @Test func quickReactionChoicesAreStableUniqueAndFilledToSix() {
         #expect(QuickReactionChoices.normalize(["🔥", "🔥", "\u{202E}", "👍"]) == [
