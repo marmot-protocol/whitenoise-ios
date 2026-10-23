@@ -27,7 +27,8 @@ struct GroupImageSearchTests {
         let probe = ConcurrentLoadProbe()
         // Each load holds its permit until four are active at once, so the
         // peak is reached by construction rather than by a sleep overlapping.
-        // A limiter that admitted fewer would time out here and report a lower peak.
+        // A limiter that admitted fewer would time out here (in seconds, not
+        // once per queued load at the 30 s default) and report a lower peak.
         let saturated = TestLatch()
 
         let peak = await withTaskGroup(of: Int.self, returning: Int.self) { group in
@@ -36,7 +37,7 @@ struct GroupImageSearchTests {
                     guard let reservation = await limiter.acquire() else { return 0 }
                     let active = await probe.begin()
                     if active >= 4 { saturated.signal() }
-                    try? await saturated.wait()
+                    try? await saturated.wait(timeout: .seconds(5))
                     await probe.end()
                     await limiter.release(reservation)
                     return active

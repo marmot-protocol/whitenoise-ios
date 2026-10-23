@@ -244,35 +244,32 @@ private struct Harness {
         let rightView: ObjectIdentifier?
         let rightViewMode: UITextField.ViewMode
         let inWindow: Bool
+        let secureEntry: Bool
+        let contentType: UITextContentType?
+        let selection: [Int]?
+        let pastes: Int
+        let submits: Int
+        let pasteboardChanges: Int
     }
 
     private func observed() -> Observed {
         Observed(
             text: field.text, modelText: model.text, textWrites: model.textWrites, modelFocused: model.isFocused,
             firstResponder: field.isFirstResponder, rightView: field.rightView.map(ObjectIdentifier.init),
-            rightViewMode: field.rightViewMode, inWindow: field.window != nil
+            rightViewMode: field.rightViewMode, inWindow: field.window != nil,
+            secureEntry: field.isSecureTextEntry, contentType: field.textContentType,
+            selection: field.selectedTextRange.map { [
+                field.offset(from: field.beginningOfDocument, to: $0.start),
+                field.offset(from: field.beginningOfDocument, to: $0.end),
+            ] },
+            pastes: model.pastes, submits: model.submits, pasteboardChanges: UIPasteboard.general.changeCount
         )
     }
 
-    /// Drains the field's deferred work by ordering rather than time. A layout
-    /// pass flushes SwiftUI, whose `updateUIView` queues the focus and
-    /// accessory tasks on the main actor; yielding runs those tasks, whose
-    /// binding writes the next layout pass flushes. Settled means three
-    /// consecutive rounds changed nothing the tests can observe.
+    /// Drains the field's deferred focus and accessory tasks by ordering
+    /// rather than time (see `settleLayout`).
     func settle() async throws {
-        let requiredQuietRounds = 3
-        var previous = observed()
-        var quietRounds = 0
-        for _ in 0..<100 {
-            controller.view.layoutIfNeeded()
-            await Task.yield()
-            controller.view.layoutIfNeeded()
-            let current = observed()
-            quietRounds = current == previous ? quietRounds + 1 : 0
-            if quietRounds == requiredQuietRounds { return }
-            previous = current
-        }
-        Issue.record("The field kept changing after 100 drain rounds")
+        try await settleLayout(controller.view) { observed() }
     }
 
     private static func secureField(in view: UIView) -> PasteInterceptingSecureTextField? {

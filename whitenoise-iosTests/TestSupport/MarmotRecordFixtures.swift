@@ -318,6 +318,7 @@ func conversationWindowSnapshot(
             initialized: true, lastReadMessageIdHex: nil, lastReadTimelineAt: nil, manuallyMarkedUnread: false,
             unreadCount: 0, unreadMentionCount: 0, firstUnreadMessageIdHex: nil
         ),
+        // Pointerless fake: never pass it to MDK or call includesChatListVersion on it.
         draft: SelectedMessageDraftFfi(revision: MessageDraftRevisionFfi(noPointer: .init()), draft: nil),
         pendingConfirmation: false,
         anchor: ConversationAnchorOutcomeFfi(kind: .empty, index: nil),

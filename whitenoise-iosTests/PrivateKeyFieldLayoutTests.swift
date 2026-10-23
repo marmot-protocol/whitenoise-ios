@@ -28,12 +28,16 @@ struct PrivateKeyFieldLayoutTests {
                 if focused { field.becomeFirstResponder() }
                 // Focus reaches SwiftUI through the binding, whose update
                 // queues the field's focus and accessory tasks on the main
-                // actor: flush, let those tasks run, then lay out again.
-                for _ in 0..<2 {
-                    controller.view.layoutIfNeeded()
-                    await Task.yield()
+                // actor: drain them until the measured geometry stops changing.
+                try await settleLayout(controller.view) {
+                    FieldGeometry(
+                        frame: field.convert(field.bounds, to: controller.view),
+                        textRect: field.textRect(forBounds: field.bounds),
+                        firstResponder: field.isFirstResponder,
+                        rightView: field.rightView.map(ObjectIdentifier.init),
+                        text: field.text
+                    )
                 }
-                controller.view.layoutIfNeeded()
 
                 let frame = field.convert(field.bounds, to: controller.view)
                 #expect(frame.width > 0)
@@ -44,6 +48,14 @@ struct PrivateKeyFieldLayoutTests {
                 #expect(frame.maxX <= controller.view.bounds.width)
             }
         }
+    }
+
+    private struct FieldGeometry: Equatable {
+        let frame: CGRect
+        let textRect: CGRect
+        let firstResponder: Bool
+        let rightView: ObjectIdentifier?
+        let text: String?
     }
 
     private func secureField(in view: UIView) -> PasteInterceptingSecureTextField? {

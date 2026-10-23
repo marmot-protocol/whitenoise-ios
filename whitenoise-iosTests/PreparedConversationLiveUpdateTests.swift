@@ -80,6 +80,7 @@ struct PreparedConversationLiveUpdateTests {
         let rebuilds = model.timelineStore.timelineRebuildCountForTesting
         snapshot.header.selected.title = .literal(text: "Header changed")
         snapshot.readState.lastReadMessageIdHex = "new"
+        // Pointerless fake revision: never pass it to MDK or includesChatListVersion.
         snapshot.draft = SelectedMessageDraftFfi(revision: MessageDraftRevisionFfi(noPointer: .init()),
             draft: SelectedMessageDraftContentFfi(groupIdHex: groupRecord.groupIdHex, content: "unsent draft",
                 replyToMessageIdHex: nil, mediaAttachments: [], createdAtMs: 1, updatedAtMs: 1))
