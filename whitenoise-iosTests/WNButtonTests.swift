@@ -3,7 +3,6 @@ import Testing
 import UIKit
 @testable import whitenoise_ios
 
-@Suite(.tags(.uiHosting))
 struct WNButtonTests {
     @Test func accentIsMonochromeAgainstTheColorScheme() {
         #expect(WNButton.Metrics.accent(for: .light) == .black)
@@ -104,7 +103,7 @@ struct WNButtonTests {
     }
 
     @MainActor
-    @Test func windowTintTracksThemeChanges() throws {
+    @Test(.tags(.uiHosting)) func windowTintTracksThemeChanges() throws {
         let window = UIWindow()
         let asset = try #require(UIColor(named: "AccentColor"))
         for theme in [AppearanceTheme.light, .dark, .system] {

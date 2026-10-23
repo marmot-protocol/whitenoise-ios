@@ -129,7 +129,6 @@ struct DeviceDiagnosticsConsentTests {
     }
 }
 
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ProductAnalyticsTests {
     @Test func retentionDisclosureUsesTheSelectedLanguageWithoutChangingPolicy() {
         var config = ProductAnalyticsBuildConfig.current(info: [
@@ -212,7 +211,8 @@ struct ProductAnalyticsTests {
         #expect(!production.runtimeConfig.allowLoopback)
     }
 
-    @Test @MainActor func deviceConsentWorksBeforeAnyProfileExists() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @MainActor func deviceConsentWorksBeforeAnyProfileExists() async throws {
         let client = try MarmotClient.testClient()
         let defaultsName = "AccountFreeConsent.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: defaultsName))
@@ -235,7 +235,7 @@ struct ProductAnalyticsTests {
         try await client.marmot.shutdownAndClose()
     }
 
-    @Test(arguments: [false, true]) @MainActor
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit, arguments: [false, true]) @MainActor
     func receiptSurvivesRuntimeReplacementAndErasureRestoresEligibility(granted: Bool) async throws {
         let original = try MarmotClient.testClient()
         let root = URL(fileURLWithPath: original.rootPath)
@@ -259,7 +259,8 @@ struct ProductAnalyticsTests {
         try await erased.marmot.shutdownAndClose()
     }
 
-    @Test @MainActor func hostPerformanceSnapshotRoundTripsThroughBindings() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @MainActor func hostPerformanceSnapshotRoundTripsThroughBindings() async throws {
         let client = try MarmotClient.testClient()
         let before = client.appPerformanceSnapshot().hostSplashReady
 
@@ -339,7 +340,7 @@ struct ProductAnalyticsTests {
         #expect(events.withLock { $0 } == ["app_screen_viewed"])
     }
 
-    @Test @MainActor func hostTimingRegistryAccepted() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) @MainActor func hostTimingRegistryAccepted() async throws {
         let client = try MarmotClient.testClient()
         let config = ProductAnalyticsBuildConfig(
             endpoint: "https://analytics.invalid/api/v0/events", appKey: "A-SH-test",
@@ -365,7 +366,8 @@ struct ProductAnalyticsTests {
         try await client.marmot.shutdownAndClose()
     }
 
-    @Test @MainActor func expandingTimingRegistryRequiresNewConsent() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @MainActor func expandingTimingRegistryRequiresNewConsent() async throws {
         let client = try MarmotClient.testClient()
         var config = ProductAnalyticsBuildConfig(
             endpoint: "https://analytics.invalid/api/v0/events", appKey: "A-SH-test",
@@ -452,7 +454,8 @@ struct ProductAnalyticsTests {
         #expect(events.withLock { $0.map(\.properties) } == [[.init(name: "outcome", value: "success")]])
     }
 
-    @Test @MainActor func realCollectorAcceptsHostVocabularyAndRevokesBothPipelines() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @MainActor func realCollectorAcceptsHostVocabularyAndRevokesBothPipelines() async throws {
         let client = try MarmotClient.testClient()
         let config = ProductAnalyticsBuildConfig(
             endpoint: "https://analytics.invalid/api/v0/events", appKey: "A-SH-test",

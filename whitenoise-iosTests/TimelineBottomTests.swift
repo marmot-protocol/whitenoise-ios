@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.uiHosting))
 struct TimelineBottomTests {
 
     @Test func initialEntryStartsAtBottomWhenMessagesExist() {

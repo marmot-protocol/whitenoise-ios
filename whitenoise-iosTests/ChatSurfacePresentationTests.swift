@@ -6,7 +6,6 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.uiHosting))
 struct ChatSurfacePresentationTests {
     @Test func reportActionMenuFitsSmallScreensAndRetainsScrollableActions() {
         let count = MessageActionsPresentation.actionCount(canRetry: false, canInteract: true,
@@ -20,7 +19,7 @@ struct ChatSurfacePresentationTests {
         #expect(layout.groupTop + layout.groupHeight <= 568)
     }
 
-    @Test(arguments: [DynamicTypeSize.large, .accessibility3])
+    @Test(.tags(.uiHosting), arguments: [DynamicTypeSize.large, .accessibility3])
     func confirmationKeepsDeliveryFooterSizeStable(dynamicType: DynamicTypeSize) {
         func size(_ status: MessageStatus) -> CGSize {
             let host = UIHostingController(rootView: MessageMetadataFooter(

@@ -7,7 +7,6 @@ import UIKit
 /// so a portrait collapsed to a sliver next to a panorama. These lock the tile
 /// to one footprint regardless of what the picker hands us.
 @MainActor
-@Suite(.tags(.uiHosting))
 struct MediaDraftStripGeometryTests {
     @Test func everyVisualDraftRendersTheSameTileWhateverTheSourceShape() {
         let panorama = renderedStrip([draft(dim: "4000x500", thumbnail: CGSize(width: 400, height: 50))])

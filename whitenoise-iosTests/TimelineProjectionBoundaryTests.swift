@@ -5,7 +5,6 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime))
 struct TimelineProjectionBoundaryTests {
     @Test func rejectedSiblingsKeepTheirSlotAndCannotBecomeDownloadable() {
         let reference = mediaReference(sourceEpoch: 42)
@@ -262,7 +261,8 @@ struct TimelineProjectionBoundaryTests {
         #expect(cache.cachedDataCalls == 0)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() async throws {
         let downloadedData = Data([0x09, 0x0a, 0x0b])
         let reference = mediaReference(sourceEpoch: 7, plaintext: downloadedData)
         var media = MessageMediaAttachment(
@@ -306,7 +306,8 @@ struct TimelineProjectionBoundaryTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func mediaDownloaderRejectsPlaintextHashMismatchBeforeCaching() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func mediaDownloaderRejectsPlaintextHashMismatchBeforeCaching() async throws {
         let reference = mediaReference(sourceEpoch: 7, plaintext: Data([0x01]))
         var media = MessageMediaAttachment(
             id: "message-a:\(reference.plaintextSha256):0:0",
@@ -430,7 +431,8 @@ struct TimelineProjectionBoundaryTests {
         #expect(verified.map(\.reference.plaintextSha256) == [acceptedReference.plaintextSha256])
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func mediaDownloaderIgnoresHashMismatchedCacheHit() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func mediaDownloaderIgnoresHashMismatchedCacheHit() async throws {
         let downloadedData = Data([0x0c, 0x0d, 0x0e])
         let reference = mediaReference(sourceEpoch: 7, plaintext: downloadedData)
         var media = MessageMediaAttachment(
@@ -507,7 +509,8 @@ struct TimelineProjectionBoundaryTests {
         #expect(cached.storedPayloads.isEmpty)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func mediaDownloaderRejectsDownloadWhenCacheIsPurgedDuringStore() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func mediaDownloaderRejectsDownloadWhenCacheIsPurgedDuringStore() async throws {
         let data = Data([0x03, 0x04])
         let reference = mediaReference(sourceEpoch: 7, plaintext: data)
         var media = MessageMediaAttachment(

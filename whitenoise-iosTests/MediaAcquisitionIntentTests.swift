@@ -5,7 +5,6 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct MediaAcquisitionIntentTests {
     private func attachment(_ mediaType: String = "image/jpeg") -> MessageMediaAttachment {
         MessageMediaAttachment(id: "source-slot", reference: nil, fileName: "attachment",
@@ -174,7 +173,8 @@ struct MediaAcquisitionIntentTests {
 
     // A local miss whose demand MDK does not queue must surface `.unavailable`
     // rather than wait on a transfer that will never start.
-    @Test func explicitAcquisitionOfAnUnknownSlotThrowsUnavailable() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func explicitAcquisitionOfAnUnknownSlotThrowsUnavailable() async throws {
         let client = try MarmotClient.testClient()
         let watchdog = MarmotFixtureWatchdog.start("Attachment acquisition guard did not finish", breaking: client)
         defer { watchdog.cancel() }

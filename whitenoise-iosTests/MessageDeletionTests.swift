@@ -4,7 +4,6 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime))
 struct MessageDeletionTests {
     @Test func capabilityCoversOwnershipRoleAndConversationType() {
         struct Row {
@@ -89,7 +88,8 @@ struct MessageDeletionTests {
         #expect(MessageTombstonePresentation.showsDeliveryStatus(isDeleted: false))
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func viewModelCapabilityIsAvailableForIngestedMessages() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func viewModelCapabilityIsAvailableForIngestedMessages() async throws {
         // Positive regression coverage for delete availability through the
         // full view-model wiring: an ingested message must surface delete
         // scopes. The pure-policy positives alone let a wiring break hide.
@@ -136,7 +136,8 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func deviceLocalMembershipEventsRefreshOnlyTheOpenConversation() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func deviceLocalMembershipEventsRefreshOnlyTheOpenConversation() async throws {
         try await withTestClient { client in
             let state = try appState(accountRef: "members", accountIdHex: hex("11"), client: client)
             state.setPhase(.ready)
@@ -160,7 +161,8 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func moderationRefreshSurvivesNavigationAwayFromTheVisibleTimeline() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func moderationRefreshSurvivesNavigationAwayFromTheVisibleTimeline() async throws {
         try await withTestClient { client in
             let state = try appState(accountRef: "reports", accountIdHex: hex("11"), client: client)
             state.setPhase(.ready)
@@ -488,7 +490,8 @@ struct MessageDeletionTests {
         #expect(store.replyPreview(for: replyRecord)?.text == "This message was deleted")
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func deleteForMePublishesNothingAndSurvivesViewModelRecreation() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func deleteForMePublishesNothingAndSurvivesViewModelRecreation() async throws {
         let accountRef = "delete-local-\(UUID().uuidString)"
         let me = hex("11")
         let group = groupRecord(id: hex("aa"), name: "Local delete test")
@@ -528,7 +531,8 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func directMessageAdminCannotDeleteAnotherSendersMessageForEveryone() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func directMessageAdminCannotDeleteAnotherSendersMessageForEveryone() async throws {
         let accountRef = "delete-dm-\(UUID().uuidString)"
         let me = hex("11")
         let group = groupRecord(id: hex("aa"), name: "", admins: [me])
@@ -567,7 +571,8 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func canonicalTimelineRecordPreventsSpoofedSenderAuthorization() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func canonicalTimelineRecordPreventsSpoofedSenderAuthorization() async throws {
         let accountRef = "delete-spoof-\(UUID().uuidString)"
         let me = hex("11")
         let other = hex("22")
@@ -608,7 +613,8 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func failedRemoteDeleteRollsBackAndCanBeRetried() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func failedRemoteDeleteRollsBackAndCanBeRetried() async throws {
         let accountRef = "delete-failure-\(UUID().uuidString)"
         let me = hex("11")
         let group = groupRecord(id: hex("aa"), name: "Failure test")
@@ -642,7 +648,8 @@ struct MessageDeletionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func repeatedRemoteDeleteStartsOnlyOneMutation() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func repeatedRemoteDeleteStartsOnlyOneMutation() async throws {
         let accountRef = "delete-repeat-\(UUID().uuidString)"
         let me = hex("11")
         let group = groupRecord(id: hex("aa"), name: "Repeat test")

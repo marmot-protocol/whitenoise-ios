@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime))
 struct ConversationTimelineProjectionTests {
 
     private func durableRetryFixture(
@@ -918,7 +917,8 @@ struct ConversationTimelineProjectionTests {
         #expect(MessageFooterPresentation.value(for: try #require(status), isFromMe: true).isFailure)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func unsuccessfulDurableRetryRestoresInvalidatedFailureOutsideRefreshedTail() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func unsuccessfulDurableRetryRestoresInvalidatedFailureOutsideRefreshedTail() async throws {
         var attempts = 0
         try await withTestClient { client in
             let fixture = try durableRetryFixture(
@@ -968,7 +968,8 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.error == L10n.string("Send failed"))
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func exhaustedDurableRetryKeepsNonInvalidatedRowSending() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func exhaustedDurableRetryKeepsNonInvalidatedRowSending() async throws {
         var attempts = 0
         var sleeps = 0
         try await withTestClient { client in
@@ -990,7 +991,8 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func publishedDurableRetryMarksRowSentWhenRefreshedTailOmitsIt() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func publishedDurableRetryMarksRowSentWhenRefreshedTailOmitsIt() async throws {
         let messageIdHex = hex("d1")
         try await withTestClient { client in
             let fixture = try durableRetryFixture(
@@ -1014,7 +1016,8 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func cancelledDurableRetryRestoresPriorFailure() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func cancelledDurableRetryRestoresPriorFailure() async throws {
         var enteredRetrySleep = false
         try await withTestClient { client in
             let fixture = try durableRetryFixture(
@@ -1043,7 +1046,8 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func cancelledDuringFinalRefreshRestoresPriorFailureWithoutError() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func cancelledDuringFinalRefreshRestoresPriorFailureWithoutError() async throws {
         var enteredFinalRefresh = false
         try await withTestClient { client in
             let fixture = try durableRetryFixture(
@@ -1067,7 +1071,8 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func authoritativeDeliveryDuringRetryIsNotOverwrittenByCleanup() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func authoritativeDeliveryDuringRetryIsNotOverwrittenByCleanup() async throws {
         let groupIdHex = hex("aa")
         let messageIdHex = hex("d1")
         let delivered = timelineRecord(
@@ -1101,7 +1106,8 @@ struct ConversationTimelineProjectionTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func authoritativePendingRefreshDuringRetryIsNotOverwrittenByCleanup() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func authoritativePendingRefreshDuringRetryIsNotOverwrittenByCleanup() async throws {
         let groupIdHex = hex("aa")
         let messageIdHex = hex("d1")
         let revalidatedPending = timelineRecord(

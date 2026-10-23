@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.uiHosting))
 struct ToastPresentationTests {
     @Test func toastOverlayPresentsAboveModalWindows() {
         #expect(ToastOverlayPresentation.windowLevel.rawValue > UIWindow.Level.alert.rawValue)

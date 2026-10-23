@@ -5,7 +5,6 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
 struct PollVotesModelTests {
     private static let group = String(repeating: "c", count: 64)
     private static let pollA = String(repeating: "1", count: 64)
@@ -345,7 +344,8 @@ struct PollVotesModelTests {
     /// A re-vote for the same option changes only the voter's `votedAt`: the
     /// window path sees an identical poll row and skips it, so the runtime
     /// projection event MDK emits for the response is what invalidates.
-    @Test(.marmotRuntimeConcurrencyLimit) func aSameTallyReVoteInvalidatesThroughRuntimeEventsAfterTheWindowDeduplicatesIt() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func aSameTallyReVoteInvalidatesThroughRuntimeEventsAfterTheWindowDeduplicatesIt() async throws {
         let row = pollRecord(id: Self.pollA, votes: [2, 1])
         let store = TimelineStore(appState: nil, groupIdHex: Self.group)
         store.applyConversationWindowPage(TimelinePageFfi(messages: [row], hasMoreBefore: false, hasMoreAfter: false))

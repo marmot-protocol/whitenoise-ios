@@ -3,10 +3,9 @@ import Testing
 import UIKit
 @testable import whitenoise_ios
 
-@Suite(.tags(.uiHosting))
 struct WNCopyFeedbackTests {
     @MainActor
-    @Test func confirmationKeepsTheCopyRowSizeAtStandardAndAccessibleTextSizes() {
+    @Test(.tags(.uiHosting)) func confirmationKeepsTheCopyRowSizeAtStandardAndAccessibleTextSizes() {
         for size in [DynamicTypeSize.large, .accessibility1] {
             let dimensions = [false, true].map { copied in
                 let host = UIHostingController(rootView:
