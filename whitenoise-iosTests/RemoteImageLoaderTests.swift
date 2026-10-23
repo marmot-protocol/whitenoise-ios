@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized, .tags(.runtime))
+@Suite(.serialized)
 struct RemoteImageLoaderTests {
     @Test func imageDataRejectsUnsanitizedURLsAtTheEgress() async throws {
         // Self-enforcing chokepoint: a caller that skips ContentSanitizer must
@@ -235,7 +235,8 @@ struct RemoteImageLoaderTests {
         #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func groupAvatarDrainBlocksNewLoadsAndSeedsUntilDecodeSettles() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func groupAvatarDrainBlocksNewLoadsAndSeedsUntilDecodeSettles() async throws {
         try await withTestClient { client in
             let request = GroupAvatarImageRequest(accountRef: "drain-\(UUID())", groupIdHex: "group",
                                                   imageHashHex: "image", maxPixelSize: 8)
@@ -275,7 +276,8 @@ struct RemoteImageLoaderTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func erasureKeepsBothLoadersBlockedAfterTheirIndividualDrains() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func erasureKeepsBothLoadersBlockedAfterTheirIndividualDrains() async throws {
         AvatarCacheErasure.begin()
         defer { AvatarCacheErasure.end() }
         await RemoteAvatarImageLoader.clearCachesAndDrain()
@@ -369,7 +371,8 @@ struct RemoteImageLoaderTests {
         ) == nil)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func groupAvatarPersistentThumbnailBypassesTheFullImageDownload() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func groupAvatarPersistentThumbnailBypassesTheFullImageDownload() async throws {
         let accountRef = "thumbnail-account-\(UUID().uuidString)"
         let imageHashHex = UUID().uuidString
         let request = GroupAvatarImageRequest(
@@ -400,7 +403,8 @@ struct RemoteImageLoaderTests {
         #expect(image.cgImage?.height == 56)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func groupAvatarLoaderPromotesTheLegacyGroupScopedDiskEntry() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func groupAvatarLoaderPromotesTheLegacyGroupScopedDiskEntry() async throws {
         let accountRef = "legacy-account-\(UUID().uuidString)"
         let groupIdHex = "legacy-group"
         let imageHashHex = UUID().uuidString
@@ -439,7 +443,8 @@ struct RemoteImageLoaderTests {
         #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: contentKey) == imageData)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func groupAvatarSeedWaitsForTheReplacementHashAndAvoidsNetwork() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func groupAvatarSeedWaitsForTheReplacementHashAndAvoidsNetwork() async throws {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80))
         let imageData = try #require(renderer.image { context in
             UIColor.purple.setFill()

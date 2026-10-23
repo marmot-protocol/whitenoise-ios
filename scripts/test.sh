@@ -4,14 +4,21 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # --tier pr|full selects TestPlans/PR.xctestplan (skips tests tagged runtime or
-# uiHosting and the XCTest hosting classes) or TestPlans/Full.xctestplan. With
-# no tier the scheme's default plan runs, as before.
+# uiHosting and the runtime/hosting XCTest classes) or TestPlans/Full.xctestplan.
+# WN_TEST_TIER=pr|full sets the same default; --tier overrides it. With neither,
+# the Staging scheme's default plan (Full) runs, as before.
+usage() {
+  echo "usage: scripts/test.sh [--tier pr|full]   (or WN_TEST_TIER=pr|full)" >&2
+  exit 2
+}
 TIER="${WN_TEST_TIER:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
-    --tier) TIER="${2:-}"; shift 2 ;;
-    --tier=*) TIER="${1#--tier=}"; shift ;;
-    *) echo "usage: scripts/test.sh [--tier pr|full]" >&2; exit 2 ;;
+    --tier)
+      [ $# -ge 2 ] && [ -n "$2" ] || usage
+      TIER="$2"; shift 2 ;;
+    --tier=*) TIER="${1#--tier=}"; [ -n "$TIER" ] || usage; shift ;;
+    *) usage ;;
   esac
 done
 case "$TIER" in
@@ -173,11 +180,19 @@ fi
 # xcodebuild (Xcode 27.1) applies a plan's skippedTests and skippedTags only to
 # XCTest; Swift Testing honours -skip-testing, so repeat the plan's list there.
 if [ "$TEST_PLAN" = "PR" ]; then
+  # Capture first so a failed read stops the run instead of silently
+  # running the PR tier with no Swift Testing skips.
+  if ! skip_list="$(python3 -c 'import json, sys
+entries = [e for t in json.load(open(sys.argv[1]))["testTargets"] for e in t.get("skippedTests", [])]
+if not entries:
+    sys.exit("PR plan has no skippedTests")
+print("\n".join(entries))' TestPlans/PR.xctestplan)"; then
+    echo "scripts/test.sh: could not read the skip list from TestPlans/PR.xctestplan" >&2
+    exit 1
+  fi
   while IFS= read -r skipped; do
     [ -n "$skipped" ] && test_plan_args+=("-skip-testing:whitenoise-iosTests/$skipped")
-  done < <(python3 -c 'import json, sys
-for target in json.load(open(sys.argv[1]))["testTargets"]:
-    print("\n".join(target.get("skippedTests", [])))' TestPlans/PR.xctestplan)
+  done <<< "$skip_list"
 fi
 
 test_status=0

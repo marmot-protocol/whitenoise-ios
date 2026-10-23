@@ -252,18 +252,25 @@ def scan(tests_dir, warn=None):
 
 
 def run_guardrails(suites, index, pr_plan, baseline_path):
-    """Print the guardrail report; return 1 when a violation is not baselined."""
-    found = guardrails.violations(suites, index, resolve_helper, guardrails.pr_plan_skips(pr_plan),
-                                  guardrails.pr_plan_entries(pr_plan))
-    new, known, stale = guardrails.split_by_baseline(found, guardrails.read_baseline(baseline_path))
-    for violation in new:
-        print("error: " + violation)
+    """Print the guardrail report; return 1 unless every violation matches
+    its baseline count and no baseline line is stale, 2 on a bad baseline."""
+    try:
+        baseline = guardrails.read_baseline(baseline_path)
+    except guardrails.BaselineError as error:
+        print("error: %s" % error)
+        return 2
+    failures, known = guardrails.compare_with_baseline(guardrail_violations(suites, index, pr_plan), baseline)
     for violation in known:
         print("baselined: " + violation)
-    for rule, suite in stale:
-        print("stale baseline entry (fixed; remove it from %s): %s %s" % (baseline_path, rule, suite))
-    print("guardrails: %d new, %d baselined, %d stale" % (len(new), len(known), len(stale)))
-    return 1 if new else 0
+    for failure in failures:
+        print("error: " + failure)
+    print("guardrails: %d failing, %d baselined" % (len(failures), len(known)))
+    return 1 if failures else 0
+
+
+def guardrail_violations(suites, index, pr_plan):
+    return guardrails.violations(suites, index, resolve_helper, guardrails.pr_plan_skips(pr_plan),
+                                 guardrails.pr_plan_entries(pr_plan))
 
 
 def is_runtime_tier(row):
@@ -337,6 +344,8 @@ def main(argv=None):
                         help="run the fixed guardrails (see guardrails.py); exits 1 on a new violation")
     parser.add_argument("--pr-plan", default=str(ROOT / DEFAULT_PR_PLAN),
                         help="PR test plan: its skippedTests must name every tagged test and hosting XCTest class")
+    parser.add_argument("--write-baseline", action="store_true",
+                        help="rewrite the guardrail baseline from the current violations")
     parser.add_argument("--write-pr-plan", action="store_true",
                         help="regenerate the PR plan's skippedTests from the tags and XCTest tier classes")
     parser.add_argument("--baseline", default=str(ROOT / DEFAULT_BASELINE),
@@ -373,6 +382,9 @@ def main(argv=None):
             print("%d violation(s)" % len(violations), file=sys.stderr)
             return 1
         print("all rules satisfied")
+    if args.write_baseline:
+        count = guardrails.write_baseline(args.baseline, guardrail_violations(suites, index, args.pr_plan))
+        print("wrote %s (%d entries)" % (args.baseline, count))
     if args.check:
         return run_guardrails(suites, index, args.pr_plan, args.baseline)
     return 0

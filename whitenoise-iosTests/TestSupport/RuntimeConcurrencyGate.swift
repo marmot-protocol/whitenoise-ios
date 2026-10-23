@@ -36,17 +36,18 @@ actor AsyncTestGate {
 
 private let marmotRuntimeTestGate = AsyncTestGate(permits: marmotRuntimeGatePermits())
 
-/// A quarter of the cores, at least two. Test runtimes now close after each
-/// test, so two run safely on the 3-vCPU CI runner; more than a quarter only
-/// adds contention (8 permits on 16 cores ran the suite slower than 4).
-/// `WN_TEST_GATE_CORES` (pass `TEST_RUNNER_WN_TEST_GATE_CORES` to xcodebuild)
-/// stands in for the core count, e.g. 3 to reproduce the CI runner.
+/// A quarter of the cores, at least one: the gate replaced serializing the
+/// runtime suites (76b4925c, #1111), so small CI runners keep one runtime at a
+/// time. `WN_TEST_GATE_CORES` (pass `TEST_RUNNER_WN_TEST_GATE_CORES` to
+/// xcodebuild) replaces only the core count this formula reads, e.g. 3 to get
+/// the CI runner's permit count; the simulator and runtimes still use every
+/// core of the machine. A non-numeric value is ignored.
 func marmotRuntimeGatePermits(
     environment: [String: String] = ProcessInfo.processInfo.environment,
     activeProcessorCount: Int = ProcessInfo.processInfo.activeProcessorCount
 ) -> Int {
     let cores = environment["WN_TEST_GATE_CORES"].flatMap(Int.init) ?? activeProcessorCount
-    return max(2, cores / 4)
+    return max(1, cores / 4)
 }
 
 struct MarmotRuntimeConcurrencyLimit: SuiteTrait, TestTrait, TestScoping {

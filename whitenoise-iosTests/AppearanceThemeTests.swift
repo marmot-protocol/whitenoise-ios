@@ -6,7 +6,6 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.uiHosting))
 struct AppearanceThemeTests {
     @Test func persistedRawValuesStayStable() {
         // Stored in UserDefaults, so renaming a case is a breaking change.
@@ -100,7 +99,7 @@ struct AppearanceThemeTests {
         #expect(defaults.string(forKey: AppearanceTheme.storageKey) == AppearanceTheme.dark.rawValue)
     }
 
-    @Test func returningToSystemClearsForcedWindowStyle() {
+    @Test(.tags(.uiHosting)) func returningToSystemClearsForcedWindowStyle() {
         let window = UIWindow()
 
         AppAppearanceRuntime.apply(theme: .light, to: [window])

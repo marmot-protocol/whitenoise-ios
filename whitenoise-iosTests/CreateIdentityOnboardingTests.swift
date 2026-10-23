@@ -6,7 +6,6 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct CreateIdentityOnboardingTests {
     @Test func reopeningSignUpDoesNotReplayRetainedFailure() {
         var presentation = SignUpFailurePresentation(retaining: .profile)
@@ -674,7 +673,8 @@ struct CreateIdentityOnboardingTests {
         #expect(service.storedAccounts == [service.identity])
     }
 
-    @Test func unreadableDraftDoesNotAbortAccountRefreshAndCanBeDiscarded() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func unreadableDraftDoesNotAbortAccountRefreshAndCanBeDiscarded() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -700,7 +700,8 @@ struct CreateIdentityOnboardingTests {
         }
     }
 
-    @Test func retryRestorationClosesRecoveryWhenTheSavedDraftIsGone() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func retryRestorationClosesRecoveryWhenTheSavedDraftIsGone() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -723,7 +724,7 @@ struct CreateIdentityOnboardingTests {
         }
     }
 
-    @Test(arguments: [false, true])
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit, arguments: [false, true])
     func missingOrUnidentifiedAccountOffersRecoveryWithoutChangingAccounts(unknownID: Bool) async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -747,7 +748,8 @@ struct CreateIdentityOnboardingTests {
         #expect(try await store.load() == nil)
     }
 
-    @Test func restorationReadFailureBlocksOnlyTheRecordedSignUpAccount() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func restorationReadFailureBlocksOnlyTheRecordedSignUpAccount() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = SignUpDraftStore(directory: directory)
@@ -777,7 +779,8 @@ struct CreateIdentityOnboardingTests {
         }
     }
 
-    @Test func restorationFromAReplacedRuntimePreservesTheDraftForRetry() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func restorationFromAReplacedRuntimePreservesTheDraftForRetry() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = SignUpDraftStore(directory: directory)

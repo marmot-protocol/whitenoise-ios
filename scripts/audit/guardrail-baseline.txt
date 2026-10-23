@@ -1,26 +1,29 @@
-# Known guardrail violations, `<rule> <Suite>` per line (see scripts/audit/guardrails.py).
-# `inventory.py --check` reports these without failing, so only new violations
-# fail the lint job. Delete a line once its suite is fixed; the check names
-# stale lines. Never add a line to land new code: fix the suite instead.
+# Known guardrail violations, `<rule> <Suite> <count>` per line (scripts/audit/guardrails.py).
+# A suite must match its count exactly: more fails, and so do fewer or a fixed
+# suite until this file is tightened in the same change. Regenerate with
+# `python3 scripts/audit/inventory.py --write-baseline`; never raise a count to
+# land new code, fix the suite instead.
 
-sleep AppStateBootstrapTests
-sleep ConversationHeaderBarLayoutTests
-sleep ConversationTailVisibilityTests
-sleep ConversationTimelineProjectionTests
-sleep LaunchBrandLayoutTests
-sleep MessageSemanticsTests
-sleep PollVotesModelTests
-sleep PresentedChatListTests
-sleep PrivateKeyPasteTests
-sleep TimelineTailRefreshTaskLifetimeTests
+sleep AppStateBootstrapTests 8
+sleep BackgroundRuntimeSuspensionTaskTests 1
+sleep ChatsListProjectionTests 1
+sleep ConversationHeaderBarLayoutTests 1
+sleep ConversationTailVisibilityTests 1
+sleep ConversationTimelineProjectionTests 2
+sleep LaunchBrandLayoutTests 1
+sleep MessageSemanticsTests 1
+sleep PollVotesModelTests 1
+sleep PresentedChatListTests 2
+sleep PrivateKeyPasteTests 1
+sleep TimelineTailRefreshTaskLifetimeTests 3
 
-unowned-runtime AuditV5AdoptionTests
-unowned-runtime CancellableSubscriptionAdapterTests
-unowned-runtime ConversationLongChatScrollTests
-unowned-runtime ConversationWindowBindingTests
-unowned-runtime CreateIdentityOnboardingTests
-unowned-runtime LaunchBrandLayoutTests
-unowned-runtime MediaAcquisitionIntentTests
-unowned-runtime OnboardingRecoveryRemovalTests
-unowned-runtime ProductAnalyticsTests
-unowned-runtime RuntimeOwnershipTests
+unowned-runtime AuditV5AdoptionTests 2
+unowned-runtime CancellableSubscriptionAdapterTests 1
+unowned-runtime ConversationLongChatScrollTests 1
+unowned-runtime ConversationWindowBindingTests 2
+unowned-runtime CreateIdentityOnboardingTests 3
+unowned-runtime LaunchBrandLayoutTests 1
+unowned-runtime MediaAcquisitionIntentTests 1
+unowned-runtime OnboardingRecoveryRemovalTests 1
+unowned-runtime ProductAnalyticsTests 9
+unowned-runtime RuntimeOwnershipTests 7

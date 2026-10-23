@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime))
 struct PresentedChatListTests {
     @Test func expiringPreviewDisappearsWithoutAnMDKUpdate() async throws {
         let state = AppState.test()
@@ -169,7 +168,8 @@ struct PresentedChatListTests {
         appState.productAnalytics.replaceSink(nil)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit) func createdChatResolvesBeforeAndAfterMissingPresentedRowRead() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func createdChatResolvesBeforeAndAfterMissingPresentedRowRead() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             appState.setPhase(.ready)
@@ -191,7 +191,7 @@ struct PresentedChatListTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit, arguments: [false, true])
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit, arguments: [false, true])
     func targetedReadSurvivesUnrelatedRowsButPreservesNewerTarget(targetChanges: Bool) async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)

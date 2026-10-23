@@ -1,34 +1,38 @@
 """Test-suite guardrails behind ``inventory.py --check``.
 
-Fixed rules, each keyed by suite:
+Fixed rules, each keyed by suite and counted:
 
-- ``runtime-tag``: a Swift Testing test that opens a Marmot runtime
+- ``runtime-tag``: a Swift Testing test that opens or starts a Marmot runtime
   (``MarmotClient.testClient(``, ``MarmotClient(rootPath:``,
-  ``withTestClient``, ``OwnedTestClient(``, ``TestRuntimeScope.own(``),
-  directly or through a helper it reaches, carries ``.tags(.runtime)`` on the
-  test or its suite. Suite-wide code (stored properties, ``init``) needs the
-  suite tag.
+  ``withTestClient``, ``OwnedTestClient(``, ``TestRuntimeScope.own(``,
+  ``bootstrap()``, ``startRuntime(``, ``marmot.start``), directly or through a
+  helper it reaches, carries ``.tags(.runtime)`` on the test, an enclosing
+  nested suite or its suite. Suite-wide code (stored properties, ``init``)
+  needs the suite tag. Count: offending tests.
 - ``ui-tag``: the same for ``UIWindow``/``UIHostingController`` and
   ``.tags(.uiHosting)``. ``ImageRenderer`` renders offscreen and does not count.
   XCTest classes cannot be tagged, so for both rules an XCTest class must be
   listed in the PR test plan's ``skippedTests`` instead.
-- ``sleep``: no ``Task.sleep`` in the suite or in a helper it reaches outside
-  ``TestSupport/``.
+- ``sleep``: no ``Task.sleep`` in the suite or in a helper it reaches, except
+  the named bounded-wait helpers in ``TestSupport/`` (``SLEEP_EXEMPT``).
+  Count: sleep sites.
 - ``unowned-runtime``: a direct ``MarmotClient.testClient(`` or
   ``MarmotClient(rootPath:`` outside ``TestSupport/`` sits inside
   ``TestRuntimeScope.own(`` / ``closing(``, or binds a name the enclosing
   declaration passes to one of them. Otherwise use ``withTestClient`` or
-  ``OwnedTestClient``.
+  ``OwnedTestClient``. Count: distinct site lines.
 - ``timelimit-gate``: ``.timeLimit`` and ``.marmotRuntimeConcurrencyLimit``
   never apply to the same test, since the limit would count queue time behind
-  the gate.
+  the gate. Count: offending tests.
 - ``pr-plan``: ``TestPlans/PR.xctestplan`` skips exactly the tagged Swift
   Testing suites and tests (see ``tagged_skips``) plus XCTest classes;
   ``inventory.py --write-pr-plan`` regenerates the list.
 
-Known violations live in a baseline file (``rule Suite`` per line); they are
-reported but do not fail, so the check only stops new ones. Remove a line
-once its suite is fixed; stale lines are reported.
+Known violations live in a baseline file, ``<rule> <Suite> <count>`` per line.
+A suite at its baseline count prints as baselined; a new violation, a higher
+count, a lower count and a line whose violation is gone all fail, so the
+baseline is tightened in the change that fixes a suite
+(``inventory.py --write-baseline`` rewrites it from the tree).
 """
 import json
 import pathlib
@@ -38,7 +42,8 @@ import swiftscan
 
 RUNTIME_SITE = re.compile(
     r"MarmotClient\.testClient\s*\(|MarmotClient\(\s*rootPath|\bwithTestClient\s*[({]"
-    r"|\bOwnedTestClient\s*\(|TestRuntimeScope\.own\s*\(")
+    r"|\bOwnedTestClient\s*\(|TestRuntimeScope\.own\s*\("
+    r"|(?<!func )\bbootstrap\(\)|(?<!func )\bstartRuntime\s*\(|\bmarmot\.start\b")
 UI_SITE = re.compile(r"\bUIHostingController\b|\bUIWindow\b(?!\s*\.\s*Level)")
 SLEEP_SITE = re.compile(r"\bTask\.sleep\b")
 DIRECT_RUNTIME = re.compile(r"MarmotClient\.testClient\s*\(|MarmotClient\(\s*rootPath")
@@ -48,19 +53,43 @@ GATE = "marmotRuntimeConcurrencyLimit"
 SUPPORT_DIR = "TestSupport"
 TIER_TAGS = ("runtime", "uiHosting")
 RULES = ("runtime-tag", "ui-tag", "sleep", "unowned-runtime", "timelimit-gate", "pr-plan")
+# (file, helper) pairs in TestSupport/ whose Task.sleep is a bounded wait, a
+# deadlock deadline or the production retry backoff, not a fixed delay.
+SLEEP_EXEMPT = frozenset({
+    ("TestLatch.swift", "TestLatch"),          # TestLatch.wait timeout
+    ("TestLatch.swift", "eventually"),
+    ("SettleLayout.swift", "settleLayout"),
+    ("MarmotFixtureWatchdog.swift", "MarmotFixtureWatchdog"),
+    ("AppStateTestFactory.swift", "test"),     # AppState.test's default runtimeRetrySleeper
+})
 
 
 class Range:
-    """One source range: the file's masked views and [start, end)."""
+    """One source range: the file's masked views and [start, end); ``name``
+    is the helper declaration it came from, if any."""
 
-    def __init__(self, path, masked, start, end):
-        self.path, self.masked, self.start, self.end = path, masked, start, end
+    def __init__(self, path, masked, start, end, name=None):
+        self.path, self.masked, self.start, self.end, self.name = path, masked, start, end, name
 
     def key(self):
         return (self.path, self.start)
 
     def in_support(self):
         return SUPPORT_DIR in pathlib.Path(self.path).parts
+
+    def sleep_exempt(self):
+        return self.in_support() and (pathlib.Path(self.path).name, self.name) in SLEEP_EXEMPT
+
+
+class Violation:
+    def __init__(self, rule, suite, count, detail):
+        self.rule, self.suite, self.count, self.detail = rule, suite, count, detail
+
+    def key(self):
+        return (self.rule, self.suite)
+
+    def __str__(self):
+        return "%s %s: %s" % (self.rule, self.suite, self.detail)
 
 
 def _traits(arguments):
@@ -87,6 +116,43 @@ def _suite_traits(decl):
 def _test_traits(test):
     attribute = test.declaration.attribute("Test")
     return _traits(attribute.arguments) if attribute else []
+
+
+def nested_tags(suite):
+    """Tags of each nested type inside the suite, keyed by its nesting path
+    (``Inner`` or ``Inner/Deeper``), as written on that type only."""
+    found = {}
+
+    def walk(masked, decl, prefix):
+        if decl.body_start < 0:
+            return
+        for member in swiftscan.declarations(masked, decl.body_start + 1, decl.body_end, decl.depth + 1):
+            if member.keyword in ("struct", "class", "enum", "actor") and member.body_start >= 0:
+                path = prefix + "/" + member.name if prefix else member.name
+                found[path] = _tags(_suite_traits(member))
+                walk(masked, member, path)
+
+    for part in suite.parts:
+        walk(part.masked, part.declaration, "")
+    return found
+
+
+def _tagged_prefix(test, nested):
+    """The shortest nesting path of ``test`` whose type carries a tier tag."""
+    parts = test.nesting.split("/") if test.nesting else []
+    for i in range(1, len(parts) + 1):
+        prefix = "/".join(parts[:i])
+        if nested.get(prefix, set()) & set(TIER_TAGS):
+            return prefix, nested[prefix]
+    return None, set()
+
+
+def effective_test_tags(test, nested):
+    tags = set(_tags(_test_traits(test)))
+    parts = test.nesting.split("/") if test.nesting else []
+    for i in range(1, len(parts) + 1):
+        tags |= nested.get("/".join(parts[:i]), set())
+    return tags
 
 
 class SuiteScan:
@@ -143,37 +209,41 @@ class SuiteScan:
             for name in sorted(set(swiftscan.identifiers(rng.masked.code, rng.start, rng.end))):
                 queue.extend(self.members.get(name, ()))
                 for helper in self.resolve(self.index, name, rng.path):
-                    queue.append(Range(helper.path, helper.masked, helper.start, helper.end + 1))
+                    queue.append(Range(helper.path, helper.masked, helper.start, helper.end + 1, helper.name))
         return found
+
+    def everything(self):
+        return self.reach([*self.test_ranges.values(), *self.suite_wide])
 
 
 def _count(pattern, ranges):
     return sum(len(pattern.findall(r.masked.code, r.start, r.end)) for r in ranges)
 
 
-def _tag_rule(rule, scan, pattern, tag, suite_tags, pr_skips):
+def _tag_rule(rule, scan, pattern, tag, suite_tags, pr_skips, nested):
     suite = scan.suite
     if suite.framework == "XCTest":
-        if _count(pattern, scan.reach([*scan.test_ranges.values(), *scan.suite_wide])) and suite.name not in pr_skips:
-            return ["%s %s: XCTest class needs an entry in the PR test plan's skippedTests" % (rule, suite.name)]
+        if _count(pattern, scan.everything()) and suite.name not in pr_skips:
+            return [Violation(rule, suite.name, 1, "XCTest class needs an entry in the PR test plan's skippedTests")]
         return []
     if tag in suite_tags:
         return []
     if _count(pattern, scan.reach(scan.suite_wide)):
-        return ["%s %s: suite-wide code needs @Suite(.tags(.%s))" % (rule, suite.name, tag)]
+        return [Violation(rule, suite.name, 1, "suite-wide code needs @Suite(.tags(.%s))" % tag)]
     missing = [test.name for test in suite.tests
-               if tag not in _tags(_test_traits(test))
+               if tag not in effective_test_tags(test, nested)
                and _count(pattern, scan.reach([scan.test_ranges[test.qualified_name]]))]
     if missing:
-        return ["%s %s: %s need .tags(.%s) on the test or suite" % (rule, suite.name, ", ".join(missing), tag)]
+        return [Violation(rule, suite.name, len(missing),
+                          "%s need .tags(.%s) on the test or suite" % (", ".join(missing), tag))]
     return []
 
 
 def _sleep_rule(scan):
-    ranges = [r for r in scan.reach([*scan.test_ranges.values(), *scan.suite_wide]) if not r.in_support()]
-    count = _count(SLEEP_SITE, ranges)
+    count = _count(SLEEP_SITE, [r for r in scan.everything() if not r.sleep_exempt()])
     if count:
-        return ["sleep %s: %d Task.sleep site(s) outside TestSupport/" % (scan.suite.name, count)]
+        return [Violation("sleep", scan.suite.name, count,
+                          "%d Task.sleep site(s) outside the bounded-wait helpers" % count)]
     return []
 
 
@@ -190,31 +260,33 @@ def _owned(code, at, enclosing):
 
 
 def _unowned_rule(scan):
-    lines = []
-    for rng in scan.reach([*scan.test_ranges.values(), *scan.suite_wide]):
+    lines = set()
+    for rng in scan.everything():
         if rng.in_support():
             continue
         code = rng.masked.code
         for match in DIRECT_RUNTIME.finditer(code, rng.start, rng.end):
             if not _owned(code, match.start(), rng):
-                lines.append("%s:%d" % (pathlib.Path(rng.path).name, rng.masked.line(match.start())))
+                lines.add("%s:%d" % (pathlib.Path(rng.path).name, rng.masked.line(match.start())))
     if lines:
-        return ["unowned-runtime %s: runtime opened outside withTestClient/OwnedTestClient/"
-                "TestRuntimeScope at %s" % (scan.suite.name, ", ".join(sorted(set(lines))))]
+        return [Violation("unowned-runtime", scan.suite.name, len(lines),
+                          "runtime opened outside withTestClient/OwnedTestClient/TestRuntimeScope at %s"
+                          % ", ".join(sorted(lines)))]
     return []
 
 
 def _timelimit_rule(suite, suite_traits):
     suite_names = _names(suite_traits)
     if "timeLimit" in suite_names and GATE in suite_names:
-        return ["timelimit-gate %s: suite combines .timeLimit with .%s" % (suite.name, GATE)]
+        return [Violation("timelimit-gate", suite.name, 1, "suite combines .timeLimit with .%s" % GATE)]
     offenders = []
     for test in suite.tests:
         names = _names(_test_traits(test))
         if ("timeLimit" in names or "timeLimit" in suite_names) and (GATE in names or GATE in suite_names):
             offenders.append(test.name)
     if offenders:
-        return ["timelimit-gate %s: %s combine .timeLimit with .%s" % (suite.name, ", ".join(offenders), GATE)]
+        return [Violation("timelimit-gate", suite.name, len(offenders),
+                          "%s combine .timeLimit with .%s" % (", ".join(offenders), GATE))]
     return []
 
 
@@ -234,22 +306,28 @@ def pr_plan_skips(plan_path):
 
 
 def tagged_skips(suites):
-    """Identifiers of Swift Testing suites and tests tagged for a slow tier.
+    """Identifiers of Swift Testing suites, nested suites and tests tagged for
+    a slow tier.
 
     As of Xcode 27.1, xcodebuild ignores a plan's ``skippedTags`` and applies
     its ``skippedTests`` only to XCTest, so the PR plan names the tagged
     suites and tests and ``scripts/test.sh --tier pr`` passes them to Swift
     Testing as ``-skip-testing:`` flags.
     """
-    skips = []
+    skips = set()
     for suite in suites:
         if suite.framework == "XCTest":
             continue
         if _tags(_suite_traits(suite.declaration)) & set(TIER_TAGS):
-            skips.append(suite.name)
+            skips.add(suite.name)
             continue
-        skips.extend("%s/%s" % (suite.name, test.qualified_name) for test in suite.tests
-                     if _tags(_test_traits(test)) & set(TIER_TAGS))
+        nested = nested_tags(suite)
+        for test in suite.tests:
+            prefix, _ = _tagged_prefix(test, nested)
+            if prefix:
+                skips.add("%s/%s" % (suite.name, prefix))
+            elif _tags(_test_traits(test)) & set(TIER_TAGS):
+                skips.add("%s/%s" % (suite.name, test.qualified_name))
     return sorted(skips)
 
 
@@ -259,11 +337,14 @@ def _plan_rule(suites, plan_entries):
     xctest = {s.name for s in suites if s.framework == "XCTest"}
     wanted = set(tagged_skips(suites))
     have = set(plan_entries)
-    found = ["pr-plan %s: tagged for a slow tier but missing from the PR plan's skippedTests" % entry.split("/")[0]
-             + ("" if "/" not in entry else " (%s)" % entry) for entry in sorted(wanted - have)]
-    found += ["pr-plan %s: the PR plan skips %s, which is no tagged test or XCTest class"
-              % (entry.split("/")[0], entry) for entry in sorted(have - wanted) if entry not in xctest]
-    return found
+    by_suite = {}
+    for entry in sorted(wanted - have):
+        by_suite.setdefault(entry.split("/")[0], []).append("missing " + entry)
+    for entry in sorted(have - wanted):
+        if entry not in xctest:
+            by_suite.setdefault(entry.split("/")[0], []).append("untagged " + entry)
+    return [Violation("pr-plan", suite, len(items), "PR plan skippedTests out of date (%s); run "
+                      "inventory.py --write-pr-plan" % "; ".join(items)) for suite, items in sorted(by_suite.items())]
 
 
 def write_pr_plan(plan_path, suites, xctest_classes=()):
@@ -289,31 +370,76 @@ def violations(suites, index, resolve, pr_skips, plan_entries=None):
         scan = SuiteScan(suite, index, resolve)
         traits = _suite_traits(suite.declaration)
         tags = _tags(traits)
-        found += _tag_rule("runtime-tag", scan, RUNTIME_SITE, "runtime", tags, pr_skips)
-        found += _tag_rule("ui-tag", scan, UI_SITE, "uiHosting", tags, pr_skips)
+        nested = nested_tags(suite)
+        found += _tag_rule("runtime-tag", scan, RUNTIME_SITE, "runtime", tags, pr_skips, nested)
+        found += _tag_rule("ui-tag", scan, UI_SITE, "uiHosting", tags, pr_skips, nested)
         found += _sleep_rule(scan)
         found += _unowned_rule(scan)
         found += _timelimit_rule(suite, traits)
     return found
 
 
+class BaselineError(ValueError):
+    pass
+
+
 def read_baseline(path):
+    """``{(rule, suite): count}``; a malformed line raises ``BaselineError``."""
     path = pathlib.Path(path)
     if not path.exists():
-        return set()
-    entries = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.split("#", 1)[0].strip()
-        if line:
-            rule, suite = line.split()
-            entries.add((rule, suite))
+        return {}
+    entries = {}
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        text = line.split("#", 1)[0].strip()
+        if not text:
+            continue
+        fields = text.split()
+        if len(fields) != 3 or fields[0] not in RULES or not fields[2].isdigit() or int(fields[2]) < 1:
+            raise BaselineError("%s:%d: expected `<rule> <Suite> <count>` with a rule from %s and a positive "
+                                "count, got %r" % (path, number, ", ".join(RULES), line))
+        key = (fields[0], fields[1])
+        if key in entries:
+            raise BaselineError("%s:%d: duplicate entry %s %s" % (path, number, *key))
+        entries[key] = int(fields[2])
     return entries
 
 
-def split_by_baseline(found, baseline):
-    """(new, baselined, stale) for violation strings ``"<rule> <Suite>: …"``."""
-    keyed = [(tuple(v.split(":", 1)[0].split()), v) for v in found]
-    new = [v for key, v in keyed if key not in baseline]
-    known = [v for key, v in keyed if key in baseline]
-    stale = sorted(baseline - {key for key, _ in keyed})
-    return new, known, stale
+def compare_with_baseline(found, baseline):
+    """(failures, baselined) message lists. A violation passes only at
+    exactly its baseline count; new, higher, lower and vanished entries fail."""
+    failures, known = [], []
+    current = {v.key(): v for v in found}
+    for violation in found:
+        allowed = baseline.get(violation.key())
+        if allowed is None:
+            failures.append("new: %s" % violation)
+        elif violation.count > allowed:
+            failures.append("count %d exceeds baseline %d: %s" % (violation.count, allowed, violation))
+        elif violation.count < allowed:
+            failures.append("count %d is below baseline %d; lower the baseline line to %d: %s"
+                            % (violation.count, allowed, violation.count, violation))
+        else:
+            known.append(str(violation))
+    for key in sorted(set(baseline) - set(current)):
+        failures.append("stale baseline line (fixed; delete it): %s %s %d" % (key[0], key[1], baseline[key]))
+    return failures, known
+
+
+BASELINE_HEADER = """\
+# Known guardrail violations, `<rule> <Suite> <count>` per line (scripts/audit/guardrails.py).
+# A suite must match its count exactly: more fails, and so do fewer or a fixed
+# suite until this file is tightened in the same change. Regenerate with
+# `python3 scripts/audit/inventory.py --write-baseline`; never raise a count to
+# land new code, fix the suite instead.
+"""
+
+
+def write_baseline(path, found):
+    lines = [BASELINE_HEADER]
+    for rule in RULES:
+        rows = sorted((v.suite, v.count) for v in found if v.rule == rule)
+        if rows:
+            lines.append("\n")
+            lines.extend("%s %s %d\n" % (rule, suite, count) for suite, count in rows)
+    pathlib.Path(path).write_text("".join(lines), encoding="utf-8")
+    return len(found)

@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.uiHosting))
 struct ReplySwipeTests {
 
     @Test func recognizerBeginsOnlyForRightwardHorizontalIntent() {
@@ -47,7 +46,7 @@ struct ReplySwipeTests {
 
     // MARK: - View identity
 
-    @Test func changingReplyAvailabilityPreservesTheDisplayedBubble() async throws {
+    @Test(.tags(.uiHosting)) func changingReplyAvailabilityPreservesTheDisplayedBubble() async throws {
         let probe = Probe()
         let host = UIHostingController(rootView: row(enabled: false, probe: probe))
         try await withHostedWindow(host, awaitingFirstUpdate: false) { window in
