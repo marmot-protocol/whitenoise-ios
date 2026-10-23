@@ -1,0 +1,68 @@
+# Known guardrail violations, `<rule> <Suite>` per line (see scripts/audit/guardrails.py).
+# `inventory.py --check` reports these without failing, so only new violations
+# fail the lint job. Delete a line once its suite is fixed; the check names
+# stale lines. Never add a line to land new code: fix the suite instead.
+
+sleep AppStateBootstrapTests
+sleep ConversationHeaderBarLayoutTests
+sleep ConversationTailVisibilityTests
+sleep ConversationTimelineProjectionTests
+sleep LaunchBrandLayoutTests
+sleep MessageSemanticsTests
+sleep PollVotesModelTests
+sleep PresentedChatListTests
+sleep PrivateKeyPasteTests
+sleep TimelineTailRefreshTaskLifetimeTests
+
+unowned-runtime AgentEventPresentationTests
+unowned-runtime AgentStreamTests
+unowned-runtime AsyncActionGuardTests
+unowned-runtime AuditV5AdoptionTests
+unowned-runtime CancellableSubscriptionAdapterTests
+unowned-runtime ChatListPreviewCacheTests
+unowned-runtime ChatTitleFallbackPresentationTests
+unowned-runtime ChatsListProjectionTests
+unowned-runtime ComposerMentionQueryTests
+unowned-runtime ComposerSendHandOffTests
+unowned-runtime ContactNicknameResolutionTests
+unowned-runtime ConversationChoiceProjectionTests
+unowned-runtime ConversationChromeTests
+unowned-runtime ConversationCustomEmojiSenderTests
+unowned-runtime ConversationInviteActionTests
+unowned-runtime ConversationLongChatScrollTests
+unowned-runtime ConversationTimelineProjectionTests
+unowned-runtime ConversationWindowBindingTests
+unowned-runtime CreateIdentityOnboardingTests
+unowned-runtime DeviceSettingsFlowTests
+unowned-runtime DirectChatStarterTests
+unowned-runtime DraftMediaPreuploadsTests
+unowned-runtime GroupDetailsArchiveActionTests
+unowned-runtime GroupDisplayTests
+unowned-runtime GroupManagementPresentationTests
+unowned-runtime GroupSystemEventPresentationTests
+unowned-runtime IdentityPresentationAdapterTests
+unowned-runtime LaunchBrandLayoutTests
+unowned-runtime MarkdownTokenThreadingTests
+unowned-runtime MediaAcquisitionIntentTests
+unowned-runtime MediaComposerAvailabilityTests
+unowned-runtime MessageDeletionTests
+unowned-runtime MessageSemanticsTests
+unowned-runtime NewChatFlowViewModelTests
+unowned-runtime NewGroupMissingKeyPackageTests
+unowned-runtime OnboardingRecoveryRemovalTests
+unowned-runtime OutgoingSendResponsivenessTests
+unowned-runtime PollVotesModelTests
+unowned-runtime PresentedChatListTests
+unowned-runtime ProductAnalyticsTests
+unowned-runtime ReactionTargetTallyTests
+unowned-runtime RemoteImageLoaderTests
+unowned-runtime RuntimeOwnershipTests
+unowned-runtime SendDispatchAndCancellationTests
+unowned-runtime StreamDebugTimelineWindowTests
+unowned-runtime SupportChatTests
+unowned-runtime SystemTimelineItemsTests
+unowned-runtime TimelineProjectionBoundaryTests
+unowned-runtime TimelineTailRefreshTaskLifetimeTests
+unowned-runtime TimelineWindowEvictionTests
+
+timelimit-gate RemoteImageLoaderTests
