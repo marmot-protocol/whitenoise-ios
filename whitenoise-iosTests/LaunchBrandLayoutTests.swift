@@ -118,27 +118,16 @@ struct LaunchBrandLayoutTests {
 @MainActor
 private final class MarkFrameReport {
     private var frame: CGRect?
-    private var waiter: CheckedContinuation<CGRect?, Never>?
+    private let reported = TestLatch()
 
     func record(_ frame: CGRect?) {
         guard let frame, !frame.isEmpty else { return }
         self.frame = frame
-        resume(with: frame)
+        reported.signal()
     }
 
     func usableFrame(timeout: Duration) async -> CGRect? {
-        if let frame { return frame }
-        let timer = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: timeout)
-            self?.resume(with: nil)
-        }
-        defer { timer.cancel() }
-        return await withCheckedContinuation { waiter = $0 }
-    }
-
-    private func resume(with frame: CGRect?) {
-        guard let waiter else { return }
-        self.waiter = nil
-        waiter.resume(returning: frame)
+        try? await reported.wait(timeout: timeout)
+        return frame
     }
 }

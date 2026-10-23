@@ -1,4 +1,5 @@
 import SwiftUI
+import Testing
 import XCTest
 @testable import whitenoise_ios
 
@@ -66,7 +67,7 @@ final class ConversationHeaderBarLayoutTests: XCTestCase {
 private final class FrameReport {
     private let expected: Set<String>
     private var frames = [String: CGRect]()
-    private var waiter: CheckedContinuation<[String: CGRect]?, Never>?
+    private let completed = TestLatch()
 
     init(expecting expected: Set<String>) {
         self.expected = expected
@@ -81,24 +82,13 @@ private final class FrameReport {
     func record(_ name: String, _ frame: CGRect) {
         frames[name] = frame
         if isComplete {
-            resume(with: frames)
+            completed.signal()
         }
     }
 
     func frames(timeout: Duration) async -> [String: CGRect]? {
-        if isComplete { return frames }
-        let timer = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: timeout)
-            self?.resume(with: nil)
-        }
-        defer { timer.cancel() }
-        return await withCheckedContinuation { waiter = $0 }
-    }
-
-    private func resume(with frames: [String: CGRect]?) {
-        guard let waiter else { return }
-        self.waiter = nil
-        waiter.resume(returning: frames)
+        try? await completed.wait(timeout: timeout)
+        return isComplete ? frames : nil
     }
 }
 
