@@ -161,7 +161,15 @@ jobs:
         timeout-minutes: 40
         # The tier comes from the Choose test tier step above. To run the full
         # suite on every pull request, make this `--tier full`.
-        run: ./scripts/test.sh --tier ${{ steps.tier.outputs.tier }}
+        run: |
+          bash scripts/bench/memlog.sh build/audit/memory.csv &
+          sampler=$!
+          set +e
+          ./scripts/test.sh --tier pr
+          code=$?
+          kill $sampler
+          python3 scripts/bench/memsummary.py build/audit/memory.csv | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $code
 
       - name: Report test phases
         if: always()
