@@ -50,7 +50,6 @@ struct ChatTitleFallbackGraceTests {
 }
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ChatTitleFallbackPresentationTests {
     private let peer = String(repeating: "ab", count: 32)
 
@@ -83,7 +82,7 @@ struct ChatTitleFallbackPresentationTests {
     }
 
     @Test func chatListShowsAPlaceholderUntilTheRealNameArrives() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let model = ChatsListViewModel(appState: appState)
         let chatRow = row(kind: .direct)
 

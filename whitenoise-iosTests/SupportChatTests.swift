@@ -3,7 +3,6 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct SupportChatTests {
     @Test func canonicalSupportContactResolvesToAUsableRecipient() throws {
         #expect(WhiteNoiseSupportContact.npub.hasPrefix("npub1"))
@@ -13,7 +12,7 @@ struct SupportChatTests {
     }
 
     @Test func existingSupportChatOpensWithoutCreatingADuplicate() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: "existing-support-dm")
         flow.starter.createGroupForTesting = { _, _ in
@@ -32,7 +31,7 @@ struct SupportChatTests {
     }
 
     @Test func missingSupportChatCreatesThroughTheNormalDirectChatPath() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         var createdAccountRef: String?
@@ -56,7 +55,7 @@ struct SupportChatTests {
     }
 
     @Test func openingSupportAgainReusesTheConversation() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: "existing-support-dm")
         flow.starter.createGroupForTesting = { _, _ in
@@ -80,7 +79,7 @@ struct SupportChatTests {
     }
 
     @Test func discardedRoutingCanReopenTheCompletedConversation() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         var creations = 0
@@ -105,7 +104,7 @@ struct SupportChatTests {
     }
 
     @Test func supportChatFailureIsRecoverableWithoutSurfacingEngineCopy() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         var attempt = 0
@@ -141,7 +140,7 @@ struct SupportChatTests {
     }
 
     @Test func failedExistingChatLookupNeverCreatesADuplicate() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
         var lookupAttempt = 0
@@ -227,7 +226,7 @@ struct SupportChatTests {
     }
 
     @Test func supportChatReportsLoadingWhileCreationIsInFlight() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         let gate = (entered: TestLatch(), released: TestLatch())
@@ -252,7 +251,7 @@ struct SupportChatTests {
     }
 
     @Test func cancellingWhileLookingForAnExistingChatDoesNotCreateOne() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
         let gate = (entered: TestLatch(), released: TestLatch())
@@ -282,7 +281,7 @@ struct SupportChatTests {
 
     @Test(arguments: [false, true])
     func cancelledCreationDoesNotOpenSupportButCanBeReopened(isRetry: Bool) async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         let model = SupportChatViewModel(chatFlow: flow)
@@ -331,7 +330,7 @@ struct SupportChatTests {
 
     @Test(arguments: [false, true])
     func settingsEntryOnlyLooksUpSupport(hasExistingChat: Bool) async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: hasExistingChat ? "support-dm" : nil)
         flow.starter.createGroupForTesting = { _, _ in
@@ -349,7 +348,7 @@ struct SupportChatTests {
     }
 
     @Test func settingsKeepsProgressVisibleUntilTheDestinationIsPrepared() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
         let gate = (entered: TestLatch(), released: TestLatch())
@@ -368,7 +367,7 @@ struct SupportChatTests {
 
     @Test(arguments: [false, true])
     func settingsDiscardsAPreparedDestinationAfterLeavingOrSwitchingAccount(switchAccount: Bool) async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
         let gate = (entered: TestLatch(), released: TestLatch())
@@ -387,7 +386,7 @@ struct SupportChatTests {
     }
 
     @Test func settingsLookupFailureOffersRetryWithoutShowingStartChat() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
         var attempt = 0
@@ -408,7 +407,7 @@ struct SupportChatTests {
     }
 
     @Test func cancelledSettingsLookupDoesNotNavigateAndCanBeRetried() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
         let gate = (entered: TestLatch(), released: TestLatch())
@@ -440,7 +439,7 @@ struct SupportChatTests {
 
     @Test(arguments: [false, true])
     func settingsLookupDiscardsResultsAfterAccountChange(lookupFails: Bool) async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "original"
         let flow = NewChatFlowViewModel()
         let gate = (entered: TestLatch(), released: TestLatch())

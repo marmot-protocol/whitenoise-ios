@@ -3,10 +3,9 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AsyncActionGuardTests {
     @Test func identityExportsReturnWhileExportIsAlreadyInFlight() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let model = IdentityViewModel()
 
@@ -25,7 +24,7 @@ struct AsyncActionGuardTests {
     }
 
     @Test func privacyAuditToggleReturnsWhileSaveIsAlreadyInFlight() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let model = PrivacySecuritySettingsViewModel()
         let current = PrivacyAuditSettingsProjection(enabled: false)
 
@@ -40,7 +39,7 @@ struct AsyncActionGuardTests {
     }
 
     @Test func auditDeleteReturnsWhileDeleteIsAlreadyInFlight() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let model = PrivacySecuritySettingsViewModel()
         let row = AuditFileRow(
             fileName: "audit.jsonl",
