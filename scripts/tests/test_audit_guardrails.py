@@ -58,7 +58,7 @@ class GuardrailTests(unittest.TestCase):
     def assertFails(self, files, rule, suite, skipped=()):
         code, lines = self.check(files, skipped)
         self.assertEqual(code, 1, lines)
-        self.assertTrue(any(line.startswith("error: %s %s:" % (rule, suite)) for line in lines), lines)
+        self.assertTrue(any(line.startswith("error: ") and " %s %s:" % (rule, suite) in line for line in lines), lines)
 
     def assertPasses(self, files, skipped=()):
         code, lines = self.check(files, skipped)
@@ -145,14 +145,44 @@ final class LayoutTests: XCTestCase {
 ''', "Helpers.swift": '''func pause() async throws { try await Task.sleep(for: .milliseconds(10)) }
 '''}, "sleep", "ATests")
 
-    def test_testsupport_helpers_may_sleep(self):
+    def test_named_wait_helpers_may_sleep(self):
         self.assertPasses({"ATests.swift": '''struct ATests {
     @Test func waits() async throws {
         try await eventually { true }
-        try await settleBriefly()
     }
 }
 '''})
+
+    def test_a_new_testsupport_helper_that_sleeps_fails(self):
+        self.assertFails({"ATests.swift": '''struct ATests {
+    @Test func waits() async throws {
+        try await settleBriefly()
+    }
+}
+'''}, "sleep", "ATests")
+
+    def test_bootstrap_counts_as_opening_a_runtime(self):
+        self.assertFails({"ATests.swift": '''@MainActor struct ATests {
+    @Test func boots() async {
+        let state = AppState.test()
+        await state.bootstrap()
+    }
+}
+'''}, "runtime-tag", "ATests")
+
+    def test_a_tag_on_a_nested_suite_covers_its_tests_and_the_plan(self):
+        files = {"OuterTests.swift": '''struct OuterTests {
+    @Suite(.tags(.runtime))
+    struct Booting {
+        @Test func boots() async throws {
+            try await withTestClient { client in _ = client }
+        }
+    }
+    @Test func pure() {}
+}
+'''}
+        self.assertFails(files, "pr-plan", "OuterTests")
+        self.assertPasses(files, skipped=["OuterTests/Booting"])
 
     # unowned-runtime
 
@@ -241,16 +271,53 @@ final class LayoutTests: XCTestCase {
 
     # baseline
 
-    def test_baselined_violations_pass_and_stale_entries_are_reported(self):
-        files = {"ATests.swift": '''struct ATests {
-    @Test func waits() async throws { try await Task.sleep(for: .milliseconds(10)) }
+    TWO_SLEEPS = {"ATests.swift": '''struct ATests {
+    @Test func waits() async throws {
+        try await Task.sleep(for: .milliseconds(10))
+        try await Task.sleep(for: .milliseconds(10))
+    }
 }
 '''}
-        code, lines = self.check(files, baseline="# known\nsleep ATests\nsleep GoneTests\n")
+
+    def test_a_violation_at_its_baseline_count_passes(self):
+        code, lines = self.check(self.TWO_SLEEPS, baseline="# known\nsleep ATests 2\n")
         self.assertEqual(code, 0, lines)
         self.assertTrue(any(line.startswith("baselined: sleep ATests:") for line in lines), lines)
-        self.assertTrue(any(line.startswith("stale baseline entry") and line.endswith("sleep GoneTests")
+
+    def test_a_count_above_the_baseline_fails(self):
+        code, lines = self.check(self.TWO_SLEEPS, baseline="sleep ATests 1\n")
+        self.assertEqual(code, 1, lines)
+        self.assertTrue(any("count 2 exceeds baseline 1" in line for line in lines), lines)
+
+    def test_a_count_below_the_baseline_fails_until_the_line_is_lowered(self):
+        code, lines = self.check(self.TWO_SLEEPS, baseline="sleep ATests 3\n")
+        self.assertEqual(code, 1, lines)
+        self.assertTrue(any("lower the baseline line to 2" in line for line in lines), lines)
+
+    def test_a_stale_baseline_line_fails(self):
+        code, lines = self.check(self.TWO_SLEEPS, baseline="sleep ATests 2\nsleep GoneTests 1\n")
+        self.assertEqual(code, 1, lines)
+        self.assertTrue(any(line.startswith("error: stale baseline line") and "sleep GoneTests 1" in line
                             for line in lines), lines)
+
+    def test_a_malformed_baseline_line_is_a_clear_error(self):
+        for bad in ("sleep ATests\n", "nap ATests 2\n", "sleep ATests two\n", "sleep ATests 2\nsleep ATests 2\n"):
+            code, lines = self.check(self.TWO_SLEEPS, baseline=bad)
+            self.assertEqual(code, 2, (bad, lines))
+            self.assertTrue(any(line.startswith("error: ") and "baseline.txt:" in line for line in lines), lines)
+
+    def test_write_baseline_records_counts(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = pathlib.Path(root)
+            tests_dir = audit_support.write_tree(root / "whitenoise-iosTests", dict(TEST_SUPPORT, **self.TWO_SLEEPS))
+            (root / "PR.xctestplan").write_text(json.dumps(plan()), encoding="utf-8")
+            baseline = root / "baseline.txt"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = inventory.main(["--tests-dir", str(tests_dir), "--out", str(root / "inventory.csv"),
+                                       "--pr-plan", str(root / "PR.xctestplan"), "--baseline", str(baseline),
+                                       "--write-baseline", "--check"])
+            self.assertEqual(code, 0)
+            self.assertIn("sleep ATests 2\n", baseline.read_text())
 
 
 if __name__ == "__main__":
