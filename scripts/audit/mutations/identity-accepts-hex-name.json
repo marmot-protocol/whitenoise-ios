@@ -1,0 +1,15 @@
+{
+  "name": "identity-accepts-hex-name",
+  "path": "Shared/IdentityPresentation.swift",
+  "old": "        if let name = ContentSanitizer.displayName(knownName), !Hex.is32Bytes(name) {\n",
+  "new": "        if let name = ContentSanitizer.displayName(knownName) {\n",
+  "grep": "IdentityPresentation",
+  "why": "AGENTS.md: raw hex is never a possible IdentityPresentation output",
+  "suites": [
+    "IdentityPresentationContractTests",
+    "IdentityPresentationAdapterTests",
+    "IdentitySubtitleNpubTests",
+    "NotificationPresentationTests",
+    "RecipientSearchTests"
+  ]
+}

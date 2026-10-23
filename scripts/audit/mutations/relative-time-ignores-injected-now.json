@@ -1,0 +1,11 @@
+{
+  "name": "relative-time-ignores-injected-now",
+  "path": "whitenoise-ios/Core/RelativeTime.swift",
+  "old": "        let seconds = now.timeIntervalSince(date)\n        if seconds < 0 { return L10n.string(\"now\") }\n",
+  "new": "        let seconds = Date().timeIntervalSince(date)\n        if seconds < 0 { return L10n.string(\"now\") }\n",
+  "grep": "RelativeTime.short",
+  "why": "AGENTS.md: with an injected now, bucketing must compare against it, not the wall clock",
+  "suites": [
+    "RelativeTimeTests"
+  ]
+}

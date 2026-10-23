@@ -1,0 +1,12 @@
+{
+  "name": "image-url-accepts-10-slash-8",
+  "path": "Shared/ContentSanitizer.swift",
+  "old": "        if octets[0] == 0 || octets[0] == 10 || octets[0] == 127 {\n",
+  "new": "        if octets[0] == 0 || octets[0] == 127 {\n",
+  "grep": "imageURL(",
+  "why": "AGENTS.md: ContentSanitizer.imageURL rejects private IPv4 hosts",
+  "suites": [
+    "ContentSanitizerRemoteMediaAddressTests",
+    "ContentSanitizerTests"
+  ]
+}
