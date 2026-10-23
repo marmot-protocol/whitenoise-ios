@@ -67,12 +67,18 @@ struct MarmotRuntimeConcurrencyLimit: SuiteTrait, TestTrait, TestScoping {
 /// Opt-in JSONL trace of gate waits, for the audit's critical-path analysis
 /// (`scripts/audit/gate-critical-path.py`). Enabled by `WN_TEST_GATE_TRACE=1`
 /// in the host environment (pass `TEST_RUNNER_WN_TEST_GATE_TRACE=1` to
-/// xcodebuild); writes `gate-trace.jsonl` in the host's temporary directory.
+/// xcodebuild); appends to `gate-trace-<pid>.jsonl` in the host's temporary
+/// directory, one file per host launch (Xcode launches the host for discovery
+/// and again to run; a relaunch after a crash gets its own file instead of
+/// truncating the earlier records).
 final class GateTrace: Sendable {
     static let shared: GateTrace? = {
         guard ProcessInfo.processInfo.environment["WN_TEST_GATE_TRACE"] == "1" else { return nil }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("gate-trace.jsonl")
-        FileManager.default.createFile(atPath: url.path, contents: nil)
+        let name = "gate-trace-\(ProcessInfo.processInfo.processIdentifier).jsonl"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
         guard let handle = try? FileHandle(forWritingTo: url) else { return nil }
         return GateTrace(handle: handle, path: url.path)
     }()
@@ -87,13 +93,18 @@ final class GateTrace: Sendable {
     }
 
     func record(test: Test, requested: Date, acquired: Date, released: Date) {
-        let name = String(describing: test.id).replacingOccurrences(of: "\"", with: "'")
-        let line = "{\"test\":\"\(name)\",\"requested\":\(requested.timeIntervalSince1970),"
-            + "\"acquired\":\(acquired.timeIntervalSince1970),\"released\":\(released.timeIntervalSince1970)}\n"
+        let record: [String: Any] = [
+            "test": String(describing: test.id),
+            "requested": requested.timeIntervalSince1970,
+            "acquired": acquired.timeIntervalSince1970,
+            "released": released.timeIntervalSince1970,
+        ]
+        guard var data = try? JSONSerialization.data(withJSONObject: record) else { return }
+        data.append(0x0A)
         lock.lock()
         defer { lock.unlock() }
-        handle.seekToEndOfFile()
-        handle.write(Data(line.utf8))
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: data)
     }
 }
 

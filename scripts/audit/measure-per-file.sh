@@ -52,10 +52,11 @@ build_settings=(
   CODE_SIGNING_ALLOWED=YES
 )
 
-# Suites declared in a file: top-level `struct|class|enum <Name>Tests`.
+# Suites declared in a file, via the shared scanner (scripts/audit/swiftscan.py)
+# so `nonisolated struct`, attribute-prefixed declarations and XCTest classes
+# are all found; warns when a file has tests but no recognised suite.
 suites_in() {
-  grep -oE '^(@MainActor[[:space:]]+)?(final[[:space:]]+)?(struct|class|enum)[[:space:]]+[A-Za-z0-9_]+Tests\b' "$1" \
-    | awk '{print $NF}'
+  python3 scripts/audit/suite-names.py --warn "$1"
 }
 
 if [ -z "${WN_AUDIT_SKIP_BUILD:-}" ]; then
@@ -67,7 +68,9 @@ fi
 run_selection() {
   local label="$1"; shift
   local bundle="$OUT/$label.xcresult"
-  rm -rf "$bundle"
+  # A rerun must not pair a fresh bundle with the previous run's log marker or
+  # cached xcresulttool JSON.
+  rm -rf "$bundle" "$OUT/$label.log" "$OUT/json/$label.xcresult.json"
   local start=$SECONDS
   local status=0
   WN_AUDIT_LOG="$OUT/$label.log" scripts/audit/timed-xcodebuild.sh test-without-building \
@@ -96,6 +99,7 @@ for file in "${files[@]}"; do
     [ -n "$suite" ] && suites+=("$suite")
   done < <(suites_in "$file")
   if [ "${#suites[@]}" -eq 0 ]; then
+    echo "skip $label (no suites)"
     continue
   fi
   if [ -e "$OUT/$label.xcresult" ] && [ -z "${WN_AUDIT_FORCE:-}" ]; then
@@ -107,4 +111,5 @@ for file in "${files[@]}"; do
   run_selection "$label" "${only[@]}"
 done
 
-echo "done; results under $OUT (see runs.log)"
+failed_runs="$(grep -c 'status=[1-9]' "$OUT/runs.log" || true)"
+echo "done; results under $OUT (see runs.log); runs with non-zero status: ${failed_runs:-0}"

@@ -26,12 +26,13 @@ The work ran in three waves, one pull request per phase:
 
 | Script | Produces | Notes |
 |---|---|---|
+| `suite-names.py` | stdout | Suite type names per file (and `--map` display→type names for `@Suite("…")`) via the shared scanner; used by the shell loops so no script carries its own declaration regex. |
 | `inventory.py` | `build/audit/inventory.csv`, tier lists | One row per suite: runtime construction/start/shutdown sites (including helpers the suite reaches), UI hosting, sleeps, polls, traits. Works on any file layout; keyed by suite name. |
 | `subject-classify.py --merge` | `subjects.csv` + `subject` column | `app`, `mdk` (tests MarmotKit behaviour), `catalog` (reads string catalogs / plists), `test-helper`. Heuristic; read the test before acting on a non-`app` label. |
 | `assertion-heuristics.py --merge` | `assertions.csv` + `literal_assertion_flags` | Flags literal pins (`constant == 16`), memberwise round-trips and tests with no assertion. A flag means "asserts a literal", not "cannot fail"; persistence keys and security build flags are legitimate pins. |
 | `timed-xcodebuild.sh`, `phases.py`, `report-run.sh`, `simlog-capture.sh` | `phases.csv`, CI step summary | Decompose `test-without-building` into simulator boot, host launch, XCTest and Swift Testing phases using xcodebuild's own markers. `WN_TEST_RAW_LOG=1 scripts/test.sh` runs a measurement run. |
-| `measure-per-file.sh` → `per-file-costs.py` | `per-file/*.xcresult`, `per-file-costs.csv` | True cost per file: one `test-without-building` per test file with coverage on, minus the fixed per-process overhead measured with an empty selection. Hours of machine time; rerun only touched files with arguments. |
-| `Whitenoise (Audit)` scheme + `TestPlans/AuditSerial.xctestplan` → `serial-costs.py --log` | `serial.xcresult`, `serial-costs.csv` | Whole suite with parallel execution off, coverage on. `TEST_RUNNER_WN_TEST_GATE_TRACE=1` also writes the runtime-gate trace. |
+| `measure-per-file.sh` → `per-file-costs.py` | `per-file/*.xcresult`, `per-file-costs.csv` | One `test-without-building` per test file with coverage on, minus the fixed per-process overhead measured with an empty selection. The numbers are FILE-level at ±1 s resolution (suites sharing a file repeat them; `shared_file` says so); their purpose is the coverage bundles and a sanity check of the serial run, not per-suite cost. About an hour of machine time; rerun touched files with arguments (`WN_AUDIT_FORCE=1` re-measures existing ones; `WN_AUDIT_PER_FILE_DIR` relocates the output). |
+| `Whitenoise (Audit)` scheme + `TestPlans/AuditSerial.xctestplan` → `serial-costs.py --log` | `serial.xcresult`, `serial-costs.csv` | Whole suite with parallel execution off, coverage on (the plan also enables Xcode's default per-test timeout, which the Staging scheme does not). Run with `WN_AUDIT_LOG=build/audit/serial-run.log scripts/audit/timed-xcodebuild.sh test-without-building -scheme "Whitenoise (Audit)" -testPlan AuditSerial -resultBundlePath build/audit/serial.xcresult …`; `TEST_RUNNER_WN_TEST_GATE_TRACE=1` also writes `gate-trace-<pid>.jsonl` into the host app's `tmp/` (`xcrun simctl get_app_container <udid> dev.ipf.whitenoise.ios.staging data`). Per-suite `wall_s` comes from the log (Swift Testing suite lines; XCTest classes from their start/end clocks). |
 | `gate-critical-path.py` | stdout | Hold and wait times of the `marmotRuntimeConcurrencyLimit` gate; the hold sum is the CI critical-path floor at one permit. |
 | `coverage-unique.py` | `coverage-unique.csv` | Per-file covered-line sets from the per-file bundles (`xccov --archive`); unique lines (covered by no other file) and pairwise overlap. Suites sharing a test file share its set. |
 | `mutate.sh` + `mutations/*.json` | `mutations.csv` | Applies one deliberate production bug per probe, runs the suites that reference the symbol, records which suites fail (kill it), reverts. A suite that covers the line and stays green is a value downgrade. |
@@ -39,7 +40,9 @@ The work ran in three waves, one pull request per phase:
 | `build-ledger.py --render` | `docs/test-audit/ledger.csv`, `ledger.md` | Joins everything above with hand overrides from `verdicts.csv`. |
 
 All scripts are Python 3.9+ standard library or bash; unit tests live in
-`scripts/tests/` (`python3 -m unittest discover -s scripts/tests`).
+`scripts/tests/` (`python3 -m unittest discover -s scripts/tests`). The
+`coverage-unique.py`, `mutate.sh`, `ci-history.sh` and `build-ledger.py` rows
+arrive with wave 2 phases 6 and 7; phase 5 ships the measurement rows.
 
 ## Reading the ledger
 
