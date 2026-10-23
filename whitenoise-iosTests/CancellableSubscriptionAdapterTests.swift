@@ -19,11 +19,10 @@ struct CancellableSubscriptionAdapterTests {
 
     @Test(arguments: Adapter.allCases)
     func cancellingAPendingWaitThrowsCancellationAndKeepsTheRuntimeUsable(_ adapter: Adapter) async throws {
-        let client = try MarmotClient.testClient()
-        let watchdog = MarmotFixtureWatchdog.start(
-            "Cancelling \(adapter.rawValue) required a runtime shutdown to unblock", breaking: client)
-        defer { watchdog.cancel() }
-        do {
+        try await withTestClient { client in
+            let watchdog = MarmotFixtureWatchdog.start(
+                "Cancelling \(adapter.rawValue) required a runtime shutdown to unblock", breaking: client)
+            defer { watchdog.cancel() }
             try await client.startRuntime()
             let account = try await client.marmot.createIdentityWithProfile(
                 defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
@@ -66,9 +65,6 @@ struct CancellableSubscriptionAdapterTests {
             #expect(try await client.listAccounts().contains { $0.accountIdHex == account.accountIdHex })
             try await client.marmot.shutdownAndClose()
             #expect(client.marmot.storageIsClosed())
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
     }
 }

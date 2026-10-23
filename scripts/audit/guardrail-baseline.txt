@@ -6,7 +6,6 @@
 
 sleep AppStateBootstrapTests 2
 
-unowned-runtime CancellableSubscriptionAdapterTests 1
 unowned-runtime ConversationWindowBindingTests 2
 unowned-runtime LaunchBrandLayoutTests 1
 unowned-runtime MediaAcquisitionIntentTests 1
