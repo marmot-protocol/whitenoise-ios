@@ -9,6 +9,8 @@ on:
       - 'NotificationServiceExtension/**'
       - '.swiftlint.yml'
       - 'scripts/lint.sh'
+      - 'scripts/check-localization-catalog.py'
+      - 'scripts/tests/**'
       - 'justfile'
       - '.github/workflows/lint.yml'
   push:
@@ -33,6 +35,12 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Check string catalogs
+        run: python3 scripts/check-localization-catalog.py
+
+      - name: Test script checks
+        run: python3 -m unittest discover -s scripts/tests
 
       - name: Install SwiftLint
         env:
