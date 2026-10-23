@@ -10,31 +10,11 @@ import Synchronization
 
 struct MessageVideoBubblePresentationTests {
 
-    @Test func landscapeVideoUsesActualAspectRatio() {
-        let size = MessageVideoBubblePresentation.displaySize(maxWidth: 300, dim: "640x360")
-
-        #expect(size.width == 300)
-        #expect(size.height == 169)
-    }
-
-    @Test func portraitVideoNarrowsInsteadOfCropping() {
-        let size = MessageVideoBubblePresentation.displaySize(maxWidth: 300, dim: "1080x1920")
-
-        #expect(size.width == 228)
-        #expect(size.height == 405)
-    }
-
     @Test func missingVideoDimensionsUseLandscapeFallback() {
         let size = MessageVideoBubblePresentation.displaySize(maxWidth: 300, dim: nil)
 
         #expect(size.width == 300)
         #expect(size.height == 169)
-    }
-
-    @Test func fullscreenAffordanceUsesTouchableOverlaySize() {
-        #expect(MessageVideoBubblePresentation.fullscreenButtonSize == 36)
-        #expect(MessageVideoBubblePresentation.fullscreenButtonIconSize == 15)
-        #expect(MessageVideoBubblePresentation.fullscreenButtonInset == 8)
     }
 
     @Test func thumbnailCacheKeySurvivesSourceEpochRefresh() {

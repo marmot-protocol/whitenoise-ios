@@ -4,21 +4,10 @@ import XCTest
 
 @MainActor
 final class ConversationHeaderBarLayoutTests: XCTestCase {
-    func testTheIdentityClusterStaysOnTheBarMidlineWhicheverControlIsShowing() async throws {
-        for width: CGFloat in [390, 768] {
-            for textSize: DynamicTypeSize in [.large, .accessibility1] {
-                for selecting in [false, true] {
-                    let frames = try await render(width: width, textSize: textSize, selecting: selecting)
-                    let bar = try XCTUnwrap(frames["bar"])
-                    let title = try XCTUnwrap(frames["title"])
-                    let label = "\(Int(width))-\(textSize)-selecting:\(selecting)"
-                    XCTAssertEqual(title.midX, bar.midX, accuracy: 1, label)
-                }
-            }
-        }
-    }
-
-    func testALongTitleTruncatesBeforeItReachesEitherEdgeControl() async throws {
+    /// One render per configuration checks both header rules: the identity
+    /// cluster sits on the bar's midline whichever control is showing, and a
+    /// long title truncates before it reaches either edge control.
+    func testTheTitleStaysCenteredAndClearOfTheEdgeControls() async throws {
         for width: CGFloat in [390, 768] {
             for textSize: DynamicTypeSize in [.large, .accessibility1] {
                 for selecting in [false, true] {
@@ -27,6 +16,9 @@ final class ConversationHeaderBarLayoutTests: XCTestCase {
                     let title = try XCTUnwrap(frames["title"])
                     let control = try XCTUnwrap(frames["control"])
                     let label = "\(Int(width))-\(textSize)-selecting:\(selecting)"
+
+                    XCTAssertEqual(title.midX, bar.midX, accuracy: 1, label)
+
                     let reserved = control.width + ConversationHeaderMetrics.horizontalPadding
                     XCTAssertGreaterThan(title.width, 0, label)
                     XCTAssertGreaterThanOrEqual(title.minX, bar.minX + reserved, label)
@@ -41,8 +33,8 @@ final class ConversationHeaderBarLayoutTests: XCTestCase {
         textSize: DynamicTypeSize,
         selecting: Bool
     ) async throws -> [String: CGRect] {
-        var frames = [String: CGRect]()
-        let fixture = HeaderFixture(selecting: selecting) { frames[$0] = $1 }
+        let report = FrameReport(expecting: ["bar", "title", "control"])
+        let fixture = HeaderFixture(selecting: selecting) { report.record($0, $1) }
             .environment(\.dynamicTypeSize, textSize)
         let host = UIHostingController(rootView: fixture)
         let scene = try XCTUnwrap(
@@ -55,9 +47,51 @@ final class ConversationHeaderBarLayoutTests: XCTestCase {
         window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
         host.view.layoutIfNeeded()
-        try await Task.sleep(for: .milliseconds(200))
-        host.view.layoutIfNeeded()
-        return frames
+        let reported = await report.frames(timeout: .seconds(5))
+        return try XCTUnwrap(
+            reported,
+            "header geometry did not report at \(Int(width))-\(textSize)-selecting:\(selecting)"
+        )
+    }
+}
+
+/// Resolves once every expected view has reported a non-empty frame, or with
+/// nil when the timeout passes first; no fixed sleeps on the happy path.
+@MainActor
+private final class FrameReport {
+    private let expected: Set<String>
+    private var frames = [String: CGRect]()
+    private var waiter: CheckedContinuation<[String: CGRect]?, Never>?
+
+    init(expecting expected: Set<String>) {
+        self.expected = expected
+    }
+
+    private var isComplete: Bool {
+        expected.allSatisfy { frames[$0]?.isEmpty == false }
+    }
+
+    func record(_ name: String, _ frame: CGRect) {
+        frames[name] = frame
+        if isComplete {
+            resume(with: frames)
+        }
+    }
+
+    func frames(timeout: Duration) async -> [String: CGRect]? {
+        if isComplete { return frames }
+        let timer = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: timeout)
+            self?.resume(with: nil)
+        }
+        defer { timer.cancel() }
+        return await withCheckedContinuation { waiter = $0 }
+    }
+
+    private func resume(with frames: [String: CGRect]?) {
+        guard let waiter else { return }
+        self.waiter = nil
+        waiter.resume(returning: frames)
     }
 }
 
