@@ -5,7 +5,6 @@
 # land new code, fix the suite instead.
 
 sleep AppStateBootstrapTests 2
-sleep ConversationTailVisibilityTests 1
 sleep PollVotesModelTests 1
 sleep PresentedChatListTests 1
 sleep PrivateKeyPasteTests 1
