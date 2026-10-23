@@ -4,10 +4,5 @@
   "old": "        else { return nil }\n        return trimmed.lowercased()\n    }\n\n    /// MLS group ids",
   "new": "        else { return nil }\n        return trimmed\n    }\n\n    /// MLS group ids",
   "grep": "normalized32Bytes",
-  "why": "AGENTS.md: hex public keys are normalized to lowercase before routing or staging",
-  "suites": [
-    "HexValidationTests",
-    "Bech32CharsetLookupTests",
-    "ProfileReferenceResolutionTests"
-  ]
+  "why": "AGENTS.md: hex public keys are normalized to lowercase before routing or staging"
 }

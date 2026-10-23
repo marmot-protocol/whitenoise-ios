@@ -4,32 +4,5 @@
   "old": "            senderName: previewMode.revealsSenderIdentity ? senderName : nil,\n",
   "new": "            senderName: senderName,\n",
   "grep": "makePresentation",
-  "why": "AGENTS.md: generic preview mode must drop senderName so the sender never reaches the communication intent",
-  "suites": [
-    "ChatMuteStoreTests",
-    "ChatMuteSuppressionPolicyTests",
-    "MutedChatMentionsPolicyTests",
-    "MutedChatMentionsSettingsViewModelTests",
-    "ChatListMuteSwipeActionsTests",
-    "ChatNotifyModeStoreTests",
-    "ContactNicknameStoreTests",
-    "ContactNicknameOwnerGateTests",
-    "ContactNicknameResolutionTests",
-    "ContactNicknameNotificationProjectionTests",
-    "GiphyIntegrationTests",
-    "GiphyEnvelopePreviewTests",
-    "IdentityPresentationContractTests",
-    "IdentityPresentationAdapterTests",
-    "IdentitySubtitleNpubTests",
-    "NotificationActionRoutingTests",
-    "NotificationActionCategoryTests",
-    "NotificationPresentationTests",
-    "NotificationPreviewStoreTests",
-    "NotificationPreviewProjectionTests",
-    "NotificationPreviewServiceDecisionTests",
-    "NotificationPreviewCommunicationIntentTests",
-    "NotificationPreviewSettingsViewModelTests",
-    "NotificationPreviewExampleTests",
-    "NotificationServiceProjectionTests"
-  ]
+  "why": "AGENTS.md: generic preview mode must drop senderName so the sender never reaches the communication intent"
 }

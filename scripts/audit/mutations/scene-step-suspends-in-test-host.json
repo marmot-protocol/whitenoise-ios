@@ -4,8 +4,5 @@
   "old": "            startsRuntime ? .suspendRuntime : .markSceneInactive\n",
   "new": "            .suspendRuntime\n",
   "grep": "SceneRuntimeStep",
-  "why": "wave 1 host guard: a never-bootstrapped host must not start runtime suspension",
-  "suites": [
-    "AppLaunchPolicyTests"
-  ]
+  "why": "wave 1 host guard: a never-bootstrapped host must not start runtime suspension"
 }

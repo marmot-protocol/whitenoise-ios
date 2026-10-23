@@ -4,8 +4,5 @@
   "old": "        case .background:\n            .suspend\n",
   "new": "        case .background:\n            .remainInactive\n",
   "grep": "SceneRuntimeAction",
-  "why": "AGENTS.md: the app suspends the runtime on background",
-  "suites": [
-    "RuntimeOwnershipTests"
-  ]
+  "why": "AGENTS.md: the app suspends the runtime on background"
 }

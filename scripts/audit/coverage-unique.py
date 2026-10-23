@@ -7,15 +7,26 @@ first-party source lines (whitenoise-ios/, Shared/, NotificationServiceExtension
 with executionCount > 0, and writes build/audit/coverage-unique.csv with one row
 per suite:
 
-  suite, file, covered_lines, unique_lines, overlaps_with, max_jaccard, shared_file
+  suite, file, covered_lines, unique_lines, overlaps_with, max_jaccard,
+  shared_file, file_suites
 
-`unique_lines` are lines no other test file covers. Suites that share a test
-file share its coverage set (`shared_file` = 1) because one xcresult covers
-all of them; read those rows at file granularity. Coverage JSON is cached as
-<File>.coverage.json beside the bundle so reruns are cheap.
+Two corrections keep the numbers about test subjects rather than plumbing:
+- the host-launch baseline (the empty-selection `overhead` bundle: AppState
+  init, RootView, the bootstrap splash) is subtracted from every file;
+- lines covered by more than `--ubiquity` of all files (default 15%: L10n
+  lookups, hex/npub helpers, build-config reads) are excluded from
+  `unique_lines` and from the Jaccard overlap, otherwise every suite that
+  renders a localized string "overlaps" every other.
+
+`unique_lines` are remaining lines no other test file covers. Suites that share
+a test file share its coverage set (`shared_file` = 1) because one xcresult
+covers all of them; read those rows at file granularity. A file whose bundle
+covered no app line at all (disabled or skipped suites) gets empty cells, not
+zeros. Coverage JSON is cached as <File>.coverage.json beside the bundle and
+refreshed when the bundle is newer.
 
 Usage: python3 scripts/audit/coverage-unique.py [--dir build/audit/per-file]
-       [--out build/audit/coverage-unique.csv] [--top 3]
+       [--out build/audit/coverage-unique.csv] [--top 3] [--ubiquity 0.15]
 """
 import argparse
 import csv
@@ -27,12 +38,37 @@ import subprocess
 import sys
 from collections import defaultdict
 
-FIRST_PARTY = ("/whitenoise-ios/", "/Shared/", "/NotificationServiceExtension/")
-SUITE_RE = re.compile(r"^(?:@MainActor\s+)?(?:final\s+)?(?:struct|class|enum) (\w+Tests)\b", re.M)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import swiftscan  # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+FIRST_PARTY = ("whitenoise-ios/", "Shared/", "NotificationServiceExtension/")
+
+
+def relative_to_root(path):
+    """Repo-relative path for an absolute xccov path, anchored on the repo root
+    (falls back to the last first-party directory marker for foreign roots)."""
+    root = os.path.realpath(ROOT) + os.sep
+    real = os.path.realpath(path)
+    if real.startswith(root):
+        return real[len(root):]
+    m = re.search(r"/(whitenoise-ios|Shared|NotificationServiceExtension)/(?!.*/(whitenoise-ios|Shared|NotificationServiceExtension)/)", path)
+    return path[m.start() + 1:] if m else path
+
+
+def newest_mtime(bundle):
+    newest = os.path.getmtime(bundle)
+    for root, _, files in os.walk(bundle):
+        for name in files:
+            try:
+                newest = max(newest, os.path.getmtime(os.path.join(root, name)))
+            except OSError:
+                pass
+    return newest
 
 
 def covered_lines(bundle, cache):
-    if os.path.exists(cache):
+    if os.path.exists(cache) and (not os.path.exists(bundle) or os.path.getmtime(cache) >= newest_mtime(bundle)):
         with open(cache) as fh:
             return {tuple(x) for x in json.load(fh)}
     try:
@@ -44,10 +80,11 @@ def covered_lines(bundle, cache):
     data = json.loads(out)
     lines = set()
     for path, entries in data.items():
-        if not any(marker in path for marker in FIRST_PARTY) or "/SourcePackages/" in path:
+        if "/SourcePackages/" in path:
             continue
-        rel = path.split("/white-noise-ios/", 1)[-1] if "/white-noise-ios/" in path else path
-        rel = re.sub(r"^.*?/(whitenoise-ios|Shared|NotificationServiceExtension)/", r"\1/", rel)
+        rel = relative_to_root(path)
+        if not rel.startswith(FIRST_PARTY) or rel.startswith("whitenoise-iosTests/"):
+            continue
         for entry in entries:
             if entry.get("isExecutable") and entry.get("executionCount", 0) > 0:
                 lines.add((rel, entry["line"]))
@@ -62,31 +99,35 @@ def main():
     ap.add_argument("--out", default="build/audit/coverage-unique.csv")
     ap.add_argument("--tests-dir", default="whitenoise-iosTests")
     ap.add_argument("--top", type=int, default=3, help="how many overlapping files to list")
+    ap.add_argument("--ubiquity", type=float, default=0.15,
+                    help="exclude lines covered by more than this fraction of files from unique/overlap")
     args = ap.parse_args()
+    os.chdir(ROOT)
 
-    # Every process also executes the host app's launch path (AppState init,
-    # RootView, the bootstrap splash); the empty-selection `overhead` bundle
-    # covers exactly that, so subtract it or every file overlaps every other.
     baseline = set()
     overhead_bundle = os.path.join(args.dir, "overhead.xcresult")
     if os.path.isdir(overhead_bundle):
         baseline = covered_lines(overhead_bundle, os.path.join(args.dir, "overhead.coverage.json")) or set()
-    sets = {}
+    raw = {}
     for bundle in sorted(glob.glob(os.path.join(args.dir, "*.xcresult"))):
         label = os.path.basename(bundle)[:-len(".xcresult")]
         if label == "overhead":
             continue
         lines = covered_lines(bundle, os.path.join(args.dir, label + ".coverage.json"))
         if lines is not None:
-            sets[label] = lines - baseline
-    if not sets:
+            raw[label] = lines - baseline
+    if not raw:
         raise SystemExit("no coverage sets found")
-    print(f"host-launch baseline: {len(baseline)} lines subtracted from every file")
 
     counts = defaultdict(int)
-    for lines in sets.values():
+    for lines in raw.values():
         for line in lines:
             counts[line] += 1
+    threshold = args.ubiquity * len(raw)
+    ubiquitous = {line for line, n in counts.items() if n > threshold}
+    sets = {label: lines - ubiquitous for label, lines in raw.items()}
+    print(f"host-launch baseline: {len(baseline)} lines subtracted; "
+          f"{len(ubiquitous)} ubiquitous lines (covered by >{args.ubiquity:.0%} of {len(raw)} files) excluded")
 
     labels = sorted(sets)
     rows = []
@@ -99,29 +140,32 @@ def main():
                 continue
             inter = len(lines & sets[other])
             if inter:
-                union = len(lines | sets[other])
-                overlaps.append((inter / union, other))
+                overlaps.append((inter / len(lines | sets[other]), other))
         overlaps.sort(reverse=True)
         top = overlaps[:args.top]
         test_file = os.path.join(args.tests_dir, label + ".swift")
-        suites = SUITE_RE.findall(open(test_file).read()) if os.path.exists(test_file) else [label]
+        suites = [s.name for s in swiftscan.suites_in_file(test_file)] if os.path.exists(test_file) else [label]
+        covered_app = len(raw[label])
         for suite in suites or [label]:
             rows.append({
-                "suite": suite, "file": label + ".swift", "covered_lines": len(lines), "unique_lines": unique,
+                "suite": suite, "file": label + ".swift",
+                "covered_lines": len(lines) if covered_app else "", "unique_lines": unique if covered_app else "",
                 "overlaps_with": ";".join(f"{o}:{j:.2f}" for j, o in top),
                 "max_jaccard": f"{top[0][0]:.3f}" if top else "", "shared_file": int(len(suites) > 1),
+                "file_suites": len(suites),
             })
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", newline="") as fh:
-        w = csv.DictWriter(fh, lineterminator="\n", fieldnames=["suite", "file", "covered_lines", "unique_lines", "overlaps_with",
-                                           "max_jaccard", "shared_file"])
+        w = csv.DictWriter(fh, lineterminator="\n", fieldnames=[
+            "suite", "file", "covered_lines", "unique_lines", "overlaps_with", "max_jaccard", "shared_file", "file_suites"])
         w.writeheader()
         w.writerows(rows)
-    zero = [r["file"] for r in rows if r["unique_lines"] == 0 and r["covered_lines"] > 0]
+    zero = {r["file"] for r in rows if r["unique_lines"] == 0}
+    empty = {r["file"] for r in rows if r["covered_lines"] == ""}
     print(f"wrote {args.out}: {len(rows)} suite rows from {len(sets)} files; "
-          f"{len(set(zero))} files with zero unique covered lines")
-    for f in sorted(set(zero))[:40]:
+          f"{len(zero)} files with zero unique covered lines; {len(empty)} files covered no app line")
+    for f in sorted(zero)[:40]:
         print("  no unique lines:", f)
 
 
