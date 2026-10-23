@@ -78,14 +78,17 @@ struct MessageMediaThumbnailDecoderTests {
             throw writer.error ?? VideoThumbnailFixtureError.writerFailed
         }
         writer.startSession(atSourceTime: .zero)
-        // `isReadyForMoreMediaData` is key-value observable: wait for it
-        // instead of polling against a fixed budget.
-        let ready = TestLatch()
-        let readiness = input.observe(\.isReadyForMoreMediaData, options: [.initial, .new]) { @Sendable input, _ in
-            if input.isReadyForMoreMediaData { ready.signal() }
+        // The adaptor requires `isReadyForMoreMediaData` before every append, and
+        // it is key-value observable: wait for it instead of polling.
+        func waitUntilReady() async throws {
+            let ready = TestLatch()
+            let readiness = input.observe(\.isReadyForMoreMediaData, options: [.initial, .new]) { @Sendable input, _ in
+                if input.isReadyForMoreMediaData { ready.signal() }
+            }
+            defer { readiness.invalidate() }
+            try await ready.wait()
         }
-        defer { readiness.invalidate() }
-        try await ready.wait()
+        try await waitUntilReady()
         let firstBuffer = try makePixelBuffer(
             adaptor: adaptor,
             width: width,
@@ -94,6 +97,7 @@ struct MessageMediaThumbnailDecoderTests {
         guard adaptor.append(firstBuffer, withPresentationTime: .zero) else {
             throw writer.error ?? VideoThumbnailFixtureError.writerFailed
         }
+        try await waitUntilReady()
         let secondBuffer = try makePixelBuffer(
             adaptor: adaptor,
             width: width,
