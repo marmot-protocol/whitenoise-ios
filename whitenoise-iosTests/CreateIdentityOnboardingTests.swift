@@ -734,18 +734,19 @@ struct CreateIdentityOnboardingTests {
         draft.baselineAccountIDs = []
         draft.accountID = unknownID ? nil : "missing"
         try await store.save(draft)
-        let client = try MarmotClient.testClient()
-        let state = AppState.test(client: client, signUpDraftStore: store)
-        let unrelated = CreateIdentityServiceStub().identity
-        try await state.restoreSignUpIfNeeded(accounts: [unrelated], client: client)
-        #expect(state.hasRestoredSignUp)
-        #expect(state.restoreSignUpPresentation)
-        #expect(state.signUpModel.isRestorationBlocked)
-        #expect(!state.isUnfinishedSignUpAccount(unrelated.accountIdHex))
-        await state.signUpModel.persistDraft()
-        #expect(try await store.load() == draft)
-        #expect(await state.signUpModel.discardUnrestorableDraft())
-        #expect(try await store.load() == nil)
+        try await withTestClient { client in
+            let state = AppState.test(client: client, signUpDraftStore: store)
+            let unrelated = CreateIdentityServiceStub().identity
+            try await state.restoreSignUpIfNeeded(accounts: [unrelated], client: client)
+            #expect(state.hasRestoredSignUp)
+            #expect(state.restoreSignUpPresentation)
+            #expect(state.signUpModel.isRestorationBlocked)
+            #expect(!state.isUnfinishedSignUpAccount(unrelated.accountIdHex))
+            await state.signUpModel.persistDraft()
+            #expect(try await store.load() == draft)
+            #expect(await state.signUpModel.discardUnrestorableDraft())
+            #expect(try await store.load() == nil)
+        }
     }
 
     @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
@@ -787,16 +788,20 @@ struct CreateIdentityOnboardingTests {
         var draft = SignUpDraft()
         draft.stage = .setup
         try await store.save(draft)
-        let previousClient = try MarmotClient.testClient()
-        let state = AppState.test(client: try MarmotClient.testClient(), signUpDraftStore: store)
+        try await withTestClient { previousClient in
+            try await withTestClient { client in
+                let state = AppState.test(client: client, signUpDraftStore: store)
 
-        await #expect(throws: CancellationError.self) {
-            try await state.restoreSignUpIfNeeded(accounts: [], client: previousClient)
+                await #expect(throws: CancellationError.self) {
+                    try await state.restoreSignUpIfNeeded(accounts: [], client: previousClient)
+                }
+                #expect(!state.hasRestoredSignUp)
+                #expect(!state.restoreSignUpPresentation)
+                #expect(!state.signUpModel.isRestorationBlocked)
+                let saved = try await store.load()
+                #expect(saved == draft)
+            }
         }
-        #expect(!state.hasRestoredSignUp)
-        #expect(!state.restoreSignUpPresentation)
-        #expect(!state.signUpModel.isRestorationBlocked)
-        #expect(try await store.load() == draft)
     }
 
     @Test func pendingTextEditsFlushTogetherAndPreserveThePhoto() async throws {

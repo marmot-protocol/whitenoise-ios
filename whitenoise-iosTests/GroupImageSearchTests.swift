@@ -25,10 +25,12 @@ struct GroupImageSearchTests {
     @Test func groupImageThumbnailLoadsStayWithinConcurrencyLimit() async {
         let limiter = CancellableLoadLimiter(maximumConcurrentLoads: 4)
         let probe = ConcurrentLoadProbe()
-        // Each load holds its permit until four are active at once, so the
-        // peak is reached by construction rather than by a sleep overlapping.
-        // A limiter that admitted fewer would time out here (in seconds, not
-        // once per queued load at the 30 s default) and report a lower peak.
+        // Each load holds its permit until four are active at once, and the
+        // load that reaches four keeps holding until the other sixteen are
+        // queued, so a limiter that admitted a fifth load would do so while all
+        // four permits are still held and report a higher peak. A limiter that
+        // admitted fewer would time out here (in seconds, not once per queued
+        // load at the 30 s default) and report a lower peak.
         let saturated = TestLatch()
 
         let peak = await withTaskGroup(of: Int.self, returning: Int.self) { group in
@@ -36,7 +38,12 @@ struct GroupImageSearchTests {
                 group.addTask {
                     guard let reservation = await limiter.acquire() else { return 0 }
                     let active = await probe.begin()
-                    if active >= 4 { saturated.signal() }
+                    if active == 4 && !saturated.isSignalled {
+                        try? await eventually(timeout: .seconds(5)) {
+                            await limiter.snapshot().waiting == 16
+                        }
+                        saturated.signal()
+                    }
                     try? await saturated.wait(timeout: .seconds(5))
                     await probe.end()
                     await limiter.release(reservation)
