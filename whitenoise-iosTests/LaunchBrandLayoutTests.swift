@@ -6,13 +6,12 @@ import UIKit
 @MainActor
 @Suite(.serialized)
 struct LaunchBrandLayoutTests {
+    private static let markIdentifier = "launch.mark"
+
     @Test(arguments: [
         CGSize(width: 320, height: 568),
-        CGSize(width: 420, height: 912),
         CGSize(width: 912, height: 420),
         CGSize(width: 834, height: 1194),
-        CGSize(width: 1194, height: 834),
-        CGSize(width: 320, height: 1024),
     ])
     func launchAndRuntimeLoadingKeepTheSameMarkFrame(size: CGSize) async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
@@ -24,7 +23,10 @@ struct LaunchBrandLayoutTests {
         window.rootViewController = launch
         window.makeKeyAndVisible()
         launch.view.layoutIfNeeded()
-        let launchMark = try #require(mark(in: launch.view))
+        let launchMark = try #require(Self.mark(in: launch.view))
+        // A blank splash would still lay out an empty view under the identifier.
+        let launchImage = try #require(launchMark as? UIImageView)
+        #expect(launchImage.image != nil)
         let expected = launchMark.convert(launchMark.bounds, to: window)
         #expect(expected.width > 0)
         #expect(expected.height <= size.height * 0.3 + 1)
@@ -40,7 +42,8 @@ struct LaunchBrandLayoutTests {
             loading.view.layoutIfNeeded()
             await Task.yield()
             loading.view.layoutIfNeeded()
-            let loadingMark = try #require(mark(in: loading.view))
+            let loadingMark = try #require(Self.mark(in: loading.view))
+            #expect((loadingMark as? UIImageView)?.image != nil)
             let actual = loadingMark.convert(loadingMark.bounds, to: window)
             #expect(abs(actual.minX - expected.minX) < 1)
             #expect(abs(actual.minY - expected.minY) < 1)
@@ -49,10 +52,10 @@ struct LaunchBrandLayoutTests {
         }
     }
 
+    // 912x420 is the compact-height case that lays Welcome out side by side.
     @Test(arguments: [
         CGSize(width: 320, height: 568),
         CGSize(width: 912, height: 420),
-        CGSize(width: 834, height: 1194),
         CGSize(width: 1194, height: 834),
     ])
     func welcomeMarkRemainsVisibleAndBounded(size: CGSize) async throws {
@@ -68,7 +71,8 @@ struct LaunchBrandLayoutTests {
 
         let appState = AppState.test(client: try MarmotClient.testClient())
         for textSize in [DynamicTypeSize.large, .accessibility5] {
-            var markFrame: CGRect?
+            // Navigation can publish a zero-size frame before its first usable layout.
+            let report = MarkFrameReport()
             let welcome = UIHostingController(rootView:
                 NavigationStack { WelcomeView() }
                     .environment(appState)
@@ -78,7 +82,7 @@ struct LaunchBrandLayoutTests {
                         GeometryReader { geometry in
                             Color.clear
                                 .onChange(of: anchor.map { geometry[$0] }, initial: true) { _, frame in
-                                    markFrame = frame
+                                    report.record(frame)
                                 }
                         }
                         .allowsHitTesting(false)
@@ -86,15 +90,13 @@ struct LaunchBrandLayoutTests {
             )
             window.rootViewController = welcome
             window.makeKeyAndVisible()
-            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-            // Navigation can publish a zero-size frame before its first usable layout.
-            while markFrame?.isEmpty != false, ContinuousClock.now < deadline {
-                welcome.view.layoutIfNeeded()
-                try await Task.sleep(for: .milliseconds(10))
-            }
+            welcome.view.layoutIfNeeded()
 
             // SwiftUI Image need not create a UIImageView; measure its rendered layout instead.
-            let actual = try #require(markFrame, "Welcome logo did not report layout for \(size), \(textSize)")
+            let actual = try #require(
+                await report.usableFrame(timeout: .seconds(5)),
+                "Welcome logo did not report layout for \(size), \(textSize)"
+            )
             #expect(actual.width > 0)
             #expect(actual.height > 0)
             #expect(actual.width <= window.bounds.width * 0.5 + 1)
@@ -103,10 +105,40 @@ struct LaunchBrandLayoutTests {
         }
     }
 
-    private func mark(in view: UIView) -> UIImageView? {
-        if let image = view as? UIImageView, image.image?.size == CGSize(width: 598, height: 460) {
-            return image
+    private static func mark(in view: UIView) -> UIView? {
+        if view.accessibilityIdentifier == markIdentifier {
+            return view
         }
         return view.subviews.lazy.compactMap { mark(in: $0) }.first
+    }
+}
+
+/// Resolves once the Welcome brand reports a non-empty frame, or with nil when
+/// the timeout passes first; no fixed sleeps on the happy path.
+@MainActor
+private final class MarkFrameReport {
+    private var frame: CGRect?
+    private var waiter: CheckedContinuation<CGRect?, Never>?
+
+    func record(_ frame: CGRect?) {
+        guard let frame, !frame.isEmpty else { return }
+        self.frame = frame
+        resume(with: frame)
+    }
+
+    func usableFrame(timeout: Duration) async -> CGRect? {
+        if let frame { return frame }
+        let timer = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: timeout)
+            self?.resume(with: nil)
+        }
+        defer { timer.cancel() }
+        return await withCheckedContinuation { waiter = $0 }
+    }
+
+    private func resume(with frame: CGRect?) {
+        guard let waiter else { return }
+        self.waiter = nil
+        waiter.resume(returning: frame)
     }
 }

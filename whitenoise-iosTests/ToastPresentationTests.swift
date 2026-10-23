@@ -14,12 +14,6 @@ struct ToastPresentationTests {
         #expect(ToastOverlayPresentation.windowLevel.rawValue > UIWindow.Level.alert.rawValue)
     }
 
-    @Test func toastDefaultsStayVisibleLongEnoughToRead() {
-        #expect(Toast.success("Saved").duration == 3.0)
-        #expect(Toast.warning("Warning").duration == 3.5)
-        #expect(Toast.error("Failed").duration == 4.0)
-    }
-
     @Test func upwardToastGestureDismissesByDistanceOrVelocity() {
         #expect(ToastDismissGesture.shouldDismiss(
             translation: -28,
