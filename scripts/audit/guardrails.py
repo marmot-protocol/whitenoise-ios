@@ -62,6 +62,15 @@ SLEEP_EXEMPT = frozenset({
     ("MarmotFixtureWatchdog.swift", "MarmotFixtureWatchdog"),
     ("AppStateTestFactory.swift", "test"),     # AppState.test's default runtimeRetrySleeper
 })
+# The bounded waits stay exempt only while their body still uses a timeout or
+# deadline (not just declares the parameter); an `eventually` that ignores its
+# timeout polls forever and its sleep counts.
+TIMEOUT_BOUNDED = frozenset({"TestLatch", "eventually"})
+TIMEOUT_USE = re.compile(r"\b(?:timeout|deadline)\b(?!\s*:)")
+
+
+def enforces_timeout(code):
+    return bool(TIMEOUT_USE.search(code))
 
 
 class Range:
@@ -78,7 +87,9 @@ class Range:
         return SUPPORT_DIR in pathlib.Path(self.path).parts
 
     def sleep_exempt(self):
-        return self.in_support() and (pathlib.Path(self.path).name, self.name) in SLEEP_EXEMPT
+        if not (self.in_support() and (pathlib.Path(self.path).name, self.name) in SLEEP_EXEMPT):
+            return False
+        return self.name not in TIMEOUT_BOUNDED or enforces_timeout(self.masked.code[self.start:self.end])
 
 
 class Violation:

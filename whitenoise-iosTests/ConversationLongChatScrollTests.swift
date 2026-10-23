@@ -322,7 +322,7 @@ private struct LongChatScrollHarness: View {
 }
 
 @MainActor
-@Suite(.serialized, .tags(.runtime, .uiHosting), .marmotRuntimeConcurrencyLimit)
+@Suite(.serialized, .tags(.runtime, .uiHosting), .marmotRuntimeConcurrencyLimit, .closesTestRuntimes)
 struct ConversationLongChatScrollTests {
     private static let settleTimeout = Duration.seconds(20)
 
@@ -350,7 +350,9 @@ struct ConversationLongChatScrollTests {
         #expect(MessageBodyCollapsePresentation.shouldCollapse(fixture.rows.last?.initialRecord.plaintext ?? ""))
 
         let model = LongChatStressModel()
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = try TestRuntimeScope.own(AppState.test(
+            client: TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot: true)
+        ))
         var lastViewport: TimelineBottomViewport?
         var visibleTargets = Set<String>()
         var olderPageRequests = 0

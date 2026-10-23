@@ -13,14 +13,9 @@ struct VideoPlaybackLeaseActionTests {
     }
 
     @Test func pausedWithLeaseReleases() {
-        // User pause via the system transport control leaves the player paused;
-        // the active `.playback`/`.moviePlayback` lease must be released.
-        #expect(VideoPlaybackLeaseAction.resolve(status: .paused, hasLease: true) == .release)
-    }
-
-    @Test func endOfItemReleasesHeldLease() {
-        // Reaching end-of-item also leaves the player in `.paused`, so the lease
-        // must be released rather than left active indefinitely after playback.
+        // User pause via the system transport control and reaching end-of-item
+        // both leave the player paused; the active `.playback`/`.moviePlayback`
+        // lease must be released rather than left active after playback.
         #expect(VideoPlaybackLeaseAction.resolve(status: .paused, hasLease: true) == .release)
     }
 

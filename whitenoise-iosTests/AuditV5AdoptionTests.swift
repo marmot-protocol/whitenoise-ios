@@ -4,7 +4,6 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AuditV5AdoptionTests {
     @Test func auditOtlpConfigIsDisabledWithoutAToken() {
         let config = Self.telemetry(auditToken: nil).auditOtlpConfig()
@@ -24,7 +23,8 @@ struct AuditV5AdoptionTests {
     }
 
     // A destination the native runtime refused would silently disable audit export.
-    @Test func nativeRuntimeAcceptsTheAppAuditDestination() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func nativeRuntimeAcceptsTheAppAuditDestination() async throws {
         let client = try MarmotClient.testClient()
         defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
         do {
@@ -41,7 +41,8 @@ struct AuditV5AdoptionTests {
         }
     }
 
-    @Test func runtimeStartsWhenTheAuditDestinationIsRejected() async throws {
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    func runtimeStartsWhenTheAuditDestinationIsRejected() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         var config = Self.telemetry(auditToken: "audit-token")

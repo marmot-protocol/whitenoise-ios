@@ -261,8 +261,10 @@ final class TestLatch: Sendable {
 }
 
 func eventually(timeout: Duration = .seconds(30), _ condition: () async throws -> Bool) async throws {
+    let deadline = ContinuousClock.now.advanced(by: timeout)
     while true {
         if try await condition() { return }
+        guard ContinuousClock.now < deadline else { throw CancellationError() }
         try await Task.sleep(for: .milliseconds(5))
     }
 }
@@ -303,6 +305,14 @@ class BoundedWaitHelperTests(unittest.TestCase):
         self.assertEqual(latch["sleep_sites"], 0)
         self.assertEqual(latch["poll_loops"], 1)  # eventually still polls, boundedly
         self.assertEqual(rows["PausingTests"]["sleep_sites"], 1)  # other TestSupport sleeps still count
+
+    def test_a_wait_helper_that_ignores_its_timeout_still_counts(self):
+        unbounded = WAIT_HELPERS_FILE.replace(
+            "    let deadline = ContinuousClock.now.advanced(by: timeout)\n", "").replace(
+            "        guard ContinuousClock.now < deadline else { throw CancellationError() }\n", "")
+        self.assertNotIn("deadline", unbounded)
+        rows = self.rows({"TestSupport/TestLatch.swift": unbounded, "WaitingTests.swift": WAITING_SUITES})
+        self.assertEqual(rows["LatchTests"]["sleep_sites"], 1)  # eventually's sleep; TestLatch still exempt
 
     def test_the_exemption_needs_the_testsupport_directory(self):
         rows = self.rows({"Waits.swift": WAIT_HELPERS_FILE, "WaitingTests.swift": WAITING_SUITES})

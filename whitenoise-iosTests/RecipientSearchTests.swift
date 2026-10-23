@@ -281,14 +281,15 @@ struct RecipientSearchTests {
             )
         }
 
-        try await follows.entered.wait()
+        // Waits match the 5-minute limit's CI allowance, not the 30 s default.
+        try await follows.entered.wait(timeout: .seconds(240))
         await model.awaitSearchForTesting()
 
         #expect(model.results == [result])
         #expect(!model.isSearching)
 
         follows.released.signal()
-        try await eventually {
+        try await eventually(timeout: .seconds(240)) {
             model.followedAccountIds == [self.alice]
                 && model.candidates.first?.isFollowedBySearcher == true
         }

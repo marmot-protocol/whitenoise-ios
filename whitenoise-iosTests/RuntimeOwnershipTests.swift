@@ -92,7 +92,7 @@ private actor RuntimeRetryGate {
 }
 
 @MainActor
-@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
+@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit, .closesTestRuntimes)
 struct RuntimeOwnershipTests {
     // The native cancellation test for the handwritten CancellablePresentedChatList
     // adapter (AGENTS.md, Rust Bindings): keep it and run it on every binding refresh.
@@ -373,11 +373,11 @@ struct RuntimeOwnershipTests {
     }
 
     @Test func userInitiatedMutationJoinsForegroundRuntimeRebuild() async throws {
-        let appState = AppState.test(
-            client: try MarmotClient.testClient(),
+        let appState = try TestRuntimeScope.own(AppState.test(
+            client: TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot: true),
             notifications: runtimeOwnershipDeniedNotifications(),
             accountDefaults: IsolatedAccountDefaults.make()
-        )
+        ))
         await appState.bootstrap()
         _ = try await appState.createIdentity()
         await appState.startRuntimeSuspension().value
