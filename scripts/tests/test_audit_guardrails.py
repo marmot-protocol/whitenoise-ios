@@ -24,8 +24,9 @@ final class TestRuntimeScope {
     static func own(_ client: MarmotClient) throws -> MarmotClient { client }
 }
 ''',
-    "TestSupport/TestLatch.swift": '''func eventually(_ condition: () -> Bool) async throws {
-    while !condition() { try await Task.sleep(for: .milliseconds(5)) }
+    "TestSupport/TestLatch.swift": '''func eventually(timeout: Duration = .seconds(30), _ condition: () -> Bool) async throws {
+    let deadline = ContinuousClock.now.advanced(by: timeout)
+    while !condition() && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
 }
 func settleBriefly() async throws {
     try await Task.sleep(for: .milliseconds(5))
@@ -152,6 +153,17 @@ final class LayoutTests: XCTestCase {
     }
 }
 '''})
+
+    def test_a_wait_helper_that_ignores_its_timeout_is_not_exempt(self):
+        unbounded = TEST_SUPPORT["TestSupport/TestLatch.swift"].replace(
+            "    let deadline = ContinuousClock.now.advanced(by: timeout)\n", "").replace(
+            " && ContinuousClock.now < deadline", "")
+        self.assertFails({"TestSupport/TestLatch.swift": unbounded, "ATests.swift": '''struct ATests {
+    @Test func waits() async throws {
+        try await eventually { true }
+    }
+}
+'''}, "sleep", "ATests")
 
     def test_a_new_testsupport_helper_that_sleeps_fails(self):
         self.assertFails({"ATests.swift": '''struct ATests {

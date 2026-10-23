@@ -131,7 +131,8 @@ per suite (`scripts/audit/guardrails.py`, fixtures in
   instead;
 - `sleep`: no `Task.sleep` except in the named bounded-wait helpers
   (`TestLatch`, `eventually`, `settleLayout`, `MarmotFixtureWatchdog`,
-  `AppState.test`'s production-backoff default sleeper);
+  `AppState.test`'s production-backoff default sleeper); `TestLatch` and
+  `eventually` stay exempt only while their bodies use their timeout;
 - `unowned-runtime`: a direct `testClient()`/`MarmotClient(rootPath:)` is
   wrapped in `TestRuntimeScope.own` or `closing`;
 - `timelimit-gate`: no `.timeLimit` on a test under

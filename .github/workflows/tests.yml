@@ -39,13 +39,16 @@ permissions:
   contents: read
 
 # The nightly run has its own group so it never replaces a pending master
-# push run (a group keeps one pending run).
+# push run (a group keeps one pending run). A pull request label other than
+# full-tests gets a group of its own, so its (skipped) run never cancels the
+# branch's active run; the job's `if` below skips it.
 concurrency:
-  group: tests-${{ github.event_name == 'schedule' && 'nightly' || github.ref }}
+  group: tests-${{ github.event_name == 'schedule' && 'nightly' || (github.event.action == 'labeled' && github.event.label.name != 'full-tests' && github.run_id) || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   test:
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-tests'
     runs-on: macos-15
     # Allow runner setup and artifact upload around the bounded 40-minute test step.
     timeout-minutes: 55
@@ -85,7 +88,9 @@ jobs:
               tier=full
               echo "full-tests label: full tier"
             else
-              changed="$(git diff --name-only HEAD^1 HEAD)"
+              # --no-renames lists both sides of a move, so moving a file out
+              # of a forced path still forces the full tier.
+              changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
               forced="$(printf '%s\n' "$changed" | grep -E '^(Packages/|Shared/|NotificationServiceExtension/|whitenoise-ios/Core/|whitenoise-ios/Onboarding/|whitenoise-iosTests/TestSupport/)' || true)"
               if [ -n "$forced" ]; then
                 tier=full

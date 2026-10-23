@@ -89,13 +89,15 @@ class HelperDecl(collections.namedtuple("HelperDecl", "path masked start end mem
 
 # Shared bounded-wait helpers in TestSupport. Their internal Task.sleep is a
 # timeout or back-off, not a fixed delay the suite depends on, so it is not
-# charged to the suites that wait through them.
+# charged to the suites that wait through them, as long as the body still
+# uses its timeout (guardrails.enforces_timeout).
 BOUNDED_WAIT_HELPERS = frozenset({"TestLatch", "eventually"})
 BOUNDED_WAIT_DIR = "TestSupport"
 
 
 def is_bounded_wait_helper(helper):
-    return helper.name in BOUNDED_WAIT_HELPERS and pathlib.Path(helper.path).parent.name == BOUNDED_WAIT_DIR
+    return (helper.name in BOUNDED_WAIT_HELPERS and pathlib.Path(helper.path).parent.name == BOUNDED_WAIT_DIR
+            and guardrails.enforces_timeout(helper.masked.code[helper.start:helper.end]))
 
 
 def helper_index(masks, suite_names):
