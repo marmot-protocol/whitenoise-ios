@@ -55,14 +55,19 @@ out="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 tier="$(head -n 1 build/test-tier 2>/dev/null || echo unknown)"
 case "$tier" in
   pr)
-    python3 - TestPlans/PR.xctestplan >> "$out" <<'PY' || echo "**Tier:** pr" >> "$out"
+    python3 - TestPlans/PR.xctestplan whitenoise-iosTests >> "$out" <<'PY' || echo "**Tier:** pr" >> "$out"
 import json, sys
+sys.path.insert(0, "scripts/audit")
+import swiftscan
 plan = json.load(open(sys.argv[1]))
 entries = [e for t in plan["testTargets"] for e in t.get("skippedTests", [])]
-suites = sorted({e for e in entries if "/" not in e})
-tests = [e for e in entries if "/" in e]
-print("**Tier:** pr (`TestPlans/PR.xctestplan`): %d suites skipped, plus %d tests in otherwise running suites\n"
-      % (len(suites), len(tests)))
+xctest = {s.name for s in swiftscan.collect_suites(sys.argv[2])[0] if s.framework == "XCTest"}
+classes = sorted(e for e in entries if e in xctest)
+suites = sorted(e for e in entries if "/" not in e and e not in xctest)
+nested = [e for e in entries if e.count("/") == 1 and not e.endswith(")")]
+tests = [e for e in entries if "/" in e and e not in nested]
+print("**Tier:** pr (`TestPlans/PR.xctestplan`): skips %d Swift Testing suites, %d nested suites, %d single "
+      "tests and %d XCTest classes\n" % (len(suites), len(nested), len(tests), len(classes)))
 PY
     ;;
   full) printf '**Tier:** full (`TestPlans/Full.xctestplan`): 0 suites skipped\n\n' >> "$out" ;;
