@@ -11,7 +11,6 @@ sleep ConversationHeaderBarLayoutTests 1
 sleep ConversationTailVisibilityTests 1
 sleep ConversationTimelineProjectionTests 2
 sleep LaunchBrandLayoutTests 1
-sleep MessageSemanticsTests 1
 sleep PollVotesModelTests 1
 sleep PresentedChatListTests 2
 sleep PrivateKeyPasteTests 1

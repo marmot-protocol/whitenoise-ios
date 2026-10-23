@@ -611,10 +611,14 @@ struct NotificationServiceProjectionTests {
             )
         }
         let summaries = NotificationPresentationPolicy.overflowSummaryPresentations(from: updates)
-        #expect(summaries.count == NotificationPresentationPolicy.maxOverflowSummaries)
-        // Every folded conversation stays represented: per-route counts plus
-        // the aggregate tail account for all 30 records.
-        #expect(summaries.count <= updates.count)
+        let cap = NotificationPresentationPolicy.maxOverflowSummaries
+        #expect(summaries.count == cap)
+        // Every folded conversation stays represented: one record per route
+        // summary plus the aggregate tail account for all 30 records.
+        let tail = updates.count - (cap - 1)
+        #expect(summaries.map(\.body)
+            == Array(repeating: L10n.plural("%lld more messages", Int64(1)), count: cap - 1)
+            + [L10n.plural("%lld more messages", Int64(tail))])
     }
 
     @Test func overflowSummariesCarryTheOrOfTheirMembersMentionBits() {
