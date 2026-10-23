@@ -177,6 +177,10 @@ struct ChatSurfacePresentationTests {
         #expect(ChatBubbleMetrics.regularMaximumWidth == 560)
     }
 
+    @Test func replyPreviewCloseControlClearsTheAppleMinimumTapTarget() {
+        #expect(ReplyPreviewLayout.closeHitSize >= 44)
+    }
+
     @Test func singleEmojiMessagesUseStickerPresentation() {
         #expect(SingleEmojiMessagePresentation.emoji(in: "😀") == "😀")
         #expect(SingleEmojiMessagePresentation.emoji(in: "  ❤️\n") == "❤️")
