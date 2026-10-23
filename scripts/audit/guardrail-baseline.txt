@@ -6,7 +6,6 @@
 
 sleep AppStateBootstrapTests 2
 sleep PollVotesModelTests 1
-sleep PresentedChatListTests 1
 
 unowned-runtime AuditV5AdoptionTests 2
 unowned-runtime CancellableSubscriptionAdapterTests 1
