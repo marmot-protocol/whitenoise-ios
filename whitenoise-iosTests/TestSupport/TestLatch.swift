@@ -119,3 +119,20 @@ func eventually(
         }
     }
 }
+
+/// Stands in for a long backoff or wait that the code under test must
+/// cancel: suspends until the current task is cancelled, then throws
+/// `CancellationError` as `Task.sleep` would. Throws `TestWaitTimeout` when
+/// no cancellation arrives within `timeout`.
+func parkUntilCancelled(
+    timeout: Duration = TestLatch.defaultTimeout,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
+    let cancelled = TestLatch()
+    try await withTaskCancellationHandler {
+        try await cancelled.wait(timeout: timeout, sourceLocation: sourceLocation)
+    } onCancel: {
+        cancelled.signal()
+    }
+    try Task.checkCancellation()
+}

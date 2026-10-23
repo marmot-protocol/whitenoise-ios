@@ -7,12 +7,10 @@
 sleep AppStateBootstrapTests 2
 sleep ConversationHeaderBarLayoutTests 1
 sleep ConversationTailVisibilityTests 1
-sleep ConversationTimelineProjectionTests 1
 sleep LaunchBrandLayoutTests 1
 sleep PollVotesModelTests 1
 sleep PresentedChatListTests 1
 sleep PrivateKeyPasteTests 1
-sleep TimelineTailRefreshTaskLifetimeTests 3
 
 unowned-runtime AuditV5AdoptionTests 2
 unowned-runtime CancellableSubscriptionAdapterTests 1

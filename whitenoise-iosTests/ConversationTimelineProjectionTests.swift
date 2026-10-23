@@ -1028,7 +1028,7 @@ struct ConversationTimelineProjectionTests {
                 },
                 sleep: { _ in
                     enteredRetrySleep = true
-                    try await Task.sleep(nanoseconds: 60_000_000_000)
+                    try await parkUntilCancelled()
                 }
             )
             let retryTask = Task { @MainActor in
