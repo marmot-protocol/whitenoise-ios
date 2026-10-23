@@ -4,5 +4,7 @@
 # `python3 scripts/audit/inventory.py --write-baseline`; never raise a count to
 # land new code, fix the suite instead.
 
+# Two tests check that a background suspension is still pending while bootstrap
+# or a notification-action lease holds it; observing that it parked needs a
+# production test hook in RuntimeLifecycle.
 sleep AppStateBootstrapTests 2
-
