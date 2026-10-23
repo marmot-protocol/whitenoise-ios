@@ -111,7 +111,7 @@ struct CreateIdentityOnboardingTests {
     @Test func lateSuggestionDoesNotOverwriteTyping() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeSuggestionReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeSuggestionReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         let preparation = Task { await model.prepare(using: service) }
         try await gate.entered.wait()
@@ -125,7 +125,7 @@ struct CreateIdentityOnboardingTests {
     @Test func cancelledPreparationCannotChangeDraftOrCreateAccount() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeSuggestionReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeSuggestionReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         let preparation = Task { await model.prepare(using: service) }
         try await gate.entered.wait()
@@ -149,7 +149,7 @@ struct CreateIdentityOnboardingTests {
     @Test func repeatedSubmissionDuringCreationDoesNotCreateOrCompleteTwice() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeCreateReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeCreateReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         model.displayName = "Alice"
         model.setAvatarDraft(Self.avatarDraft)
@@ -270,7 +270,7 @@ struct CreateIdentityOnboardingTests {
     @Test func submitWaitsForNetworkSetupBeforeUploadingOrPublishing() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeReadinessReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeReadinessReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         model.displayName = "Alice"
         model.setAvatarDraft(Self.avatarDraft)
@@ -319,7 +319,7 @@ struct CreateIdentityOnboardingTests {
     @Test func cancellationDuringAccountReadDoesNotCreateAnIdentity() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeAccountsReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeAccountsReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         model.displayName = "Alice"
         let submission = Task { await model.submit(using: service) {} }
@@ -341,7 +341,7 @@ struct CreateIdentityOnboardingTests {
     @Test func cancellationDuringSetupDoesNotSaveOrActivateAndCanRetry() async throws {
         let gate = (entered: TestLatch(), released: TestLatch())
         let service = CreateIdentityServiceStub()
-        service.beforeReadinessReturn = { gate.entered.signal(); try? await gate.released.wait() }
+        service.beforeReadinessReturn = { gate.entered.signal(); await gate.released.hold() }
         let model = CreateIdentityViewModel()
         model.displayName = "Alice"
         let submission = Task { await model.submit(using: service) {} }
@@ -440,7 +440,7 @@ struct CreateIdentityOnboardingTests {
         let waiting = Task {
             try await IdentitySetupReadinessWaiter.wait {
                 gate.entered.signal()
-                try? await gate.released.wait()
+                try await gate.released.wait()
                 return .networkReady
             }
         }
@@ -454,7 +454,7 @@ struct CreateIdentityOnboardingTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = SignUpDraftStore(directory: directory)
-        let appState = AppState.test(client: nil, notifications: .shared, signUpDraftStore: store)
+        let appState = AppState.test(client: nil, signUpDraftStore: store)
         await appState.openSignUpDraft()
         let model = appState.signUpModel
         model.displayName = "Alice"
@@ -479,7 +479,7 @@ struct CreateIdentityOnboardingTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = SignUpDraftStore(directory: directory)
-        let appState = AppState.test(client: nil, notifications: .shared, signUpDraftStore: store)
+        let appState = AppState.test(client: nil, signUpDraftStore: store)
         await appState.openSignUpDraft()
         let model = appState.signUpModel
         model.displayName = "Alice"
@@ -683,7 +683,7 @@ struct CreateIdentityOnboardingTests {
         try invalid.write(to: file)
         try await withTestClient { client in
             try await client.startRuntime()
-            let state = AppState.test(client: client, notifications: .shared,
+            let state = AppState.test(client: client,
                                  signUpDraftStore: SignUpDraftStore(directory: directory))
             try await state.refreshAccounts(refreshUnreadSummaries: false)
             #expect(state.hasRestoredSignUp)
@@ -708,7 +708,7 @@ struct CreateIdentityOnboardingTests {
         try Data("broken".utf8).write(to: file)
         try await withTestClient { client in
             try await client.startRuntime()
-            let state = AppState.test(client: client, notifications: .shared,
+            let state = AppState.test(client: client,
                                       signUpDraftStore: SignUpDraftStore(directory: directory))
             try await state.refreshAccounts(refreshUnreadSummaries: false)
             #expect(state.signUpModel.isRestorationBlocked)
@@ -734,7 +734,7 @@ struct CreateIdentityOnboardingTests {
         draft.accountID = unknownID ? nil : "missing"
         try await store.save(draft)
         let client = try MarmotClient.testClient()
-        let state = AppState.test(client: client, notifications: .shared, signUpDraftStore: store)
+        let state = AppState.test(client: client, signUpDraftStore: store)
         let unrelated = CreateIdentityServiceStub().identity
         try await state.restoreSignUpIfNeeded(accounts: [unrelated], client: client)
         #expect(state.hasRestoredSignUp)
@@ -758,7 +758,7 @@ struct CreateIdentityOnboardingTests {
         draft.accountRef = identity.label
         try await store.save(draft)
         try await withTestClient { client in
-            let state = AppState.test(client: client, notifications: .shared, signUpDraftStore: store)
+            let state = AppState.test(client: client, signUpDraftStore: store)
             try await client.startRuntime()
             // The stale account list names an identity absent from this runtime's store.
             await #expect(throws: (any Error).self) {

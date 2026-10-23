@@ -4,7 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+@Suite(.tags(.uiHosting))
 struct AvatarViewerZoomTests {
     @Test func hostedAvatarViewerZoomsLikeTheMediaViewer() async throws {
         let host = UIHostingController(rootView: WNAvatarViewer { size in

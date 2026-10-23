@@ -13,21 +13,36 @@ extension MarmotClient {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("MarmotTests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
-        return try MarmotClient(rootPath: tmp.path, relayUrls: relayUrls)
+        do {
+            return try MarmotClient(rootPath: tmp.path, relayUrls: relayUrls)
+        } catch {
+            try? FileManager.default.removeItem(at: tmp)
+            throw error
+        }
     }
 }
 
 /// Runs `body` with a fresh `MarmotClient.testClient()`, then shuts the
-/// runtime down and removes its temporary root, whether `body` returns or
-/// throws.
+/// runtime down whether `body` returns or throws. The temporary root is
+/// removed only after a successful shutdown.
 func withTestClient<T>(
     relayUrls: [String] = MarmotClient.unreachableTestRelays,
     isolation: isolated (any Actor)? = #isolation,
     _ body: (MarmotClient) async throws -> T
 ) async throws -> T {
     let client = try MarmotClient.testClient(relayUrls: relayUrls)
-    defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
-    return try await closing(client) { try await body(client) }
+    let result: T
+    do {
+        result = try await body(client)
+    } catch {
+        if (try? await client.marmot.shutdownAndClose()) != nil {
+            try? FileManager.default.removeItem(atPath: client.rootPath)
+        }
+        throw error
+    }
+    try await client.marmot.shutdownAndClose()
+    try? FileManager.default.removeItem(atPath: client.rootPath)
+    return result
 }
 
 /// Runs `body`, then shuts `client` down whether `body` returns or throws. A
@@ -50,8 +65,9 @@ func closing<T>(
 }
 
 /// Stored-property shape for fixtures that keep a runtime across helper
-/// calls. `close()` shuts the runtime down once and then removes the root.
-/// The root is never removed while the runtime may still be open.
+/// calls. `close()` shuts the runtime down once and removes the root only
+/// after that shutdown succeeds, so a runtime that may still be open never
+/// loses its files.
 final class OwnedTestClient: Sendable {
     let client: MarmotClient
     private let closed = Mutex(false)
@@ -62,7 +78,7 @@ final class OwnedTestClient: Sendable {
 
     func close() async throws {
         guard closed.withLock({ wasClosed in defer { wasClosed = true }; return !wasClosed }) else { return }
-        defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
         try await client.marmot.shutdownAndClose()
+        try? FileManager.default.removeItem(atPath: client.rootPath)
     }
 }

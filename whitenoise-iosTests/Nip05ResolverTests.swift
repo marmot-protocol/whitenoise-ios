@@ -107,7 +107,7 @@ struct Nip05ResolverTests {
                 "alice@example.com",
                 transport: { request, _ in
                     gate.entered.signal()
-                    try? await gate.released.wait()
+                    try await gate.released.wait()
                     let response = HTTPURLResponse(
                         url: request.url ?? URL(fileURLWithPath: "/"),
                         statusCode: 200,
@@ -158,7 +158,7 @@ struct Nip05ResolverTests {
         let oldLookup = Task {
             await model.verifyDeclaredNip05("alice@example.com") { request, maximumBytes in
                 gate.entered.signal()
-                try? await gate.released.wait()
+                try await gate.released.wait()
                 return try await response(request, maximumBytes)
             }
         }
@@ -180,7 +180,7 @@ struct Nip05ResolverTests {
         let oldLookup = Task {
             await model.verifyDeclaredNip05("alice@example.com") { request, maximumBytes in
                 gate.entered.signal()
-                try? await gate.released.wait()
+                try await gate.released.wait()
                 return try await response(request, maximumBytes)
             }
         }
@@ -200,7 +200,7 @@ struct Nip05ResolverTests {
         let oldLookup = Task {
             await model.verifyDeclaredNip05("alice@example.com") { request, maximumBytes in
                 gate.entered.signal()
-                try? await gate.released.wait()
+                try await gate.released.wait()
                 return try await response(request, maximumBytes)
             }
         }

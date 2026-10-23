@@ -5,7 +5,6 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationOpenPerformanceTests {
     private nonisolated struct Sample: Equatable, Sendable {
         let operation: HostPerformanceOperationFfi
@@ -87,7 +86,7 @@ struct ConversationOpenPerformanceTests {
     }
 
     @Test func replacementAndLateCallbacksCannotCompleteNewAttempt() {
-        let state = AppState.test(client: nil, notifications: .shared)
+        let state = AppState.test(client: nil)
         let samples = Samples()
         state.productAnalytics.activateSink(performance: { op, ms, outcome in
             samples.append(Sample(operation: op, milliseconds: ms, outcome: outcome))

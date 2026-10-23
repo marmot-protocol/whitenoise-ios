@@ -64,7 +64,9 @@ ASSERTION_CALL = re.compile(r"#expect\(|#require\(|XCTAssert\w*\(")
 # Not the `for:` argument label of Task.sleep(for:).
 LOOP_KEYWORD = re.compile(r"(?<![\w.])(for|while|repeat)\b(?!\s*:)")
 POLL_BODY = re.compile(r"\bTask\.yield\(|\bTask\.sleep\b")
-RUNTIME_COLUMNS = ("testClient_sites", "start_sites", "app_state_test_sites")
+# `AppState.test()` alone builds no runtime: one exists only once a client is
+# passed (counted as testClient_sites) or bootstrap starts one (start_sites).
+RUNTIME_COLUMNS = ("testClient_sites", "start_sites")
 UI_COLUMNS = ("ui_hosting", "image_renderer", "layout_if_needed")
 HELPER_KEYWORDS = ("struct", "class", "enum", "actor", "func", "let", "var")
 

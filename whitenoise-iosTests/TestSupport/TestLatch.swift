@@ -19,9 +19,14 @@ struct TestWaitTimeout: Error, CustomStringConvertible {
 final class TestLatch: Sendable {
     static let defaultTimeout = Duration.seconds(30)
 
+    private struct Waiter {
+        let continuation: CheckedContinuation<Void, any Error>
+        var timeout: Task<Void, Never>?
+    }
+
     private struct State {
         var isSignalled = false
-        var waiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
+        var waiters: [UUID: Waiter] = [:]
     }
 
     private let state = Mutex(State())
@@ -31,13 +36,16 @@ final class TestLatch: Sendable {
     var isSignalled: Bool { state.withLock { $0.isSignalled } }
 
     func signal() {
-        let waiters = state.withLock { state -> [CheckedContinuation<Void, any Error>] in
+        let waiters = state.withLock { state -> [Waiter] in
             guard !state.isSignalled else { return [] }
             state.isSignalled = true
             defer { state.waiters.removeAll() }
             return Array(state.waiters.values)
         }
-        for waiter in waiters { waiter.resume() }
+        for waiter in waiters {
+            waiter.timeout?.cancel()
+            waiter.continuation.resume()
+        }
     }
 
     func wait(
@@ -50,19 +58,40 @@ final class TestLatch: Sendable {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             let isOpen = state.withLock { state -> Bool in
                 if state.isSignalled { return true }
-                state.waiters[id] = continuation
+                state.waiters[id] = Waiter(continuation: continuation, timeout: nil)
                 return false
             }
             if isOpen { return continuation.resume() }
-            Task {
-                try? await Task.sleep(for: timeout)
+            let timer = Task {
+                do { try await Task.sleep(for: timeout) } catch { return }
                 self.fail(id, TestWaitTimeout(what: "TestLatch signal", timeout: timeout, sourceLocation: sourceLocation))
             }
+            // Signalled in between: the waiter is already resumed, so stop the timer.
+            let isWaiting = state.withLock { state -> Bool in
+                guard state.waiters[id] != nil else { return false }
+                state.waiters[id]?.timeout = timer
+                return true
+            }
+            if !isWaiting { timer.cancel() }
+        }
+    }
+
+    /// `wait(timeout:)` for holders inside non-throwing closures: a missing
+    /// signal records a test issue at `sourceLocation` instead of resuming
+    /// silently, so the test fails rather than running on unreleased.
+    func hold(
+        timeout: Duration = TestLatch.defaultTimeout,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        do {
+            try await wait(timeout: timeout, sourceLocation: sourceLocation)
+        } catch {
+            Issue.record(error, sourceLocation: sourceLocation)
         }
     }
 
     private func fail(_ id: UUID, _ error: any Error) {
-        state.withLock { $0.waiters.removeValue(forKey: id) }?.resume(throwing: error)
+        state.withLock { $0.waiters.removeValue(forKey: id) }?.continuation.resume(throwing: error)
     }
 }
 
