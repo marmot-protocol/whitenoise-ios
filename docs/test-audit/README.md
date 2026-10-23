@@ -90,44 +90,65 @@ the probe.
 
 | plan | runs | CI |
 |---|---|---|
-| `TestPlans/PR.xctestplan` | everything except tests tagged `.runtime` or `.uiHosting` and the hosting XCTest classes | pull requests (`scripts/test.sh --tier pr`) |
-| `TestPlans/Full.xctestplan` | everything; the Staging scheme's default plan | master pushes, nightly `schedule`, manual runs (`--tier full`) |
+| `TestPlans/PR.xctestplan` | everything except tests tagged `.runtime` or `.uiHosting` and the runtime/hosting XCTest classes | pull requests that touch none of the forced paths below (`scripts/test.sh --tier pr`) |
+| `TestPlans/Full.xctestplan` | everything; the Staging scheme's default plan | master pushes, nightly `schedule`, manual runs, forced pull requests (`--tier full`) |
 
-The policy is one line in `.github/workflows/tests.yml` (`--tier` on the Run
-tests step). Tags (`whitenoise-iosTests/TestSupport/Tags.swift`) go on the
-suite or on single tests. Xcode 27.1's xcodebuild ignores a plan's
-`skippedTags`, and applies `skippedTests` only to XCTest, so the PR plan lists
-every tagged suite and test by identifier and `scripts/test.sh --tier pr`
-repeats that list as `-skip-testing:` flags for Swift Testing. Regenerate the
-list with `python3 scripts/audit/inventory.py --write-pr-plan` after tagging;
-it keeps the XCTest classes already listed (`ProfileShareCardLocalizationTests`
-runs Vision OCR on a rendered card and is listed by hand).
+**Owner decision to confirm.** The Choose test tier step in
+`.github/workflows/tests.yml` runs a pull request on the full tier when its
+diff against the base touches `Packages/`, `Shared/`,
+`NotificationServiceExtension/`, `whitenoise-ios/Core/`,
+`whitenoise-ios/Onboarding/` or `whitenoise-iosTests/TestSupport/`, or it
+carries the `full-tests` label; otherwise on the PR tier. Running every pull
+request on the full tier is a one-word change on the Run tests step. The
+nightly run has its own concurrency group, so it never replaces a pending
+master push run, and its failures reach people only through GitHub's default
+workflow notifications.
+
+Tags (`whitenoise-iosTests/TestSupport/Tags.swift`) go on the tests that need
+them, or on the suite (or a nested suite) when most tests do. Xcode 27.1's
+xcodebuild ignores a plan's `skippedTags` and applies `skippedTests` only to
+XCTest, so the PR plan lists every tagged suite and test by identifier and
+`scripts/test.sh --tier pr` repeats that list as `-skip-testing:` flags for
+Swift Testing. This was verified locally on Xcode 27.1; CI pins Xcode 26, so
+the first CI run's step summary (tier and skip counts from `report-run.sh`)
+must be checked. Regenerate the list with
+`python3 scripts/audit/inventory.py --write-pr-plan` after tagging; it keeps
+the XCTest classes already listed (`ProfileShareCardLocalizationTests` runs
+Vision OCR on a rendered card and is listed by hand).
 
 `python3 scripts/audit/inventory.py --check` (in `scripts/lint.sh`) enforces,
 per suite (`scripts/audit/guardrails.py`, fixtures in
 `scripts/tests/test_audit_guardrails.py`):
 
 - `runtime-tag`: a test reaching `MarmotClient.testClient(`,
-  `MarmotClient(rootPath:`, `withTestClient`, `OwnedTestClient(` or
-  `TestRuntimeScope.own(` is tagged `.runtime` (test or suite; suite-wide code
-  needs the suite tag);
+  `MarmotClient(rootPath:`, `withTestClient`, `OwnedTestClient(`,
+  `TestRuntimeScope.own(`, `bootstrap()`, `startRuntime(` or `marmot.start` is
+  tagged `.runtime` (test, nested suite or suite; suite-wide code needs the
+  suite tag);
 - `ui-tag`: the same for `UIWindow`/`UIHostingController` and `.uiHosting`
   (`ImageRenderer` does not count); an XCTest class must be in the PR plan
   instead;
-- `sleep`: no `Task.sleep` outside `TestSupport/` helpers;
+- `sleep`: no `Task.sleep` except in the named bounded-wait helpers
+  (`TestLatch`, `eventually`, `settleLayout`, `MarmotFixtureWatchdog`,
+  `AppState.test`'s production-backoff default sleeper);
 - `unowned-runtime`: a direct `testClient()`/`MarmotClient(rootPath:)` is
   wrapped in `TestRuntimeScope.own` or `closing`;
 - `timelimit-gate`: no `.timeLimit` on a test under
   `.marmotRuntimeConcurrencyLimit` (the limit would count gate queue time);
 - `pr-plan`: the PR plan skips exactly the tagged suites and tests.
 
-`scripts/audit/guardrail-baseline.txt` holds the violations present when the
-check landed; they print as `baselined` and do not fail. Remove a line when its
-suite is fixed (stale lines are reported).
+`scripts/audit/guardrail-baseline.txt` lists known violations as
+`<rule> <Suite> <count>`. A suite must match its count exactly: a higher
+count, a new violation, a lower count and a line whose violation is gone all
+fail, so the file is tightened in the change that fixes a suite
+(`inventory.py --write-baseline` regenerates it).
 
-The runtime gate has `max(2, cores/4)` permits (2 on the 3-vCPU CI runner, 4
-on a 16-core Mac); `TEST_RUNNER_WN_TEST_GATE_CORES=3` reproduces CI locally.
-On 16 cores 8 permits passed but ran the full suite about 50 s slower than 4.
+The runtime gate has `max(1, cores/4)` permits: 1 on the 3-vCPU CI runner, 4
+on a 16-core Mac. It replaced serializing the runtime suites (76b4925c,
+#1111). Local runs with `TEST_RUNNER_WN_TEST_GATE_CORES=3` (2 and 4 permits
+both passed on a 16-core Mac; 8 passed but ran about 50 s slower) only change
+the permit count, not the CPUs the simulator and runtimes get, so raising CI
+to 2 permits needs several green full-tier CI runs on the real runner first.
 
 Known flake, not yet fixed: `AppStateBootstrapTests.signOutClearsSigningOutGuardBeforeReturning`
 failed once on the wave 3 integration branch (`activeAccountRef` still set
