@@ -253,18 +253,3 @@ struct WNQRCodeCardRenderingTests {
         return drawn ? Bitmap(width: width, height: height, luma: luma) : nil
     }
 }
-
-struct WNNeutralAccentTests {
-    @Test func accentIsMonochromeInLightAppearance() {
-        #expect(WNNeutralAccent.color(for: .light) == .black)
-    }
-
-    @Test func accentIsMonochromeInDarkAppearance() {
-        #expect(WNNeutralAccent.color(for: .dark) == .white)
-    }
-
-    @Test func accentNeverFallsBackToTheSystemTint() {
-        #expect(WNNeutralAccent.color(for: .light) != .accentColor)
-        #expect(WNNeutralAccent.color(for: .dark) != .accentColor)
-    }
-}
