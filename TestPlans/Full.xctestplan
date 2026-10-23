@@ -13,7 +13,6 @@
   },
   "testTargets" : [
     {
-      "parallelizable" : false,
       "target" : {
         "containerPath" : "container:whitenoise-ios.xcodeproj",
         "identifier" : "1FF76DFC2FBE3C9C00DCDFA7",

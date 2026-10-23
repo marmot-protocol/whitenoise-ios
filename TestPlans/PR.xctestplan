@@ -9,7 +9,6 @@
   "defaultOptions" : {},
   "testTargets" : [
     {
-      "parallelizable" : false,
       "skippedTags" : {
         "tags" : [
           "runtime",
