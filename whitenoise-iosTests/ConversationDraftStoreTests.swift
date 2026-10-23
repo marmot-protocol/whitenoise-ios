@@ -366,6 +366,15 @@ struct ConversationDraftStoreTests {
         #expect(preview == "First @Alice second")
     }
 
+    @Test func preparedDraftIsBoundedAndDoesNotExposeAttachmentNames() {
+        let draft = ChatListDraftPreviewFfi(text: "  Hello\nworld  ", textTruncated: false, attachmentCount: 2, attachmentKind: .mixed)
+        #expect(ConversationDraftPreview.preparedText(draft) == "Hello world")
+        let photo = ChatListDraftPreviewFfi(text: "", textTruncated: false, attachmentCount: 1, attachmentKind: .photo)
+        #expect(ConversationDraftPreview.preparedText(photo) == L10n.string("Photo"))
+        let large = ChatListDraftPreviewFfi(text: String(repeating: "a", count: 1024), textTruncated: true, attachmentCount: 0, attachmentKind: nil)
+        #expect(ConversationDraftPreview.preparedText(large).count <= ConversationDraftPreview.maximumLength + 1)
+    }
+
     @Test func aSendTapClearsTheComposerWithoutDeletingTheDraftItStillHasToClaim() async {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)

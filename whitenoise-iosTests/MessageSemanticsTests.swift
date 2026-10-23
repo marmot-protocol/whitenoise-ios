@@ -865,6 +865,63 @@ struct MessageSemanticsTests {
 
         #expect(viewModel.displayBody(of: record) == "📎 a.png")
     }
+
+    @Test func optimisticImetaParserRejectsUnsafeLocator() {
+        let values = [
+            MessageSemantics.imetaTag,
+            "v \(EncryptedMediaVersionFfi.v1.wireValue)",
+            "locator blossom-v1 https://192.168.1.1/\(String(repeating: "a", count: 64)).bin",
+            "ciphertext_sha256 \(String(repeating: "a", count: 64))",
+            "plaintext_sha256 \(String(repeating: "b", count: 64))",
+            "nonce \(String(repeating: "c", count: 24))",
+            "m image/jpeg",
+            "filename photo.jpg",
+        ]
+        #expect(MessageSemantics.mediaAttachments(from: [MessageTagFfi(values: values)]) == nil)
+    }
+
+    @Test func optimisticImetaParserRetainsUnsupportedLocatorWithSafeBlossomFallback() throws {
+        let values = [
+            MessageSemantics.imetaTag,
+            "v \(EncryptedMediaVersionFfi.v1.wireValue)",
+            "locator ipfs-v1 ipfs://bafy-test",
+            "locator blossom-v1 https://media.example/\(String(repeating: "a", count: 64)).bin",
+            "ciphertext_sha256 \(String(repeating: "a", count: 64))",
+            "plaintext_sha256 \(String(repeating: "b", count: 64))",
+            "nonce \(String(repeating: "c", count: 24))",
+            "m image/jpeg",
+            "filename photo.jpg",
+        ]
+
+        let attachment = try #require(MessageSemantics.mediaAttachments(
+            from: [MessageTagFfi(values: values)]
+        )?.first)
+        #expect(attachment.locators.map(\.kind) == ["ipfs-v1", "blossom-v1"])
+    }
+
+    @Test func optimisticImetaParserKeepsValidSiblingWhenMdkRejectsMalformedTag() throws {
+        let valid = MessageTagFfi(values: [
+            MessageSemantics.imetaTag,
+            "v \(EncryptedMediaVersionFfi.v1.wireValue)",
+            "locator blossom-v1 https://media.example/\(String(repeating: "a", count: 64)).bin",
+            "ciphertext_sha256 \(String(repeating: "a", count: 64))",
+            "plaintext_sha256 \(String(repeating: "b", count: 64))",
+            "nonce \(String(repeating: "c", count: 24))",
+            "m image/jpeg",
+            "filename photo.jpg",
+        ])
+        let malformed = MessageTagFfi(values: [
+            MessageSemantics.imetaTag,
+            "v unknown-version",
+        ])
+
+        let attachment = try #require(MessageSemantics.mediaAttachments(
+            from: [malformed, valid],
+            sourceEpoch: 42
+        )?.first)
+        #expect(attachment.fileName == "photo.jpg")
+        #expect(attachment.sourceEpoch == 42)
+    }
 }
 
 private func encryptedMediaTag(

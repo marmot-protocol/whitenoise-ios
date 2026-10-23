@@ -170,6 +170,31 @@ struct MediaAcquisitionIntentTests {
             target: target, with: failed))
         #expect((live.calls + failed.calls).map(\.kind) == [.automatic, .automatic])
     }
+
+    @Test func retainedReadsRespectOffsetsAndRevocation() async throws {
+        let offsets = Mutex<[UInt64]>([])
+        let data = try await RetainedAttachmentReader.read(byteCount: 3) { offset, limit in
+            #expect(limit <= 1_048_576)
+            offsets.withLock { $0.append(offset) }
+            return AttachmentLocalBytesFfi(available: true, bytes: offset == 0 ? Data([1, 2]) : offset == 2 ? Data([3]) : Data())
+        }
+        #expect(data == Data([1, 2, 3]))
+        #expect(offsets.withLock { $0 } == [0, 2, 3])
+        await #expect(throws: AttachmentReadError.self) {
+            try await RetainedAttachmentReader.read(byteCount: 2) { offset, _ in
+                AttachmentLocalBytesFfi(available: offset == 0, bytes: offset == 0 ? Data([1]) : Data())
+            }
+        }
+        let empty = try await RetainedAttachmentReader.read(byteCount: 0) { _, _ in
+            AttachmentLocalBytesFfi(available: true, bytes: Data())
+        }
+        #expect(empty.isEmpty)
+        await #expect(throws: AttachmentReadError.self) {
+            try await RetainedAttachmentReader.read(byteCount: 2) { _, _ in
+                AttachmentLocalBytesFfi(available: true, bytes: Data())
+            }
+        }
+    }
 }
 
 private nonisolated final class RecordingAttachmentDemandRequester: AttachmentDemandRequesting {

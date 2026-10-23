@@ -271,4 +271,45 @@ struct ContentSanitizerTests {
         #expect(ContentSanitizer.groupName("") == nil)
         #expect(ContentSanitizer.groupName("\u{202E}\u{200B}") == nil)
     }
+
+    // Encrypted-media locators route through `ContentSanitizer.imageURL`, so a
+    // private-range host must be refused at the locator boundary as well.
+    @Test func mediaLocatorStaticValidationAllowsOnlyPublicHttpsBlossom() {
+        #expect(EncryptedMediaLocatorValidation.isStaticallySafe([
+            blossomLocator("https://media.example/blob"),
+        ]))
+        #expect(!EncryptedMediaLocatorValidation.isStaticallySafe([
+            blossomLocator("http://media.example/blob"),
+        ]))
+        #expect(!EncryptedMediaLocatorValidation.isStaticallySafe([
+            blossomLocator("https://user:password@media.example/blob"),
+        ]))
+        #expect(!EncryptedMediaLocatorValidation.isStaticallySafe([
+            blossomLocator("https://media.example:8443/blob"),
+        ]))
+        #expect(!EncryptedMediaLocatorValidation.isStaticallySafe([
+            blossomLocator("not a url"),
+        ]))
+        #expect(!EncryptedMediaLocatorValidation.isStaticallySafe([
+            blossomLocator("https://127.0.0.1/blob"),
+        ]))
+        #expect(!EncryptedMediaLocatorValidation.isStaticallySafe([
+            blossomLocator("https://service.localhost/blob"),
+        ]))
+        #expect(!EncryptedMediaLocatorValidation.isStaticallySafe([
+            blossomLocator("https://media.example/blob"),
+            blossomLocator("https://10.0.0.5/private"),
+        ]))
+        #expect(EncryptedMediaLocatorValidation.isStaticallySafe([
+            MediaLocatorFfi(kind: "ipfs-v1", value: "https://10.0.0.5/private"),
+            blossomLocator("https://media.example/blob"),
+        ]))
+        #expect(!EncryptedMediaLocatorValidation.isStaticallySafe([
+            MediaLocatorFfi(kind: "ipfs-v1", value: "https://media.example/blob"),
+        ]))
+    }
+
+    private func blossomLocator(_ value: String) -> MediaLocatorFfi {
+        MediaLocatorFfi(kind: EncryptedMediaLocatorValidation.blossomKind, value: value)
+    }
 }

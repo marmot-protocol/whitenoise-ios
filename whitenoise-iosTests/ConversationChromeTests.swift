@@ -116,4 +116,41 @@ struct ConversationChromeTests {
                 == .empty
         )
     }
+
+    @Test func emptyGroupInviteRequiresConfirmedSoleMemberAdmin() {
+        #expect(EmptyGroupConversationPresentation.canInvite(
+            isSelfMember: true,
+            isSelfAdmin: true,
+            membersLoaded: true,
+            memberCount: 1,
+            onlyMemberIsSelf: true
+        ))
+        #expect(!EmptyGroupConversationPresentation.canInvite(
+            isSelfMember: true,
+            isSelfAdmin: true,
+            membersLoaded: false,
+            memberCount: 0,
+            onlyMemberIsSelf: false
+        ))
+        #expect(!EmptyGroupConversationPresentation.canInvite(
+            isSelfMember: true,
+            isSelfAdmin: false,
+            membersLoaded: true,
+            memberCount: 1,
+            onlyMemberIsSelf: true
+        ))
+    }
+
+    @Test func activeRetentionReplacesMemberSubtitleButConnectingWins() {
+        #expect(ConversationHeaderSecondary.resolve(
+            isRuntimeWarmingUp: false,
+            subtitle: "4 members",
+            retentionSeconds: 300
+        ) == .retention(300))
+        #expect(ConversationHeaderSecondary.resolve(
+            isRuntimeWarmingUp: true,
+            subtitle: "4 members",
+            retentionSeconds: 300
+        ) == .connecting)
+    }
 }

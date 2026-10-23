@@ -105,3 +105,26 @@ func chatListRow(
         leaveRequestedAtMs: leaveRequestPending ? updatedAt * 1_000 : nil
     )
 }
+
+// Existing projection fixtures use the same message and invite selection as MDK.
+extension PresentedChatRowFfi {
+    init(row: ChatListRowFfi, presentation: ConversationPresentationFfi, avatarAsset: AvatarAssetFfi?) {
+        self.init(
+            draftVersion: nil,
+            preview: row.lastMessage != nil ? .message : (row.pendingConfirmation ? .invitation : .empty),
+            actions: Self.testActions(), row: row, presentation: presentation, avatarAsset: avatarAsset
+        )
+    }
+
+    static func testActions(
+        read: Bool = false, unread: Bool = false, pin: Bool = false, unpin: Bool = false,
+        mute: Bool = false, unmute: Bool = false, archive: Bool = false, restore: Bool = false,
+        leave: Bool = false, delete: Bool = false
+    ) -> ChatListRowActionsFfi {
+        ChatListRowActionsFfi(
+            canMarkRead: read, canMarkUnread: unread, canPin: pin, canUnpin: unpin,
+            canMute: mute, canUnmute: unmute, canArchive: archive, canRestore: restore,
+            canStartLeave: leave, canDeleteLocal: delete
+        )
+    }
+}

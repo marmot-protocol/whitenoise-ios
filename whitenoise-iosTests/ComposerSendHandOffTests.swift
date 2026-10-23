@@ -130,4 +130,63 @@ struct ComposerSendHandOffTests {
 
         #expect(stagedRowsDuringPublish == [2])
     }
+
+    @Test func durablyAcceptedComposerOutcomesKeepClockWithoutFailureUI() async throws {
+        let client = try MarmotClient.testClient()
+        let appState = AppState.test(client: client)
+        appState.activeAccountRef = "account-ref"
+        let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let composer = ComposerModel(
+            appState: appState,
+            groupIdHex: hex("aa"),
+            timelineStore: timelineStore
+        )
+        composer.canSendMessages = { true }
+        var surfacedErrors: [String] = []
+        composer.onError = { surfacedErrors.append($0) }
+        composer.sendTextForTesting = { _, _, _, _, token in
+            LocalSendAcceptanceFfi(clientToken: token, messageIdHex: "local")
+        }
+
+        await composer.send("durably retained")
+
+        let statuses = timelineStore.timeline.compactMap { item -> MessageStatus? in
+            guard case .message(_, let status) = item.kind else { return nil }
+            return status
+        }
+        #expect(statuses == [.sending])
+        #expect(surfacedErrors.isEmpty)
+        #expect(appState.activeToast == nil)
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test func thrownTransientComposerSendRendersFailedAndSurfacesFailure() async throws {
+        let client = try MarmotClient.testClient()
+        let appState = AppState.test(client: client)
+        appState.activeAccountRef = "account-ref"
+        let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let composer = ComposerModel(
+            appState: appState,
+            groupIdHex: hex("aa"),
+            timelineStore: timelineStore
+        )
+        composer.canSendMessages = { true }
+        var surfacedErrors: [String] = []
+        composer.onError = { surfacedErrors.append($0) }
+        composer.localSendStatusForTesting = { _ in nil }
+        composer.sendTextForTesting = { _, _, _, _, _ in
+            throw NSError(domain: "ComposerSendTests", code: 1)
+        }
+
+        await composer.send("not retained")
+
+        let statuses = timelineStore.timeline.compactMap { item -> MessageStatus? in
+            guard case .message(_, let status) = item.kind else { return nil }
+            return status
+        }
+        #expect(statuses == [.failed])
+        #expect(surfacedErrors.count == 1)
+        #expect(appState.activeToast != nil)
+        try await client.marmot.shutdownAndClose()
+    }
 }
