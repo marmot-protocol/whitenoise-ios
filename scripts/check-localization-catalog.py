@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
 """Lint the app's string catalogs (Shared/Localizable.xcstrings, whitenoise-ios/InfoPlist.xcstrings).
 
-Checks, for every key of the shared catalog and every shipped locale:
+Shared catalog, for every key and every shipped locale:
   * a localization exists and every leaf (string unit, plural form,
     substitution form) is marked `translated` with a non-empty value;
-  * each leaf keeps the key's placeholder multiset (`%@`, `%lld`, ...);
-  * a key that uses plural variations in any locale uses them in every locale
-    (source included), with an `other` form and, for Russian, one/few/many;
-  * the retention and donation copy is not left as the English source.
-For the InfoPlist catalog: every key except CFBundleDisplayName has a non-empty
-value in English and every shipped locale, usage descriptions are translated,
-and CFBundleDisplayName never carries a translated value (it would hide the
-build flavor's display name).
+  * format specifiers match the key as (position, type) pairs, so positional
+    reordering passes and a type swap fails; a substitution shell names only
+    defined substitutions, uses each one, and their argNum/formatSpecifier
+    fill the key's remaining arguments; each substitution form carries that
+    substitution's specifier;
+  * plural variations (with `other`, and one/few/many/other for Russian) in
+    the source and every locale for REQUIRED_PLURAL_KEYS and for any key that
+    has them in some locale, except PLURAL_GAPS, which must be pruned once
+    the gap closes;
+  * REQUIRED_KEYS exist, PINNED_VALUES match exactly, and ENGLISH_COPY_KEYS
+    are not left as the English source.
+InfoPlist catalog: INFOPLIST_REQUIRED_KEYS exist; every key except
+CFBundleDisplayName is non-empty in English and every locale; usage
+descriptions are translated; INFOPLIST_PINNED_VALUES match; and
+CFBundleDisplayName never carries a translated value (it would hide the build
+flavor's display name).
+Not checked: the source (`en`) leaves' state and specifiers, since many are
+auto-extracted `new` entries that mirror the key.
 """
 
 import argparse
@@ -21,15 +31,91 @@ import sys
 from pathlib import Path
 
 LOCALES = ("de", "es", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant")
-PLACEHOLDER = re.compile(r"%[@a-zA-Z0-9]+")
+SOURCE = "en"
 RUSSIAN_PLURALS = {"one", "few", "many", "other"}
+# printf/NSString specifiers: optional `n$`, then a `%#@name@` substitution token,
+# a conversion (flags without space, so prose like "50 % de" is not one), or `%%`.
+SPECIFIER = re.compile(
+    r"%(?:(\d+)\$)?(?:#@(\w+)@|[-+#0]*\d*(?:\.\d+)?(hh|h|ll|l|q|z|t|j|L)?([@dDiuUxXoOfFeEgGcCsSpaA])|(%))"
+)
+
+# Copy whose absence or loss of translation once shipped or would ship broken.
+REQUIRED_KEYS = (
+    "Settings", "Notifications", "New Chat", "Message", "Appearance", "Theme", "Light", "Dark", "System",
+    "Language", "Preferences", "Draft: %@", "Edit Description", "Shared Media", "New encrypted message",
+    "That QR code isn't a White Noise profile.", "Couldn't create chat", "Mark as unread", "Pin", "Pinned",
+    "Unpin", "Updating chat…", "Couldn't mark as unread", "Couldn't update pin", "Push registration failed",
+    "Support", "Chat with support", "Connecting to support…", "Couldn't connect to support",
+    "Please check your connection and try again.", "Leave “%@”?",
+    "You'll stop receiving new messages. This chat will remain on this device as read-only history until you delete it.",
+    "Leaving…", "Sign Up", "Choose Avatar", "Change Avatar", "Remove Avatar", "Name", "About (Optional)",
+    "Signing Up…", "Couldn’t create your account. Please try again.",
+    "Couldn’t save your profile details. Please try again.", "Continue",
+    "Your avatar is public. The photo is uploaded to a public service, and removing it from your profile may not "
+    "delete the uploaded copy.",
+    "This image is too large. Choose an image smaller than 25 MB.",
+    "We couldn’t read this image. Choose another image.", "New profile", "Profile avatar preview",
+    "Selected profile photo", "Camera Access Is Off", "Allow camera access in Settings to take photos and videos.",
+    "Camera Is Restricted", "Camera access is restricted on this iPhone.", "Camera Unavailable",
+    "The camera isn’t available on this iPhone right now.",
+)
+
+REQUIRED_PLURAL_KEYS = (
+    "%lld members", "%lld person group", "%lld more messages", "%llu unread messages", "📎 %lld attachments",
+    "Invited %lld members", "Published %lld updates.", "Your kind:0 metadata is live on %lld relays.",
+    "You can send up to %lld photos at once",
+)
 
 # Count keys whose translations still use a single string unit rather than
-# plural variations. Remove an entry once the catalog gains the variations.
+# plural variations. The check fails once an entry is no longer a gap.
 PLURAL_GAPS = frozenset({
     "Delete %lld selected messages?",
     "Forward %lld messages",
 })
+
+# Exact translations pinned after regressions: Sign In/Sign Up shipped as
+# English copy (#895), the retention strings shipped untranslated (#1058).
+PINNED_VALUES = {
+    "Save profile": {
+        "de": "Profil speichern", "es": "Guardar perfil", "fr": "Enregistrer le profil", "it": "Salva profilo",
+        "pt": "Salvar perfil", "ru": "Сохранить профиль", "tr": "Profili kaydet", "zh-Hans": "保存个人资料",
+        "zh-Hant": "儲存個人資料",
+    },
+    "Couldn't load chats": {
+        "de": "Chats konnten nicht geladen werden", "es": "No se pudieron cargar los chats",
+        "fr": "Impossible de charger les discussions", "it": "Impossibile caricare le chat",
+        "pt": "Não foi possível carregar os bate-papos", "ru": "Не удалось загрузить чаты",
+        "tr": "Sohbetler yüklenemedi", "zh-Hans": "无法加载聊天记录", "zh-Hant": "無法載入聊天記錄",
+    },
+    "Sign In": {
+        "de": "Anmelden", "es": "Iniciar sesión", "fr": "Se connecter", "it": "Accedi", "pt": "Entrar",
+        "ru": "Войти", "tr": "Oturum Aç", "zh-Hans": "登录", "zh-Hant": "登入",
+    },
+    "Sign Up": {
+        "de": "Registrieren", "es": "Registrarse", "fr": "S’inscrire", "it": "Registrati", "pt": "Cadastrar-se",
+        "ru": "Зарегистрироваться", "tr": "Kaydol", "zh-Hans": "注册", "zh-Hant": "註冊",
+    },
+    "Disappearing messages": {
+        "de": "Verschwindende Nachrichten", "es": "Mensajes temporales", "fr": "Messages éphémères",
+        "it": "Messaggi effimeri", "pt": "Mensagens temporárias", "ru": "Исчезающие сообщения",
+        "tr": "Kaybolan mesajlar", "zh-Hans": "阅后即焚消息", "zh-Hant": "限時訊息",
+    },
+    "Off": {
+        "de": "Aus", "es": "Desactivado", "fr": "Désactivé", "it": "Disattivato", "pt": "Desativado",
+        "ru": "Выкл.", "tr": "Kapalı", "zh-Hans": "关闭", "zh-Hant": "關閉",
+    },
+    "Messages are kept until you delete them.": {
+        "de": "Nachrichten bleiben erhalten, bis du sie löschst.",
+        "es": "Los mensajes se conservan hasta que los elimines.",
+        "fr": "Les messages sont conservés jusqu’à ce que vous les supprimiez.",
+        "it": "I messaggi vengono conservati finché non li elimini.",
+        "pt": "As mensagens são mantidas até você apagá-las.",
+        "ru": "Сообщения хранятся, пока вы их не удалите.",
+        "tr": "Mesajlar siz silene kadar saklanır.",
+        "zh-Hans": "消息会一直保留，直到你删除它们。",
+        "zh-Hant": "訊息會一直保留，直到你刪除為止。",
+    },
+}
 
 # Families that once shipped with the English source marked `translated`.
 RETENTION_KEYS = (
@@ -72,13 +158,44 @@ DONATION_KEYS = (
     "More billing activity couldn't be loaded. Try again.", "A new donation won't restore earlier payments.",
     "Your donation succeeded, but history couldn't be saved on this device.",
 )
-ENGLISH_COPY_KEYS = RETENTION_KEYS + DONATION_KEYS
+ENGLISH_COPY_KEYS = ("Sign In", "Sign Up") + RETENTION_KEYS + DONATION_KEYS
 # (key, locale) pairs, or (key, "*"), whose correct translation is spelled like English.
 SHARED_SPELLINGS = frozenset({("Minutes", "fr"), ("USD", "*")})
 
+INFOPLIST_REQUIRED_KEYS = (
+    "CFBundleName", "NSCameraUsageDescription", "NSMicrophoneUsageDescription", "NSFaceIDUsageDescription",
+    "NSLocationWhenInUseUsageDescription", "NSPhotoLibraryAddUsageDescription",
+)
+INFOPLIST_PINNED_VALUES = {
+    "NSCameraUsageDescription": {
+        "en": "White Noise uses the camera to scan profile QR codes and take photos and videos for encrypted chats.",
+    },
+}
 
-def placeholders(text):
-    return sorted(PLACEHOLDER.findall(text))
+
+def parse_format(text):
+    """(sorted (position, type) arguments, substitution names) of a format string.
+
+    Implicit specifiers are numbered from 1 in order; `%%` and `%#@name@`
+    tokens consume no argument.
+    """
+    arguments, names, implicit = [], [], 0
+    for match in SPECIFIER.finditer(text):
+        position, name, length, conversion, literal = match.groups()
+        if literal:
+            continue
+        if name is not None:
+            names.append(name)
+            continue
+        if position is None:
+            implicit += 1
+            position = implicit
+        arguments.append((int(position), (length or "") + conversion))
+    return sorted(arguments), names
+
+
+def render(arguments):
+    return [f"%{position}${kind}" for position, kind in arguments]
 
 
 def plural_forms(localization):
@@ -92,65 +209,141 @@ def plural_forms(localization):
     return plurals
 
 
-def leaves(localization):
-    """(state, value, is_substitution_shell) for each string unit of one localization."""
-    result = []
+def has_plurals(localization):
+    return any(isinstance(plural, dict) for plural in plural_forms(localization))
+
+
+def unit_errors(where, key, unit):
+    errors = []
+    if unit.get("state") != "translated":
+        errors.append(f"{where}: {key!r} is not translated (state: {unit.get('state')})")
+    value = unit.get("value")
+    if value is None:
+        errors.append(f"{where}: {key!r} has a string unit without a value")
+    elif key and not value.strip():
+        errors.append(f"{where}: empty value for {key!r}")
+    return errors, value
+
+
+def plural_dict_errors(where, key, plural, expected):
+    """Leaves of one plural dict; `expected` is the specifier list each form must carry."""
+    errors = []
+    if not isinstance(plural, dict):
+        return [f"{where}: {key!r} has variations without a plural dict"]
+    for category, form in sorted(plural.items()):
+        found, value = unit_errors(f"{where} [{category}]", key, form.get("stringUnit", {}))
+        errors += found
+        if value is not None and expected(value) is not None:
+            errors.append(f"{where} [{category}]: {expected(value)} for {key!r}")
+    return errors
+
+
+def localization_errors(locale, key, localization, key_arguments):
+    errors = []
+    substitutions = localization.get("substitutions", {})
     unit = localization.get("stringUnit")
+    if unit is None and "variations" not in localization:
+        return [f"{locale}: no value for {key!r}"] if key else []
+
     if unit is not None:
-        result.append((unit.get("state"), unit.get("value"), bool(localization.get("substitutions"))))
-    for plural in plural_forms(localization):
-        if not isinstance(plural, dict):
-            result.append((None, None, False))
-            continue
-        for form in plural.values():
-            unit = form.get("stringUnit", {})
-            result.append((unit.get("state"), unit.get("value"), False))
-    return result
+        found, value = unit_errors(locale, key, unit)
+        errors += found
+        if value is not None:
+            arguments, names = parse_format(value)
+            if substitutions or names:
+                for name in sorted(set(names) - set(substitutions)):
+                    errors.append(f"{locale}: {key!r} uses %#@{name}@ without a substitution")
+                for name in sorted(set(substitutions) - set(names)):
+                    errors.append(f"{locale}: {key!r} defines substitution {name!r} its value never uses")
+                for name, substitution in substitutions.items():
+                    arg, spec = substitution.get("argNum"), substitution.get("formatSpecifier")
+                    if not isinstance(arg, int) or not spec:
+                        errors.append(f"{locale}: substitution {name!r} of {key!r} needs argNum and formatSpecifier")
+                    else:
+                        arguments.append((arg, spec))
+                arguments.sort()
+            if arguments != key_arguments:
+                errors.append(f"{locale}: specifiers {render(arguments)} for {key!r} expect {render(key_arguments)}")
+
+    variations = localization.get("variations")
+    if variations is not None:
+        def direct(value):
+            arguments, names = parse_format(value)
+            if names or arguments != key_arguments:
+                return f"specifiers {render(arguments)} expect {render(key_arguments)}"
+            return None
+        errors += plural_dict_errors(locale, key, variations.get("plural"), direct)
+
+    for name, substitution in sorted(substitutions.items()):
+        spec = substitution.get("formatSpecifier")
+
+        def carried(value, spec=spec):
+            kinds = [kind for _, kind in parse_format(value)[0]]
+            if kinds != [spec]:
+                return f"substitution {name!r} form carries {kinds}, expects ['{spec}']"
+            return None
+        errors += plural_dict_errors(f"{locale} {name}", key, substitution.get("variations", {}).get("plural"), carried)
+    return errors
+
+
+def plural_requirement_errors(key, localizations, locales):
+    errors = []
+    for locale in locales:
+        forms = [p for p in plural_forms(localizations.get(locale, {})) if isinstance(p, dict)]
+        categories = set().union(*forms) if forms else set()
+        if not forms:
+            errors.append(f"{locale}: {key!r} needs plural variations")
+        elif "other" not in categories:
+            errors.append(f"{locale}: {key!r} is missing an `other` plural form")
+        elif locale == "ru" and not RUSSIAN_PLURALS <= categories:
+            errors.append(f"ru: {key!r} needs one/few/many/other plural forms")
+    return errors
 
 
 def source_value(key, localizations):
-    unit = localizations.get("en", {}).get("stringUnit")
+    unit = localizations.get(SOURCE, {}).get("stringUnit")
     return unit.get("value", key) if unit else key
 
 
 def check_strings_catalog(catalog, locales=LOCALES):
     errors = []
     strings = catalog.get("strings", {})
+    for key in REQUIRED_KEYS + REQUIRED_PLURAL_KEYS:
+        if key not in strings:
+            errors.append(f"missing required key {key!r}")
+
     for key, entry in sorted(strings.items()):
         localizations = entry.get("localizations", {})
-        expected = placeholders(key)
+        key_arguments = parse_format(key)[0]
         for locale in locales:
             localization = localizations.get(locale)
             if localization is None:
                 errors.append(f"{locale}: missing localization for {key!r}")
-                continue
-            values = leaves(localization)
-            if key and not any(not shell for _, _, shell in values):
-                errors.append(f"{locale}: no value for {key!r}")
-            for state, value, shell in values:
-                if state != "translated":
-                    errors.append(f"{locale}: {key!r} is not translated (state: {state})")
-                if value is None:
-                    errors.append(f"{locale}: {key!r} has a string unit without a value")
-                    continue
-                if shell:
-                    continue
-                if key and not value.strip():
-                    errors.append(f"{locale}: empty value for {key!r}")
-                if placeholders(value) != expected:
-                    errors.append(f"{locale}: placeholders {placeholders(value)} for {key!r} expect {expected}")
+            else:
+                errors += localization_errors(locale, key, localization, key_arguments)
 
-        plural_locales = {locale for locale, loc in localizations.items() if plural_forms(loc)}
-        if plural_locales and key not in PLURAL_GAPS:
-            for locale in ("en", *locales) if "en" in localizations else locales:
-                forms = [p for p in plural_forms(localizations.get(locale, {})) if isinstance(p, dict)]
-                categories = set().union(*forms) if forms else set()
-                if not forms:
-                    errors.append(f"{locale}: {key!r} needs plural variations")
-                elif "other" not in categories:
-                    errors.append(f"{locale}: {key!r} is missing an `other` plural form")
-                elif locale == "ru" and not RUSSIAN_PLURALS <= categories:
-                    errors.append(f"ru: {key!r} needs one/few/many/other plural forms")
+        inferred = any(has_plurals(loc) for loc in localizations.values())
+        if key in REQUIRED_PLURAL_KEYS:
+            errors += plural_requirement_errors(key, localizations, (SOURCE, *locales))
+        elif inferred and key not in PLURAL_GAPS:
+            scope = (SOURCE, *locales) if SOURCE in localizations else locales
+            errors += plural_requirement_errors(key, localizations, scope)
+
+    for key in sorted(PLURAL_GAPS):
+        localizations = strings.get(key, {}).get("localizations")
+        if localizations is None:
+            errors.append(f"remove {key!r} from PLURAL_GAPS: the key no longer exists")
+        elif not plural_requirement_errors(key, localizations, (SOURCE, *locales)):
+            errors.append(f"remove {key!r} from PLURAL_GAPS: it has plural variations in every locale")
+
+    for key, values in sorted(PINNED_VALUES.items()):
+        localizations = strings.get(key, {}).get("localizations", {})
+        for locale, expected in sorted(values.items()):
+            if locale not in locales and locale != SOURCE:
+                continue
+            actual = localizations.get(locale, {}).get("stringUnit", {}).get("value")
+            if actual != expected:
+                errors.append(f"{locale}: {key!r} is {actual!r}, pinned {expected!r}")
 
     for key in ENGLISH_COPY_KEYS:
         entry = strings.get(key)
@@ -171,6 +364,9 @@ def check_strings_catalog(catalog, locales=LOCALES):
 def check_infoplist_catalog(catalog, locales=LOCALES):
     errors = []
     strings = catalog.get("strings", {})
+    for key in INFOPLIST_REQUIRED_KEYS:
+        if key not in strings:
+            errors.append(f"missing required InfoPlist key {key}")
     for key, entry in sorted(strings.items()):
         localizations = entry.get("localizations", {})
         if key == "CFBundleDisplayName":
@@ -179,12 +375,18 @@ def check_infoplist_catalog(catalog, locales=LOCALES):
                     errors.append(f"{locale}: CFBundleDisplayName must not be translated; "
                                   "it would hide the flavor display name")
             continue
-        for locale in ("en", *locales):
+        for locale in (SOURCE, *locales):
             unit = localizations.get(locale, {}).get("stringUnit", {})
             if not (unit.get("value") or "").strip():
                 errors.append(f"{locale}: empty InfoPlist value for {key}")
-            elif key.endswith("UsageDescription") and locale != "en" and unit.get("state") != "translated":
+            elif key.endswith("UsageDescription") and locale != SOURCE and unit.get("state") != "translated":
                 errors.append(f"{locale}: {key} is not translated (state: {unit.get('state')})")
+    for key, values in sorted(INFOPLIST_PINNED_VALUES.items()):
+        localizations = strings.get(key, {}).get("localizations", {})
+        for locale, expected in sorted(values.items()):
+            actual = localizations.get(locale, {}).get("stringUnit", {}).get("value")
+            if actual != expected:
+                errors.append(f"{locale}: {key} is {actual!r}, pinned {expected!r}")
     return errors
 
 

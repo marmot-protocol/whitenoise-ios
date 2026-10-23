@@ -11,16 +11,19 @@ CHECK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECK)
 
 LOCALES = ("de", "ru")
+RU_FORMS = {"one": "%lld", "few": "%lld", "many": "%lld", "other": "%lld"}
 
 
 def unit(value, state="translated"):
     return {"stringUnit": {"state": state, "value": value}}
 
 
-def plural(forms, substitution=False):
+def plural(forms, substitution=False, arg=1, spec="lld"):
     variations = {"plural": {name: unit(value) for name, value in forms.items()}}
     if substitution:
-        return {**unit("%#@count@"), "substitutions": {"count": {"variations": variations}}}
+        return {**unit("%#@count@"), "substitutions": {
+            "count": {"argNum": arg, "formatSpecifier": spec, "variations": variations},
+        }}
     return {"variations": variations}
 
 
@@ -28,25 +31,40 @@ def catalog(strings):
     return {"sourceLanguage": "en", "strings": strings}
 
 
-class StringsCatalogTests(unittest.TestCase):
+class FixtureCase(unittest.TestCase):
+    """Name-keyed tables are emptied so fixtures exercise one rule at a time."""
+
+    TABLES = ("REQUIRED_KEYS", "REQUIRED_PLURAL_KEYS", "PLURAL_GAPS", "PINNED_VALUES", "ENGLISH_COPY_KEYS",
+              "INFOPLIST_REQUIRED_KEYS", "INFOPLIST_PINNED_VALUES")
+
     def setUp(self):
-        # The English-copy families are checked by name; keep them out of the
-        # fixtures unless a test opts in.
-        self.addCleanup(setattr, CHECK, "ENGLISH_COPY_KEYS", CHECK.ENGLISH_COPY_KEYS)
-        CHECK.ENGLISH_COPY_KEYS = ()
+        for name in self.TABLES:
+            self.addCleanup(setattr, CHECK, name, getattr(CHECK, name))
+            empty = {} if isinstance(getattr(CHECK, name), dict) else ()
+            setattr(CHECK, name, frozenset() if name == "PLURAL_GAPS" else empty)
 
     def errors(self, strings):
         return CHECK.check_strings_catalog(catalog(strings), locales=LOCALES)
 
+
+class FormatParsingTests(unittest.TestCase):
+    def test_positions_types_and_tokens(self):
+        self.assertEqual(CHECK.parse_format("%@ of %lld, %2$@ %1$lld 100%% %#@count@ %02lld"),
+                         ([(1, "@"), (1, "lld"), (2, "@"), (2, "lld"), (3, "lld")], ["count"]))
+
+    def test_prose_percent_is_not_a_specifier(self):
+        self.assertEqual(CHECK.parse_format("50 % de remise"), ([], []))
+
+
+class StringsCatalogTests(FixtureCase):
     def test_complete_catalog_passes(self):
-        ru_forms = {"one": "%lld участник", "few": "%lld участника", "many": "%lld участников", "other": "%lld"}
         self.assertEqual(self.errors({
             "Settings": {"localizations": {"de": unit("Einstellungen"), "ru": unit("Настройки")}},
-            "Draft: %@": {"localizations": {"de": unit("Entwurf: %@"), "ru": unit("Черновик: %@")}},
+            "%@ of %lld": {"localizations": {"de": unit("%2$lld von %1$@"), "ru": unit("%@ из %lld")}},
             "%lld members": {"localizations": {
                 "en": plural({"one": "%lld member", "other": "%lld members"}),
                 "de": plural({"one": "%lld Mitglied", "other": "%lld Mitglieder"}, substitution=True),
-                "ru": plural(ru_forms),
+                "ru": plural(RU_FORMS),
             }},
             "": {"localizations": {"de": unit(""), "ru": unit("")}},
         }), [])
@@ -56,38 +74,59 @@ class StringsCatalogTests(unittest.TestCase):
         self.assertEqual(errors, ["ru: missing localization for 'Settings'"])
 
     def test_untranslated_plural_form_fails(self):
-        entry = {"localizations": {
-            "de": plural({"one": "%lld Mitglied", "other": "%lld Mitglieder"}),
-            "ru": plural({"one": "%lld", "few": "%lld", "many": "%lld", "other": "%lld"}),
-        }}
+        entry = {"localizations": {"de": plural({"one": "%lld", "other": "%lld"}), "ru": plural(RU_FORMS)}}
         entry["localizations"]["de"]["variations"]["plural"]["other"]["stringUnit"]["state"] = "needs_review"
-        self.assertIn("de: '%lld members' is not translated (state: needs_review)",
+        self.assertIn("de [other]: '%lld members' is not translated (state: needs_review)",
                       self.errors({"%lld members": entry}))
 
-    def test_empty_value_and_broken_placeholder_fail(self):
+    def test_empty_value_and_missing_specifier_fail(self):
         errors = self.errors({"Draft: %@": {"localizations": {"de": unit("  "), "ru": unit("Черновик")}}})
         self.assertIn("de: empty value for 'Draft: %@'", errors)
-        self.assertIn("ru: placeholders [] for 'Draft: %@' expect ['%@']", errors)
+        self.assertIn("ru: specifiers [] for 'Draft: %@' expect ['%1$@']", errors)
 
-    def test_placeholder_multiset_counts_duplicates(self):
+    def test_specifier_multiset_counts_duplicates(self):
         errors = self.errors({"%@ and %@": {"localizations": {"de": unit("%@ und %@"), "ru": unit("%@ и")}}})
-        self.assertEqual(errors, ["ru: placeholders ['%@'] for '%@ and %@' expect ['%@', '%@']"])
+        self.assertEqual(errors, ["ru: specifiers ['%1$@'] for '%@ and %@' expect ['%1$@', '%2$@']"])
 
-    def test_count_key_without_plural_in_one_locale_fails(self):
+    def test_positional_type_swap_fails(self):
+        errors = self.errors({"%@ of %lld": {"localizations": {
+            "de": unit("%2$lld von %1$@"), "ru": unit("%1$lld из %2$@"),
+        }}})
+        self.assertEqual(errors, ["ru: specifiers ['%1$lld', '%2$@'] for '%@ of %lld' expect ['%1$@', '%2$lld']"])
+
+    def test_substitution_token_without_definition_fails(self):
+        localization = plural({"other": "%lld"}, substitution=True)
+        localization["stringUnit"]["value"] = "%#@counter@"
+        errors = self.errors({"%lld votes": {"localizations": {"de": localization, "ru": plural(RU_FORMS)}}})
+        self.assertIn("de: '%lld votes' uses %#@counter@ without a substitution", errors)
+        self.assertIn("de: '%lld votes' defines substitution 'count' its value never uses", errors)
+
+    def test_substitution_argument_must_match_the_key(self):
+        errors = self.errors({"%lld votes": {"localizations": {
+            "de": plural({"other": "%lld"}, substitution=True, spec="@"),
+            "ru": plural(RU_FORMS, substitution=True, arg=2),
+        }}})
+        self.assertIn("de: specifiers ['%1$@'] for '%lld votes' expect ['%1$lld']", errors)
+        self.assertIn("ru: specifiers ['%2$lld'] for '%lld votes' expect ['%1$lld']", errors)
+        self.assertIn("de count [other]: substitution 'count' form carries ['lld'], expects ['@'] for '%lld votes'",
+                      errors)
+
+    def test_substitution_form_must_carry_its_specifier(self):
+        errors = self.errors({"%lld votes": {"localizations": {
+            "de": plural({"one": "Eine Stimme", "other": "%lld Stimmen"}, substitution=True),
+            "ru": plural(RU_FORMS, substitution=True),
+        }}})
+        self.assertEqual(errors, [
+            "de count [one]: substitution 'count' form carries [], expects ['lld'] for '%lld votes'",
+        ])
+
+    def test_inferred_count_key_without_plural_in_one_locale_fails(self):
         errors = self.errors({"%lld members": {"localizations": {
             "en": plural({"one": "%lld member", "other": "%lld members"}),
             "de": unit("%lld Mitglieder"),
-            "ru": plural({"one": "%lld", "few": "%lld", "many": "%lld", "other": "%lld"}),
+            "ru": plural(RU_FORMS),
         }}})
         self.assertEqual(errors, ["de: '%lld members' needs plural variations"])
-
-    def test_known_plural_gap_is_exempt(self):
-        key = next(iter(CHECK.PLURAL_GAPS))
-        self.assertEqual(self.errors({key: {"localizations": {
-            "en": plural({"one": "%lld", "other": "%lld"}),
-            "de": unit("%lld"),
-            "ru": unit("%lld"),
-        }}}), [])
 
     def test_missing_other_and_russian_categories_fail(self):
         errors = self.errors({"%lld members": {"localizations": {
@@ -99,6 +138,33 @@ class StringsCatalogTests(unittest.TestCase):
             "ru: '%lld members' needs one/few/many/other plural forms",
         ])
 
+    def test_required_plural_key_flattened_everywhere_fails(self):
+        CHECK.REQUIRED_PLURAL_KEYS = ("%lld members",)
+        errors = self.errors({"%lld members": {"localizations": {
+            "en": unit("%lld members"), "de": unit("%lld Mitglieder"), "ru": unit("%lld участников"),
+        }}})
+        self.assertEqual(errors, [f"{locale}: '%lld members' needs plural variations" for locale in ("en", "de", "ru")])
+        self.assertEqual(self.errors({}), ["missing required key '%lld members'"])
+
+    def test_plural_gap_is_exempt_until_it_closes(self):
+        CHECK.PLURAL_GAPS = frozenset({"Forward %lld messages"})
+        gap = {"en": plural({"one": "%lld", "other": "%lld"}), "de": unit("%lld"), "ru": unit("%lld")}
+        self.assertEqual(self.errors({"Forward %lld messages": {"localizations": gap}}), [])
+        closed = {**gap, "de": plural({"one": "%lld", "other": "%lld"}), "ru": plural(RU_FORMS)}
+        self.assertEqual(self.errors({"Forward %lld messages": {"localizations": closed}}),
+                         ["remove 'Forward %lld messages' from PLURAL_GAPS: it has plural variations in every locale"])
+        self.assertEqual(self.errors({}),
+                         ["remove 'Forward %lld messages' from PLURAL_GAPS: the key no longer exists"])
+
+    def test_required_key_must_exist(self):
+        CHECK.REQUIRED_KEYS = ("Settings",)
+        self.assertEqual(self.errors({}), ["missing required key 'Settings'"])
+
+    def test_pinned_value_must_match(self):
+        CHECK.PINNED_VALUES = {"Sign In": {"de": "Anmelden", "ru": "Войти"}}
+        errors = self.errors({"Sign In": {"localizations": {"de": unit("Einloggen"), "ru": unit("Войти")}}})
+        self.assertEqual(errors, ["de: 'Sign In' is 'Einloggen', pinned 'Anmelden'"])
+
     def test_english_copy_family_fails_unless_shared_spelling(self):
         CHECK.ENGLISH_COPY_KEYS = ("Minutes", "Off")
         errors = CHECK.check_strings_catalog(catalog({
@@ -108,7 +174,7 @@ class StringsCatalogTests(unittest.TestCase):
         self.assertEqual(errors, ["fr: 'Off' still shows the English copy"])
 
 
-class InfoPlistCatalogTests(unittest.TestCase):
+class InfoPlistCatalogTests(FixtureCase):
     def errors(self, strings):
         return CHECK.check_infoplist_catalog(catalog(strings), locales=LOCALES)
 
@@ -134,23 +200,65 @@ class InfoPlistCatalogTests(unittest.TestCase):
             "ru: NSCameraUsageDescription is not translated (state: new)",
         ])
 
+    def test_required_key_and_pinned_value(self):
+        CHECK.INFOPLIST_REQUIRED_KEYS = ("CFBundleName",)
+        CHECK.INFOPLIST_PINNED_VALUES = {"NSCameraUsageDescription": {"en": "Camera"}}
+        errors = self.errors({"NSCameraUsageDescription": {"localizations": {
+            "en": unit("Kamera"), "de": unit("Kamera"), "ru": unit("Камера"),
+        }}})
+        self.assertEqual(errors, [
+            "missing required InfoPlist key CFBundleName",
+            "en: NSCameraUsageDescription is 'Kamera', pinned 'Camera'",
+        ])
+
 
 class RepositoryCatalogTests(unittest.TestCase):
-    """The committed catalogs pass, and a deliberately broken copy fails."""
+    """The committed catalogs pass; deliberately broken copies fail."""
 
     def setUp(self):
         self.shared = json.loads((ROOT / "Shared/Localizable.xcstrings").read_text(encoding="utf-8"))
         self.infoplist = json.loads((ROOT / "whitenoise-ios/InfoPlist.xcstrings").read_text(encoding="utf-8"))
 
+    def broken(self, mutate):
+        shared = copy.deepcopy(self.shared)
+        mutate(shared["strings"])
+        return CHECK.check_strings_catalog(shared)
+
     def test_repository_catalogs_pass(self):
         self.assertEqual(CHECK.check_repo(ROOT), [])
 
-    def test_broken_shared_catalog_fails(self):
-        broken = copy.deepcopy(self.shared)
-        broken["strings"]["Off"]["localizations"]["de"] = unit("Off")
-        broken["strings"]["%lld members"]["localizations"]["ru"]["substitutions"]["count"]["variations"]["plural"].pop("few")
-        del broken["strings"]["Settings"]["localizations"]["fr"]
-        errors = CHECK.check_strings_catalog(broken)
+    def test_flattening_a_required_count_key_fails(self):
+        def flatten(strings):
+            for localization in strings["%lld members"]["localizations"].values():
+                localization.pop("substitutions", None)
+                localization.pop("variations", None)
+                localization["stringUnit"] = {"state": "translated", "value": "%lld"}
+        errors = self.broken(flatten)
+        self.assertIn("en: '%lld members' needs plural variations", errors)
+        self.assertIn("de: '%lld members' needs plural variations", errors)
+
+    def test_removing_a_required_key_fails(self):
+        self.assertIn("missing required key 'Leave “%@”?'", self.broken(lambda s: s.pop("Leave “%@”?")))
+
+    def test_sign_in_as_english_copy_fails(self):
+        def english(strings):
+            strings["Sign In"]["localizations"]["de"]["stringUnit"]["value"] = "Sign In"
+        errors = self.broken(english)
+        self.assertIn("de: 'Sign In' is 'Sign In', pinned 'Anmelden'", errors)
+        self.assertIn("de: 'Sign In' still shows the English copy", errors)
+
+    def test_specifier_type_swap_in_a_real_entry_fails(self):
+        def swap(strings):
+            strings["%1$lld of %2$lld"]["localizations"]["de"]["stringUnit"]["value"] = "%1$lld von %2$@"
+        self.assertIn("de: specifiers ['%1$lld', '%2$@'] for '%1$lld of %2$lld' expect ['%1$lld', '%2$lld']",
+                      self.broken(swap))
+
+    def test_broken_retention_and_russian_plural_fail(self):
+        def damage(strings):
+            strings["Off"]["localizations"]["de"] = unit("Off")
+            strings["%lld members"]["localizations"]["ru"]["substitutions"]["count"]["variations"]["plural"].pop("few")
+            del strings["Settings"]["localizations"]["fr"]
+        errors = self.broken(damage)
         self.assertIn("de: 'Off' still shows the English copy", errors)
         self.assertIn("ru: '%lld members' needs one/few/many/other plural forms", errors)
         self.assertIn("fr: missing localization for 'Settings'", errors)
@@ -158,8 +266,11 @@ class RepositoryCatalogTests(unittest.TestCase):
     def test_broken_infoplist_catalog_fails(self):
         broken = copy.deepcopy(self.infoplist)
         broken["strings"]["NSMicrophoneUsageDescription"]["localizations"]["tr"]["stringUnit"]["value"] = ""
-        self.assertEqual(CHECK.check_infoplist_catalog(broken),
-                         ["tr: empty InfoPlist value for NSMicrophoneUsageDescription"])
+        del broken["strings"]["CFBundleName"]
+        self.assertEqual(CHECK.check_infoplist_catalog(broken), [
+            "missing required InfoPlist key CFBundleName",
+            "tr: empty InfoPlist value for NSMicrophoneUsageDescription",
+        ])
 
 
 if __name__ == "__main__":
