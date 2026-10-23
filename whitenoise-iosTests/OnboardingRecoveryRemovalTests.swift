@@ -9,7 +9,7 @@ import UserNotifications
 struct OnboardingRecoveryRemovalTests {
     @Test func removingBrokenSetupRemovesOnlySelectedProfileAndSurvivesRefresh() async throws {
         let (state, client) = try await makeState()
-        do {
+        try await closing(client) {
             let removed = try await makeBrokenAccount(client)
             let retained = try await makeBrokenAccount(client, nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn")
             try await state.refreshAccounts(refreshUnreadSummaries: false)
@@ -23,16 +23,12 @@ struct OnboardingRecoveryRemovalTests {
             #expect(try await client.onboardingRecoveryRequired(accountRef: retained.label))
             try await state.refreshAccounts(refreshUnreadSummaries: false)
             #expect(state.onboardingRecoveryAccounts.map(\.accountIdHex) == [retained.accountIdHex])
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func staleRecoverySelectionCannotRemoveARepairedProfile() async throws {
         let (state, client) = try await makeState()
-        do {
+        try await closing(client) {
             let account = try await makeBrokenAccount(client)
             try await state.refreshAccounts(refreshUnreadSummaries: false)
             #expect(state.onboardingRecoveryAccounts.count == 1)
@@ -43,16 +39,12 @@ struct OnboardingRecoveryRemovalTests {
                 try await state.removeOnboardingRecoveryAccount(account)
             }
             #expect(try await client.listAccounts().map(\.accountIdHex) == [account.accountIdHex])
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func recoveryKeepsProfileButClearsTheRecoveryEntryWithoutStartingSignIn() async throws {
         let (state, client) = try await makeState()
-        do {
+        try await closing(client) {
             let account = try await makeBrokenAccount(client)
             try await state.refreshAccounts(refreshUnreadSummaries: false)
             try await state.recoverOnboardingSetup(accountID: account.accountIdHex)
@@ -70,16 +62,12 @@ struct OnboardingRecoveryRemovalTests {
                 unfinishedIDs: Set(state.accountSetupSnapshots.map(\.accountIdHex))
             )
             #expect(readyProfiles.map(\.accountIdHex) == [account.accountIdHex])
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func successfulRecoveryStaysSuccessfulWhenAccountRefreshFails() async throws {
         let (state, client) = try await makeState()
-        do {
+        try await closing(client) {
             let account = try await makeBrokenAccount(client)
             try await state.refreshAccounts(refreshUnreadSummaries: false)
             state.beforeAccountRefreshForTesting = { throw URLError(.notConnectedToInternet) }
@@ -92,16 +80,12 @@ struct OnboardingRecoveryRemovalTests {
             #expect(retained.signedOut)
             #expect(state.pendingAccountSetup == nil)
             #expect(state.activeAccountRef == nil)
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func recoveryIsRejectedWhileAnotherProfileSignsOut() async throws {
         let (state, client) = try await makeState()
-        do {
+        try await closing(client) {
             _ = try await state.createIdentity()
             let account = try await makeBrokenAccount(client)
             try await state.refreshAccounts(refreshUnreadSummaries: false)
@@ -120,28 +104,20 @@ struct OnboardingRecoveryRemovalTests {
             #expect(attemptedRecovery)
             #expect(try await client.onboardingRecoveryRequired(accountRef: account.label))
             #expect(state.onboardingRecoveryAccounts.map(\.accountIdHex) == [account.accountIdHex])
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func resetProfileRemainsAvailableAfterRuntimeReopens() async throws {
         let (state, client) = try await makeState()
-        let account: AccountSummaryFfi
-        do {
-            account = try await makeBrokenAccount(client)
+        let account = try await closing(client) {
+            let account = try await makeBrokenAccount(client)
             try await state.refreshAccounts(refreshUnreadSummaries: false)
             try await state.recoverOnboardingSetup(accountID: account.accountIdHex)
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
+            return account
         }
-        try await client.marmot.shutdownAndClose()
 
         let reopened = try MarmotClient(rootPath: client.rootPath, relayUrls: client.relayUrls)
-        do {
+        try await closing(reopened) {
             let (reopenedState, _) = try await makeState(existingClient: reopened)
             let readyProfiles = OnboardingRecoveryPresentation.readyProfiles(
                 accounts: reopenedState.accounts, recoveredInSession: [],
@@ -151,11 +127,7 @@ struct OnboardingRecoveryRemovalTests {
             #expect(readyProfiles.map(\.accountIdHex) == [account.accountIdHex])
             #expect(reopenedState.activeAccountRef == nil)
             #expect(reopenedState.pendingAccountSetup == nil)
-        } catch {
-            try? await reopened.marmot.shutdownAndClose()
-            throw error
         }
-        try await reopened.marmot.shutdownAndClose()
     }
 
     private func makeState(existingClient: MarmotClient? = nil) async throws -> (AppState, MarmotClient) {

@@ -881,20 +881,20 @@ struct AccountSetupRuntimeTests {
     // stalled job. Starved CI runners have taken 357s for a single real-runtime
     // test, so keep it well above that.
     @Test(.timeLimit(.minutes(10))) func realSnapshotSubscriptionCancelsWhileMDKIsQuiet() async throws {
-        let client = try MarmotClient.testClient()
-        try await client.startRuntime()
-        let initial = try await client.marmot.beginOnboarding(
-            nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
-            options: OnboardingOptionsFfi(defaultRelays: ["wss://relay.invalid.test"], discoveryRelays: ["wss://relay.invalid.test"])
-        )
-        let subscription = try await MarmotAccountSetupClient(client: client, accountID: initial.accountIdHex).subscribe()
-        let waiting = Task { try await subscription.next() }
-        await Task.yield()
-        waiting.cancel()
-        await #expect(throws: CancellationError.self) { _ = try await waiting.value }
-        // Cancellation must finish without closing the live runtime or emitting another snapshot.
-        #expect(try await client.onboardingSnapshot(accountID: initial.accountIdHex)?.revision == initial.revision)
-        try await client.marmot.shutdownAndClose()
+        try await withTestClient { client in
+            try await client.startRuntime()
+            let initial = try await client.marmot.beginOnboarding(
+                nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
+                options: OnboardingOptionsFfi(defaultRelays: ["wss://relay.invalid.test"], discoveryRelays: ["wss://relay.invalid.test"])
+            )
+            let subscription = try await MarmotAccountSetupClient(client: client, accountID: initial.accountIdHex).subscribe()
+            let waiting = Task { try await subscription.next() }
+            await Task.yield()
+            waiting.cancel()
+            await #expect(throws: CancellationError.self) { _ = try await waiting.value }
+            // Cancellation must finish without closing the live runtime or emitting another snapshot.
+            #expect(try await client.onboardingSnapshot(accountID: initial.accountIdHex)?.revision == initial.revision)
+        }
     }
 }
 

@@ -681,23 +681,23 @@ struct CreateIdentityOnboardingTests {
         let file = directory.appendingPathComponent("draft.json")
         let invalid = Data("broken".utf8)
         try invalid.write(to: file)
-        let client = try MarmotClient.testClient()
-        try await client.startRuntime()
-        let state = AppState.test(client: client, notifications: .shared,
-                             signUpDraftStore: SignUpDraftStore(directory: directory))
-        try await state.refreshAccounts(refreshUnreadSummaries: false)
-        #expect(state.hasRestoredSignUp)
-        #expect(state.restoreSignUpPresentation)
-        #expect(state.signUpModel.isRestorationBlocked)
-        try await state.refreshAccounts(refreshUnreadSummaries: false)
-        await state.signUpModel.persistDraft()
-        #expect(try Data(contentsOf: file) == invalid)
-        let blocked = state.signUpModel
-        state.closeSignUpDraft()
-        #expect(state.signUpModel === blocked)
-        #expect(await state.signUpModel.discardUnrestorableDraft())
-        #expect(!FileManager.default.fileExists(atPath: file.path))
-        try await client.marmot.shutdownAndClose()
+        try await withTestClient { client in
+            try await client.startRuntime()
+            let state = AppState.test(client: client, notifications: .shared,
+                                 signUpDraftStore: SignUpDraftStore(directory: directory))
+            try await state.refreshAccounts(refreshUnreadSummaries: false)
+            #expect(state.hasRestoredSignUp)
+            #expect(state.restoreSignUpPresentation)
+            #expect(state.signUpModel.isRestorationBlocked)
+            try await state.refreshAccounts(refreshUnreadSummaries: false)
+            await state.signUpModel.persistDraft()
+            #expect(try Data(contentsOf: file) == invalid)
+            let blocked = state.signUpModel
+            state.closeSignUpDraft()
+            #expect(state.signUpModel === blocked)
+            #expect(await state.signUpModel.discardUnrestorableDraft())
+            #expect(!FileManager.default.fileExists(atPath: file.path))
+        }
     }
 
     @Test func retryRestorationClosesRecoveryWhenTheSavedDraftIsGone() async throws {
@@ -706,21 +706,21 @@ struct CreateIdentityOnboardingTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent("draft.json")
         try Data("broken".utf8).write(to: file)
-        let client = try MarmotClient.testClient()
-        try await client.startRuntime()
-        let state = AppState.test(client: client, notifications: .shared,
-                                  signUpDraftStore: SignUpDraftStore(directory: directory))
-        try await state.refreshAccounts(refreshUnreadSummaries: false)
-        #expect(state.signUpModel.isRestorationBlocked)
-        #expect(state.restoreSignUpPresentation)
+        try await withTestClient { client in
+            try await client.startRuntime()
+            let state = AppState.test(client: client, notifications: .shared,
+                                      signUpDraftStore: SignUpDraftStore(directory: directory))
+            try await state.refreshAccounts(refreshUnreadSummaries: false)
+            #expect(state.signUpModel.isRestorationBlocked)
+            #expect(state.restoreSignUpPresentation)
 
-        try FileManager.default.removeItem(at: file)
-        await state.retrySignUpRestoration()
+            try FileManager.default.removeItem(at: file)
+            await state.retrySignUpRestoration()
 
-        #expect(!state.signUpModel.isRestorationBlocked)
-        #expect(!state.restoreSignUpPresentation)
-        #expect(state.accounts.isEmpty)
-        try await client.marmot.shutdownAndClose()
+            #expect(!state.signUpModel.isRestorationBlocked)
+            #expect(!state.restoreSignUpPresentation)
+            #expect(state.accounts.isEmpty)
+        }
     }
 
     @Test(arguments: [false, true])
@@ -757,24 +757,24 @@ struct CreateIdentityOnboardingTests {
         draft.accountID = identity.accountIdHex
         draft.accountRef = identity.label
         try await store.save(draft)
-        let client = try MarmotClient.testClient()
-        let state = AppState.test(client: client, notifications: .shared, signUpDraftStore: store)
-        try await client.startRuntime()
-        // The stale account list names an identity absent from this runtime's store.
-        await #expect(throws: (any Error).self) {
-            try await client.accountSetupReadiness(accountRef: identity.label)
+        try await withTestClient { client in
+            let state = AppState.test(client: client, notifications: .shared, signUpDraftStore: store)
+            try await client.startRuntime()
+            // The stale account list names an identity absent from this runtime's store.
+            await #expect(throws: (any Error).self) {
+                try await client.accountSetupReadiness(accountRef: identity.label)
+            }
+
+            try await state.restoreSignUpIfNeeded(accounts: [identity], client: client)
+
+            #expect(state.hasRestoredSignUp)
+            #expect(state.restoreSignUpPresentation)
+            #expect(state.signUpModel.isRestorationBlocked)
+            #expect(state.isUnfinishedSignUpAccount(identity.accountIdHex))
+            #expect(!state.isUnfinishedSignUpAccount("unrelated"))
+            await state.signUpModel.persistDraft()
+            #expect(try await store.load() == draft)
         }
-
-        try await state.restoreSignUpIfNeeded(accounts: [identity], client: client)
-
-        #expect(state.hasRestoredSignUp)
-        #expect(state.restoreSignUpPresentation)
-        #expect(state.signUpModel.isRestorationBlocked)
-        #expect(state.isUnfinishedSignUpAccount(identity.accountIdHex))
-        #expect(!state.isUnfinishedSignUpAccount("unrelated"))
-        await state.signUpModel.persistDraft()
-        #expect(try await store.load() == draft)
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func restorationFromAReplacedRuntimePreservesTheDraftForRetry() async throws {
