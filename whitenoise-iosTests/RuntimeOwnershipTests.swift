@@ -48,7 +48,7 @@ private actor ScriptedRuntimeFactory {
             runtimeBusyFailuresRemaining -= 1
             throw MarmotKitError.RuntimeBusy
         }
-        return try MarmotClient.testClient()
+        return try TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot: true)
     }
 
     func snapshot() -> (attempts: Int, maximumInFlight: Int) {
@@ -97,8 +97,7 @@ struct RuntimeOwnershipTests {
     // The native cancellation test for the handwritten CancellablePresentedChatList
     // adapter (AGENTS.md, Rust Bindings): keep it and run it on every binding refresh.
     @Test func publishedPresentationSubscriptionCancelsWithoutAnotherEvent() async throws {
-        let client = try MarmotClient.testClient()
-        do {
+        try await withTestClient { client in
             try await client.startRuntime()
             let creation = try await client.marmot.createIdentityWithProfile(
                 defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
@@ -142,9 +141,6 @@ struct RuntimeOwnershipTests {
             #expect(try await !client.onboardingRecoveryRequired(accountRef: account.label))
             try await client.marmot.shutdownAndClose()
             #expect(client.marmot.storageIsClosed())
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
     }
 
@@ -181,7 +177,8 @@ struct RuntimeOwnershipTests {
     }
 
     @Test func coldBackgroundLaunchClosesRuntimeAfterBootstrap() async throws {
-        var injectedClient: MarmotClient? = try MarmotClient.testClient()
+        var injectedClient: MarmotClient? = try TestRuntimeScope.own(
+            MarmotClient.testClient(), ownsRoot: true, retainingClient: false)
         let marmot = try #require(injectedClient?.marmot)
         weak let releasedClient = injectedClient
         let appState = AppState.test(
@@ -331,7 +328,8 @@ struct RuntimeOwnershipTests {
     }
 
     @Test func backgroundSuspensionDropsTheFinalClientReference() async throws {
-        var injectedClient: MarmotClient? = try MarmotClient.testClient()
+        var injectedClient: MarmotClient? = try TestRuntimeScope.own(
+            MarmotClient.testClient(), ownsRoot: true, retainingClient: false)
         let marmot = try #require(injectedClient?.marmot)
         weak let releasedClient = injectedClient
         let appState = AppState.test(
@@ -350,7 +348,8 @@ struct RuntimeOwnershipTests {
     }
 
     @Test func suspensionCancelsAndDrainsOwnedMutationFollowup() async throws {
-        var injectedClient: MarmotClient? = try MarmotClient.testClient()
+        var injectedClient: MarmotClient? = try TestRuntimeScope.own(
+            MarmotClient.testClient(), ownsRoot: true, retainingClient: false)
         let marmot = try #require(injectedClient?.marmot)
         let gate = RuntimeRetryGate()
         let appState = AppState.test(
@@ -450,7 +449,8 @@ struct RuntimeOwnershipTests {
     }
 
     @Test func notificationActionContentionFailsImmediatelyAndReleasesSuspensionGate() async throws {
-        var initialClient: MarmotClient? = try MarmotClient.testClient()
+        var initialClient: MarmotClient? = try TestRuntimeScope.own(
+            MarmotClient.testClient(), ownsRoot: true, retainingClient: false)
         let appState = AppState.test(
             client: initialClient,
             notifications: runtimeOwnershipDeniedNotifications(),

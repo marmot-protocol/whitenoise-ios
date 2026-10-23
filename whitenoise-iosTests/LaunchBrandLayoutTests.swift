@@ -69,39 +69,41 @@ struct LaunchBrandLayoutTests {
             previousKeyWindow?.makeKey()
         }
 
-        let appState = AppState.test(client: try MarmotClient.testClient())
-        for textSize in [DynamicTypeSize.large, .accessibility5] {
-            // Navigation can publish a zero-size frame before its first usable layout.
-            let report = MarkFrameReport()
-            let welcome = UIHostingController(rootView:
-                NavigationStack { WelcomeView() }
-                    .environment(appState)
-                    .environment(\.dynamicTypeSize, textSize)
-                    .environment(\.verticalSizeClass, size.height < 500 ? .compact : .regular)
-                    .overlayPreferenceValue(WelcomeBrandBoundsKey.self) { anchor in
-                        GeometryReader { geometry in
-                            Color.clear
-                                .onChange(of: anchor.map { geometry[$0] }, initial: true) { _, frame in
-                                    report.record(frame)
-                                }
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            for textSize in [DynamicTypeSize.large, .accessibility5] {
+                // Navigation can publish a zero-size frame before its first usable layout.
+                let report = MarkFrameReport()
+                let welcome = UIHostingController(rootView:
+                    NavigationStack { WelcomeView() }
+                        .environment(appState)
+                        .environment(\.dynamicTypeSize, textSize)
+                        .environment(\.verticalSizeClass, size.height < 500 ? .compact : .regular)
+                        .overlayPreferenceValue(WelcomeBrandBoundsKey.self) { anchor in
+                            GeometryReader { geometry in
+                                Color.clear
+                                    .onChange(of: anchor.map { geometry[$0] }, initial: true) { _, frame in
+                                        report.record(frame)
+                                    }
+                            }
+                            .allowsHitTesting(false)
                         }
-                        .allowsHitTesting(false)
-                    }
-            )
-            window.rootViewController = welcome
-            window.makeKeyAndVisible()
-            welcome.view.layoutIfNeeded()
+                )
+                window.rootViewController = welcome
+                window.makeKeyAndVisible()
+                welcome.view.layoutIfNeeded()
 
-            // SwiftUI Image need not create a UIImageView; measure its rendered layout instead.
-            let actual = try #require(
-                await report.usableFrame(timeout: .seconds(5)),
-                "Welcome logo did not report layout for \(size), \(textSize)"
-            )
-            #expect(actual.width > 0)
-            #expect(actual.height > 0)
-            #expect(actual.width <= window.bounds.width * 0.5 + 1)
-            #expect(actual.height <= window.bounds.height * 0.3 + 1)
-            #expect(window.bounds.insetBy(dx: -1, dy: -1).contains(actual))
+                // SwiftUI Image need not create a UIImageView; measure its rendered layout instead.
+                let actual = try #require(
+                    await report.usableFrame(timeout: .seconds(5)),
+                    "Welcome logo did not report layout for \(size), \(textSize)"
+                )
+                #expect(actual.width > 0)
+                #expect(actual.height > 0)
+                #expect(actual.width <= window.bounds.width * 0.5 + 1)
+                #expect(actual.height <= window.bounds.height * 0.3 + 1)
+                #expect(window.bounds.insetBy(dx: -1, dy: -1).contains(actual))
+            }
         }
     }
 
@@ -118,27 +120,16 @@ struct LaunchBrandLayoutTests {
 @MainActor
 private final class MarkFrameReport {
     private var frame: CGRect?
-    private var waiter: CheckedContinuation<CGRect?, Never>?
+    private let reported = TestLatch()
 
     func record(_ frame: CGRect?) {
         guard let frame, !frame.isEmpty else { return }
         self.frame = frame
-        resume(with: frame)
+        reported.signal()
     }
 
     func usableFrame(timeout: Duration) async -> CGRect? {
-        if let frame { return frame }
-        let timer = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: timeout)
-            self?.resume(with: nil)
-        }
-        defer { timer.cancel() }
-        return await withCheckedContinuation { waiter = $0 }
-    }
-
-    private func resume(with frame: CGRect?) {
-        guard let waiter else { return }
-        self.waiter = nil
-        waiter.resume(returning: frame)
+        try? await reported.wait(timeout: timeout)
+        return frame
     }
 }

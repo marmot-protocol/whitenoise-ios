@@ -498,11 +498,7 @@ private nonisolated final class GatedPollVotesSource: PollVotesDataSource {
     }
 
     func waitUntilWaiting(_ subject: PollVotesSubject) async throws {
-        for _ in 0..<10_000 {
-            if state.withLock({ $0.waiters[subject] != nil }) { return }
-            try await Task.sleep(nanoseconds: 1_000_000)
-        }
-        Issue.record("Timed out waiting for a request for \(subject.pollEventId)")
+        try await eventually { state.withLock { $0.waiters[subject] != nil } }
     }
 
     func pollVotesPage(for subject: PollVotesSubject, after cursor: PollVotesCursor?, limit: UInt32) async throws -> PollVotePageFfi {

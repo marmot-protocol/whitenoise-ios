@@ -25,19 +25,13 @@ struct AuditV5AdoptionTests {
     // A destination the native runtime refused would silently disable audit export.
     @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
     func nativeRuntimeAcceptsTheAppAuditDestination() async throws {
-        let client = try MarmotClient.testClient()
-        defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
-        do {
+        try await withTestClient { client in
             let applied = try client.marmot.setAuditOtlpConfigV5(
                 config: Self.telemetry(auditToken: "audit-token").auditOtlpConfig()
             )
             #expect(applied.enabled)
             #expect(applied.destination == TelemetryBuildConfig.auditOtlpDestination)
             #expect(applied.endpoint == "https://otlp.whitenoise.chat/v1/logs")
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
     }
 
@@ -49,7 +43,7 @@ struct AuditV5AdoptionTests {
         config.auditOtlpEndpoint = "http://collector.invalid.test/not-logs"
         let client = try MarmotClient(rootPath: root.path, relayUrls: ["wss://relay.invalid.test"],
                                       cursorPersistence: .advance, telemetryConfig: config)
-        try await client.marmot.shutdownAndClose()
+        try await closing(client) {}
     }
 
     @Test func exportSelectsTheNewestNonEmptyAuditFileAndPreservesItsOriginalBytes() async throws {

@@ -204,8 +204,8 @@ Provenance: 2026-10-23, Apple Silicon Mac (16 cores), Xcode 27.1, iPhone SE
   `MarmotClient.testClient()` and never start it) cost little here:
   `ChatsListProjectionTests` with 30 of them runs in 0.09 s. They leaked
   ~190 unclosed runtimes per run; wave 3's `purify` verdicts removed or
-  scoped most of them, and the remaining direct opens are baselined as
-  `unowned-runtime` in `scripts/audit/guardrail-baseline.txt`.
+  scoped most of them, and the baseline burndown scoped the rest, so
+  `scripts/audit/guardrail-baseline.txt` has no `unowned-runtime` line.
 - **Coverage overlap**: after subtracting the 966 host-launch lines and
   excluding 341 ubiquitous lines, 38 of 325 files cover no line that another
   file does not also cover, and 4 files covered no app line at all (disabled

@@ -7,16 +7,15 @@ import MarmotKit
 @Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationWindowBindingTests {
     @Test func draftStorePreservesTypingDuringSendAndRequiresConflictResolution() async throws {
-        let client = try MarmotClient.testClient()
-        let defaults = try #require(UserDefaults(suiteName: "DraftWindowTests.\(UUID())"))
-        let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-        let state = AppState.test(client: client, conversationDraftStore: store,
-            accountDefaults: defaults, erasureDefaults: defaults)
-        state.setPhase(.ready)
-        let watchdog = MarmotFixtureWatchdog.start(
-            "Draft store send did not complete", breaking: client)
-        defer { watchdog.cancel() }
-        do {
+        try await withTestClient { client in
+            let defaults = try #require(UserDefaults(suiteName: "DraftWindowTests.\(UUID())"))
+            let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+            let state = AppState.test(client: client, conversationDraftStore: store,
+                accountDefaults: defaults, erasureDefaults: defaults)
+            state.setPhase(.ready)
+            let watchdog = MarmotFixtureWatchdog.start(
+                "Draft store send did not complete", breaking: client)
+            defer { watchdog.cancel() }
             try await client.startRuntime()
             let account = try await client.marmot.createIdentityWithProfile(
                 defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
@@ -50,24 +49,19 @@ struct ConversationWindowBindingTests {
             await store.flush()
             #expect(!store.conflictedKeys.contains(key))
             #expect(try await client.selectedMessageDraft(accountRef: account.label, groupIdHex: group.groupIdHex).draft?.content == "my unsaved text")
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
     }
 
     @Test(arguments: [false, true])
     func draftSendStatusDistinguishesAcceptedFromRejectedAdmission(accepted: Bool) async throws {
-        let client = try MarmotClient.testClient()
-        let defaults = try #require(UserDefaults(suiteName: "DraftSendFailureTests.\(UUID())"))
-        let drafts = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-        let state = AppState.test(client: client, conversationDraftStore: drafts,
-            accountDefaults: defaults, erasureDefaults: defaults)
-        state.setPhase(.ready)
-        let watchdog = MarmotFixtureWatchdog.start("Draft send recovery did not complete", breaking: client)
-        defer { watchdog.cancel() }
-        do {
+        try await withTestClient { client in
+            let defaults = try #require(UserDefaults(suiteName: "DraftSendFailureTests.\(UUID())"))
+            let drafts = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+            let state = AppState.test(client: client, conversationDraftStore: drafts,
+                accountDefaults: defaults, erasureDefaults: defaults)
+            state.setPhase(.ready)
+            let watchdog = MarmotFixtureWatchdog.start("Draft send recovery did not complete", breaking: client)
+            defer { watchdog.cancel() }
             try await client.startRuntime()
             let account = try await client.marmot.createIdentityWithProfile(
                 defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
@@ -96,10 +90,6 @@ struct ConversationWindowBindingTests {
             #expect((timeline.failedTransientRecord(rowId: row.id) == nil) == accepted)
             let recovered = await drafts.snapshot(accountRef: account.label, groupIdHex: group.groupIdHex)
             #expect(recovered?.canonicalText == (accepted ? nil : "send once"))
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
     }
 

@@ -19,9 +19,7 @@ struct PresentedChatListTests {
         let row = chatListRow(groupIdHex: "expiry", title: "Chat", lastMessage: preview)
         model.applyPresentedSnapshot(presentedChatSnapshot([row]))
         #expect(model.items.first?.searchHaystack.contains("secret preview") == true)
-        for _ in 0..<400 where model.items.first?.previewExpired != true {
-            try await Task.sleep(for: .milliseconds(25))
-        }
+        try await eventually { model.items.first?.previewExpired == true }
         let expired = try #require(model.items.first)
         #expect(expired.previewExpired)
         #expect(expired.lastMessage == nil)
@@ -163,7 +161,7 @@ struct PresentedChatListTests {
         model.applyPresentedSnapshot(snapshot)
         #expect(stages.withLock { $0.isEmpty })
         #expect(model.finishPinOrderUITransition(transitionID: transition, orderedGroupIds: nil))
-        try await waitForExpectation { stages.withLock { $0.contains(.inboxSnapshot) } }
+        try await eventually { stages.withLock { $0.contains(.inboxSnapshot) } }
         #expect(stages.withLock { $0.filter { $0 == .inboxSnapshot }.count } == 1)
         appState.productAnalytics.replaceSink(nil)
     }

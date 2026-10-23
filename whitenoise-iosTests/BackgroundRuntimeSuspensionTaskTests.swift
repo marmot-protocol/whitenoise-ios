@@ -38,7 +38,7 @@ struct BackgroundRuntimeSuspensionTaskTests {
         await checkpoint.waitUntilPaused()
 
         capturedExpirationHandler?()
-        try await waitForExpectation {
+        try await eventually {
             expirationCount == 1 && endedTaskIDs == [taskID]
         }
 

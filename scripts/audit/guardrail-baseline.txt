@@ -4,23 +4,7 @@
 # `python3 scripts/audit/inventory.py --write-baseline`; never raise a count to
 # land new code, fix the suite instead.
 
-sleep AppStateBootstrapTests 8
-sleep BackgroundRuntimeSuspensionTaskTests 1
-sleep ChatsListProjectionTests 1
-sleep ConversationHeaderBarLayoutTests 1
-sleep ConversationTailVisibilityTests 1
-sleep ConversationTimelineProjectionTests 2
-sleep LaunchBrandLayoutTests 1
-sleep PollVotesModelTests 1
-sleep PresentedChatListTests 2
-sleep PrivateKeyPasteTests 1
-sleep TimelineTailRefreshTaskLifetimeTests 3
-
-unowned-runtime AuditV5AdoptionTests 2
-unowned-runtime CancellableSubscriptionAdapterTests 1
-unowned-runtime ConversationWindowBindingTests 2
-unowned-runtime LaunchBrandLayoutTests 1
-unowned-runtime MediaAcquisitionIntentTests 1
-unowned-runtime OnboardingRecoveryRemovalTests 1
-unowned-runtime ProductAnalyticsTests 9
-unowned-runtime RuntimeOwnershipTests 6
+# Two tests check that a background suspension is still pending while bootstrap
+# or a notification-action lease holds it; observing that it parked needs a
+# production test hook in RuntimeLifecycle.
+sleep AppStateBootstrapTests 2

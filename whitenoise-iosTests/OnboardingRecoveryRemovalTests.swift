@@ -5,7 +5,7 @@ import UserNotifications
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit, .closesTestRuntimes)
 struct OnboardingRecoveryRemovalTests {
     @Test func removingBrokenSetupRemovesOnlySelectedProfileAndSurvivesRefresh() async throws {
         let (state, client) = try await makeState()
@@ -131,7 +131,8 @@ struct OnboardingRecoveryRemovalTests {
     }
 
     private func makeState(existingClient: MarmotClient? = nil) async throws -> (AppState, MarmotClient) {
-        let client = try existingClient ?? MarmotClient.testClient()
+        // The scope closes a fresh client even if bootstrap throws before a test's `closing`.
+        let client = try existingClient ?? TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot: true)
         let state = AppState.test(
             client: client,
             notifications: AppNotifications(
