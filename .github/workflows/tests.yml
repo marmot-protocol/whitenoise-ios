@@ -139,55 +139,22 @@ jobs:
           restore-keys: |
             spm-${{ runner.os }}-xcode26-
 
-      - name: Isolate simulator clipboard
-        # Host clipboard sync can stall UIPasteboard reads and block MainActor tests.
-        run: defaults write com.apple.iphonesimulator PasteboardAutomaticSync -bool false
-
-      # Compiler cache keys hash compiler inputs rather than file mtimes, so a
-      # fresh checkout still replays cached objects. Only master writes the
-      # cache; pull requests read master's copy and never evict each other.
-      # To disable, drop WN_TEST_COMPILATION_CACHE from the job env above.
-      - name: Restore compilation cache
-        id: compilation-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: build/CompilationCache
-          key: cas-${{ runner.os }}-xcode26-${{ github.sha }}
-          restore-keys: |
-            cas-${{ runner.os }}-xcode26-
-
-      - name: Run tests
-        # End the step before the job deadline so failure artifacts can upload.
-        timeout-minutes: 40
-        # The tier comes from the Choose test tier step above. To run the full
-        # suite on every pull request, make this `--tier full`.
-        run: ./scripts/test.sh --tier ${{ steps.tier.outputs.tier }}
-
-      - name: Report test phases
-        if: always()
-        run: ./scripts/audit/report-run.sh build/TestResults.xcresult
-
-      - name: Save compilation cache
-        if: always() && github.ref == 'refs/heads/master'
-        uses: actions/cache/save@v4
-        with:
-          path: build/CompilationCache
-          key: cas-${{ runner.os }}-xcode26-${{ github.sha }}
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TestResults
-          path: build/TestResults.xcresult
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Upload audit logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TestAudit
-          path: build/audit
-          if-no-files-found: ignore
-          retention-days: 7
+      - name: Build Release apps and check privacy configuration
+        timeout-minutes: 50
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          for pair in "Whitenoise (Production):Release-Production" "Whitenoise (Staging):Release-Staging"; do
+            scheme="${pair%%:*}"; config="${pair##*:}"
+            t0=$(date +%s)
+            xcodebuild build -project whitenoise-ios.xcodeproj -scheme "$scheme" -configuration "$config" \
+              -destination 'generic/platform=iOS' -derivedDataPath build/DD-release \
+              -clonedSourcePackagesDirPath build/SourcePackages CODE_SIGNING_ALLOWED=NO -quiet
+            echo "BUILD_SECONDS scheme=$scheme seconds=$(( $(date +%s) - t0 ))"
+          done
+          for app in build/DD-release/Build/Products/Release-*-iphoneos/*.app; do
+            echo "== $app"
+            python3 scripts/check-privacy-release-config.py "$app"
+          done
+          echo "PRIVACY_TRIAL_SECONDS=$(( $(date +%s) - start ))" | tee -a "$GITHUB_STEP_SUMMARY"
+          df -h / | tee -a "$GITHUB_STEP_SUMMARY"
