@@ -2,15 +2,16 @@
 """Summarize a runtime-gate trace written by `GateTrace` in the test host.
 
 Enable the trace with `TEST_RUNNER_WN_TEST_GATE_TRACE=1` on `xcodebuild test`,
-then fetch `gate-trace.jsonl` from the host's temporary directory, e.g.
+then fetch the `gate-trace-<pid>.jsonl` files from the host's temporary directory
+(one per host launch; concatenate them), e.g.
 
   xcrun simctl get_app_container <udid> dev.ipf.whitenoise.ios.staging data
-  find <container>/tmp -name gate-trace.jsonl
+  find <container>/tmp -name 'gate-trace-*.jsonl'
 
 Each line is {"test", "requested", "acquired", "released"} (epoch seconds).
 Reports: permits observed, total hold time (the floor for the gated critical
 path at one permit), total wait time, hold-time distribution, and the longest
-holders. Usage: python3 scripts/audit/gate-critical-path.py <gate-trace.jsonl>
+holders. Usage: python3 scripts/audit/gate-critical-path.py <gate-trace.jsonl> (concatenated)
 """
 import json
 import statistics

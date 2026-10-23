@@ -1,0 +1,8 @@
+{
+  "name": "generic-preview-keeps-sender",
+  "path": "Shared/LocalNotificationProjection.swift",
+  "old": "            senderName: previewMode.revealsSenderIdentity ? senderName : nil,\n",
+  "new": "            senderName: senderName,\n",
+  "grep": "makePresentation",
+  "why": "AGENTS.md: generic preview mode must drop senderName so the sender never reaches the communication intent"
+}
