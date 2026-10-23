@@ -24,6 +24,9 @@ struct LaunchBrandLayoutTests {
         window.makeKeyAndVisible()
         launch.view.layoutIfNeeded()
         let launchMark = try #require(Self.mark(in: launch.view))
+        // A blank splash would still lay out an empty view under the identifier.
+        let launchImage = try #require(launchMark as? UIImageView)
+        #expect(launchImage.image != nil)
         let expected = launchMark.convert(launchMark.bounds, to: window)
         #expect(expected.width > 0)
         #expect(expected.height <= size.height * 0.3 + 1)
@@ -40,6 +43,7 @@ struct LaunchBrandLayoutTests {
             await Task.yield()
             loading.view.layoutIfNeeded()
             let loadingMark = try #require(Self.mark(in: loading.view))
+            #expect((loadingMark as? UIImageView)?.image != nil)
             let actual = loadingMark.convert(loadingMark.bounds, to: window)
             #expect(abs(actual.minX - expected.minX) < 1)
             #expect(abs(actual.minY - expected.minY) < 1)
@@ -48,8 +52,10 @@ struct LaunchBrandLayoutTests {
         }
     }
 
+    // 912x420 is the compact-height case that lays Welcome out side by side.
     @Test(arguments: [
         CGSize(width: 320, height: 568),
+        CGSize(width: 912, height: 420),
         CGSize(width: 1194, height: 834),
     ])
     func welcomeMarkRemainsVisibleAndBounded(size: CGSize) async throws {

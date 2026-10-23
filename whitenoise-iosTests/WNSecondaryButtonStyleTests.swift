@@ -5,6 +5,12 @@ import Testing
 struct WNSecondaryButtonStyleTests {
     private typealias Metrics = WNSecondaryButtonStyle.Metrics
 
+    @Test func pressFadesTheCapsuleWithoutHidingIt() {
+        let pressed = Metrics.opacity(isPressed: true)
+        #expect(pressed > 0)
+        #expect(pressed < 1)
+    }
+
     @Test func paddingKeepsAWiderThanTallPill() {
         for controlSize in ControlSize.allCases {
             #expect(Metrics.verticalPadding(for: controlSize) > 0)

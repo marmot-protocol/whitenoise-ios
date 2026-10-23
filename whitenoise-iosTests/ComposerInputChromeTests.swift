@@ -13,6 +13,19 @@ struct ComposerInputChromeTests {
         #expect(ComposerInputChrome.controlSize >= 44)
     }
 
+    @MainActor
+    @Test(arguments: [ColorScheme.light, .dark])
+    func sendButtonSymbolStaysLegibleOnItsFill(_ scheme: ColorScheme) {
+        let appearance = ComposerSendButtonAppearance.colorScheme(scheme)
+        let ratio = ContrastProbe.ratio(
+            foreground: appearance.symbol.color,
+            background: appearance.fill.color,
+            style: scheme == .dark ? .dark : .light
+        )
+
+        #expect(ratio >= 4.5, "send symbol contrast \(ratio) in \(scheme)")
+    }
+
     @Test func voiceRecordingControlsKeepCancelAvailableAndGateStopOnLock() {
         #expect(!ComposerVoiceChromePresentation.showsCancel(isActive: false))
         #expect(ComposerVoiceChromePresentation.showsCancel(isActive: true))

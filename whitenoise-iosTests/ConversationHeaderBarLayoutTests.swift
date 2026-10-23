@@ -48,10 +48,15 @@ final class ConversationHeaderBarLayoutTests: XCTestCase {
         defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
         host.view.layoutIfNeeded()
         let reported = await report.frames(timeout: .seconds(5))
-        return try XCTUnwrap(
+        _ = try XCTUnwrap(
             reported,
             "header geometry did not report at \(Int(width))-\(textSize)-selecting:\(selecting)"
         )
+        // The first complete set can precede the final pass; settle once more
+        // and read whatever the callbacks reported since.
+        host.view.layoutIfNeeded()
+        await Task.yield()
+        return report.latest
     }
 }
 
@@ -66,6 +71,8 @@ private final class FrameReport {
     init(expecting expected: Set<String>) {
         self.expected = expected
     }
+
+    var latest: [String: CGRect] { frames }
 
     private var isComplete: Bool {
         expected.allSatisfy { frames[$0]?.isEmpty == false }

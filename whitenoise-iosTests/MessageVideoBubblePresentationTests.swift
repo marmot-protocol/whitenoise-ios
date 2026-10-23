@@ -10,6 +10,13 @@ import Synchronization
 
 struct MessageVideoBubblePresentationTests {
 
+    @Test func portraitVideoNarrowsInsteadOfCropping() {
+        let size = MessageVideoBubblePresentation.displaySize(maxWidth: 300, dim: "1080x1920")
+
+        #expect(size.width < 300)
+        #expect(size.height > size.width)
+    }
+
     @Test func missingVideoDimensionsUseLandscapeFallback() {
         let size = MessageVideoBubblePresentation.displaySize(maxWidth: 300, dim: nil)
 

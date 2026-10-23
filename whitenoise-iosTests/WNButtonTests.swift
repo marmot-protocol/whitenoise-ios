@@ -4,6 +4,20 @@ import UIKit
 @testable import whitenoise_ios
 
 struct WNButtonTests {
+    @Test func accentIsMonochromeAgainstTheColorScheme() {
+        #expect(WNButton.Metrics.accent(for: .light) == .black)
+        #expect(WNButton.Metrics.accent(for: .dark) == .white)
+    }
+
+    @Test func disabledPrimaryContentLooksDifferentFromEnabled() {
+        for colorScheme in [ColorScheme.light, .dark] {
+            #expect(
+                WNButton.Metrics.contentColor(emphasis: .primary, colorScheme: colorScheme, isEnabled: false)
+                    != WNButton.Metrics.contentColor(emphasis: .primary, colorScheme: colorScheme, isEnabled: true)
+            )
+        }
+    }
+
     @Test func fallbackLabelMinHeightClearsTheAppleMinimumTapTarget() {
         #expect(WNButton.Metrics.fallbackLabelMinHeight >= 44)
     }

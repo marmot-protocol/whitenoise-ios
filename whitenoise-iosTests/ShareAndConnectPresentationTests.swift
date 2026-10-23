@@ -40,17 +40,20 @@ struct WNQRCodeCardRenderingTests {
     private static let containerWidth: CGFloat = 369
     private static let renderScale: CGFloat = 3
 
-    @Test func theRenderedCardDecodesBackToItsPayload() throws {
-        let card = try Self.renderCard(image: QRCode.image(from: Self.payload))
+    // 320 is the narrowest container and leaves the tightest quiet zone.
+    @Test(arguments: [CGFloat(320), 369])
+    func theRenderedCardDecodesBackToItsPayload(containerWidth: CGFloat) throws {
+        let card = try Self.renderCard(image: QRCode.image(from: Self.payload), containerWidth: containerWidth)
 
         #expect(Self.decodedPayloads(in: card).contains(Self.payload))
     }
 
-    @Test func theRenderedCardKeepsAFullQuietZoneAroundTheSymbol() throws {
+    @Test(arguments: [CGFloat(320), 369])
+    func theRenderedCardKeepsAFullQuietZoneAroundTheSymbol(containerWidth: CGFloat) throws {
         let bare = try #require(QRCode.image(from: Self.payload, scale: 1, quietZoneModules: 0))
         let moduleCount = bare.size.width
 
-        let card = try Self.renderCard(image: QRCode.image(from: Self.payload))
+        let card = try Self.renderCard(image: QRCode.image(from: Self.payload), containerWidth: containerWidth)
         let bitmap = try #require(Self.bitmap(of: card))
         let symbol = try #require(bitmap.horizontalExtent { $0 <= 100 }, "no symbol rendered")
         let surface = try #require(bitmap.horizontalExtent { $0 >= 250 }, "no card rendered")
@@ -62,7 +65,7 @@ struct WNQRCodeCardRenderingTests {
 
         #expect(
             margin + 1 >= module * QRCode.standardQuietZoneModules,
-            "\(margin / module) modules of quiet zone"
+            "container \(containerWidth) left \(margin / module) modules of quiet zone"
         )
     }
 
@@ -104,12 +107,13 @@ struct WNQRCodeCardRenderingTests {
         #expect(Self.decodedPayloads(in: failedImage).isEmpty)
     }
 
-    /// Hosts the card in a window at the one container width and snapshots it
-    /// after pending screen updates, without spinning the run loop (which
-    /// would execute other tests' main-thread work from inside this one).
+    /// Hosts the card in a window and snapshots it after pending screen
+    /// updates, without spinning the run loop (which would execute other
+    /// tests' main-thread work from inside this one).
     private static func renderCard(
         image: UIImage?,
-        unavailableDescription: LocalizedStringKey? = nil
+        unavailableDescription: LocalizedStringKey? = nil,
+        containerWidth: CGFloat = Self.containerWidth
     ) throws -> UIImage {
         let controller = UIHostingController(
             rootView: WNQRCodeCard(

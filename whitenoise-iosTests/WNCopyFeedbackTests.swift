@@ -20,4 +20,17 @@ struct WNCopyFeedbackTests {
             #expect(abs(dimensions[0].height - dimensions[1].height) < 0.5)
         }
     }
+
+    @Test func accessibilityLabelNamesTheValueBeforeCopying() {
+        let label = WNCopyFeedback.accessibilityLabel(isCopied: false, copyTitle: L10n.formatted("Copy %@", "npub"))
+
+        #expect(label.contains("npub"))
+        #expect(label != L10n.string("Copied"))
+    }
+
+    @Test func accessibilityLabelConfirmsTheCopyAfterwards() {
+        let label = WNCopyFeedback.accessibilityLabel(isCopied: true, copyTitle: L10n.formatted("Copy %@", "npub"))
+
+        #expect(label == L10n.string("Copied"))
+    }
 }
