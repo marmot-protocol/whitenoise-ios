@@ -31,46 +31,47 @@ struct MessageAudioBubblePresentationTests {
         #expect(MessageAudioBubblePresentation.durationLabel(-.infinity) == nil)
     }
 
-    @Test func audioMetadataCacheKeySurvivesSourceEpochRefresh() {
-        let initial = attachment(
-            id: "row:\(hex("33")):0:0",
-            reference: encryptedMediaReference(
-                fileName: "voice.m4a",
-                mediaType: "audio/mp4",
-                dim: nil,
-                sourceEpoch: 0
-            )
-        )
-        let refreshed = attachment(
-            id: "row:\(hex("33")):42:0",
-            reference: encryptedMediaReference(
-                fileName: "voice.m4a",
-                mediaType: "audio/mp4",
-                dim: nil,
-                sourceEpoch: 42
-            )
-        )
+    // MARK: - Composer draft preview
 
-        #expect(MessageAudioBubblePresentation.cacheKey(for: initial) == MessageAudioBubblePresentation.cacheKey(for: refreshed))
+    @Test func playbackIconReflectsPreviewState() {
+        #expect(ComposerAudioDraftPreviewPresentation.playIconName(isPlaying: false, didFail: false) == "play.fill")
+        #expect(ComposerAudioDraftPreviewPresentation.playIconName(isPlaying: true, didFail: false) == "pause.fill")
+        #expect(ComposerAudioDraftPreviewPresentation.playIconName(isPlaying: false, didFail: true) == "arrow.clockwise")
     }
 
-    @Test func audioMetadataCacheKeyFallsBackToItemIdForLocalAudio() {
-        let local = attachment(id: "local-audio", reference: nil)
-
-        #expect(MessageAudioBubblePresentation.cacheKey(for: local) == "item:local-audio")
+    @Test func durationLabelMatchesComposerPreviewFormat() {
+        #expect(ComposerAudioDraftPreviewPresentation.durationLabel(nil) == "")
+        #expect(ComposerAudioDraftPreviewPresentation.durationLabel(2.9) == "0:02")
+        #expect(ComposerAudioDraftPreviewPresentation.durationLabel(65) == "1:05")
     }
 
-    private func attachment(
-        id: String,
-        reference: MediaAttachmentReferenceFfi?
-    ) -> MessageMediaAttachment {
-        MessageMediaAttachment(
-            id: id,
-            reference: reference,
-            fileName: reference?.fileName ?? "local.m4a",
-            mediaType: reference?.mediaType ?? "audio/mp4",
-            dim: reference?.dim,
-            localData: nil
+    @Test func durationLabelClampsNonFiniteDraftDurations() {
+        #expect(ComposerAudioDraftPreviewPresentation.durationLabel(.nan) == "0:00")
+        #expect(ComposerAudioDraftPreviewPresentation.durationLabel(.infinity) == "0:00")
+        #expect(ComposerAudioDraftPreviewPresentation.durationLabel(-.infinity) == "0:00")
+    }
+
+    @Test func durationLabelUsesLocalizedDigits() {
+        let locale = Locale(identifier: "ar_EG")
+        let expected = L10n.formatted(
+            "%@:%@",
+            arguments: [
+                String(format: "%lld", locale: locale, Int64(1)),
+                String(format: "%02lld", locale: locale, Int64(5))
+            ],
+            locale: locale
         )
+
+        #expect(AudioDurationLabel.label(for: 65, locale: locale) == expected)
+        #expect(AudioDurationLabel.label(for: 65, locale: locale) != "1:05")
+    }
+
+    // MARK: - Camera capture
+
+    @Test func recordingDurationUsesMinuteAndZeroPaddedSecondFields() {
+        #expect(CameraCapturePresentation.durationLabel(0) == "0:00")
+        #expect(CameraCapturePresentation.durationLabel(9.99) == "0:09")
+        #expect(CameraCapturePresentation.durationLabel(65) == "1:05")
+        #expect(CameraCapturePresentation.durationLabel(-2) == "0:00")
     }
 }
