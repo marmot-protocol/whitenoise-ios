@@ -283,3 +283,58 @@ func managementState(
         memberActions: []
     )
 }
+
+/// A conversation-window snapshot shaped like the one MDK delivers for a
+/// freshly created group, so `ConversationViewModel.installConversationWindow`
+/// can be driven without a runtime. The draft revision is an inert fake: it
+/// must never be handed back to MDK.
+func conversationWindowSnapshot(
+    groupIdHex: String = hex("aa"),
+    title: String = "Group",
+    epoch: UInt64 = 1,
+    messages: [ConversationMessageFfi] = [],
+    identities: [ConversationIdentityFfi] = []
+) -> ConversationWindowSnapshotFfi {
+    ConversationWindowSnapshotFfi(
+        revision: ConversationWindowRevisionFfi(generation: "fixture", sequence: 1),
+        header: ConversationHeaderFfi(
+            selected: ConversationPresentationFfi(
+                title: .literal(text: title),
+                avatar: .placeholder(stableSeed: groupIdHex, source: .groupFallback),
+                titleSource: .group, avatarSource: .groupFallback, peerId: nil, resolution: .lastKnown
+            ),
+            memberCount: 1, archived: false, epoch: epoch, lifecycle: .stable, disbanding: false,
+            unrecoverable: false,
+            capabilities: ConversationCapabilitiesFfi(
+                participation: .active, isSelfAdmin: true, isLastAdmin: true, canSend: true, canInvite: true,
+                canEditGroup: true, canLeave: false, requiresSelfDemoteBeforeLeave: true,
+                canEnableDisbanding: false, canDisband: false
+            ),
+            avatarAsset: nil
+        ),
+        messages: messages,
+        identities: identities,
+        readState: ConversationOpenReadStateFfi(
+            initialized: true, lastReadMessageIdHex: nil, lastReadTimelineAt: nil, manuallyMarkedUnread: false,
+            unreadCount: 0, unreadMentionCount: 0, firstUnreadMessageIdHex: nil
+        ),
+        // Pointerless fake: never pass it to MDK or call includesChatListVersion on it.
+        draft: SelectedMessageDraftFfi(revision: MessageDraftRevisionFfi(noPointer: .init()), draft: nil),
+        pendingConfirmation: false,
+        anchor: ConversationAnchorOutcomeFfi(kind: .empty, index: nil),
+        hasMoreBefore: false,
+        hasMoreAfter: false
+    )
+}
+
+/// Wraps a timeline record in the bounded display references a window carries.
+func conversationMessage(
+    _ record: TimelineMessageRecordFfi,
+    reactions: ConversationReactionsFfi = ConversationReactionsFfi(totalCount: 0, totalKinds: 0, items: [], omittedKinds: 0)
+) -> ConversationMessageFfi {
+    ConversationMessageFfi(timeline: record, references: ConversationMessageReferencesFfi(
+        messageIdHex: record.messageIdHex, sender: record.sender, replyAuthor: nil, mentions: [],
+        mentionsTruncated: false, replyMentions: [], replyMentionsTruncated: false, system: nil,
+        reactions: reactions
+    ))
+}

@@ -2,58 +2,52 @@ import SwiftUI
 import XCTest
 @testable import whitenoise_ios
 
+/// Measures the shared controls through their own geometry callbacks: each
+/// configuration renders once, waits until every control has reported and
+/// the reported frames stop changing, and is asserted while still on screen.
+/// The screenshots stay as visual evidence in the result bundle.
 @MainActor
 final class ControlLayoutTests: XCTestCase {
     func testAvatarFormKeepsItsGeometryWhenAppearanceChangesWhileVisible() async throws {
+        let names = ["avatar", "add", "change"]
         var frames = [String: CGRect]()
         var appearances = [String: ColorScheme]()
         var expectedScheme = ColorScheme.light
         var layoutReady: XCTestExpectation?
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let previousKeyWindow = scene.keyWindow
-        let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        func fulfilIfLaidOut() {
+            if names.allSatisfy({ appearances[$0] == expectedScheme && frames[$0]?.isEmpty == false }) {
+                layoutReady?.fulfill()
+                layoutReady = nil
+            }
+        }
         let host = UIHostingController(rootView: AvatarFormFixture { name, frame, scheme in
             frames[name] = frame
             appearances[name] = scheme
-            if ["avatar", "add", "change"].allSatisfy({ appearances[$0] == expectedScheme && frames[$0]?.isEmpty == false }) {
-                layoutReady?.fulfill()
-                layoutReady = nil
-            }
+            fulfilIfLaidOut()
         }.tint(.accentColor))
-        window.rootViewController = host
-        window.overrideUserInterfaceStyle = .light
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
-        var baseline = [String: CGRect]()
-        for style in [UIUserInterfaceStyle.light, .dark, .light] {
-            expectedScheme = style == .dark ? .dark : .light
-            let ready = expectation(description: "Avatar form laid out in \(expectedScheme)")
-            layoutReady = ready
-            window.overrideUserInterfaceStyle = style
-            host.view.layoutIfNeeded()
-            if ["avatar", "add", "change"].allSatisfy({ appearances[$0] == expectedScheme && frames[$0]?.isEmpty == false }) {
-                layoutReady?.fulfill()
-                layoutReady = nil
+        // One visible hierarchy for all three passes: the appearance changes in place.
+        try await withHostedWindow(host, frame: CGRect(x: 0, y: 0, width: 390, height: 844), style: .light) { window in
+            var baseline = [String: CGRect]()
+            for style in [UIUserInterfaceStyle.light, .dark, .light] {
+                expectedScheme = style == .dark ? .dark : .light
+                let ready = expectation(description: "Avatar form laid out in \(expectedScheme)")
+                layoutReady = ready
+                window.overrideUserInterfaceStyle = style
+                host.view.layoutIfNeeded()
+                fulfilIfLaidOut()
+                await fulfillment(of: [ready], timeout: 30)
+                try await settleLayout(host.view) { frames }
+                for name in names {
+                    let frame = try XCTUnwrap(frames[name])
+                    if let expected = baseline[name] {
+                        XCTAssertEqual(frame.width, expected.width, accuracy: 0.5, name)
+                        XCTAssertEqual(frame.height, expected.height, accuracy: 0.5, name)
+                        XCTAssertEqual(frame.minX, expected.minX, accuracy: 0.5, name)
+                        XCTAssertEqual(frame.minY, expected.minY, accuracy: 0.5, name)
+                    } else { baseline[name] = frame }
+                }
+                attachScreenshot(of: window, named: "avatar-form-\(style.rawValue)")
             }
-            await fulfillment(of: [ready], timeout: 30)
-            host.view.layoutIfNeeded()
-            for name in ["avatar", "add", "change"] {
-                let frame = try XCTUnwrap(frames[name])
-                if let expected = baseline[name] {
-                    XCTAssertEqual(frame.width, expected.width, accuracy: 0.5, name)
-                    XCTAssertEqual(frame.height, expected.height, accuracy: 0.5, name)
-                    XCTAssertEqual(frame.minX, expected.minX, accuracy: 0.5, name)
-                    XCTAssertEqual(frame.minY, expected.minY, accuracy: 0.5, name)
-                } else { baseline[name] = frame }
-            }
-            let rendered = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
-                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
-            }
-            let attachment = XCTAttachment(image: rendered)
-            attachment.name = "avatar-form-\(style.rawValue)"
-            attachment.lifetime = .keepAlways
-            add(attachment)
         }
     }
 
@@ -73,47 +67,63 @@ final class ControlLayoutTests: XCTestCase {
         }
     }
 
+    private static let measuredControls = [
+        "close", "share", "add", "disabled", "empty", "filled", "input", "copy", "photo", "changePhoto",
+        "disabledPhoto", "primary", "secondary", "destructive", "loading",
+    ]
+
+    /// Returns the settled frames, measured and asserted while the window is live.
     private func checkControls(width: CGFloat, scheme: ColorScheme, textSize: DynamicTypeSize) async throws -> [String: CGRect] {
         var frames = [String: CGRect]()
-        let fixture = ControlFixture { frames[$0] = $1 }
+        let ready = expectation(description: "Controls laid out at \(Int(width)) \(scheme) \(textSize)")
+        var fulfilled = false
+        let fixture = ControlFixture { name, frame in
+            frames[name] = frame
+            if !fulfilled, Self.measuredControls.allSatisfy({ frames[$0] != nil }) {
+                fulfilled = true
+                ready.fulfill()
+            }
+        }
             .environment(\.colorScheme, scheme)
             .environment(\.dynamicTypeSize, textSize)
         let host = UIHostingController(rootView: fixture)
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let previousKeyWindow = scene.keyWindow
-        let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: width, height: 1100)
-        window.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
-        window.tintColor = UIColor(named: "AccentColor")
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
-        host.view.layoutIfNeeded()
-        try await Task.sleep(for: .milliseconds(200))
-        host.view.layoutIfNeeded()
-        for name in ["close", "share", "add", "disabled", "empty", "filled", "input", "copy", "photo", "changePhoto", "disabledPhoto", "primary", "secondary", "destructive", "loading"] {
-            let frame = try XCTUnwrap(frames[name], name)
-            XCTAssertGreaterThanOrEqual(frame.height, 44 - 0.01, name)
-            XCTAssertGreaterThanOrEqual(frame.width, 44 - 0.01, name)
-            XCTAssertGreaterThanOrEqual(frame.minX, 0, name)
-            XCTAssertLessThanOrEqual(frame.maxX, width, name)
+        // SwiftUI reports geometry only for a hierarchy in a window.
+        return try await withHostedWindow(host, frame: CGRect(x: 0, y: 0, width: width, height: 1100),
+                                          style: scheme == .dark ? .dark : .light) { window in
+            window.tintColor = UIColor(named: "AccentColor")
+            await fulfillment(of: [ready], timeout: 30)
+            // Compare settled frames, not the first ones each control reported.
+            try await settleLayout(host.view) { frames }
+            for name in Self.measuredControls {
+                let frame = try XCTUnwrap(frames[name], name)
+                XCTAssertGreaterThanOrEqual(frame.height, 44 - 0.01, name)
+                XCTAssertGreaterThanOrEqual(frame.width, 44 - 0.01, name)
+                XCTAssertGreaterThanOrEqual(frame.minX, 0, name)
+                XCTAssertLessThanOrEqual(frame.maxX, width, name)
+            }
+            let close = try XCTUnwrap(frames["close"])
+            for name in ["share", "add", "disabled"] {
+                let frame = try XCTUnwrap(frames[name])
+                XCTAssertEqual(frame.width, frame.height, accuracy: 1, name)
+                XCTAssertEqual(frame.height, close.height, accuracy: 1, name)
+            }
+            XCTAssertEqual(try XCTUnwrap(frames["empty"]).height,
+                           try XCTUnwrap(frames["filled"]).height, accuracy: 1)
+            attachScreenshot(of: host.view, named: "controls-\(Int(width))-\(scheme)-\(textSize)")
+            return frames
         }
-        let close = try XCTUnwrap(frames["close"])
-        for name in ["share", "add", "disabled"] {
-            let frame = try XCTUnwrap(frames[name])
-            XCTAssertEqual(frame.width, frame.height, accuracy: 1, name)
-            XCTAssertEqual(frame.height, close.height, accuracy: 1, name)
-        }
-        XCTAssertEqual(try XCTUnwrap(frames["empty"]).height,
-                       try XCTUnwrap(frames["filled"]).height, accuracy: 1)
-        let rendered = UIGraphicsImageRenderer(size: host.view.bounds.size).image { _ in
-            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+    }
+
+    /// Keeps a rendering of the settled layout in the result bundle as visual
+    /// evidence; it is taken after the geometry wait, never instead of one.
+    private func attachScreenshot(of view: UIView, named name: String) {
+        let rendered = UIGraphicsImageRenderer(size: view.bounds.size).image { _ in
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
         }
         let attachment = XCTAttachment(image: rendered)
-        attachment.name = "controls-\(Int(width))-\(scheme)-\(textSize)"
+        attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
-        return frames
     }
 }
 

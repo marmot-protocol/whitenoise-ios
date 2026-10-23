@@ -266,9 +266,8 @@ struct MediaFileUploadTests {
             ) { _ in
                 started.signal()
                 // Stands in for MDK: it returns only once its control is cancelled.
-                while !control.isCancelled() {
-                    try? await Task.sleep(for: .milliseconds(5))
-                }
+                // The control exposes no callback, so this is a bounded poll.
+                try? await eventually { control.isCancelled() }
                 throw MarmotKitError.InvalidMediaReference(details: "media transfer cancelled")
             }
         }
@@ -308,15 +307,13 @@ struct MediaFileUploadTests {
     // MARK: Progress store
 
     @MainActor
-    @Test func progressStoreReportsOnlyItsSingleTrackedAttachment() async {
+    @Test func progressStoreReportsOnlyItsSingleTrackedAttachment() async throws {
         let store = MediaUploadProgressStore()
         let draft = Self.attachment(bytes: 1_000)
         let control = MediaFileTransferControlFfi()
 
         let tracking = store.track([draft], control: control)
-        for _ in 0..<100 where store.fraction(forItemIds: [draft.id.uuidString]) == nil {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
+        try await eventually { store.fraction(forItemIds: [draft.id.uuidString]) != nil }
 
         #expect(store.fraction(forItemIds: [draft.id.uuidString]) == 0)
         #expect(store.fraction(forItemIds: [UUID().uuidString]) == nil)

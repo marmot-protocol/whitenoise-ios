@@ -80,25 +80,24 @@
 | InteractivePopGesturePolicyTests | 3 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep | InteractivePopTransitionStateTests | Three InteractivePop files for one feature; move the two pure suites into one file, keep the enabler (hosting) separate. |
 | MessageMediaThumbnailPresentationTests | 2 | 0.001 | none | app | 0 | 1 | 0 | 0/0 | 2/0/0/0 | keep | MessageImageBubblePresentationTests | Three byte-identical cacheKey functions (MessageBubble.swift:2001-2037) have six identical tests across the thumbnail, video and audio suites; one shared parameterized test in the survivor replaces them. |
 
-## purify (66)
+## purify (59)
 
 | suite | tests | serialized s | runtime | subject | flagged tests | unique | shared file | CI (master/all) | V/C/F/R | auto | into | rationale |
 |---|---:|---:|---|---|---:|---:|---:|---|---|---|---|---|
 | AppStateBootstrapTests | 84 | 141.447 | start | app | 0 | 854 | 0 | 0/0 | 2/3/2/0 | re-tier |  | The CI critical path: 141 s serialized, 61% of the whole suite, and every case holds the single gate permit on CI. Move the pure-state tests that construct a client they never start (toast presentation, pending navigation, profile refresh queue, notification-defaults tests; identify them as the tests whose only client access is the AppState.test(client:) argument) into a pure AppStateTests suite without the client. Keep the 65 lifecycle tests here in the runtime tier. Raising the gate permits to max(2, cores/2) once leaked clients are closed is a CI-infrastructure change for wave 3 phase 9, flagged separately. |
-| ControlLayoutTests | 2 | 6.498 | none | app | 0 | 345 | 0 | 0/1 | 2/3/3/0 | re-tier |  | Make the wait deterministic and drop the 9 windows and 11 screenshots kept per run; the 44 pt tap-target and light/dark geometry checks stay and can use sizeThatFits. 6.5 s serialized; crashed the CI host once. |
-| AccountExitSheetTests | 4 | 5.659 | none | app | 0 | 564 | 0 | 0/4 | 2/3/3/0 | re-tier |  | Make the waits deterministic: XCTest, 5.7 s serialized, fixed sleeps while hosting RootView, and the top CI crasher (crashed the host in 4 of the last 200 runs and failed outright in another). No runtime client is constructed here; the cost is hosting plus sleeps. |
-| PrivateKeyAutoFillTests | 6 | 3.111 | none | app | 0 | 23 | 0 | 1/3 | 2/3/3/0 | re-tier |  | Make the wait deterministic: a fixed 5x10 ms 'settle' called 11 times; failed 3 of the last 200 CI runs on 3 branches. Wait on the paste/autofill callback. |
-| PreparedConversationLiveUpdateTests | 3 | 2.785 | start | app | 0 | 87 | 0 | 0/0 | 2/3/2/0 | re-tier |  | Drop the runtime: the 215-line first test uses it only to obtain a snapshot and one draft revision; everything else is ConversationViewModel logic. Rewrite against fixture snapshots. |
-| CustomEmojiSendingFixtureTests | 1 | 2.546 | start | app | 0 | 16 | 0 | 2/3 | 2/3/3/1 | re-tier |  | Drop the runtime: it only supplies a snapshot and group record while rows are synthetic and upload/send are stubbed. Rewrite pure. Failed in 3 of the last 200 CI runs, 2 of them on master. |
-| CustomEmojiConversationFixtureTests | 1 | 2.505 | start | app | 0 | 6 | 0 | 0/0 | 2/3/2/1 | re-tier |  | Drop the runtime, same shape as CustomEmojiSendingFixtureTests (header says 'Binding fixture for MDK 0.12.0'); rewrite pure. |
-| PrivateKeyFieldLayoutTests | 1 | 1.608 | construct | app | 0 | 198 | 0 | 0/0 | 2/3/2/0 | purify |  | Drop the MarmotClient.testClient() built per case (never started) and the UIKit walk for a secure UITextField; measure the field directly without the magic width-80. |
-| ProfileFormLayoutTests | 1 | 1.519 | none | app | 0 | 22 | 0 | 0/3 | 2/2/3/0 | re-tier |  | Make the wait deterministic (it crashed the CI host in 3 runs) and drop the 6 kept screenshots; sizeThatFits is enough. |
-| MediaImageZoomTests | 7 | 1.119 | none | app | 0 | 442 | 0 | 0/1 | 2/3/3/0 | re-tier |  | Make the wait deterministic: 7 tests, 1.1 s, a fixed 300 ms sleep, crashed the CI host once. No runtime client is constructed here. |
+| ControlLayoutTests | 2 | 6.498 | none | app | 0 | 345 | 0 | 0/1 | 2/3/3/0 | re-tier |  | Its one CI host crash (shared with MediaImageZoomTests) was on the PR branch welcome-terms-consent (master_failures 0) and was fixed in production before merge (60fcf197). withHostedWindow tears down the same way the hand-built windows did, so phase 8f does not address those crashes; it removes timing dependence. The 200 ms sleep is replaced by geometry callbacks plus a settled-frames check, asserted while the window is live; screenshots kept as visual evidence. Purify done in phase 8f: inventory sleep_sites 0. |
+| AccountExitSheetTests | 4 | 5.659 | none | app | 0 | 564 | 0 | 0/4 | 2/3/3/0 | re-tier |  | Its CI host crashes and failure were all on PR branches (master_failures 0) and were fixed in production before merge: unify-sign-out (e51f42a7, cadb1e82) and cleanup-result-ui (3af0b2e0). withHostedWindow tears down the same way the hand-built windows did, so phase 8f does not address those crashes; it removes timing dependence. Hosted through withHostedWindow; the 20 ms / 4 s presentation poll waits through eventually(). Purify done in phase 8f: inventory sleep_sites 0. |
+| PrivateKeyAutoFillTests | 6 | 3.111 | none | app | 0 | 23 | 0 | 1/3 | 2/3/3/0 | re-tier |  | The 5 x 10 ms settle is TestSupport settleLayout (layout + yield until the observed field state is quiet). Purify done in phase 8f: inventory sleep_sites 0. |
+| PreparedConversationLiveUpdateTests | 3 | 2.785 | start | app | 0 | 87 | 0 | 0/0 | 2/3/2/0 | re-tier |  | Runtime dropped: test 1 is fed conversationWindowSnapshot fixtures. Purify done in phase 8f: inventory sleep_sites 0. |
+| CustomEmojiSendingFixtureTests | 1 | 2.546 | start | app | 0 | 16 | 0 | 2/3 | 2/3/3/1 | re-tier |  | Runtime dropped: fed conversationWindowSnapshot fixtures. Purify done in phase 8f: inventory sleep_sites 0. |
+| CustomEmojiConversationFixtureTests | 1 | 2.505 | start | app | 0 | 6 | 0 | 0/0 | 2/3/2/1 | re-tier |  | Runtime dropped: fed conversationWindowSnapshot fixtures. Purify done in phase 8f: inventory sleep_sites 0. |
+| PrivateKeyFieldLayoutTests | 1 | 1.608 | construct | app | 0 | 198 | 0 | 0/0 | 2/3/2/0 | purify |  | No runtime client; paste waits through eventually(), focus through settleLayout. The width - 80 bound is kept. Purify done in phase 8f: inventory sleep_sites 0. |
+| ProfileFormLayoutTests | 1 | 1.519 | none | app | 0 | 22 | 0 | 0/3 | 2/2/3/0 | re-tier |  | Its three CI host crashes were on the PR branch profile-visual-alignment (master_failures 0) and were fixed in production before merge (5528f472, 3a11de5d, 9eea008d). withHostedWindow tears down the same way the hand-built windows did, so phase 8f does not address those crashes; it removes timing dependence. One window reused across configurations, each read from the section's height callback; screenshots kept as visual evidence, taken after the wait. Purify done in phase 8f: inventory sleep_sites 0. |
+| MediaImageZoomTests | 7 | 1.119 | none | app | 0 | 442 | 0 | 0/1 | 2/3/3/0 | re-tier |  | Its one CI host crash (shared with ControlLayoutTests) was on the PR branch welcome-terms-consent (master_failures 0) and was fixed in production before merge (60fcf197). withHostedWindow tears down the same way the hand-built windows did, so phase 8f does not address those crashes; it removes timing dependence. The 300 ms GIF sleep is an inverted KVO expectation (no positive signal exists); the gallery waits through eventually(); screenshots kept. Purify done in phase 8f: inventory sleep_sites 0. |
 | PresentedChatListTests | 13 | 0.774 | construct | app | 0 | 234 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | ConversationInviteActionTests | 6 | 0.324 | construct | app | 0 | 75 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| MessageMediaThumbnailDecoderTests | 2 | 0.205 | none | app | 0 | 34 | 0 | 0/0 | 2/1/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
-| NotificationAvatarBudgetTests | 6 | 0.107 | none | app | 0 | 58 | 0 | 0/0 | 2/1/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
-| ContinuousQRScannerTests | 9 | 0.098 | none | app | 0 | 96 | 1 | 0/1 | 2/0/2/0 | purify |  | Make the wait deterministic: one CI failure on a PR branch with concrete assertions, green on the next run, and no commit touched the scanner in between, so this one is a genuine flake. |
+| MessageMediaThumbnailDecoderTests | 2 | 0.205 | none | app | 0 | 34 | 0 | 0/0 | 2/1/2/0 | purify |  | Writer readiness is a KVO wait. Purify done in phase 8f: inventory sleep_sites 0. |
+| NotificationAvatarBudgetTests | 6 | 0.107 | none | app | 0 | 58 | 0 | 0/0 | 2/1/2/0 | purify |  | Sleeps and the cancellation poll are cancellation latches. Purify done in phase 8f: inventory sleep_sites 0. |
 | StreamDebugTimelineWindowTests | 5 | 0.091 | construct | app | 0 | 45 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | ChatsListProjectionTests | 45 | 0.086 | construct | app | 0 | 278 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | MessageDeletionTests | 24 | 0.069 | construct | app | 0 | 331 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
@@ -107,25 +106,22 @@
 | SupportChatTests | 18 | 0.051 | construct | app | 0 | 155 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | MessageSemanticsTests | 33 | 0.047 | construct | app | 0 | 86 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | OutgoingSendResponsivenessTests | 19 | 0.047 | construct | app | 0 | 18 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| MediaFileUploadTests | 27 | 0.044 | none | app | 0 | 147 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
+| MediaFileUploadTests | 27 | 0.044 | none | app | 0 | 147 | 0 | 0/0 | 2/0/2/0 | purify |  | Hand-rolled polls use eventually() (no completion exposed). Purify done in phase 8f: inventory sleep_sites 0. |
 | RemoteImageLoaderTests | 21 | 0.044 | construct | app | 0 | 608 | 0 | 0/0 | 2/2/1/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | TimelineProjectionBoundaryTests | 19 | 0.044 | construct | app | 0 | 118 | 0 | 0/0 | 3/2/2/0 | purify |  | kills 1 probe(s); drop the unused runtime client |
-| GroupImageSearchTests | 10 | 0.042 | none | app | 0 | 96 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
-| RecipientSearchTests | 21 | 0.036 | none | app | 0 | 357 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
-| NativeAvatarImageCacheTests | 5 | 0.031 | none | app | 0 | 35 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
+| GroupImageSearchTests | 10 | 0.042 | none | app | 0 | 96 | 0 | 0/0 | 2/0/2/0 | purify |  | The 5 ms overlap sleep is a saturation latch. Purify done in phase 8f: inventory sleep_sites 0. |
+| RecipientSearchTests | 21 | 0.036 | none | app | 0 | 357 | 0 | 0/0 | 2/0/2/0 | purify |  | The enrichment poll uses eventually() (no completion exposed). Purify done in phase 8f: inventory sleep_sites 0. |
 | PollVotesModelTests | 19 | 0.031 | construct | app | 0 | 102 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | AgentStreamTests | 20 | 0.028 | construct | app | 0 | 241 | 0 | 0/0 | 3/2/2/1 | purify |  | kills 1 probe(s); drop the unused runtime client |
-| DonationClientTests | 15 | 0.026 | none | app | 0 | 151 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
-| TimelinePaginationVisibilityTests | 1 | 0.026 | none | test-helper | 0 | 8 | 1 | 0/0 | 0/3/2/0 | review |  | Classified test-helper because it drives the view model through a fixture, but it tests real pagination behaviour; failed in the Sep 16 local run and uses a 20 s settle budget. Make the wait deterministic rather than delete. |
+| TimelinePaginationVisibilityTests | 1 | 0.026 | none | test-helper | 0 | 8 | 1 | 0/0 | 0/3/2/0 | review |  | The 20 s courtesy poll is a latch opened by the bottom edge's own visibility and request callbacks. Purify done in phase 8f: inventory sleep_sites 0. |
 | ComposerMentionQueryTests | 34 | 0.025 | construct | app | 0 | 162 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | ConversationCustomEmojiSenderTests | 15 | 0.025 | construct | app | 0 | 51 | 0 | 0/0 | 3/2/2/0 | purify |  | kills 1 probe(s); drop the unused runtime client |
 | DeviceSettingsFlowTests | 7 | 0.025 | construct | app | 0 | 22 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | SendDispatchAndCancellationTests | 19 | 0.025 | construct | app | 0 | 62 | 0 | 0/0 | 2/2/0/1 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| MessageReactionsModelTests | 22 | 0.022 | none | app | 0 | 106 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
+| MessageReactionsModelTests | 22 | 0.022 | none | app | 0 | 106 | 0 | 0/0 | 2/0/2/0 | purify |  | waitUntilWaiting is signalled by the parked read. Purify done in phase 8f: inventory sleep_sites 0. |
 | ChatListPreviewCacheTests | 30 | 0.02 | construct | app | 0 | 115 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | ComposerSendHandOffTests | 6 | 0.018 | construct | app | 0 | 1 | 0 | 0/0 | 2/2/2/1 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | MediaComposerAvailabilityTests | 18 | 0.016 | construct | app | 0 | 66 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| AccountExitPresentationTests | 5 | 0.015 | none | app | 0 | 4 | 0 | 0/1 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
 | ConversationChoiceProjectionTests | 6 | 0.015 | construct | app | 0 | 63 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | DraftMediaPreuploadsTests | 13 | 0.015 | construct | app | 0 | 43 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | GroupManagementPresentationTests | 22 | 0.015 | construct | app | 0 | 118 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
@@ -138,18 +134,15 @@
 | GroupDisplayTests | 8 | 0.009 | construct | app | 0 | 2 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | IdentityPresentationAdapterTests | 11 | 0.009 | construct | app | 0 | 33 | 1 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | ContactNicknameResolutionTests | 2 | 0.007 | construct | app | 0 | 16 | 1 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| DonateViewModelTests | 23 | 0.007 | none | app | 0 | 272 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
+| DonateViewModelTests | 23 | 0.007 | none | app | 0 | 272 | 0 | 0/0 | 2/0/2/0 | purify |  | The yield-count wait uses eventually(); the spin is a cancellation latch. Purify done in phase 8f: inventory sleep_sites 0. |
 | SystemTimelineItemsTests | 8 | 0.007 | construct | app | 0 | 59 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | AsyncActionGuardTests | 3 | 0.005 | construct | app | 0 | 6 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | MarkdownTokenThreadingTests | 5 | 0.005 | construct | app | 0 | 17 | 0 | 0/0 | 2/2/2/1 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | ConversationChromeTests | 9 | 0.004 | construct | app | 0 | 25 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| ConversationOpenPerformanceTests | 11 | 0.004 | none | app | 0 | 27 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
 | NewGroupMissingKeyPackageTests | 2 | 0.004 | construct | app | 0 | 14 | 1 | 0/0 | 2/2/0/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| NotificationSubscriptionRetryTests | 6 | 0.004 | none | app | 0 | 19 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
+| NotificationSubscriptionRetryTests | 6 | 0.004 | none | app | 0 | 19 | 0 | 0/0 | 2/0/2/0 | purify |  | The driver poll uses eventually() (no completion exposed). Purify done in phase 8f: inventory sleep_sites 0. |
 | ChatTitleFallbackPresentationTests | 4 | 0.003 | construct | app | 0 | 9 | 1 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | NewChatFlowViewModelTests | 1 | 0.002 | construct | app | 0 | 3 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| ResolvedDisplayNameTests | 9 | 0.002 | none | app | 0 | 9 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
-| DonationBuildConfigTests | 4 | 0.001 | none | app | 0 | 16 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
 
 ## re-tier (11)
 
@@ -183,7 +176,7 @@
 | IdentityKeyExportPresentationTests | 3 | 0.001 | none | app | 0 | 14 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.62 with UserFacingErrorTests but 14 unique lines; coverage similarity, not proven duplication |
 | ProfileEditViewTests | 4 | 0.001 | none | app | 0 | 11 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.62 with ProfileEditMetadataDraftTests but 11 unique lines; coverage similarity, not proven duplication |
 
-## keep (232)
+## keep (239)
 
 | suite | tests | serialized s | runtime | subject | flagged tests | unique | shared file | CI (master/all) | V/C/F/R | auto | into | rationale |
 |---|---:|---:|---|---|---:|---:|---:|---|---|---|---|---|
@@ -191,6 +184,7 @@
 | ProfileShareCardTests | 1 | 0.155 | none | app | 0 | 64 | 1 | 0/0 | 2/1/0/0 | keep |  |  |
 | ChatListViewportTests | 6 | 0.119 | none | app | 0 | 91 | 0 | 0/0 | 2/1/0/0 | keep |  |  |
 | QRCodeTests | 6 | 0.105 | none | app | 0 | 0 | 0 | 0/0 | 1/1/0/2 | keep |  | Zero unique lines only because ShareAndConnectPresentationTests renders the same QR path; the decode assertions are distinct. Keep. |
+| ContinuousQRScannerTests | 9 | 0.098 | none | app | 0 | 96 | 1 | 0/1 | 2/0/2/0 | purify |  | Keep: no wait to make deterministic; every test injects ContinuousClock instants. Its one CI failure (decodedCameraImagesClearInvalidFeedbackWhenTheCodeLeaves, code == []) ran before 74258b09 pinned VNDetectBarcodesRequestRevision1 on Simulator: the newer revision needs inference unavailable in Simulator, a bug of that branch, not a flake. Note that Simulator now runs a different Vision revision than devices, so this test does not cover the device detector. |
 | ConversationNavigationBarVisibilityTests | 1 | 0.083 | none | app | 0 | 23 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | ProfileContactActionsTests | 1 | 0.082 | none | app | 0 | 46 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | InteractivePopGestureEnablerTests | 10 | 0.08 | none | app | 0 | 15 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
@@ -207,9 +201,11 @@
 | MessageLinkCopyTests | 10 | 0.035 | none | app | 0 | 48 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | AppLockTests | 18 | 0.032 | none | app | 0 | 43 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | DiagnosticsPresentationTests | 11 | 0.032 | none | app | 1 | 107 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| NativeAvatarImageCacheTests | 5 | 0.031 | none | app | 0 | 35 | 0 | 0/0 | 2/0/2/0 | purify |  | Keep: no sleep, polling or CI failure; the audit's sleep came through AppState.test(), hermetic since phase 8e. Checked in phase 8f. |
 | WNSwipeActionBadgeTests | 8 | 0.03 | none | app | 0 | 72 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | MediaDraftProcessorOrientationTests | 6 | 0.028 | none | app | 0 | 5 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | DiagnosticLogExportTests | 8 | 0.026 | none | app | 0 | 22 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| DonationClientTests | 15 | 0.026 | none | app | 0 | 151 | 0 | 0/0 | 2/0/2/0 | purify |  | Keep: no sleep, polling or CI failure; the audit's helper sleep no longer resolves. Checked in phase 8f. |
 | MessageMediaGalleryTests | 11 | 0.026 | none | app | 0 | 2 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | MarkdownMessageBuilderTests | 33 | 0.022 | none | app | 0 | 215 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | AppStateDeinitializationTests | 1 | 0.021 | none | app | 0 | 0 | 0 | 0/0 | 1/0/2/2 | keep |  | no unique covered lines but no overlapping suite (max Jaccard 0.08); distinct assertions |
@@ -219,6 +215,7 @@
 | TimelineIncrementalUpsertOrderingTests | 4 | 0.018 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep |  | See TimelineSortClampTests. |
 | WNBadgeGeometryTests | 3 | 0.018 | none | app | 0 | 67 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | NotificationContentDecoratorTests | 7 | 0.016 | none | app | 0 | 22 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| AccountExitPresentationTests | 5 | 0.015 | none | app | 0 | 4 | 0 | 0/1 | 2/0/2/0 | purify |  | Keep: no sleep or polling. The audit's sleep came through AppState.test(), hermetic since phase 8e; its single CI failure was on unify-sign-out, the branch that was changing sign-out itself. Checked in phase 8f. |
 | AsyncReloadGateTests | 8 | 0.015 | none | app | 0 | 228 | 0 | 0/0 | 2/0/0/0 | keep |  | Misnamed, not a test of a test: it exercises RelaysViewModel and PrivacySecuritySettingsViewModel. Rename to ReloadGateViewModelTests. |
 | ChatNotifyModeStoreTests | 5 | 0.014 | none | app | 0 | 40 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | ConversationDraftStoreTests | 21 | 0.014 | none | app | 0 | 272 | 0 | 0/0 | 2/0/1/0 | keep |  |  |
@@ -274,6 +271,7 @@
 | ChatDeveloperToolsPresentationTests | 2 | 0.004 | none | app | 0 | 10 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | ChatMuteSuppressionPolicyTests | 11 | 0.004 | none | app | 0 | 40 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | ConversationCustomEmojiStoreTests | 5 | 0.004 | none | app | 0 | 66 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| ConversationOpenPerformanceTests | 11 | 0.004 | none | app | 0 | 27 | 0 | 0/0 | 2/0/2/0 | purify |  | Keep: no sleep or polling and no CI failure. The audit's sleep came through AppState.test(), hermetic since phase 8e; the tests pass explicit ContinuousClock instants. Checked in phase 8f. |
 | IdentityPresentationContractTests | 9 | 0.004 | none | app | 0 | 33 | 1 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
 | KeyPackageRelayPreviewTests | 14 | 0.004 | none | app | 0 | 45 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | NetworkTrustRegressionTests | 4 | 0.004 | none | app | 0 | 40 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
@@ -314,6 +312,7 @@
 | PinnedHTTPSRedirectTests | 3 | 0.002 | none | app | 0 | 1 | 0 | 0/0 | 3/0/0/1 | keep |  | kills 1 mutation probe(s) |
 | ProfileFollowTests | 6 | 0.002 | none | app | 0 | 44 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | ReceivedMessageTimestampTests | 4 | 0.002 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep |  | no unique covered lines but no overlapping suite (max Jaccard 0.14); distinct assertions |
+| ResolvedDisplayNameTests | 9 | 0.002 | none | app | 0 | 9 | 0 | 0/0 | 2/0/2/0 | purify |  | Keep: no sleep, polling or CI failure; the audit's sleep came through AppState.test(), hermetic since phase 8e. Checked in phase 8f. |
 | VoiceMessageRecorderLifecycleTests | 6 | 0.002 | none | app | 0 | 93 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | AccountAttentionTests | 5 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep |  | no unique covered lines but no overlapping suite (max Jaccard 0.37); distinct assertions |
 | AccountSetupRecoveryPresentationTests | 5 | 0.001 | none | app | 0 | 15 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
@@ -341,6 +340,7 @@
 | ConversationInvitePresentationTests | 4 | 0.001 | none | app | 0 | 12 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | ConversationSearchPagingPolicyTests | 6 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep |  | no unique covered lines but no overlapping suite (max Jaccard 0.04); distinct assertions |
 | DeepLinkTests | 3 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | merge |  | Survivor of the DeepLink cluster: DeepLinkChatGroupIdTests and DeepLinkGenerationTests move in here. |
+| DonationBuildConfigTests | 4 | 0.001 | none | app | 0 | 16 | 0 | 0/0 | 2/0/2/0 | purify |  | Keep: pure Info.plist parsing with no sleep, polling or CI failure; the audit's helper sleep was a helper-name match that no longer resolves. Checked in phase 8f. |
 | DonationInvoiceModelTests | 5 | 0.001 | none | app | 0 | 48 | 0 | 0/0 | 2/0/1/0 | keep |  |  |
 | DonationSupportSummaryTests | 3 | 0.001 | none | app | 0 | 3 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | ForegroundNotificationBatchTests | 5 | 0.001 | none | app | 0 | 104 | 1 | 0/0 | 2/0/0/0 | keep |  |  |

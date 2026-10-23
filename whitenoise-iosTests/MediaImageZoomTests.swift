@@ -1,5 +1,6 @@
 import SwiftUI
 import ImageIO
+import Testing
 import UniformTypeIdentifiers
 import XCTest
 @testable import whitenoise_ios
@@ -32,7 +33,16 @@ final class MediaImageZoomTests: XCTestCase {
         XCTAssertEqual(try redComponent(of: finalFrame), 0, "Completion lands on the last, blue frame")
         XCTAssertEqual(budget.activePlaybackCount, 0)
         XCTAssertFalse(playback.didFail)
-        try await Task.sleep(for: .milliseconds(300))
+        // A stopped animation produces no event, so this is a bounded negative
+        // check: any later frame would replace the image within three frame
+        // delays (0.1 s each) and fail the inverted expectation immediately.
+        let laterFrame = expectation(description: "A frame after completion")
+        laterFrame.isInverted = true
+        let frameObservation = view.imageView.observe(\.image, options: [.new]) { @Sendable _, _ in
+            laterFrame.fulfill()
+        }
+        await fulfillment(of: [laterFrame], timeout: 0.3)
+        frameObservation.invalidate()
         XCTAssertTrue(view.imageView.image === finalFrame, "Finite-loop GIFs must stop at their last frame")
         view.display(poster)
         view.displayGIF(data: data, id: id)
@@ -183,32 +193,27 @@ final class MediaImageZoomTests: XCTestCase {
         }
         let host = UIHostingController(rootView: MessageMediaFullscreenGalleryView(
             gallery: gallery, onLoadMedia: loader, onDismiss: {}).environment(AppState.test()))
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let previousKeyWindow = scene.keyWindow
-        let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
-        // The page decodes off the MainActor at utility priority, which a
-        // loaded CI runner can starve for seconds; wait for the hosted view.
-        try await waitForHostedUpdate(host) { findZoomView(host.view) != nil }
-        let zoom = try XCTUnwrap(findZoomView(host.view))
-        XCTAssertFalse(requestedIDs.isEmpty)
-        XCTAssertEqual(Set(requestedIDs), ["selected"])
-        zoom.setZoomScale(2.5, animated: false)
-        try await toggleChromeAndAwaitRepresentableUpdate(zoom, host: host)
-        XCTAssertEqual(zoom.zoomScale, 2.5)
-        XCTAssertEqual(Set(requestedIDs), ["selected"])
-        try await toggleChromeAndAwaitRepresentableUpdate(zoom, host: host)
-        XCTAssertEqual(zoom.zoomScale, 2.5)
-        let rendered = UIGraphicsImageRenderer(size: host.view.bounds.size).image { _ in
-            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        try await withHostedWindow(host, frame: CGRect(x: 0, y: 0, width: 390, height: 844)) { _ in
+            // The page decodes off the MainActor at utility priority, which a
+            // loaded CI runner can starve for seconds; wait for the hosted view.
+            try await waitForHostedUpdate(host) { findZoomView(host.view) != nil }
+            let zoom = try XCTUnwrap(findZoomView(host.view))
+            XCTAssertFalse(requestedIDs.isEmpty)
+            XCTAssertEqual(Set(requestedIDs), ["selected"])
+            zoom.setZoomScale(2.5, animated: false)
+            try await toggleChromeAndAwaitRepresentableUpdate(zoom, host: host)
+            XCTAssertEqual(zoom.zoomScale, 2.5)
+            XCTAssertEqual(Set(requestedIDs), ["selected"])
+            try await toggleChromeAndAwaitRepresentableUpdate(zoom, host: host)
+            XCTAssertEqual(zoom.zoomScale, 2.5)
+            let rendered = UIGraphicsImageRenderer(size: host.view.bounds.size).image { _ in
+                host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+            }
+            let attachment = XCTAttachment(image: rendered)
+            attachment.name = "hosted-fullscreen-gallery-zoomed"
+            attachment.lifetime = .keepAlways
+            add(attachment)
         }
-        let attachment = XCTAttachment(image: rendered)
-        attachment.name = "hosted-fullscreen-gallery-zoomed"
-        attachment.lifetime = .keepAlways
-        add(attachment)
     }
 
     /// `updateUIView` reassigns `onTap`, so clearing it after the tap proves
@@ -223,25 +228,24 @@ final class MediaImageZoomTests: XCTestCase {
         try await waitForHostedUpdate(host) { zoom.onTap != nil }
     }
 
-    /// Runs the host's layout pass, which flushes pending SwiftUI updates, then
-    /// yields the run loop until `condition` holds. The deadline only bounds a hang.
+    /// Runs the host's layout pass, which flushes pending SwiftUI updates,
+    /// before each check of `condition`. The off-main decode has no completion
+    /// the test can observe, so this is a bounded poll.
     private func waitForHostedUpdate(
         _ host: UIViewController,
-        timeout: Duration = .seconds(60),
         file: StaticString = #filePath,
         line: UInt = #line,
         until condition: () -> Bool
     ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while true {
-            host.view.setNeedsLayout()
-            host.view.layoutIfNeeded()
-            if condition() { return }
-            guard ContinuousClock.now < deadline else {
-                XCTFail("Hosted gallery did not reach the expected state within \(timeout)", file: file, line: line)
-                return
+        do {
+            try await eventually(timeout: .seconds(60)) {
+                host.view.setNeedsLayout()
+                host.view.layoutIfNeeded()
+                return condition()
             }
-            try await Task.sleep(for: .milliseconds(20))
+        } catch {
+            XCTFail("Hosted gallery did not reach the expected state: \(error)", file: file, line: line)
+            throw error
         }
     }
 

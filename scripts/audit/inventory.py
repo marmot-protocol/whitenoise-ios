@@ -76,9 +76,20 @@ COLUMN_ALIASES = {
 }
 
 
-class HelperDecl(collections.namedtuple("HelperDecl", "path masked start end member shared")):
+class HelperDecl(collections.namedtuple("HelperDecl", "path masked start end member shared name")):
     """A non-suite declaration a suite may reach. ``member`` marks extension
     members; ``shared`` ones (not private/fileprivate) resolve across files."""
+
+
+# Shared bounded-wait helpers in TestSupport. Their internal Task.sleep is a
+# timeout or back-off, not a fixed delay the suite depends on, so it is not
+# charged to the suites that wait through them.
+BOUNDED_WAIT_HELPERS = frozenset({"TestLatch", "eventually"})
+BOUNDED_WAIT_DIR = "TestSupport"
+
+
+def is_bounded_wait_helper(helper):
+    return helper.name in BOUNDED_WAIT_HELPERS and pathlib.Path(helper.path).parent.name == BOUNDED_WAIT_DIR
 
 
 def helper_index(masks, suite_names):
@@ -91,9 +102,10 @@ def helper_index(masks, suite_names):
                 for member in swiftscan.declarations(masked, decl.body_start + 1, decl.body_end, 1):
                     if member.keyword in ("func", "let", "var"):
                         index[member.name].append(HelperDecl(path, masked, member.start, member.body_end,
-                                                             True, _is_shared(member)))
+                                                             True, _is_shared(member), member.name))
             elif decl.keyword in HELPER_KEYWORDS:
-                index[decl.name].append(HelperDecl(path, masked, decl.start, decl.body_end, False, _is_shared(decl)))
+                index[decl.name].append(HelperDecl(path, masked, decl.start, decl.body_end, False, _is_shared(decl),
+                                                decl.name))
     return index
 
 
@@ -211,8 +223,11 @@ def suite_row(suite, tests_dir, index):
     for part in suite.parts:
         own += count_range(part.masked, part.start, part.end, CODE_PATTERNS)
     for helper in reached_helpers(suite, index):
-        via_helpers += count_range(helper.masked, helper.start, helper.end,
-                                   MEMBER_PATTERNS if helper.member else CODE_PATTERNS)
+        counts = count_range(helper.masked, helper.start, helper.end,
+                             MEMBER_PATTERNS if helper.member else CODE_PATTERNS)
+        if is_bounded_wait_helper(helper):
+            counts["sleep_sites"] = 0
+        via_helpers += counts
     for column in COUNT_COLUMNS:
         row[column] = own[column] + via_helpers[column]
     row["helper_sites"] = ";".join("%s:%d" % (c, via_helpers[c]) for c in COUNT_COLUMNS if via_helpers[c])

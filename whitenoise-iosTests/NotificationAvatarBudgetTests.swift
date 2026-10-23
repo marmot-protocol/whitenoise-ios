@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import Testing
 @testable import whitenoise_ios
 
@@ -31,49 +30,47 @@ struct NotificationAvatarBudgetTests {
         ) == nil)
     }
 
-    @Test func deadlineWinCancelsTheAbandonedFetch() async {
-        let observedCancellation = Mutex(false)
+    @Test func deadlineWinCancelsTheAbandonedFetch() async throws {
+        // The work never finishes on its own: it returns only once its
+        // cancellation handler opens the latch, which the test then awaits.
+        let cancelled = TestLatch()
         let result = await NotificationCommunicationDecorator.withDeadline(.milliseconds(50)) {
             await withTaskCancellationHandler {
-                try? await Task.sleep(for: .seconds(30))
+                try? await cancelled.wait()
                 return nil
             } onCancel: {
-                observedCancellation.withLock { $0 = true }
+                cancelled.signal()
             }
         }
         #expect(result == nil)
-        // Generous poll: a starved runner may schedule the detached work task
-        // (and its cancellation handler) tens of seconds late.
-        for _ in 0..<300 where !observedCancellation.withLock({ $0 }) {
-            try? await Task.sleep(for: .milliseconds(100))
-        }
-        #expect(observedCancellation.withLock { $0 })
+        // A starved runner may schedule the detached work task (and its
+        // cancellation handler) late; the latch waits for it, bounded.
+        try await cancelled.wait()
     }
 
-    @Test func callerCancellationResumesTheDeadlineWaitAndCancelsWork() async {
-        // The deadline and the work are effectively infinite, so the await
-        // below can only ever return through the caller-cancellation racer —
-        // completion itself is the assertion, with no wall-clock comparison
-        // to flake on a saturated parallel test runner.
-        let observedCancellation = Mutex(false)
+    @Test func callerCancellationResumesTheDeadlineWaitAndCancelsWork() async throws {
+        // The deadline is effectively infinite and the work returns only once
+        // cancelled, so the await below can only ever return through the
+        // caller-cancellation racer — completion itself is the assertion,
+        // with no wall-clock comparison to flake on a saturated test runner.
+        let started = TestLatch()
+        let cancelled = TestLatch()
         let waiter = Task {
             await NotificationCommunicationDecorator.withDeadline(.seconds(100_000)) {
                 await withTaskCancellationHandler {
-                    try? await Task.sleep(for: .seconds(100_000))
+                    started.signal()
+                    try? await cancelled.wait()
                     return nil
                 } onCancel: {
-                    observedCancellation.withLock { $0 = true }
+                    cancelled.signal()
                 }
             }
         }
-        try? await Task.sleep(for: .milliseconds(50))
+        try await started.wait()
         waiter.cancel()
         let result = await waiter.value
         #expect(result == nil)
-        for _ in 0..<300 where !observedCancellation.withLock({ $0 }) {
-            try? await Task.sleep(for: .milliseconds(100))
-        }
-        #expect(observedCancellation.withLock { $0 })
+        try await cancelled.wait()
     }
 
     @Test func warmSlotsDeduplicatePerUrlAndCapConcurrency() {

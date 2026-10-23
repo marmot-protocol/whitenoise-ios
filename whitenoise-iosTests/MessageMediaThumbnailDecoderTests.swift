@@ -78,12 +78,14 @@ struct MessageMediaThumbnailDecoderTests {
             throw writer.error ?? VideoThumbnailFixtureError.writerFailed
         }
         writer.startSession(atSourceTime: .zero)
-        for _ in 0..<50 where !input.isReadyForMoreMediaData {
-            try await Task.sleep(nanoseconds: 10_000_000)
+        // `isReadyForMoreMediaData` is key-value observable: wait for it
+        // instead of polling against a fixed budget.
+        let ready = TestLatch()
+        let readiness = input.observe(\.isReadyForMoreMediaData, options: [.initial, .new]) { @Sendable input, _ in
+            if input.isReadyForMoreMediaData { ready.signal() }
         }
-        guard input.isReadyForMoreMediaData else {
-            throw VideoThumbnailFixtureError.inputNotReady
-        }
+        defer { readiness.invalidate() }
+        try await ready.wait()
         let firstBuffer = try makePixelBuffer(
             adaptor: adaptor,
             width: width,
@@ -149,7 +151,6 @@ struct MessageMediaThumbnailDecoderTests {
 
     private enum VideoThumbnailFixtureError: Error {
         case cannotAddInput
-        case inputNotReady
         case missingContext
         case missingPixelBuffer
         case missingPixelBufferPool
