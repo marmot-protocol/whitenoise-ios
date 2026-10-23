@@ -65,6 +65,8 @@ struct ConversationTailVisibilityTests {
     private static let sentinelID = TimelineTailVisibilityHarness.bottomSentinelID
 
     private static let settleTimeout = Duration.seconds(20)
+    // A loaded CI runner can starve the main actor for the whole timeout.
+    private static let minimumSettleSchedulingOpportunities = 400
 
     /// Waits for the condition the caller is about to assert, rather than for
     /// the first row to appear. A loaded CI machine can deliver `row-0` and
@@ -97,7 +99,10 @@ struct ConversationTailVisibilityTests {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
 
-        try? await eventually(timeout: Self.settleTimeout) { isSettled(visible, viewport) }
+        try? await eventually(
+            timeout: Self.settleTimeout,
+            minimumAttempts: Self.minimumSettleSchedulingOpportunities
+        ) { isSettled(visible, viewport) }
         if !isSettled(visible, viewport) {
             Issue.record(
                 """

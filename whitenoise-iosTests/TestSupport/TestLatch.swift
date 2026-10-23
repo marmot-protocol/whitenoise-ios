@@ -96,10 +96,13 @@ final class TestLatch: Sendable {
 }
 
 /// Polls `condition` until it holds, yielding first and then sleeping briefly
-/// between checks. Throws `TestWaitTimeout` when `timeout` elapses; never
-/// returns silently with the condition still false.
+/// between checks. Throws `TestWaitTimeout` once `timeout` has elapsed and at
+/// least `minimumAttempts` checks have run; never returns silently with the
+/// condition still false. A minimum keeps a starved main actor on a loaded CI
+/// runner from timing out after only a few turns.
 func eventually(
     timeout: Duration = TestLatch.defaultTimeout,
+    minimumAttempts: Int = 0,
     isolation: isolated (any Actor)? = #isolation,
     sourceLocation: SourceLocation = #_sourceLocation,
     _ condition: () async throws -> Bool
@@ -108,7 +111,7 @@ func eventually(
     var attempts = 0
     while true {
         if try await condition() { return }
-        guard ContinuousClock.now < deadline else {
+        guard ContinuousClock.now < deadline || attempts < minimumAttempts else {
             throw TestWaitTimeout(what: "condition", timeout: timeout, sourceLocation: sourceLocation)
         }
         attempts += 1
