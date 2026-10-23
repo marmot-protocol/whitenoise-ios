@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct MessageSemanticsTests {
 
     @Test func decodedUnsignedEventChatPreviewsItsContent() {
@@ -347,7 +346,7 @@ struct MessageSemanticsTests {
     @Test func timelineMediaItemsUseCachedReferenceProjection() throws {
         let messageId = hex("dd")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: hex("aa"))
         )
         let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
@@ -386,7 +385,7 @@ struct MessageSemanticsTests {
         let messageId = hex("dd")
         let otherMessageId = hex("ee")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: hex("aa"))
         )
         let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
@@ -418,7 +417,7 @@ struct MessageSemanticsTests {
     @Test func timelineMediaItemsDoNotClassifyTagsWhenRowProjectionIsEmpty() throws {
         let messageId = hex("dd")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: hex("aa"))
         )
         let record = timelineRecord(
@@ -447,7 +446,7 @@ struct MessageSemanticsTests {
     @Test func pendingMediaOverridesCachedTimelineProjection() throws {
         let messageId = hex("dd")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "", id: hex("aa"))
         )
         let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
@@ -860,7 +859,7 @@ struct MessageSemanticsTests {
             ]
         )
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "")
         )
 

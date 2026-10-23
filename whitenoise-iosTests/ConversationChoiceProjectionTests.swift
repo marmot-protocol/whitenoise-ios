@@ -3,7 +3,6 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationChoiceProjectionTests {
     private let me = String(repeating: "aa", count: 32)
     private let alice = String(repeating: "bb", count: 32)
@@ -102,7 +101,7 @@ struct ConversationChoiceProjectionTests {
     }
 
     @Test func startNewConversationCreatesEvenWhenExistingChoicesArePresent() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account"
         let model = NewChatFlowViewModel()
         model.conversationChooser = chooser()
@@ -123,7 +122,7 @@ struct ConversationChoiceProjectionTests {
     }
 
     @Test func openingAChoiceNeverCreatesAnotherGroup() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account"
         let model = NewChatFlowViewModel()
         let chooser = chooser()
@@ -146,7 +145,7 @@ struct ConversationChoiceProjectionTests {
     }
 
     @Test func retryAfterStartNewFailureRetriesTheExactCreateIntent() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account"
         let model = NewChatFlowViewModel()
         model.conversationChooser = chooser()

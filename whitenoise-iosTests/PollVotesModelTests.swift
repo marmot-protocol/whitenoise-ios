@@ -5,7 +5,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+@Suite(.tags(.runtime))
 struct PollVotesModelTests {
     private static let group = String(repeating: "c", count: 64)
     private static let pollA = String(repeating: "1", count: 64)
@@ -345,7 +345,7 @@ struct PollVotesModelTests {
     /// A re-vote for the same option changes only the voter's `votedAt`: the
     /// window path sees an identical poll row and skips it, so the runtime
     /// projection event MDK emits for the response is what invalidates.
-    @Test func aSameTallyReVoteInvalidatesThroughRuntimeEventsAfterTheWindowDeduplicatesIt() throws {
+    @Test(.marmotRuntimeConcurrencyLimit) func aSameTallyReVoteInvalidatesThroughRuntimeEventsAfterTheWindowDeduplicatesIt() async throws {
         let row = pollRecord(id: Self.pollA, votes: [2, 1])
         let store = TimelineStore(appState: nil, groupIdHex: Self.group)
         store.applyConversationWindowPage(TimelinePageFfi(messages: [row], hasMoreBefore: false, hasMoreAfter: false))
@@ -353,25 +353,27 @@ struct PollVotesModelTests {
         store.applyConversationWindowPage(TimelinePageFfi(messages: [row], hasMoreBefore: false, hasMoreAfter: false))
         #expect(store.pollReprojectionRevision(for: Self.pollA) == windowRevision)
 
-        let state = AppState.test(client: try MarmotClient.testClient())
-        state.accountStore.accounts = [
-            AccountSummaryFfi(label: "alice", accountIdHex: Self.me, localSigning: true, signedOut: false, running: true)
-        ]
-        state.activeAccountRef = "alice"
-        state.setPhase(.ready)
-        let generation = try #require(state.runtimeEventsGeneration)
-        state.pollVotesInvalidation.begin(Self.watch)
+        try await withTestClient { client in
+            let state = AppState.test(client: client)
+            state.accountStore.accounts = [
+                AccountSummaryFfi(label: "alice", accountIdHex: Self.me, localSigning: true, signedOut: false, running: true)
+            ]
+            state.activeAccountRef = "alice"
+            state.setPhase(.ready)
+            let generation = try #require(state.runtimeEventsGeneration)
+            state.pollVotesInvalidation.begin(Self.watch)
 
-        let reVote = MarmotEventFfi.projectionUpdated(update: projectionUpdate(
-            changes: [.upsert(trigger: .messageEditedOrReprojected, message: row)]))
-        state.handleRuntimeEvent(reVote, generation: generation)
-        #expect(state.pollVotesInvalidation.revision == 1)
-        state.handleRuntimeEvent(reVote, generation: generation)
-        #expect(state.pollVotesInvalidation.revision == 2)
+            let reVote = MarmotEventFfi.projectionUpdated(update: projectionUpdate(
+                changes: [.upsert(trigger: .messageEditedOrReprojected, message: row)]))
+            state.handleRuntimeEvent(reVote, generation: generation)
+            #expect(state.pollVotesInvalidation.revision == 1)
+            state.handleRuntimeEvent(reVote, generation: generation)
+            #expect(state.pollVotesInvalidation.revision == 2)
 
-        // Events from a replaced runtime are ignored.
-        state.handleRuntimeEvent(reVote, generation: generation - 1)
-        #expect(state.pollVotesInvalidation.revision == 2)
+            // Events from a replaced runtime are ignored.
+            state.handleRuntimeEvent(reVote, generation: generation - 1)
+            #expect(state.pollVotesInvalidation.revision == 2)
+        }
     }
 
     // MARK: Avatars

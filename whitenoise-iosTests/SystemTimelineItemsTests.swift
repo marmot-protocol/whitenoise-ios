@@ -4,7 +4,6 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct SystemTimelineItemsTests {
     @Test func retainedSystemTimelineItemsDeduplicateConsecutiveEvents() {
         let first = TimelineItem.systemEvent(id: "first", event: .rosterChanged, timestamp: 1)
@@ -51,7 +50,7 @@ struct SystemTimelineItemsTests {
 
     @Test func resetOptimisticStateClearsSessionSystemTimelineRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
 
@@ -71,7 +70,7 @@ struct SystemTimelineItemsTests {
 
     @Test func consecutiveSameKindSystemEventPublishesUpdatedTimestamp() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
 
@@ -90,7 +89,7 @@ struct SystemTimelineItemsTests {
 
     @Test func resetOptimisticStateClearsTransientMessageRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let pending = AppMessageRecordFfi(

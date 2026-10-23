@@ -9,12 +9,11 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct MediaComposerAvailabilityTests {
 
     @Test func v2MediaComponentEnablesAttachments() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "media-ready")
         )
 
@@ -23,7 +22,7 @@ struct MediaComposerAvailabilityTests {
 
     @Test func v1MediaComponentStillEnablesAttachments() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(
                 name: "legacy-media-ready",
                 encryptedMedia: encryptedMediaComponent(version: .v1)
@@ -44,7 +43,7 @@ struct MediaComposerAvailabilityTests {
             defaultBlobEndpoints: []
         )
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "unknown-media", encryptedMedia: component)
         )
 
@@ -53,7 +52,7 @@ struct MediaComposerAvailabilityTests {
 
     @Test func legacyGroupWithoutMediaComponentDisablesAttachments() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "legacy", encryptedMedia: legacyEncryptedMediaComponent())
         )
 
@@ -62,7 +61,7 @@ struct MediaComposerAvailabilityTests {
 
     @Test func pendingInviteDisablesComposerAndAttachments() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "invited", pendingConfirmation: true)
         )
 
@@ -75,7 +74,7 @@ struct MediaComposerAvailabilityTests {
         let me = hex("11")
         let other = hex("22")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "removed")
         )
         viewModel.applyGroupMutation(
@@ -117,7 +116,7 @@ struct MediaComposerAvailabilityTests {
         let me = hex("11")
         let other = hex("22")
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "leaving"),
             leaveRequestPending: true
         )
@@ -163,7 +162,7 @@ struct MediaComposerAvailabilityTests {
 
     @Test func resolvedTerminalLeaveClearsPendingProjection() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "leaving"),
             leaveRequestPending: true
         )
@@ -180,7 +179,7 @@ struct MediaComposerAvailabilityTests {
 
     @Test func publishedTerminalLeaveCanRemainPending() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: group(name: "leaving")
         )
 
@@ -320,7 +319,7 @@ struct MediaComposerAvailabilityTests {
     }
 
     @Test func freshConversationReportsGroupDerivedComposerMessages() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let disbanded = ConversationViewModel(appState: appState, group: group(name: "ended", disbanded: true))
         let left = ConversationViewModel(appState: appState, group: group(name: "gone", selfMembership: .left))
 

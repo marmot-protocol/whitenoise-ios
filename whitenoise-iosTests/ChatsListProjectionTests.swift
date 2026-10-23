@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ChatsListProjectionTests {
 
     @Test func directPeerProjectionRequiresExactlySelfAndOneOtherMember() {
@@ -31,7 +30,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func projectedRowsDriveActiveArchivedUnreadAndOrdering() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let older = chatListRow(
             groupIdHex: hex("a1"),
             title: "Older",
@@ -65,7 +64,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func projectedRowsUseDurableActivityOrderingAfterPreviewPruning() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let prunedButNewer = chatListRow(
             groupIdHex: hex("a1"),
             title: "Pruned",
@@ -86,7 +85,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func pinnedRowsLeadInManualPositionOrderBeforeRecentChats() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let firstPin = chatListRow(
             groupIdHex: hex("a1"),
             pinned: true,
@@ -118,7 +117,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func authoritativePinOrderReordersPinsAndClearsPinsOmittedFromState() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let first = chatListRow(
             groupIdHex: hex("a1"),
             pinned: true,
@@ -157,7 +156,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func pinOrderSnapshotWaitsForSwipeDrawerTransitionToFinish() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let first = chatListRow(
             groupIdHex: hex("a1"),
             pinned: true,
@@ -191,7 +190,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func pinOrderSubscriptionSnapshotAtomicallyReplacesRowsAndPendingUpdates() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let first = chatListRow(
             groupIdHex: hex("a1"),
             pinned: true,
@@ -238,7 +237,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func successfulSnapshotClearsPreviousLoadError() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(groupIdHex: hex("a1"), title: "Recovered", updatedAt: 10)
 
         viewModel.setLoadErrorForTesting("Couldn't load chats")
@@ -249,7 +248,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func presentedSnapshotReplacesQueuedRowEvenWithOlderTimestamp() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let groupId = hex("a8")
         let stale = chatListRow(
             groupIdHex: groupId,
@@ -272,7 +271,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func visibleRowsRevisionAdvancesOnlyForPublishedCollectionChanges() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(groupIdHex: hex("a9"), title: "Stable", updatedAt: 10)
 
         #expect(viewModel.visibleRowsRevision == 0)
@@ -283,7 +282,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func itemByGroupIdAccessorResolvesActiveAndArchivedRowsAndMissesUnknownId() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let active = chatListRow(groupIdHex: hex("a1"), title: "Active", updatedAt: 10)
         let archived = chatListRow(groupIdHex: hex("a2"), archived: true, title: "Archived", updatedAt: 20)
 
@@ -388,7 +387,7 @@ struct ChatsListProjectionTests {
 
     @MainActor
     @Test func chatListDisplayTitleUsesGroupDisplayForUnnamedDirectMessage() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let me = hex("11")
         let other = hex("22")
         let groupId = hex("aa")
@@ -416,7 +415,7 @@ struct ChatsListProjectionTests {
 
     @MainActor
     @Test func chatListDisplayUsesPeerAvatarSeedForUnnamedDirectMessage() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let me = hex("31")
         let other = hex("32")
         let groupId = hex("ab")
@@ -436,7 +435,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func cachedDirectPeerResolvesAnUnnamedDirectRowWithoutGroupDetails() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let other = hex("33")
         let groupId = hex("ac")
         let avatar = "https://cdn.example.com/alice.png"
@@ -475,7 +474,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func unresolvedDirectRowNeverExposesItsInternalGroupHexAsAUserIdentity() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let groupId = hex("ad")
         let row = chatListRow(
             groupIdHex: groupId,
@@ -597,7 +596,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func localArchiveChangeMovesProjectedRowBetweenScopes() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(groupIdHex: hex("d1"), title: "General")
         viewModel.applyChatListSnapshot([row])
 
@@ -609,7 +608,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func localGroupChangeUpdatesProjectedAvatarURL() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(groupIdHex: hex("d6"), title: "General")
         viewModel.applyChatListSnapshot([row])
 
@@ -624,7 +623,7 @@ struct ChatsListProjectionTests {
 
     @Test func localGroupChangeRefreshesCachedGroupDetailsDisplay() throws {
         let groupId = hex("d8")
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(groupIdHex: groupId, title: groupId, groupName: "")
         viewModel.applyChatListSnapshot([row])
         viewModel.seedGroupDetailsCacheForTesting(GroupDetailsFfi(
@@ -644,7 +643,7 @@ struct ChatsListProjectionTests {
 
     @Test func chatListRowRefreshesCachedGroupDetailsDisplay() throws {
         let groupId = hex("d9")
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let oldRow = chatListRow(
             groupIdHex: groupId,
             title: "Old name",
@@ -670,7 +669,7 @@ struct ChatsListProjectionTests {
 
     @Test func liveRowWithoutNameOrAvatarKeepsEnrichedGroupDetails() throws {
         let groupId = hex("da")
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         viewModel.applyChatListSnapshot([chatListRow(groupIdHex: groupId, title: "Enriched name", groupName: "")])
         viewModel.seedGroupDetailsCacheForTesting(GroupDetailsFfi(
             group: group(name: "Enriched name", id: groupId, avatarUrl: "https://cdn.example.com/enriched.png"),
@@ -702,7 +701,7 @@ struct ChatsListProjectionTests {
                 .nostrMention(entity: MarkdownNostrEntityFfi(hrp: .npub, bech32: bech32)),
             ]),
         ], truncated: false)
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         viewModel.mentionDisplayNameForTesting = { _ in nil }
         let row = chatListRow(
             groupIdHex: hex("da"),
@@ -725,7 +724,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func localGroupChangeUpdatesProjectedMembership() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(groupIdHex: hex("d7"), title: "General")
         viewModel.applyChatListSnapshot([row])
 
@@ -740,7 +739,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func markGroupLeftPreservesInactiveHistoryRow() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(groupIdHex: hex("df"), title: "Left group")
         viewModel.applyChatListSnapshot([row])
 
@@ -758,7 +757,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func durableMemberPendingLeaveSurvivesFreshSnapshot() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let groupId = hex("e1")
         viewModel.applyChatListSnapshot([
             chatListRow(
@@ -776,7 +775,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func resolvedTerminalMembershipClearsPendingLeave() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let groupId = hex("e2")
 
         viewModel.applyChatListSnapshot([
@@ -794,7 +793,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func publishedLeaveCanRemainDurablyPending() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(
             groupIdHex: hex("e3"),
             title: "Leaving group",
@@ -821,7 +820,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func presentedSnapshotDropsAbsentProjectedRow() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let kept = chatListRow(groupIdHex: hex("d1"), title: "Keep")
         let removed = chatListRow(groupIdHex: hex("d2"), title: "Remove")
         viewModel.applyChatListSnapshot([kept, removed])
@@ -863,7 +862,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func staleAvatarEnrichmentTaskCannotClearNewerTaskHandle() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let stale = UUID()
         let current = UUID()
 
@@ -879,7 +878,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func chatListRowUpdatesAreCoalescedBeforePublishing() async throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let older = chatListRow(
             groupIdHex: hex("e1"),
             title: "Older",
@@ -902,7 +901,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func directChatListRowUpdatesCanBeCoalescedBeforePublishing() async throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(
             groupIdHex: hex("e1"),
             title: "Read marker",
@@ -917,7 +916,7 @@ struct ChatsListProjectionTests {
     }
 
     @Test func identicalProjectedRowDoesNotRepublishObservedLists() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(
             groupIdHex: hex("e1"),
             title: "Stable",

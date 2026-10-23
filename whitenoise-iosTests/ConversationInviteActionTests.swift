@@ -9,10 +9,9 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationInviteActionTests {
     @Test func acceptClearsPendingStateInPlace() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let pending = group(
             name: "invited",
@@ -36,7 +35,7 @@ struct ConversationInviteActionTests {
     }
 
     @Test func declineAppliesArchivedInactiveGroup() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let pending = group(name: "invited", pendingConfirmation: true)
         let viewModel = ConversationViewModel(appState: appState, group: pending)
@@ -63,7 +62,7 @@ struct ConversationInviteActionTests {
     }
 
     @Test func acceptRetriesOnceWhenWorkerIsDefinitelyBusy() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let pending = group(name: "invited", pendingConfirmation: true)
         let viewModel = ConversationViewModel(appState: appState, group: pending)
@@ -90,7 +89,7 @@ struct ConversationInviteActionTests {
     }
 
     @Test func acceptTimeoutRefreshesStateWithoutRetryingAmbiguousOperation() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let pending = group(name: "invited", pendingConfirmation: true)
         let viewModel = ConversationViewModel(appState: appState, group: pending)
@@ -112,7 +111,7 @@ struct ConversationInviteActionTests {
     }
 
     @Test func staleAcceptRefreshesTheTerminalGroupWithoutRetrying() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let pending = group(name: "invited", pendingConfirmation: true)
         let viewModel = ConversationViewModel(appState: appState, group: pending)
@@ -141,7 +140,7 @@ struct ConversationInviteActionTests {
     }
 
     @Test func unrecoverableGroupDisablesComposerBeforeSend() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let viewModel = ConversationViewModel(
             appState: appState,
             group: group(name: "damaged", unrecoverable: true)

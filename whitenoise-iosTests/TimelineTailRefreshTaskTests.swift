@@ -4,7 +4,6 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct TimelineTailRefreshTaskLifetimeTests {
     @Test func staleCompletionCannotClearReplacementGeneration() {
         let first = TimelineTailRefreshTaskLifetime.nextGeneration(after: 0)
@@ -23,7 +22,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
     @MainActor
     @Test func schedulingTailRefreshCancelsPreviousTaskAndClearsLatestOnCompletion() async throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let probe = TailRefreshTaskProbe()
@@ -56,7 +55,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
     @MainActor
     @Test func cancellingTailRefreshDropsStoredTask() async throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
 

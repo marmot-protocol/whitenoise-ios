@@ -4,11 +4,10 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ChatListPreviewCacheTests {
 
     @Test func pendingLeaveKeepsMembershipAndWithholdsDelete() throws {
-        let model = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let model = ChatsListViewModel(appState: AppState.test())
         let activeRow = row()
         model.applyChatListSnapshot([activeRow])
         model.markGroupLeavePending(groupIdHex: activeRow.groupIdHex)
@@ -20,7 +19,7 @@ struct ChatListPreviewCacheTests {
     }
 
     @Test func latePendingResultDoesNotOverwriteEndedMembership() throws {
-        let model = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
+        let model = ChatsListViewModel(appState: AppState.test())
         let removedRow = row(selfMembership: .removed)
         model.applyChatListSnapshot([removedRow])
         model.markGroupLeavePending(groupIdHex: removedRow.groupIdHex)
@@ -567,7 +566,7 @@ struct ChatListPreviewCacheTests {
     }
 
     @Test func directChatOpeningKeepsTheContactHeaderBeforeTheWindowArrives() throws {
-        let state = AppState.test(client: try MarmotClient.testClient())
+        let state = AppState.test()
         let peer = String(repeating: "22", count: 32)
         var directRow = row(title: "Alice")
         directRow.groupName = ""

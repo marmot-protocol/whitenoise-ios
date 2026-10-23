@@ -4,7 +4,6 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct DeviceSettingsFlowTests {
     @Test func profileChooserSurvivesLaunchUntilAProfileIsSelected() throws {
         let name = "ProfileChooserTests.\(UUID())"
@@ -47,7 +46,7 @@ struct DeviceSettingsFlowTests {
             accounts.removePersistentDomain(forName: accountSuite)
             journal.removePersistentDomain(forName: journalSuite)
         }
-        let appState = AppState.test(client: try MarmotClient.testClient(), notifications: .shared,
+        let appState = AppState.test(notifications: .shared,
                                 accountDefaults: accounts, erasureDefaults: journal)
         appState.erasureState.begin()
         accounts.removePersistentDomain(forName: accountSuite)

@@ -4,12 +4,9 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct NewChatFlowViewModelTests {
     @Test func finalCreateFailureKeepsSelectionAndAllowsRetry() async throws {
-        let client = try MarmotClient.testClient()
-        defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
-        let appState = AppState.test(client: client)
+        let appState = AppState.test()
         appState.activeAccountRef = "account"
         let model = NewChatFlowViewModel()
         let member = MemberRefFfi(memberRef: "npub1alice", accountIdHex: String(repeating: "a", count: 64), npub: "npub1alice")
@@ -33,7 +30,6 @@ struct NewChatFlowViewModelTests {
         await model.createGroup(name: "Test", description: "", retentionSeconds: 0, using: appState) { opened = $0 }
         #expect(opened == "created")
         #expect(model.groupCreateError == nil)
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func resolvedGroupRecipientAutoSelectSkipsSelfDuplicatesAndBusyState() {

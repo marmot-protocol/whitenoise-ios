@@ -9,7 +9,6 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct GroupDisplayTests {
 
     @Test func otherMemberUsesMemberIdNotLocalAccountLabel() {
@@ -24,7 +23,7 @@ struct GroupDisplayTests {
     }
 
     @Test func resolvedGroupSanitizesNameOnceForTitleAvatarAndSeed() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let other = hex("22")
         var sanitizeCalls = 0
         let display = GroupDisplay.resolve(
@@ -48,7 +47,7 @@ struct GroupDisplayTests {
     }
 
     @Test func namedGroupTitleWinsOverMemberRules() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let display = GroupDisplay.resolve(
             group: group(name: "  Project Room  "),
             otherMember: hex("22"),
@@ -59,9 +58,9 @@ struct GroupDisplayTests {
         #expect(title == "Project Room")
     }
 
-    @Test func unnamedMultiPersonGroupShowsCount() throws {
-        try withAppLanguage(.english) {
-            let appState = AppState.test(client: try MarmotClient.testClient())
+    @Test func unnamedMultiPersonGroupShowsCount() {
+        withAppLanguage(.english) {
+            let appState = AppState.test()
             let display = GroupDisplay.resolve(
                 group: group(name: ""),
                 otherMember: hex("22"),
@@ -74,7 +73,7 @@ struct GroupDisplayTests {
     }
 
     @Test func unnamedTwoPersonGroupFallsBackToOtherIdentity() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let other = hex("22")
         let display = GroupDisplay.resolve(
             group: group(name: ""),
@@ -91,7 +90,7 @@ struct GroupDisplayTests {
     }
 
     @Test func unnamedTwoPersonGroupFallsBackToNpub() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let display = GroupDisplay.resolve(
             group: group(name: ""),
             otherMember: hex("22"),
@@ -103,7 +102,7 @@ struct GroupDisplayTests {
     }
 
     @Test func groupAvatarURLWinsOverDirectMessageFallback() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let display = GroupDisplay.resolve(
             group: group(name: "", avatarUrl: "https://cdn.example.com/group.png"),
             otherMember: hex("22"),
@@ -115,7 +114,7 @@ struct GroupDisplayTests {
     }
 
     @Test func groupAvatarURLRejectsUnsafeGroupURL() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let display = GroupDisplay.resolve(
             group: group(name: "Unsafe", avatarUrl: "http://127.0.0.1/group.png"),
             otherMember: hex("22"),
