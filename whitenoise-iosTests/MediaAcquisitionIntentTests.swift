@@ -5,6 +5,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct MediaAcquisitionIntentTests {
     private func attachment(_ mediaType: String = "image/jpeg") -> MessageMediaAttachment {
         MessageMediaAttachment(id: "source-slot", reference: nil, fileName: "attachment",
