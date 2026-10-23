@@ -39,7 +39,7 @@
 | MediaDraftStripGeometryTests | 5 | 0.048 | none | app | 0 | 136 | 0 | 0/0 | 2/0/0/0 | keep |  | Delete tests 2 and 5, which recompute the size from the view's own constants; keep 1, 3, 4. |
 | ChatSurfacePresentationTests | 25 | 0.024 | none | app | 2 | 178 | 0 | 0/0 | 2/0/0/0 | keep |  | Delete mediaGridHandlesOneThroughOverflowWithoutMoreThanFiveTiles (duplicates MessageMediaGridPresentationTests), the regularMaximumWidth == 560 expect at line 177 and the restated formula expect at lines 275-277 (the compactCount/expandedCount asserts in that test stay). The other 22 tests are good. |
 | MarmotKitMasterIntegrationTests | 5 | 0.013 | construct | app | 0 | 3 | 0 | 0/0 | 2/2/2/1 | purify |  | Delete accountWorkerErrorsExposeRetrySafetySemantics (a tautology: isAccountWorkerBusy is an `if case`) and hostPerformanceSnapshotRoundTripsThroughBindings (MDK host-performance round trip). Move the composer and policy tests to their owning suites and dissolve the suite. |
-| IOSParityBatchTests | 15 | 0.012 | construct | app | 0 | 78 | 0 | 0/0 | 2/2/2/0 | purify |  | Move each of the 15 unrelated tests (recipients, group creation, quick reactions, retention, media locators) to its feature suite without the runtime client, then remove the file. A batch name is not a subject. |
+| IOSParityBatchTests | 15 | 0.012 | construct | app | 0 | 78 | 0 | 0/0 | 3/2/2/0 | purify |  | Move each of the 15 unrelated tests (recipients, group creation, quick reactions, retention, media locators) to its feature suite without the runtime client, then remove the file. A batch name is not a subject. |
 | WNButtonTests | 17 | 0.005 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep |  | Keep fallbackLabelMinHeightClearsTheAppleMinimumTapTarget, anIconButtonDrawsItsOwnSurfaceUnlessToldOtherwise, destructiveLabelsMeetTextContrastAcrossAppearanceAndContrastSettings and destructiveAlwaysPaintsItsOwnSurface. Delete the other 13, each restating a ternary or a switch literal. |
 | WNCopyFeedbackTests | 6 | 0.005 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep |  | Keep test 1 (sizeThatFits footprint); drop the symbol-name literals and the loose reset-delay bound. |
 | WNSecondaryButtonStyleTests | 10 | 0.002 | none | app | 0 | 29 | 0 | 0/0 | 2/0/0/0 | keep |  | Keep paddingKeepsAWiderThanTallPill, theCapsuleKeepsItsPaddingWhileTheCircleSizesFromItsDiameter and circleDiameterClearsTheAppleMinimumTapTarget. Delete the other 7 (ternaries, verticalPadding(.extraLarge) == 15, pass-throughs). |
@@ -72,7 +72,7 @@
 | ChatMutePickerStateTests | 5 | 0.001 | none | app | 0 | 21 | 0 | 0/0 | 2/0/0/0 | keep | ChatMuteStoreTests | Move into ChatMuteTests.swift beside ChatMuteStoreTests. |
 | ContentSanitizerMultilineTests | 4 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep | ContentSanitizerTests | Move every test (CRLF/CR run clamp, bidi strip, nil-on-whitespace are unique). |
 | ContentSanitizerRelayDisplayTests | 8 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep | ContentSanitizerTests | Move every test; it becomes the relay-display section of the survivor once the two wrapper suites shrink. |
-| DeepLinkChatGroupIdTests | 3 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | merge | DeepLinkTests | Move every test (the uppercase group-id normalization case exercises Hex.normalized32Bytes through DeepLink.parse). |
+| DeepLinkChatGroupIdTests | 3 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 3/0/0/2 | keep | DeepLinkTests | Move every test (the uppercase group-id normalization case exercises Hex.normalized32Bytes through DeepLink.parse). |
 | DeepLinkGenerationTests | 3 | 0.001 | none | app | 0 | 4 | 0 | 0/0 | 2/0/0/1 | review | DeepLinkTests | Move every test (Jaccard 0.84 with the survivor). |
 | DonationSupportProjectionTests | 1 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep | DonationSupportSummaryTests | Move its test (multiple subscriptions/billing states remain distinct is not in the survivor). |
 | GroupDetailsMuteStateTests | 2 | 0.001 | none | app | 0 | 20 | 0 | 0/0 | 2/0/0/0 | keep | ChatMuteStoreTests | Move into ChatMuteTests.swift beside ChatMuteStoreTests. |
@@ -109,16 +109,16 @@
 | OutgoingSendResponsivenessTests | 19 | 0.047 | construct | app | 0 | 18 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | MediaFileUploadTests | 27 | 0.044 | none | app | 0 | 147 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
 | RemoteImageLoaderTests | 21 | 0.044 | construct | app | 0 | 608 | 0 | 0/0 | 2/2/1/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| TimelineProjectionBoundaryTests | 19 | 0.044 | construct | app | 0 | 118 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
+| TimelineProjectionBoundaryTests | 19 | 0.044 | construct | app | 0 | 118 | 0 | 0/0 | 3/2/2/0 | purify |  | kills 1 probe(s); drop the unused runtime client |
 | GroupImageSearchTests | 10 | 0.042 | none | app | 0 | 96 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
 | RecipientSearchTests | 21 | 0.036 | none | app | 0 | 357 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
 | NativeAvatarImageCacheTests | 5 | 0.031 | none | app | 0 | 35 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
 | PollVotesModelTests | 19 | 0.031 | construct | app | 0 | 102 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| AgentStreamTests | 20 | 0.028 | construct | app | 0 | 241 | 0 | 0/0 | 2/2/2/1 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
+| AgentStreamTests | 20 | 0.028 | construct | app | 0 | 241 | 0 | 0/0 | 3/2/2/1 | purify |  | kills 1 probe(s); drop the unused runtime client |
 | DonationClientTests | 15 | 0.026 | none | app | 0 | 151 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
 | TimelinePaginationVisibilityTests | 1 | 0.026 | none | test-helper | 0 | 8 | 1 | 0/0 | 0/3/2/0 | review |  | Classified test-helper because it drives the view model through a fixture, but it tests real pagination behaviour; failed in the Sep 16 local run and uses a 20 s settle budget. Make the wait deterministic rather than delete. |
 | ComposerMentionQueryTests | 34 | 0.025 | construct | app | 0 | 162 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
-| ConversationCustomEmojiSenderTests | 15 | 0.025 | construct | app | 0 | 51 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
+| ConversationCustomEmojiSenderTests | 15 | 0.025 | construct | app | 0 | 51 | 0 | 0/0 | 3/2/2/0 | purify |  | kills 1 probe(s); drop the unused runtime client |
 | DeviceSettingsFlowTests | 7 | 0.025 | construct | app | 0 | 22 | 0 | 0/0 | 2/2/2/0 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | SendDispatchAndCancellationTests | 19 | 0.025 | construct | app | 0 | 62 | 0 | 0/0 | 2/2/0/1 | purify |  | constructs a runtime it never starts; drop the client (verify no test reads it) |
 | MessageReactionsModelTests | 22 | 0.022 | none | app | 0 | 106 | 0 | 0/0 | 2/0/2/0 | purify |  | fragility 2: fixed sleeps or CI failures; make the wait deterministic |
@@ -158,7 +158,7 @@
 | OnboardingRecoveryRemovalTests | 6 | 6.435 | start | app | 0 | 75 | 0 | 0/0 | 2/3/2/0 | re-tier |  | start runtime / hosting 0 / 6.435s; keep but out of the PR tier |
 | ChatListDraftHandoffBindingTests | 1 | 3.33 | start | app | 0 | 20 | 1 | 0/0 | 2/3/2/0 | re-tier |  | Keep, out of the PR tier (3.3 s, starts a runtime). Its header declares it the real-binary counterpart of the fakes in ChatListDraftHandoffTests: sent-revision/draftVersion correlation, a rejected send leaving the MDK draft intact, an accepted send consuming exactly the sent revision. Nothing else checks the fake's assumption against MDK. |
 | ProfileShareCardLocalizationTests | 1 | 2.336 | none | app | 0 | 64 | 1 | 0/0 | 2/2/0/0 | re-tier |  | none runtime / hosting 0 / 2.336s; keep but out of the PR tier |
-| NotificationServiceProjectionTests | 26 | 1.235 | start | app | 0 | 99 | 0 | 0/0 | 2/3/0/0 | re-tier |  | One test runs the app storage reader on a real runtime; the other 25 are pure. Split that one into the runtime tier. |
+| NotificationServiceProjectionTests | 26 | 1.235 | start | app | 0 | 99 | 0 | 0/0 | 3/3/0/0 | re-tier |  | One test runs the app storage reader on a real runtime; the other 25 are pure. Split that one into the runtime tier. |
 | ConversationLongChatScrollTests | 1 | 0.57 | construct | app | 0 | 850 | 0 | 0/0 | 2/3/2/0 | purify |  | Keep out of the PR tier (0.57 s) rather than delete: the scroll view under test is a hand-written copy of the timeline (lines 267-272 versus ConversationView.swift:1884) with 5 phases x 20 s timeouts, but its fixture drives 850 lines no other file covers, including TimelineBottomScrollCoordinator.sizeChangeAnchor. The follow-up is to rebuild one phase on the real ConversationView and then retire the copy; deleting first would drop that coverage silently. |
 | PrivateKeyPasteTests | 3 | 0.368 | none | app | 0 | 21 | 0 | 0/0 | 2/3/2/0 | re-tier |  | none runtime / hosting 5 / 0.368s; keep but out of the PR tier |
 | CreateIdentityOnboardingTests | 46 | 0.186 | start | app | 0 | 436 | 0 | 0/0 | 2/3/2/0 | re-tier |  | start runtime / hosting 0 / 0.186s; keep but out of the PR tier |
@@ -167,7 +167,7 @@
 | AvatarViewerZoomTests | 1 | 0.025 | none | app | 0 | 33 | 0 | 0/0 | 2/3/2/0 | re-tier |  | Keep, out of the PR tier: it hosts WNAvatarViewer (a different view from MediaImageZoomTests) and is the only test asserting its accessibility label. No runtime client is involved; the cost is hosting. |
 | ComposerTextInputLayoutTests | 1 | 0.025 | none | app | 0 | 88 | 0 | 0/0 | 2/0/1/0 | keep |  | Keep, out of the PR tier (hosts a text view): caret reveal after growth, no snap-back on a layout pass, selection-change reveal and shrink re-disabling scroll landed with the ComposerTextInput fix in 1883f3d; ChatSurfacePresentationTests:321 only checks isScrollEnabled. |
 
-## review (13)
+## review (11)
 
 | suite | tests | serialized s | runtime | subject | flagged tests | unique | shared file | CI (master/all) | V/C/F/R | auto | into | rationale |
 |---|---:|---:|---|---|---:|---:|---:|---|---|---|---|---|
@@ -178,14 +178,12 @@
 | ProfileEditMetadataDraftTests | 18 | 0.006 | none | app | 0 | 52 | 1 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.62 with ProfileEditViewTests but 52 unique lines; coverage similarity, not proven duplication |
 | ChatListIdentifierSearchTests | 4 | 0.003 | none | app | 0 | 4 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.86 with RecipientIdentifierQueryTests but 4 unique lines; coverage similarity, not proven duplication |
 | RecipientIdentifierQueryTests | 5 | 0.003 | none | app | 0 | 2 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.86 with ChatListIdentifierSearchTests but 2 unique lines; coverage similarity, not proven duplication |
-| PinnedHTTPSRedirectTests | 3 | 0.002 | none | app | 0 | 1 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.81 with ContentSanitizerRemoteMediaAddressTests but 1 unique lines; coverage similarity, not proven duplication |
 | ComposerMediaDraftLayoutTests | 1 | 0.001 | none | app | 0 | 12 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.62 with ComposerMediaDraftPresentationTests but 12 unique lines; coverage similarity, not proven duplication |
 | ComposerMediaDraftPresentationTests | 3 | 0.001 | none | app | 0 | 10 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.62 with ComposerMediaDraftLayoutTests but 10 unique lines; coverage similarity, not proven duplication |
 | IdentityKeyExportPresentationTests | 3 | 0.001 | none | app | 0 | 14 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.62 with UserFacingErrorTests but 14 unique lines; coverage similarity, not proven duplication |
-| NativePushServerConfigValidationTests | 6 | 0.001 | none | app | 0 | 8 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.69 with RelayURLDeduplicationTests but 8 unique lines; coverage similarity, not proven duplication |
 | ProfileEditViewTests | 4 | 0.001 | none | app | 0 | 11 | 0 | 0/0 | 2/0/0/1 | review |  | Jaccard 0.62 with ProfileEditMetadataDraftTests but 11 unique lines; coverage similarity, not proven duplication |
 
-## keep (230)
+## keep (232)
 
 | suite | tests | serialized s | runtime | subject | flagged tests | unique | shared file | CI (master/all) | V/C/F/R | auto | into | rationale |
 |---|---:|---:|---|---|---:|---:|---:|---|---|---|---|---|
@@ -198,7 +196,7 @@
 | InteractivePopGestureEnablerTests | 10 | 0.08 | none | app | 0 | 15 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | AvatarImageCropperTests | 9 | 0.068 | none | app | 0 | 65 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | AppNotificationsRefreshTests | 9 | 0.066 | none | app | 0 | 73 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
-| LinkPreviewTests | 12 | 0.066 | none | app | 0 | 96 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| LinkPreviewTests | 12 | 0.066 | none | app | 0 | 96 | 0 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
 | ChatListSwipeActionTests | 3 | 0.058 | none | app | 0 | 72 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | SettingsModelDeinitializationTests | 2 | 0.05 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep |  | no unique covered lines but no overlapping suite (max Jaccard 0.09); distinct assertions |
 | ContentSanitizerTests | 29 | 0.047 | none | app | 0 | 15 | 0 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
@@ -237,7 +235,7 @@
 | ConversationTranscriptExportTests | 8 | 0.011 | none | app | 0 | 105 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | AppReviewDemoCheckpointTests | 3 | 0.01 | none | app | 0 | 9 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | CustomEmojiSendingTests | 14 | 0.01 | none | app | 0 | 18 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
-| HostResolutionGuardTests | 10 | 0.01 | none | app | 0 | 3 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| HostResolutionGuardTests | 10 | 0.01 | none | app | 0 | 3 | 0 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
 | MarkdownTimestampTests | 28 | 0.01 | none | app | 0 | 352 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | QRScannerFailureTests | 4 | 0.01 | none | app | 0 | 22 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | SignUpDraftStoreTests | 6 | 0.01 | none | app | 0 | 2 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
@@ -265,12 +263,12 @@
 | CustomEmojiResolverTests | 17 | 0.005 | none | app | 0 | 45 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | DonationAmountInputTests | 5 | 0.005 | none | app | 0 | 1 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | GroupSharedMediaPresentationTests | 5 | 0.005 | none | app | 0 | 24 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
-| LocalNotificationSuppressionPolicyTests | 9 | 0.005 | none | app | 0 | 11 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| LocalNotificationSuppressionPolicyTests | 9 | 0.005 | none | app | 0 | 11 | 0 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
 | MediaAutoDownloadMatrixTests | 9 | 0.005 | none | app | 0 | 66 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | MessageAudioBubblePresentationTests | 6 | 0.005 | none | app | 0 | 20 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | MessageMediaCachePurgeTests | 3 | 0.005 | none | app | 0 | 29 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | MessagePreviewBodyTests | 14 | 0.005 | none | app | 0 | 37 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
-| Nip05ResolverTests | 15 | 0.005 | none | app | 0 | 123 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| Nip05ResolverTests | 15 | 0.005 | none | app | 0 | 123 | 0 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
 | NotificationSettingsViewModelTests | 5 | 0.005 | none | app | 0 | 77 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | RecipientCandidateDerivationTests | 9 | 0.005 | none | app | 0 | 78 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | ChatDeveloperToolsPresentationTests | 2 | 0.004 | none | app | 0 | 10 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
@@ -296,7 +294,7 @@
 | MarkdownPlainTextTests | 17 | 0.003 | none | app | 0 | 26 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | MediaAcquisitionIntentTests | 13 | 0.003 | none | app | 0 | 28 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | MessageRetentionSweepTests | 7 | 0.003 | none | app | 0 | 46 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
-| ModerationReportTests | 8 | 0.003 | none | app | 0 | 34 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| ModerationReportTests | 8 | 0.003 | none | app | 0 | 34 | 0 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
 | NotificationPreviewSettingsViewModelTests | 2 | 0.003 | none | app | 0 | 16 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | SensitiveClipboardTests | 13 | 0.003 | none | app | 0 | 12 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | TelemetryBuildConfigTests | 8 | 0.003 | none | app | 0 | 9 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
@@ -313,13 +311,14 @@
 | MediaWaveformAnalyzerBoundsTests | 11 | 0.002 | none | app | 0 | 22 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | MutedChatMentionsSettingsViewModelTests | 2 | 0.002 | none | app | 0 | 40 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | OutboundMessageCapTests | 3 | 0.002 | none | app | 0 | 3 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| PinnedHTTPSRedirectTests | 3 | 0.002 | none | app | 0 | 1 | 0 | 0/0 | 3/0/0/1 | keep |  | kills 1 mutation probe(s) |
 | ProfileFollowTests | 6 | 0.002 | none | app | 0 | 44 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | ReceivedMessageTimestampTests | 4 | 0.002 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep |  | no unique covered lines but no overlapping suite (max Jaccard 0.14); distinct assertions |
 | VoiceMessageRecorderLifecycleTests | 6 | 0.002 | none | app | 0 | 93 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | AccountAttentionTests | 5 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | keep |  | no unique covered lines but no overlapping suite (max Jaccard 0.37); distinct assertions |
 | AccountSetupRecoveryPresentationTests | 5 | 0.001 | none | app | 0 | 15 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | AgentStreamSecurityTests | 4 | 0.001 | none | app | 0 | 6 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
-| AppLaunchPolicyTests | 6 | 0.001 | none | app | 0 |  |  | 0/0 | 3/0/0/0 | keep |  | kills 2 mutation probe(s) |
+| AppLaunchPolicyTests | 6 | 0.001 | none | app | 0 | 1 | 0 | 0/0 | 3/0/0/0 | keep |  | kills 2 mutation probe(s) |
 | AppStateGateTests | 7 | 0.001 | none | app | 0 | 18 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | AudioPlaybackLoadOutcomeTests | 2 | 0.001 | none | app | 0 | 92 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | AudioWaveformPresentationTests | 5 | 0.001 | none | app | 0 | 36 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
@@ -371,10 +370,11 @@
 | MessageClusterProjectionTests | 3 | 0.001 | none | app | 0 | 20 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | MessageMediaGridPresentationTests | 6 | 0.001 | none | app | 0 | 80 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | MessageMutationPolicyTests | 6 | 0.001 | none | app | 1 | 122 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
-| MissingKeyPackageInvitationPresentationTests | 4 | 0.001 | none | app | 0 | 14 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
+| MissingKeyPackageInvitationPresentationTests | 4 | 0.001 | none | app | 0 | 14 | 1 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
 | NativePushDisableCoordinatorTests | 3 | 0.001 | none | app | 0 | 10 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | NativePushEnableCoordinatorTests | 4 | 0.001 | none | app | 0 | 4 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | NativePushRegistrationPolicyTests | 3 | 0.001 | none | app | 0 | 3 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| NativePushServerConfigValidationTests | 6 | 0.001 | none | app | 0 | 8 | 0 | 0/0 | 3/0/0/1 | keep |  | kills 1 mutation probe(s) |
 | NotificationActionRoutingTests | 8 | 0.001 | none | app | 0 | 21 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | NotificationPreviewCommunicationIntentTests | 2 | 0.001 | none | app | 0 | 16 | 1 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
 | NotificationPreviewProjectionTests | 7 | 0.001 | none | app | 0 | 16 | 1 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
@@ -399,7 +399,7 @@
 | RecipientPasteboardTests | 3 | 0.001 | none | app | 0 | 20 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | RecipientQueryModeTests | 4 | 0.001 | none | app | 0 | 20 | 1 | 0/0 | 2/0/0/0 | keep |  |  |
 | RecipientSelectionTests | 6 | 0.001 | none | app | 0 | 22 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
-| RelaySettingsTests | 6 | 0.001 | none | app | 0 | 32 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
+| RelaySettingsTests | 6 | 0.001 | none | app | 0 | 32 | 0 | 0/0 | 3/0/0/0 | keep |  | kills 1 mutation probe(s) |
 | RelayURLDeduplicationTests | 2 | 0.001 | none | app | 0 | 0 | 0 | 0/0 | 1/0/0/2 | merge |  | Keep: it pins the #98 regression (first-seen order preserved while dropping non-ws schemes; empty or all-invalid input yields empty); RelaySettingsTests only dedups a two-element list. |
 | ReplySwipeTests | 5 | 0.001 | none | app | 0 | 6 | 0 | 0/0 | 2/0/0/0 | keep |  |  |
 | SelectedRecipientRailTests | 5 | 0.001 | none | app | 0 | 20 | 0 | 0/0 | 2/0/0/0 | keep |  |  |

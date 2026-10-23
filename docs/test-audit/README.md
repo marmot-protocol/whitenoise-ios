@@ -135,7 +135,7 @@ Provenance: 2026-10-23, Apple Silicon Mac (16 cores), Xcode 27.1, iPhone SE
   `ChatsListProjectionTests` with 30 of them runs in 0.09 s. They still leak
   ~190 unclosed runtimes per run and are removed by `purify` for hygiene.
 - **Coverage overlap**: after subtracting the 966 host-launch lines and
-  excluding 341 ubiquitous lines, 38 of 324 files cover no line that another
+  excluding 341 ubiquitous lines, 38 of 325 files cover no line that another
   file does not also cover, and 4 files covered no app line at all (disabled
   or catalog-only suites). Zero unique lines is a redundancy input, never a
   deletion by itself; for pure policy suites the value is in the enumerated
@@ -145,16 +145,19 @@ Provenance: 2026-10-23, Apple Silicon Mac (16 cores), Xcode 27.1, iPhone SE
   mutated lines) and which killed each probe; the selection is broad, so most
   selected suites passing a mutant says only that they do not assert that
   line.
-- **CI failure history (last 200 runs, 27 failed)**: 5 were build failures and
-  1 a post-step gate. Of the rest, `Marmot0104BindingTests` failed 4 times on 4
-  branches (1 on master), `AccountExitSheetTests` crashed the host in 4 runs
-  and failed in 1 (plus one host crash before any test), `PrivateKeyAutoFillTests`
-  3 on 3 branches, `CustomEmojiSendingFixtureTests` 3 (2 on master),
-  `ProfileFormLayoutTests` crashed 3 times, `LocalizationCatalogTests` failed
-  twice on one PR branch when copy changed, and `ControlLayoutTests`,
-  `MediaImageZoomTests`, `GroupModerationBindingTests`,
-  `AccountExitPresentationTests`, `ContinuousQRScannerTests` once each.
-  `ci-runs.csv` durations include queue time.
+- **CI failure history (last 200 runs, 27 failed, 44 cancelled)**: 7 runs name
+  no suite (`data/ci-unattributed.csv`: 5 build failures, one host crash
+  before any test ran, one manual dispatch). Of the rest,
+  `Marmot0104BindingTests` failed 4 times on 4 branches (1 on master),
+  `AccountExitSheetTests` was in 4 failed runs on 2 branches (host crashes
+  during its XCTest class, one plain failure), `PrivateKeyAutoFillTests` 3 on 3
+  branches, `CustomEmojiSendingFixtureTests` 3 (2 on master),
+  `ProfileFormLayoutTests` crashed the host 3 times on one branch,
+  `LocalizationCatalogTests` failed twice on one PR branch when copy changed,
+  and `ControlLayoutTests`, `MediaImageZoomTests` (one crashed run together),
+  `GroupModerationBindingTests`, `AccountExitPresentationTests`,
+  `ContinuousQRScannerTests` once each. `ci-runs.csv` durations include
+  queue time.
 - **Ledger** (`ledger.csv`): counts by decision are in the header of
   `ledger.md`; 86 suites carry a hand verdict from `verdicts.csv`, the rest are
   the automatic proposal.
