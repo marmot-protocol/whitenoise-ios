@@ -107,9 +107,10 @@ struct WNQRCodeCardRenderingTests {
         #expect(Self.decodedPayloads(in: failedImage).isEmpty)
     }
 
-    /// Hosts the card in a window and snapshots it after pending screen
-    /// updates, without spinning the run loop (which would execute other
-    /// tests' main-thread work from inside this one).
+    /// Hosts the card in a window and renders its layer tree. The short run
+    /// loop turn lets SwiftUI commit the card before rendering; the suite is
+    /// `.serialized`. `drawHierarchy(afterScreenUpdates:)` was tried instead
+    /// and lost part of the quiet zone on the Xcode 26 CI simulator.
     private static func renderCard(
         image: UIImage?,
         unavailableDescription: LocalizedStringKey? = nil,
@@ -135,11 +136,12 @@ struct WNQRCodeCardRenderingTests {
         defer { window.isHidden = true }
         controller.view.frame = bounds
         controller.view.layoutIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = renderScale
-        return UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
-            window.drawHierarchy(in: bounds, afterScreenUpdates: true)
+        return UIGraphicsImageRenderer(bounds: bounds, format: format).image { context in
+            window.layer.render(in: context.cgContext)
         }
     }
 
