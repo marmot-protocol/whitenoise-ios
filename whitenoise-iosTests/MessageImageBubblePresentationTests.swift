@@ -110,4 +110,87 @@ struct MessageImageBubblePresentationTests {
         #expect(MessageImageBubblePresentation.aspectRatio(dim: "10000x1") == 4)
         #expect(MessageImageBubblePresentation.aspectRatio(dim: "1x10000") == 0.25)
     }
+
+    // MARK: - Media cache keys
+    //
+    // MessageMediaThumbnailPresentation, MessageVideoThumbnailPresentation and
+    // MessageAudioBubblePresentation each carry their own cacheKey; one
+    // parameterized pair covers all three (merged from
+    // MessageMediaThumbnailPresentationTests and the audio pair of
+    // MessageAudioBubblePresentationTests).
+
+    enum CacheKeyKind: String, CaseIterable, Sendable {
+        case thumbnail, video, audio
+
+        func cacheKey(for item: MessageMediaAttachment) -> String {
+            switch self {
+            case .thumbnail: MessageMediaThumbnailPresentation.cacheKey(for: item)
+            case .video: MessageVideoThumbnailPresentation.cacheKey(for: item)
+            case .audio: MessageAudioBubblePresentation.cacheKey(for: item)
+            }
+        }
+
+        var fileName: String {
+            switch self {
+            case .thumbnail: "photo.jpg"
+            case .video: "clip.mp4"
+            case .audio: "voice.m4a"
+            }
+        }
+
+        var mediaType: String {
+            switch self {
+            case .thumbnail: "image/jpeg"
+            case .video: "video/mp4"
+            case .audio: "audio/mp4"
+            }
+        }
+
+        var dim: String? { self == .audio ? nil : "640x480" }
+    }
+
+    @Test(arguments: CacheKeyKind.allCases)
+    func mediaCacheKeySurvivesSourceEpochRefresh(kind: CacheKeyKind) {
+        let initial = attachment(
+            id: "row:\(hex("33")):0:0",
+            reference: encryptedMediaReference(
+                fileName: kind.fileName,
+                mediaType: kind.mediaType,
+                dim: kind.dim,
+                sourceEpoch: 0
+            )
+        )
+        let refreshed = attachment(
+            id: "row:\(hex("33")):42:0",
+            reference: encryptedMediaReference(
+                fileName: kind.fileName,
+                mediaType: kind.mediaType,
+                dim: kind.dim,
+                sourceEpoch: 42
+            )
+        )
+
+        #expect(kind.cacheKey(for: initial) == kind.cacheKey(for: refreshed))
+    }
+
+    @Test(arguments: CacheKeyKind.allCases)
+    func mediaCacheKeyFallsBackToItemIdForLocalMedia(kind: CacheKeyKind) {
+        let local = attachment(id: "local-\(kind.rawValue)", reference: nil)
+
+        #expect(kind.cacheKey(for: local) == "item:local-\(kind.rawValue)")
+    }
+
+    private func attachment(
+        id: String,
+        reference: MediaAttachmentReferenceFfi?
+    ) -> MessageMediaAttachment {
+        MessageMediaAttachment(
+            id: id,
+            reference: reference,
+            fileName: reference?.fileName ?? "local.bin",
+            mediaType: reference?.mediaType ?? "application/octet-stream",
+            dim: reference?.dim,
+            localData: nil
+        )
+    }
 }
