@@ -45,19 +45,12 @@ final class ConversationHeaderBarLayoutTests: XCTestCase {
         let fixture = HeaderFixture(selecting: selecting) { frames[$0] = $1 }
             .environment(\.dynamicTypeSize, textSize)
         let host = UIHostingController(rootView: fixture)
-        let scene = try XCTUnwrap(
-            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        )
-        let previousKeyWindow = scene.keyWindow
-        let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: width, height: 400)
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
-        host.view.layoutIfNeeded()
-        try await Task.sleep(for: .milliseconds(200))
-        host.view.layoutIfNeeded()
-        return frames
+        return try await withHostedWindow(host, frame: CGRect(x: 0, y: 0, width: width, height: 400)) { _ in
+            host.view.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(200))
+            host.view.layoutIfNeeded()
+            return frames
+        }
     }
 }
 
