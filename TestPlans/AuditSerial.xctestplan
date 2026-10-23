@@ -1,0 +1,27 @@
+{
+  "configurations" : [
+    {
+      "id" : "7A3B1C2D-0000-4000-8000-000000000001",
+      "name" : "Serial",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : true,
+    "testExecutionOrdering" : "lexical",
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:whitenoise-ios.xcodeproj",
+        "identifier" : "1FF76DFC2FBE3C9C00DCDFA7",
+        "name" : "whitenoise-iosTests"
+      }
+    }
+  ],
+  "version" : 1
+}
