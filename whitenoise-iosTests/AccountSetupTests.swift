@@ -877,10 +877,14 @@ struct AccountSetupTests {
 @Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AccountSetupRuntimeTests {
     // The poller's cancellation semantics are covered deterministically above;
-    // this limit only turns an uncancellable wait into a failure instead of a
+    // this bound only turns an uncancellable wait into a failure instead of a
     // stalled job. Starved CI runners have taken 357s for a single real-runtime
-    // test, so keep it well above that.
-    @Test(.timeLimit(.minutes(10))) func realSnapshotSubscriptionCancelsWhileMDKIsQuiet() async throws {
+    // test, so keep it well above that. It sits around the awaited
+    // cancellation rather than in a `.timeLimit` trait, which would also count
+    // the time this suite spends queued at the runtime gate.
+    private static let cancellationBudget = Duration.seconds(600)
+
+    @Test func realSnapshotSubscriptionCancelsWhileMDKIsQuiet() async throws {
         try await withTestClient { client in
             try await client.startRuntime()
             let initial = try await client.marmot.beginOnboarding(
@@ -891,6 +895,12 @@ struct AccountSetupRuntimeTests {
             let waiting = Task { try await subscription.next() }
             await Task.yield()
             waiting.cancel()
+            let settled = TestLatch()
+            Task {
+                _ = try? await waiting.value
+                settled.signal()
+            }
+            try await settled.wait(timeout: Self.cancellationBudget)
             await #expect(throws: CancellationError.self) { _ = try await waiting.value }
             // Cancellation must finish without closing the live runtime or emitting another snapshot.
             #expect(try await client.onboardingSnapshot(accountID: initial.accountIdHex)?.revision == initial.revision)
