@@ -113,6 +113,7 @@ private struct TimelineShortContentResizeHarness: View {
 }
 
 @MainActor
+@Suite(.tags(.uiHosting))
 struct TimelineBottomTests {
 
     @Test func shortTimelineRemainsVisibleWhenViewportShrinks() async throws {

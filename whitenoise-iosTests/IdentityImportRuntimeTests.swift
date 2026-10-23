@@ -6,6 +6,7 @@ import UserNotifications
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime))
 struct IdentityImportRuntimeTests {
     private let accountDefaults = IsolatedAccountDefaults.make()
 

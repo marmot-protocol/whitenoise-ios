@@ -4,6 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.uiHosting))
 struct WNAccentContrastTests {
     @Test(arguments: [UIUserInterfaceStyle.light, .dark])
     func assetMatchesExistingMonochromeControls(style: UIUserInterfaceStyle) throws {

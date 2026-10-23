@@ -4,6 +4,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime))
 struct IOSParityBatchTests {
     @Test func resolvedGroupRecipientAutoSelectSkipsSelfDuplicatesAndBusyState() {
         #expect(NewChatFlowViewModel.shouldAutoSelectResolved(

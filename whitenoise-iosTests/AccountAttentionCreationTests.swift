@@ -4,7 +4,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct AccountAttentionCreationTests {
     @Test(
         .enabled(if: ProcessInfo.processInfo.environment["WN_RUN_ATTENTION_CREATION_DIAGNOSTIC"] == "1"),

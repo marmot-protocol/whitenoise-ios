@@ -5,6 +5,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime))
 struct ConversationOpenPerformanceTests {
     private nonisolated struct Sample: Equatable, Sendable {
         let operation: HostPerformanceOperationFfi

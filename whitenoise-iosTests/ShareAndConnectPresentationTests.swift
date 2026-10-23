@@ -43,7 +43,7 @@ struct WNQRCodeCardMetricsTests {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.uiHosting))
 struct WNQRCodeCardRenderingTests {
     private static let payload = "marmot://profile/npub1" + String(repeating: "q", count: 58)
     private static let containerWidths: [CGFloat] = [320, 369, 402, 440]

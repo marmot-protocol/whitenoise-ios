@@ -129,6 +129,7 @@ struct DeviceDiagnosticsConsentTests {
     }
 }
 
+@Suite(.tags(.runtime))
 struct ProductAnalyticsTests {
     @Test func retentionDisclosureUsesTheSelectedLanguageWithoutChangingPolicy() {
         var config = ProductAnalyticsBuildConfig.current(info: [

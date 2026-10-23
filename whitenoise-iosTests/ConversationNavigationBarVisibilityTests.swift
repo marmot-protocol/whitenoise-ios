@@ -4,6 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.uiHosting))
 struct ConversationNavigationBarVisibilityTests {
     @Test func conversationHidesTheBarAndRestoresItForDetailsAndBack() throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

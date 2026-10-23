@@ -3,6 +3,7 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
+@Suite(.tags(.runtime))
 struct TimelineWindowEvictionTests {
     @MainActor
     @Test func completeConversationReplacementRemovesFilteredAndEvictedRows() throws {

@@ -4,6 +4,7 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
+@Suite(.tags(.runtime))
 struct TimelineTailRefreshTaskLifetimeTests {
     @Test func staleCompletionCannotClearReplacementGeneration() {
         let first = TimelineTailRefreshTaskLifetime.nextGeneration(after: 0)

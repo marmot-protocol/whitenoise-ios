@@ -5,6 +5,7 @@ import UserNotifications
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime))
 struct OnboardingRecoveryRemovalTests {
     @Test func removingBrokenSetupRemovesOnlySelectedProfileAndSurvivesRefresh() async throws {
         let (state, client) = try await makeState()

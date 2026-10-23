@@ -94,7 +94,7 @@ private actor RuntimeRetryGate {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct RuntimeOwnershipTests {
     @Test func releasedMembershipPageLimitCrossesTheRealBinding() async throws {
         let client = try MarmotClient.testClient()

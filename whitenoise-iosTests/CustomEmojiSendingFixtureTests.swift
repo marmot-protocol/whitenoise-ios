@@ -7,7 +7,7 @@ import MarmotKit
 /// Captures the existing sender boundary and projects its output into the real
 /// conversation view model. Relay-coupled MDK delivery is not part of this unit test.
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct CustomEmojiSendingFixtureTests {
     static func hex(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()

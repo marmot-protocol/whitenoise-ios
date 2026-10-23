@@ -4,6 +4,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime))
 struct ChatListPreviewCacheTests {
 
     @Test func pendingLeaveKeepsMembershipAndWithholdsDelete() throws {

@@ -4,6 +4,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime))
 struct DeviceSettingsFlowTests {
     @Test func profileChooserSurvivesLaunchUntilAProfileIsSelected() throws {
         let name = "ProfileChooserTests.\(UUID())"

@@ -50,6 +50,7 @@ struct ChatTitleFallbackGraceTests {
 }
 
 @MainActor
+@Suite(.tags(.runtime))
 struct ChatTitleFallbackPresentationTests {
     private let peer = String(repeating: "ab", count: 32)
 

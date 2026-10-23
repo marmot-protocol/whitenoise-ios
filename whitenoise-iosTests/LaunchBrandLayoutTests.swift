@@ -4,7 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct LaunchBrandLayoutTests {
     @Test(arguments: [
         CGSize(width: 320, height: 568),

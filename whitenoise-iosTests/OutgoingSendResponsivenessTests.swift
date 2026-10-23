@@ -7,6 +7,7 @@ import Testing
 /// before draft persistence and MDK, and is reconciled with MDK's authoritative
 /// row without duplicating, dropping or reordering it.
 @MainActor
+@Suite(.tags(.runtime))
 struct OutgoingSendResponsivenessTests {
 
     // MARK: - Follow-latest command suppression

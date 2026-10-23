@@ -131,7 +131,7 @@ struct ChatListDraftHandoffTests {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct ChatListDraftHandoffBindingTests {
     @Test func publishedBinaryCorrelatesSendRevisionWithChatListDraftVersion() async throws {
         let client = try MarmotClient.testClient()

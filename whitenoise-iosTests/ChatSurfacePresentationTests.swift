@@ -6,6 +6,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.uiHosting))
 struct ChatSurfacePresentationTests {
     @Test func reportActionMenuFitsSmallScreensAndRetainsScrollableActions() {
         let count = MessageActionsPresentation.actionCount(canRetry: false, canInteract: true,

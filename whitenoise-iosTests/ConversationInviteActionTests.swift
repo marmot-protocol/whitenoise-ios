@@ -9,6 +9,7 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime))
 struct ConversationInviteActionTests {
     @Test func acceptClearsPendingStateInPlace() async throws {
         let appState = AppState.test(client: try MarmotClient.testClient())

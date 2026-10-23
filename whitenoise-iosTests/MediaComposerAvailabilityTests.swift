@@ -9,6 +9,7 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime))
 struct MediaComposerAvailabilityTests {
 
     @Test func v2MediaComponentEnablesAttachments() throws {

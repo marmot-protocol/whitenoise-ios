@@ -7,7 +7,7 @@ import MarmotKit
 /// a `:shortcode:` reaction installed through the real conversation-window path
 /// of a live test runtime.
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct CustomEmojiConversationFixtureTests {
     @Test func taggedRowAndShortcodeReactionProjectThroughTheConversationWindow() async throws {
         let client = try MarmotClient.testClient()

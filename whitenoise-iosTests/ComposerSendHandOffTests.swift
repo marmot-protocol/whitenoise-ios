@@ -9,6 +9,7 @@ private final class SendOrderRecorder {
 }
 
 @MainActor
+@Suite(.tags(.runtime))
 struct ComposerSendHandOffTests {
     @Test func admittedTimeoutKeepsAnUnresolvedBubbleWithoutFreshSendRetry() async throws {
         let client = try MarmotClient.testClient()

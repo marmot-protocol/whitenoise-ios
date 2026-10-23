@@ -4,7 +4,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct PreparedConversationLiveUpdateTests {
     @Test func preparedInstallationKeepsSendIdentityOrderAndUnchangedRowsInert() async throws {
         let client = try MarmotClient.testClient()

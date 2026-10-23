@@ -6,6 +6,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.uiHosting))
 struct AppearanceThemeTests {
     @Test func persistedRawValuesStayStable() {
         // Stored in UserDefaults, so renaming a case is a breaking change.

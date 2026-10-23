@@ -4,6 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.uiHosting))
 struct ProfileContactActionsTests {
     @Test(arguments: [ColorScheme.light, .dark])
     func contactActionsRenderWithNeutralColors(colorScheme: ColorScheme) throws {

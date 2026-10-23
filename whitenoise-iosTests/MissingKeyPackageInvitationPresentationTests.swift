@@ -42,6 +42,7 @@ struct MissingKeyPackageInvitationPresentationTests {
 }
 
 @MainActor
+@Suite(.tags(.runtime))
 struct NewGroupMissingKeyPackageTests {
     private let peerHex = String(repeating: "c", count: 64)
 

@@ -3,6 +3,7 @@ import Testing
 import UIKit
 @testable import whitenoise_ios
 
+@Suite(.tags(.uiHosting))
 struct WNCopyFeedbackTests {
     @MainActor
     @Test func confirmationKeepsTheCopyRowSizeAtStandardAndAccessibleTextSizes() {

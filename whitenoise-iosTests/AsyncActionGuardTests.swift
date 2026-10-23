@@ -3,6 +3,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime))
 struct AsyncActionGuardTests {
     @Test func identityExportsReturnWhileExportIsAlreadyInFlight() async throws {
         let appState = AppState.test(client: try MarmotClient.testClient())

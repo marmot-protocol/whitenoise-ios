@@ -4,6 +4,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.tags(.runtime))
 struct NewChatFlowViewModelTests {
     @Test func finalCreateFailureKeepsSelectionAndAllowsRetry() async throws {
         let client = try MarmotClient.testClient()

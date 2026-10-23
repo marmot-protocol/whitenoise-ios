@@ -228,7 +228,8 @@ def is_runtime_tier(row):
 
 
 def is_ui_tier(row):
-    return any(int(row[c]) > 0 for c in UI_COLUMNS) or "ui" in tags_of(row["traits"].split(";"))
+    tags = tags_of(row["traits"].split(";"))
+    return any(int(row[c]) > 0 for c in UI_COLUMNS) or bool(tags & {"ui", "uiHosting"})
 
 
 def tier_lists(rows, tests_dir_name):

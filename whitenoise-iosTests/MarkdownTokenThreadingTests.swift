@@ -7,6 +7,7 @@ import Testing
 /// view model's record conversions must not drop them on the floor (they did,
 /// via the `.emptyDocument` compatibility initializers).
 @MainActor
+@Suite(.tags(.runtime))
 struct MarkdownTokenThreadingTests {
 
     private let tokens = MarkdownDocumentFfi(blocks: [

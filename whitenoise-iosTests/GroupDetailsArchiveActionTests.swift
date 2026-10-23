@@ -4,7 +4,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct GroupDetailsArchiveActionTests {
 
     /// #446 — the Archive/Unarchive row already disables itself from

@@ -27,6 +27,7 @@ extension PresentedChatRowFfi {
 }
 
 @MainActor
+@Suite(.tags(.runtime))
 struct Marmot0103IntegrationTests {
     @Test func publishedBinarySelectsExactDraftPreviewAndActions() async throws {
         let client = try MarmotClient.testClient()

@@ -60,6 +60,7 @@ private struct TimelineTailVisibilityHarness: View {
 }
 
 @MainActor
+@Suite(.tags(.uiHosting))
 struct ConversationTailVisibilityTests {
     private static let sentinelID = TimelineTailVisibilityHarness.bottomSentinelID
 

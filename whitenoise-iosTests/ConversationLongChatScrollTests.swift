@@ -322,7 +322,7 @@ private struct LongChatScrollHarness: View {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct ConversationLongChatScrollTests {
     private static let settleTimeout = Duration.seconds(20)
 

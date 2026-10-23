@@ -3,6 +3,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
+@Suite(.tags(.runtime))
 struct DirectChatStarterTests {
     private let alice = String(repeating: "bb", count: 32)
 

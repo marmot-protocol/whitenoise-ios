@@ -3,6 +3,7 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
+@Suite(.tags(.runtime))
 struct GroupSystemEventPresentationTests {
     @Test func structuredBindingProjectionAvoidsJsonFallbackAndNamesCurrentAccountAsYou() {
         let me = hex("aa")

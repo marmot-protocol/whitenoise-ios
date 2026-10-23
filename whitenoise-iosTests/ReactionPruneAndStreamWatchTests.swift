@@ -160,6 +160,7 @@ struct OptimisticReactionRemovalPruneTests {
 
 /// #380 — target-local reaction tally recomputation should only need the
 /// changed target's summary plus optimistic edits that actually point at it.
+@Suite(.tags(.runtime))
 struct ReactionTargetTallyTests {
     private let me = String(repeating: "1", count: 64)
     private let other = String(repeating: "2", count: 64)

@@ -5,7 +5,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime))
 struct Marmot0102IntegrationTests {
     @Test func retainedReadsRespectOffsetsAndRevocation() async throws {
         let offsets = Mutex<[UInt64]>([])

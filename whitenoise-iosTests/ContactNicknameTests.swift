@@ -198,6 +198,7 @@ struct ContactNicknameOwnerGateTests {
 }
 
 @MainActor
+@Suite(.tags(.runtime))
 struct ContactNicknameResolutionTests {
 
     private func nicknameDefaults() throws -> (UserDefaults, String) {

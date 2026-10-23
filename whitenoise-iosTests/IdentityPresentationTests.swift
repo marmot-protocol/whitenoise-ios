@@ -240,6 +240,7 @@ struct IdentityPresentationContractTests {
 /// calls, so the assertion is about behavior rather than how the call site is
 /// spelled.
 @MainActor
+@Suite(.tags(.runtime))
 struct IdentityPresentationAdapterTests {
 
     @Test func groupSystemEventsNameParticipantsByNpubWithoutAResolver() throws {
