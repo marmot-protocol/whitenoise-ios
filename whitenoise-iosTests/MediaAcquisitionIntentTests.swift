@@ -175,10 +175,9 @@ struct MediaAcquisitionIntentTests {
     // rather than wait on a transfer that will never start.
     @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
     func explicitAcquisitionOfAnUnknownSlotThrowsUnavailable() async throws {
-        let client = try MarmotClient.testClient()
-        let watchdog = MarmotFixtureWatchdog.start("Attachment acquisition guard did not finish", breaking: client)
-        defer { watchdog.cancel() }
-        do {
+        try await withTestClient { client in
+            let watchdog = MarmotFixtureWatchdog.start("Attachment acquisition guard did not finish", breaking: client)
+            defer { watchdog.cancel() }
             try await client.startRuntime()
             let account = try await client.marmot.createIdentityWithProfile(
                 defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]).account
@@ -191,10 +190,6 @@ struct MediaAcquisitionIntentTests {
                 _ = try await client.acquireAttachmentData(accountRef: account.label,
                     groupID: group.groupIdHex, target: target, demand: .explicit)
             }
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
     }
 
