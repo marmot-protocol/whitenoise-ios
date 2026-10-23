@@ -153,6 +153,9 @@ final class AppState {
     /// sites and SwiftUI observation unchanged. AppState still drives the Marmot
     /// account refresh and the identity lifecycle (create / import / sign-out).
     @ObservationIgnored let accountStore: AccountStore
+    /// Device preferences (developer mode, screenshots, reactions). `.standard`
+    /// in production; tests inject an isolated suite.
+    @ObservationIgnored private let preferenceDefaults: UserDefaults
     var accounts: [AccountSummaryFfi] { accountStore.accounts }
 
     private(set) var isErasingAppData = false
@@ -275,7 +278,7 @@ final class AppState {
     /// on the chat-details screen). Off by default; toggled in Settings.
     var developerMode: Bool {
         didSet {
-            HostSettingsSaveTiming.measure { UserDefaults.standard.set(developerMode, forKey: Self.developerModeKey) }
+            HostSettingsSaveTiming.measure { preferenceDefaults.set(developerMode, forKey: Self.developerModeKey) }
         }
     }
 
@@ -283,7 +286,7 @@ final class AppState {
     /// conversation timeline with debug styling (kinds 1200+, reactions, etc.).
     var streamingDebugMode: Bool {
         didSet {
-            HostSettingsSaveTiming.measure { UserDefaults.standard.set(streamingDebugMode, forKey: Self.streamingDebugModeKey) }
+            HostSettingsSaveTiming.measure { preferenceDefaults.set(streamingDebugMode, forKey: Self.streamingDebugModeKey) }
         }
     }
 
@@ -307,7 +310,7 @@ final class AppState {
     /// Off by default; toggled in Settings → Privacy & Security.
     var blockScreenshots: Bool {
         didSet {
-            HostSettingsSaveTiming.measure { UserDefaults.standard.set(blockScreenshots, forKey: Self.blockScreenshotsKey) }
+            HostSettingsSaveTiming.measure { preferenceDefaults.set(blockScreenshots, forKey: Self.blockScreenshotsKey) }
         }
     }
 
@@ -332,11 +335,11 @@ final class AppState {
         var list = recentReactions.filter { $0 != emoji }
         list.insert(emoji, at: 0)
         recentReactions = Array(list.prefix(12))
-        UserDefaults.standard.set(recentReactions, forKey: Self.recentReactionsKey)
+        preferenceDefaults.set(recentReactions, forKey: Self.recentReactionsKey)
     }
 
     func setQuickReactions(_ choices: [String]) {
-        let normalized = QuickReactionPreferences.save(choices, to: .standard)
+        let normalized = QuickReactionPreferences.save(choices, to: preferenceDefaults)
         customizedQuickReactions = normalized
     }
 
@@ -566,6 +569,7 @@ final class AppState {
         // Default arguments evaluate in a nonisolated context and `UserDefaults`
         // is not Sendable, so the MainActor store is resolved in the body.
         erasureDefaults: UserDefaults? = nil,
+        preferenceDefaults: UserDefaults? = nil,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory =
             RuntimeLifecycle.defaultRuntimeClientFactory,
@@ -590,12 +594,14 @@ final class AppState {
             legacyDefaults: accountDefaults)
         self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
         self.diagnosticsConsent = DeviceDiagnosticsConsent()
-        self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
-        self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)
-        self.blockScreenshots = UserDefaults.standard.bool(forKey: Self.blockScreenshotsKey)
-        self.recentReactions = UserDefaults.standard.stringArray(forKey: Self.recentReactionsKey)
+        let preferenceDefaults = preferenceDefaults ?? .standard
+        self.preferenceDefaults = preferenceDefaults
+        self.developerMode = preferenceDefaults.bool(forKey: Self.developerModeKey)
+        self.streamingDebugMode = preferenceDefaults.bool(forKey: Self.streamingDebugModeKey)
+        self.blockScreenshots = preferenceDefaults.bool(forKey: Self.blockScreenshotsKey)
+        self.recentReactions = preferenceDefaults.stringArray(forKey: Self.recentReactionsKey)
             ?? Self.defaultReactions
-        self.customizedQuickReactions = QuickReactionPreferences.load(from: .standard)
+        self.customizedQuickReactions = QuickReactionPreferences.load(from: preferenceDefaults)
         self.profileStore.appState = self
         self.runtimeLifecycle.configure(appState: self)
         self.conversationDraftStore.configure(persistence: self)

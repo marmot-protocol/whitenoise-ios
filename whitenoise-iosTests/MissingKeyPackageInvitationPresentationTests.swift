@@ -47,7 +47,7 @@ struct NewGroupMissingKeyPackageTests {
     private let peerHex = String(repeating: "c", count: 64)
 
     private func makeAppState(client: MarmotClient, knownName: String?, defaults: UserDefaults) -> AppState {
-        let appState = AppState(client: client)
+        let appState = AppState.test(client: client)
         appState.activeAccountRef = "account"
         appState.profileStore.contactNicknameDefaults = defaults
         appState.profileStore.profileProjectionCache[peerHex] = ProfileDisplayProjection(
