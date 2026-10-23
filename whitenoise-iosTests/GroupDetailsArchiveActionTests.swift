@@ -334,66 +334,73 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test func groupInfoSaveKeepsTheImageEditWhenTheTextPublishFails() async throws {
-        let appState = AppState.test()
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false, description: "Existing description")
-        )
-        let model = GroupDetailsViewModel()
-        var imageRequests = 0
+    @Test(.marmotRuntimeConcurrencyLimit) func groupInfoSaveKeepsTheImageEditWhenTheTextPublishFails() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false, description: "Existing description")
+            )
+            let model = GroupDetailsViewModel()
+            var imageRequests = 0
 
-        model.conversation = conversation
-        model.prepareProfileDrafts()
-        model.descriptionDraft = "Changed"
-        model.imageEdit = .removed
-        model.updateGroupProfileForTesting = { _, _, _, _ in
-            throw GroupDetailsActionError.noActiveAccount
+            model.conversation = conversation
+            model.prepareProfileDrafts()
+            model.descriptionDraft = "Changed"
+            model.imageEdit = .removed
+            model.updateGroupProfileForTesting = { _, _, _, _ in
+                throw GroupDetailsActionError.noActiveAccount
+            }
+            model.clearGroupImageForTesting = { _, _ in
+                imageRequests += 1
+                return SendSummaryFfi(published: 1, messageIds: ["clear"])
+            }
+
+            let succeeded = await model.saveGroupInfo(using: appState)
+
+            #expect(!succeeded)
+            #expect(imageRequests == 0)
+            #expect(model.imageEdit == .removed)
+            #expect(model.actionError != nil)
         }
-        model.clearGroupImageForTesting = { _, _ in
-            imageRequests += 1
-            return SendSummaryFfi(published: 1, messageIds: ["clear"])
-        }
-
-        let succeeded = await model.saveGroupInfo(using: appState)
-
-        #expect(!succeeded)
-        #expect(imageRequests == 0)
-        #expect(model.imageEdit == .removed)
-        #expect(model.actionError != nil)
     }
 
-    @Test func groupInfoSaveSaysTheTextWasSavedWhenOnlyTheImageFails() async throws {
-        let appState = AppState.test()
-        appState.activeAccountRef = "account-1"
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(
-                groupIdHex: String(repeating: "ab", count: 32),
-                archived: false,
-                avatarUrl: "https://example.com/group.jpg"
+    @Test(.marmotRuntimeConcurrencyLimit) func groupInfoSaveSaysTheTextWasSavedWhenOnlyTheImageFails() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(
+                    groupIdHex: String(repeating: "ab", count: 32),
+                    archived: false,
+                    avatarUrl: "https://example.com/group.jpg"
+                )
             )
-        )
-        let model = GroupDetailsViewModel()
+            let model = GroupDetailsViewModel()
+            var avatarUrlRequests = 0
 
-        model.conversation = conversation
-        model.prepareProfileDrafts()
-        model.renameDraft = "Renamed group"
-        model.imageEdit = .removed
-        model.updateGroupProfileForTesting = { _, _, _, _ in
-            SendSummaryFfi(published: 1, messageIds: ["profile"])
+            model.conversation = conversation
+            model.prepareProfileDrafts()
+            model.renameDraft = "Renamed group"
+            model.imageEdit = .removed
+            model.updateGroupProfileForTesting = { _, _, _, _ in
+                SendSummaryFfi(published: 1, messageIds: ["profile"])
+            }
+            model.updateGroupAvatarUrlForTesting = { _, _, _ in
+                avatarUrlRequests += 1
+                throw GroupDetailsActionError.noActiveAccount
+            }
+
+            let succeeded = await model.saveGroupInfo(using: appState)
+
+            #expect(!succeeded)
+            #expect(avatarUrlRequests == 1)
+            #expect(model.imageEdit == .removed)
+            #expect(model.actionError?.hasPrefix("Name and description saved.") == true)
         }
-        model.updateGroupAvatarUrlForTesting = { _, _, _ in
-            throw GroupDetailsActionError.noActiveAccount
-        }
-
-        let succeeded = await model.saveGroupInfo(using: appState)
-
-        #expect(!succeeded)
-        #expect(model.imageEdit == .removed)
-        #expect(model.actionError?.hasPrefix("Name and description saved.") == true)
     }
 
     @Test(.marmotRuntimeConcurrencyLimit) func groupInfoSaveSetsAnUnnamedGroupImageWithoutPublishingText() async throws {
