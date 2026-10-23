@@ -97,8 +97,8 @@ struct Nip05ResolverTests {
     }
 
     @MainActor
-    @Test func staleVerificationCannotRestoreBadgeAfterAccountChange() async {
-        let gate = Nip05TransportGate()
+    @Test func staleVerificationCannotRestoreBadgeAfterAccountChange() async throws {
+        let gate = (entered: TestLatch(), released: TestLatch())
         let model = ProfileViewModel()
         model.applyResolvedAccount(hex)
         let verifiedHex = hex
@@ -106,7 +106,8 @@ struct Nip05ResolverTests {
             await model.verifyDeclaredNip05(
                 "alice@example.com",
                 transport: { request, _ in
-                    await gate.suspendUntilReleased()
+                    gate.entered.signal()
+                    try? await gate.released.wait()
                     let response = HTTPURLResponse(
                         url: request.url ?? URL(fileURLWithPath: "/"),
                         statusCode: 200,
@@ -121,9 +122,9 @@ struct Nip05ResolverTests {
             )
         }
 
-        await gate.waitUntilStarted()
+        try await gate.entered.wait()
         model.applyResolvedAccount(String(repeating: "f", count: 64))
-        await gate.release()
+        gate.released.signal()
         await verification.value
 
         #expect(model.verifiedNip05 == nil)
@@ -149,62 +150,65 @@ struct Nip05ResolverTests {
     }
 
     @MainActor
-    @Test func cancelledVerificationCanRetryBeforeOldTransportFinishes() async {
+    @Test func cancelledVerificationCanRetryBeforeOldTransportFinishes() async throws {
         let model = ProfileViewModel()
         model.applyResolvedAccount(hex)
-        let gate = Nip05TransportGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         let response = stub(returning: "{\"names\":{\"alice\":\"\(hex)\"}}")
         let oldLookup = Task {
             await model.verifyDeclaredNip05("alice@example.com") { request, maximumBytes in
-                await gate.suspendUntilReleased()
+                gate.entered.signal()
+                try? await gate.released.wait()
                 return try await response(request, maximumBytes)
             }
         }
-        await gate.waitUntilStarted()
+        try await gate.entered.wait()
         oldLookup.cancel()
         await model.verifyDeclaredNip05("alice@example.com", transport: response)
         #expect(model.verifiedNip05 == "alice@example.com")
-        await gate.release()
+        gate.released.signal()
         await oldLookup.value
         #expect(model.verifiedNip05 == "alice@example.com")
     }
 
     @MainActor
-    @Test func removingDeclarationInvalidatesAnInFlightVerification() async {
+    @Test func removingDeclarationInvalidatesAnInFlightVerification() async throws {
         let model = ProfileViewModel()
         model.applyResolvedAccount(hex)
-        let gate = Nip05TransportGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         let response = stub(returning: "{\"names\":{\"alice\":\"\(hex)\"}}")
         let oldLookup = Task {
             await model.verifyDeclaredNip05("alice@example.com") { request, maximumBytes in
-                await gate.suspendUntilReleased()
+                gate.entered.signal()
+                try? await gate.released.wait()
                 return try await response(request, maximumBytes)
             }
         }
-        await gate.waitUntilStarted()
+        try await gate.entered.wait()
         await model.verifyDeclaredNip05(nil, transport: response)
-        await gate.release()
+        gate.released.signal()
         await oldLookup.value
         #expect(model.verifiedNip05 == nil)
     }
 
     @MainActor
-    @Test func returningToAnAccountDoesNotAcceptItsOlderVerification() async {
+    @Test func returningToAnAccountDoesNotAcceptItsOlderVerification() async throws {
         let model = ProfileViewModel()
         model.applyResolvedAccount(hex)
-        let gate = Nip05TransportGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         let response = stub(returning: "{\"names\":{\"alice\":\"\(hex)\"}}")
         let oldLookup = Task {
             await model.verifyDeclaredNip05("alice@example.com") { request, maximumBytes in
-                await gate.suspendUntilReleased()
+                gate.entered.signal()
+                try? await gate.released.wait()
                 return try await response(request, maximumBytes)
             }
         }
-        await gate.waitUntilStarted()
+        try await gate.entered.wait()
         model.applyResolvedAccount(String(repeating: "f", count: 64))
         model.applyResolvedAccount(hex)
         await model.verifyDeclaredNip05("alice@example.com", transport: stub(returning: "{\"names\":{}}"))
-        await gate.release()
+        gate.released.signal()
         await oldLookup.value
         #expect(model.verifiedNip05 == nil)
     }
@@ -289,38 +293,5 @@ struct Nip05ResolverTests {
             )
             return (Data(body.utf8), response ?? URLResponse())
         }
-    }
-}
-
-private actor Nip05TransportGate {
-    private var started = false
-    private var released = false
-    private var startedWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseWaiter: CheckedContinuation<Void, Never>?
-
-    func suspendUntilReleased() async {
-        started = true
-        let waiters = startedWaiters
-        startedWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
-        guard !released else { return }
-        await withCheckedContinuation { continuation in
-            releaseWaiter = continuation
-        }
-    }
-
-    func waitUntilStarted() async {
-        guard !started else { return }
-        await withCheckedContinuation { continuation in
-            startedWaiters.append(continuation)
-        }
-    }
-
-    func release() {
-        released = true
-        releaseWaiter?.resume()
-        releaseWaiter = nil
     }
 }

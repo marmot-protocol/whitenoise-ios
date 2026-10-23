@@ -67,10 +67,10 @@ private func runtimeOwnershipDeniedNotifications() -> AppNotifications {
 
 private actor RuntimeRetryGate {
     private var continuation: CheckedContinuation<Void, Never>?
-    private var didEnter = false
+    private let entered = TestLatch()
 
     func sleep(_: Duration) async throws {
-        didEnter = true
+        entered.signal()
         await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 self.continuation = continuation
@@ -81,10 +81,8 @@ private actor RuntimeRetryGate {
         try Task.checkCancellation()
     }
 
-    func waitUntilEntered() async {
-        while !didEnter {
-            await Task.yield()
-        }
+    func waitUntilEntered() async throws {
+        try await entered.wait()
     }
 
     func release() {
@@ -279,7 +277,7 @@ struct RuntimeOwnershipTests {
         }
     }
 
-    @Test func inactiveLaunchBootstrapsWithoutTreatingInactiveAsCancellation() async {
+    @Test func inactiveLaunchBootstrapsWithoutTreatingInactiveAsCancellation() async throws {
         let factory = ScriptedRuntimeFactory(busyFailures: 0)
         let appState = AppState.test(
             client: nil,
@@ -331,7 +329,7 @@ struct RuntimeOwnershipTests {
         #expect(marmot.storageIsClosed())
     }
 
-    @Test func bootstrapRetriesRuntimeBusySeriallyAndInstallsOneClient() async {
+    @Test func bootstrapRetriesRuntimeBusySeriallyAndInstallsOneClient() async throws {
         let factory = ScriptedRuntimeFactory(busyFailures: 2)
         let appState = AppState.test(
             client: nil,
@@ -363,7 +361,7 @@ struct RuntimeOwnershipTests {
         #expect(appState.phase == .onboarding)
     }
 
-    @Test func bootstrapRetriesTransientStorageAndKeystoreReadiness() async {
+    @Test func bootstrapRetriesTransientStorageAndKeystoreReadiness() async throws {
         let factory = ScriptedRuntimeFactory(failures: [
             .StorageBusy(details: "database is locked"),
             .KeystoreUnavailable(details: "protected data unavailable"),
@@ -394,7 +392,7 @@ struct RuntimeOwnershipTests {
         #expect(appState.client != nil)
     }
 
-    @Test func bootstrapStopsRetryingWhenAppBackgrounds() async {
+    @Test func bootstrapStopsRetryingWhenAppBackgrounds() async throws {
         let factory = ScriptedRuntimeFactory(busyFailures: .max)
         let retryGate = RuntimeRetryGate()
         let appState = AppState.test(
@@ -415,7 +413,7 @@ struct RuntimeOwnershipTests {
         )
         appState.setAppSceneActive(true)
         let bootstrap = Task { await appState.bootstrap() }
-        await retryGate.waitUntilEntered()
+        try await retryGate.waitUntilEntered()
 
         appState.setAppSceneActive(false)
         await retryGate.release()
@@ -427,7 +425,7 @@ struct RuntimeOwnershipTests {
         #expect(appState.phase == .bootstrapping)
     }
 
-    @Test func exhaustedContentionIsRecoverableAndASecondBootstrapCanSucceed() async {
+    @Test func exhaustedContentionIsRecoverableAndASecondBootstrapCanSucceed() async throws {
         let factory = ScriptedRuntimeFactory(busyFailures: 2)
         let appState = AppState.test(
             client: nil,
@@ -495,7 +493,7 @@ struct RuntimeOwnershipTests {
         appState.scheduleForegroundMutationFollowupForTesting {
             try? await gate.sleep(.seconds(30))
         }
-        await gate.waitUntilEntered()
+        try await gate.waitUntilEntered()
 
         await appState.startRuntimeSuspension().value
 

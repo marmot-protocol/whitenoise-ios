@@ -52,9 +52,7 @@ struct GroupImageSearchTests {
         let first = try #require(await limiter.acquire())
         let queued = Task { await limiter.acquire() }
 
-        while await limiter.snapshot().waiting == 0 {
-            await Task.yield()
-        }
+        try await eventually { await limiter.snapshot().waiting > 0 }
         queued.cancel()
 
         #expect(await queued.value == nil)

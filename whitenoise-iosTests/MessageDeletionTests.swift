@@ -633,7 +633,7 @@ struct MessageDeletionTests {
         let me = hex("11")
         let group = groupRecord(id: hex("aa"), name: "Repeat test")
         let appState = try appState(accountRef: accountRef, accountIdHex: me)
-        let barrier = DeleteOperationBarrier()
+        let barrier = (entered: TestLatch(), released: TestLatch())
         var remoteDeleteCalls = 0
         let viewModel = ConversationViewModel(
             appState: appState,
@@ -641,7 +641,8 @@ struct MessageDeletionTests {
             deleteMessageOperation: { _, _, _, _ in
                 remoteDeleteCalls += 1
                 if remoteDeleteCalls == 1 {
-                    await barrier.arriveAndWait()
+                    barrier.entered.signal()
+                    try? await barrier.released.wait()
                 }
                 return SendSummaryFfi(published: 1, messageIds: [])
             }
@@ -662,9 +663,9 @@ struct MessageDeletionTests {
         )
 
         let first = Task { await viewModel.deleteMessageForEveryone(message) }
-        await barrier.waitUntilStarted()
+        try await barrier.entered.wait()
         let repeated = await viewModel.deleteMessageForEveryone(message)
-        await barrier.release()
+        barrier.released.signal()
         let firstResult = await first.value
 
         #expect(firstResult)
@@ -802,36 +803,6 @@ struct MessageDeletionTests {
 
 private enum DeleteTestError: Error {
     case failed
-}
-
-private actor DeleteOperationBarrier {
-    private var started = false
-    private var startWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseWaiter: CheckedContinuation<Void, Never>?
-
-    func arriveAndWait() async {
-        started = true
-        let waiters = startWaiters
-        startWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
-        await withCheckedContinuation { continuation in
-            releaseWaiter = continuation
-        }
-    }
-
-    func waitUntilStarted() async {
-        guard !started else { return }
-        await withCheckedContinuation { continuation in
-            startWaiters.append(continuation)
-        }
-    }
-
-    func release() {
-        releaseWaiter?.resume()
-        releaseWaiter = nil
-    }
 }
 
 private actor ModerationFixture: GroupModerationClient, MessageReportsClient {

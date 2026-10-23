@@ -503,7 +503,7 @@ struct RemoteImageLoaderTests {
             await order.append("list")
             await limiter.release(reservation)
         }
-        while await limiter.snapshot().waiting < 1 { await Task.yield() }
+        try await eventually { await limiter.snapshot().waiting >= 1 }
         let foregroundTask = Task {
             guard let reservation = await limiter.acquire(priority: GroupAvatarLoadPriority.foreground.rawValue) else {
                 return
@@ -511,7 +511,7 @@ struct RemoteImageLoaderTests {
             await order.append("foreground")
             await limiter.release(reservation)
         }
-        while await limiter.snapshot().waiting < 2 { await Task.yield() }
+        try await eventually { await limiter.snapshot().waiting >= 2 }
 
         await limiter.release(first)
         await listTask.value
