@@ -137,7 +137,7 @@ struct ChatListDraftHandoffBindingTests {
         let client = try MarmotClient.testClient()
         let defaults = try #require(UserDefaults(suiteName: "DraftHandoffTests.\(UUID())"))
         let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-        let state = AppState.test(client: client, notifications: .shared, conversationDraftStore: store,
+        let state = AppState.test(client: client, conversationDraftStore: store,
             accountDefaults: defaults, erasureDefaults: defaults)
         state.setPhase(.ready)
         let watchdog = MarmotFixtureWatchdog.start("Draft handoff did not complete", breaking: client)
