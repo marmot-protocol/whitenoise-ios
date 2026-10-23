@@ -67,7 +67,7 @@ struct InteractivePopTransitionStateTests {
         #expect(!state.isNavigating)
     }
 
-    // MARK: - Gesture policy (merged from InteractivePopGesturePolicyTests)
+    // MARK: - Gesture policy
 
     @Test func beginsOnceSomethingIsPushedAboveTheRoot() {
         #expect(InteractivePopGesturePolicy.shouldBegin(stackDepth: 2, isTransitioning: false))

@@ -113,11 +113,8 @@ struct MessageImageBubblePresentationTests {
 
     // MARK: - Media cache keys
     //
-    // MessageMediaThumbnailPresentation, MessageVideoThumbnailPresentation and
-    // MessageAudioBubblePresentation each carry their own cacheKey; one
-    // parameterized pair covers all three (merged from
-    // MessageMediaThumbnailPresentationTests and the audio pair of
-    // MessageAudioBubblePresentationTests).
+    // Thumbnail, video and audio each carry their own cacheKey; one
+    // parameterized pair covers all three.
 
     enum CacheKeyKind: String, CaseIterable, Sendable {
         case thumbnail, video, audio

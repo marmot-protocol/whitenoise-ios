@@ -271,7 +271,7 @@ struct ContentSanitizerTests {
         #expect(ContentSanitizer.groupName("\u{202E}\u{200B}") == nil)
     }
 
-    // MARK: - Multiline text (merged from ContentSanitizerMultilineTests)
+    // MARK: - Multiline text
 
     @Test func clampsRunsOfBlankLines() {
         let flooded = "Line one" + String(repeating: "\n", count: 8) + "Line two"
@@ -296,7 +296,7 @@ struct ContentSanitizerTests {
         #expect(ContentSanitizer.multilineText(nil) == nil)
     }
 
-    // MARK: - Relay display lines (merged from ContentSanitizerRelayDisplayTests)
+    // MARK: - Relay display lines
 
     @Test func stripsZeroWidthNonJoinerJoinerAndWordJoiner() {
         let spoofed = "wss://re\u{200C}lay\u{200D}evil\u{2060}.example"
@@ -344,7 +344,7 @@ struct ContentSanitizerTests {
         #expect(ContentSanitizer.singleLine(withZWJ, maxLength: 80) == withZWJ)
     }
 
-    // MARK: - Remote media address literals (merged from ContentSanitizerRemoteMediaAddressTests)
+    // MARK: - Remote media address literals
 
     @Test(arguments: [
         "192.0.2.0", "192.0.2.255", "192.88.99.0", "192.88.99.255",
@@ -386,7 +386,7 @@ struct ContentSanitizerTests {
         #expect(ContentSanitizer.imageURL("https://\(host)/image.png") != nil)
     }
 
-    // MARK: - Group relay rows (merged from GroupRelaysPresentationTests)
+    // MARK: - Group relay rows
     //
     // #298 — group relay strings come from `AppGroupRecordFfi.relays`, which is
     // MLS-propagated group metadata controlled by a (possibly malicious) group
@@ -460,7 +460,7 @@ struct ContentSanitizerTests {
         #expect(rows == ["wss://relay spaced.example"])
     }
 
-    // MARK: - Published relay list rows (merged from RelaysViewPresentationTests)
+    // MARK: - Published relay list rows
     //
     // #365 — `RelaysView`'s "Published Relay Lists" section renders relay URLs
     // from relay-hosted NIP-65 / kind:10050 inbox events. Those are
@@ -523,7 +523,7 @@ struct ContentSanitizerTests {
         #expect(rows == ["wss://relay spaced.example"])
     }
 
-    // MARK: - Editable relay rows (merged from RelaysViewPresentationTests)
+    // MARK: - Editable relay rows
     //
     // #467 — the editable account-relays section is the same relay-influenced
     // render surface as the published lists, so it must sanitize identically.
@@ -559,7 +559,7 @@ struct ContentSanitizerTests {
         #expect(RelaySettings.editableRelayDisplay("\u{FEFF}\u{202E}") == RelaySettings.invalidRelayMessage)
     }
 
-    // MARK: - Missing relay footer labels (merged from RelaysViewPresentationTests)
+    // MARK: - Missing relay footer labels
 
     @Test @MainActor func missingLabelsRenderStableEnumNames() {
         #expect(RelaySettings.missingRelayLabels([.nip65, .inbox]) == ["NIP-65", "Inbox"])

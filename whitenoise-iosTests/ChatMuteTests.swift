@@ -126,7 +126,7 @@ struct ChatMuteStoreTests {
         #expect(!ChatMuteStore.isMuted(accountIdHex: "", groupIdHex: "group-a", in: snapshot))
     }
 
-    // MARK: - Timed mute actions (merged from ChatMuteActionTests)
+    // MARK: - Timed mute actions
 
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
@@ -238,7 +238,7 @@ struct ChatMuteStoreTests {
         try operation(defaults)
     }
 
-    // MARK: - Mute picker presentation state (merged from ChatMutePickerStateTests)
+    // MARK: - Mute picker presentation state
 
     @Test func layoutCannotReopenADismissingOrDismissedPicker() {
         var state = ChatMutePickerState()
@@ -292,7 +292,7 @@ struct ChatMuteStoreTests {
         #expect(state.beginPresentation() == false)
     }
 
-    // MARK: - Group details mute state (merged from GroupDetailsMuteStateTests)
+    // MARK: - Group details mute state
 
     @Test @MainActor func initialAndFailedLoadsShowUnavailable() {
         let model = GroupDetailsViewModel()

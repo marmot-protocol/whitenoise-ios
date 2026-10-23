@@ -41,7 +41,7 @@ struct DeepLinkTests {
         #expect(DeepLink.parse(string: "darkmatter://profile/\(npub)") == nil)
     }
 
-    // MARK: - Generated links (merged from DeepLinkGenerationTests)
+    // MARK: - Generated links
     //
     // Generated QR/share links must carry the canonical cross-client scheme in
     // every build flavor, while inbound parsing stays scheme-liberal.
@@ -62,7 +62,7 @@ struct DeepLinkTests {
         }
     }
 
-    // MARK: - Chat group ids (merged from DeepLinkChatGroupIdTests)
+    // MARK: - Chat group ids
     //
     // #68 — chat deep links must carry a 64-char (32-byte) hex group id; any
     // other length must be rejected before it reaches Marmot.

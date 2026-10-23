@@ -29,7 +29,7 @@ struct ChatListSelectionTests {
         #expect(ChatListSelection.selectAll(["a", "b", "c"]) == ["a", "b", "c"])
     }
 
-    // MARK: - Select all toggle (merged from ChatListSelectionToggleTests)
+    // MARK: - Select all toggle
 
     @Test func emptyListDoesNotOfferDeselectAll() {
         #expect(!ChatListSelection.allSelected([], visibleIds: []))

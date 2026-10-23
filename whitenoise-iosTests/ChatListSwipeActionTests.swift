@@ -37,7 +37,7 @@ struct ChatListSwipeActionTests {
         #expect(ChatListSwipeAction.read.tint != ChatListSwipeAction.pin.tint)
     }
 
-    // MARK: - Departure status and action (merged from ChatDeparturePresentationTests)
+    // MARK: - Departure status and action
 
     private static let memberships: [SelfMembershipFfi] = [.member, .left, .removed]
 
@@ -161,7 +161,7 @@ struct ChatListSwipeActionTests {
         }
     }
 
-    // MARK: - Membership actions (merged from ChatListSwipeActionsPresentationTests)
+    // MARK: - Membership actions
 
     @Test func activeMemberShowsLeaveAndArchive() {
         let actions = ChatListSwipeActionsPresentation.trailingActions(
@@ -202,7 +202,7 @@ struct ChatListSwipeActionTests {
         #expect(!actions.contains(.archive))
     }
 
-    // MARK: - Mute and read/pin actions (merged from ChatListMuteSwipeActionsTests)
+    // MARK: - Mute and read/pin actions
 
     @Test func unmutedRowOffersMuteOnly() {
         let actions = ChatListSwipeActionsPresentation.trailingActions(
@@ -271,7 +271,7 @@ struct ChatListSwipeActionTests {
         #expect(actions == [.unread])
     }
 
-    // MARK: - Bulk selection (merged from ChatListSwipeActionsPresentationTests)
+    // MARK: - Bulk selection
 
     @Test func bulkLocalDeleteRequiresEverySelectedMembershipToBeInactive() {
         #expect(!ChatListSelection.canDeleteLocally([]))

@@ -44,7 +44,7 @@ struct ReplySwipeTests {
         #expect(ReplySwipe.completionPauseNanoseconds <= 20_000_000)
     }
 
-    // MARK: - View identity (merged from ReplySwipeIdentityTests)
+    // MARK: - View identity
 
     @Test func changingReplyAvailabilityPreservesTheDisplayedBubble() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

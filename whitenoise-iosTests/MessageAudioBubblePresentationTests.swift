@@ -31,10 +31,7 @@ struct MessageAudioBubblePresentationTests {
         #expect(MessageAudioBubblePresentation.durationLabel(-.infinity) == nil)
     }
 
-    // The audio cacheKey is covered by MessageImageBubblePresentationTests'
-    // parameterized media cache-key tests.
-
-    // MARK: - Composer draft preview (merged from ComposerAudioDraftPreviewPresentationTests)
+    // MARK: - Composer draft preview
 
     @Test func playbackIconReflectsPreviewState() {
         #expect(ComposerAudioDraftPreviewPresentation.playIconName(isPlaying: false, didFail: false) == "play.fill")
@@ -69,7 +66,7 @@ struct MessageAudioBubblePresentationTests {
         #expect(AudioDurationLabel.label(for: 65, locale: locale) != "1:05")
     }
 
-    // MARK: - Camera capture (merged from CameraCapturePresentationTests)
+    // MARK: - Camera capture
 
     @Test func recordingDurationUsesMinuteAndZeroPaddedSecondFields() {
         #expect(CameraCapturePresentation.durationLabel(0) == "0:00")

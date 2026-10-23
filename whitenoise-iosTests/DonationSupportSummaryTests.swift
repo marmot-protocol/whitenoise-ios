@@ -37,7 +37,7 @@ struct DonationSupportSummaryTests {
         #expect(summary.recentPayments.isEmpty)
     }
 
-    // MARK: - Record projection (merged from DonationSupportProjectionTests)
+    // MARK: - Record projection
 
     @Test func multipleSubscriptionsAndBillingStatesRemainDistinct() throws {
         let active = try decodeSubscription(
