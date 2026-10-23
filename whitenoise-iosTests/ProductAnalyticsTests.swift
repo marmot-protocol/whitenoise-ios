@@ -129,7 +129,7 @@ struct DeviceDiagnosticsConsentTests {
     }
 }
 
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ProductAnalyticsTests {
     @Test func retentionDisclosureUsesTheSelectedLanguageWithoutChangingPolicy() {
         var config = ProductAnalyticsBuildConfig.current(info: [

@@ -4,7 +4,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct NewChatFlowViewModelTests {
     @Test func finalCreateFailureKeepsSelectionAndAllowsRetry() async throws {
         let client = try MarmotClient.testClient()

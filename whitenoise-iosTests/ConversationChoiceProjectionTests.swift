@@ -3,7 +3,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationChoiceProjectionTests {
     private let me = String(repeating: "aa", count: 32)
     private let alice = String(repeating: "bb", count: 32)

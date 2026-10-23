@@ -50,7 +50,7 @@ struct ChatTitleFallbackGraceTests {
 }
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ChatTitleFallbackPresentationTests {
     private let peer = String(repeating: "ab", count: 32)
 

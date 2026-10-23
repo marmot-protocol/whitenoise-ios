@@ -5,7 +5,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ConversationCustomEmojiSenderTests {
     typealias F = CustomEmojiFixtures
 

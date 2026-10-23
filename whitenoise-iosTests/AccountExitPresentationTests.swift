@@ -3,7 +3,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized, .tags(.runtime))
+@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AccountExitPresentationTests {
     @Test(arguments: [false, true])
     func sheetReceivesGateFailureWithoutDuplicateToast(wiping: Bool) async throws {

@@ -4,7 +4,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct DeviceSettingsFlowTests {
     @Test func profileChooserSurvivesLaunchUntilAProfileIsSelected() throws {
         let name = "ProfileChooserTests.\(UUID())"

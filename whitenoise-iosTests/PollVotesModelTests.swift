@@ -5,7 +5,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct PollVotesModelTests {
     private static let group = String(repeating: "c", count: 64)
     private static let pollA = String(repeating: "1", count: 64)

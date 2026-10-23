@@ -5,7 +5,7 @@ import Testing
 /// #51 — listAccounts is now an async method on MarmotClient that encapsulates
 /// the off-main-actor offload, so callers use a plain await with no Task.detached.
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct MarmotClientListAccountsTests {
 
     @Test func listAccountsReturnsEmptyForFreshClient() async throws {

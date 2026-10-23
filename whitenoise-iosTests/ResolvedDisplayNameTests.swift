@@ -7,7 +7,7 @@ import Foundation
 /// preserving the established precedence: fetched kind:0 profile name →
 /// runtime projected name → local account label.
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ResolvedDisplayNameTests {
     private func profile(displayName: String? = nil, name: String? = nil) -> UserProfileMetadataFfi {
         UserProfileMetadataFfi(

@@ -4,7 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized, .tags(.runtime))
+@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct LaunchBrandLayoutTests {
     @Test(arguments: [
         CGSize(width: 320, height: 568),

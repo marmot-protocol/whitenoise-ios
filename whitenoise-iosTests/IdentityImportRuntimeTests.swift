@@ -6,7 +6,7 @@ import UserNotifications
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct IdentityImportRuntimeTests {
     private let accountDefaults = IsolatedAccountDefaults.make()
 

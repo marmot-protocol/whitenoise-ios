@@ -3,7 +3,7 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AgentEventPresentationTests {
     @Test func oversizedPayloadIsRejectedBeforeParsing() {
         // The cap runs before JSONSerialization materializes anything — a

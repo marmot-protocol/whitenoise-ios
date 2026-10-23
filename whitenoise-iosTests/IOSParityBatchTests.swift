@@ -4,7 +4,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct IOSParityBatchTests {
     @Test func resolvedGroupRecipientAutoSelectSkipsSelfDuplicatesAndBusyState() {
         #expect(NewChatFlowViewModel.shouldAutoSelectResolved(

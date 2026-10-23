@@ -9,7 +9,7 @@ import Synchronization
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct PresentedChatListTests {
     @Test func expiringPreviewDisappearsWithoutAnMDKUpdate() async throws {
         let state = AppState.test(client: try MarmotClient.testClient())

@@ -5,7 +5,7 @@ import UserNotifications
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct OnboardingRecoveryRemovalTests {
     @Test func removingBrokenSetupRemovesOnlySelectedProfileAndSurvivesRefresh() async throws {
         let (state, client) = try await makeState()

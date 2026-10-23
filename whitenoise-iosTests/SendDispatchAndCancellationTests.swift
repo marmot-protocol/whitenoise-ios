@@ -3,7 +3,7 @@ import Foundation
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct SendDispatchAndCancellationTests {
 
     /// #49 — send() must confirm it has a view model before clearing the draft,

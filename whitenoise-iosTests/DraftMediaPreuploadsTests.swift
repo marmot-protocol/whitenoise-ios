@@ -4,7 +4,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct DraftMediaPreuploadsTests {
     @Test func uploadsEachStagedAttachmentOnceAndHandsReferencesToSendInOrder() async {
         let probe = UploadProbe()

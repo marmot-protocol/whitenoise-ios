@@ -6,7 +6,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct CreateIdentityOnboardingTests {
     @Test func reopeningSignUpDoesNotReplayRetainedFailure() {
         var presentation = SignUpFailurePresentation(retaining: .profile)

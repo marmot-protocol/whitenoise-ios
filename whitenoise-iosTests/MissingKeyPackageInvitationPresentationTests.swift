@@ -42,7 +42,7 @@ struct MissingKeyPackageInvitationPresentationTests {
 }
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct NewGroupMissingKeyPackageTests {
     private let peerHex = String(repeating: "c", count: 64)
 

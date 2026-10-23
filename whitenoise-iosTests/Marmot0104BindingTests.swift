@@ -6,7 +6,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized, .tags(.runtime))
+@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct Marmot0104BindingTests {
     @Test func acceptedTokenSurvivesRestartAndRejectsChangedRequests() async throws {
         let relay = try LocalAdmissionTestRelay()

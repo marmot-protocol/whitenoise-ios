@@ -874,7 +874,7 @@ struct AccountSetupTests {
 
 /// Runs off the MainActor so the real runtime's hops do not queue behind the
 /// rest of the in-process parallel suite on a starved CI runner.
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct AccountSetupRuntimeTests {
     // The poller's cancellation semantics are covered deterministically above;
     // this limit only turns an uncancellable wait into a failure instead of a

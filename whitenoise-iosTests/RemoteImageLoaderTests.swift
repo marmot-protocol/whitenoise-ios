@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized, .tags(.runtime))
+@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct RemoteImageLoaderTests {
     @Test func imageDataRejectsUnsanitizedURLsAtTheEgress() async throws {
         // Self-enforcing chokepoint: a caller that skips ContentSanitizer must

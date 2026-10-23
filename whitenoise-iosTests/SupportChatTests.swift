@@ -3,7 +3,7 @@ import MarmotKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.runtime))
+@Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct SupportChatTests {
     @Test func canonicalSupportContactResolvesToAUsableRecipient() throws {
         #expect(WhiteNoiseSupportContact.npub.hasPrefix("npub1"))
