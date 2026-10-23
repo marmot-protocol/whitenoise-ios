@@ -41,11 +41,11 @@ numbers and why. Nothing in the ledger is owner-approved until the owner writes
 | `subject-classify.py --merge` | `subjects.csv` + `subject` column | `app`, `mdk` (tests MarmotKit behaviour), `catalog` (reads string catalogs / plists), `test-helper`. A heuristic: a non-`app` label yields `review`, never `delete`, and the test must be read before acting. |
 | `assertion-heuristics.py --merge` | `assertions.csv` + `literal_assertion_flags` | Flags literal pins (`constant == 16`), memberwise round-trips and tests with no assertion. A flag means "asserts a literal", not "cannot fail"; persistence keys and security build flags are legitimate pins. |
 | `timed-xcodebuild.sh`, `phases.py`, `report-run.sh`, `simlog-capture.sh` | `phases.csv`, CI step summary | Decompose `test-without-building` into simulator boot, host launch, XCTest and Swift Testing phases from xcodebuild's own markers. `WN_TEST_RAW_LOG=1 scripts/test.sh` runs a measurement run. |
-| `Whitenoise (Audit)` scheme + `TestPlans/AuditSerial.xctestplan` → `serial-costs.py --log` | `serial.xcresult`, `serial-costs.csv` | Whole suite with parallel execution off and coverage on (the plan also enables Xcode's default per-test timeout, which the Staging scheme does not). Run with `WN_AUDIT_LOG=build/audit/serial-run.log scripts/audit/timed-xcodebuild.sh test-without-building -scheme "Whitenoise (Audit)" -testPlan AuditSerial -resultBundlePath build/audit/serial.xcresult …`. Per-suite `wall_s` comes from the log: Swift Testing suite lines (millisecond precision, display names mapped back to type names) and XCTest class start/end clocks. This is the cost the ledger scores. |
+| `Whitenoise (Audit)` scheme + `TestPlans/AuditSerial.xctestplan` → `serial-costs.py --log` | `serial.xcresult`, `serial-costs.csv` | Whole suite with parallel execution off and coverage on (the plan also enables Xcode's default per-test timeout, which the Staging scheme does not). After a `build-for-testing` of the same scheme, run `WN_AUDIT_LOG=build/audit/serial-run.log scripts/audit/timed-xcodebuild.sh test-without-building -project whitenoise-ios.xcodeproj -scheme "Whitenoise (Audit)" -testPlan AuditSerial -destination 'platform=iOS Simulator,name=iPhone 17' -resultBundlePath build/audit/serial.xcresult` (any simulator name). Per-suite `wall_s` comes from the log: Swift Testing suite lines (millisecond precision, display names mapped back to type names) and XCTest class start/end clocks. This is the cost the ledger scores. |
 | gate trace (`TEST_RUNNER_WN_TEST_GATE_TRACE=1`) → `gate-critical-path.py` | `gate-trace-<pid>.jsonl` in the host app's `tmp/` (`xcrun simctl get_app_container <udid> dev.ipf.whitenoise.ios.staging data`) | Hold and wait times of the `marmotRuntimeConcurrencyLimit` gate. In a serial run it is a per-case breakdown of the gated suite; the hold sum is the CI critical-path floor at one permit. |
 | `measure-per-file.sh` → `per-file-costs.py` | `per-file/*.xcresult`, `per-file-costs.csv` | One `test-without-building` per test file with coverage on, minus the fixed per-process overhead measured with an empty selection. File-level at ±1 s resolution (suites sharing a file repeat the numbers; `shared_file` says so); its purpose is the coverage bundles, not per-suite cost. About an hour; rerun touched files with arguments (`WN_AUDIT_FORCE=1` re-measures, `WN_AUDIT_PER_FILE_DIR` relocates). |
 | `coverage-unique.py` | `coverage-unique.csv` | Per-file covered-line sets from `xccov --archive` on the per-file bundles, with the host-launch baseline (the empty-selection bundle) subtracted and lines covered by more than 15% of files (L10n lookups, hex/npub helpers, build-config reads) excluded; unique lines and pairwise Jaccard. Suites sharing a file share its set. |
-| `probe-suites.py`, `mutate.sh` + `mutations/*.json` | `mutations.csv` | One deliberate production bug per probe. Suites are selected by coverage of the mutated lines (fallbacks: file, then symbol grep), the probe is applied, built, run, recorded (`killed` 1 / 0 / `na` when no bundle could be read) and reverted from a trap; a final rebuild restores the clean products. A kill is evidence; a surviving or unselected suite is not. |
+| `probe-suites.py`, `mutate.sh` + `mutations/*.json` | `mutations.csv` | One deliberate production bug per probe. Suites are selected by coverage of the mutated lines (fallbacks: file, then symbol grep), the probe is applied, built, run, recorded (`killed` 1; 0 when it passed and coverage shows it ran the mutated lines; `unverified` when it passed but was selected only at file level, from a file with several suites, a `file` or a `grep` match; `na` when none of its cases ran) and reverted from a trap, which also rebuilds the clean products whenever a mutant was built and fails the script if that rebuild fails. A kill is evidence; a surviving, unverified or unselected suite is not. |
 | `ci-history.sh` → `ci-attribute.py` | `ci-runs.csv`, `ci-history.csv`, `ci-unattributed.csv` | Which suites failed in the last N GitHub Actions runs: Swift Testing suite lines, XCTest methods mapped to their class, and the host-crash signature in xcbeautify logs (a class starts and a `Selected tests` restart follows). Failures on master are counted separately from failures on PR branches, where the test may have caught the PR's own regression; build failures are listed as unattributed. |
 | `build-ledger.py --render` | `docs/test-audit/ledger.csv`, `ledger.md` | Joins everything above with the hand verdicts in `verdicts.csv`. |
 
@@ -63,7 +63,8 @@ Scores 0–3 per suite, as implemented in `build-ledger.py`:
   over 10 s, or hosts UIKit with fixed sleeps; 2 constructs a runtime or
   1–10 s; 0 under 0.1 s; 1 otherwise.
 - **fragility** — 3 failed on master, on two or more branches, or crashed the
-  CI host; 2 fixed sleeps, a run-loop spin, or one PR-branch failure; 1 bounded
+  CI host; 2 fixed sleeps or a run-loop spin (a single failure on one PR
+  branch is usually that PR's regression and adds nothing); 1 bounded
   polling; 0 none.
 - **redundancy** — 3 zero unique lines and Jaccard > 0.9 with one file; 2 zero
   unique lines; 1 Jaccard > 0.6; 0 otherwise.
@@ -71,7 +72,7 @@ Scores 0–3 per suite, as implemented in `build-ledger.py`:
 | decision | the implementer does | done when |
 |---|---|---|
 | `keep` | nothing | — |
-| `trim` | deletes exactly the tests the rationale names; the suite stays | suite green; the named tests are gone; nothing else changed |
+| `trim` | deletes exactly the tests the rationale names; the suite stays, unless the rationale moves the remaining tests to named suites, then the emptied file goes | suite green (or its moved tests green where they landed); the named tests are gone; nothing else changed |
 | `merge` | moves every test into `merge_into`, then deletes the empty file; drops a test only when the rationale says it duplicates a named survivor test | survivor green with the moved tests; the survivor still kills the probes it killed |
 | `purify` | the rationale says which: removes a `MarmotClient.testClient()` the suite never starts (check no test reads the client first), or replaces a fixed sleep / polling loop with a callback or injected clock | suite green; `inventory.py` shows `testClient_sites` at 0 for a removed client, and `inventory.py --check` reports no `sleep` or `unowned-runtime` line for the suite (sleeps inside `TestSupport/` helpers do not count); serialized time not worse |
 | `re-tier` | tags the suite (or only the tests that need it) `.runtime` or `.uiHosting` so PRs skip it; an XCTest class goes into the PR plan's `skippedTests`; no code change | the PR plan skips it; full suite still green on master |
@@ -193,15 +194,17 @@ Provenance: 2026-10-23, Apple Silicon Mac (16 cores), Xcode 27.1, iPhone SE
 - **Per-file processes** (325 files, 11 s fixed overhead each at ±1 s): same
   ranking; `AppStateBootstrapTests` 139 s net. Used for coverage, not cost.
 - **Runtime gate**: 95 gated test cases hold the permit for 139.9 s in total
-  (median 1.2 s, p90 3.3 s, max 8.0 s). That hold time is real work (each test
+  (median 1.2 s, p90 5.5 s, max 8.0 s). That hold time is real work (each test
   boots a runtime and creates an identity), so on the 3-vCPU CI runner, where
   the gate has one permit, it becomes the 300–650 s critical path seen in CI
   logs. On this 16-core Mac the gate has 4 permits; the serial plan ran one
   test at a time, so the trace measures hold, not contention.
 - **Open-only runtime constructions** (~300 tests that call
   `MarmotClient.testClient()` and never start it) cost little here:
-  `ChatsListProjectionTests` with 30 of them runs in 0.09 s. They still leak
-  ~190 unclosed runtimes per run and are removed by `purify` for hygiene.
+  `ChatsListProjectionTests` with 30 of them runs in 0.09 s. They leaked
+  ~190 unclosed runtimes per run; wave 3's `purify` verdicts removed or
+  scoped most of them, and the remaining direct opens are baselined as
+  `unowned-runtime` in `scripts/audit/guardrail-baseline.txt`.
 - **Coverage overlap**: after subtracting the 966 host-launch lines and
   excluding 341 ubiquitous lines, 38 of 325 files cover no line that another
   file does not also cover, and 4 files covered no app line at all (disabled
