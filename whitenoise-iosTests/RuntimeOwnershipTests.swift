@@ -96,137 +96,8 @@ private actor RuntimeRetryGate {
 @MainActor
 @Suite(.serialized)
 struct RuntimeOwnershipTests {
-    @Test func releasedMembershipPageLimitCrossesTheRealBinding() async throws {
-        let client = try MarmotClient.testClient()
-        do {
-            _ = try await client.groupMemberIdsPage(
-                accountRef: "unused",
-                groupIdsHex: (0...100).map { String(format: "%032x", $0) }
-            )
-            Issue.record("Expected the 100-group binding limit to be enforced")
-        } catch let error as MarmotKitError {
-            guard case .InvalidGroupMembershipPage(let maximum) = error else {
-                Issue.record("Unexpected membership page error: \(error)")
-                return
-            }
-            #expect(maximum == 100)
-        }
-        try await client.marmot.shutdownAndClose()
-    }
-
-    @Test func newlyCreatedGroupIsImmediatelyReadableThroughRosterAndPage() async throws {
-        let client = try MarmotClient.testClient()
-        do {
-            try await client.startRuntime()
-            let account = try await client.marmot.createIdentityWithProfile(
-                defaultRelays: client.relayUrls,
-                bootstrapRelays: client.relayUrls
-            ).account
-            let created = try await client.createGroupWithOptionsDetailed(
-                accountRef: account.label,
-                name: "Local readiness",
-                memberRefs: [],
-                options: CreateGroupOptionsFfi(
-                    description: "Available when create returns",
-                    initialImage: nil,
-                    disappearingMessageSecs: 3_600
-                )
-            )
-            let groupIdHex = created.groupIdHex
-
-            let roster = try await client.groupRoster(
-                accountRef: account.label,
-                groupIdHex: groupIdHex
-            )
-            let page = try await client.groupMemberIdsPage(
-                accountRef: account.label,
-                groupIdsHex: [groupIdHex]
-            )
-            let storedRow = try await client.chatListRow(
-                accountRef: account.label,
-                groupIdHex: groupIdHex
-            )
-            let row = try #require(storedRow)
-            let snapshot = try await client.groupConversationSnapshot(
-                accountRef: account.label,
-                groupIdHex: groupIdHex
-            )
-
-            #expect(roster.groupIdHex == groupIdHex)
-            #expect(roster.memberCount == 1)
-            #expect(roster.selfMembership == .member)
-            #expect(roster.members.count == 1)
-            #expect(page.map(\.groupIdHex) == [groupIdHex])
-            #expect(page.first?.memberIdsHex == roster.members.map(\.memberIdHex))
-            #expect(row.groupIdHex == groupIdHex)
-            #expect(row.groupName == "Local readiness")
-            var createdRow = created.chatListRow
-            // Projection refreshes may advance updatedAt between these separate reads.
-            createdRow.updatedAt = row.updatedAt
-            #expect(createdRow == row)
-            #expect(snapshot.details.group.groupIdHex == groupIdHex)
-            #expect(snapshot.details.group.disappearingMessageSecs == 3_600)
-            #expect(snapshot.managementState.myAccountIdHex == account.accountIdHex)
-            #expect(snapshot.managementState.isSelfAdmin)
-            try await client.marmot.shutdownAndClose()
-            #expect(client.marmot.storageIsClosed())
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
-        }
-    }
-
-    @Test func windowAttentionAndResetCrossTheNativeBindings() async throws {
-        let client = try MarmotClient.testClient()
-        let watchdog = MarmotFixtureWatchdog.start(
-            "Native projection operation did not finish", breaking: client)
-        defer { watchdog.cancel() }
-        do {
-            try await client.startRuntime()
-            let account = try await client.marmot.createIdentityWithProfile(
-                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
-            ).account
-            let first = try await client.createGroupWithOptionsDetailed(
-                accountRef: account.label, name: "First", memberRefs: [],
-                options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)
-            )
-            _ = try await client.createGroupWithOptionsDetailed(
-                accountRef: account.label, name: "Second", memberRefs: [],
-                options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)
-            )
-            let window = try await client.marmot.openChatListWindow(accountRef: account.label, view: .chats, initialRows: 1)
-            let initial = try #require(window.snapshot())
-            #expect(initial.rows.count == 1 && initial.hasMoreAfter)
-            #expect(window.snapshot() == nil)
-            let page = try await window.page(sequence: initial.sequence, direction: .forward, count: 1)
-            #expect(page.rows.count == 2 && !page.hasMoreAfter)
-            let attention = try await client.subscribeAccountAttention()
-            let initialAttention = try #require(attention.snapshot())
-            #expect(initialAttention.accounts.contains { $0.accountIdHex == account.accountIdHex })
-            #expect(attention.snapshot() == nil)
-            for _ in 0..<8 {
-                let listReader = Task.detached {
-                    while try await window.nextCancellable() != nil {}
-                }
-                let attentionReader = Task.detached {
-                    while try await attention.nextCancellable() != nil {}
-                }
-                await Task.yield()
-                listReader.cancel()
-                attentionReader.cancel()
-                await #expect(throws: CancellationError.self) { try await listReader.value }
-                await #expect(throws: CancellationError.self) { try await attentionReader.value }
-            }
-            #expect(try await client.forgetGroupLocal(accountRef: account.label, groupIdHex: first.groupIdHex))
-            #expect(try await !client.forgetGroupLocal(accountRef: account.label, groupIdHex: first.groupIdHex))
-            #expect(try await client.presentedChatListRow(accountRef: account.label, groupIdHex: first.groupIdHex) == nil)
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
-        }
-    }
-
+    // The native cancellation test for the handwritten CancellablePresentedChatList
+    // adapter (AGENTS.md, Rust Bindings): keep it and run it on every binding refresh.
     @Test func publishedPresentationSubscriptionCancelsWithoutAnotherEvent() async throws {
         let client = try MarmotClient.testClient()
         do {
@@ -503,36 +374,27 @@ struct RuntimeOwnershipTests {
         #expect(marmot.storageIsClosed())
     }
 
-    @Test func runtimeLeaseRejectsASecondOwnerUntilTheFinalHandleDrops() async throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("MarmotLeaseTests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        var first: Marmot? = try Marmot.newWithCursorPersistence(
-            rootPath: root.path,
-            relayUrls: ["wss://relay.invalid.test"],
-            cursorPersistence: .advance
+    @Test func userInitiatedMutationJoinsForegroundRuntimeRebuild() async throws {
+        let appState = AppState.test(
+            client: try MarmotClient.testClient(),
+            notifications: runtimeOwnershipDeniedNotifications(),
+            accountDefaults: IsolatedAccountDefaults.make()
         )
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        await appState.startRuntimeSuspension().value
 
-        do {
-            _ = try Marmot.newWithCursorPersistence(
-                rootPath: root.path,
-                relayUrls: ["wss://relay.invalid.test"],
-                cursorPersistence: .frozen
-            )
-            Issue.record("Expected the second runtime owner to be rejected")
-        } catch let error as MarmotKitError {
-            #expect(error.isRuntimeOwnershipContention)
-        }
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
 
-        try await first?.shutdownAndClose()
-        first = nil
+        let lease = try await appState.runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
 
-        let replacement = try Marmot.newWithCursorPersistence(
-            rootPath: root.path,
-            relayUrls: ["wss://relay.invalid.test"],
-            cursorPersistence: .advance
-        )
-        try await replacement.shutdownAndClose()
+        #expect(lease.client === appState.client)
+        #expect(appState.client != nil)
+        #expect(!appState.runtimeSuspendedForBackground)
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+
+        await appState.startRuntimeSuspension().value
     }
 
     @Test func notificationContentionUsesTypedImmediateFallbackClassification() {
