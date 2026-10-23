@@ -891,6 +891,7 @@ final class AppState {
             (onError ?? present)(.error(L10n.string("Couldn't sign out")))
             return false
         }
+        await awaitCancelledForegroundMutationFollowups()
         let nativePushWasEnabled = (
             try? await exitingClient
                 .notificationSettings(accountRef: signingOut)
@@ -1075,6 +1076,7 @@ final class AppState {
             (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
             return false
         }
+        await awaitCancelledForegroundMutationFollowups()
         let nativePushWasEnabled = (
             try? await exitingClient
                 .notificationSettings(accountRef: wipingRef)
@@ -2089,6 +2091,14 @@ final class AppState {
         let tasks = Array(foregroundMutationFollowupTasks.values)
         tasks.forEach { $0.cancel() }
         return tasks
+    }
+
+    /// Account exit must not race a new identity's notification defaults: an
+    /// enable that lands while MDK deactivates the account re-registers push.
+    private func awaitCancelledForegroundMutationFollowups() async {
+        for task in cancelForegroundMutationFollowups() {
+            await task.value
+        }
     }
 
     @MainActor

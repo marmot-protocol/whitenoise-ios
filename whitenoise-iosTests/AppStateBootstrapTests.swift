@@ -1991,15 +1991,59 @@ struct AppStateBootstrapTests {
 
         #expect(!appState.isSigningOutForTesting)
 
-        await appState.signOut()
+        var failure: Toast?
+        let signedOut = await appState.signOut(onError: { failure = $0 })
 
+        // The guard clears on every exit path, including a failed sign-out.
         #expect(!appState.isSigningOutForTesting)
+        try #require(signedOut, "Sign-out failed: \(failure?.title ?? "-") \(failure?.message ?? "")")
         #expect(appState.activeAccountRef == nil)
         // A reschedule is permitted again; it must not trap or re-raise the flag.
         appState.scheduleNativePushRegistrationIfEnabled()
         #expect(!appState.isSigningOutForTesting)
 
         await appState.drainRuntimeLifecycleTasksForTesting()
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func signOutCancelsNewIdentityNotificationDefaultsBeforeClearingPush() async throws {
+        // Identity creation enables notifications and native push in a
+        // follow-up task. Sign-out must cancel and await it, or it can land
+        // after the push cleanup and re-register the signed-out account.
+        let permissionRequested = TestLatch()
+        let permissionAnswered = TestLatch()
+        let notifications = AppNotifications(
+            requestAuthorizationHandler: {
+                permissionRequested.signal()
+                try await withTaskCancellationHandler {
+                    try await permissionAnswered.wait()
+                } onCancel: {
+                    permissionAnswered.signal()
+                }
+                try Task.checkCancellation()
+                return true
+            },
+            authorizationStatusProvider: { .authorized },
+            remoteNotificationRegistrar: {}
+        )
+        notifications.recordDeviceToken(Data([0xab, 0xcd]))
+        let seeded = try await readyAppStateWithCreatedIdentities(notifications: notifications)
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        try await permissionRequested.wait()
+        // Answer the prompt once sign-out has begun, while MDK is still
+        // deactivating the account and accepts settings writes.
+        appState.afterAccountExitClientCapturedForTesting = {
+            permissionAnswered.signal()
+        }
+
+        let signedOut = await appState.signOut()
+        await appState.drainRuntimeLifecycleTasksForTesting()
+
+        #expect(signedOut)
+        #expect(await appState.notificationSettings(for: account.label)?.nativePushEnabled == false)
+        #expect(await appState.pushRegistration(for: account.label) == nil)
+
         await stopReadyRuntime(appState)
     }
 
