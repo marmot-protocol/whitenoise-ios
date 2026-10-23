@@ -183,53 +183,85 @@ in a second, the rest cost simulator time.
 ## Measured findings
 
 Provenance: 2026-10-23, Apple Silicon Mac (16 cores), Xcode 27.1, iPhone SE
-(3rd generation) iOS 26.2 simulator, tree at the wave 1 integration merge.
+(3rd generation) iOS 26.2 simulator. Two trees:
 
-- **Serialized cost of the whole suite: 232 s** (2,977 tests, 378 suites,
-  parallel execution off; 211 s of Swift Testing suites plus 21 s of XCTest
-  classes). `AppStateBootstrapTests` alone is **141 s, 61%**; the next suites
-  are `ConversationWindowBindingTests` 10.2 s, `RuntimeOwnershipTests` 9.4 s,
-  `ControlLayoutTests` 6.5 s, `OnboardingRecoveryRemovalTests` 6.4 s,
-  `AccountExitSheetTests` 5.7 s, `WNQRCodeCardRenderingTests` 5.4 s.
-  Everything else together is about 45 s.
-- **Per-file processes** (325 files, 11 s fixed overhead each at ±1 s): same
-  ranking; `AppStateBootstrapTests` 139 s net. Used for coverage, not cost.
-- **Runtime gate**: 95 gated test cases hold the permit for 139.9 s in total
-  (median 1.2 s, p90 5.5 s, max 8.0 s). That hold time is real work (each test
-  boots a runtime and creates an identity), so on the 3-vCPU CI runner, where
-  the gate has one permit, it becomes the 300–650 s critical path seen in CI
-  logs. On this 16-core Mac the gate has 4 permits; the serial plan ran one
-  test at a time, so the trace measures hold, not contention.
+- **Wave 1 integration merge** (before the cleanup): the serial run and the
+  runtime gate trace (`serial-costs.csv`, `gate-summary.txt`). Not re-run
+  after wave 3, so the ledger's `serialized s` column and cost score still come
+  from this tree; 9 suites created or renamed since have no serial cost.
+- **After the cleanup** (`tests-cleanup-candidate`, wave 3 plus #1221 and
+  #1222): inventory, subjects, assertions, per-file costs, coverage, mutation
+  probes and CI history. Rerun with the commands above; the values before the
+  cleanup are given in brackets.
+
+- **Serialized cost of the whole suite (wave 1 tree): 232 s** (2,977 tests,
+  378 suites, parallel execution off; 211 s of Swift Testing suites plus 21 s
+  of XCTest classes). `AppStateBootstrapTests` alone is **141 s, 61%**; the
+  next suites are `ConversationWindowBindingTests` 10.2 s,
+  `RuntimeOwnershipTests` 9.4 s, `ControlLayoutTests` 6.5 s,
+  `OnboardingRecoveryRemovalTests` 6.4 s, `AccountExitSheetTests` 5.7 s,
+  `WNQRCodeCardRenderingTests` 5.4 s. Everything else together is about 45 s.
+- **Inventory**: 2,897 tests in 352 suites [2,977 in 378]; subjects
+  `app` 2,886, `mdk` 4, `catalog` 3, `platform` 3, `test-helper` 1; 11 tests
+  flagged `constant-literal`.
+- **Per-file processes**: 306 files with suites [325], 6 s fixed overhead
+  each [11 s]; `AppStateBootstrapTests` 151 s net [139 s], everything else
+  under 12 s. Used for coverage, not cost: the refresh ran while other
+  sessions loaded the Mac (load average up to ~600), and reruns of the same
+  small file varied between 7 and 22 s, so file-level times other than
+  `AppStateBootstrapTests` are noise.
+- **Runtime gate (wave 1 tree)**: 95 gated test cases hold the permit for
+  139.9 s in total (median 1.2 s, p90 5.5 s, max 8.0 s). That hold time is
+  real work (each test boots a runtime and creates an identity), so on the
+  3-vCPU CI runner, where the gate has one permit, it becomes the 300–650 s
+  critical path seen in CI logs. On this 16-core Mac the gate has 4 permits;
+  the serial plan ran one test at a time, so the trace measures hold, not
+  contention.
 - **Open-only runtime constructions** (~300 tests that call
   `MarmotClient.testClient()` and never start it) cost little here:
   `ChatsListProjectionTests` with 30 of them runs in 0.09 s. They leaked
   ~190 unclosed runtimes per run; wave 3's `purify` verdicts removed or
   scoped most of them, and the baseline burndown scoped the rest, so
   `scripts/audit/guardrail-baseline.txt` has no `unowned-runtime` line.
-- **Coverage overlap**: after subtracting the 966 host-launch lines and
-  excluding 341 ubiquitous lines, 38 of 325 files cover no line that another
-  file does not also cover, and 4 files covered no app line at all (disabled
-  or catalog-only suites). Zero unique lines is a redundancy input, never a
-  deletion by itself; for pure policy suites the value is in the enumerated
-  inputs, which line coverage cannot see.
-- **Mutation probes**: 9 of 9 killed by at least one suite. See
-  `data/mutations.csv` for which suites were selected (by coverage of the
-  mutated lines) and which killed each probe; the selection is broad, so most
-  selected suites passing a mutant says only that they do not assert that
-  line.
-- **CI failure history (last 200 runs, 27 failed, 44 cancelled)**: 7 runs name
-  no suite (`data/ci-unattributed.csv`: 5 build failures, one host crash
-  before any test ran, one manual dispatch). Of the rest,
-  `Marmot0104BindingTests` failed 4 times on 4 branches (1 on master),
-  `AccountExitSheetTests` was in 4 failed runs on 2 branches (host crashes
-  during its XCTest class, one plain failure), `PrivateKeyAutoFillTests` 3 on 3
-  branches, `CustomEmojiSendingFixtureTests` 3 (2 on master),
-  `ProfileFormLayoutTests` crashed the host 3 times on one branch,
-  `LocalizationCatalogTests` failed twice on one PR branch when copy changed,
-  and `ControlLayoutTests`, `MediaImageZoomTests` (one crashed run together),
-  `GroupModerationBindingTests`, `AccountExitPresentationTests`,
-  `ContinuousQRScannerTests` once each. `ci-runs.csv` durations include
-  queue time.
-- **Ledger** (`ledger.csv`): counts by decision are in the header of
-  `ledger.md`; 86 suites carry a hand verdict from `verdicts.csv`, the rest are
-  the automatic proposal.
+- **Coverage overlap**: after subtracting the 967 host-launch lines [966] and
+  excluding 197 ubiquitous lines [341], 31 of 306 files cover no line that
+  another file does not also cover [38 of 325], and 2 files covered no app
+  line at all [4] (disabled or catalog-only suites). Zero unique lines is a
+  redundancy input, never a deletion by itself; for pure policy suites the
+  value is in the enumerated inputs, which line coverage cannot see.
+- **Mutation probes**: 9 of 9 still killed by at least one suite after the
+  cleanup [9 of 9]. Killers: `generic-preview-keeps-sender` 3 suites,
+  `hex-normalize-keeps-case` 7 (`DeepLinkTests` replaces the merged
+  `DeepLinkChatGroupIdTests`), `identity-accepts-hex-name` 3,
+  `image-url-accepts-10-slash-8` 6 [7: `IOSParityBatchTests` is gone],
+  `notify-mode-ignores-mention-gate` 3, and one suite each for
+  `relative-time-ignores-injected-now` (`RelativeTimeTests`),
+  `scene-background-does-not-suspend` (`RuntimeOwnershipTests`),
+  `host-guard-inverted` and `scene-step-suspends-in-test-host`
+  (`AppLaunchPolicyTests`). See `data/mutations.csv` for which suites were
+  selected (by coverage of the mutated lines) and which killed each probe;
+  the selection is broad, so most selected suites passing a mutant says only
+  that they do not assert that line. The single-killer probes depend on one
+  suite each: rerun them after changing it.
+- **CI failure history (last 200 runs, 34 failed, 40 cancelled)** [27, 44]:
+  11 runs name no suite (`data/ci-unattributed.csv`: 10 build failures, 6 of
+  them the wave 3 phase branches on 2026-10-23, and one execute failure).
+  Of the rest, `AccountExitSheetTests` was in 4 failed runs on 2 branches
+  (host crashes during its XCTest class, one plain failure),
+  `WNQRCodeCardRenderingTests` failed 4 times on 4 wave 3 branches (new in
+  this window), `Marmot0104BindingTests` (removed in wave 3) 3 on 3 branches
+  (1 on master), `PrivateKeyAutoFillTests` 3 on 3 branches (1 on master),
+  `CustomEmojiSendingFixtureTests` 3 (2 on master), `ProfileFormLayoutTests`
+  crashed the host 3 times on one branch, `LocalizationCatalogTests` failed
+  twice on one PR branch when copy changed, and `ControlLayoutTests`,
+  `MediaImageZoomTests` (one crashed run together),
+  `AccountExitPresentationTests`, `ContinuousQRScannerTests` once each.
+  `ci-runs.csv` durations include queue time.
+- **Ledger** (`ledger.csv`): 352 suites; keep 248, purify 56, trim 22,
+  review 14, re-tier 10, merge 1, script 1 [378 suites; keep 239, purify 59,
+  trim 28, merge 22, review 11, re-tier 11, delete 6, script 2]. 73 suites
+  carry a hand verdict from `verdicts.csv`, the rest are the automatic
+  proposal. The 35 verdicts whose suite wave 3 removed or merged away (22
+  merge, 6 trim, 6 delete, 1 script) moved to `verdicts-executed.csv`, which
+  `build-ledger.py` does not read, so it can keep rejecting verdicts for
+  unknown suites.
