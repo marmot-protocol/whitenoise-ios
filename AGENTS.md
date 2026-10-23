@@ -349,6 +349,36 @@ Do not add a second storage path for data Marmot already owns.
 - Conversation bottom-follow requests, including the scroll-to-bottom button, should route through the timeline scroll coordinator instead of calling `scrollToBottom` directly from SwiftUI event handlers.
 - Keep comments short and only where they explain a non-obvious constraint.
 
+## Tests
+
+- Two tiers. `TestPlans/PR.xctestplan` skips tests tagged `.runtime` or
+  `.uiHosting` and the XCTest hosting classes, all listed in its
+  `skippedTests`; `TestPlans/Full.xctestplan` runs everything. CI runs the PR
+  tier on pull requests and the full tier on master pushes and nightly. After
+  changing a tag, run `python3 scripts/audit/inventory.py --write-pr-plan`.
+- Tag (`TestSupport/Tags.swift`) a test or suite `.runtime` when it opens a Marmot
+  runtime and `.uiHosting` when it hosts a `UIWindow`/`UIHostingController`;
+  `ImageRenderer` alone needs no tag. Runtime tests also take
+  `.marmotRuntimeConcurrencyLimit`; never combine it with `.timeLimit`, which
+  would count time queued behind the gate. XCTest classes cannot be tagged:
+  list hosting ones in the PR plan's `skippedTests`.
+- Open runtimes with `withTestClient`, `OwnedTestClient` (stored fixtures) or
+  `TestRuntimeScope.own` under `.closesTestRuntimes`; reopen a root with
+  `closing`. Never leave a `MarmotClient.testClient()` unclosed.
+- Wait with `TestLatch`/`eventually` or a layout callback, never a fixed
+  `Task.sleep`; only `TestSupport/` helpers may sleep. Host views through
+  `withHostedWindow`.
+- No source-text assertions (see Architecture).
+- `python3 scripts/audit/inventory.py --check` (run by `scripts/lint.sh`)
+  enforces the tags, sleeps, runtime ownership and gate/`.timeLimit` rules.
+  `scripts/audit/guardrail-baseline.txt` lists known violations; only remove
+  lines from it.
+- Run a tier locally with `scripts/test.sh --tier pr|full`. A bare
+  `xcodebuild -testPlan PR` skips only the XCTest classes (xcodebuild applies
+  plan skips and tags to XCTest only); the script adds the Swift Testing
+  skips as `-skip-testing:`. Without a tier the scheme's default (Full) runs.
+- The per-suite audit ledger and how to rerun it live in `docs/test-audit/`.
+
 ## Validation
 
 Use the smallest test set that covers your change, then broaden when lifecycle, notification, or binding behavior changes.

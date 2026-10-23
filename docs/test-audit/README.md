@@ -73,8 +73,8 @@ Scores 0–3 per suite, as implemented in `build-ledger.py`:
 | `keep` | nothing | — |
 | `trim` | deletes exactly the tests the rationale names; the suite stays | suite green; the named tests are gone; nothing else changed |
 | `merge` | moves every test into `merge_into`, then deletes the empty file; drops a test only when the rationale says it duplicates a named survivor test | survivor green with the moved tests; the survivor still kills the probes it killed |
-| `purify` | the rationale says which: removes a `MarmotClient.testClient()` the suite never starts (check no test reads the client first), or replaces a fixed sleep / polling loop with a callback or injected clock | suite green; `inventory.py` shows `testClient_sites` or `sleep_sites` at 0; serialized time not worse |
-| `re-tier` | tags the suite for the runtime or hosting tier so PRs skip it; no code change | tier lists contain it; full suite still green on master |
+| `purify` | the rationale says which: removes a `MarmotClient.testClient()` the suite never starts (check no test reads the client first), or replaces a fixed sleep / polling loop with a callback or injected clock | suite green; `inventory.py` shows `testClient_sites` at 0 for a removed client, and `inventory.py --check` reports no `sleep` or `unowned-runtime` line for the suite (sleeps inside `TestSupport/` helpers do not count); serialized time not worse |
+| `re-tier` | tags the suite (or only the tests that need it) `.runtime` or `.uiHosting` so PRs skip it; an XCTest class goes into the PR plan's `skippedTests`; no code change | the PR plan skips it; full suite still green on master |
 | `script` | moves the catalog checks to a Python script in the lint job; keeps the named in-process tests | script fails on a deliberately broken catalog; the kept tests are green |
 | `delete` | deletes the suite (not the file, when the file holds other suites) | full suite green; the rationale's named replacement coverage still exists |
 | `review` | reads the suite before deciding; the numbers alone were not conclusive | a verdict row is added |
@@ -85,6 +85,53 @@ non-app subject label alone yields `review`. `merge` survivors are resolved so
 none is itself removed; mutual pairs keep the suite with more unique coverage.
 Kills are recorded per suite: after trimming a suite that killed a probe, rerun
 the probe.
+
+## Tiers
+
+| plan | runs | CI |
+|---|---|---|
+| `TestPlans/PR.xctestplan` | everything except tests tagged `.runtime` or `.uiHosting` and the hosting XCTest classes | pull requests (`scripts/test.sh --tier pr`) |
+| `TestPlans/Full.xctestplan` | everything; the Staging scheme's default plan | master pushes, nightly `schedule`, manual runs (`--tier full`) |
+
+The policy is one line in `.github/workflows/tests.yml` (`--tier` on the Run
+tests step). Tags (`whitenoise-iosTests/TestSupport/Tags.swift`) go on the
+suite or on single tests. Xcode 27.1's xcodebuild ignores a plan's
+`skippedTags`, and applies `skippedTests` only to XCTest, so the PR plan lists
+every tagged suite and test by identifier and `scripts/test.sh --tier pr`
+repeats that list as `-skip-testing:` flags for Swift Testing. Regenerate the
+list with `python3 scripts/audit/inventory.py --write-pr-plan` after tagging;
+it keeps the XCTest classes already listed (`ProfileShareCardLocalizationTests`
+runs Vision OCR on a rendered card and is listed by hand).
+
+`python3 scripts/audit/inventory.py --check` (in `scripts/lint.sh`) enforces,
+per suite (`scripts/audit/guardrails.py`, fixtures in
+`scripts/tests/test_audit_guardrails.py`):
+
+- `runtime-tag`: a test reaching `MarmotClient.testClient(`,
+  `MarmotClient(rootPath:`, `withTestClient`, `OwnedTestClient(` or
+  `TestRuntimeScope.own(` is tagged `.runtime` (test or suite; suite-wide code
+  needs the suite tag);
+- `ui-tag`: the same for `UIWindow`/`UIHostingController` and `.uiHosting`
+  (`ImageRenderer` does not count); an XCTest class must be in the PR plan
+  instead;
+- `sleep`: no `Task.sleep` outside `TestSupport/` helpers;
+- `unowned-runtime`: a direct `testClient()`/`MarmotClient(rootPath:)` is
+  wrapped in `TestRuntimeScope.own` or `closing`;
+- `timelimit-gate`: no `.timeLimit` on a test under
+  `.marmotRuntimeConcurrencyLimit` (the limit would count gate queue time);
+- `pr-plan`: the PR plan skips exactly the tagged suites and tests.
+
+`scripts/audit/guardrail-baseline.txt` holds the violations present when the
+check landed; they print as `baselined` and do not fail. Remove a line when its
+suite is fixed (stale lines are reported).
+
+The runtime gate has `max(2, cores/4)` permits (2 on the 3-vCPU CI runner, 4
+on a 16-core Mac); `TEST_RUNNER_WN_TEST_GATE_CORES=3` reproduces CI locally.
+On 16 cores 8 permits passed but ran the full suite about 50 s slower than 4.
+
+Known flake, not yet fixed: `AppStateBootstrapTests.signOutClearsSigningOutGuardBeforeReturning`
+failed once on the wave 3 integration branch (`activeAccountRef` still set
+after sign-out).
 
 ## Rerunning the measurements
 
