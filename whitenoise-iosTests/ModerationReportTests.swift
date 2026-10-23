@@ -99,8 +99,4 @@ struct ModerationReportTests {
         #expect(BlockReportFollowUp.after(blockConfirmed: false, retryPending: false, sameAccount: true) == .drop)
         #expect(BlockReportFollowUp.after(blockConfirmed: true, retryPending: false, sameAccount: false) == .drop)
     }
-
-    private func hex(_ byte: String) -> String {
-        String(repeating: byte, count: 32)
-    }
 }

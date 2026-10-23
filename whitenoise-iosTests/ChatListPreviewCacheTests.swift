@@ -776,10 +776,6 @@ struct ChatListPreviewCacheTests {
         return message
     }
 
-    private func hex(_ byte: String) -> String {
-        String(repeating: byte, count: 32)
-    }
-
     private func names(_ accountIdHex: String) -> String {
         switch accountIdHex.prefix(2) {
         case "aa": "Alice"

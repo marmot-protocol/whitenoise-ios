@@ -1,10 +1,4 @@
-import Testing
 import Foundation
-import SwiftUI
-import UIKit
-import AVFoundation
-import Combine
-import Synchronization
 @testable import whitenoise_ios
 @testable import MarmotKit
 
@@ -26,16 +20,23 @@ func unsignedEventRecord(
     )
 }
 
+/// Spells a nil `sourceMessageIdHex` for `timelineRecord`, whose omitted
+/// argument means "same as `messageIdHex`".
+extension Optional where Wrapped == String? {
+    static var absent: Self { .some(nil) }
+}
+
 func timelineRecord(
     messageIdHex: String,
     // Delivered by default, mirroring the engine (received rows always carry
-    // a source id; own rows carry one once delivered). Pass `.some(nil)` to
-    // build a committed-but-undelivered own row.
+    // a source id; own rows carry one once delivered). Pass `.absent` for a
+    // row without one, such as a committed-but-undelivered own row.
     sourceMessageIdHex: String?? = nil,
     direction: String = "received",
     groupIdHex: String = hex("aa"),
     sender: String = hex("11"),
     plaintext: String = "hello",
+    contentTokens: MarkdownDocumentFfi = .emptyDocument,
     kind: UInt64 = MessageSemantics.kindChat,
     tags: [MessageTagFfi] = [],
     timelineAt: UInt64,
@@ -45,6 +46,7 @@ func timelineRecord(
     mediaJson: String? = nil,
     media: [MediaAttachmentReferenceFfi] = [],
     agentTextStreamJson: String? = nil,
+    groupSystem: GroupSystemEventFfi? = nil,
     reactions: TimelineReactionSummaryFfi = TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
     deleted: Bool = false,
     deletedByMessageIdHex: String? = nil,
@@ -57,6 +59,7 @@ func timelineRecord(
         groupIdHex: groupIdHex,
         sender: sender,
         plaintext: plaintext,
+        contentTokens: contentTokens,
         kind: kind,
         tags: tags,
         timelineAt: timelineAt,
@@ -66,6 +69,7 @@ func timelineRecord(
         mediaJson: mediaJson,
         media: media,
         agentTextStreamJson: agentTextStreamJson,
+        groupSystem: groupSystem,
         reactions: reactions,
         edit: nil,
         deleted: deleted,
@@ -208,6 +212,7 @@ func notificationUpdate(
     isDm: Bool = true,
     isMention: Bool = false,
     groupName: String? = nil,
+    senderAccountIdHex: String = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     senderName: String? = "Alice",
     previewText: String? = "Hello",
     reactionEmoji: String? = nil,
@@ -228,7 +233,7 @@ func notificationUpdate(
         isMention: isMention,
         messageIdHex: messageIdHex,
         sender: NotificationUserFfi(
-            accountIdHex: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            accountIdHex: senderAccountIdHex,
             displayName: senderName,
             pictureUrl: nil
         ),

@@ -548,10 +548,6 @@ struct ConversationDraftStoreTests {
         )
     }
 
-    private func hex(_ byte: String) -> String {
-        String(repeating: byte, count: 32)
-    }
-
     private func makeFixture() -> (root: URL, file: URL) {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
