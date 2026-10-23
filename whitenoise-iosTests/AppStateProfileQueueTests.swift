@@ -3,41 +3,11 @@ import Foundation
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-/// Profile fetch and projection-load queue bookkeeping while profile
-/// refresh is unavailable, with no runtime client.
+/// Profile fetch and projection-load queue bookkeeping with no runtime
+/// client. Tests where the inactive scene is what blocks refresh need a client
+/// and live in AppStateBootstrapTests.
 @MainActor
 struct AppStateProfileQueueTests {
-    @Test func profileFetchQueueLeavesQueuedIDsWhenRefreshBecomesUnavailable() async throws {
-        let appState = AppState.test()
-        let queued = [hex("11"), hex("22")]
-        appState.profileStore.queuedProfileFetchIDs = queued
-        appState.profileStore.scheduledProfileFetchIDs = Set(queued)
-        appState.setAppSceneActive(false)
-
-        await appState.runProfileFetchQueueForTesting()
-
-        #expect(appState.profileStore.queuedProfileFetchIDs == queued)
-        #expect(appState.profileStore.scheduledProfileFetchIDs == Set(queued))
-        #expect(appState.profileStore.activeProfileFetchID == nil)
-        #expect(appState.profileStore.profileFetchQueueTask == nil)
-    }
-
-    @Test func cachedProjectionWithoutIdentityRequeuesRefreshWhileInactive() async throws {
-        let appState = AppState.test()
-        let accountIdHex = hex("35")
-        appState.profileStore.profileProjectionCache[accountIdHex] = ProfileDisplayProjection(
-            profile: nil,
-            projectedName: nil,
-            localAccountLabel: nil
-        )
-        appState.setAppSceneActive(false)
-
-        #expect(appState.knownDisplayName(forAccountIdHex: accountIdHex) == nil)
-        #expect(appState.profileStore.queuedProfileFetchIDs == [accountIdHex])
-        #expect(appState.profileStore.scheduledProfileFetchIDs == [accountIdHex])
-        #expect(appState.profileStore.profileFetchQueueTask == nil)
-    }
-
     @Test func foregroundMaintenancePausePreservesPendingProfileWork() async throws {
         let appState = AppState.test()
         let loading = hex("36")

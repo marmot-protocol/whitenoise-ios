@@ -16,6 +16,7 @@ private let notificationDefaultsTestGate = AsyncTestGate()
 /// `marmot-uniffi`'s Rust integration tests). These tests just exercise the
 /// boundary between MarmotKit and the iOS code, plus pure-Swift helpers.
 @MainActor
+// Keep .marmotRuntimeConcurrencyLimit before .closesTestRuntimes so cleanup runs inside the gate.
 @Suite(.marmotRuntimeConcurrencyLimit, .closesTestRuntimes, .tags(.runtime))
 struct AppStateBootstrapTests {
 
@@ -207,7 +208,7 @@ struct AppStateBootstrapTests {
 
     @Test(arguments: [false, true])
     func foregroundAccountRefreshRetriesAndReleasesFailedRuntime(exhaustRetries: Bool) async throws {
-        let appState = ownedAppState(
+        let appState = try ownedAppState(
             client: try ownedTestClient(), notifications: deniedNotifications(),
             accountDefaults: accountDefaults, runtimeRetrySleeper: { _ in },
             runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy(delays: [.zero])
@@ -292,7 +293,7 @@ struct AppStateBootstrapTests {
         original.setAppSceneActive(false)
         await original.startRuntimeSuspension().value
         accountDefaults.set(broken.label, forKey: AccountStore.activeAccountKey)
-        let appState = ownedAppState(
+        let appState = try ownedAppState(
             client: try reopenedClient(rootPath: root, relayUrls: relays),
             notifications: deniedNotifications(), accountDefaults: accountDefaults
         )
@@ -397,8 +398,8 @@ struct AppStateBootstrapTests {
         }
         // Cold launch must not restart a live runtime while its setup worker writes the journal.
         try await seedClient.marmot.shutdownAndClose()
-        let appState = ownedAppState(
-            client: TestRuntimeScope.own(try seedClient.freshRuntime()), notifications: deniedNotifications(),
+        let appState = try ownedAppState(
+            client: try TestRuntimeScope.own(seedClient.freshRuntime()), notifications: deniedNotifications(),
             accountDefaults: accountDefaults, runtimeRetrySleeper: { _ in },
             runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy(delays: [.zero])
         )
@@ -461,7 +462,7 @@ struct AppStateBootstrapTests {
 
     @Test func bootstrapWithoutAccountsClearsPersistedActiveAccountRef() async throws {
         accountDefaults.set("legacy-darkmatter-account", forKey: AccountStore.activeAccountKey)
-        let appState = ownedAppState(
+        let appState = try ownedAppState(
             client: try ownedTestClient(),
             notifications: deniedNotifications(),
             accountDefaults: accountDefaults
@@ -492,7 +493,7 @@ struct AppStateBootstrapTests {
         var originalClient: MarmotClient? = try ownedTestClient()
         let originalRootPath = originalClient!.rootPath
         let originalRelayUrls = originalClient!.relayUrls
-        let original = ownedAppState(
+        let original = try ownedAppState(
             client: originalClient!,
             notifications: deniedNotifications(),
             accountDefaults: accountDefaults
@@ -502,7 +503,7 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(original)
         originalClient = nil
 
-        let relaunched = ownedAppState(
+        let relaunched = try ownedAppState(
             client: try reopenedClient(
                 rootPath: originalRootPath,
                 relayUrls: originalRelayUrls
@@ -1329,7 +1330,7 @@ struct AppStateBootstrapTests {
         let seedRootPath = try #require(seeded.appState.client).rootPath
         let seedRelayUrls = try #require(seeded.appState.client).relayUrls
         await stopReadyRuntime(seeded.appState)
-        let appState = ownedAppState(
+        let appState = try ownedAppState(
             client: try reopenedClient(rootPath: seedRootPath, relayUrls: seedRelayUrls),
             notifications: deniedNotifications(),
             accountDefaults: accountDefaults
@@ -1828,6 +1829,21 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func profileFetchQueueLeavesQueuedIDsWhenRefreshBecomesUnavailable() async throws {
+        let appState = try testAppState()
+        let queued = [hex("11"), hex("22")]
+        appState.profileStore.queuedProfileFetchIDs = queued
+        appState.profileStore.scheduledProfileFetchIDs = Set(queued)
+        appState.setAppSceneActive(false)
+
+        await appState.runProfileFetchQueueForTesting()
+
+        #expect(appState.profileStore.queuedProfileFetchIDs == queued)
+        #expect(appState.profileStore.scheduledProfileFetchIDs == Set(queued))
+        #expect(appState.profileStore.activeProfileFetchID == nil)
+        #expect(appState.profileStore.profileFetchQueueTask == nil)
+    }
+
     @Test func profileFetchQueueRearmsPreservedIDsWhenRefreshIsAllowed() async throws {
         let appState = try testAppState()
         let queued = [hex("33")]
@@ -1854,6 +1870,22 @@ struct AppStateBootstrapTests {
         appState.setAppSceneActive(true)
         appState.resumeProfileFetchQueueIfNeeded()
         #expect(appState.cancelProfileFetchQueue() != nil)
+    }
+
+    @Test func cachedProjectionWithoutIdentityRequeuesRefreshWhileInactive() async throws {
+        let appState = try testAppState()
+        let accountIdHex = hex("35")
+        appState.profileStore.profileProjectionCache[accountIdHex] = ProfileDisplayProjection(
+            profile: nil,
+            projectedName: nil,
+            localAccountLabel: nil
+        )
+        appState.setAppSceneActive(false)
+
+        #expect(appState.knownDisplayName(forAccountIdHex: accountIdHex) == nil)
+        #expect(appState.profileStore.queuedProfileFetchIDs == [accountIdHex])
+        #expect(appState.profileStore.scheduledProfileFetchIDs == [accountIdHex])
+        #expect(appState.profileStore.profileFetchQueueTask == nil)
     }
 
     @Test func destructiveWipeClearsProfileProjectionState() async throws {
@@ -2015,7 +2047,7 @@ struct AppStateBootstrapTests {
         var client: MarmotClient? = try ownedTestClient()
         let rootPath = client!.rootPath
         let relayUrls = client!.relayUrls
-        let appState = ownedAppState(
+        let appState = try ownedAppState(
             client: client!,
             notifications: deniedNotifications(),
             accountDefaults: accountDefaults
@@ -2030,7 +2062,7 @@ struct AppStateBootstrapTests {
         #expect(accountDefaults.string(forKey: AccountStore.activeAccountKey) == nil)
         await appState.startRuntimeSuspension().value
         client = nil
-        let reborn = ownedAppState(
+        let reborn = try ownedAppState(
             client: try reopenedClient(rootPath: rootPath, relayUrls: relayUrls),
             notifications: deniedNotifications(),
             accountDefaults: accountDefaults
@@ -2044,7 +2076,7 @@ struct AppStateBootstrapTests {
         relayUrls: [String] = MarmotClient.unreachableTestRelays
     ) throws -> AppState {
         resetPersistedActiveAccountRef()
-        return ownedAppState(
+        return try ownedAppState(
             client: try ownedTestClient(relayUrls: relayUrls),
             notifications: notifications ?? deniedNotifications(),
             accountDefaults: accountDefaults,
@@ -2052,20 +2084,17 @@ struct AppStateBootstrapTests {
         )
     }
 
-    /// Every runtime this suite creates is owned by the test's
-    /// `TestRuntimeScope`, which closes it (and whatever client the owning
-    /// `AppState` holds at the end, including lifecycle rebuilds) after the
-    /// test. Tests may still close or suspend earlier; closing is idempotent.
+    /// Owned by the test's `TestRuntimeScope`, which also removes the root.
     private func ownedTestClient(
         relayUrls: [String] = MarmotClient.unreachableTestRelays
     ) throws -> MarmotClient {
-        TestRuntimeScope.own(try MarmotClient.testClient(relayUrls: relayUrls), ownsRoot: true)
+        try TestRuntimeScope.own(MarmotClient.testClient(relayUrls: relayUrls), ownsRoot: true)
     }
 
     /// Reopens an owned root, as a relaunch would. The root is removed by the
     /// client that created it.
     private func reopenedClient(rootPath: String, relayUrls: [String]) throws -> MarmotClient {
-        TestRuntimeScope.own(try MarmotClient(rootPath: rootPath, relayUrls: relayUrls))
+        try TestRuntimeScope.own(MarmotClient(rootPath: rootPath, relayUrls: relayUrls))
     }
 
     private func ownedAppState(
@@ -2075,8 +2104,8 @@ struct AppStateBootstrapTests {
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = TelemetryBuildConfig.current(),
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = AppStateTestResources.immediateRetry,
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground
-    ) -> AppState {
-        TestRuntimeScope.own(AppState.test(
+    ) throws -> AppState {
+        try TestRuntimeScope.own(AppState.test(
             client: client,
             notifications: notifications,
             accountDefaults: accountDefaults,

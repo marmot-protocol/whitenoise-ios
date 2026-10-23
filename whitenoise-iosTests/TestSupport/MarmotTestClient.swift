@@ -71,11 +71,17 @@ final class OwnedTestClient: Sendable {
 /// Per-test owner for runtimes a suite cannot scope with `withTestClient`
 /// because they are handed to an `AppState`, reopened on the same root, or
 /// rebuilt by the app's own runtime factory. Apply `.closesTestRuntimes` to
-/// the suite. After each test case, returned or thrown, every owned client
-/// and the client each owned `AppState` then holds is shut down
-/// (`shutdownAndClose` is idempotent), and only then are owned roots removed.
+/// the suite. After each test case, returned or thrown, every owned
+/// `AppState` with a live runtime is suspended through the app's background
+/// path, then every owned client and any client a state still holds is shut
+/// down (`shutdownAndClose` is idempotent), and only then are owned roots
+/// removed. A close failure fails a passing test; a test's own error wins.
 final class TestRuntimeScope: Sendable {
     @TaskLocal static var current: TestRuntimeScope?
+
+    struct MissingScope: Error, CustomStringConvertible {
+        var description: String { "TestRuntimeScope.own needs a suite with .closesTestRuntimes" }
+    }
 
     private struct Owned {
         var clients: [MarmotClient] = []
@@ -85,12 +91,19 @@ final class TestRuntimeScope: Sendable {
 
     private let owned = Mutex(Owned())
 
+    private static func requireCurrent() throws -> TestRuntimeScope {
+        guard let scope = current else {
+            let error = MissingScope()
+            Issue.record(error)
+            throw error
+        }
+        return scope
+    }
+
     /// Registers `client` with the running test's scope. `ownsRoot` removes
     /// its root directory once every runtime is closed.
-    static func own(_ client: MarmotClient, ownsRoot: Bool = false) -> MarmotClient {
-        guard let scope = current else {
-            preconditionFailure("TestRuntimeScope.own needs a suite with .closesTestRuntimes")
-        }
+    static func own(_ client: MarmotClient, ownsRoot: Bool = false) throws -> MarmotClient {
+        let scope = try requireCurrent()
         scope.owned.withLock { owned in
             owned.clients.append(client)
             if ownsRoot { owned.roots.insert(client.rootPath) }
@@ -98,30 +111,49 @@ final class TestRuntimeScope: Sendable {
         return client
     }
 
-    /// Registers `appState` so the client it holds when the test ends,
-    /// including one its lifecycle rebuilt, is closed too.
+    /// Registers `appState` so its runtime, including one its lifecycle
+    /// rebuilt, is suspended and closed too.
     @MainActor
-    static func own(_ appState: AppState) -> AppState {
-        guard let scope = current else {
-            preconditionFailure("TestRuntimeScope.own needs a suite with .closesTestRuntimes")
-        }
+    static func own(_ appState: AppState) throws -> AppState {
+        let scope = try requireCurrent()
         scope.owned.withLock { $0.appStates.append(appState) }
         return appState
     }
 
-    fileprivate func close() async {
+    /// Returns the shutdown errors; the caller decides whether they fail the test.
+    fileprivate func close() async -> [any Error] {
         let snapshot = owned.withLock { owned in
             defer { owned = Owned() }
             return owned
         }
-        let states = snapshot.appStates
-        let live = await MainActor.run { states.compactMap(\.client) }
+        let live = await Self.suspend(snapshot.appStates)
+        var errors: [any Error] = []
         for client in live + snapshot.clients {
-            try? await client.marmot.shutdownAndClose()
+            do {
+                try await client.marmot.shutdownAndClose()
+            } catch {
+                errors.append(error)
+            }
         }
         for root in snapshot.roots {
             try? FileManager.default.removeItem(atPath: root)
         }
+        return errors
+    }
+
+    /// Suspends each live state so its lifecycle tasks drain before the
+    /// snapshot, then returns any client a state still holds.
+    @MainActor
+    private static func suspend(_ states: [AppState]) async -> [MarmotClient] {
+        for state in states {
+            // A state still in `.bootstrapping` parks suspension until
+            // bootstrap registers, so only suspend states past it.
+            guard state.phase != .bootstrapping, state.client != nil,
+                  !state.runtimeSuspendedForBackground else { continue }
+            state.setAppSceneActive(false)
+            await state.startRuntimeSuspension().value
+        }
+        return states.compactMap(\.client)
     }
 }
 
@@ -139,10 +171,12 @@ struct ClosesTestRuntimes: SuiteTrait, TestTrait, TestScoping {
             do {
                 try await function()
             } catch {
-                await scope.close()
+                _ = await scope.close()
                 throw error
             }
-            await scope.close()
+            for error in await scope.close() {
+                Issue.record(error, "Closing a test runtime failed")
+            }
         }
     }
 }
