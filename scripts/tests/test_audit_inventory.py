@@ -238,5 +238,62 @@ class InventoryRowTests(unittest.TestCase):
                 inventory.main(["--tests-dir", str(self.tests_dir), "--out", str(out), "--rule", "sleep-max=abc"])
 
 
+WAIT_HELPERS_FILE = '''import Foundation
+
+final class TestLatch: Sendable {
+    func wait(timeout: Duration = .seconds(30)) async throws {
+        Task { try? await Task.sleep(for: timeout) }
+    }
+}
+
+func eventually(timeout: Duration = .seconds(30), _ condition: () async throws -> Bool) async throws {
+    while true {
+        if try await condition() { return }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+}
+
+func pauseBriefly() async throws {
+    try await Task.sleep(for: .milliseconds(50))
+}
+'''
+
+WAITING_SUITES = '''import Testing
+
+struct LatchTests {
+    @Test func waits() async throws {
+        let latch = TestLatch()
+        try await latch.wait()
+        try await eventually { true }
+    }
+}
+
+struct PausingTests {
+    @Test func pauses() async throws {
+        try await pauseBriefly()
+    }
+}
+'''
+
+
+class BoundedWaitHelperTests(unittest.TestCase):
+    def rows(self, files):
+        with tempfile.TemporaryDirectory() as root:
+            tests_dir = pathlib.Path(root) / "whitenoise-iosTests"
+            audit_support.write_tree(tests_dir, files)
+            return {row["suite"]: row for row in inventory.build_rows(str(tests_dir))}
+
+    def test_testsupport_wait_helpers_do_not_count_as_sleep_sites(self):
+        rows = self.rows({"TestSupport/TestLatch.swift": WAIT_HELPERS_FILE, "WaitingTests.swift": WAITING_SUITES})
+        latch = rows["LatchTests"]
+        self.assertEqual(latch["sleep_sites"], 0)
+        self.assertEqual(latch["poll_loops"], 1)  # eventually still polls, boundedly
+        self.assertEqual(rows["PausingTests"]["sleep_sites"], 1)  # other TestSupport sleeps still count
+
+    def test_the_exemption_needs_the_testsupport_directory(self):
+        rows = self.rows({"Waits.swift": WAIT_HELPERS_FILE, "WaitingTests.swift": WAITING_SUITES})
+        self.assertEqual(rows["LatchTests"]["sleep_sites"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()
