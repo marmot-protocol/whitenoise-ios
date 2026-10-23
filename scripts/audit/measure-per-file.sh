@@ -21,6 +21,9 @@
 #
 # Outputs under build/audit/per-file/: <File>.xcresult, <File>.log, and
 # overhead.xcresult/.log for the empty-selection baseline. Nothing is committed.
+# WN_AUDIT_FORCE=1 re-measures existing files and the overhead baseline. The
+# script exits non-zero when a named file is missing or any run failed (after
+# finishing the remaining runs).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -59,11 +62,23 @@ suites_in() {
   python3 scripts/audit/suite-names.py --warn "$1"
 }
 
+if [ "$#" -gt 0 ]; then
+  files=()
+  for name in "$@"; do files+=("$TESTS_DIR/$name.swift"); done
+  for file in "${files[@]}"; do
+    [ -r "$file" ] || { echo "error: cannot read $file" >&2; exit 1; }
+  done
+else
+  files=("$TESTS_DIR"/*.swift)
+fi
+
 if [ -z "${WN_AUDIT_SKIP_BUILD:-}" ]; then
   echo "==> build-for-testing (coverage on)"
   xcodebuild build-for-testing "${xcodebuild_args[@]}" "${build_settings[@]}" \
     | { command -v xcbeautify >/dev/null 2>&1 && xcbeautify || cat; }
 fi
+
+run_failed=0
 
 run_selection() {
   local label="$1"; shift
@@ -76,20 +91,17 @@ run_selection() {
   WN_AUDIT_LOG="$OUT/$label.log" scripts/audit/timed-xcodebuild.sh test-without-building \
     "${xcodebuild_args[@]}" -resultBundlePath "$bundle" "$@" >/dev/null || status=$?
   echo "$(date +%Y-%m-%dT%H:%M:%S) ==> $label: $((SECONDS - start))s status=$status" | tee -a "$OUT/$label.log" >> "$OUT/runs.log"
+  # Keep measuring the other files; the exit status reports the failure.
+  if [ "$status" -ne 0 ]; then
+    run_failed=1
+  fi
   return 0
 }
 
 # Fixed overhead: a selection that matches nothing still attaches, installs and
 # launches the host twice (discovery + run).
-if [ ! -e "$OUT/overhead.xcresult" ]; then
+if [ ! -e "$OUT/overhead.xcresult" ] || [ -n "${WN_AUDIT_FORCE:-}" ]; then
   run_selection overhead "-only-testing:whitenoise-iosTests/NoSuchSuiteForOverheadMeasurement"
-fi
-
-if [ "$#" -gt 0 ]; then
-  files=()
-  for name in "$@"; do files+=("$TESTS_DIR/$name.swift"); done
-else
-  files=("$TESTS_DIR"/*.swift)
 fi
 
 for file in "${files[@]}"; do
@@ -113,3 +125,7 @@ done
 
 failed_runs="$(grep -c 'status=[1-9]' "$OUT/runs.log" || true)"
 echo "done; results under $OUT (see runs.log); runs with non-zero status: ${failed_runs:-0}"
+if [ "$run_failed" -ne 0 ]; then
+  echo "error: at least one run in this invocation failed" >&2
+  exit 1
+fi

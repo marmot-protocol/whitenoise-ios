@@ -6,7 +6,7 @@ Inputs under --audit-dir (the committed copies live in docs/test-audit/data):
   serial-costs.csv     scripts/audit/serial-costs.py --log  (per-suite wall_s)
   per-file-costs.csv   scripts/audit/per-file-costs.py      (file-level, informational)
   coverage-unique.csv  scripts/audit/coverage-unique.py
-  mutations.csv        scripts/audit/mutate.sh (killed: 1 / 0 / na)
+  mutations.csv        scripts/audit/mutate.sh (killed: 1 / 0 / unverified / na; only 1 counts)
   ci-history.csv       scripts/audit/ci-attribute.py (failures, master_failures, branches, kinds)
   assertions.csv       scripts/audit/assertion-heuristics.py (per-test flags)
 Hand verdicts: --verdicts (default docs/test-audit/verdicts.csv) with columns
@@ -15,7 +15,8 @@ Hand verdicts: --verdicts (default docs/test-audit/verdicts.csv) with columns
 Output: <out-dir>/ledger.csv and, with --render, <out-dir>/ledger.md.
 
 Decision words (see docs/test-audit/README.md for the implementer actions):
-  keep · trim (remove the named tests, suite stays) · merge (move every test
+  keep · trim (remove the named tests; the suite stays unless the rationale
+  moves the rest elsewhere) · merge (move every test
   into `merge_into`; delete nothing) · purify (drop an unused runtime client,
   or make a wait deterministic; the rationale says which) · re-tier (keep, out
   of the PR tier) · script (replace with a lint-job script, keep the named
@@ -37,6 +38,11 @@ from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REMOVING = {"delete", "merge", "script"}
+DECISIONS = ["delete", "script", "trim", "merge", "purify", "re-tier", "review", "keep"]
+# Scoring evidence and the hand verdicts: a missing file would silently turn
+# into "no kills", "no failures" or "no verdicts" and change the proposals.
+REQUIRED_INPUTS = ["inventory.csv", "serial-costs.csv", "coverage-unique.csv", "mutations.csv",
+                   "ci-history.csv", "assertions.csv"]
 
 COLUMNS = [
     "suite", "file", "tests", "framework", "tier_now", "serialized_s", "wall_share_pct", "file_net_wall_s",
@@ -47,8 +53,10 @@ COLUMNS = [
 ]
 
 
-def read_csv(path):
+def read_csv(path, required=False):
     if not os.path.exists(path):
+        if required:
+            raise SystemExit(f"{path} missing; the ledger needs it (see docs/test-audit/README.md)")
         return []
     with open(path, newline="") as fh:
         return list(csv.DictReader(fh))
@@ -137,7 +145,7 @@ def score(row, serial, cov, mut, hist, flagged_tests):
     # that PR's regression and counts as timing-shaped only if it also sleeps.
     if master_failures or branches >= 2 or crashed:
         fragility = 3
-    elif sleeps or to_int(row.get("run_loop")) or failures:
+    elif sleeps or to_int(row.get("run_loop")):
         fragility = 2
     elif to_int(row.get("poll_loops")):
         fragility = 1
@@ -165,7 +173,7 @@ def score(row, serial, cov, mut, hist, flagged_tests):
         decision, why, target = "review", f"classified {subject}; read the test before deciding (the label is a heuristic)", ""
     elif pins:
         decision, why, target = "trim", "every test asserts a literal or a memberwise round-trip; keep only behavioural assertions", ""
-    elif unique_i == 0 and redundancy == 3 and cost >= 1:
+    elif unique_i == 0 and redundancy == 3 and seconds is not None and seconds >= 1:
         decision, why, target = "delete", f"covers nothing {survivor} does not (Jaccard {jaccard:.2f}); costs {seconds}s", survivor
     elif unique_i == 0 and jaccard > 0.6:
         decision, why, target = "merge", f"no unique covered lines; move its tests into {survivor} (Jaccard {jaccard:.2f})", survivor
@@ -178,7 +186,7 @@ def score(row, serial, cov, mut, hist, flagged_tests):
     elif redundancy >= 1:
         decision, why, target = "review", f"Jaccard {jaccard:.2f} with {survivor} but {unique_i} unique lines; coverage similarity, not proven duplication", ""
     elif fragility >= 2:
-        decision, why, target = "purify", f"fragility {fragility}: fixed sleeps or CI failures; make the wait deterministic", ""
+        decision, why, target = "purify", f"fragility {fragility}: fixed sleeps or a run-loop spin; make the wait deterministic", ""
     else:
         decision, why, target = "keep", "", ""
     return value, cost, fragility, redundancy, decision, why, target
@@ -192,6 +200,11 @@ def resolve_survivors(rows, cov, inventory_names):
     row into the merge; a survivor outside the inventory becomes `review`.
     """
     by_suite = {r["suite"]: r for r in rows}
+
+    def rewrite(row, why):
+        # An approved verdict is the owner's; never replace it with another decision.
+        if row.get("owner_verdict") == "approve":
+            raise SystemExit(f"approved verdict for {row['suite']} conflicts: {why}; the owner must resolve it")
 
     def unique(name):
         return to_int(cov.get(name, {}).get("unique_lines"), 0), to_int(by_suite.get(name, {}).get("tests"))
@@ -212,9 +225,11 @@ def resolve_survivors(rows, cov, inventory_names):
             if t["decision"] == "merge" and t["merge_into"] == r["suite"]:
                 # mutual pair: the richer one survives
                 if unique(target) > unique(r["suite"]):
+                    rewrite(t, f"mutual merge with {r['suite']}")
                     t["decision"], t["merge_into"] = "keep", ""
                     t["rationale"] = f"survivor of {r['suite']}; {t['auto_rationale']}"
                 else:
+                    rewrite(r, f"mutual merge with {target}")
                     r["decision"], r["merge_into"] = "keep", ""
                     r["rationale"] = f"survivor of {target}; {r['auto_rationale']}"
                 changed = True
@@ -223,6 +238,7 @@ def resolve_survivors(rows, cov, inventory_names):
                 r["rationale"] = f"{r['rationale']} (survivor {target} is itself merged into {t['merge_into']})"
                 changed = True
             elif t["decision"] in ("delete", "script") or (t["decision"] == "merge" and not t["merge_into"]):
+                rewrite(r, f"intended survivor {target} is {t['decision']}d")
                 r["decision"], r["merge_into"] = "review", ""
                 r["rationale"] = f"intended survivor {target} is {t['decision']}d; {r['rationale']}"
                 changed = True
@@ -238,32 +254,34 @@ def render(rows, path):
     lines = ["# Test audit ledger", "",
              f"{len(rows)} suites. Generated by scripts/audit/build-ledger.py from docs/test-audit/data; do not edit by hand. "
              "`owner_verdict` is `proposed` until the repository owner approves a row.", ""]
-    for decision in ["delete", "script", "trim", "merge", "purify", "re-tier", "review", "keep"]:
+    for decision in DECISIONS:
         group = sorted(by_decision.get(decision, []), key=lambda r: -(to_float(r["serialized_s"], 0) or 0))
         if not group:
             continue
         lines += [f"## {decision} ({len(group)})", "",
-                  "| suite | tests | serialized s | runtime | subject | flagged tests | unique | shared file | CI (master/all) | V/C/F/R | auto | into | rationale |",
-                  "|---|---:|---:|---|---|---:|---:|---:|---|---|---|---|---|"]
+                  "| suite | tests | serialized s | runtime | subject | flagged tests | unique | shared file | CI (master/all) | V/C/F/R | auto | into | owner | rationale |",
+                  "|---|---:|---:|---|---|---:|---:|---:|---|---|---|---|---|---|"]
         for r in group:
             lines.append(
                 f"| {cell(r['suite'])} | {r['tests']} | {r['serialized_s']} | {r['runtime']} | {r['subject']} | "
                 f"{r['flagged_tests']} | {r['unique_lines']} | {r['shared_file']} | {r['ci_master_failures']}/{r['ci_failures']} | "
-                f"{r['value']}/{r['cost']}/{r['fragility']}/{r['redundancy']} | {r['auto_decision']} | {cell(r['merge_into'])} | {cell(r['rationale'])} |")
+                f"{r['value']}/{r['cost']}/{r['fragility']}/{r['redundancy']} | {r['auto_decision']} | {cell(r['merge_into'])} | {cell(r['owner_verdict'])} | {cell(r['rationale'])} |")
         lines.append("")
     with open(path, "w") as fh:
         fh.write("\n".join(lines))
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--audit-dir", default=os.path.join(ROOT, "docs", "test-audit", "data"))
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "docs", "test-audit"))
     ap.add_argument("--verdicts", default=os.path.join(ROOT, "docs", "test-audit", "verdicts.csv"))
     ap.add_argument("--render", action="store_true")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     a = args.audit_dir
 
+    for name in REQUIRED_INPUTS:
+        read_csv(os.path.join(a, name), required=True)
     inventory = read_csv(os.path.join(a, "inventory.csv"))
     if not inventory:
         raise SystemExit(f"{os.path.join(a, 'inventory.csv')} missing; run scripts/audit/inventory.py first")
@@ -280,11 +298,14 @@ def main():
     for r in read_csv(os.path.join(a, "assertions.csv")):
         assertions[r["suite"]].append(r)
     overrides = {}
-    for r in read_csv(args.verdicts):
+    for r in read_csv(args.verdicts, required=True):
         if r["suite"] not in names:
             raise SystemExit(f"verdicts.csv names an unknown suite: {r['suite']}")
         overrides[r["suite"]] = r
     for r in overrides.values():
+        if r.get("decision") and r["decision"] not in DECISIONS:
+            raise SystemExit(f"verdict for {r['suite']} has unknown decision {r['decision']!r}; "
+                             f"use one of {', '.join(DECISIONS)}")
         target = (r.get("merge_into") or "").strip()
         if r.get("decision") == "merge" and target not in names:
             raise SystemExit(f"verdict for {r['suite']} merges into {target or '(none)'}, which is not an inventory suite")

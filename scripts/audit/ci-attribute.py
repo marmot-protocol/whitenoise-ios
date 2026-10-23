@@ -14,7 +14,9 @@ Attribution sources, all from xcodebuild/xcbeautify output:
 - XCTest crash/restart: a `Test Suite 'X' started at …` with no matching
   `passed|failed at` line later in the log means the host died inside X.
 
-Run kinds: `build-failure` (`** TEST BUILD FAILED **`), `test-failure` (some
+Only the failed runs in the current ci-runs.json are attributed (logs left in
+ci-logs from an older window are ignored); a failed run whose log could not
+be fetched is listed as `log-unavailable`. Run kinds: `build-failure` (`** TEST BUILD FAILED **`), `test-failure` (some
 suite attributed), `host-crash` (`** TEST EXECUTE FAILED **` with a crashed
 suite), `execute-failure` (execute failed, nothing attributed), `other`
 (post-step gates etc.). `master_failures` counts failures on push events to
@@ -99,11 +101,11 @@ def attribute(text, method_map):
     return kind, suites
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out-dir", default="build/audit")
     ap.add_argument("--tests-dir", default="whitenoise-iosTests")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     out = args.out_dir
     with open(os.path.join(out, "ci-runs.json")) as fh:
         runs = {str(r["databaseId"]): r for r in json.load(fh)}
@@ -111,9 +113,12 @@ def main():
 
     per_suite = defaultdict(lambda: {"runs": set(), "master": set(), "branches": set(), "kinds": set()})
     unattributed = []
-    for path in sorted(glob.glob(os.path.join(out, "ci-logs", "*.log"))):
-        run_id = os.path.basename(path)[:-4]
-        run = runs.get(run_id, {})
+    for run_id in sorted(r for r, run in runs.items() if run.get("conclusion") == "failure"):
+        run = runs[run_id]
+        path = os.path.join(out, "ci-logs", run_id + ".log")
+        if not os.path.exists(path):
+            unattributed.append((run_id, "log-unavailable", run.get("event", ""), run.get("headBranch", "")))
+            continue
         with open(path, encoding="utf-8", errors="replace") as fh:
             kind, suites = attribute(fh.read(), method_map)
         if not suites:

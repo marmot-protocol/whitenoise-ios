@@ -111,10 +111,13 @@ def helper_names(masks, suite_names):
     return names - set(suite_names) - SWIFT_KEYWORDS
 
 
-class HelperRange(collections.namedtuple("HelperRange", "masked start end shared")):
-    """A helper declaration's source range. ``shared`` helpers (non-private
-    top-level declarations and extension members) resolve from any file;
-    others resolve only from their own file, since suites reuse names."""
+class HelperRange(collections.namedtuple("HelperRange", "masked start end shared owner")):
+    """A helper declaration's source range. A member of a suite (its body or
+    an `extension <Suite>` block) has that suite as ``owner`` and resolves
+    from its own file and, unless private, from that suite's tests in any
+    file. Other ``shared`` helpers (non-private top-level declarations and
+    extension members of non-suite types) resolve from any file; the rest
+    only from their own file, since suites reuse names."""
 
 
 def helper_bodies(masks, suite_names):
@@ -131,11 +134,14 @@ def helper_bodies(masks, suite_names):
                 if decl.has_attribute("Test") or (xctest and decl.name.startswith("test")):
                     continue
             in_extension = parent is not None and parent.keyword == "extension"
-            if decl.depth > 0 and not in_extension and parent is not None and parent.name in suite_names:
+            private = bool(decl.modifiers & {"private", "fileprivate"})
+            owner = None
+            if decl.depth > 0 and parent is not None and parent.name in suite_names:
                 shared = False
+                owner = None if private else parent.name
             else:
-                shared = (decl.depth == 0 or in_extension) and not (decl.modifiers & {"private", "fileprivate"})
-            bodies[decl.name].append(HelperRange(masked, decl.start, decl.body_end, shared))
+                shared = (decl.depth == 0 or in_extension) and not private
+            bodies[decl.name].append(HelperRange(masked, decl.start, decl.body_end, shared, owner))
     return bodies
 
 
@@ -160,12 +166,12 @@ class Classifier:
             if name in self.mdk_calls or (qualified and name in self.mdk_funcs):
                 counts["mdk"] += 1
 
-    def resolve(self, identifier, masked):
+    def resolve(self, identifier, masked, suite=None):
         candidates = self.helper_bodies.get(identifier, ())
-        local = [h for h in candidates if h.masked is masked]
+        local = [h for h in candidates if h.masked is masked or (suite is not None and h.owner == suite)]
         return local or [h for h in candidates if h.shared]
 
-    def count(self, masked, start, end, header=""):
+    def count(self, masked, start, end, header="", suite=None):
         counts = collections.Counter()
         self._count(masked, start, end, counts)
         for identifier in swiftscan.identifiers(header):
@@ -179,7 +185,7 @@ class Classifier:
         for level in range(2):
             next_frontier = set()
             for identifier in frontier:
-                for helper in self.resolve(identifier, masked):
+                for helper in self.resolve(identifier, masked, suite):
                     key = (id(helper.masked), helper.start, helper.end)
                     if key in seen or (helper.masked is masked and helper.start <= start and end <= helper.end):
                         continue
@@ -191,10 +197,10 @@ class Classifier:
             frontier = next_frontier
         return counts
 
-    def classify(self, masked, start, end, header=""):
+    def classify(self, masked, start, end, header="", suite=None):
         if CATALOG_TEXT.search(masked.text, start, end) or CATALOG_CODE.search(masked.code, start, end):
             return "catalog", 0, 0, 0
-        counts = self.count(masked, start, end, header)
+        counts = self.count(masked, start, end, header, suite)
         app, mdk, helper = counts["app"], counts["mdk"], counts["helper"]
         if mdk > app:
             subject = "mdk"
@@ -213,7 +219,7 @@ def classify_tests(suites, classifier):
         for test in suite.tests:
             masked = next(part.masked for part in suite.parts if part.path == test.path)
             subject, app, mdk, helper = classifier.classify(masked, test.declaration.start, test.body_end,
-                                                            test.declaration.header)
+                                                            test.declaration.header, suite.name)
             rows.append({"suite": suite.name, "test": test.qualified_name, "subject": subject,
                          "app_refs": app, "mdk_refs": mdk, "helper_refs": helper})
     return rows

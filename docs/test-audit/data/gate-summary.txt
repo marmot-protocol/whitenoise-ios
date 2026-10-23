@@ -1,6 +1,6 @@
 gated tests: 95  span 139.9s  permits observed: 1
 total hold 139.9s (critical-path floor at 1 permit)  total wait 0.0s
-hold median 1.21s  p90 3.32s  max 8.01s
+hold median 1.21s  p90 5.52s  max 8.01s
 longest holders:
      8.01s  whitenoise_iosTests.AppStateBootstrapTests/unreadableCheckpointDoesNotBlockLaunchResumeSignInOrSetupCompletion(healthyAvailable:)/AppStateBootstrapTests.swift:289:6
      6.03s  whitenoise_iosTests.AppStateBootstrapTests/signOutOfOnlyAccountKeepsItAvailableForReactivation()/AppStateBootstrapTests.swift:2290:6

@@ -286,16 +286,20 @@ def localization_errors(locale, key, localization, key_arguments):
     return errors
 
 
-def plural_requirement_errors(key, localizations, locales):
+def plural_requirement_errors(key, localizations, locales, require=True):
+    """Each plural dictionary (direct or per substitution) must be complete on
+    its own; a union across substitutions would hide a form missing `other`.
+    `require=False` (a PLURAL_GAPS key) skips locales without any plural
+    dictionary but still checks the ones that exist."""
     errors = []
     for locale in locales:
         forms = [p for p in plural_forms(localizations.get(locale, {})) if isinstance(p, dict)]
-        categories = set().union(*forms) if forms else set()
         if not forms:
-            errors.append(f"{locale}: {key!r} needs plural variations")
-        elif "other" not in categories:
+            if require:
+                errors.append(f"{locale}: {key!r} needs plural variations")
+        elif any("other" not in form for form in forms):
             errors.append(f"{locale}: {key!r} is missing an `other` plural form")
-        elif locale == "ru" and not RUSSIAN_PLURALS <= categories:
+        elif locale == "ru" and any(not RUSSIAN_PLURALS <= set(form) for form in forms):
             errors.append(f"ru: {key!r} needs one/few/many/other plural forms")
     return errors
 
@@ -325,9 +329,9 @@ def check_strings_catalog(catalog, locales=LOCALES):
         inferred = any(has_plurals(loc) for loc in localizations.values())
         if key in REQUIRED_PLURAL_KEYS:
             errors += plural_requirement_errors(key, localizations, (SOURCE, *locales))
-        elif inferred and key not in PLURAL_GAPS:
+        elif inferred:
             scope = (SOURCE, *locales) if SOURCE in localizations else locales
-            errors += plural_requirement_errors(key, localizations, scope)
+            errors += plural_requirement_errors(key, localizations, scope, require=key not in PLURAL_GAPS)
 
     for key in sorted(PLURAL_GAPS):
         localizations = strings.get(key, {}).get("localizations")

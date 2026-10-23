@@ -138,6 +138,28 @@ class StringsCatalogTests(FixtureCase):
             "ru: '%lld members' needs one/few/many/other plural forms",
         ])
 
+    def test_each_substitution_needs_its_own_complete_plural_forms(self):
+        def two(first, second):
+            return {**unit("%#@a@ %#@b@"), "substitutions": {
+                "a": {"argNum": 1, "formatSpecifier": "lld", "variations": {
+                    "plural": {name: unit("%lld") for name in first}}},
+                "b": {"argNum": 2, "formatSpecifier": "lld", "variations": {
+                    "plural": {name: unit("%lld") for name in second}}},
+            }}
+        errors = self.errors({"%lld of %lld": {"localizations": {
+            "de": two(["one", "other"], ["one"]),
+            "ru": two(["one", "few"], ["many", "other"]),
+        }}})
+        self.assertEqual(errors, [
+            "de: '%lld of %lld' is missing an `other` plural form",
+            "ru: '%lld of %lld' is missing an `other` plural form",
+        ])
+        errors = self.errors({"%lld of %lld": {"localizations": {
+            "de": two(["other"], ["other"]),
+            "ru": two(["one", "few", "other"], ["many", "other"]),
+        }}})
+        self.assertEqual(errors, ["ru: '%lld of %lld' needs one/few/many/other plural forms"])
+
     def test_required_plural_key_flattened_everywhere_fails(self):
         CHECK.REQUIRED_PLURAL_KEYS = ("%lld members",)
         errors = self.errors({"%lld members": {"localizations": {
@@ -150,6 +172,10 @@ class StringsCatalogTests(FixtureCase):
         CHECK.PLURAL_GAPS = frozenset({"Forward %lld messages"})
         gap = {"en": plural({"one": "%lld", "other": "%lld"}), "de": unit("%lld"), "ru": unit("%lld")}
         self.assertEqual(self.errors({"Forward %lld messages": {"localizations": gap}}), [])
+        # The exemption covers missing plural dictionaries, not incomplete ones.
+        partial = {**gap, "ru": plural({"one": "%lld", "other": "%lld"})}
+        self.assertEqual(self.errors({"Forward %lld messages": {"localizations": partial}}),
+                         ["ru: 'Forward %lld messages' needs one/few/many/other plural forms"])
         closed = {**gap, "de": plural({"one": "%lld", "other": "%lld"}), "ru": plural(RU_FORMS)}
         self.assertEqual(self.errors({"Forward %lld messages": {"localizations": closed}}),
                          ["remove 'Forward %lld messages' from PLURAL_GAPS: it has plural variations in every locale"])

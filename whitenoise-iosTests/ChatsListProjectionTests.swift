@@ -586,13 +586,19 @@ struct ChatsListProjectionTests {
     }
 
     @Test func itemAvatarURLRejectsUnsafeProjectedGroupAvatarURL() throws {
-        let item = ChatsListViewModel.Item(
-            row: chatListRow(groupIdHex: hex("d5"), title: "Unsafe Avatar"),
-            avatarURL: nil,
-            title: "Unsafe Avatar"
-        )
+        let viewModel = ChatsListViewModel(appState: AppState.test())
+        let row = chatListRow(groupIdHex: hex("d5"), title: "Unsafe Avatar")
+        viewModel.applyChatListSnapshot([row])
 
-        #expect(item.avatarURL == nil)
+        // The same path keeps a public HTTPS URL (localGroupChangeUpdatesProjectedAvatarURL).
+        viewModel.applyLocalGroupChange(group(
+            name: "Unsafe Avatar",
+            id: row.groupIdHex,
+            avatarUrl: "https://127.0.0.1/private.png"
+        ))
+
+        #expect(viewModel.items.map(\.id) == [row.groupIdHex])
+        #expect(viewModel.items.first?.avatarURL == nil)
     }
 
     @Test func localArchiveChangeMovesProjectedRowBetweenScopes() throws {

@@ -64,6 +64,26 @@ class PerSuiteDurationsTests(unittest.TestCase):
         self.assertEqual(result["BetaTests"], [2.0])
 
 
+class TestsJsonTests(unittest.TestCase):
+    def test_unreadable_bundle_or_missing_xcrun_returns_none(self):
+        from unittest import mock
+        import contextlib
+        import io
+        failures = [
+            costs.subprocess.CalledProcessError(1, "xcresulttool", stderr="Error: invalid result bundle\n"),
+            FileNotFoundError("xcrun"),
+        ]
+        for failure in failures:
+            with tempfile.TemporaryDirectory() as tmp, \
+                    mock.patch.object(costs.subprocess, "run", side_effect=failure), \
+                    contextlib.redirect_stderr(io.StringIO()) as err:
+                bundle = os.path.join(tmp, "A.xcresult")
+                os.makedirs(bundle)
+                self.assertIsNone(costs.tests_json(bundle, os.path.join(tmp, "json")))
+                self.assertIn("cannot read", err.getvalue())
+                self.assertFalse(os.path.exists(os.path.join(tmp, "json", "A.xcresult.json")))
+
+
 class GateCriticalPathTests(unittest.TestCase):
     def test_peak_concurrency_and_hold_sum(self):
         rows = [
@@ -85,6 +105,7 @@ class GateCriticalPathTests(unittest.TestCase):
             self.assertIn("permits observed: 1", out)
             self.assertIn("total hold 3.0s", out)
             self.assertIn("total wait 1.5s", out)
+            self.assertIn("p90 2.00s", out)  # nearest rank: the larger of two holds
         finally:
             os.unlink(path)
 

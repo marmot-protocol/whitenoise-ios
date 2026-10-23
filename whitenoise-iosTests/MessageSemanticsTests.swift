@@ -496,18 +496,36 @@ struct MessageSemanticsTests {
     @Test func inFlightMediaDownloadsShareTaskForSameReference() async throws {
         let store = MediaDownloadInFlightStore()
         let key = MediaDownloadInFlightKey(reference: encryptedMediaReference(sourceEpoch: 0))
-        let probe = MediaDownloadProbe()
+        let starts = MediaDownloadStartCounter()
+        let firstStarted = TestLatch()
+        let secondJoining = TestLatch()
+        let release = TestLatch()
 
-        async let first = store.data(for: key) {
-            await probe.run(returning: Data([1]))
+        let first = Task { @MainActor in
+            try await store.data(for: key) {
+                starts.count += 1
+                firstStarted.signal()
+                try await release.wait()
+                return Data([1])
+            }
         }
-        async let second = store.data(for: key) {
-            await probe.run(returning: Data([2]))
+        try await firstStarted.wait()
+        let second = Task { @MainActor in
+            // The signal and the store's synchronous in-flight lookup run in one
+            // main-actor turn, so this request has joined before the test resumes.
+            secondJoining.signal()
+            return try await store.data(for: key) {
+                starts.count += 1
+                return Data([2])
+            }
         }
+        try await secondJoining.wait()
+        release.signal()
 
-        let results = try await (first, second)
-        #expect(results.0 == results.1)
-        #expect(await probe.startCount() == 1)
+        let results = try await (first.value, second.value)
+        #expect(results.0 == Data([1]))
+        #expect(results.1 == Data([1]))
+        #expect(starts.count == 1)
     }
 
     @MainActor
@@ -944,16 +962,7 @@ private func encryptedMediaTag(
     ])
 }
 
-private actor MediaDownloadProbe {
-    private var starts = 0
-
-    func run(returning data: Data) async -> Data {
-        starts += 1
-        try? await Task.sleep(nanoseconds: 20_000_000)
-        return data
-    }
-
-    func startCount() -> Int {
-        starts
-    }
+@MainActor
+private final class MediaDownloadStartCounter {
+    var count = 0
 }
