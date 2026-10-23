@@ -46,11 +46,42 @@ struct MediaImetaProjectionParityTests {
             sourceEpoch: 0,
             expected: [ref(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", sourceEpoch: 0, dim: nil)]
         ),
+        // The app must pass `mediaType` and `version` through unchanged: both feed
+        // the decryption AAD.
+        Case(
+            name: "legacy V1 media type spelling is preserved for AAD",
+            imeta: [imetaValues(file: "a.jpg", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/jpg", dim: nil)],
+            sourceEpoch: 1,
+            expected: [ref(file: "a.jpg", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/jpg", sourceEpoch: 1, dim: nil)]
+        ),
         Case(
             name: "valid thumbhash preserved",
             imeta: [imetaValues(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", dim: nil, extra: ["thumbhash Abc123+/=_-"])],
             sourceEpoch: 9,
             expected: [ref(file: "a.png", ciphertext: c, plaintext: p, nonce: n, mediaType: "image/png", sourceEpoch: 9, dim: nil, thumbhash: "Abc123+/=_-")]
+        ),
+        Case(
+            name: "encrypted-media-v2 is accepted and remains typed v2",
+            imeta: [imetaValues(
+                file: "v2.png",
+                ciphertext: c,
+                plaintext: p,
+                nonce: n,
+                mediaType: "image/png",
+                dim: nil,
+                version: EncryptedMediaVersionFfi.v2.wireValue
+            )],
+            sourceEpoch: 4,
+            expected: [ref(
+                file: "v2.png",
+                ciphertext: c,
+                plaintext: p,
+                nonce: n,
+                mediaType: "image/png",
+                sourceEpoch: 4,
+                dim: nil,
+                version: .v2
+            )]
         ),
 
         // --- A malformed required field degrades that attachment to nil ---
@@ -207,10 +238,11 @@ private func imetaValues(
     nonce: String,
     mediaType: String,
     dim: String?,
+    version: String = EncryptedMediaVersionFfi.v1.wireValue,
     extra: [String] = [],
     omitLocator: Bool = false
 ) -> [String] {
-    var values = [MessageSemantics.imetaTag, "v \(EncryptedMediaVersionFfi.v1.wireValue)"]
+    var values = [MessageSemantics.imetaTag, "v \(version)"]
     if !omitLocator {
         values.append("locator blossom-v1 https://media.example/\(ciphertext).bin")
     }
@@ -234,7 +266,8 @@ private func ref(
     mediaType: String,
     sourceEpoch: UInt64,
     dim: String?,
-    thumbhash: String? = nil
+    thumbhash: String? = nil,
+    version: EncryptedMediaVersionFfi = .v1
 ) -> MediaAttachmentReferenceFfi {
     MediaAttachmentReferenceFfi(
         locators: [MediaLocatorFfi(kind: "blossom-v1", value: "https://media.example/\(ciphertext).bin")],
@@ -243,7 +276,7 @@ private func ref(
         nonceHex: nonce.lowercased(),
         fileName: file,
         mediaType: mediaType,
-        version: .v1,
+        version: version,
         sourceEpoch: sourceEpoch,
         dim: dim,
         thumbhash: thumbhash

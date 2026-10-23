@@ -22,6 +22,24 @@ struct AuditV5AdoptionTests {
         #expect(config.allowLoopbackDev == false)
     }
 
+    // A destination the native runtime refused would silently disable audit export.
+    @Test func nativeRuntimeAcceptsTheAppAuditDestination() async throws {
+        let client = try MarmotClient.testClient()
+        defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
+        do {
+            let applied = try client.marmot.setAuditOtlpConfigV5(
+                config: Self.telemetry(auditToken: "audit-token").auditOtlpConfig()
+            )
+            #expect(applied.enabled)
+            #expect(applied.destination == TelemetryBuildConfig.auditOtlpDestination)
+            #expect(applied.endpoint == "https://otlp.whitenoise.chat/v1/logs")
+            try await client.marmot.shutdownAndClose()
+        } catch {
+            try? await client.marmot.shutdownAndClose()
+            throw error
+        }
+    }
+
     @Test func runtimeStartsWhenTheAuditDestinationIsRejected() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -32,7 +50,7 @@ struct AuditV5AdoptionTests {
         try await client.marmot.shutdownAndClose()
     }
 
-    @Test func exportSelectsTheLatestV5AuditFileAndPreservesItsOriginalBytes() async throws {
+    @Test func exportSelectsTheNewestNonEmptyAuditFileAndPreservesItsOriginalBytes() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -51,8 +69,13 @@ struct AuditV5AdoptionTests {
         }
         let legacy = try write("audit-\(engine)-v4.jsonl", Data("{\"schema_version\":\"marmot-forensics-audit/v4\"}\n".utf8), modifiedAtMs: 1)
         let current = try write("audit-\(engine)-v5.jsonl", data, modifiedAtMs: 2)
+        let emptyNewest = try write("audit-\(engine)-v5-seg000002.jsonl", Data(), modifiedAtMs: 3)
 
-        let file = try DiagnosticLogExport.fileForExport(in: [legacy, current])
+        // Selection is by modification time, not by version: a later v4 file wins.
+        let laterLegacy = try write("audit-\(engine)-later-v4.jsonl", Data("{\"schema_version\":\"marmot-forensics-audit/v4\"}\n".utf8), modifiedAtMs: 4)
+        #expect(try DiagnosticLogExport.fileForExport(in: [current, laterLegacy, emptyNewest]) == laterLegacy)
+
+        let file = try DiagnosticLogExport.fileForExport(in: [legacy, current, emptyNewest])
         let snapshot = try await Task.detached { try DiagnosticLogExport.snapshot(file: file) }.value
         #expect(file.fileName.contains("-v5"))
         #expect(snapshot.fileName == file.fileName)

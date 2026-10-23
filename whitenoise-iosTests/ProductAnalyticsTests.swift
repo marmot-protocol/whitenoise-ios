@@ -258,6 +258,23 @@ struct ProductAnalyticsTests {
         try await erased.marmot.shutdownAndClose()
     }
 
+    @Test @MainActor func hostPerformanceSnapshotRoundTripsThroughBindings() async throws {
+        let client = try MarmotClient.testClient()
+        let before = client.appPerformanceSnapshot().hostSplashReady
+
+        client.recordHostPerformance(
+            operation: .splashReady,
+            durationMs: 250,
+            outcome: .success
+        )
+        let after = client.appPerformanceSnapshot().hostSplashReady
+
+        #expect(after.attempts >= before.attempts + 1)
+        #expect(after.successes >= before.successes + 1)
+        #expect(after.durationMs.sumMs >= before.durationMs.sumMs + 250)
+        try await client.marmot.shutdownAndClose()
+    }
+
     @Test func timingConsentAndDuration() async throws {
         let recorder = ProductAnalyticsRecorder()
         let events = Mutex<[(ProductTimingStage, UInt64, HostPerformanceOutcomeFfi)]>([])

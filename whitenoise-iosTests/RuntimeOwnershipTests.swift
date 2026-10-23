@@ -397,6 +397,46 @@ struct RuntimeOwnershipTests {
         await appState.startRuntimeSuspension().value
     }
 
+    @Test func runtimeLeaseRejectsASecondOwnerUntilTheFinalHandleDrops() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MarmotLeaseTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        var first: Marmot? = try Marmot.newWithCursorPersistence(
+            rootPath: root.path,
+            relayUrls: ["wss://relay.invalid.test"],
+            cursorPersistence: .advance
+        )
+
+        do {
+            _ = try Marmot.newWithCursorPersistence(
+                rootPath: root.path,
+                relayUrls: ["wss://relay.invalid.test"],
+                cursorPersistence: .frozen
+            )
+            Issue.record("Expected the second runtime owner to be rejected")
+        } catch let error as MarmotKitError {
+            #expect(error.isRuntimeOwnershipContention)
+        }
+
+        try await first?.shutdownAndClose()
+        first = nil
+
+        let replacement = try Marmot.newWithCursorPersistence(
+            rootPath: root.path,
+            relayUrls: ["wss://relay.invalid.test"],
+            cursorPersistence: .advance
+        )
+        try await replacement.shutdownAndClose()
+    }
+
+    // An ambiguous timeout must not be treated as "busy, safe to resubmit".
+    @Test func accountWorkerBusyClassifierExcludesAmbiguousTimeouts() {
+        #expect(MarmotKitError.AccountWorkerBusy.isAccountWorkerBusy)
+        #expect(!MarmotKitError.AccountWorkerBusy.isAccountWorkerResponseTimedOut)
+        #expect(MarmotKitError.AccountWorkerResponseTimedOut.isAccountWorkerResponseTimedOut)
+        #expect(!MarmotKitError.AccountWorkerResponseTimedOut.isAccountWorkerBusy)
+    }
+
     @Test func notificationContentionUsesTypedImmediateFallbackClassification() {
         #expect(MarmotKitError.RuntimeBusy.isRuntimeOwnershipContention)
         #expect(!MarmotKitError.RuntimeStopping.isRuntimeOwnershipContention)
