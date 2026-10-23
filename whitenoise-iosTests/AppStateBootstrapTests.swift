@@ -131,7 +131,7 @@ struct AppStateBootstrapTests {
         )
         let model = AccountSetupModel(snapshot: completed)
         await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
-        for _ in 0..<200 where !model.canFinish { try await Task.sleep(for: .milliseconds(10)) }
+        try await eventually { model.canFinish }
         try #require(model.canFinish)
         appState.activeAccountRef = nil
         appState.setPhase(.onboarding)
@@ -156,7 +156,7 @@ struct AppStateBootstrapTests {
 
         appState.beforeOnboardingSnapshotReadForTesting = nil
         await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
-        for _ in 0..<200 where !model.canFinish { try await Task.sleep(for: .milliseconds(10)) }
+        try await eventually { model.canFinish }
         try #require(model.canFinish)
         await appState.finishAccountSetup()
         #expect(appState.pendingAccountSetup == nil)
@@ -180,7 +180,7 @@ struct AppStateBootstrapTests {
         )
         let model = AccountSetupModel(snapshot: completed)
         await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
-        for _ in 0..<200 where !model.canFinish { try await Task.sleep(for: .milliseconds(10)) }
+        try await eventually { model.canFinish }
         try #require(model.canFinish)
         appState.signInAttempts.begin(account.accountIdHex)
         appState.pendingAccountSetup = model
@@ -340,7 +340,7 @@ struct AppStateBootstrapTests {
         )
         let model = AccountSetupModel(snapshot: completed)
         await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
-        for _ in 0..<200 where !model.canFinish { try await Task.sleep(for: .milliseconds(10)) }
+        try await eventually { model.canFinish }
         #expect(model.canFinish)
         appState.activeAccountRef = nil
         appState.setPhase(.onboarding)
@@ -984,7 +984,7 @@ struct AppStateBootstrapTests {
 
         appState.setAppSceneActive(false)
         let secondActivation = appState.startForegroundActivation()
-        try await Task.sleep(nanoseconds: 50_000_000)
+        await Task.yield()
 
         #expect(foregroundRuntimeCreateCount == 1)
 
@@ -992,6 +992,8 @@ struct AppStateBootstrapTests {
         await firstActivation.value
         await secondActivation.value
         appState.runtimeLifecycle.afterForegroundRuntimeCreatedForTesting = nil
+        // Both activations have finished, so a second runtime would be counted by now.
+        #expect(foregroundRuntimeCreateCount == 1)
 
         #expect(appState.isAppSceneActive)
         #expect(!appState.runtimeSuspendedForBackground)
