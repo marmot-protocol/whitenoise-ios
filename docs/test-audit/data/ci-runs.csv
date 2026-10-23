@@ -1,4 +1,4 @@
-run_id,conclusion,event,branch,created,minutes
+run_id,conclusion,event,branch,created,elapsed_min_incl_queue
 39846423229,success,pull_request,feat/attachment-handoff-share,2026-10-22T20:09:48Z,68.2
 39846308914,success,pull_request,feat/manage-storage,2026-10-22T20:09:00Z,79.4
 39846013445,success,pull_request,feat/marmotkit-0.14-nightly,2026-10-22T20:06:57Z,39.2

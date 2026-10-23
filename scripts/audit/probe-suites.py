@@ -85,6 +85,17 @@ def main():
     with open(args.probe) as fh:
         probe = json.load(fh)
     method, suites = select(probe, args.per_file_dir, args.tests_dir)
+    if method in ("coverage", "file"):
+        # A test file without a coverage set can never be selected by coverage;
+        # say so, since its suites' silence is then not evidence of anything.
+        measured = set(coverage_sets(args.per_file_dir))
+        unmeasured = sorted(
+            os.path.basename(p)[:-len(".swift")]
+            for p in glob.glob(os.path.join(args.tests_dir, "*.swift"))
+            if os.path.basename(p)[:-len(".swift")] not in measured and swiftscan.suites_in_file(p))
+        if unmeasured:
+            print(f"# warning: {len(unmeasured)} test file(s) have no coverage set and were not considered: "
+                  + ", ".join(unmeasured), file=sys.stderr)
     print(f"# method: {method}")
     for suite in suites:
         print(suite)

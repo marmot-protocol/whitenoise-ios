@@ -186,7 +186,7 @@ def main():
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=[
+        writer = csv.DictWriter(fh, lineterminator="\n", fieldnames=[
             "suite", "file", "wall_s", "overhead_s", "net_wall_s", "file_suites", "shared_file", "tests",
             "sum_test_s", "max_test_s", "status"])
         writer.writeheader()

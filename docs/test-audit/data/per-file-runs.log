@@ -323,3 +323,5 @@
 2026-10-23T01:52:54 ==> WNSecondaryButtonStyleTests: 9s status=0
 2026-10-23T01:53:04 ==> WNToggleTests: 10s status=0
 2026-10-23T01:53:13 ==> WindowCaptureProtectionTests: 9s status=0
+2026-10-23T05:53:23 ==> AppLaunchPolicyTests: 612s status=65
+2026-10-23T07:26:19 ==> AppLaunchPolicyTests: 11s status=0
