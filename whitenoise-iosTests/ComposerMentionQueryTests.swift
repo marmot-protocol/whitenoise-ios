@@ -4,6 +4,7 @@ import Testing
 
 @testable import whitenoise_ios
 
+@MainActor
 struct ComposerMentionQueryTests {
     private let jeffNpub = "npub1" + String(repeating: "q", count: 58)
     private let aliceNpub = "npub1" + String(repeating: "a", count: 58)
@@ -554,6 +555,7 @@ struct ComposerMentionQueryTests {
     }
 }
 
+@MainActor
 private func mentionCandidate(name: String, npub: String, hex: String) -> ComposerMentionCandidate {
     ComposerMentionCandidate(
         details: GroupMemberDetailsFfi(
