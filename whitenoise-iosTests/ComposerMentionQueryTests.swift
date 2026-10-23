@@ -4,6 +4,7 @@ import Testing
 
 @testable import whitenoise_ios
 
+@MainActor
 @Suite(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
 struct ComposerMentionQueryTests {
     private let jeffNpub = "npub1" + String(repeating: "q", count: 58)
@@ -555,6 +556,7 @@ struct ComposerMentionQueryTests {
     }
 }
 
+@MainActor
 private func mentionCandidate(name: String, npub: String, hex: String) -> ComposerMentionCandidate {
     ComposerMentionCandidate(
         details: GroupMemberDetailsFfi(
