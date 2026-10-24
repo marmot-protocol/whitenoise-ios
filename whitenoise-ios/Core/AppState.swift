@@ -1178,6 +1178,7 @@ final class AppState {
                 throw ForegroundRuntimeMutationError.runtimeUnavailable
             }
             notifications.removeAllNotifications()
+            await notifications.drainNotificationCenterMutations()
             URLCache.shared.removeAllCachedResponses()
             RemoteAvatarImageLoader.clearCaches()
             GroupAvatarImageLoader.clearCaches()
