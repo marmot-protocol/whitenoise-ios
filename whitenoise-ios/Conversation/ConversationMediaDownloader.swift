@@ -236,7 +236,7 @@ final class ConversationMediaDownloader {
                 if let target {
                     let state = try await client.marmot.attachmentTransferSnapshot(accountRef: accountRef,
                         groupIdHex: groupIdHex, targets: [target]).items.first?.state
-                    guard let state, ![.unavailable, .removed, .cancelled].contains(state) else {
+                    guard let state, ![.unavailable, .removed, .cleanedBySetting, .cancelled].contains(state) else {
                         throw AttachmentReadError.stale
                     }
                 }
@@ -250,6 +250,16 @@ final class ConversationMediaDownloader {
             } catch AttachmentReadError.unavailable {
                 loadOutcome = .unavailable
                 throw AttachmentReadError.unavailable
+            } catch AttachmentReadError.storageBlocked {
+                loadOutcome = .unavailable
+                // Automatic loads stay quiet; a tap explains why its Retry needs free space.
+                if media.demand.isUserInitiated {
+                    appState?.present(.warning(
+                        L10n.string("Not enough storage"),
+                        message: L10n.string("Free up space on this device, then tap the attachment to try again.")
+                    ))
+                }
+                throw AttachmentReadError.storageBlocked
             }
         }
     }

@@ -131970,6 +131970,1436 @@
           }
         }
       }
+    },
+    "%@ needs to update their app before they can be invited." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ muss die App aktualisieren, bevor du eine Einladung senden kannst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ needs to update their app before they can be invited."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ tiene que actualizar su app antes de poder recibir una invitación."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ doit mettre à jour son app avant de pouvoir être invité."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ deve aggiornare l’app prima di poter essere invitato."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ precisa atualizar o app antes de poder ser convidado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ нужно обновить приложение, прежде чем его можно будет пригласить."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ davet edilebilmek için uygulamasını güncellemeli."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@需要先更新应用，才能被邀请。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@需要先更新應用程式，才能被邀請。"
+          }
+        }
+      }
+    },
+    "This user needs to update their app before they can be invited." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Person muss die App aktualisieren, bevor du eine Einladung senden kannst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This user needs to update their app before they can be invited."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este usuario tiene que actualizar su app antes de poder recibir una invitación."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet utilisateur doit mettre à jour son app avant de pouvoir être invité."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo utente deve aggiornare l’app prima di poter essere invitato."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este usuário precisa atualizar o app antes de poder ser convidado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этому пользователю нужно обновить приложение, прежде чем его можно будет пригласить."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kullanıcının davet edilebilmesi için uygulamasını güncellemesi gerekiyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此用户需要先更新应用，才能被邀请。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此使用者需要先更新應用程式，才能被邀請。"
+          }
+        }
+      }
+    },
+    "Your follow list is too large to change here. No follows were changed." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Folgeliste ist zu groß, um sie hier zu ändern. Deine Folgebeziehungen wurden nicht geändert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your follow list is too large to change here. No follows were changed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu lista de seguidos es demasiado grande para cambiarla aquí. No se ha cambiado a quién sigues."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre liste de suivi est trop longue pour être modifiée ici. Aucun abonnement n’a été modifié."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La lista delle persone che segui è troppo grande per essere modificata qui. Nessun follow è stato modificato."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sua lista de pessoas seguidas é grande demais para ser alterada aqui. Não foi alterado quem você segue."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Список подписок слишком большой, чтобы изменить его здесь. Подписки не были изменены."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Takip listeniz burada değiştirilemeyecek kadar büyük. Takipleriniz değiştirilmedi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的关注列表过大，无法在此更改。未更改任何关注关系。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的關注清單過大，無法在此變更。未變更任何關注關係。"
+          }
+        }
+      }
+    },
+    "This person's app is out of date. Ask them to update it and open it, then try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die App dieser Person ist veraltet. Bitte sie, die App zu aktualisieren und zu öffnen, und versuche es dann erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This person's app is out of date. Ask them to update it and open it, then try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La app de esta persona está desactualizada. Pídele que la actualice y la abra, y luego inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’app de cette personne n’est pas à jour. Demandez-lui de la mettre à jour et de l’ouvrir, puis réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’app di questa persona non è aggiornata. Chiedile di aggiornarla e aprirla, poi riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O app desta pessoa está desatualizado. Peça que ela o atualize e abra, depois tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У этого человека устаревшая версия приложения. Попросите его обновить и открыть приложение, затем повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kişinin uygulaması güncel değil. Uygulamayı güncelleyip açmasını isteyin, ardından tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此人的应用版本过旧。请让对方更新并打开应用，然后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此人的應用程式版本過舊。請對方更新並開啟應用程式，然後再試一次。"
+          }
+        }
+      }
+    },
+    "Couldn't finish looking this person up on relays. Check your connection and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Suche nach dieser Person auf den Relays konnte nicht abgeschlossen werden. Prüfe deine Verbindung und versuche es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't finish looking this person up on relays. Check your connection and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo terminar de buscar a esta persona en los relays. Comprueba tu conexión e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de terminer la recherche de cette personne sur les relais. Vérifiez votre connexion et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile completare la ricerca di questa persona sui relay. Controlla la connessione e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível concluir a busca por esta pessoa nos relays. Verifique sua conexão e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось завершить поиск этого человека на ретрансляторах. Проверьте подключение и повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kişi rölelerde aranırken işlem tamamlanamadı. Bağlantınızı kontrol edip tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能在中继服务器上完成对此人的查找。请检查网络连接，然后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能在中繼伺服器上完成對此人的查詢。請檢查網路連線，然後再試一次。"
+          }
+        }
+      }
+    },
+    "This chat may be out of date on this device. Wait for it to sync, then try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Chat ist auf diesem Gerät möglicherweise nicht aktuell. Warte, bis er synchronisiert ist, und versuche es dann erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This chat may be out of date on this device. Wait for it to sync, then try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que este chat no esté actualizado en este dispositivo. Espera a que se sincronice e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette discussion n’est peut-être pas à jour sur cet appareil. Attendez qu’elle soit synchronisée, puis réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa chat potrebbe non essere aggiornata su questo dispositivo. Attendi la sincronizzazione, poi riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este bate-papo pode estar desatualizado neste dispositivo. Aguarde a sincronização e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот чат на этом устройстве может быть неактуален. Дождитесь синхронизации, затем повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu sohbet bu cihazda güncel olmayabilir. Eşitlenmesini bekleyin, ardından tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天在本设备上可能不是最新的。请等待同步完成，然后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天在本裝置上可能不是最新的。請等待同步完成，然後再試一次。"
+          }
+        }
+      }
+    },
+    "The group's last change hasn't reached all of its relays yet. Try again in a moment." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die letzte Änderung der Gruppe hat noch nicht alle ihre Relays erreicht. Versuche es gleich noch einmal."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The group's last change hasn't reached all of its relays yet. Try again in a moment."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El último cambio del grupo aún no ha llegado a todos sus relays. Inténtalo de nuevo en un momento."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La dernière modification du groupe n’a pas encore atteint tous ses relais. Réessayez dans un instant."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’ultima modifica del gruppo non ha ancora raggiunto tutti i suoi relay. Riprova tra poco."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A última alteração do grupo ainda não chegou a todos os seus relays. Tente novamente em instantes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Последнее изменение группы ещё не дошло до всех её ретрансляторов. Повторите попытку чуть позже."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grubun son değişikliği henüz tüm rölelerine ulaşmadı. Birazdan tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该群组的最近一次更改尚未送达其所有中继服务器。请稍后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該群組的最近一次變更尚未送達其所有中繼伺服器。請稍後再試一次。"
+          }
+        }
+      }
+    },
+    "This message can't be edited." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Nachricht kann nicht bearbeitet werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This message can't be edited."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este mensaje no se puede editar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce message ne peut pas être modifié."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo messaggio non può essere modificato."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta mensagem não pode ser editada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это сообщение нельзя изменить."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu mesaj düzenlenemez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法编辑此消息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法編輯此訊息。"
+          }
+        }
+      }
+    },
+    "This device is out of storage. Free up some space and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf diesem Gerät ist kein Speicherplatz mehr frei. Gib etwas Speicher frei und versuche es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device is out of storage. Free up some space and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo no tiene espacio de almacenamiento. Libera espacio e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet appareil n’a plus d’espace de stockage. Libérez de l’espace et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo spazio di archiviazione di questo dispositivo è esaurito. Libera spazio e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo está sem espaço de armazenamento. Libere espaço e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На этом устройстве закончилось место. Освободите место и повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazda depolama alanı kalmadı. Biraz yer açıp tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备的存储空间已满。请释放一些空间，然后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此裝置的儲存空間已滿。請釋放一些空間，然後再試一次。"
+          }
+        }
+      }
+    },
+    "Not enough storage. Free up space to download." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht genug Speicherplatz. Gib Speicher frei, um herunterzuladen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not enough storage. Free up space to download."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay suficiente espacio. Libera espacio para descargar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espace de stockage insuffisant. Libérez de l’espace pour télécharger."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio insufficiente. Libera spazio per scaricare."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espaço insuficiente. Libere espaço para baixar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недостаточно места. Освободите место для загрузки."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yeterli depolama alanı yok. İndirmek için yer açın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存储空间不足。请释放空间以下载。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "儲存空間不足。請釋放空間以下載。"
+          }
+        }
+      }
+    },
+    "Not enough storage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht genug Speicherplatz"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not enough storage"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay suficiente espacio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espace de stockage insuffisant"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio insufficiente"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espaço insuficiente"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недостаточно места"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yeterli depolama alanı yok"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存储空间不足"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "儲存空間不足"
+          }
+        }
+      }
+    },
+    "Free up space on this device, then tap the attachment to try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gib auf diesem Gerät Speicher frei und tippe dann erneut auf den Anhang."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free up space on this device, then tap the attachment to try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libera espacio en este dispositivo y luego toca el archivo adjunto para volver a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libérez de l’espace sur cet appareil, puis touchez la pièce jointe pour réessayer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libera spazio su questo dispositivo, poi tocca l’allegato per riprovare."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libere espaço neste dispositivo e toque no anexo para tentar novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Освободите место на этом устройстве, затем коснитесь вложения, чтобы повторить попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazda yer açın, ardından tekrar denemek için eke dokunun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请释放此设备上的空间，然后轻点附件重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請釋放此裝置上的空間，然後點一下附件再試一次。"
+          }
+        }
+      }
+    },
+    "This chat may be out of date" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Chat ist möglicherweise nicht aktuell"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This chat may be out of date"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que este chat no esté actualizado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette discussion n’est peut-être pas à jour"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa chat potrebbe non essere aggiornata"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este bate-papo pode estar desatualizado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот чат может быть неактуален"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu sohbet güncel olmayabilir"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天可能不是最新的"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天可能不是最新的"
+          }
+        }
+      }
+    },
+    "Last group change not delivered" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzte Gruppenänderung nicht zugestellt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last group change not delivered"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El último cambio del grupo no se ha entregado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernière modification du groupe non distribuée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ultima modifica del gruppo non consegnata"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Última alteração do grupo não entregue"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Последнее изменение группы не доставлено"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son grup değişikliği iletilmedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近一次群组更改未送达"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近一次群組變更未送達"
+          }
+        }
+      }
+    },
+    "This device may not have the group's latest changes yet. Changing the group now could split it for everyone. Wait for it to sync, or continue anyway?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät hat die neuesten Änderungen der Gruppe möglicherweise noch nicht. Wenn du die Gruppe jetzt änderst, könnte sie sich für alle aufspalten. Warten, bis sie synchronisiert ist, oder trotzdem fortfahren?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device may not have the group's latest changes yet. Changing the group now could split it for everyone. Wait for it to sync, or continue anyway?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que este dispositivo aún no tenga los últimos cambios del grupo. Cambiar el grupo ahora podría dividirlo para todos. ¿Esperar a que se sincronice o continuar de todos modos?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet appareil n’a peut-être pas encore les dernières modifications du groupe. Le modifier maintenant pourrait le scinder pour tout le monde. Attendre la synchronisation ou continuer quand même ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo dispositivo potrebbe non avere ancora le ultime modifiche del gruppo. Modificare il gruppo ora potrebbe dividerlo per tutti. Attendere la sincronizzazione o continuare comunque?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo pode ainda não ter as alterações mais recentes do grupo. Alterar o grupo agora pode dividi-lo para todos. Aguardar a sincronização ou continuar mesmo assim?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На этом устройстве может ещё не быть последних изменений группы. Изменение группы сейчас может разделить её для всех участников. Дождаться синхронизации или всё равно продолжить?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazda grubun en son değişiklikleri henüz olmayabilir. Grubu şimdi değiştirmek onu herkes için bölebilir. Eşitlenmesini beklemek mi, yoksa yine de devam etmek mi istersiniz?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备可能还没有该群组的最新更改。现在更改群组可能会让所有人的群组分裂。要等待同步完成，还是仍然继续？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此裝置可能還沒有該群組的最新變更。現在變更群組可能會讓所有人的群組分裂。要等待同步完成，還是仍要繼續？"
+          }
+        }
+      }
+    },
+    "This device may not have the group's latest changes yet. Inviting now could split the group for everyone and leave the people you invite with an invitation that no longer works. Wait for it to sync, or continue anyway?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät hat die neuesten Änderungen der Gruppe möglicherweise noch nicht. Wenn du jetzt einlädst, könnte sich die Gruppe für alle aufspalten, und die eingeladenen Personen könnten eine Einladung erhalten, die nicht mehr funktioniert. Warten, bis sie synchronisiert ist, oder trotzdem fortfahren?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device may not have the group's latest changes yet. Inviting now could split the group for everyone and leave the people you invite with an invitation that no longer works. Wait for it to sync, or continue anyway?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que este dispositivo aún no tenga los últimos cambios del grupo. Invitar ahora podría dividir el grupo para todos y dejar a las personas que invites con una invitación que ya no funciona. ¿Esperar a que se sincronice o continuar de todos modos?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet appareil n’a peut-être pas encore les dernières modifications du groupe. Inviter maintenant pourrait scinder le groupe pour tout le monde et laisser les personnes invitées avec une invitation qui ne fonctionne plus. Attendre la synchronisation ou continuer quand même ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo dispositivo potrebbe non avere ancora le ultime modifiche del gruppo. Invitare ora potrebbe dividere il gruppo per tutti e lasciare le persone invitate con un invito che non funziona più. Attendere la sincronizzazione o continuare comunque?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo pode ainda não ter as alterações mais recentes do grupo. Convidar agora pode dividir o grupo para todos e deixar as pessoas convidadas com um convite que não funciona mais. Aguardar a sincronização ou continuar mesmo assim?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На этом устройстве может ещё не быть последних изменений группы. Приглашение сейчас может разделить группу для всех участников, а у приглашённых останется недействительное приглашение. Дождаться синхронизации или всё равно продолжить?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazda grubun en son değişiklikleri henüz olmayabilir. Şimdi davet etmek grubu herkes için bölebilir ve davet ettiğiniz kişilerin elinde artık çalışmayan bir davet kalabilir. Eşitlenmesini beklemek mi, yoksa yine de devam etmek mi istersiniz?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备可能还没有该群组的最新更改。现在邀请可能会让所有人的群组分裂，并让你邀请的人收到无法使用的邀请。要等待同步完成，还是仍然继续？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此裝置可能還沒有該群組的最新變更。現在邀請可能會讓所有人的群組分裂，並讓你邀請的人收到無法使用的邀請。要等待同步完成，還是仍要繼續？"
+          }
+        }
+      }
+    },
+    "The group's last change hasn't reached all of its relays yet. Members who use only those relays may not be able to follow this change. Wait, or continue anyway?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die letzte Änderung der Gruppe hat noch nicht alle ihre Relays erreicht. Mitglieder, die nur diese Relays nutzen, können dieser Änderung möglicherweise nicht folgen. Warten oder trotzdem fortfahren?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The group's last change hasn't reached all of its relays yet. Members who use only those relays may not be able to follow this change. Wait, or continue anyway?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El último cambio del grupo aún no ha llegado a todos sus relays. Es posible que los miembros que solo usan esos relays no puedan seguir este cambio. ¿Esperar o continuar de todos modos?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La dernière modification du groupe n’a pas encore atteint tous ses relais. Les membres qui utilisent uniquement ces relais risquent de ne pas pouvoir suivre cette modification. Attendre ou continuer quand même ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’ultima modifica del gruppo non ha ancora raggiunto tutti i suoi relay. I membri che usano solo quei relay potrebbero non riuscire a seguire questa modifica. Attendere o continuare comunque?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A última alteração do grupo ainda não chegou a todos os seus relays. Membros que usam apenas esses relays podem não conseguir acompanhar esta alteração. Aguardar ou continuar mesmo assim?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Последнее изменение группы ещё не дошло до всех её ретрансляторов. Участники, которые используют только эти ретрансляторы, могут не получить это изменение. Подождать или всё равно продолжить?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grubun son değişikliği henüz tüm rölelerine ulaşmadı. Yalnızca bu röleleri kullanan üyeler bu değişikliği takip edemeyebilir. Beklemek mi, yoksa yine de devam etmek mi istersiniz?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该群组的最近一次更改尚未送达其所有中继服务器。仅使用这些中继服务器的成员可能无法跟上此次更改。要等待，还是仍然继续？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該群組的最近一次變更尚未送達其所有中繼伺服器。只使用這些中繼伺服器的成員可能無法跟上此次變更。要等待，還是仍要繼續？"
+          }
+        }
+      }
+    },
+    "Group not changed. Try again once this chat has synced." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Gruppe wurde nicht geändert. Versuche es erneut, sobald dieser Chat synchronisiert ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group not changed. Try again once this chat has synced."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se ha cambiado el grupo. Inténtalo de nuevo cuando este chat se haya sincronizado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le groupe n’a pas été modifié. Réessayez une fois cette discussion synchronisée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il gruppo non è stato modificato. Riprova quando questa chat sarà sincronizzata."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O grupo não foi alterado. Tente novamente quando este bate-papo estiver sincronizado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Группа не изменена. Повторите попытку, когда этот чат синхронизируется."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grup değiştirilmedi. Bu sohbet eşitlendikten sonra tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群组未更改。请在此聊天同步完成后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群組未變更。請在此聊天同步完成後再試一次。"
+          }
+        }
+      }
+    },
+    "Group not changed. Try again once the last change has reached every relay." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Gruppe wurde nicht geändert. Versuche es erneut, sobald die letzte Änderung alle Relays erreicht hat."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group not changed. Try again once the last change has reached every relay."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se ha cambiado el grupo. Inténtalo de nuevo cuando el último cambio haya llegado a todos los relays."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le groupe n’a pas été modifié. Réessayez une fois que la dernière modification aura atteint tous les relais."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il gruppo non è stato modificato. Riprova quando l’ultima modifica avrà raggiunto tutti i relay."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O grupo não foi alterado. Tente novamente quando a última alteração tiver chegado a todos os relays."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Группа не изменена. Повторите попытку, когда последнее изменение дойдёт до всех ретрансляторов."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grup değiştirilmedi. Son değişiklik tüm rölelere ulaştıktan sonra tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群组未更改。请在最近一次更改送达所有中继服务器后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群組未變更。請在最近一次變更送達所有中繼伺服器後再試一次。"
+          }
+        }
+      }
+    },
+    "Wait" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wait"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attendre"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attendi"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aguardar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подождать"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bekle"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待"
+          }
+        }
+      }
+    },
+    "A relay answered the check." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Relay hat auf die Prüfung geantwortet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A relay answered the check."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un relay respondió a la comprobación."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un relais a répondu à la vérification."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un relay ha risposto alla verifica."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Um relay respondeu à verificação."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ретранслятор ответил на проверку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir röle denetime yanıt verdi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一个中继服务器响应了检查。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一個中繼伺服器回應了檢查。"
+          }
+        }
+      }
+    },
+    "Some chats weren't left. Try them again later." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Chats wurden nicht verlassen. Versuche es später erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some chats weren't left. Try them again later."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se ha salido de algunos chats. Inténtalo de nuevo más tarde."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certaines discussions n’ont pas été quittées. Réessayez plus tard."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non hai lasciato alcune chat. Riprova più tardi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você não saiu de alguns bate-papos. Tente novamente mais tarde."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы не вышли из некоторых чатов. Повторите попытку позже."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bazı sohbetlerden çıkılmadı. Daha sonra tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分聊天未退出。请稍后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分聊天未退出。請稍後再試一次。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

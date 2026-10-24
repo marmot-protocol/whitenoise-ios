@@ -97,7 +97,7 @@ CARGO_TOML="$TEMP_DIR/marmot-uniffi-Cargo.toml"
 curl --fail --location --retry 3 --silent --show-error \
     "https://raw.githubusercontent.com/marmot-protocol/mdk/$SOURCE_SHA/crates/marmot-uniffi/Cargo.toml" \
     --output "$CARGO_TOML"
-UNIFFI_VERSION="$(sed -nE 's/^uniffi = \{ version = "([^"]+)".*/\1/p' "$CARGO_TOML" | head -1)"
+UNIFFI_VERSION="$(sed -nE 's/^uniffi = (\{ version = )?"([^"]+)".*/\2/p' "$CARGO_TOML" | head -1)"
 if [[ -z "$UNIFFI_VERSION" ]]; then
     echo "error: could not determine UniFFI version for $SOURCE_SHA" >&2
     exit 1

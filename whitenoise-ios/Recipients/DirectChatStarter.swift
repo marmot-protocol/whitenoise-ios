@@ -5,7 +5,9 @@ import MarmotKit
 /// whose identity resolves but who has no usable messaging setup gets an
 /// invite prompt, not an error: `MissingKeyPackage`, `InvalidKeyPackageEvent`,
 /// and post-resolution `InvalidIdentity` all mean "not reachable on White
-/// Noise yet". Group-membership mutations keep their strict error mapping.
+/// Noise yet". A recipient with only outdated KeyPackages is on White Noise
+/// and needs to update, so that stays a retryable error. Group-membership
+/// mutations keep their strict error mapping.
 nonisolated enum StartChatFailurePresentation {
     enum Failure: Equatable {
         case missingSetup
@@ -17,6 +19,8 @@ nonisolated enum StartChatFailurePresentation {
             return .other(message: UserFacingError.message(for: error))
         }
         switch marmotError {
+        case .MissingKeyPackage(_, .obsoleteOnly):
+            return .other(message: UserFacingError.message(for: marmotError))
         case .MissingKeyPackage, .InvalidKeyPackageEvent, .InvalidIdentity:
             return .missingSetup
         default:
