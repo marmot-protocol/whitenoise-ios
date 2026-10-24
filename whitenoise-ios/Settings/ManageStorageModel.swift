@@ -246,15 +246,13 @@ final class ManageStorageModel {
             guard try await client.removeRetainedAttachment(accountRef: accountRef,
                 groupIdHex: attachment.groupIdHex, target: attachment.target)
             else { throw AttachmentReadError.stale }
-            // Like Downloads, drop only this file's decrypted copy. When that copy
-            // can't be named or deleted, drop them all rather than keep plaintext.
-            let hash = try? await client.retainedAttachmentPlaintextHash(accountRef: accountRef,
-                groupIdHex: attachment.groupIdHex, target: attachment.target)
-            if let hash, await MessageMediaCache.removeCachedData(forPlaintextHashes: [hash]) {
-                AttachmentPresentationState.shared.invalidate()
-            } else {
-                await Self.purgeAllDecryptedMedia()
+            // Like Downloads, drop only this file's decrypted copy. A copy that can't be
+            // named or deleted stays a miss: never wipe every profile's media for one row.
+            if let hash = try await client.retainedAttachmentPlaintextHash(accountRef: accountRef,
+                groupIdHex: attachment.groupIdHex, target: attachment.target) {
+                _ = await MessageMediaCache.removeCachedData(forPlaintextHashes: [hash])
             }
+            AttachmentPresentationState.shared.invalidate()
         }
     }
 
