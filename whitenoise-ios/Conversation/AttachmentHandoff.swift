@@ -43,6 +43,34 @@ nonisolated final class AttachmentHandoffLease: Sendable {
         self.init(lease: handoff.lease, path: handoff.path, releaser: releaser)
     }
 
+    /// MDK writes the copy owner-only under the default Data Protection class, which
+    /// stays readable once the device locks. Raise it to complete before an OS surface
+    /// sees `url`; a copy that cannot be protected is released instead of shared.
+    func protect() throws {
+        do {
+            let files = FileManager.default
+            try files.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
+            let applied = try files.attributesOfItem(atPath: url.path)[.protectionKey] as? FileProtectionType
+            guard Self.isComplete(applied) else { throw AttachmentHandoffFailure.unprotected }
+        } catch {
+            release()
+            throw AttachmentHandoffFailure.unprotected
+        }
+    }
+
+    /// The simulator ignores Data Protection: setting a class is a no-op and none is reported.
+    static let dataProtectionEnforced: Bool = {
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return true
+        #endif
+    }()
+
+    static func isComplete(_ applied: FileProtectionType?, enforced: Bool = dataProtectionEnforced) -> Bool {
+        applied == .complete || (!enforced && applied == nil)
+    }
+
     /// Deletes the copy; never use `url` afterwards. Returns nil when already released.
     @discardableResult
     func release() -> Task<AttachmentHandoffRelease.Outcome, Never>? {
@@ -119,11 +147,14 @@ nonisolated enum AttachmentHandoffFailure: LocalizedError, Equatable {
     case notHeldLocally
     /// No room for the plaintext copy beyond MDK's disk reserve.
     case storageFull
+    /// The copy could not be given complete file protection, so it was released.
+    case unprotected
 
     var errorDescription: String? {
         switch self {
         case .notHeldLocally: L10n.string("This attachment is not ready yet.")
         case .storageFull: L10n.string("This device is out of storage. Free up some space and try again.")
+        case .unprotected: L10n.string("Please try again.")
         }
     }
 }

@@ -438,6 +438,9 @@ simulator, find that folder with
 - [ ] Tap a received PDF that has not downloaded yet (Documents auto-download
       set to Never). It downloads, then the share sheet opens; nothing is left
       under `handoff/` after dismissal.
+- [ ] On a device, open a document's share sheet, lock the phone for a minute,
+      then unlock. Save to Files still delivers an intact PDF (the copy is
+      `.complete`, unreadable only while locked), and dismissal removes it.
 - [ ] Share a large document, then background the app for a minute and return
       before dismissing. The share still completes, and dismissal still removes
       the copy (released through the reopened runtime, not the suspended one).

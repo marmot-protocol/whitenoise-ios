@@ -114,6 +114,50 @@ struct AttachmentHandoffTests {
         file.finish()
     }
 
+    // MARK: Protection
+
+    @Test func leasedCopyIsRaisedToCompleteProtection() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("handoff-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("Report.pdf")
+        try Data("%PDF-1.7".utf8).write(to: url, options: .noFileProtection)
+        let releaser = FakeReleaser()
+        let leased = AttachmentHandoffLease(lease: lease, path: url.path, releaser: releaser)
+
+        try leased.protect()
+
+        if AttachmentHandoffLease.dataProtectionEnforced {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            #expect(attributes[.protectionKey] as? FileProtectionType == .complete)
+        }
+        #expect(try Data(contentsOf: url) == Data("%PDF-1.7".utf8))
+        #expect(await releaser.leases.isEmpty)
+        leased.release()
+    }
+
+    @Test func onlyCompleteProtectionIsShared() {
+        #expect(AttachmentHandoffLease.isComplete(.complete, enforced: true))
+        #expect(!AttachmentHandoffLease.isComplete(nil, enforced: true))
+        #expect(!AttachmentHandoffLease.isComplete(.completeUntilFirstUserAuthentication, enforced: true))
+        #expect(!AttachmentHandoffLease.isComplete(.completeUnlessOpen, enforced: true))
+        #expect(!AttachmentHandoffLease.isComplete(FileProtectionType.none, enforced: true))
+        #expect(AttachmentHandoffLease.isComplete(nil, enforced: false))
+        #expect(!AttachmentHandoffLease.isComplete(.completeUntilFirstUserAuthentication, enforced: false))
+    }
+
+    @Test func copyThatCannotBeProtectedIsReleasedInsteadOfShared() async {
+        let releaser = FakeReleaser()
+        let missing = FileManager.default.temporaryDirectory
+            .appendingPathComponent("handoff-\(UUID().uuidString)/Report.pdf").path
+        let leased = AttachmentHandoffLease(lease: lease, path: missing, releaser: releaser)
+
+        #expect(throws: AttachmentHandoffFailure.unprotected) { try leased.protect() }
+        #expect(await waitForReleases(releaser, count: 1) == [lease])
+        #expect(leased.release() == nil)
+    }
+
     // MARK: Opening
 
     @Test func heldAttachmentOpensWithoutAcquiring() async throws {

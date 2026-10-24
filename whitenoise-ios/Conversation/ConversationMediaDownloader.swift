@@ -304,8 +304,12 @@ final class ConversationMediaDownloader {
             guard let lease = try await AttachmentHandoffOpening.open(
                 handoff: {
                     try await AttachmentHandoffOpening.shielded(cancel: { control.cancel() }) {
-                        try await marmot.openAttachmentHandoff(accountRef: account, groupIdHex: groupIdHex,
-                            target: target, control: control).map { AttachmentHandoffLease($0, releaser: releaser) }
+                        () async throws -> AttachmentHandoffLease? in
+                        guard let handoff = try await marmot.openAttachmentHandoff(accountRef: account,
+                            groupIdHex: groupIdHex, target: target, control: control) else { return nil }
+                        let lease = AttachmentHandoffLease(handoff, releaser: releaser)
+                        try lease.protect()
+                        return lease
                     }
                 },
                 hostHasBytes: hostHasBytes,
