@@ -22,7 +22,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
     @MainActor
     @Test func schedulingTailRefreshCancelsPreviousTaskAndClearsLatestOnCompletion() async throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let probe = TailRefreshTaskProbe()
@@ -30,12 +30,12 @@ struct TimelineTailRefreshTaskLifetimeTests {
         viewModel.scheduleTimelineTailRefreshForTesting {
             await withTaskCancellationHandler {
                 probe.markFirstStarted()
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                try? await parkUntilCancelled()
             } onCancel: {
                 probe.markFirstCancelled()
             }
         }
-        await waitUntil { probe.firstStarted }
+        try await eventually { probe.firstStarted }
 
         #expect(probe.firstStarted)
         #expect(viewModel.hasTimelineTailRefreshTaskForTesting)
@@ -43,7 +43,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
         viewModel.scheduleTimelineTailRefreshForTesting {
             probe.markSecondRan()
         }
-        await waitUntil {
+        try await eventually {
             probe.firstCancelled && probe.secondRan && !viewModel.hasTimelineTailRefreshTaskForTesting
         }
 
@@ -55,37 +55,18 @@ struct TimelineTailRefreshTaskLifetimeTests {
     @MainActor
     @Test func cancellingTailRefreshDropsStoredTask() async throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
 
         viewModel.scheduleTimelineTailRefreshForTesting {
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            try? await parkUntilCancelled()
         }
         #expect(viewModel.hasTimelineTailRefreshTaskForTesting)
 
         viewModel.cancelTimelineTailRefreshForTesting()
         #expect(!viewModel.hasTimelineTailRefreshTaskForTesting)
     }
-}
-
-@MainActor
-private func waitUntil(
-    timeoutNanoseconds: UInt64 = 10_000_000_000,
-    pollIntervalNanoseconds: UInt64 = 5_000_000,
-    sourceLocation: SourceLocation = #_sourceLocation,
-    _ condition: () -> Bool
-) async {
-    let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
-    while DispatchTime.now().uptimeNanoseconds < deadline {
-        if condition() { return }
-        try? await Task.sleep(nanoseconds: pollIntervalNanoseconds)
-    }
-    if condition() { return }
-    Issue.record(
-        "condition never became true within \(timeoutNanoseconds / 1_000_000_000)s",
-        sourceLocation: sourceLocation
-    )
 }
 
 private final class TailRefreshTaskProbe: Sendable {

@@ -376,11 +376,85 @@ Do not add a second storage path for data Marmot already owns.
 - Conversation bottom-follow requests, including the scroll-to-bottom button, should route through the timeline scroll coordinator instead of calling `scrollToBottom` directly from SwiftUI event handlers.
 - Keep comments short and only where they explain a non-obvious constraint.
 
+## Tests
+
+- Two tiers. `TestPlans/PR.xctestplan` skips tests tagged `.runtime` or
+  `.uiHosting` plus the runtime and hosting XCTest classes, all listed in its
+  `skippedTests`; `TestPlans/Full.xctestplan` runs everything. After changing
+  a tag, run `python3 scripts/audit/inventory.py --write-pr-plan`.
+- CI (owner decision to confirm): pull requests run the PR tier, but the full
+  tier when they touch `Packages/`, `Shared/`, `NotificationServiceExtension/`,
+  `whitenoise-ios/Core/`, `whitenoise-ios/Onboarding/` or
+  `whitenoise-iosTests/TestSupport/`, or carry the `full-tests` label. Master
+  pushes, the nightly schedule and manual runs run the full tier. Nightly
+  failures reach people only through GitHub's default notifications.
+- Tag (`TestSupport/Tags.swift`) the tests that open or start a Marmot runtime
+  `.runtime` and those that host a `UIWindow`/`UIHostingController`
+  `.uiHosting`; tag the suite only when most of its tests need it.
+  `ImageRenderer` alone needs no tag. Runtime tests also take
+  `.marmotRuntimeConcurrencyLimit`; never combine it with `.timeLimit`, which
+  would count time queued behind the gate.
+- The gate allows `max(1, cores/4)` runtimes: 1 on the 3-vCPU CI runner. It
+  replaced serializing the runtime suites (76b4925c, #1111). Raising CI to 2
+  permits needs several green full-tier CI runs first; local runs with
+  `TEST_RUNNER_WN_TEST_GATE_CORES=3` only change the permit count, not the
+  CPUs the simulator and runtimes get.
+- Open runtimes with `withTestClient`, `OwnedTestClient` (stored fixtures) or
+  `TestRuntimeScope.own` under `.closesTestRuntimes`; reopen a root with
+  `closing`. Never leave a `MarmotClient.testClient()` unclosed.
+- Wait with `TestLatch`/`eventually`/`settleLayout` or a layout callback,
+  never a fixed `Task.sleep`; only those named helpers may sleep. Host views
+  through `withHostedWindow`.
+- No source-text assertions (see Architecture).
+- Test the app's decisions, not other code. Most suites the audit deleted
+  broke one of these rules:
+  - Don't test MarmotKit through one-line `MarmotClient` pass-throughs or
+    version-adoption smoke tests; MDK's behaviour belongs in MDK's tests.
+  - Don't pin literals: no `constant == literal`, memberwise-init or
+    synthesized-`Equatable` round-trips, or layout numbers restated from the
+    code. Assert relations and invariants ("fits", "doesn't grow",
+    "at least 44 pt").
+  - Search for an existing suite before adding one and extend it; name the
+    file after its suite. One behaviour, one owner.
+  - Build records with the shared fixtures (`hex`, `timelineRecord`,
+    `chatListRow`, `group`, `message`, … in `TestSupport/`); don't add
+    private copies. Build `AppState` with `AppState.test()`, never
+    `AppState(client:)`, and never touch `UserDefaults.standard` or other
+    process-wide state.
+  - When a decision only runs inside a view, a runtime or an async path,
+    extract a small pure helper and test that on the PR tier instead of
+    hosting a window or starting a runtime.
+  - Add catalog, manifest and config checks as scripts in the lint job, not
+    unit tests. `PrivacyManifestTests` stays until #1227 runs the release
+    privacy check in CI.
+  - Keep waits loud: a timed-out wait must still fail the test. If you
+    catch it (`try? await eventually`), assert the condition right after;
+    never write a helper that returns quietly on timeout. Keep the default
+    timeout unless a test has a reason.
+- `python3 scripts/audit/inventory.py --check` (run by `scripts/lint.sh`)
+  enforces the tags, sleeps, runtime ownership, gate/`.timeLimit` and PR-plan
+  rules. `scripts/audit/guardrail-baseline.txt` holds known violations with
+  their counts; a count may only go down, in the same change that lowers it.
+- Run a tier locally with `scripts/test.sh --tier pr|full` (or
+  `WN_TEST_TIER`). A bare `xcodebuild -testPlan PR` skips only the XCTest
+  classes (xcodebuild applies plan skips and tags to XCTest only); the script
+  adds the Swift Testing skips as `-skip-testing:`. Without a tier the Staging
+  scheme's default plan (Full) runs; the Production scheme has no plans.
+- Tier behaviour was verified locally on Xcode 27.1; CI pins Xcode 26, so
+  check the first CI run's step summary for the expected skip counts.
+- The per-suite audit ledger and how to rerun it live in `docs/test-audit/`.
+
 ## Validation
 
 Use the smallest test set that covers your change, then broaden when lifecycle, notification, or binding behavior changes.
 
+The unit-test host does not bootstrap the production Marmot runtime (`AppLaunchPolicy`); a test that needs the real launch path sets `WN_RUN_HOST_BOOTSTRAP=1` in the scheme's Test environment or passes `TEST_RUNNER_WN_RUN_HOST_BOOTSTRAP=1` to xcodebuild.
+
 Useful commands:
+
+```sh
+scripts/test.sh --tier pr     # or --tier full; Staging scheme, see Tests
+```
 
 ```sh
 xcodebuild test \

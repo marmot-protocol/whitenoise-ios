@@ -4,7 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite
+@Suite(.tags(.uiHosting))
 struct ChatListViewportTests {
     enum Gesture: CaseIterable { case dragging, decelerating }
 

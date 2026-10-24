@@ -1,0 +1,12 @@
+suite,failures,master_failures,branches,kinds,runs
+AccountExitSheetTests,4,0,2,crashed;failed,39308183808;39464638559;39471413922;39775770574
+WNQRCodeCardRenderingTests,4,0,4,failed,39951842441;39961559246;39963400169;39963798133
+CustomEmojiSendingFixtureTests,3,2,2,failed,37781559225;38379072670;38382105410
+Marmot0104BindingTests,3,1,3,failed,37951321478;38254851879;38787520986
+PrivateKeyAutoFillTests,3,1,3,failed,37879098783;38293846938;39775770574
+ProfileFormLayoutTests,3,0,1,crashed,39403547618;39410630810;39415335057
+LocalizationCatalogTests,2,0,1,failed,37776608890;37781559225
+AccountExitPresentationTests,1,0,1,failed,39301319427
+ContinuousQRScannerTests,1,0,1,failed,39401542687
+ControlLayoutTests,1,0,1,crashed,38909962529
+MediaImageZoomTests,1,0,1,crashed,38909962529

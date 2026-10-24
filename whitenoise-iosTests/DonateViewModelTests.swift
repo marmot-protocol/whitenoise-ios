@@ -396,9 +396,9 @@ struct DonateViewModelTests {
         _ condition: @MainActor () -> Bool,
         sourceLocation: SourceLocation = #_sourceLocation
     ) async {
-        for _ in 0..<100 where !condition() {
-            await Task.yield()
-        }
+        // A time-bounded poll rather than a fixed number of yields, which a
+        // loaded runner can exhaust before the payment task gets scheduled.
+        try? await eventually { condition() }
         #expect(condition(), sourceLocation: sourceLocation)
     }
 }
@@ -498,8 +498,12 @@ private final class DonationCoordinatorFake: DonationPaymentCoordinating {
     func donate(_ draft: DonationDraft) async throws -> DonationPaymentSuccess {
         drafts.append(draft)
         if waitForCancellation {
-            while !Task.isCancelled {
-                await Task.yield()
+            // Parks until the payment task is cancelled instead of spinning.
+            let cancelled = TestLatch()
+            await withTaskCancellationHandler {
+                try? await cancelled.wait()
+            } onCancel: {
+                cancelled.signal()
             }
             throw CancellationError()
         }

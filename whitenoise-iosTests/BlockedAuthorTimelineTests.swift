@@ -126,8 +126,4 @@ struct BlockedAuthorTimelineTests {
             return record.messageIdHex
         }
     }
-
-    private func hex(_ byte: String) -> String {
-        String(repeating: byte, count: 32)
-    }
 }

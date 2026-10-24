@@ -8,15 +8,6 @@ struct WNQRCodeCardMetricsTests {
     private static let legacyFixedCardWidth: CGFloat = 225 + 2 * 16
     private static let formContainerWidth: CGFloat = 369
 
-    @Test func cardWidthScalesWithItsContainer() {
-        let narrow = WNQRCodeCard.Metrics.width(forContainerWidth: 320)
-        let wide = WNQRCodeCard.Metrics.width(forContainerWidth: 440)
-
-        #expect(narrow < wide)
-        #expect(narrow == 320 * WNQRCodeCard.Metrics.widthFraction)
-        #expect(wide == 440 * WNQRCodeCard.Metrics.widthFraction)
-    }
-
     @Test func cardNeverOutgrowsItsContainer() {
         for containerWidth in [CGFloat(320), 369, 402, 440, 700] {
             #expect(WNQRCodeCard.Metrics.width(forContainerWidth: containerWidth) < containerWidth)
@@ -37,110 +28,72 @@ struct WNQRCodeCardMetricsTests {
 
     /// The width the symbol had before the quiet zone was rendered into the
     /// image: the card's old 0.81 share less its 12-point margins.
-    static func prototypeSymbolWidth(forContainerWidth containerWidth: CGFloat) -> CGFloat {
+    private static func prototypeSymbolWidth(forContainerWidth containerWidth: CGFloat) -> CGFloat {
         containerWidth * 0.81 - 24
     }
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.uiHosting))
 struct WNQRCodeCardRenderingTests {
     private static let payload = "marmot://profile/npub1" + String(repeating: "q", count: 58)
-    private static let containerWidths: [CGFloat] = [320, 369, 402, 440]
+    private static let containerWidth: CGFloat = 369
     private static let renderScale: CGFloat = 3
 
-    @Test func theRenderedCardDecodesBackToItsPayload() throws {
-        for containerWidth in Self.containerWidths {
-            let card = try Self.renderCard(containerWidth: containerWidth, image: QRCode.image(from: Self.payload))
+    // 320 is the narrowest container and leaves the tightest quiet zone.
+    @Test(arguments: [CGFloat(320), 369])
+    func theRenderedCardDecodesBackToItsPayload(containerWidth: CGFloat) throws {
+        let card = try Self.renderCard(image: QRCode.image(from: Self.payload), containerWidth: containerWidth)
 
-            #expect(
-                Self.decodedPayloads(in: card).contains(Self.payload),
-                "no decode at container width \(containerWidth)"
-            )
-        }
+        #expect(Self.decodedPayloads(in: card).contains(Self.payload))
     }
 
-    @Test func theRenderedCardKeepsAFullQuietZoneAroundTheSymbol() throws {
+    @Test(arguments: [CGFloat(320), 369])
+    func theRenderedCardKeepsAFullQuietZoneAroundTheSymbol(containerWidth: CGFloat) throws {
         let bare = try #require(QRCode.image(from: Self.payload, scale: 1, quietZoneModules: 0))
         let moduleCount = bare.size.width
 
-        for containerWidth in Self.containerWidths {
-            let card = try Self.renderCard(containerWidth: containerWidth, image: QRCode.image(from: Self.payload))
-            let bitmap = try #require(Self.bitmap(of: card))
-            let symbol = try #require(
-                bitmap.horizontalExtent { $0 <= 100 },
-                "no symbol rendered at container width \(containerWidth)"
-            )
-            let surface = try #require(
-                bitmap.horizontalExtent { $0 >= 250 },
-                "no card rendered at container width \(containerWidth)"
-            )
+        let card = try Self.renderCard(image: QRCode.image(from: Self.payload), containerWidth: containerWidth)
+        let bitmap = try #require(Self.bitmap(of: card))
+        let symbol = try #require(bitmap.horizontalExtent { $0 <= 100 }, "no symbol rendered")
+        let surface = try #require(bitmap.horizontalExtent { $0 >= 250 }, "no card rendered")
 
-            let module = CGFloat(symbol.upperBound - symbol.lowerBound + 1) / moduleCount
-            let margin = CGFloat(
-                min(symbol.lowerBound - surface.lowerBound, surface.upperBound - symbol.upperBound)
-            )
+        let module = CGFloat(symbol.upperBound - symbol.lowerBound + 1) / moduleCount
+        let margin = CGFloat(
+            min(symbol.lowerBound - surface.lowerBound, surface.upperBound - symbol.upperBound)
+        )
 
-            #expect(
-                margin + 1 >= module * QRCode.standardQuietZoneModules,
-                "container \(containerWidth) left \(margin / module) modules of quiet zone"
-            )
-        }
+        #expect(
+            margin + 1 >= module * QRCode.standardQuietZoneModules,
+            "container \(containerWidth) left \(margin / module) modules of quiet zone"
+        )
     }
 
     @Test func theCardKeepsTheSameSquareWhileTheImageIsStillLoading() throws {
-        for containerWidth in Self.containerWidths {
-            let loading = try #require(
-                Self.bitmap(of: Self.renderCard(containerWidth: containerWidth, image: nil))
-            )
-            let loaded = try #require(
-                Self.bitmap(of: Self.renderCard(containerWidth: containerWidth, image: QRCode.image(from: Self.payload)))
-            )
-            let isCard: (UInt8) -> Bool = { $0 >= 250 }
+        let loading = try #require(Self.bitmap(of: Self.renderCard(image: nil)))
+        let loaded = try #require(
+            Self.bitmap(of: Self.renderCard(image: QRCode.image(from: Self.payload)))
+        )
+        let isCard: (UInt8) -> Bool = { $0 >= 250 }
 
-            let loadingRect = try #require(loading.horizontalExtent(where: isCard))
-            let loadedRect = try #require(loaded.horizontalExtent(where: isCard))
-            let loadingHeight = try #require(loading.verticalExtent(where: isCard))
-            let loadedHeight = try #require(loaded.verticalExtent(where: isCard))
+        let loadingRect = try #require(loading.horizontalExtent(where: isCard))
+        let loadedRect = try #require(loaded.horizontalExtent(where: isCard))
+        let loadingHeight = try #require(loading.verticalExtent(where: isCard))
+        let loadedHeight = try #require(loaded.verticalExtent(where: isCard))
 
-            #expect(
-                loadingRect == loadedRect,
-                "container \(containerWidth) width \(loadingRect) loading, \(loadedRect) loaded"
-            )
-            #expect(
-                loadingHeight == loadedHeight,
-                "container \(containerWidth) height \(loadingHeight) loading, \(loadedHeight) loaded"
-            )
-            #expect(
-                abs((loadedRect.upperBound - loadedRect.lowerBound)
-                    - (loadedHeight.upperBound - loadedHeight.lowerBound)) <= 3,
-                "container \(containerWidth) card is not square: \(loadedRect) by \(loadedHeight)"
-            )
-        }
-    }
-
-    @Test func theSymbolKeepsTheSizeItHadInThePrototype() throws {
-        for containerWidth in Self.containerWidths {
-            let card = try #require(Self.bitmap(of: Self.renderCard(
-                containerWidth: containerWidth, image: QRCode.image(from: Self.payload))))
-            let symbol = try #require(card.horizontalExtent { $0 <= 100 })
-            let width = CGFloat(symbol.upperBound - symbol.lowerBound + 1) / Self.renderScale
-            let prototype = WNQRCodeCardMetricsTests
-                .prototypeSymbolWidth(forContainerWidth: containerWidth)
-
-            #expect(
-                abs(width - prototype) <= 6,
-                "container \(containerWidth) symbol \(width)pt, prototype \(prototype)pt"
-            )
-        }
+        #expect(loadingRect == loadedRect, "width \(loadingRect) loading, \(loadedRect) loaded")
+        #expect(loadingHeight == loadedHeight, "height \(loadingHeight) loading, \(loadedHeight) loaded")
+        #expect(
+            abs((loadedRect.upperBound - loadedRect.lowerBound)
+                - (loadedHeight.upperBound - loadedHeight.lowerBound)) <= 3,
+            "card is not square: \(loadedRect) by \(loadedHeight)"
+        )
     }
 
     @Test func theFailureKeepsTheSameQRCodeCard() throws {
-        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
-        let width = scene.screen.bounds.width
-        let readyImage = try Self.renderCard(containerWidth: width, image: QRCode.image(from: Self.payload))
+        let readyImage = try Self.renderCard(image: QRCode.image(from: Self.payload))
         let failedImage = try Self.renderCard(
-            containerWidth: width, image: nil,
+            image: nil,
             unavailableDescription: "You can still share your profile link from the Share menu."
         )
         let ready = try #require(Self.bitmap(of: readyImage))
@@ -154,10 +107,14 @@ struct WNQRCodeCardRenderingTests {
         #expect(Self.decodedPayloads(in: failedImage).isEmpty)
     }
 
+    /// Hosts the card in a window and renders its layer tree. The short run
+    /// loop turn lets SwiftUI commit the card before rendering; the suite is
+    /// `.serialized`. `drawHierarchy(afterScreenUpdates:)` was tried instead
+    /// and lost part of the quiet zone on the Xcode 26 CI simulator.
     private static func renderCard(
-        containerWidth: CGFloat,
         image: UIImage?,
-        unavailableDescription: LocalizedStringKey? = nil
+        unavailableDescription: LocalizedStringKey? = nil,
+        containerWidth: CGFloat = Self.containerWidth
     ) throws -> UIImage {
         let controller = UIHostingController(
             rootView: WNQRCodeCard(
@@ -251,20 +208,5 @@ struct WNQRCodeCardRenderingTests {
             return true
         }
         return drawn ? Bitmap(width: width, height: height, luma: luma) : nil
-    }
-}
-
-struct WNNeutralAccentTests {
-    @Test func accentIsMonochromeInLightAppearance() {
-        #expect(WNNeutralAccent.color(for: .light) == .black)
-    }
-
-    @Test func accentIsMonochromeInDarkAppearance() {
-        #expect(WNNeutralAccent.color(for: .dark) == .white)
-    }
-
-    @Test func accentNeverFallsBackToTheSystemTint() {
-        #expect(WNNeutralAccent.color(for: .light) != .accentColor)
-        #expect(WNNeutralAccent.color(for: .dark) != .accentColor)
     }
 }

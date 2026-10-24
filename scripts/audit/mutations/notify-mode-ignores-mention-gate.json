@@ -1,0 +1,8 @@
+{
+  "name": "notify-mode-ignores-mention-gate",
+  "path": "Shared/NotificationPresentationPolicy.swift",
+  "old": "        case .nothing: isMention && mentionsBreakThroughMute\n",
+  "new": "        case .nothing: isMention\n",
+  "grep": "notifyModeAllows",
+  "why": "AGENTS.md: mentions break through a muted chat only while the MutedChatMentionsStore preference is on"
+}

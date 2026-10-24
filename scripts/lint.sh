@@ -12,6 +12,8 @@
 #   CI unset/false → emoji (default)          (human-readable terminal output)
 #
 # Exits non-zero on:
+#   - a string-catalog problem (scripts/check-localization-catalog.py)
+#   - a new test-suite guardrail violation (scripts/audit/inventory.py --check)
 #   - swiftlint not installed
 #   - swiftlint version not the exact pin (must match CI)
 #   - any lint violation (--strict)
@@ -22,6 +24,16 @@ REQUIRED_SWIFTLINT_VERSION="0.63.2"   # bump in lockstep with .github/workflows/
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
+
+# ── string catalogs ──────────────────────────────────────────────────
+echo "==> localization catalogs"
+python3 "$ROOT_DIR/scripts/check-localization-catalog.py"
+
+# ── test-suite guardrails ────────────────────────────────────────────
+# Tier tags, fixed sleeps, unowned runtimes, .timeLimit under the runtime
+# gate (scripts/audit/guardrails.py); known violations are baselined.
+echo "==> test guardrails"
+python3 "$ROOT_DIR/scripts/audit/inventory.py" --check --out "$ROOT_DIR/build/audit/inventory.csv"
 
 # ── precheck: swiftlint installed ────────────────────────────────────
 if ! command -v swiftlint >/dev/null 2>&1; then

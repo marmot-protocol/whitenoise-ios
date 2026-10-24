@@ -9,6 +9,13 @@ on:
       - 'NotificationServiceExtension/**'
       - '.swiftlint.yml'
       - 'scripts/lint.sh'
+      - 'scripts/check-localization-catalog.py'
+      - 'scripts/tests/**'
+      - 'scripts/audit/inventory.py'
+      - 'scripts/audit/guardrails.py'
+      - 'scripts/audit/swiftscan.py'
+      - 'scripts/audit/guardrail-baseline.txt'
+      - 'TestPlans/**'
       - 'justfile'
       - '.github/workflows/lint.yml'
   push:
@@ -33,6 +40,14 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+
+      # The guardrail check itself runs inside scripts/lint.sh below.
+      - name: Test the test-suite guardrails
+        run: python3 -m unittest discover -s scripts/tests -p 'test_audit_guardrails.py'
+
+      # The catalog check itself runs inside scripts/lint.sh below.
+      - name: Test the localization catalog check
+        run: python3 -m unittest discover -s scripts/tests -p 'test_localization_catalog.py'
 
       - name: Install SwiftLint
         env:

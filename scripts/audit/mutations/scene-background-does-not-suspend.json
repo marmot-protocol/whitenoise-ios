@@ -1,0 +1,8 @@
+{
+  "name": "scene-background-does-not-suspend",
+  "path": "whitenoise-ios/whitenoise_iosApp.swift",
+  "old": "        case .background:\n            .suspend\n",
+  "new": "        case .background:\n            .remainInactive\n",
+  "grep": "SceneRuntimeAction",
+  "why": "AGENTS.md: the app suspends the runtime on background"
+}

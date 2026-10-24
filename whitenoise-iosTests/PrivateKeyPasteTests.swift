@@ -3,7 +3,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.uiHosting))
 struct PrivateKeyPasteTests {
     @Test(arguments: [false, true])
     func itemProviderPasteReportsTheInsertedText(alreadyFocused: Bool) async throws {
@@ -34,9 +34,7 @@ struct PrivateKeyPasteTests {
         let providers = [NSItemProvider(object: pastedText as NSString)]
         #expect(field.canPaste(providers))
         target.paste?(itemProviders: providers)
-        for _ in 0..<100 where reportedText == nil {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await eventually { reportedText != nil }
         #expect(field.text == pastedText)
         #expect(reportedText == pastedText)
         #expect(hadPasteToken)

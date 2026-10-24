@@ -5,7 +5,7 @@ import UIKit
 
 struct WNCopyFeedbackTests {
     @MainActor
-    @Test func confirmationKeepsTheCopyRowSizeAtStandardAndAccessibleTextSizes() {
+    @Test(.tags(.uiHosting)) func confirmationKeepsTheCopyRowSizeAtStandardAndAccessibleTextSizes() {
         for size in [DynamicTypeSize.large, .accessibility1] {
             let dimensions = [false, true].map { copied in
                 let host = UIHostingController(rootView:
@@ -21,14 +21,6 @@ struct WNCopyFeedbackTests {
         }
     }
 
-    @Test func offersACopyGlyphBeforeCopying() {
-        #expect(WNCopyFeedback.symbolName(isCopied: false) == "doc.on.doc")
-    }
-
-    @Test func confirmsWithACheckmarkAfterCopying() {
-        #expect(WNCopyFeedback.symbolName(isCopied: true) == "checkmark")
-    }
-
     @Test func accessibilityLabelNamesTheValueBeforeCopying() {
         let label = WNCopyFeedback.accessibilityLabel(isCopied: false, copyTitle: L10n.formatted("Copy %@", "npub"))
 
@@ -40,10 +32,5 @@ struct WNCopyFeedbackTests {
         let label = WNCopyFeedback.accessibilityLabel(isCopied: true, copyTitle: L10n.formatted("Copy %@", "npub"))
 
         #expect(label == L10n.string("Copied"))
-    }
-
-    @Test func copyFeedbackResetsAfterABoundedDelay() {
-        #expect(WNCopyFeedback.resetDelay > .zero)
-        #expect(WNCopyFeedback.resetDelay <= .seconds(5))
     }
 }

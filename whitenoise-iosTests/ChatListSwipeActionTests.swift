@@ -36,6 +36,262 @@ struct ChatListSwipeActionTests {
         #expect(ChatListSwipeAction.archive.tint != ChatListSwipeAction.delete.tint)
         #expect(ChatListSwipeAction.read.tint != ChatListSwipeAction.pin.tint)
     }
+
+    // MARK: - Departure status and action
+
+    private static let memberships: [SelfMembershipFfi] = [.member, .left, .removed]
+
+    /// The regression this section exists to pin. Marmot derives
+    /// `leaveRequestPending` from an uncommitted leave request, so it stays true
+    /// until a remaining member commits the removal — for a quiet group, never.
+    /// Reading it ahead of membership parked departed chats on a "Leaving…"
+    /// badge they could never escape.
+    @Test func departedChatReportsTheSettledMembershipRatherThanAnUnresolvedLeave() {
+        #expect(
+            ChatDepartureStatus.status(
+                membership: .left,
+                leaveRequestPending: true,
+                pendingConfirmation: false
+            ) == .membershipEnded(.left)
+        )
+        #expect(
+            ChatDepartureStatus.status(
+                membership: .removed,
+                leaveRequestPending: true,
+                pendingConfirmation: false
+            ) == .membershipEnded(.removed)
+        )
+    }
+
+    @Test func stillAMemberWithAnOutstandingRequestReportsTheLeaveInFlight() {
+        #expect(
+            ChatDepartureStatus.status(
+                membership: .member,
+                leaveRequestPending: true,
+                pendingConfirmation: false
+            ) == .leaving
+        )
+    }
+
+    @Test func anEndedMembershipSupersedesAPendingInvite() {
+        #expect(
+            ChatDepartureStatus.status(
+                membership: .removed,
+                leaveRequestPending: true,
+                pendingConfirmation: true
+            ) == .membershipEnded(.removed)
+        )
+        #expect(
+            ChatDepartureStatus.status(
+                membership: .member,
+                leaveRequestPending: false,
+                pendingConfirmation: true
+            ) == .pendingInvite
+        )
+        #expect(
+            ChatDepartureStatus.status(
+                membership: .member,
+                leaveRequestPending: false,
+                pendingConfirmation: false
+            ) == nil
+        )
+    }
+
+    /// The other half of the stranding: withholding the local delete left a
+    /// departed chat with a badge and no action that could clear it.
+    @Test func departedChatOffersLocalDeleteEvenWithAnUnresolvedLeaveRequest() {
+        for membership in [SelfMembershipFfi.left, .removed] {
+            for pending in [false, true] {
+                #expect(
+                    ChatDepartureAction.action(
+                        membership: membership,
+                        leaveRequestPending: pending
+                    ) == .deleteLocally,
+                    "\(membership) with pending=\(pending) must still offer the local delete"
+                )
+            }
+        }
+    }
+
+    @Test func pendingLeaveSuppressesTheLeaveOnlyWhileStillAMember() {
+        #expect(
+            ChatDepartureAction.action(membership: .member, leaveRequestPending: true) == nil
+        )
+        #expect(
+            ChatDepartureAction.action(membership: .member, leaveRequestPending: false) == .leave
+        )
+    }
+
+    /// Badge and menu are two readings of one state: no chat may show a leave in
+    /// progress while offering a destructive action, and none may sit on
+    /// `.leaving` with no way out.
+    @Test func onlyTheLeavingStateWithholdsEveryDestructiveAction() {
+        for membership in Self.memberships {
+            for pending in [false, true] {
+                for invited in [false, true] {
+                    let status = ChatDepartureStatus.status(
+                        membership: membership,
+                        leaveRequestPending: pending,
+                        pendingConfirmation: invited
+                    )
+                    let action = ChatDepartureAction.action(
+                        membership: membership,
+                        leaveRequestPending: pending
+                    )
+                    #expect(
+                        (status == .leaving) == (action == nil),
+                        "\(membership)/pending=\(pending): a stuck badge needs an action, and vice versa"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test func departedChatSwipeAlwaysOffersDeleteDespiteAnUnresolvedLeave() {
+        for isArchived in [false, true] {
+            let actions = ChatListSwipeActionsPresentation.trailingActions(
+                isArchived: isArchived,
+                selfMembership: .left,
+                leaveRequestPending: true,
+                isMuted: false
+            )
+            #expect(actions.contains(.delete), "archived=\(isArchived) must offer the local delete")
+            #expect(!actions.contains(.leave))
+            #expect(actions.contains(isArchived ? .unarchive : .archive))
+        }
+    }
+
+    // MARK: - Membership actions
+
+    @Test func activeMemberShowsLeaveAndArchive() {
+        let actions = ChatListSwipeActionsPresentation.trailingActions(
+            isArchived: false,
+            selfMembership: .member,
+            leaveRequestPending: false,
+            isMuted: false
+        )
+        #expect(actions.contains(.leave))
+        #expect(actions.contains(.archive))
+        #expect(!actions.contains(.delete))
+        #expect(!actions.contains(.unarchive))
+    }
+
+    @Test func archivedActiveMemberShowsUnarchiveAndLeave() {
+        let actions = ChatListSwipeActionsPresentation.trailingActions(
+            isArchived: true,
+            selfMembership: .member,
+            leaveRequestPending: false,
+            isMuted: false
+        )
+        #expect(actions.contains(.unarchive))
+        #expect(actions.contains(.leave))
+        #expect(!actions.contains(.delete))
+        #expect(!actions.contains(.archive))
+    }
+
+    @Test func archivedInactiveMemberShowsUnarchiveAndDelete() {
+        let actions = ChatListSwipeActionsPresentation.trailingActions(
+            isArchived: true,
+            selfMembership: .left,
+            leaveRequestPending: false,
+            isMuted: false
+        )
+        #expect(actions.contains(.unarchive))
+        #expect(actions.contains(.delete))
+        #expect(!actions.contains(.leave))
+        #expect(!actions.contains(.archive))
+    }
+
+    // MARK: - Mute and read/pin actions
+
+    @Test func unmutedRowOffersMuteOnly() {
+        let actions = ChatListSwipeActionsPresentation.trailingActions(
+            isArchived: false,
+            selfMembership: .member,
+            leaveRequestPending: false,
+            isMuted: false
+        )
+        #expect(actions.contains(.mute))
+        #expect(!actions.contains(.unmute))
+    }
+
+    @Test func mutedRowOffersUnmuteOnly() {
+        let actions = ChatListSwipeActionsPresentation.trailingActions(
+            isArchived: false,
+            selfMembership: .member,
+            leaveRequestPending: false,
+            isMuted: true
+        )
+        #expect(actions.contains(.unmute))
+        #expect(!actions.contains(.mute))
+    }
+
+    @Test func leadingSwipeOffersReadAndUnpinForUnreadPinnedRows() {
+        let actions = ChatListSwipeActionsPresentation.leadingActions(
+            hasUnread: true,
+            isPinned: true,
+            isArchived: false
+        )
+        #expect(actions.contains(.read))
+        #expect(!actions.contains(.unread))
+        #expect(actions.contains(.unpin))
+        #expect(!actions.contains(.pin))
+    }
+
+    @Test func leadingSwipeOffersUnreadAndPinForReadUnpinnedRows() {
+        let actions = ChatListSwipeActionsPresentation.leadingActions(
+            hasUnread: false,
+            isPinned: false,
+            isArchived: false
+        )
+        #expect(actions.contains(.unread))
+        #expect(!actions.contains(.read))
+        #expect(actions.contains(.pin))
+        #expect(!actions.contains(.unpin))
+    }
+
+    /// A muted member with a leave outstanding keeps only archiving: the mute
+    /// toggle is withheld along with both destructive actions.
+    @Test func pendingLeaveOffersOnlyArchiveControl() {
+        let actions = ChatListSwipeActionsPresentation.trailingActions(
+            isArchived: false,
+            selfMembership: .member,
+            leaveRequestPending: true,
+            isMuted: true
+        )
+        #expect(actions == [.archive])
+    }
+
+    @Test func archivedRowsKeepReadControlButDoNotOfferPinning() {
+        let actions = ChatListSwipeActionsPresentation.leadingActions(
+            hasUnread: false,
+            isPinned: false,
+            isArchived: true
+        )
+        #expect(actions == [.unread])
+    }
+
+    // MARK: - Bulk selection
+
+    @Test func projectedActionsControlGestures() {
+        let hints = PresentedChatRowFfi.testActions(unpin: true, mute: true, restore: true, delete: true)
+        #expect(ChatListSwipeActionsPresentation.leadingActions(hints) == [.unpin])
+        #expect(ChatListSwipeActionsPresentation.trailingActions(hints, isMuted: false) == [.unarchive, .mute, .delete])
+        #expect(ChatListSwipeActionsPresentation.trailingActions(hints, isMuted: true) == [.unarchive, .unmute, .delete])
+        let pending = PresentedChatRowFfi.testActions(archive: true)
+        #expect(ChatListSwipeActionsPresentation.leadingActions(pending).isEmpty)
+        #expect(ChatListSwipeActionsPresentation.trailingActions(pending, isMuted: false) == [.archive])
+    }
+
+    @Test func bulkLocalDeleteRequiresEverySelectedMembershipToBeInactive() {
+        #expect(!ChatListSelection.canDeleteLocally([]))
+        #expect(ChatListSelection.canDeleteLocally([.deleteLocally]))
+        #expect(ChatListSelection.canDeleteLocally([.deleteLocally, .deleteLocally]))
+        #expect(!ChatListSelection.canDeleteLocally([.leave]))
+        #expect(!ChatListSelection.canDeleteLocally([.deleteLocally, .leave]))
+        #expect(!ChatListSelection.canDeleteLocally([nil]))
+        #expect(!ChatListSelection.canDeleteLocally([.deleteLocally, nil]))
+    }
 }
 
 struct ChatListSwipeActionOrderTests {

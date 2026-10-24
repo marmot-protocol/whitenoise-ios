@@ -60,10 +60,12 @@ private struct TimelineTailVisibilityHarness: View {
 }
 
 @MainActor
+@Suite(.tags(.uiHosting))
 struct ConversationTailVisibilityTests {
     private static let sentinelID = TimelineTailVisibilityHarness.bottomSentinelID
 
     private static let settleTimeout = Duration.seconds(20)
+    // A loaded CI runner can starve the main actor for the whole timeout.
     private static let minimumSettleSchedulingOpportunities = 400
 
     /// Waits for the condition the caller is about to assert, rather than for
@@ -97,19 +99,14 @@ struct ConversationTailVisibilityTests {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
 
-        let deadline = ContinuousClock.now.advanced(by: Self.settleTimeout)
-        var schedulingOpportunities = 0
-        while !isSettled(visible, viewport),
-              schedulingOpportunities < Self.minimumSettleSchedulingOpportunities
-                || ContinuousClock.now < deadline {
-            schedulingOpportunities += 1
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try? await eventually(
+            timeout: Self.settleTimeout,
+            minimumAttempts: Self.minimumSettleSchedulingOpportunities
+        ) { isSettled(visible, viewport) }
         if !isSettled(visible, viewport) {
             Issue.record(
                 """
-                timeline harness never settled within \(Self.settleTimeout) or \
-                \(schedulingOpportunities) main-actor scheduling opportunities. \
+                timeline harness never settled within \(Self.settleTimeout). \
                 Visible: \(visible.sorted())
                 """,
                 sourceLocation: sourceLocation

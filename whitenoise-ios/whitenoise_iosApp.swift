@@ -21,6 +21,29 @@ enum SceneRuntimeAction: Equatable {
     }
 }
 
+/// The runtime side of a scene-phase change, after the app-lock handling that
+/// every phase runs regardless. In the unit-test host (`startsRuntime` false)
+/// foreground activation would re-enter bootstrap from the never-bootstrapped
+/// `.bootstrapping` phase and suspension would park on bootstrap registration
+/// holding the UIKit background assertion, so both collapse to the flag.
+enum SceneRuntimeStep: Equatable {
+    case markSceneActive
+    case startForegroundActivation
+    case markSceneInactive
+    case suspendRuntime
+
+    static func resolve(_ action: SceneRuntimeAction, isInitial: Bool, startsRuntime: Bool) -> Self {
+        switch action {
+        case .activate:
+            isInitial || !startsRuntime ? .markSceneActive : .startForegroundActivation
+        case .remainInactive:
+            .markSceneInactive
+        case .suspend:
+            startsRuntime ? .suspendRuntime : .markSceneInactive
+        }
+    }
+}
+
 @MainActor
 final class BackgroundRuntimeSuspensionTask {
     typealias BeginBackgroundTask = @MainActor (
@@ -95,6 +118,9 @@ struct whitenoise_iosApp: App {
     @State private var appState: AppState
     @State private var appearance: AppAppearanceStore
     @State private var appLockOverlay = AppLockOverlayPresenter()
+    /// False only while the app is hosting a unit-test bundle without the
+    /// `WN_RUN_HOST_BOOTSTRAP=1` opt-in; see `AppLaunchPolicy`.
+    private let startsRuntime = AppLaunchPolicy.shouldStartRuntime()
 
     init() {
         let windowInitStartedAt = ContinuousClock.now
@@ -122,21 +148,27 @@ struct whitenoise_iosApp: App {
                 .appAppearance(appearance)
                 .dismissesKeyboardOnTap()
                 .task {
+                    // Deliberately ahead of the test-host guard so the
+                    // production ordering below stays literally unchanged.
                     appState.noteHostWindowInitialized()
-                    // The path monitor lives in this lazy singleton; touch it
-                    // at launch so connectivity-restored events fire even in
-                    // sessions that never read a media setting.
-                    _ = MediaAutoDownloadStore.shared
+                    if startsRuntime {
+                        // The path monitor lives in this lazy singleton; touch it
+                        // at launch so connectivity-restored events fire even in
+                        // sessions that never read a media setting.
+                        _ = MediaAutoDownloadStore.shared
+                    }
                     handleScenePhase(scenePhase, isInitial: true)
                     appLockOverlay.update(
                         for: appState.appLock.shield,
                         controller: appState.appLock,
                         appearance: appearance
                     )
+                    guard startsRuntime else { return }
                     await appState.bootstrap()
                 }
                 .task(id: "\(appState.runtimeGeneration)/\(appState.canUseRuntimeForLocalForegroundWork)/\(appState.accounts.map { "\($0.accountIdHex):\($0.signedOut)" }.joined())") {
-                    guard appState.canUseRuntimeForLocalForegroundWork,
+                    guard startsRuntime,
+                          appState.canUseRuntimeForLocalForegroundWork,
                           let client = try? appState.currentMarmotClient() else { return }
                     do { try await AttachmentPolicyBridge.synchronize(client) }
                     catch is CancellationError { return }
@@ -154,6 +186,7 @@ struct whitenoise_iosApp: App {
                     appState.scheduleConnectivityCatchUp(connectivityRestored: true)
                 }
                 .onChange(of: appState.activeAccount?.accountIdHex, initial: true) { _, accountIdHex in
+                    guard startsRuntime else { return }
                     MediaAutoDownloadStore.shared.setActiveAccount(accountIdHex)
                 }
                 .onChange(of: appState.appLock.shield) { _, shield in
@@ -172,20 +205,24 @@ struct whitenoise_iosApp: App {
 
     @MainActor
     private func handleScenePhase(_ phase: ScenePhase, isInitial: Bool) {
-        switch SceneRuntimeAction.resolve(phase) {
+        let action = SceneRuntimeAction.resolve(phase)
+        switch action {
         case .activate:
             appState.appLock.handleScenePhaseActive()
             Task { await appState.appLock.requestUnlock() }
-            if isInitial {
-                appState.setAppSceneActive(true)
-            } else {
-                appState.startForegroundActivation()
-            }
         case .remainInactive:
             appState.appLock.handleScenePhaseInactive()
-            appState.setAppSceneActive(false)
         case .suspend:
             appState.appLock.handleScenePhaseBackground()
+        }
+        switch SceneRuntimeStep.resolve(action, isInitial: isInitial, startsRuntime: startsRuntime) {
+        case .markSceneActive:
+            appState.setAppSceneActive(true)
+        case .startForegroundActivation:
+            appState.startForegroundActivation()
+        case .markSceneInactive:
+            appState.setAppSceneActive(false)
+        case .suspendRuntime:
             beginBackgroundRuntimeSuspension()
         }
     }

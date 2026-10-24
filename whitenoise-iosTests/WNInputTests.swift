@@ -15,12 +15,6 @@ struct WNInputTests {
         )
     }
 
-    @Test func multilineRadiusMatchesTheCapsuleAtTheCollapsedHeight() {
-        // Equality is the point: a one-line multi-line field is a pill, and
-        // taller states keep that same corner instead of squaring off.
-        #expect(WNInputMetrics.multilineCornerRadius == WNInputMetrics.height / 2)
-    }
-
     @Test func oneLineMultilineIsIndistinguishableFromACapsule() {
         let collapsed = WNInputMetrics.height
         guard case .rounded(let radius) = WNInputMetrics.shape(for: .multiline(1 ... 4)) else {

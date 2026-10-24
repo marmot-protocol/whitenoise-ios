@@ -171,7 +171,3 @@ struct ConversationEditRecordsSourcingTests {
         )
     }
 }
-
-private func hex(_ byte: String) -> String {
-    String(repeating: byte, count: 32)
-}

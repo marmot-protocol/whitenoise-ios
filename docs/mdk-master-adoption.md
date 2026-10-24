@@ -81,10 +81,9 @@ current finding against the published release. The user asked to defer it.
 
 This was observed on the earlier `dcb3c1c3` local snapshot.
 
-Reproduction is in `AccountAttentionCreationTests`. It is an opt-in manual
-integration diagnostic: set `WN_RUN_ATTENTION_CREATION_DIAGNOSTIC=1` in the test
-process environment. It requires working relay publication/readiness and is not
-part of the default offline regression gate.
+The env-gated `AccountAttentionCreationTests` diagnostic was removed in the
+test-suite cleanup; its reproduction lives in git history at the commit before
+that deletion.
 
 A build-36 run against 0.10.0 failed the first identity's `networkReady`
 prerequisite (including with attention disabled). That run did not establish a

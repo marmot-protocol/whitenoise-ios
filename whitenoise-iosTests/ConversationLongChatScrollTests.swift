@@ -322,17 +322,18 @@ private struct LongChatScrollHarness: View {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .tags(.runtime, .uiHosting), .marmotRuntimeConcurrencyLimit, .closesTestRuntimes)
 struct ConversationLongChatScrollTests {
     private static let settleTimeout = Duration.seconds(20)
 
-    private func settle(_ window: UIWindow, until isSettled: () -> Bool) async throws {
-        let deadline = ContinuousClock.now.advanced(by: Self.settleTimeout)
-        while true {
+    private func settle(
+        _ window: UIWindow,
+        sourceLocation: SourceLocation = #_sourceLocation,
+        until isSettled: () -> Bool
+    ) async throws {
+        try await eventually(timeout: Self.settleTimeout, sourceLocation: sourceLocation) {
             window.layoutIfNeeded()
-            if isSettled() { return }
-            guard ContinuousClock.now < deadline else { return }
-            try await Task.sleep(for: .milliseconds(10))
+            return isSettled()
         }
     }
 
@@ -349,7 +350,9 @@ struct ConversationLongChatScrollTests {
         #expect(MessageBodyCollapsePresentation.shouldCollapse(fixture.rows.last?.initialRecord.plaintext ?? ""))
 
         let model = LongChatStressModel()
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = try TestRuntimeScope.own(AppState.test(
+            client: TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot: true)
+        ))
         var lastViewport: TimelineBottomViewport?
         var visibleTargets = Set<String>()
         var olderPageRequests = 0

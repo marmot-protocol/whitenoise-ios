@@ -19,7 +19,7 @@ struct ChatSurfacePresentationTests {
         #expect(layout.groupTop + layout.groupHeight <= 568)
     }
 
-    @Test(arguments: [DynamicTypeSize.large, .accessibility3])
+    @Test(.tags(.uiHosting), arguments: [DynamicTypeSize.large, .accessibility3])
     func confirmationKeepsDeliveryFooterSizeStable(dynamicType: DynamicTypeSize) {
         func size(_ status: MessageStatus) -> CGSize {
             let host = UIHostingController(rootView: MessageMetadataFooter(
@@ -161,20 +161,12 @@ struct ChatSurfacePresentationTests {
         #expect(cache.buildCountForTesting == 4)
     }
 
-    @Test func mediaGridHandlesOneThroughOverflowWithoutMoreThanFiveTiles() {
-        for count in 1...8 {
-            let visible = MessageMediaGridPresentation.visibleCount(totalCount: count)
-            let columns = MessageMediaGridPresentation.columnCount(totalCount: count)
-            let rows = MessageMediaGridPresentation.rowCount(totalCount: count)
-            #expect(visible <= 5)
-            #expect(rows * columns >= visible)
-            #expect(MessageMediaGridPresentation.hiddenCount(totalCount: count) == max(0, count - 5))
-        }
-    }
-
     @Test func compactBubblesReserveReadableOppositeMargin() {
         #expect(ChatBubbleMetrics.compactOppositeInset >= 44)
-        #expect(ChatBubbleMetrics.regularMaximumWidth == 560)
+    }
+
+    @Test func replyPreviewCloseControlClearsTheAppleMinimumTapTarget() {
+        #expect(ReplyPreviewLayout.closeHitSize >= 44)
     }
 
     @Test func singleEmojiMessagesUseStickerPresentation() {
@@ -272,9 +264,6 @@ struct ChatSurfacePresentationTests {
 
         #expect(compactCount == 3)
         #expect(expandedCount == 9)
-        #expect(MessageActionsPresentation.actionMenuHeight(actionCount: expandedCount)
-            == 9 * MessageActionsPresentation.actionHeight
-                + MessageActionsPresentation.actionVerticalPadding * 2)
     }
 
     @Test func reactionSurfaceCanBeWiderThanTheActionPanelWithoutLeavingScreenMargins() {

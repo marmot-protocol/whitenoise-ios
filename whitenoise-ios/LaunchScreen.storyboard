@@ -16,6 +16,7 @@
                         <subviews>
                             <imageView userInteractionEnabled="NO" contentMode="scaleAspectFit" image="WhiteNoiseMark" translatesAutoresizingMaskIntoConstraints="NO" id="launch-mark">
                                 <rect key="frame" x="100.5" y="359.6923076923" width="201" height="154.6153846154"/>
+                                <accessibility key="accessibilityConfiguration" identifier="launch.mark"/>
                                 <constraints>
                                     <constraint firstAttribute="width" secondItem="launch-mark" secondAttribute="height" multiplier="598:460" id="mark-aspect"/>
                                 </constraints>

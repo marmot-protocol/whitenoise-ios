@@ -135,11 +135,13 @@ struct AgentEventPresentationTests {
     @MainActor
     @Test func agentOperationTimelineRowIsVisibleWithoutStreamingDebug() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testAgentGroup()
         )
         let operation = timelineRecord(
             messageIdHex: hex("aa"),
+            sourceMessageIdHex: .absent,
+            groupIdHex: hex("bb"),
             sender: hex("11"),
             plaintext: #"{"v":1,"status":"started","text":"Searching"}"#,
             kind: MessageSemantics.kindAgentOperation,
@@ -165,6 +167,8 @@ struct AgentEventPresentationTests {
 
         let updated = timelineRecord(
             messageIdHex: operation.messageIdHex,
+            sourceMessageIdHex: .absent,
+            groupIdHex: hex("bb"),
             sender: operation.sender,
             plaintext: operation.plaintext,
             kind: operation.kind,
@@ -245,40 +249,6 @@ private func agentRecord(
     )
 }
 
-private func timelineRecord(
-    messageIdHex: String,
-    sender: String,
-    plaintext: String,
-    kind: UInt64,
-    tags: [MessageTagFfi],
-    timelineAt: UInt64
-) -> TimelineMessageRecordFfi {
-    TimelineMessageRecordFfi(
-        messageIdHex: messageIdHex,
-        sourceMessageIdHex: nil,
-        direction: "received",
-        groupIdHex: hex("bb"),
-        sender: sender,
-        plaintext: plaintext,
-        contentTokens: MarkdownDocumentFfi.emptyDocument,
-        kind: kind,
-        tags: tags,
-        timelineAt: timelineAt,
-        receivedAt: timelineAt,
-        replyToMessageIdHex: nil,
-        replyPreview: nil,
-        mediaJson: nil,
-        media: [],
-        agentTextStreamJson: nil,
-        groupSystem: nil,
-        reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
-        edit: nil,
-        deleted: false,
-        deletedByMessageIdHex: nil,
-        invalidationStatus: nil
-    )
-}
-
 private func testAgentGroup() -> AppGroupRecordFfi {
     AppGroupRecordFfi(
         groupIdHex: hex("bb"),
@@ -306,8 +276,4 @@ private func testAgentGroup() -> AppGroupRecordFfi {
         welcomerAccountIdHex: nil,
         viaWelcomeMessageIdHex: nil
     )
-}
-
-private func hex(_ byte: String) -> String {
-    String(repeating: byte, count: 32)
 }
