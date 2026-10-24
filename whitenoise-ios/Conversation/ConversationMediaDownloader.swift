@@ -236,7 +236,7 @@ final class ConversationMediaDownloader {
                 if let target {
                     let state = try await client.marmot.attachmentTransferSnapshot(accountRef: accountRef,
                         groupIdHex: groupIdHex, targets: [target]).items.first?.state
-                    guard let state, ![.unavailable, .removed, .cancelled].contains(state) else {
+                    guard let state, ![.unavailable, .removed, .cleanedBySetting, .cancelled].contains(state) else {
                         throw AttachmentReadError.stale
                     }
                 }

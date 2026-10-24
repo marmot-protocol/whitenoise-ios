@@ -3766,6 +3766,12 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func attachmentHistoryVersion(accountRef: String, groupIdHex: String) async throws  -> AttachmentHistoryVersion
 
     /**
+     * The account's "Keep media" setting: `Forever` unless the user chose
+     * a window. Needs no started runtime.
+     */
+    func attachmentKeepMedia(accountRef: String) async throws  -> AttachmentKeepMediaFfi
+
+    /**
      * Local-only metadata for up to 64 original source slots in one group.
      * Results preserve input order/duplicates. No bytes are loaded, jobs queued,
      * downloads started or engine state hydrated. Requires no runtime start.
@@ -5129,6 +5135,18 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func setAttachmentDownloadPolicy(accountRef: String, policy: AttachmentDownloadPolicyFfi) async throws
 
     /**
+     * Sets the account's "Keep media" setting, then removes every retained
+     * attachment older than the new window, and every unfinished automatic
+     * download past it, and returns how many it removed. Age is the later of
+     * the message's received time and the user's last explicit download of
+     * that attachment. They show as `CleanedBySetting` (download again
+     * allowed), and media-store space is freed before this returns.
+     * `Forever` removes nothing. While the runtime runs, the account worker
+     * keeps applying the window as attachments age.
+     */
+    func setAttachmentKeepMedia(accountRef: String, keep: AttachmentKeepMediaFfi) async throws  -> UInt64
+
+    /**
      * Persist local forensic audit-log recording settings and return the stored
      * value.
      *
@@ -6188,6 +6206,27 @@ open func attachmentHistoryVersion(accountRef: String, groupIdHex: String)async 
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
             liftFunc: FfiConverterTypeAttachmentHistoryVersion_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * The account's "Keep media" setting: `Forever` unless the user chose
+     * a window. Needs no started runtime.
+     */
+open func attachmentKeepMedia(accountRef: String)async throws  -> AttachmentKeepMediaFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_attachment_keep_media(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAttachmentKeepMediaFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -10265,6 +10304,33 @@ open func setAttachmentDownloadPolicy(accountRef: String, policy: AttachmentDown
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
             liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Sets the account's "Keep media" setting, then removes every retained
+     * attachment older than the new window, and every unfinished automatic
+     * download past it, and returns how many it removed. Age is the later of
+     * the message's received time and the user's last explicit download of
+     * that attachment. They show as `CleanedBySetting` (download again
+     * allowed), and media-store space is freed before this returns.
+     * `Forever` removes nothing. While the runtime runs, the account worker
+     * keeps applying the window as attachments age.
+     */
+open func setAttachmentKeepMedia(accountRef: String, keep: AttachmentKeepMediaFfi)async throws  -> UInt64  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_set_attachment_keep_media(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeAttachmentKeepMediaFfi_lower(keep)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -28575,12 +28641,24 @@ public func FfiConverterTypeOnboardingDevicePackageFfi_lower(_ value: Onboarding
 public struct OnboardingFindingFfi {
     public var issue: OnboardingIssueFfi
     public var endpoint: String?
+    public var context: OnboardingFindingContextFfi
+    public var purpose: OnboardingCheckPurposeFfi
+    public var outcome: OnboardingCheckOutcomeFfi
+    public var declaredCapability: OnboardingRelayCapabilityFfi
+    public var actions: [OnboardingActionFfi]
+    public var observedRevision: UInt64?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(issue: OnboardingIssueFfi, endpoint: String?) {
+    public init(issue: OnboardingIssueFfi, endpoint: String?, context: OnboardingFindingContextFfi, purpose: OnboardingCheckPurposeFfi, outcome: OnboardingCheckOutcomeFfi, declaredCapability: OnboardingRelayCapabilityFfi, actions: [OnboardingActionFfi], observedRevision: UInt64?) {
         self.issue = issue
         self.endpoint = endpoint
+        self.context = context
+        self.purpose = purpose
+        self.outcome = outcome
+        self.declaredCapability = declaredCapability
+        self.actions = actions
+        self.observedRevision = observedRevision
     }
 }
 
@@ -28597,12 +28675,36 @@ extension OnboardingFindingFfi: Equatable, Hashable {
         if lhs.endpoint != rhs.endpoint {
             return false
         }
+        if lhs.context != rhs.context {
+            return false
+        }
+        if lhs.purpose != rhs.purpose {
+            return false
+        }
+        if lhs.outcome != rhs.outcome {
+            return false
+        }
+        if lhs.declaredCapability != rhs.declaredCapability {
+            return false
+        }
+        if lhs.actions != rhs.actions {
+            return false
+        }
+        if lhs.observedRevision != rhs.observedRevision {
+            return false
+        }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(issue)
         hasher.combine(endpoint)
+        hasher.combine(context)
+        hasher.combine(purpose)
+        hasher.combine(outcome)
+        hasher.combine(declaredCapability)
+        hasher.combine(actions)
+        hasher.combine(observedRevision)
     }
 }
 
@@ -28616,13 +28718,25 @@ public struct FfiConverterTypeOnboardingFindingFfi: FfiConverterRustBuffer {
         return
             try OnboardingFindingFfi(
                 issue: FfiConverterTypeOnboardingIssueFfi.read(from: &buf),
-                endpoint: FfiConverterOptionString.read(from: &buf)
+                endpoint: FfiConverterOptionString.read(from: &buf),
+                context: FfiConverterTypeOnboardingFindingContextFfi.read(from: &buf),
+                purpose: FfiConverterTypeOnboardingCheckPurposeFfi.read(from: &buf),
+                outcome: FfiConverterTypeOnboardingCheckOutcomeFfi.read(from: &buf),
+                declaredCapability: FfiConverterTypeOnboardingRelayCapabilityFfi.read(from: &buf),
+                actions: FfiConverterSequenceTypeOnboardingActionFfi.read(from: &buf),
+                observedRevision: FfiConverterOptionUInt64.read(from: &buf)
         )
     }
 
     public static func write(_ value: OnboardingFindingFfi, into buf: inout [UInt8]) {
         FfiConverterTypeOnboardingIssueFfi.write(value.issue, into: &buf)
         FfiConverterOptionString.write(value.endpoint, into: &buf)
+        FfiConverterTypeOnboardingFindingContextFfi.write(value.context, into: &buf)
+        FfiConverterTypeOnboardingCheckPurposeFfi.write(value.purpose, into: &buf)
+        FfiConverterTypeOnboardingCheckOutcomeFfi.write(value.outcome, into: &buf)
+        FfiConverterTypeOnboardingRelayCapabilityFfi.write(value.declaredCapability, into: &buf)
+        FfiConverterSequenceTypeOnboardingActionFfi.write(value.actions, into: &buf)
+        FfiConverterOptionUInt64.write(value.observedRevision, into: &buf)
     }
 }
 
@@ -36784,6 +36898,109 @@ extension AttachmentHistoryChangeFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * How long retained attachments are kept on this device, per account
+ * ("Keep media"). Attachments of messages older than the window are
+ * removed automatically and show as `CleanedBySetting`; download again
+ * stays allowed and keeps that attachment for the whole window from the
+ * request.
+ */
+
+public enum AttachmentKeepMediaFfi {
+
+    /**
+     * Nothing is removed automatically. The default.
+     */
+    case forever
+    /**
+     * 365 days.
+     */
+    case oneYear
+    /**
+     * 183 days.
+     */
+    case sixMonths
+    /**
+     * 30 days.
+     */
+    case thirtyDays
+}
+
+
+#if compiler(>=6)
+extension AttachmentKeepMediaFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAttachmentKeepMediaFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AttachmentKeepMediaFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AttachmentKeepMediaFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .forever
+
+        case 2: return .oneYear
+
+        case 3: return .sixMonths
+
+        case 4: return .thirtyDays
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AttachmentKeepMediaFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .forever:
+            writeInt(&buf, Int32(1))
+
+
+        case .oneYear:
+            writeInt(&buf, Int32(2))
+
+
+        case .sixMonths:
+            writeInt(&buf, Int32(3))
+
+
+        case .thirtyDays:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAttachmentKeepMediaFfi_lift(_ buf: RustBuffer) throws -> AttachmentKeepMediaFfi {
+    return try FfiConverterTypeAttachmentKeepMediaFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAttachmentKeepMediaFfi_lower(_ value: AttachmentKeepMediaFfi) -> RustBuffer {
+    return FfiConverterTypeAttachmentKeepMediaFfi.lower(value)
+}
+
+
+extension AttachmentKeepMediaFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * Where moving legacy attachment bodies out of the account database into
  * the media store stands. It runs in the background; nothing is deleted to
  * make room for it.
@@ -37080,6 +37297,12 @@ public enum AttachmentTransferStateFfi {
      * the job readmits once space frees or on explicit Retry.
      */
     case storageBlocked
+    /**
+     * The account's "Keep media" setting removed the body because the
+     * message is older than its window. Download again is allowed, as for
+     * `Removed`.
+     */
+    case cleanedBySetting
 }
 
 
@@ -37132,6 +37355,8 @@ public struct FfiConverterTypeAttachmentTransferStateFfi: FfiConverterRustBuffer
         case 17: return .retryExhausted
 
         case 18: return .storageBlocked
+
+        case 19: return .cleanedBySetting
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -37211,6 +37436,10 @@ public struct FfiConverterTypeAttachmentTransferStateFfi: FfiConverterRustBuffer
 
         case .storageBlocked:
             writeInt(&buf, Int32(18))
+
+
+        case .cleanedBySetting:
+            writeInt(&buf, Int32(19))
 
         }
     }
@@ -44271,6 +44500,181 @@ extension OnboardingActionFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
+public enum OnboardingCheckOutcomeFfi {
+
+    case unknown
+    case success
+    case failure
+}
+
+
+#if compiler(>=6)
+extension OnboardingCheckOutcomeFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingCheckOutcomeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingCheckOutcomeFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingCheckOutcomeFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .unknown
+
+        case 2: return .success
+
+        case 3: return .failure
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OnboardingCheckOutcomeFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .unknown:
+            writeInt(&buf, Int32(1))
+
+
+        case .success:
+            writeInt(&buf, Int32(2))
+
+
+        case .failure:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingCheckOutcomeFfi_lift(_ buf: RustBuffer) throws -> OnboardingCheckOutcomeFfi {
+    return try FfiConverterTypeOnboardingCheckOutcomeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingCheckOutcomeFfi_lower(_ value: OnboardingCheckOutcomeFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingCheckOutcomeFfi.lower(value)
+}
+
+
+extension OnboardingCheckOutcomeFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum OnboardingCheckPurposeFfi {
+
+    case unknown
+    case recordLookup
+    case declarationValidation
+    case directoryQuery
+    case sourceFreshness
+    case eventPublication
+}
+
+
+#if compiler(>=6)
+extension OnboardingCheckPurposeFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingCheckPurposeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingCheckPurposeFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingCheckPurposeFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .unknown
+
+        case 2: return .recordLookup
+
+        case 3: return .declarationValidation
+
+        case 4: return .directoryQuery
+
+        case 5: return .sourceFreshness
+
+        case 6: return .eventPublication
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OnboardingCheckPurposeFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .unknown:
+            writeInt(&buf, Int32(1))
+
+
+        case .recordLookup:
+            writeInt(&buf, Int32(2))
+
+
+        case .declarationValidation:
+            writeInt(&buf, Int32(3))
+
+
+        case .directoryQuery:
+            writeInt(&buf, Int32(4))
+
+
+        case .sourceFreshness:
+            writeInt(&buf, Int32(5))
+
+
+        case .eventPublication:
+            writeInt(&buf, Int32(6))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingCheckPurposeFfi_lift(_ buf: RustBuffer) throws -> OnboardingCheckPurposeFfi {
+    return try FfiConverterTypeOnboardingCheckPurposeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingCheckPurposeFfi_lower(_ value: OnboardingCheckPurposeFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingCheckPurposeFfi.lower(value)
+}
+
+
+extension OnboardingCheckPurposeFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
 public enum OnboardingDeviceDiscoveryFfi {
 
     case noneFound
@@ -44348,6 +44752,104 @@ extension OnboardingDeviceDiscoveryFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
+public enum OnboardingFindingContextFfi {
+
+    case unknown
+    case recordDiscovery
+    case publishedDeclaration
+    case declaredRoute
+    case repairApproval
+    case repairPublication
+}
+
+
+#if compiler(>=6)
+extension OnboardingFindingContextFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingFindingContextFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingFindingContextFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingFindingContextFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .unknown
+
+        case 2: return .recordDiscovery
+
+        case 3: return .publishedDeclaration
+
+        case 4: return .declaredRoute
+
+        case 5: return .repairApproval
+
+        case 6: return .repairPublication
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OnboardingFindingContextFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .unknown:
+            writeInt(&buf, Int32(1))
+
+
+        case .recordDiscovery:
+            writeInt(&buf, Int32(2))
+
+
+        case .publishedDeclaration:
+            writeInt(&buf, Int32(3))
+
+
+        case .declaredRoute:
+            writeInt(&buf, Int32(4))
+
+
+        case .repairApproval:
+            writeInt(&buf, Int32(5))
+
+
+        case .repairPublication:
+            writeInt(&buf, Int32(6))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingFindingContextFfi_lift(_ buf: RustBuffer) throws -> OnboardingFindingContextFfi {
+    return try FfiConverterTypeOnboardingFindingContextFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingFindingContextFfi_lower(_ value: OnboardingFindingContextFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingFindingContextFfi.lower(value)
+}
+
+
+extension OnboardingFindingContextFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
 public enum OnboardingIssueFfi {
 
     case missing
@@ -44371,6 +44873,7 @@ public enum OnboardingIssueFfi {
     case multiDeviceUnsupported
     case otherInstallationPossible
     case discoveryIncomplete
+    case inspectionCompleted
 }
 
 
@@ -44429,6 +44932,8 @@ public struct FfiConverterTypeOnboardingIssueFfi: FfiConverterRustBuffer {
         case 20: return .otherInstallationPossible
 
         case 21: return .discoveryIncomplete
+
+        case 22: return .inspectionCompleted
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -44520,6 +45025,10 @@ public struct FfiConverterTypeOnboardingIssueFfi: FfiConverterRustBuffer {
 
         case .discoveryIncomplete:
             writeInt(&buf, Int32(21))
+
+
+        case .inspectionCompleted:
+            writeInt(&buf, Int32(22))
 
         }
     }
@@ -52005,6 +52514,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_attachment_history_version() != 22193) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_attachment_keep_media() != 65370) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_attachment_local_assets() != 38276) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -52633,6 +53145,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_attachment_download_policy() != 9264) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_attachment_keep_media() != 15472) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_settings() != 36141) {

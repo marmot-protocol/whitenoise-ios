@@ -346,11 +346,14 @@ before every release tag.
       tap surfaces the failure, and only the following Retry tap starts a fresh
       download.
 
-## MarmotKit 0.14.0 nightly integration
+## MarmotKit 0.14.0 upgrade
 
 - [ ] Upgrade a signed-in install in place. Accounts, chats and notifications
       keep working (the deployment keeps the existing keychain service), and a
       new group can still send photos and set a group image.
+- [ ] Turn on Airplane Mode, create a group, and send a message in it. The
+      message stays pending instead of failing, and delivers once the device
+      is back online (mdk#2562).
 - [ ] Make a group change while the group is catching up (for example, admin
       device offline while two other admins change the group, then reconnect
       and immediately rename). The "This chat may be out of date" alert appears

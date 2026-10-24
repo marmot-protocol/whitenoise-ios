@@ -131,8 +131,9 @@ Install a formal release or a dated nightly using its version:
 ./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-Nightlies are for testing only and are deleted after 30 days; pin a formal
-release before shipping. For local reproduction only,
+The app pins the formal MarmotKit 0.14.0 release. Nightlies are for testing only
+and are deleted after 30 days; pin a formal release before shipping. For local
+reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
 Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten

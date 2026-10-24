@@ -125,7 +125,7 @@ extension MarmotClient {
                     guard let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target)
                     else { throw AttachmentReadError.stale }
                     return data
-                case .unavailable, .cancelled, .removed, .failed, .policyBlocked, .paused,
+                case .unavailable, .cancelled, .removed, .cleanedBySetting, .failed, .policyBlocked, .paused,
                      .previouslyAcquiredUnavailable, .completedUnretained, .retryExhausted, .notRequested:
                     throw AttachmentReadError.unavailable
                 case .storageBlocked:
@@ -189,7 +189,8 @@ nonisolated enum AttachmentAcquisitionPresentation {
         case .queued, .downloading, .verifyingCiphertext, .decrypting, .verifyingPlaintext,
              .ready, .retryScheduled: true
         case .unavailable, .notRequested, .paused, .failed, .policyBlocked, .cancelled, .removed,
-             .previouslyAcquiredUnavailable, .completedUnretained, .retryExhausted, .storageBlocked: false
+             .previouslyAcquiredUnavailable, .completedUnretained, .retryExhausted, .storageBlocked,
+             .cleanedBySetting: false
         }
     }
 }

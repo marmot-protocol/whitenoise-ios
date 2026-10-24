@@ -122,7 +122,8 @@ nonisolated enum AttachmentTransferPresentation {
         case .failed: L10n.string("Download failed")
         case .cancelled: L10n.string("Cancelled")
         case .paused: L10n.string("Paused")
-        case .removed: L10n.string("Download removed")
+        // "Keep media" removals allow downloading again, like an explicit removal.
+        case .removed, .cleanedBySetting: L10n.string("Download removed")
         case .previouslyAcquiredUnavailable: L10n.string("Download unavailable")
         case .completedUnretained: L10n.string("Download not saved")
         case .retryExhausted: L10n.string("Download retry limit reached")

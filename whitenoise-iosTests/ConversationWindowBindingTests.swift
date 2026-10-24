@@ -80,8 +80,7 @@ struct ConversationWindowBindingTests {
             store.setDraft(draft("next message"), accountRef: account.label, groupIdHex: group.groupIdHex)
             await store.flush()
             #expect(try await client.selectedMessageDraft(accountRef: account.label, groupIdHex: group.groupIdHex).draft?.content == "send me")
-            // The composer's token-aware send: local admission does not wait on the
-            // fixture's unreachable relay, which the blocking send now reports.
+            // The composer's token-aware send; local admission doesn't wait on the relay.
             _ = try await client.sendDraftWithClientToken(accountRef: account.label, revision: revision,
                 attachments: [], clientToken: UUID().uuidString)
             await store.finishSend(accountRef: account.label, groupIdHex: group.groupIdHex, accepted: true)

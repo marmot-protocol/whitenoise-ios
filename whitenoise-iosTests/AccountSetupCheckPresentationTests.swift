@@ -37,7 +37,7 @@ struct AccountSetupCheckPresentationTests {
 
     @Test func busyChecksHideErrorsAndConnectionFailureTakesPrecedence() {
         let presentation = AccountSetupCheckPresentation(
-            check: .device, snapshot: snapshot(status: .retryableFailure, findings: [.init(issue: .unreachable, endpoint: nil)])
+            check: .device, snapshot: snapshot(status: .retryableFailure, findings: [onboardingFinding(issue: .unreachable, endpoint: nil)])
         )
         #expect(presentation.failureMessages(isBusy: true, hasConnectionFailure: true, operationFailure: .settingsChanged).isEmpty)
         #expect(presentation.failureMessages(isBusy: false, hasConnectionFailure: true, operationFailure: .settingsChanged) == [
@@ -49,7 +49,7 @@ struct AccountSetupCheckPresentationTests {
     }
 
     @Test func waitingForSignerShowsFindingsOnlyForSecureMessaging() {
-        let reviewed = snapshot(status: .waitingForSigner, findings: [.init(issue: .unreachable, endpoint: nil)])
+        let reviewed = snapshot(status: .waitingForSigner, findings: [onboardingFinding(issue: .unreachable, endpoint: nil)])
         let device = AccountSetupCheckPresentation(check: .device, snapshot: reviewed)
         let messaging = AccountSetupCheckPresentation(check: .secureMessaging, snapshot: reviewed)
         #expect(device.failureMessages(isBusy: false, hasConnectionFailure: false, operationFailure: nil).isEmpty)
