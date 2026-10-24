@@ -401,14 +401,16 @@ struct RuntimeOwnershipTests {
         var first: Marmot? = try Marmot.newWithCursorPersistence(
             rootPath: root.path,
             relayUrls: ["wss://relay.invalid.test"],
-            cursorPersistence: .advance
+            cursorPersistence: .advance,
+            deployment: marmotDeploymentWhiteNoise()
         )
 
         do {
             _ = try Marmot.newWithCursorPersistence(
                 rootPath: root.path,
                 relayUrls: ["wss://relay.invalid.test"],
-                cursorPersistence: .frozen
+                cursorPersistence: .frozen,
+                deployment: marmotDeploymentWhiteNoise()
             )
             Issue.record("Expected the second runtime owner to be rejected")
         } catch let error as MarmotKitError {
@@ -421,7 +423,8 @@ struct RuntimeOwnershipTests {
         let replacement = try Marmot.newWithCursorPersistence(
             rootPath: root.path,
             relayUrls: ["wss://relay.invalid.test"],
-            cursorPersistence: .advance
+            cursorPersistence: .advance,
+            deployment: marmotDeploymentWhiteNoise()
         )
         try await replacement.shutdownAndClose()
     }

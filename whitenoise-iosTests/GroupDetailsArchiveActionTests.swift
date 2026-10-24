@@ -56,54 +56,56 @@ struct GroupDetailsArchiveActionTests {
         #expect(changedRecords.map(\.archived) == [true])
     }
 
-    @Test func profileUpdateRejectsConcurrentPublishUntilFirstCompletes() async throws {
-        let appState = AppState.test()
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
-        )
-        let model = GroupDetailsViewModel()
-        let publisher = GroupProfilePublishProbe()
-
-        model.conversation = conversation
-        model.renameDraft = "Renamed group"
-        model.descriptionDraft = "A shared description"
-        model.updateGroupProfileForTesting = { accountRef, groupIdHex, name, description in
-            try await publisher.publish(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                name: name,
-                description: description
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func profileUpdateRejectsConcurrentPublishUntilFirstCompletes() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
             )
+            let model = GroupDetailsViewModel()
+            let publisher = GroupProfilePublishProbe()
+
+            model.conversation = conversation
+            model.renameDraft = "Renamed group"
+            model.descriptionDraft = "A shared description"
+            model.updateGroupProfileForTesting = { accountRef, groupIdHex, name, description in
+                try await publisher.publish(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    name: name,
+                    description: description
+                )
+            }
+
+            let first = Task { @MainActor in
+                await model.updateProfile(using: appState)
+            }
+            await publisher.waitUntilStarted()
+
+            #expect(model.membershipActionInFlight)
+
+            let second = Task { @MainActor in
+                await model.updateProfile(using: appState)
+            }
+            _ = await second.value
+
+            #expect(publisher.requests == [
+                GroupProfilePublishProbe.Request(
+                    accountRef: "account-1",
+                    groupIdHex: groupIdHex,
+                    name: "Renamed group",
+                    description: "A shared description"
+                ),
+            ])
+
+            publisher.completeFirst()
+            _ = await first.value
+
+            #expect(!model.membershipActionInFlight)
         }
-
-        let first = Task { @MainActor in
-            await model.updateProfile(using: appState)
-        }
-        await publisher.waitUntilStarted()
-
-        #expect(model.membershipActionInFlight)
-
-        let second = Task { @MainActor in
-            await model.updateProfile(using: appState)
-        }
-        _ = await second.value
-
-        #expect(publisher.requests == [
-            GroupProfilePublishProbe.Request(
-                accountRef: "account-1",
-                groupIdHex: groupIdHex,
-                name: "Renamed group",
-                description: "A shared description"
-            ),
-        ])
-
-        publisher.completeFirst()
-        _ = await first.value
-
-        #expect(!model.membershipActionInFlight)
     }
 
     @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func updateGroupImageRejectsConcurrentPublishUntilFirstCompletes() async throws {
@@ -258,37 +260,39 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test func clearingDescriptionPublishesTheExplicitEmptyStringSentinel() async throws {
-        let appState = AppState.test()
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(
-                groupIdHex: groupIdHex,
-                archived: false,
-                description: "Existing description"
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func clearingDescriptionPublishesTheExplicitEmptyStringSentinel() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(
+                    groupIdHex: groupIdHex,
+                    archived: false,
+                    description: "Existing description"
+                )
             )
-        )
-        let model = GroupDetailsViewModel()
-        var requests: [(accountRef: String, groupIdHex: String, description: String)] = []
+            let model = GroupDetailsViewModel()
+            var requests: [(accountRef: String, groupIdHex: String, description: String)] = []
 
-        model.conversation = conversation
-        model.renameDraft = conversation.group.name
-        model.descriptionDraft = " \n\t "
-        model.updateGroupProfileForTesting = { accountRef, groupIdHex, _, description in
-            requests.append((accountRef, groupIdHex, description))
-            return SendSummaryFfi(published: 1, messageIds: ["description-update"])
+            model.conversation = conversation
+            model.renameDraft = conversation.group.name
+            model.descriptionDraft = " \n\t "
+            model.updateGroupProfileForTesting = { accountRef, groupIdHex, _, description in
+                requests.append((accountRef, groupIdHex, description))
+                return SendSummaryFfi(published: 1, messageIds: ["description-update"])
+            }
+
+            let succeeded = await model.updateProfile(using: appState)
+
+            #expect(succeeded)
+            #expect(requests.count == 1)
+            #expect(requests.first?.accountRef == "account-1")
+            #expect(requests.first?.groupIdHex == groupIdHex)
+            #expect(requests.first?.description == "")
+            #expect(!model.membershipActionInFlight)
         }
-
-        let succeeded = await model.updateProfile(using: appState)
-
-        #expect(succeeded)
-        #expect(requests.count == 1)
-        #expect(requests.first?.accountRef == "account-1")
-        #expect(requests.first?.groupIdHex == groupIdHex)
-        #expect(requests.first?.description == "")
-        #expect(!model.membershipActionInFlight)
     }
 
     @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func groupInfoSavePublishesTextThenImageAndClearsTheImageEdit() async throws {
@@ -539,80 +543,84 @@ struct GroupDetailsArchiveActionTests {
         }
     }
 
-    @Test func endGroupRecordsDurableIntentAndDisablesMessagingImmediately() async throws {
-        let appState = AppState.test()
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let conversation = ConversationViewModel(
-            appState: appState,
-            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
-        )
-        conversation.setManagementStateForTesting(disbandManagementState(
-            disbandingEnabled: true,
-            canDisband: true
-        ))
-        let model = GroupDetailsViewModel()
-        var disbandRequests: [(String, String)] = []
-        var changedRecords: [AppGroupRecordFfi] = []
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func endGroupRecordsDurableIntentAndDisablesMessagingImmediately() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let conversation = ConversationViewModel(
+                appState: appState,
+                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
+            )
+            conversation.setManagementStateForTesting(disbandManagementState(
+                disbandingEnabled: true,
+                canDisband: true
+            ))
+            let model = GroupDetailsViewModel()
+            var disbandRequests: [(String, String)] = []
+            var changedRecords: [AppGroupRecordFfi] = []
 
-        model.conversation = conversation
-        model.onGroupChanged = { changedRecords.append($0) }
-        model.disbandGroupForTesting = { accountRef, groupIdHex in
-            disbandRequests.append((accountRef, groupIdHex))
-            return .pending(requestedAtMs: 1_000)
+            model.conversation = conversation
+            model.onGroupChanged = { changedRecords.append($0) }
+            model.disbandGroupForTesting = { accountRef, groupIdHex in
+                disbandRequests.append((accountRef, groupIdHex))
+                return .pending(requestedAtMs: 1_000)
+            }
+
+            await model.endGroup(using: appState)
+
+            #expect(disbandRequests.count == 1)
+            #expect(disbandRequests.first?.0 == "account-1")
+            #expect(disbandRequests.first?.1 == groupIdHex)
+            #expect(conversation.group.disbanding)
+            #expect(conversation.group.disbandRequest == .pending(requestedAtMs: 1_000))
+            #expect(!conversation.canSendMessages)
+            #expect(
+                conversation.inactiveGroupMessage
+                    == GroupManagementPresentation.disbandingComposerMessage
+            )
+            #expect(changedRecords.map(\.disbanding) == [true])
         }
-
-        await model.endGroup(using: appState)
-
-        #expect(disbandRequests.count == 1)
-        #expect(disbandRequests.first?.0 == "account-1")
-        #expect(disbandRequests.first?.1 == groupIdHex)
-        #expect(conversation.group.disbanding)
-        #expect(conversation.group.disbandRequest == .pending(requestedAtMs: 1_000))
-        #expect(!conversation.canSendMessages)
-        #expect(
-            conversation.inactiveGroupMessage
-                == GroupManagementPresentation.disbandingComposerMessage
-        )
-        #expect(changedRecords.map(\.disbanding) == [true])
     }
 
-    @Test func endGroupEnablesLifecycleAndDisbandsFromOneConfirmation() async throws {
-        let appState = AppState.test()
-        appState.activeAccountRef = "account-1"
-        let groupIdHex = String(repeating: "ab", count: 32)
-        let group = archiveTestGroup(groupIdHex: groupIdHex, archived: false)
-        let conversation = ConversationViewModel(appState: appState, group: group)
-        conversation.setManagementStateForTesting(disbandManagementState(
-            canEnableDisbanding: true
-        ))
-        let model = GroupDetailsViewModel()
-        var enableCount = 0
-        var disbandCount = 0
+    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func endGroupEnablesLifecycleAndDisbandsFromOneConfirmation() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-1"
+            let groupIdHex = String(repeating: "ab", count: 32)
+            let group = archiveTestGroup(groupIdHex: groupIdHex, archived: false)
+            let conversation = ConversationViewModel(appState: appState, group: group)
+            conversation.setManagementStateForTesting(disbandManagementState(
+                canEnableDisbanding: true
+            ))
+            let model = GroupDetailsViewModel()
+            var enableCount = 0
+            var disbandCount = 0
 
-        model.conversation = conversation
-        model.enableGroupDisbandingForTesting = { _, _ in
-            enableCount += 1
-            return GroupMutationResultFfi(
-                summary: SendSummaryFfi(published: 1, messageIds: ["enable"]),
-                details: GroupDetailsFfi(group: group, members: []),
-                managementState: disbandManagementState(
-                    disbandingEnabled: true,
-                    canDisband: true
+            model.conversation = conversation
+            model.enableGroupDisbandingForTesting = { _, _ in
+                enableCount += 1
+                return GroupMutationResultFfi(
+                    summary: SendSummaryFfi(published: 1, messageIds: ["enable"]),
+                    details: GroupDetailsFfi(group: group, members: []),
+                    managementState: disbandManagementState(
+                        disbandingEnabled: true,
+                        canDisband: true
+                    )
                 )
-            )
-        }
-        model.disbandGroupForTesting = { _, _ in
-            disbandCount += 1
-            return .pending(requestedAtMs: 2_000)
-        }
+            }
+            model.disbandGroupForTesting = { _, _ in
+                disbandCount += 1
+                return .pending(requestedAtMs: 2_000)
+            }
 
-        await model.endGroup(using: appState)
+            await model.endGroup(using: appState)
 
-        #expect(enableCount == 1)
-        #expect(disbandCount == 1)
-        #expect(conversation.group.disbanding)
-        #expect(conversation.group.disbandRequest == .pending(requestedAtMs: 2_000))
+            #expect(enableCount == 1)
+            #expect(disbandCount == 1)
+            #expect(conversation.group.disbanding)
+            #expect(conversation.group.disbandRequest == .pending(requestedAtMs: 2_000))
+        }
     }
 
     @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit) func alreadyRequestedLeaveIsPresentedAsDurableProgress() async throws {
@@ -836,14 +844,13 @@ private final class GroupArchivePublishProbe {
     }
 
     private(set) var requests: [Request] = []
-    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private let started = TestLatch()
     private var firstCompletion: CheckedContinuation<AppGroupRecordFfi, Error>?
 
     func publish(accountRef: String, groupIdHex: String, archived: Bool) async throws -> AppGroupRecordFfi {
         let request = Request(accountRef: accountRef, groupIdHex: groupIdHex, archived: archived)
         requests.append(request)
-        startWaiters.forEach { $0.resume() }
-        startWaiters.removeAll()
+        started.signal()
 
         // If the production guard regresses, do not hang the test on a second
         // blocked continuation; return a record and let the request-count
@@ -857,11 +864,9 @@ private final class GroupArchivePublishProbe {
         }
     }
 
-    func waitUntilStarted() async {
-        guard requests.isEmpty else { return }
-        await withCheckedContinuation { continuation in
-            startWaiters.append(continuation)
-        }
+    /// Records a test issue instead of hanging when the publish never starts.
+    func waitUntilStarted(sourceLocation: SourceLocation = #_sourceLocation) async {
+        await started.hold(sourceLocation: sourceLocation)
     }
 
     func completeFirst(with record: AppGroupRecordFfi) {
@@ -880,7 +885,7 @@ private final class GroupProfilePublishProbe {
     }
 
     private(set) var requests: [Request] = []
-    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private let started = TestLatch()
     private var firstCompletion: CheckedContinuation<SendSummaryFfi, Error>?
 
     func publish(
@@ -896,8 +901,7 @@ private final class GroupProfilePublishProbe {
             description: description
         )
         requests.append(request)
-        startWaiters.forEach { $0.resume() }
-        startWaiters.removeAll()
+        started.signal()
 
         guard requests.count == 1 else {
             return SendSummaryFfi(published: 0, messageIds: [])
@@ -908,11 +912,9 @@ private final class GroupProfilePublishProbe {
         }
     }
 
-    func waitUntilStarted() async {
-        guard requests.isEmpty else { return }
-        await withCheckedContinuation { continuation in
-            startWaiters.append(continuation)
-        }
+    /// Records a test issue instead of hanging when the publish never starts.
+    func waitUntilStarted(sourceLocation: SourceLocation = #_sourceLocation) async {
+        await started.hold(sourceLocation: sourceLocation)
     }
 
     func completeFirst() {
@@ -931,7 +933,7 @@ private final class GroupAvatarPublishProbe {
     }
 
     private(set) var requests: [Request] = []
-    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private let started = TestLatch()
     private var firstCompletion: CheckedContinuation<SendSummaryFfi, Error>?
 
     func publish(
@@ -947,8 +949,7 @@ private final class GroupAvatarPublishProbe {
             mediaType: mediaType
         )
         requests.append(request)
-        startWaiters.forEach { $0.resume() }
-        startWaiters.removeAll()
+        started.signal()
 
         guard requests.count == 1 else {
             return SendSummaryFfi(published: 0, messageIds: [])
@@ -959,11 +960,9 @@ private final class GroupAvatarPublishProbe {
         }
     }
 
-    func waitUntilStarted() async {
-        guard requests.isEmpty else { return }
-        await withCheckedContinuation { continuation in
-            startWaiters.append(continuation)
-        }
+    /// Records a test issue instead of hanging when the publish never starts.
+    func waitUntilStarted(sourceLocation: SourceLocation = #_sourceLocation) async {
+        await started.hold(sourceLocation: sourceLocation)
     }
 
     func completeFirst() {

@@ -36,6 +36,30 @@ struct UserFacingErrorTests {
         }
     }
 
+    @Test func newMarmotKitRefusalsUseTypedCopy() {
+        let cases: [(MarmotKitError, String)] = [
+            (.MissingKeyPackage(account: "peer", reason: .obsoleteOnly),
+             "This person's app is out of date. Ask them to update it and open it, then try again."),
+            (.DirectoryLookupIncomplete(account: "peer"),
+             "Couldn't finish looking this person up on relays. Check your connection and try again."),
+            (.GroupCatchingUp(groupIdHex: "group"),
+             "This chat may be out of date on this device. Wait for it to sync, then try again."),
+            (.GroupCommitUndelivered(groupIdHex: "group"),
+             "The group's last change hasn't reached all of its relays yet. Try again in a moment."),
+            (.InvalidEditTarget, "This message can't be edited."),
+            (.FollowListTooLarge, "Your follow list is too large to change here. No follows were changed."),
+        ]
+        for (error, expected) in cases {
+            #expect(UserFacingError.message(for: error) == expected)
+        }
+    }
+
+    @Test func fullStorageAsksForSpaceAndKeepsTheRuntimeDetailAsDiagnostic() {
+        let error = MarmotKitError.StorageFull(details: "disk reserve exceeded")
+        #expect(UserFacingError.message(for: error) == "This device is out of storage. Free up some space and try again.")
+        #expect(UserFacingError.sanitizedDiagnostic(for: error) == "Disk reserve exceeded")
+    }
+
     @Test func typedDuplicateIdentityUsesActionableCopy() {
         let error = MarmotKitError.DuplicateIdentity(account: "existing-account")
 

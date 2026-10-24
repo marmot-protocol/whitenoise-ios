@@ -138,11 +138,18 @@ struct MediaAttachmentPolicyTests {
 
     @Test func terminalAttachmentStatesDoNotWaitOrRetryAutomatically() {
         for state in [AttachmentTransferStateFfi.previouslyAcquiredUnavailable, .completedUnretained,
-                      .retryExhausted, .removed, .cancelled, .failed, .policyBlocked, .paused, .unavailable] {
+                      .retryExhausted, .removed, .cancelled, .failed, .policyBlocked, .paused, .unavailable,
+                      .storageBlocked] {
             #expect(!AttachmentAcquisitionPresentation.canAwait(state))
         }
         for state in [AttachmentTransferStateFfi.queued, .downloading, .ready, .retryScheduled] {
             #expect(AttachmentAcquisitionPresentation.canAwait(state))
         }
+    }
+
+    @Test func storageBlockedDownloadsAskForSpaceInsteadOfShowingARetryTimer() {
+        let label = AttachmentTransferPresentation.label(.storageBlocked)
+        #expect(label == "Not enough storage. Free up space to download.")
+        #expect(label != AttachmentTransferPresentation.label(.retryScheduled))
     }
 }

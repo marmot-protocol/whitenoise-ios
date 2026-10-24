@@ -138,6 +138,7 @@ struct GroupDetailsView: View {
                 npub: member.npub,
                 moderation: moderationContext(for: member)
             )
+            .groupChangeAdvisoryAlert(model.advisoryPrompter)
         }
         .navigationDestination(isPresented: $showContactProfile) {
             if let contactNpub {
@@ -201,6 +202,7 @@ struct GroupDetailsView: View {
                 ),
                 excludedMemberMessage: AddMembersPresentation.existingMemberMessage
             )
+            .groupChangeAdvisoryAlert(model.advisoryPrompter)
             .appAppearance()
         }
         .sheet(isPresented: $model.showRetentionEditor) {
@@ -210,6 +212,7 @@ struct GroupDetailsView: View {
                     await model.updateRetention(seconds: seconds, using: appState)
                 }
             )
+            .groupChangeAdvisoryAlert(model.advisoryPrompter)
             .appAppearance()
         }
         .sheet(isPresented: $model.showProfileEditor) {
@@ -221,12 +224,20 @@ struct GroupDetailsView: View {
                 let groupDisplay = viewModel.groupDisplay
                 groupAvatar(groupDisplay: groupDisplay, displayTitle: viewModel.displayTitle(for: groupDisplay))
             }
+            .groupChangeAdvisoryAlert(model.advisoryPrompter)
             .appAppearance()
         }
         .fullScreenCover(item: $model.pendingConfirmation) { confirmation in
             fullScreenConfirmation(for: confirmation)
                 .appAppearance()
         }
+        // Sheets and the member profile that submit group changes show the prompt themselves.
+        .groupChangeAdvisoryAlert(
+            model.advisoryPrompter,
+            isEnabled: !model.showAddMembers && !model.showProfileEditor && !model.showRetentionEditor
+                && memberProfileTarget == nil
+        )
+        .onDisappear { model.advisoryPrompter.cancelPending() }
         .fullScreenCover(item: $sharedMediaGallery) { gallery in
             MessageMediaFullscreenGalleryView(
                 gallery: gallery,

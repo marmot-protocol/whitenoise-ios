@@ -24,6 +24,13 @@ nonisolated enum ChatListLeavePresentation {
     static var failureMessage: String {
         L10n.string("Try again.")
     }
+
+    /// The note after a bulk leave with no failures, for chats where the user chose
+    /// Wait. The per-chat copy holds only when every selected chat waited.
+    static func bulkWaitNotice(waitMessage: String?, waitedCount: Int, targetCount: Int) -> String? {
+        guard let waitMessage, waitedCount > 0 else { return nil }
+        return waitedCount < targetCount ? L10n.string("Some chats weren't left. Try them again later.") : waitMessage
+    }
 }
 
 @MainActor

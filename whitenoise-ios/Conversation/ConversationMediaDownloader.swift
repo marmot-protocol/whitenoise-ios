@@ -136,9 +136,11 @@ final class ConversationMediaDownloader {
     }
 
     private var isStopped = false
+    private var handoffControls: [ObjectIdentifier: MediaFileTransferControlFfi] = [:]
 
     func stopAndDrain() async {
         isStopped = true
+        handoffControls.values.forEach { $0.cancel() }
         await inFlight.cancelAndDrain()
     }
 
@@ -236,7 +238,7 @@ final class ConversationMediaDownloader {
                 if let target {
                     let state = try await client.marmot.attachmentTransferSnapshot(accountRef: accountRef,
                         groupIdHex: groupIdHex, targets: [target]).items.first?.state
-                    guard let state, ![.unavailable, .removed, .cancelled].contains(state) else {
+                    guard let state, ![.unavailable, .removed, .cleanedBySetting, .cancelled].contains(state) else {
                         throw AttachmentReadError.stale
                     }
                 }
@@ -250,7 +252,83 @@ final class ConversationMediaDownloader {
             } catch AttachmentReadError.unavailable {
                 loadOutcome = .unavailable
                 throw AttachmentReadError.unavailable
+            } catch AttachmentReadError.storageBlocked {
+                loadOutcome = .unavailable
+                // Automatic loads stay quiet; a tap explains why its Retry needs free space.
+                if media.demand.isUserInitiated {
+                    appState?.present(.warning(
+                        L10n.string("Not enough storage"),
+                        message: L10n.string("Free up space on this device, then tap the attachment to try again.")
+                    ))
+                }
+                throw AttachmentReadError.storageBlocked
             }
+        }
+    }
+
+    /// MDK's leased plaintext copy of the item's original source slot, for the share
+    /// sheet. Nil when MDK has no slot for it (an unsent draft) or does not hold this
+    /// device's own send yet, so the caller exports the host's bytes. A slot MDK does
+    /// not hold yet is otherwise acquired with the item's demand first; cancel only
+    /// through `control`.
+    func openHandoff(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?,
+                     control: MediaFileTransferControlFfi) async throws -> AttachmentHandoffLease? {
+        guard !isStopped else { throw CancellationError() }
+        let source = AttachmentHandoffSource(media)
+        guard source != .none else { return nil }
+        let hostHasBytes = media.localData != nil
+        guard let appState, let account = appState.activeAccountRef else { throw MediaDataError.missingAccount }
+        let client = try appState.currentMarmotClient()
+        let marmot = client.marmot
+        let releaser = LiveRuntimeHandoffReleaser { @MainActor [weak appState] in
+            guard let live = appState?.client?.marmot, !live.storageIsClosed() else { return nil }
+            return live
+        }
+        let controlID = ObjectIdentifier(control)
+        handoffControls[controlID] = control
+        defer { handoffControls[controlID] = nil }
+        do {
+            let target: AttachmentLocalTargetFfi
+            switch source {
+            case .target(let slot):
+                target = slot
+            case .hint(let hint):
+                do {
+                    target = try await client.resolveAttachmentTarget(accountRef: account, groupID: groupIdHex, hint: hint)
+                } catch AttachmentReadError.unavailable where hostHasBytes {
+                    return nil
+                }
+            case .none:
+                return nil
+            }
+            guard let lease = try await AttachmentHandoffOpening.open(
+                handoff: {
+                    try await AttachmentHandoffOpening.shielded(cancel: { control.cancel() }) {
+                        () async throws -> AttachmentHandoffLease? in
+                        guard let handoff = try await marmot.openAttachmentHandoff(accountRef: account,
+                            groupIdHex: groupIdHex, target: target, control: control) else { return nil }
+                        let lease = AttachmentHandoffLease(handoff, releaser: releaser)
+                        try lease.protect()
+                        return lease
+                    }
+                },
+                hostHasBytes: hostHasBytes,
+                acquire: { _ = try await self.data(for: media, groupIdHex: groupIdHex, appState: appState) }
+            ) else { return nil }
+            guard !Task.isCancelled, !isStopped, appState.activeAccountRef == account, appState.client === client else {
+                lease.release()
+                throw CancellationError()
+            }
+            return lease
+        } catch {
+            let failure = AttachmentHandoffOpening.failure(for: error, controlCancelled: control.isCancelled())
+            if failure as? AttachmentHandoffFailure == .storageFull {
+                appState.present(.warning(
+                    L10n.string("Not enough storage"),
+                    message: L10n.string("Free up space on this device, then tap the attachment to try again.")
+                ))
+            }
+            throw failure
         }
     }
 

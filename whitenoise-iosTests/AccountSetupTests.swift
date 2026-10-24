@@ -175,17 +175,17 @@ struct AccountSetupTests {
     @Test func profileOptionalityFollowsTheOfferedActions() {
         var step = snapshot().steps[0]
         step.step = .profile
-        step.findings = [.init(issue: .missing, endpoint: nil)]
+        step.findings = [onboardingFinding(issue: .missing, endpoint: nil)]
         step.actions = [.editProfile, .continueWithout]
         #expect(AccountSetupPresentation.checkState(step) == .optionalReview)
 
         step.status = .retryableFailure
-        step.findings = [.init(issue: .timedOut, endpoint: nil)]
+        step.findings = [onboardingFinding(issue: .timedOut, endpoint: nil)]
         step.actions = [.retry, .continueWithout]
         #expect(AccountSetupPresentation.checkState(step) == .optionalReview)
 
         // An interrupted profile publication cannot promise a skip that MDK does not offer.
-        step.findings = [.init(issue: .publicationFailed, endpoint: nil)]
+        step.findings = [onboardingFinding(issue: .publicationFailed, endpoint: nil)]
         step.actions = [.retry]
         #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
     }
@@ -343,16 +343,26 @@ struct AccountSetupTests {
     }
 
     @Test func relayFindingsNameTheAffectedAddressWithoutDuplicates() {
-        let retired = OnboardingFindingFfi(issue: .retiredRelay, endpoint: "wss://relay.damus.io")
-        let unreachable = OnboardingFindingFfi(issue: .unreachable, endpoint: "wss://example.com")
+        let retired = onboardingFinding(issue: .retiredRelay, endpoint: "wss://relay.damus.io")
+        let unreachable = onboardingFinding(issue: .unreachable, endpoint: "wss://example.com")
         #expect(AccountSetupPresentation.findingMessages([retired, retired, unreachable]) == [
             AccountSetupPresentation.issue(.retiredRelay) + "\nwss://relay.damus.io",
             AccountSetupPresentation.issue(.unreachable) + "\nwss://example.com"
         ])
     }
 
+    @Test func answeredRelaysAreNotListedAsProblems() {
+        let answered = OnboardingFindingFfi(issue: .inspectionCompleted, endpoint: "wss://relay.example",
+            context: .declaredRoute, purpose: .directoryQuery, outcome: .success,
+            declaredCapability: .readAndWrite, actions: [], observedRevision: 3)
+        let unreachable = onboardingFinding(issue: .unreachable, endpoint: "wss://example.com")
+        #expect(AccountSetupPresentation.findingMessages([answered, unreachable]) == [
+            AccountSetupPresentation.issue(.unreachable) + "\nwss://example.com"
+        ])
+    }
+
     @Test func relayFindingAddressesAreBoundedAndStripInvisibleFormatting() {
-        let findings = [OnboardingFindingFfi(issue: .invalidRelay,
+        let findings = [onboardingFinding(issue: .invalidRelay,
                                            endpoint: "\u{202e}wss://example.com\n" + String(repeating: "a", count: 1_000))]
         let messages = AccountSetupPresentation.findingMessages(findings)
         #expect(messages.count == 1)
@@ -561,7 +571,7 @@ struct AccountSetupTests {
         var result = initial
         result.revision += 1
         result.steps[0].status = lookupFailed ? .retryableFailure : .needsInput
-        result.steps[0].findings = [OnboardingFindingFfi(
+        result.steps[0].findings = [onboardingFinding(
             issue: lookupFailed ? .unreachable : .missing, endpoint: nil
         )]
         result.steps[0].actions = [.retry, .editDiscoveryRelays]
@@ -616,7 +626,7 @@ struct AccountSetupTests {
     func missingRelaysRequireConsent(_ step: OnboardingStepFfi) {
         var value = snapshot()
         value.steps[0].step = step
-        value.steps[0].findings = [OnboardingFindingFfi(issue: .missing, endpoint: nil)]
+        value.steps[0].findings = [onboardingFinding(issue: .missing, endpoint: nil)]
         value.steps[0].actions = [.useRecommendedRelays]
         #expect(AccountSetupPolicy.automaticAction(value) == nil)
     }
@@ -906,6 +916,12 @@ struct AccountSetupRuntimeTests {
             #expect(try await client.onboardingSnapshot(accountID: initial.accountIdHex)?.revision == initial.revision)
         }
     }
+}
+
+/// A finding without relay-diagnostic provenance, as MDK reports outside relay checks.
+func onboardingFinding(issue: OnboardingIssueFfi, endpoint: String?) -> OnboardingFindingFfi {
+    OnboardingFindingFfi(issue: issue, endpoint: endpoint, context: .unknown, purpose: .unknown,
+                         outcome: .unknown, declaredCapability: .none, actions: [], observedRevision: nil)
 }
 
 private actor SetupTestClient: AccountSetupClient {

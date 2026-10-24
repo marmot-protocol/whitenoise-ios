@@ -2304,6 +2304,8 @@ struct ConversationView: View {
             },
             onLoadMedia: ConversationMediaLoader { media in
                 try await viewModel.data(for: media)
+            } openHandoff: { media, control in
+                try await viewModel.openHandoff(for: media, control: control)
             },
             mediaForwardingContext: MediaForwardingContext(
                 viewModel: viewModel,

@@ -92,7 +92,8 @@ nonisolated final class MarmotClient: Sendable {
             relayUrls: relayUrls,
             options: MarmotOptions(cursorPersistence: cursorPersistence, clientName: "whitenoise",
                 attachmentAcquisitionMode: .hostManaged,
-                moderationReportConfig: ModerationReportBuildConfig.current()?.ffi)
+                moderationReportConfig: ModerationReportBuildConfig.current()?.ffi,
+                deployment: marmotDeploymentWhiteNoise())
         )
         moderationReportingAvailable = marmot.moderationReportingAvailable()
         // Opt-in startup capture must begin before the first account read.
@@ -773,6 +774,19 @@ nonisolated final class MarmotClient: Sendable {
 
     func acknowledgeDisbandFailure(accountRef: String, groupIdHex: String) async throws -> Bool {
         try await marmot.acknowledgeDisbandFailure(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    /// Admits one group-change attempt after the user accepts an advisory refusal.
+    /// `false` means the condition already lifted; retrying is still correct.
+    func acknowledgeGroupChangeAdvisory(
+        _ advisory: GroupChangeAdvisory, accountRef: String, groupIdHex: String
+    ) async throws -> Bool {
+        switch advisory {
+        case .catchingUp:
+            try await marmot.acknowledgeGroupCatchingUp(accountRef: accountRef, groupIdHex: groupIdHex)
+        case .commitUndelivered:
+            try await marmot.acknowledgeGroupCommitUndelivered(accountRef: accountRef, groupIdHex: groupIdHex)
+        }
     }
 
     func updateGroupProfile(accountRef: String, groupIdHex: String, name: String?, description: String?) async throws -> SendSummaryFfi {

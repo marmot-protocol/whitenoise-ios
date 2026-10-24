@@ -5,6 +5,8 @@ nonisolated enum AccountSetupPresentation {
     static func findingMessages(_ findings: [OnboardingFindingFfi]) -> [String] {
         var seen: Set<String> = []
         return findings.compactMap { finding in
+            // A relay that answered is not a problem, and MDK warns it doesn't prove write support.
+            guard finding.issue != .inspectionCompleted else { return nil }
             var message = issue(finding.issue)
             if let endpoint = finding.endpoint {
                 let scalars = endpoint.unicodeScalars.prefix(200).filter {
@@ -154,6 +156,7 @@ nonisolated enum AccountSetupPresentation {
         case .multiDeviceUnsupported: L10n.string("Conversations do not sync across devices yet.")
         case .otherInstallationPossible: L10n.string("Another installation may exist.")
         case .discoveryIncomplete: L10n.string("Some discovery sources could not be checked.")
+        case .inspectionCompleted: L10n.string("A relay answered the check.")
         }
     }
 }

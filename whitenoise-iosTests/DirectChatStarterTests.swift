@@ -133,7 +133,7 @@ struct DirectChatStarterTests {
     @Test func missingSetupErrorsMapToTheInvitePathOnTheDirectChatRoute() {
         #expect(
             StartChatFailurePresentation.failure(
-                for: MarmotKitError.MissingKeyPackage(account: alice)
+                for: MarmotKitError.MissingKeyPackage(account: alice, reason: .notFound)
             ) == .missingSetup
         )
         #expect(
@@ -156,6 +156,16 @@ struct DirectChatStarterTests {
         guard case .other = failure else {
             Issue.record("unexpected invite mapping for an unrelated error")
             return
+        }
+    }
+
+    @Test func outdatedKeyPackagesAndIncompleteLookupsStayRetryableErrors() {
+        for error in [
+            MarmotKitError.MissingKeyPackage(account: alice, reason: .obsoleteOnly),
+            MarmotKitError.DirectoryLookupIncomplete(account: alice)
+        ] {
+            #expect(StartChatFailurePresentation.failure(for: error)
+                == .other(message: UserFacingError.message(for: error)))
         }
     }
 

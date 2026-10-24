@@ -346,6 +346,119 @@ before every release tag.
       tap surfaces the failure, and only the following Retry tap starts a fresh
       download.
 
+## MarmotKit 0.14.0 upgrade
+
+- [ ] Upgrade a signed-in install in place. Accounts, chats and notifications
+      keep working (the deployment keeps the existing keychain service), and a
+      new group can still send photos and set a group image.
+- [ ] Turn on Airplane Mode, create a group, and send a message in it. The
+      message stays pending instead of failing, and delivers once the device
+      is back online (mdk#2562).
+- [ ] Make a group change while the group is catching up (for example, admin
+      device offline while two other admins change the group, then reconnect
+      and immediately rename). The "This chat may be out of date" alert appears
+      over whichever screen made the change (Group Info, Edit, Add Members,
+      Disappearing Messages, or a member's profile). Wait changes nothing and
+      shows an inline note without an error toast; Continue anyway publishes.
+      An invite uses the stronger invitation warning.
+- [ ] Block one group relay right after a group change, wait two minutes, then
+      make another change. "Last group change not delivered" appears; Continue
+      anyway publishes the change.
+- [ ] Invite someone whose only KeyPackages are outdated: the copy asks them to
+      update their app instead of saying they aren't on White Noise.
+- [ ] Fill the device until a tapped download can't fit. The bubble shows Retry
+      with a "Not enough storage" toast, Info → Downloads says "Not enough
+      storage", and after freeing space a Retry tap downloads it.
+- [ ] In Settings → Apple Account → iCloud → Manage Storage → Backups, the
+      device backup size does not include White Noise attachments.
+
+### Manage Storage
+
+- [ ] Open Settings → Manage Storage with a profile that has downloaded photos,
+      videos, voice notes and files in several chats. Storage Used shows
+      Attachments (with a count) and Messages and Chat Data; Cache shows Profile
+      and Group Pictures. Chats are listed largest first with their real names
+      and avatars (a direct chat with a nickname shows the nickname), never a
+      group ID. A chat whose picture was not downloaded yet shows it once it
+      arrives, and renaming a chat elsewhere updates its row, without leaving
+      the screen. Pull to refresh reloads every figure.
+- [ ] With more than 50 chats or attachments holding files, scroll to the end
+      of Chats and of Largest Attachments: further pages load once, with no
+      duplicate rows, and the spinner disappears at the end.
+- [ ] Clear Cache: progress shows in the button, the cache figure drops,
+      pictures on the screen blank while it runs, and avatars in Chats and
+      Settings reappear on demand.
+- [ ] In Largest Attachments, swipe a row and tap Remove. The row disappears,
+      Storage Used drops, and the message in its chat shows the attachment as
+      removed with Download again. Download again restores it. Photos you
+      viewed in other chats and other profiles still open at once, without
+      decrypting again.
+- [ ] Open a chat's row, tap Remove All Attachments and confirm. The dialog
+      names the chat; afterwards the chat's list is empty, the chat leaves the
+      main list, and its media in the open conversation shows as removed (no
+      stale thumbnails). Cancel leaves everything in place.
+- [ ] Remove Older Attachments → Older Than 1 Week (account-wide and inside one
+      chat). The confirmation names the cutoff date; only attachments received
+      before that day go, and ones received on it or later stay. Leave the
+      dialog open past midnight before confirming: it still removes before the
+      date it shows.
+- [ ] Switch to another profile while Manage Storage is open: figures and chats
+      reload for the new profile and never mix profiles. Background and
+      foreground the app: the screen reloads after the runtime resumes.
+- [ ] Upgrade an install whose attachments predate the media store (MarmotKit
+      0.13 or earlier). While bodies move, Updating Attachment Storage shows the
+      remaining size and refreshes on its own; it disappears when done. If the
+      device is nearly full, the paused row says how much space is needed.
+      After a removal or freeing space elsewhere, the row switches back to
+      updating within about 15 seconds without pull to refresh. Reclaiming
+      Space may appear briefly.
+- [ ] On that upgraded install (live data over 64 MiB, so MDK doesn't compact
+      it), remove attachments that were still in the chat database. Messages
+      and Chat Data stays the same size; Unused Database Space appears with the
+      space the database file still holds.
+- [ ] Turn on airplane mode and remove attachments: removals still work
+      because they are local.
+- [ ] Check VoiceOver on chat and attachment rows (name, count/date and size
+      read together; Remove is offered as an action), Dynamic Type at an
+      accessibility size, and light and dark appearance.
+
+### Document sharing through MDK handoff leases
+
+Tapping a received document, or its share button in View Shared Media → Files,
+shares MDK's leased copy under the account's `handoff/` folder. In the
+simulator, find that folder with
+`find "$(xcrun simctl get_app_container booted dev.ipf.whitenoise.ios groups | awk '/group.dev.ipf.whitenoise.ios/ {print $2}')" -path '*handoff*'`.
+
+- [ ] Tap a received PDF that has already downloaded. The share sheet names the
+      file by its original name (not a hash), and Save to Files and AirDrop
+      each deliver an intact, openable PDF.
+- [ ] While the share sheet is up, `<account>/handoff/<lease>/<name>.pdf`
+      exists. Close the sheet with its close button, by swiping it down, and by
+      completing an action: each time the lease folder is gone within a second.
+- [ ] Tap a received PDF that has not downloaded yet (Documents auto-download
+      set to Never). It downloads, then the share sheet opens; nothing is left
+      under `handoff/` after dismissal.
+- [ ] On a device, open a document's share sheet, lock the phone for a minute,
+      then unlock. Save to Files still delivers an intact PDF (the copy is
+      `.complete`, unreadable only while locked), and dismissal removes it.
+- [ ] Share a large document, then background the app for a minute and return
+      before dismissing. The share still completes, and dismissal still removes
+      the copy (released through the reopened runtime, not the suspended one).
+- [ ] Fill the device so the attachment fits but a copy of it does not. The tap
+      shows a "Not enough storage" toast, no share sheet and no Retry state, and
+      leaves nothing under `handoff/`. After freeing space a tap shares it.
+- [ ] Remove a document (Info → Downloads → Remove), then tap it. It shows the
+      Retry state instead of a share sheet; Retry downloads it again and shares.
+- [ ] Send a PDF, wait for its delivered check, then tap your own bubble in the
+      same conversation. The share sheet shows the original name from a lease
+      under `handoff/`, not a hash-named file under `Caches/EncryptedMediaPlayback`.
+- [ ] A document still uploading from this device (before it sends) can still
+      be shared from its bubble.
+- [ ] As a group admin, open Group Info → Moderation and tap a reported PDF.
+      It shares through a lease under `handoff/` with its original name.
+- [ ] Force-quit with a share sheet open, relaunch and open the account. The
+      leftover copy under `handoff/` is removed.
+
 ## In-place MarmotKit upgrade
 
 Run this before releasing any MarmotKit bump that advances the account storage
