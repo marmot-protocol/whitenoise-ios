@@ -18,6 +18,8 @@ struct TestWaitTimeout: Error, CustomStringConvertible {
 /// otherwise. Safe to signal from any isolation, including synchronous code.
 final class TestLatch: Sendable {
     static let defaultTimeout = Duration.seconds(30)
+    /// Checks for a late signal after the timeout fires, about half a second.
+    static let checksAfterTimeout = 100
 
     private struct Waiter {
         let continuation: CheckedContinuation<Void, any Error>
@@ -64,6 +66,16 @@ final class TestLatch: Sendable {
             if isOpen { return continuation.resume() }
             let timer = Task {
                 do { try await Task.sleep(for: timeout) } catch { return }
+                // A stalled runner wakes this timer late, possibly before the
+                // signalling side has had a turn; give it a few before failing.
+                for check in 0..<TestLatch.checksAfterTimeout {
+                    if self.isSignalled { return }
+                    if check < 20 {
+                        await Task.yield()
+                    } else {
+                        do { try await Task.sleep(for: .milliseconds(5)) } catch { return }
+                    }
+                }
                 self.fail(id, TestWaitTimeout(what: "TestLatch signal", timeout: timeout, sourceLocation: sourceLocation))
             }
             // Signalled in between: the waiter is already resumed, so stop the timer.

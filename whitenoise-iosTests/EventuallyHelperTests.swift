@@ -47,6 +47,26 @@ struct EventuallyHelperTests {
         #expect(checks == 20)
     }
 
+    /// Models a runner stall: the latch's timer has expired by the time the
+    /// signalling side gets its turn, a few turns later.
+    @Test func aLatchSignalledJustAfterItsTimeoutStillOpens() async throws {
+        let latch = TestLatch()
+        let signaller = Task {
+            for _ in 0..<5 { await Task.yield() }
+            latch.signal()
+        }
+        try await latch.wait(timeout: .zero)
+        await signaller.value
+        #expect(latch.isSignalled)
+    }
+
+    @Test func aLatchThatIsNeverSignalledStillTimesOut() async {
+        let latch = TestLatch()
+        await #expect(throws: TestWaitTimeout.self) {
+            try await latch.wait(timeout: .zero)
+        }
+    }
+
     @Test func aConditionThatBecomesTrueReturnsWithoutThrowing() async throws {
         var checks = 0
         try await eventually(timeout: .zero, minimumAttempts: 10) {
