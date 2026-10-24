@@ -6,7 +6,7 @@ struct EventuallyHelperTests {
     @Test func timeoutAloneStopsAfterTheDeadline() async {
         var checks = 0
         await #expect(throws: TestWaitTimeout.self) {
-            try await eventually(timeout: .zero) {
+            try await eventually(timeout: .zero, attemptsAfterDeadline: 0) {
                 checks += 1
                 return false
             }
@@ -17,12 +17,34 @@ struct EventuallyHelperTests {
     @Test func minimumAttemptsKeepPollingPastTheDeadline() async {
         var checks = 0
         await #expect(throws: TestWaitTimeout.self) {
-            try await eventually(timeout: .zero, minimumAttempts: 5) {
+            try await eventually(timeout: .zero, minimumAttempts: 5, attemptsAfterDeadline: 0) {
                 checks += 1
                 return false
             }
         }
         #expect(checks == 6)
+    }
+
+    @Test func aFalseConditionGetsTheDefaultChecksPastTheDeadline() async {
+        var checks = 0
+        await #expect(throws: TestWaitTimeout.self) {
+            try await eventually(timeout: .zero) {
+                checks += 1
+                return false
+            }
+        }
+        #expect(checks == 101)
+    }
+
+    /// Models a runner stall: the deadline has passed by the first check, and
+    /// the awaited work completes a few turns later.
+    @Test func aConditionThatHoldsSoonAfterTheDeadlineStillPasses() async throws {
+        var checks = 0
+        try await eventually(timeout: .zero) {
+            checks += 1
+            return checks == 20
+        }
+        #expect(checks == 20)
     }
 
     @Test func aConditionThatBecomesTrueReturnsWithoutThrowing() async throws {
