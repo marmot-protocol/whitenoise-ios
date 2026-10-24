@@ -14,7 +14,8 @@ final class ChatListBulkLeaveState {
     struct Result {
         let failedIDs: Set<String>
         let pendingIDs: Set<String>
-        /// Set when the user chose Wait for at least one chat's step-down.
+        /// Chats whose step-down the user chose to wait on; nothing was published for them.
+        let waitedIDs: Set<String>
         let waitMessage: String?
     }
 
@@ -63,6 +64,7 @@ final class ChatListBulkLeaveState {
         defer { self.approved = nil; processingID = nil }
         var failedIDs = Set<String>()
         var pendingIDs = Set<String>()
+        var waitedIDs = Set<String>()
         var waitMessage: String?
         for target in approved.targets {
             guard !Task.isCancelled, isCurrent() else { return nil }
@@ -71,12 +73,14 @@ final class ChatListBulkLeaveState {
             case .left: break
             case .pending: pendingIDs.insert(target.groupIdHex)
             case .failed, .blocked: failedIDs.insert(target.groupIdHex)
-            case .waited(let message): waitMessage = message
+            case .waited(let message):
+                waitedIDs.insert(target.groupIdHex)
+                waitMessage = message
             case .cancelled: return nil
             }
         }
         guard !Task.isCancelled, isCurrent() else { return nil }
-        return Result(failedIDs: failedIDs, pendingIDs: pendingIDs, waitMessage: waitMessage)
+        return Result(failedIDs: failedIDs, pendingIDs: pendingIDs, waitedIDs: waitedIDs, waitMessage: waitMessage)
     }
 
     func clearSelection() {

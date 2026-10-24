@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import whitenoise_ios
 
@@ -88,7 +89,16 @@ struct ChatListBulkLeaveStateTests {
         }
         #expect(calls == ["a", "b", "c"])
         #expect(result?.failedIDs.isEmpty == true)
+        #expect(result?.waitedIDs == ["b"])
         #expect(result?.waitMessage == "Group not changed.")
+    }
+
+    @Test func bulkWaitNoticeOnlyClaimsNothingChangedWhenEveryChatWaited() {
+        #expect(ChatListLeavePresentation.bulkWaitNotice(waitMessage: nil, waitedCount: 0, targetCount: 3) == nil)
+        #expect(ChatListLeavePresentation.bulkWaitNotice(waitMessage: "Group not changed.", waitedCount: 3,
+            targetCount: 3) == "Group not changed.")
+        #expect(ChatListLeavePresentation.bulkWaitNotice(waitMessage: "Group not changed.", waitedCount: 1,
+            targetCount: 3) == L10n.string("Some chats weren't left. Try them again later."))
     }
 
     @Test func contextChangeStopsTheRemainingMutations() async throws {

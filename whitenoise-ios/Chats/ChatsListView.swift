@@ -1471,7 +1471,12 @@ struct ChatsListView: View {
             return L10n.plural("Couldn't leave %lld chats. Try again.", Int64(result.failedIDs.count))
         }
         Haptics.warning()
-        return result.waitMessage
+        // Choosing Wait is not a failure: close the sheet and say what didn't change.
+        if let notice = ChatListLeavePresentation.bulkWaitNotice(waitMessage: result.waitMessage,
+            waitedCount: result.waitedIDs.count, targetCount: request.targets.count) {
+            appState.present(.warning(notice))
+        }
+        return nil
     }
 
     private func readLeaveState(
