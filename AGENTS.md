@@ -171,6 +171,16 @@ explicit retry on a read miss. Voice notes follow the Audio preference. Preserve
 terminal acquisition states until an explicit user retry. Do not escalate automatic
 loads to explicit jobs. `StorageBlocked` is a download parked for free space, not a
 retry timer: stop waiting, ask the user to free space, and let the explicit Retry readmit it.
+Share sheets get documents from MDK's `openAttachmentHandoff` on the original slot,
+not a host plaintext export; in-app display stays on `readAttachmentAsset`. MDK
+writes the copy without complete Data Protection: set `.complete` on the leased file
+before exposing its URL, and release the lease instead of sharing if that fails. Never
+change protection elsewhere in the Marmot root, which the NSE reads while locked. Release
+the lease on completion and on dismissal through the live runtime (idempotent; retry
+`Io`, `StorageClosed` and no open runtime, since a suspend closes the runtime that
+opened it). Cancel a copy only through its `MediaFileTransferControlFfi`, never by
+cancelling the awaiting task.
+Only bytes MDK has no slot for (an outgoing draft) use the host export.
 Conversation-open performance ends at rendered layout, uses the navigation consent
 ticket, and records unavailable/cancelled/timeout outcomes separately from success.
 

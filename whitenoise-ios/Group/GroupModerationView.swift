@@ -238,6 +238,15 @@ final class GroupModerationModel {
 
     init(client: (any GroupModerationClient)? = nil) { clientOverride = client }
 
+    /// Keeps the reported message's original slot, as the timeline does, so its media
+    /// reads through MDK and a shared document opens a handoff lease.
+    nonisolated static func mediaItems(for message: TimelineMessageRecordFfi,
+                                       reportIdHex: String) -> [MessageMediaAttachment] {
+        MessageMediaAttachment.displayItems(fromOutcomes: message.media,
+            ownerId: "report:\(reportIdHex):\(message.messageIdHex)",
+            messageId: message.messageIdHex, sourceMessageId: message.sourceMessageIdHex)
+    }
+
     private func client(using appState: AppState) throws -> any GroupModerationClient {
         if let clientOverride { return clientOverride }
         return try appState.currentMarmotClient()
@@ -270,8 +279,7 @@ final class GroupModerationModel {
                     entry.markdownBlocks = MarkdownMessageBuilder.displayBlocks(
                         for: message.contentTokens)
                     // Review projections can include personally blocked targets absent from the normal window.
-                    entry.mediaItems = MessageMediaAttachment.displayItems(fromOutcomes: message.media,
-                        ownerId: "report:\(report.reportIdHex):\(message.messageIdHex)")
+                    entry.mediaItems = Self.mediaItems(for: message, reportIdHex: report.reportIdHex)
                 }
                 rows.append(entry)
             }
@@ -387,7 +395,8 @@ struct GroupModerationView: View {
                                     markdownBlocks: entry.markdownBlocks,
                                     identityName: conversation.windowDisplayName,
                                     identityAvatarAsset: { conversation.windowIdentities[$0]?.avatarAsset },
-                                    onLoadMedia: ConversationMediaLoader { try await conversation.data(for: $0) }
+                                    onLoadMedia: ConversationMediaLoader({ try await conversation.data(for: $0) },
+                                        openHandoff: { try await conversation.openHandoff(for: $0, control: $1) })
                                 )
                                 .messageLinkCopyAccessibilityActions(for: entry.markdownBlocks, appState: appState)
                                 Text(Date(timeIntervalSince1970: TimeInterval(message.timelineAt)), format: .dateTime.day().month().year())
