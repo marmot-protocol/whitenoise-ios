@@ -82,3 +82,42 @@ struct ManageStorageModelTests {
         #expect(model.identity(for: "invite").avatarAsset == nil)
     }
 }
+
+/// Removals drop the host's decrypted copies of what MDK removed, and no more.
+@MainActor
+struct ManageStorageRemovalTests {
+    /// Only bulk removals, which report a count, drop every profile's decrypted
+    /// copies; a single Remove drops just its own file, and Clear Cache none.
+    @Test func onlyBulkRemovalsDropEveryDecryptedCopy() {
+        #expect(ManageStorageModel.Operation.removeOlder(.account).removesInBulk)
+        #expect(ManageStorageModel.Operation.removeOlder(.chat("g")).removesInBulk)
+        #expect(ManageStorageModel.Operation.removeChat("g").removesInBulk)
+        #expect(!ManageStorageModel.Operation.removeAttachment("g:m:s:0").removesInBulk)
+        #expect(!ManageStorageModel.Operation.clearCache.removesInBulk)
+    }
+
+    /// The removed file's decrypted copy is found by its original message, source and slot.
+    @Test func singleRemovalNamesTheRemovedFilesPlaintext() {
+        func reference(_ plaintext: Character) -> MediaAttachmentReferenceFfi {
+            MediaAttachmentReferenceFfi(locators: [], ciphertextSha256: String(repeating: "a", count: 64),
+                plaintextSha256: String(repeating: plaintext, count: 64), nonceHex: String(repeating: "c", count: 24),
+                fileName: "photo.jpg", mediaType: "image/jpeg", version: .v1, sourceEpoch: 1, dim: nil, thumbhash: nil)
+        }
+        func entry(message: String, source: String, _ attachment: MediaAttachmentOutcomeFfi) -> AttachmentEntryFfi {
+            AttachmentEntryFfi(messageIdHex: message, sourceMessageIdHex: source, sender: "sender", timelineAt: 1,
+                               receivedAt: 1, sourceEpoch: nil, category: .image, role: .shared, attachment: attachment)
+        }
+        let target = AttachmentLocalTargetFfi(messageIdHex: "edit", sourceMessageIdHex: "original", attachmentIndex: 2)
+        let rejected = MediaAttachmentRejectionFfi(kind: .unsupportedFormat, detail: "bad")
+        let entries = [
+            entry(message: "edit", source: "other", .accepted(attachmentIndex: 2, reference: reference("1"))),
+            entry(message: "other", source: "original", .accepted(attachmentIndex: 2, reference: reference("2"))),
+            entry(message: "edit", source: "original", .rejected(attachmentIndex: 2, rejection: rejected)),
+            entry(message: "edit", source: "original", .accepted(attachmentIndex: 1, reference: reference("3"))),
+            entry(message: "edit", source: "original", .accepted(attachmentIndex: 2, reference: reference("4"))),
+        ]
+
+        #expect(MarmotClient.plaintextHash(in: entries, for: target) == String(repeating: "4", count: 64))
+        #expect(MarmotClient.plaintextHash(in: Array(entries.dropLast()), for: target) == nil)
+    }
+}

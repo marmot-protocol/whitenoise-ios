@@ -43,10 +43,26 @@ struct ManageStoragePresentationTests {
         #expect(usage.cacheBytes == 50)
     }
 
+    /// Removing a legacy body leaves the database file the same size until it is
+    /// compacted: those bytes become free pages, not chat data, and stay on screen.
+    @Test func freePagesShowApartFromChatData() {
+        let before = ManageStoragePresentation.Usage(Self.usage(legacy: 300, database: 1_000, databaseFree: 100))
+        #expect(before.chatDataBytes == 600)
+        #expect(before.unusedDatabaseBytes == 100)
+
+        let after = ManageStoragePresentation.Usage(Self.usage(legacy: 0, database: 1_000, databaseFree: 400))
+        #expect(after.chatDataBytes == 600)
+        #expect(after.unusedDatabaseBytes == 400)
+    }
+
     @Test func figuresNeverWrapAround() {
         let usage = ManageStoragePresentation.Usage(Self.usage(media: .max, legacy: 10, database: 5))
         #expect(usage.attachmentBytes == .max)
         #expect(usage.chatDataBytes == 0)
+
+        let mostlyFree = ManageStoragePresentation.Usage(Self.usage(legacy: 50, database: 100, databaseFree: 80))
+        #expect(mostlyFree.chatDataBytes == 0)
+        #expect(mostlyFree.unusedDatabaseBytes == 80)
     }
 
     @Test func onlyUnfinishedMigrationStatesShowANotice() {

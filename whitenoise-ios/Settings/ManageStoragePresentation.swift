@@ -8,15 +8,21 @@ enum ManageStoragePresentation {
     struct Usage: Equatable {
         let attachmentBytes: UInt64
         let attachmentCount: UInt64
-        /// The account database without the attachment bodies still inside it.
+        /// The account database's live data, without its free pages or the
+        /// attachment bodies still inside it.
         let chatDataBytes: UInt64
+        /// Free pages the database file still holds. iOS counts them until the
+        /// database is compacted, so they stay on screen rather than vanish.
+        let unusedDatabaseBytes: UInt64
         let cacheBytes: UInt64
         let migration: MigrationNotice?
 
         init(_ usage: AttachmentStorageUsageFfi) {
             attachmentBytes = saturatingSum(usage.mediaBytes, usage.legacyBytes)
             attachmentCount = usage.attachmentCount
-            chatDataBytes = usage.databaseBytes >= usage.legacyBytes ? usage.databaseBytes - usage.legacyBytes : 0
+            chatDataBytes = saturatingDifference(saturatingDifference(usage.databaseBytes, usage.databaseFreeBytes),
+                                                 usage.legacyBytes)
+            unusedDatabaseBytes = usage.databaseFreeBytes
             cacheBytes = usage.cacheBytes
             migration = migrationNotice(usage.migration, bytes: usage.migrationBytes)
         }
@@ -170,6 +176,10 @@ enum ManageStoragePresentation {
     private static func saturatingSum(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
         let (sum, overflow) = lhs.addingReportingOverflow(rhs)
         return overflow ? .max : sum
+    }
+
+    private static func saturatingDifference(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
+        lhs >= rhs ? lhs - rhs : 0
     }
 }
 

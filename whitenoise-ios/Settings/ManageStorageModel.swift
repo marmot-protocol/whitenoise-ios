@@ -25,6 +25,14 @@ final class ManageStorageModel {
         case removeOlder(Scope)
         case removeChat(String)
         case removeAttachment(String)
+
+        /// Bulk removals report a count, not which plaintext they removed.
+        var removesInBulk: Bool {
+            switch self {
+            case .removeOlder, .removeChat: true
+            case .clearCache, .removeAttachment: false
+            }
+        }
     }
 
     struct ChatIdentity: Equatable {
@@ -208,6 +216,9 @@ final class ManageStorageModel {
 
     func clearCache(using appState: AppState) async {
         await perform(.clearCache, using: appState) { client, accountRef in
+            // Drop decoded pictures and hold off new avatar demand while MDK clears the stored ones.
+            AvatarCacheErasure.begin()
+            defer { AvatarCacheErasure.end() }
             try await client.clearAvatarCache(accountRef: accountRef)
         }
     }
@@ -235,6 +246,15 @@ final class ManageStorageModel {
             guard try await client.removeRetainedAttachment(accountRef: accountRef,
                 groupIdHex: attachment.groupIdHex, target: attachment.target)
             else { throw AttachmentReadError.stale }
+            // Like Downloads, drop only this file's decrypted copy. When that copy
+            // can't be named or deleted, drop them all rather than keep plaintext.
+            let hash = try? await client.retainedAttachmentPlaintextHash(accountRef: accountRef,
+                groupIdHex: attachment.groupIdHex, target: attachment.target)
+            if let hash, await MessageMediaCache.removeCachedData(forPlaintextHashes: [hash]) {
+                AttachmentPresentationState.shared.invalidate()
+            } else {
+                await Self.purgeAllDecryptedMedia()
+            }
         }
     }
 
@@ -257,16 +277,16 @@ final class ManageStorageModel {
             if currentContext(appState) == context { failedOperation = operation }
         }
         // A failed bulk call may still have removed some attachments.
-        if attempted, operation != .clearCache {
-            await Self.invalidateHostMedia()
+        if attempted, operation.removesInBulk {
+            await Self.purgeAllDecryptedMedia()
         }
         guard currentContext(appState) == context else { return }
         await bind(using: appState)
     }
 
-    /// Bulk removals report counts, not plaintext hashes, so drop every decrypted
-    /// copy; open conversations then re-read through MDK.
-    private static func invalidateHostMedia() async {
+    /// Drops every decrypted copy, for removals that can't name what they removed;
+    /// open conversations then re-read through MDK.
+    private static func purgeAllDecryptedMedia() async {
         _ = await MessageMediaCache.purgeAllDecryptedMedia()
         AttachmentPresentationState.shared.invalidate()
     }

@@ -60,6 +60,14 @@ struct ManageStorageView: View {
                 }
                 LabeledContent("Messages and Chat Data",
                                value: ManageStoragePresentation.byteText(usage.chatDataBytes))
+                if usage.unusedDatabaseBytes > 0 {
+                    LabeledContent {
+                        Text(ManageStoragePresentation.byteText(usage.unusedDatabaseBytes))
+                    } label: {
+                        Text("Unused Database Space")
+                        Text("Still held by the chat database file")
+                    }
+                }
                 // Stale figures stay visible, but not as if they were current.
                 if model.usageRefresh.failed {
                     ManageStorageRetryRow(message: L10n.string("Couldn't load storage usage")) {
@@ -515,7 +523,7 @@ private struct RemoveOlderConfirmation: ViewModifier {
     ]
     let model = ManageStorageModel.fixture(
         usage: AttachmentStorageUsageFfi(mediaBytes: 209 * mebibyte, legacyBytes: 0, attachmentCount: 3,
-                                         databaseBytes: 18 * mebibyte, databaseFreeBytes: 0,
+                                         databaseBytes: 18 * mebibyte, databaseFreeBytes: 6 * mebibyte,
                                          migration: .paused, migrationBytes: 640 * mebibyte,
                                          cacheBytes: 6 * mebibyte),
         chats: [

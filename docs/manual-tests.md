@@ -385,11 +385,14 @@ before every release tag.
 - [ ] With more than 50 chats or attachments holding files, scroll to the end
       of Chats and of Largest Attachments: further pages load once, with no
       duplicate rows, and the spinner disappears at the end.
-- [ ] Clear Cache: progress shows in the button, the cache figure drops, and
-      avatars in Chats and Settings reappear on demand.
+- [ ] Clear Cache: progress shows in the button, the cache figure drops,
+      pictures on the screen blank while it runs, and avatars in Chats and
+      Settings reappear on demand.
 - [ ] In Largest Attachments, swipe a row and tap Remove. The row disappears,
       Storage Used drops, and the message in its chat shows the attachment as
-      removed with Download again. Download again restores it.
+      removed with Download again. Download again restores it. Photos you
+      viewed in other chats and other profiles still open at once, without
+      decrypting again.
 - [ ] Open a chat's row, tap Remove All Attachments and confirm. The dialog
       names the chat; afterwards the chat's list is empty, the chat leaves the
       main list, and its media in the open conversation shows as removed (no
@@ -409,6 +412,10 @@ before every release tag.
       After a removal or freeing space elsewhere, the row switches back to
       updating within about 15 seconds without pull to refresh. Reclaiming
       Space may appear briefly.
+- [ ] On that upgraded install (live data over 64 MiB, so MDK doesn't compact
+      it), remove attachments that were still in the chat database. Messages
+      and Chat Data stays the same size; Unused Database Space appears with the
+      space the database file still holds.
 - [ ] Turn on airplane mode and remove attachments: removals still work
       because they are local.
 - [ ] Check VoiceOver on chat and attachment rows (name, count/date and size

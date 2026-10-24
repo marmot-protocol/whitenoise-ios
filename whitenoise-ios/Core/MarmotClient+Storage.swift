@@ -39,6 +39,36 @@ extension MarmotClient {
         return try await marmot.controlAttachment(accountRef: accountRef, reference: reference, control: .remove)
     }
 
+    /// The plaintext hash the host media cache keys a listing entry's decrypted
+    /// copy by. Local references are opaque, so this reads the chat's attachment
+    /// history, which still names a removed attachment. Nil when it can't be found.
+    func retainedAttachmentPlaintextHash(accountRef: String, groupIdHex: String,
+                                         target: AttachmentLocalTargetFfi) async throws -> String? {
+        var cursor: AttachmentHistoryCursor?
+        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+        repeat {
+            try Task.checkCancellation()
+            guard ContinuousClock.now < deadline else { return nil }
+            let result = try await marmot.attachmentHistoryPage(accountRef: accountRef,
+                groupIdHex: groupIdHex, limit: 100, cursor: cursor)
+            guard case .page(let page) = result else { return nil }
+            if let hash = Self.plaintextHash(in: page.entries, for: target) { return hash }
+            cursor = page.hasMore ? page.nextCursor : nil
+        } while cursor != nil
+        return nil
+    }
+
+    /// Only the original message, source and slot name the same attachment.
+    static func plaintextHash(in entries: [AttachmentEntryFfi], for target: AttachmentLocalTargetFfi) -> String? {
+        for entry in entries where entry.messageIdHex == target.messageIdHex
+            && entry.sourceMessageIdHex == target.sourceMessageIdHex {
+            if case .accepted(let index, let reference) = entry.attachment, index == target.attachmentIndex {
+                return reference.plaintextSha256
+            }
+        }
+        return nil
+    }
+
     func clearAvatarCache(accountRef: String) async throws {
         try await marmot.clearAvatarCache(accountRef: accountRef)
     }
