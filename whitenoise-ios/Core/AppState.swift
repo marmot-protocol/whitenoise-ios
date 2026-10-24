@@ -1177,9 +1177,7 @@ final class AppState {
             guard await NotificationCommunicationDecorator.deleteAllDonatedInteractions() else {
                 throw ForegroundRuntimeMutationError.runtimeUnavailable
             }
-            notifications.cancelForegroundBatches()
-            UNUserNotificationCenter.current().removeAllDeliveredNotifications()
-            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+            notifications.removeAllNotifications()
             URLCache.shared.removeAllCachedResponses()
             RemoteAvatarImageLoader.clearCaches()
             GroupAvatarImageLoader.clearCaches()

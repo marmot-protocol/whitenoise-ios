@@ -20,7 +20,16 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     private let applicationBadgeCountSetter: ((Int) async throws -> Void)?
     private let deliveredNotificationDescriptorsProvider:
         (() async -> [DeliveredNotificationDescriptor])?
-    private let deliveredNotificationIdentifiersRemover: (([String]) -> Void)?
+    private let pendingNotificationRequestsRemover: @Sendable ([String]) -> Void
+    private let deliveredNotificationIdentifiersRemover: @Sendable ([String]) -> Void
+    /// Notification Center mutations make a synchronous XPC round trip, so they
+    /// run on this serial queue instead of the main thread, in call order.
+    /// Requests are added through it too, so a removal can't land after a
+    /// newer request that reuses its identifier.
+    private let centerMutationQueue = DispatchQueue(
+        label: "dev.ipf.whitenoise.ios.notification-center",
+        qos: .userInitiated
+    )
     private weak var appState: AppState?
     private var foregroundBatches = ForegroundNotificationBatch()
     private var pendingRoutes: [LocalNotificationRoute] = []
@@ -40,7 +49,8 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         applicationBadgeCountSetter: ((Int) async throws -> Void)? = nil,
         deliveredNotificationDescriptorsProvider:
             (() async -> [DeliveredNotificationDescriptor])? = nil,
-        deliveredNotificationIdentifiersRemover: (([String]) -> Void)? = nil,
+        pendingNotificationRequestsRemover: (@Sendable ([String]) -> Void)? = nil,
+        deliveredNotificationIdentifiersRemover: (@Sendable ([String]) -> Void)? = nil,
         notificationRequestScheduler: ((UNNotificationRequest) async throws -> Void)? = nil,
         notificationClock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
@@ -52,7 +62,12 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         self.remoteNotificationRegistrar = remoteNotificationRegistrar
         self.applicationBadgeCountSetter = applicationBadgeCountSetter
         self.deliveredNotificationDescriptorsProvider = deliveredNotificationDescriptorsProvider
-        self.deliveredNotificationIdentifiersRemover = deliveredNotificationIdentifiersRemover
+        self.pendingNotificationRequestsRemover = pendingNotificationRequestsRemover ?? { identifiers in
+            center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        }
+        self.deliveredNotificationIdentifiersRemover = deliveredNotificationIdentifiersRemover ?? { identifiers in
+            center.removeDeliveredNotifications(withIdentifiers: identifiers)
+        }
         super.init()
     }
 
@@ -81,7 +96,11 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func registerNotificationCategories() {
-        center.setNotificationCategories([Self.messageNotificationCategory()])
+        let center = center
+        let categories: Set<UNNotificationCategory> = [Self.messageNotificationCategory()]
+        centerMutationQueue.async {
+            center.setNotificationCategories(categories)
+        }
     }
 
     static func messageNotificationCategory() -> UNNotificationCategory {
@@ -282,11 +301,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         )
 
         do {
-            if let notificationRequestScheduler {
-                try await notificationRequestScheduler(request)
-            } else {
-                try await center.add(request)
-            }
+            try await addNotificationRequest(request)
         } catch {
             appState?.present(.error(
                 L10n.string("Notification failed"),
@@ -482,14 +497,65 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
             trigger: nil
         )
         do {
-            try await center.add(request)
+            try await addNotificationRequest(request)
         } catch {
             appState?.present(.error(title, message: body))
         }
     }
 
     func cancelForegroundBatches(accountRef: String? = nil) {
-        center.removePendingNotificationRequests(withIdentifiers: foregroundBatches.cancel(account: accountRef))
+        removePendingNotificationRequests(withIdentifiers: foregroundBatches.cancel(account: accountRef))
+    }
+
+    /// App-data erasure: drops every pending and delivered notification.
+    func removeAllNotifications() {
+        _ = foregroundBatches.cancel()
+        let center = center
+        centerMutationQueue.async {
+            center.removeAllDeliveredNotifications()
+            center.removeAllPendingNotificationRequests()
+        }
+    }
+
+    /// Waits until every Notification Center mutation enqueued so far has run.
+    func drainNotificationCenterMutations() async {
+        let queue = centerMutationQueue
+        await withCheckedContinuation { continuation in
+            queue.async { continuation.resume() }
+        }
+    }
+
+    private func removePendingNotificationRequests(withIdentifiers identifiers: [String]) {
+        guard !identifiers.isEmpty else { return }
+        let remover = pendingNotificationRequestsRemover
+        centerMutationQueue.async { remover(identifiers) }
+    }
+
+    private func removeDeliveredNotifications(withIdentifiers identifiers: [String]) {
+        guard !identifiers.isEmpty else { return }
+        let remover = deliveredNotificationIdentifiersRemover
+        centerMutationQueue.async { remover(identifiers) }
+    }
+
+    private func addNotificationRequest(_ request: UNNotificationRequest) async throws {
+        if let notificationRequestScheduler {
+            await drainNotificationCenterMutations()
+            try await notificationRequestScheduler(request)
+            return
+        }
+        let center = center
+        let queue = centerMutationQueue
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            queue.async {
+                center.add(request) { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+        }
     }
 
     /// Legacy exact-message cleanup; batches are reconciled using their read marker.
@@ -497,7 +563,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         // The exact-action fallback must not dismiss a newer batch for this chat.
         // Batched requests carry full routing metadata and use read reconciliation.
         guard !identifier.hasPrefix("foreground-chat:") else { return }
-        center.removeDeliveredNotifications(
+        removeDeliveredNotifications(
             withIdentifiers: NotificationActionDeliveredNotificationPolicy.identifiersToRemove(
                 actedNotificationIdentifier: identifier
             )
@@ -517,7 +583,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         guard !readMessageIdHexes.isEmpty else { return }
         let pending = foregroundBatches.cancel(account: accountRef, group: groupIdHex,
             readMessages: conversationStillHasUnread == false ? nil : readMessageIdHexes)
-        center.removePendingNotificationRequests(withIdentifiers: pending)
+        removePendingNotificationRequests(withIdentifiers: pending)
         let descriptors = await deliveredNotificationDescriptors()
         let identifiers = DeliveredNotificationReadCleanupPolicy.identifiersToRemove(
             from: descriptors,
@@ -526,12 +592,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
             readMessageIdHexes: readMessageIdHexes,
             removeEntireConversation: conversationStillHasUnread == false
         )
-        guard !identifiers.isEmpty else { return }
-        if let deliveredNotificationIdentifiersRemover {
-            deliveredNotificationIdentifiersRemover(identifiers)
-        } else {
-            center.removeDeliveredNotifications(withIdentifiers: identifiers)
-        }
+        removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 
     private func deliveredNotificationDescriptors() async -> [DeliveredNotificationDescriptor] {
