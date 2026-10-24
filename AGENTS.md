@@ -379,6 +379,31 @@ Do not add a second storage path for data Marmot already owns.
   never a fixed `Task.sleep`; only those named helpers may sleep. Host views
   through `withHostedWindow`.
 - No source-text assertions (see Architecture).
+- Test the app's decisions, not other code. Most suites the audit deleted
+  broke one of these rules:
+  - Don't test MarmotKit through one-line `MarmotClient` pass-throughs or
+    version-adoption smoke tests; MDK's behaviour belongs in MDK's tests.
+  - Don't pin literals: no `constant == literal`, memberwise-init or
+    synthesized-`Equatable` round-trips, or layout numbers restated from the
+    code. Assert relations and invariants ("fits", "doesn't grow",
+    "at least 44 pt").
+  - Search for an existing suite before adding one and extend it; name the
+    file after its suite. One behaviour, one owner.
+  - Build records with the shared fixtures (`hex`, `timelineRecord`,
+    `chatListRow`, `group`, `message`, … in `TestSupport/`); don't add
+    private copies. Build `AppState` with `AppState.test()`, never
+    `AppState(client:)`, and never touch `UserDefaults.standard` or other
+    process-wide state.
+  - When a decision only runs inside a view, a runtime or an async path,
+    extract a small pure helper and test that on the PR tier instead of
+    hosting a window or starting a runtime.
+  - Add catalog, manifest and config checks as scripts in the lint job, not
+    unit tests. `PrivacyManifestTests` stays until #1227 runs the release
+    privacy check in CI.
+  - Keep waits loud: a timed-out wait must still fail the test. If you
+    catch it (`try? await eventually`), assert the condition right after;
+    never write a helper that returns quietly on timeout. Keep the default
+    timeout unless a test has a reason.
 - `python3 scripts/audit/inventory.py --check` (run by `scripts/lint.sh`)
   enforces the tags, sleeps, runtime ownership, gate/`.timeLimit` and PR-plan
   rules. `scripts/audit/guardrail-baseline.txt` holds known violations with
