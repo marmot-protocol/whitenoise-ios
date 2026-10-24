@@ -8,6 +8,7 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
     case appearance
     case privacyAndSecurity
     case dataUsage
+    case manageStorage
     case relays
     case aiAgents
     case support
@@ -22,6 +23,7 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
         case .appearance: "Appearance"
         case .privacyAndSecurity: "Privacy & Security"
         case .dataUsage: "Data Usage"
+        case .manageStorage: "Manage Storage"
         case .relays: "Relays"
         case .aiAgents: "AI Agents"
         case .support: "Chat with support"
@@ -38,6 +40,7 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
         case .appearance: "circle.lefthalf.filled"
         case .privacyAndSecurity: "hand.raised"
         case .dataUsage: "externaldrive"
+        case .manageStorage: "internaldrive"
         case .relays: "antenna.radiowaves.left.and.right"
         case .aiAgents: "sparkles"
         case .support: "message"
@@ -74,6 +77,7 @@ struct SettingsView: View {
                 .appearance,
                 .privacyAndSecurity,
                 .dataUsage,
+                .manageStorage,
                 .relays,
                 .aiAgents,
             ])
@@ -297,6 +301,7 @@ struct SettingsView: View {
         case .appearance: AppearanceSettingsView()
         case .privacyAndSecurity: PrivacySecuritySettingsView()
         case .dataUsage: DataAndStorageView()
+        case .manageStorage: ManageStorageView()
         case .relays: RelaysView()
         case .aiAgents: AIAgentsSettingsView()
         case .support: EmptyView() // Support resolves its destination before pushing.
