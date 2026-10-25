@@ -137440,61 +137440,61 @@
         }
       }
     },
-    "This profile's attachments older than this are removed from this device automatically. Downloading one again keeps it for the full period from then." : {
+    "Forever keeps this profile's attachments on this device. A shorter period removes older ones now and as they age. Downloading one again keeps it for the full period from then." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anhänge dieses Profils, die älter als dieser Zeitraum sind, werden automatisch von diesem Gerät entfernt. Lädst du einen erneut herunter, bleibt er ab dann für den gesamten Zeitraum erhalten."
+            "value" : "„Für immer“ behält die Anhänge dieses Profils auf diesem Gerät. Ein kürzerer Zeitraum entfernt ältere Anhänge sofort und weiterhin, sobald sie älter werden. Lädst du einen erneut herunter, bleibt er ab dann für den gesamten Zeitraum erhalten."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los archivos adjuntos de este perfil con más antigüedad que este período se eliminan automáticamente de este dispositivo. Si vuelves a descargar uno, se conserva durante todo el período desde ese momento."
+            "value" : "«Siempre» conserva los archivos adjuntos de este perfil en este dispositivo. Un período más corto elimina los más antiguos ahora y a medida que envejecen. Si vuelves a descargar uno, se conserva durante todo el período desde ese momento."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les pièces jointes de ce profil plus anciennes que cette durée sont supprimées automatiquement de cet appareil. Si vous en téléchargez une à nouveau, elle est conservée pendant toute la durée à partir de ce moment."
+            "value" : "« Toujours » conserve les pièces jointes de ce profil sur cet appareil. Une durée plus courte supprime les plus anciennes maintenant, puis au fil du temps. Si vous en téléchargez une à nouveau, elle est conservée pendant toute la durée à partir de ce moment."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gli allegati di questo profilo più vecchi di questo periodo vengono rimossi automaticamente da questo dispositivo. Se ne scarichi di nuovo uno, viene conservato per l’intero periodo da quel momento."
+            "value" : "«Per sempre» conserva gli allegati di questo profilo su questo dispositivo. Un periodo più breve rimuove quelli più vecchi ora e man mano che invecchiano. Se ne scarichi di nuovo uno, viene conservato per l’intero periodo da quel momento."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Os anexos deste perfil mais antigos que esse período são removidos automaticamente deste dispositivo. Se você baixar um novamente, ele será mantido pelo período completo a partir de então."
+            "value" : "“Para sempre” mantém os anexos deste perfil neste dispositivo. Um período menor remove os mais antigos agora e à medida que envelhecem. Se você baixar um novamente, ele será mantido pelo período completo a partir de então."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Вложения этого профиля старше этого срока автоматически удаляются с этого устройства. Если скачать вложение снова, оно хранится весь срок с этого момента."
+            "value" : "«Всегда» сохраняет вложения этого профиля на этом устройстве. Более короткий срок удаляет более старые вложения сразу и затем по мере устаревания. Если скачать вложение снова, оно хранится весь срок с этого момента."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu profilin bu süreden eski ekleri bu cihazdan otomatik olarak kaldırılır. Birini yeniden indirirseniz o andan itibaren tüm süre boyunca saklanır."
+            "value" : "“Süresiz” bu profilin eklerini bu cihazda tutar. Daha kısa bir süre, daha eski ekleri hemen ve eskidikçe kaldırır. Birini yeniden indirirseniz o andan itibaren tüm süre boyunca saklanır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此个人资料中超过此时长的附件会自动从此设备上移除。重新下载的附件会从下载时起保留完整时长。"
+            "value" : "“永久”会在此设备上保留此个人资料的附件。较短的时长会立即移除较早的附件，并在附件超过时长后继续移除。重新下载的附件会从下载时起保留完整时长。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此個人檔案中超過此時長的附件會自動從此裝置上移除。重新下載的附件會從下載時起保留完整時長。"
+            "value" : "「永久」會在此裝置上保留此個人檔案的附件。較短的時長會立即移除較早的附件，並在附件超過時長後繼續移除。重新下載的附件會從下載時起保留完整時長。"
           }
         }
       }

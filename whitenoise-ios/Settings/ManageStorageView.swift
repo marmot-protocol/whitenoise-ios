@@ -128,7 +128,7 @@ struct ManageStorageView: View {
                 ManageStorageLoadingRow()
             }
         } footer: {
-            Text("This profile's attachments older than this are removed from this device automatically. Downloading one again keeps it for the full period from then.")
+            Text("Forever keeps this profile's attachments on this device. A shorter period removes older ones now and as they age. Downloading one again keeps it for the full period from then.")
         }
     }
 

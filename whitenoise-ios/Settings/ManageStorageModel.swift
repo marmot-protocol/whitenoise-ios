@@ -34,6 +34,11 @@ final class ManageStorageModel {
             case .clearCache, .removeAttachment: false
             }
         }
+
+        /// A failed bulk call (nil) may still have removed some; one that reported none removed nothing.
+        func dropsEveryDecryptedCopy(removed: UInt64?) -> Bool {
+            removesInBulk && removed != 0
+        }
     }
 
     struct ChatIdentity: Equatable {
@@ -241,6 +246,7 @@ final class ManageStorageModel {
             AvatarCacheErasure.begin()
             defer { AvatarCacheErasure.end() }
             try await client.clearAvatarCache(accountRef: accountRef)
+            return nil
         }
     }
 
@@ -249,7 +255,7 @@ final class ManageStorageModel {
                      using appState: AppState) async {
         let receivedBefore = cutoff.receivedBefore
         await perform(.removeOlder(scope), using: appState) { client, accountRef in
-            _ = try await client.removeAttachmentsOlderThan(accountRef: accountRef,
+            try await client.removeAttachmentsOlderThan(accountRef: accountRef,
                 receivedBefore: receivedBefore, groupIdHex: scope.groupIdHex)
         }
     }
@@ -269,6 +275,7 @@ final class ManageStorageModel {
             }
             removed = try await client.setAttachmentKeepMedia(accountRef: accountRef, keep: keep)
             saved = true
+            return removed
         }
         guard let started, currentContext(appState) == started else { return nil }
         return removed
@@ -276,7 +283,7 @@ final class ManageStorageModel {
 
     func removeAllAttachments(inChat groupIdHex: String, using appState: AppState) async {
         await perform(.removeChat(groupIdHex), using: appState) { client, accountRef in
-            _ = try await client.removeChatAttachments(accountRef: accountRef, groupIdHex: groupIdHex)
+            try await client.removeChatAttachments(accountRef: accountRef, groupIdHex: groupIdHex)
         }
     }
 
@@ -294,16 +301,19 @@ final class ManageStorageModel {
                 _ = await MessageMediaCache.removeCachedData(forPlaintextHashes: [hash])
             }
             AttachmentPresentationState.shared.invalidate()
+            return nil
         }
     }
 
+    /// `body` returns how many attachments MDK removed, when it reports a count.
     private func perform(_ operation: Operation, using appState: AppState,
-                         _ body: (MarmotClient, String) async throws -> Void) async {
+                         _ body: (MarmotClient, String) async throws -> UInt64?) async {
         guard self.operation == nil, let context, currentContext(appState) == context else { return }
         self.operation = operation
         failedOperation = nil
         defer { self.operation = nil }
         var attempted = false
+        var removed: UInt64?
         do {
             let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
             defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
@@ -311,12 +321,11 @@ final class ManageStorageModel {
                 throw CancellationError()
             }
             attempted = true
-            try await body(lease.client, context.accountRef)
+            removed = try await body(lease.client, context.accountRef)
         } catch {
             if currentContext(appState) == context { failedOperation = operation }
         }
-        // A failed bulk call may still have removed some attachments.
-        if attempted, operation.removesInBulk {
+        if attempted, operation.dropsEveryDecryptedCopy(removed: removed) {
             await Self.purgeAllDecryptedMedia()
         }
         guard currentContext(appState) == context else { return }

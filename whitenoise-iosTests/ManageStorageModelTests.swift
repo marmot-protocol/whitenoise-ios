@@ -92,8 +92,20 @@ struct ManageStorageRemovalTests {
         #expect(ManageStorageModel.Operation.removeOlder(.account).removesInBulk)
         #expect(ManageStorageModel.Operation.removeOlder(.chat("g")).removesInBulk)
         #expect(ManageStorageModel.Operation.removeChat("g").removesInBulk)
+        #expect(ManageStorageModel.Operation.keepMedia.removesInBulk)
         #expect(!ManageStorageModel.Operation.removeAttachment("g:m:s:0").removesInBulk)
         #expect(!ManageStorageModel.Operation.clearCache.removesInBulk)
+    }
+
+    /// A longer Keep Media window removes nothing, so open chats keep their decrypted copies.
+    @Test func bulkRemovalsThatRemovedNothingKeepDecryptedCopies() {
+        let keepMedia = ManageStorageModel.Operation.keepMedia
+        #expect(!keepMedia.dropsEveryDecryptedCopy(removed: 0))
+        #expect(keepMedia.dropsEveryDecryptedCopy(removed: 3))
+        // A failed call may still have removed some.
+        #expect(keepMedia.dropsEveryDecryptedCopy(removed: nil))
+        #expect(!ManageStorageModel.Operation.removeChat("g").dropsEveryDecryptedCopy(removed: 0))
+        #expect(!ManageStorageModel.Operation.clearCache.dropsEveryDecryptedCopy(removed: nil))
     }
 
     /// The removed file's decrypted copy is found by its original message, source and slot.
