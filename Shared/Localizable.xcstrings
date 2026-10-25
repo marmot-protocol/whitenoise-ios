@@ -44046,65 +44046,6 @@
         }
       }
     },
-    "Download storage limit" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speicherlimit für Downloads"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Límite de almacenamiento de descargas"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Limite de stockage des téléchargements"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Limite di spazio per i download"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Limite de armazenamento de downloads"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Лимит хранилища загрузок"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme depolama sınırı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下载存储限制"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下載儲存空間限制"
-          }
-        }
-      }
-    },
     "Download unavailable" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -63303,65 +63244,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lightning 位址 QR 碼"
-          }
-        }
-      }
-    },
-    "Limits apply to this profile. Downloads pause when storage is full; existing files are kept. Remove individual downloads from Message info. Automatic downloads also follow your media and network preferences." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Limits gelten für dieses Profil. Bei vollem Speicher pausieren Downloads; vorhandene Dateien bleiben erhalten. Einzelne Downloads lassen sich unter Nachrichteninfo entfernen. Automatische Downloads berücksichtigen auch deine Medien- und Netzwerkeinstellungen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los límites se aplican a este perfil. Las descargas se pausan cuando el almacenamiento está lleno; los archivos existentes se conservan. Elimina descargas individuales desde Información del mensaje. Las descargas automáticas también respetan tus preferencias de contenido y red."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les limites s’appliquent à ce profil. Les téléchargements sont suspendus lorsque le stockage est plein ; les fichiers existants sont conservés. Supprimez les téléchargements individuellement dans Infos du message. Les téléchargements automatiques respectent aussi vos préférences de médias et de réseau."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I limiti si applicano a questo profilo. I download si interrompono quando lo spazio è pieno; i file esistenti vengono conservati. Rimuovi i singoli download da Info messaggio. I download automatici rispettano anche le preferenze relative ai contenuti e alla rete."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Os limites se aplicam a este perfil. Os downloads pausam quando o armazenamento está cheio; os arquivos existentes são mantidos. Remova downloads individuais em Informações da mensagem. Os downloads automáticos também respeitam suas preferências de mídia e rede."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Лимиты действуют для этого профиля. При заполнении хранилища загрузки приостанавливаются; существующие файлы сохраняются. Отдельные загрузки можно удалить в информации о сообщении. Автозагрузка также учитывает настройки медиа и сети."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sınırlar bu profil için geçerlidir. Depolama dolduğunda indirmeler duraklar; mevcut dosyalar korunur. Tek tek indirmeleri Mesaj bilgisi bölümünden kaldırın. Otomatik indirmeler medya ve ağ tercihlerinize de uyar."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "限制适用于此个人资料。存储空间已满时下载会暂停；已有文件会保留。可在“消息信息”中移除单个下载。自动下载也遵循您的媒体和网络偏好设置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "限制適用於此個人檔案。儲存空間已滿時下載會暫停；現有檔案會保留。可在「訊息資訊」中移除個別下載。自動下載也遵循您的媒體和網路偏好設定。"
           }
         }
       }
@@ -136213,6 +136095,1406 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "仍由聊天資料庫檔案佔用"
+          }
+        }
+      }
+    },
+    "Limits apply to this profile. A download waits when it would leave less free space than this, and continues when you free up space. To remove attachments or choose how long to keep them, go to Manage Storage. Automatic downloads also follow your media and network preferences." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Limits gelten für dieses Profil. Ein Download wartet, wenn danach weniger freier Speicher als dieser Wert bliebe, und wird fortgesetzt, sobald du Speicherplatz freigibst. Um Anhänge zu entfernen oder festzulegen, wie lange sie behalten werden, öffne „Speicher verwalten“. Automatische Downloads berücksichtigen auch deine Medien- und Netzwerkeinstellungen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los límites se aplican a este perfil. Una descarga espera si dejaría menos espacio libre que este valor y continúa cuando liberas espacio. Para eliminar archivos adjuntos o elegir cuánto tiempo conservarlos, ve a Gestionar almacenamiento. Las descargas automáticas también respetan tus preferencias de contenido y red."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les limites s’appliquent à ce profil. Un téléchargement attend s’il laisserait moins d’espace libre que cette valeur, puis reprend lorsque vous libérez de l’espace. Pour supprimer des pièces jointes ou choisir combien de temps les conserver, accédez à Gérer le stockage. Les téléchargements automatiques respectent aussi vos préférences de médias et de réseau."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I limiti si applicano a questo profilo. Un download resta in attesa se lascerebbe meno spazio libero di questo valore e riprende quando liberi spazio. Per rimuovere gli allegati o scegliere per quanto tempo conservarli, vai a Gestisci spazio. I download automatici rispettano anche le preferenze relative ai contenuti e alla rete."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os limites se aplicam a este perfil. Um download aguarda se deixar menos espaço livre do que este valor e continua quando você libera espaço. Para remover anexos ou escolher por quanto tempo mantê-los, acesse Gerenciar armazenamento. Os downloads automáticos também respeitam suas preferências de mídia e rede."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Лимиты действуют для этого профиля. Загрузка ждёт, если после неё останется меньше свободного места, чем указано, и продолжается, когда вы освободите место. Чтобы удалить вложения или выбрать, как долго их хранить, откройте «Управление хранилищем». Автозагрузка также учитывает настройки медиа и сети."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sınırlar bu profil için geçerlidir. Bir indirme, bundan daha az boş alan bırakacaksa bekler ve alan açtığınızda devam eder. Ekleri kaldırmak veya ne kadar süre saklanacaklarını seçmek için Depolama alanını yönet bölümüne gidin. Otomatik indirmeler medya ve ağ tercihlerinize de uyar."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "限制适用于此个人资料。如果下载后剩余的可用空间少于此值，下载会等待，并在你释放空间后继续。要移除附件或选择保留时长，请前往“管理存储空间”。自动下载也遵循你的媒体和网络偏好设置。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "限制適用於此個人檔案。如果下載後剩餘的可用空間少於此值，下載會等待，並在你釋出空間後繼續。若要移除附件或選擇保留時間，請前往「管理儲存空間」。自動下載也遵循你的媒體和網路偏好設定。"
+          }
+        }
+      }
+    },
+    "Keep Media" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medien behalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar archivos multimedia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver les médias"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva media"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manter mídia"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранить медиа"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medyayı sakla"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留媒体"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留媒體"
+          }
+        }
+      }
+    },
+    "Forever" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für immer"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siempre"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toujours"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per sempre"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para sempre"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Всегда"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Süresiz"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久"
+          }
+        }
+      }
+    },
+    "1 Year" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 Jahr"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 año"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 an"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 anno"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 ano"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 год"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 yıl"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 年"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 年"
+          }
+        }
+      }
+    },
+    "6 Months" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 Monate"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 meses"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 mois"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 mesi"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 meses"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 месяцев"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 ay"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 个月"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 個月"
+          }
+        }
+      }
+    },
+    "30 Days" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 Tage"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 días"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 jours"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 giorni"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 dias"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 дней"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 gün"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 天"
+          }
+        }
+      }
+    },
+    "Keep Media for 1 Year?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medien 1 Jahr behalten?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Conservar archivos multimedia durante 1 año?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver les médias pendant 1 an ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservare i media per 1 anno?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manter mídia por 1 ano?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранить медиа 1 год?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medya 1 yıl saklansın mı?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要将媒体保留 1 年吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要將媒體保留 1 年嗎？"
+          }
+        }
+      }
+    },
+    "Keep Media for 6 Months?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medien 6 Monate behalten?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Conservar archivos multimedia durante 6 meses?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver les médias pendant 6 mois ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservare i media per 6 mesi?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manter mídia por 6 meses?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранить медиа 6 месяцев?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medya 6 ay saklansın mı?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要将媒体保留 6 个月吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要將媒體保留 6 個月嗎？"
+          }
+        }
+      }
+    },
+    "Keep Media for 30 Days?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medien 30 Tage behalten?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Conservar archivos multimedia durante 30 días?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver les médias pendant 30 jours ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservare i media per 30 giorni?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manter mídia por 30 dias?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранить медиа 30 дней?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medya 30 gün saklansın mı?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要将媒体保留 30 天吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要將媒體保留 30 天嗎？"
+          }
+        }
+      }
+    },
+    "Attachments older than 1 year are removed from this device now and as they age. Messages stay, and you can download attachments again while they're still available." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhänge, die älter als 1 Jahr sind, werden jetzt von diesem Gerät entfernt, weitere, sobald sie dieses Alter erreichen. Die Nachrichten bleiben erhalten, und du kannst Anhänge erneut herunterladen, solange sie noch verfügbar sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos adjuntos de más de 1 año se eliminarán de este dispositivo ahora y a medida que alcancen esa antigüedad. Los mensajes se conservan y puedes volver a descargar los archivos adjuntos mientras sigan disponibles."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les pièces jointes de plus d’un an sont supprimées de cet appareil maintenant, puis au fur et à mesure qu’elles atteignent cet âge. Les messages sont conservés et vous pouvez télécharger à nouveau les pièces jointes tant qu’elles sont disponibles."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli allegati più vecchi di 1 anno vengono rimossi da questo dispositivo ora e man mano che raggiungono questa età. I messaggi restano e puoi scaricare di nuovo gli allegati finché sono ancora disponibili."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os anexos com mais de 1 ano serão removidos deste dispositivo agora e à medida que atingirem essa idade. As mensagens permanecem e você pode baixar os anexos novamente enquanto ainda estiverem disponíveis."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вложения старше 1 года будут удалены с этого устройства сейчас и далее по мере устаревания. Сообщения останутся, и вложения можно будет скачать снова, пока они доступны."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 yıldan eski ekler bu cihazdan şimdi ve bu süreyi aştıkça kaldırılır. Mesajlar kalır ve ekler hâlâ kullanılabilir olduğu sürece onları yeniden indirebilirsiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超过 1 年的附件将立即从此设备上移除，之后的附件也会在超过该时长时移除。消息会保留，只要附件仍可用，你就可以重新下载。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超過 1 年的附件將立即從此裝置上移除，之後的附件也會在超過該時長時移除。訊息會保留，只要附件仍可使用，你就可以重新下載。"
+          }
+        }
+      }
+    },
+    "Attachments older than 6 months are removed from this device now and as they age. Messages stay, and you can download attachments again while they're still available." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhänge, die älter als 6 Monate sind, werden jetzt von diesem Gerät entfernt, weitere, sobald sie dieses Alter erreichen. Die Nachrichten bleiben erhalten, und du kannst Anhänge erneut herunterladen, solange sie noch verfügbar sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos adjuntos de más de 6 meses se eliminarán de este dispositivo ahora y a medida que alcancen esa antigüedad. Los mensajes se conservan y puedes volver a descargar los archivos adjuntos mientras sigan disponibles."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les pièces jointes de plus de 6 mois sont supprimées de cet appareil maintenant, puis au fur et à mesure qu’elles atteignent cet âge. Les messages sont conservés et vous pouvez télécharger à nouveau les pièces jointes tant qu’elles sont disponibles."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli allegati più vecchi di 6 mesi vengono rimossi da questo dispositivo ora e man mano che raggiungono questa età. I messaggi restano e puoi scaricare di nuovo gli allegati finché sono ancora disponibili."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os anexos com mais de 6 meses serão removidos deste dispositivo agora e à medida que atingirem essa idade. As mensagens permanecem e você pode baixar os anexos novamente enquanto ainda estiverem disponíveis."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вложения старше 6 месяцев будут удалены с этого устройства сейчас и далее по мере устаревания. Сообщения останутся, и вложения можно будет скачать снова, пока они доступны."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 aydan eski ekler bu cihazdan şimdi ve bu süreyi aştıkça kaldırılır. Mesajlar kalır ve ekler hâlâ kullanılabilir olduğu sürece onları yeniden indirebilirsiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超过 6 个月的附件将立即从此设备上移除，之后的附件也会在超过该时长时移除。消息会保留，只要附件仍可用，你就可以重新下载。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超過 6 個月的附件將立即從此裝置上移除，之後的附件也會在超過該時長時移除。訊息會保留，只要附件仍可使用，你就可以重新下載。"
+          }
+        }
+      }
+    },
+    "Attachments older than 30 days are removed from this device now and as they age. Messages stay, and you can download attachments again while they're still available." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhänge, die älter als 30 Tage sind, werden jetzt von diesem Gerät entfernt, weitere, sobald sie dieses Alter erreichen. Die Nachrichten bleiben erhalten, und du kannst Anhänge erneut herunterladen, solange sie noch verfügbar sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos adjuntos de más de 30 días se eliminarán de este dispositivo ahora y a medida que alcancen esa antigüedad. Los mensajes se conservan y puedes volver a descargar los archivos adjuntos mientras sigan disponibles."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les pièces jointes de plus de 30 jours sont supprimées de cet appareil maintenant, puis au fur et à mesure qu’elles atteignent cet âge. Les messages sont conservés et vous pouvez télécharger à nouveau les pièces jointes tant qu’elles sont disponibles."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli allegati più vecchi di 30 giorni vengono rimossi da questo dispositivo ora e man mano che raggiungono questa età. I messaggi restano e puoi scaricare di nuovo gli allegati finché sono ancora disponibili."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os anexos com mais de 30 dias serão removidos deste dispositivo agora e à medida que atingirem essa idade. As mensagens permanecem e você pode baixar os anexos novamente enquanto ainda estiverem disponíveis."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вложения старше 30 дней будут удалены с этого устройства сейчас и далее по мере устаревания. Сообщения останутся, и вложения можно будет скачать снова, пока они доступны."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 günden eski ekler bu cihazdan şimdi ve bu süreyi aştıkça kaldırılır. Mesajlar kalır ve ekler hâlâ kullanılabilir olduğu sürece onları yeniden indirebilirsiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超过 30 天的附件将立即从此设备上移除，之后的附件也会在超过该时长时移除。消息会保留，只要附件仍可用，你就可以重新下载。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超過 30 天的附件將立即從此裝置上移除，之後的附件也會在超過該時長時移除。訊息會保留，只要附件仍可使用，你就可以重新下載。"
+          }
+        }
+      }
+    },
+    "Keep for 1 Year" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 Jahr behalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar 1 año"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver 1 an"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva per 1 anno"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manter por 1 ano"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранить 1 год"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 yıl sakla"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留 1 年"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留 1 年"
+          }
+        }
+      }
+    },
+    "Keep for 6 Months" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 Monate behalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar 6 meses"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver 6 mois"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva per 6 mesi"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manter por 6 meses"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранить 6 месяцев"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 ay sakla"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留 6 个月"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留 6 個月"
+          }
+        }
+      }
+    },
+    "Keep for 30 Days" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 Tage behalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservar 30 días"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver 30 jours"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva per 30 giorni"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manter por 30 dias"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранить 30 дней"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 gün sakla"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留 30 天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留 30 天"
+          }
+        }
+      }
+    },
+    "Removed %lld attachments" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld Anhang entfernt"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld Anhänge entfernt"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Removed %lld attachment"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Removed %lld attachments"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Se eliminó %lld archivo adjunto"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Se eliminaron %lld archivos adjuntos"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld pièce jointe supprimée"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld pièces jointes supprimées"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld allegato rimosso"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld allegati rimossi"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld anexo removido"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld anexos removidos"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "few" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Удалено %lld вложения"
+                    }
+                  },
+                  "many" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Удалено %lld вложений"
+                    }
+                  },
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Удалено %lld вложение"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Удалено %lld вложения"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld ek kaldırıldı"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "已移除 %lld 个附件"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "已移除 %lld 個附件"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "No attachments were old enough to remove." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Anhänge waren alt genug, um entfernt zu werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ningún archivo adjunto tenía la antigüedad suficiente para eliminarse."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune pièce jointe n’était assez ancienne pour être supprimée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun allegato era abbastanza vecchio da essere rimosso."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum anexo era antigo o suficiente para ser removido."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет вложений, достаточно старых для удаления."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaldırılacak kadar eski ek yoktu."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有足够早的附件需要移除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有足夠早的附件需要移除。"
+          }
+        }
+      }
+    },
+    "Couldn't change Keep Media. Try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Medien behalten“ konnte nicht geändert werden. Versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo cambiar Conservar archivos multimedia. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de modifier Conserver les médias. Réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile modificare Conserva media. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível alterar Manter mídia. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось изменить «Хранить медиа». Повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medyayı sakla değiştirilemedi. Tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更改“保留媒体”。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法變更「保留媒體」。請再試一次。"
+          }
+        }
+      }
+    },
+    "Couldn't load Keep Media" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Medien behalten“ konnte nicht geladen werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo cargar Conservar archivos multimedia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de charger Conserver les médias"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare Conserva media"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível carregar Manter mídia"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось загрузить «Хранить медиа»"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medyayı sakla yüklenemedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载“保留媒体”"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法載入「保留媒體」"
+          }
+        }
+      }
+    },
+    "This profile's attachments older than this are removed from this device automatically. Downloading one again keeps it for the full period from then." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhänge dieses Profils, die älter als dieser Zeitraum sind, werden automatisch von diesem Gerät entfernt. Lädst du einen erneut herunter, bleibt er ab dann für den gesamten Zeitraum erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos adjuntos de este perfil con más antigüedad que este período se eliminan automáticamente de este dispositivo. Si vuelves a descargar uno, se conserva durante todo el período desde ese momento."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les pièces jointes de ce profil plus anciennes que cette durée sont supprimées automatiquement de cet appareil. Si vous en téléchargez une à nouveau, elle est conservée pendant toute la durée à partir de ce moment."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli allegati di questo profilo più vecchi di questo periodo vengono rimossi automaticamente da questo dispositivo. Se ne scarichi di nuovo uno, viene conservato per l’intero periodo da quel momento."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os anexos deste perfil mais antigos que esse período são removidos automaticamente deste dispositivo. Se você baixar um novamente, ele será mantido pelo período completo a partir de então."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вложения этого профиля старше этого срока автоматически удаляются с этого устройства. Если скачать вложение снова, оно хранится весь срок с этого момента."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu profilin bu süreden eski ekleri bu cihazdan otomatik olarak kaldırılır. Birini yeniden indirirseniz o andan itibaren tüm süre boyunca saklanır."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此个人资料中超过此时长的附件会自动从此设备上移除。重新下载的附件会从下载时起保留完整时长。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此個人檔案中超過此時長的附件會自動從此裝置上移除。重新下載的附件會從下載時起保留完整時長。"
           }
         }
       }

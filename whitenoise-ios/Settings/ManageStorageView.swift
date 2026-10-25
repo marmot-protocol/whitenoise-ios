@@ -7,6 +7,7 @@ struct ManageStorageView: View {
     @Environment(AppState.self) private var appState
     @State private var model: ManageStorageModel
     @State private var pendingRemoval: ManageStoragePresentation.RemovalCutoff?
+    @State private var pendingKeepMedia: ManageStoragePresentation.KeepMedia.Confirmation?
 
     init(model: ManageStorageModel? = nil) {
         _model = State(initialValue: model ?? ManageStorageModel())
@@ -18,6 +19,7 @@ struct ManageStorageView: View {
             if let notice = model.usage?.migration {
                 ManageStorageMigrationSection(notice: notice)
             }
+            keepMediaSection
             cacheSection
             freeUpSpaceSection
             chatsSection
@@ -38,6 +40,19 @@ struct ManageStorageView: View {
             await model.refreshUsage(using: appState)
         }
         .removeOlderConfirmation($pendingRemoval, scope: .account, model: model)
+        .confirmationDialog(
+            pendingKeepMedia?.title ?? "",
+            isPresented: Binding(get: { pendingKeepMedia != nil }, set: { if !$0 { pendingKeepMedia = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingKeepMedia
+        ) { confirmation in
+            Button(confirmation.action, role: .destructive) {
+                setKeepMedia(confirmation.keep, confirmed: true)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { confirmation in
+            Text(confirmation.message)
+        }
     }
 
     private var bindingKey: String {
@@ -85,6 +100,53 @@ struct ManageStorageView: View {
             Text("Storage Used")
         } footer: {
             Text("What this profile keeps on this device. Other profiles are counted separately.")
+        }
+    }
+
+    @ViewBuilder
+    private var keepMediaSection: some View {
+        Section {
+            if let keep = model.keepMedia {
+                if model.operation == .keepMedia {
+                    LabeledContent("Keep Media") { ProgressView() }
+                } else {
+                    Picker("Keep Media", selection: Binding(get: { keep }, set: { chooseKeepMedia($0, current: keep) })) {
+                        ForEach(ManageStoragePresentation.KeepMedia.options, id: \.self) { option in
+                            Text(ManageStoragePresentation.KeepMedia.title(option)).tag(option)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                if model.failedOperation == .keepMedia {
+                    ManageStorageFailureRow(message: L10n.string("Couldn't change Keep Media. Try again."))
+                }
+            } else if model.keepMediaFailed {
+                ManageStorageRetryRow(message: L10n.string("Couldn't load Keep Media")) {
+                    Task { await model.refreshKeepMedia(using: appState) }
+                }
+            } else {
+                ManageStorageLoadingRow()
+            }
+        } footer: {
+            Text("This profile's attachments older than this are removed from this device automatically. Downloading one again keeps it for the full period from then.")
+        }
+    }
+
+    private func chooseKeepMedia(_ next: AttachmentKeepMediaFfi, current: AttachmentKeepMediaFfi) {
+        guard next != current else { return }
+        if let confirmation = ManageStoragePresentation.KeepMedia.confirmation(from: current, to: next) {
+            pendingKeepMedia = confirmation
+        } else {
+            setKeepMedia(next, confirmed: false)
+        }
+    }
+
+    private func setKeepMedia(_ keep: AttachmentKeepMediaFfi, confirmed: Bool) {
+        Task {
+            guard let removed = await model.setKeepMedia(keep, using: appState),
+                  let text = ManageStoragePresentation.KeepMedia.resultText(removed: removed, confirmed: confirmed)
+            else { return }
+            appState.present(.success(text))
         }
     }
 

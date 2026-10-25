@@ -25,11 +25,12 @@ final class ManageStorageModel {
         case removeOlder(Scope)
         case removeChat(String)
         case removeAttachment(String)
+        case keepMedia
 
         /// Bulk removals report a count, not which plaintext they removed.
         var removesInBulk: Bool {
             switch self {
-            case .removeOlder, .removeChat: true
+            case .removeOlder, .removeChat, .keepMedia: true
             case .clearCache, .removeAttachment: false
             }
         }
@@ -51,6 +52,9 @@ final class ManageStorageModel {
     }
 
     private(set) var usageRefresh = ManageStoragePresentation.UsageRefresh()
+    /// Kept through removals so the picker doesn't blank; re-read after each.
+    private(set) var keepMedia: AttachmentKeepMediaFfi?
+    private(set) var keepMediaFailed = false
     private(set) var chats = ChatPages(id: \.groupIdHex)
     private(set) var chatsFailed = false
     private(set) var isLoadingChats = false
@@ -92,6 +96,8 @@ final class ManageStorageModel {
         #endif
         guard let context = currentContext(appState) else {
             self.context = nil
+            keepMedia = nil
+            keepMediaFailed = false
             reset()
             return
         }
@@ -99,10 +105,27 @@ final class ManageStorageModel {
             self.context = context
             identities = [:]
             failedOperation = nil
+            keepMedia = nil
+            keepMediaFailed = false
         }
         reset()
         await refreshUsage(using: appState)
+        await refreshKeepMedia(using: appState)
         await loadMoreChats(using: appState)
+    }
+
+    func refreshKeepMedia(using appState: AppState) async {
+        guard let context, let client = client(for: context, appState) else { return }
+        let epoch = epoch
+        do {
+            let value = try await client.attachmentKeepMedia(accountRef: context.accountRef)
+            guard isCurrent(context, epoch: epoch, appState) else { return }
+            keepMedia = value
+            keepMediaFailed = false
+        } catch {
+            guard !(error is CancellationError), isCurrent(context, epoch: epoch, appState) else { return }
+            keepMediaFailed = true
+        }
     }
 
     func refreshUsage(using appState: AppState) async {
@@ -233,6 +256,18 @@ final class ManageStorageModel {
         }
     }
 
+    /// Returns how many attachments MDK removed, or nil when the change failed
+    /// or the profile or runtime changed meanwhile.
+    func setKeepMedia(_ keep: AttachmentKeepMediaFfi, using appState: AppState) async -> UInt64? {
+        let started = context
+        var removed: UInt64?
+        await perform(.keepMedia, using: appState) { client, accountRef in
+            removed = try await client.setAttachmentKeepMedia(accountRef: accountRef, keep: keep)
+        }
+        guard let started, currentContext(appState) == started else { return nil }
+        return removed
+    }
+
     func removeAllAttachments(inChat groupIdHex: String, using appState: AppState) async {
         await perform(.removeChat(groupIdHex), using: appState) { client, accountRef in
             _ = try await client.removeChatAttachments(accountRef: accountRef, groupIdHex: groupIdHex)
@@ -352,10 +387,12 @@ extension ManageStorageModel {
     /// runtime, so nothing reaches MDK.
     static func fixture(usage: AttachmentStorageUsageFfi,
                         chats: [(usage: ChatAttachmentUsageFfi, title: String)],
-                        attachments: [RetainedAttachmentSummaryFfi]) -> ManageStorageModel {
+                        attachments: [RetainedAttachmentSummaryFfi],
+                        keepMedia: AttachmentKeepMediaFfi = .forever) -> ManageStorageModel {
         let model = ManageStorageModel()
         model.isFixture = true
         model.usageRefresh.succeeded(ManageStoragePresentation.Usage(usage))
+        model.keepMedia = keepMedia
         for chat in chats {
             model.identities[chat.usage.groupIdHex] = ChatIdentity(title: chat.title, seed: chat.usage.groupIdHex,
                                                                    avatarAsset: nil)

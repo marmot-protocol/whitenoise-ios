@@ -418,6 +418,23 @@ before every release tag.
       space the database file still holds.
 - [ ] Turn on airplane mode and remove attachments: removals still work
       because they are local.
+- [ ] Keep Media shows Forever on a profile that never changed it. Choose 30
+      Days on a profile with attachments received over a month ago: the
+      confirmation names 30 days, and Cancel leaves Forever selected with
+      nothing removed. Confirm: the row shows progress, then a toast says how
+      many attachments were removed, Storage Used drops, and those messages
+      show Download again. Choosing 30 Days again or a shorter window with
+      nothing that old says "No attachments were old enough to remove."
+- [ ] Change Keep Media from 30 Days to 1 Year and to Forever: no confirmation
+      and no toast. Choose 6 Months from 1 Year: it asks first. Switch profiles
+      and back: each profile shows its own choice, and it survives relaunch.
+- [ ] With Keep Media at 30 Days, download one of the removed attachments
+      again. It stays after the app is backgrounded and reopened (a later
+      download restarts its age).
+- [ ] Settings → Data Usage → Download Storage offers only Keep disk space free
+      and Automatic download size limit, and the footer points to Manage
+      Storage. Raise the automatic limit to 512 MB and Save: it saves without an
+      error.
 - [ ] Check VoiceOver on chat and attachment rows (name, count/date and size
       read together; Remove is offered as an action), Dynamic Type at an
       accessibility size, and light and dark appearance.
