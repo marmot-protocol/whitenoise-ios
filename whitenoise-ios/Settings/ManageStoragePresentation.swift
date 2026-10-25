@@ -146,6 +146,28 @@ enum ManageStoragePresentation {
             let action: String
         }
 
+        /// The window MDK has saved, as far as this screen knows. Shorter windows
+        /// confirm against it, so it never holds a value that may be stale.
+        struct Refresh: Equatable {
+            private(set) var keep: AttachmentKeepMediaFfi?
+            private(set) var failed = false
+
+            mutating func succeeded(_ keep: AttachmentKeepMediaFfi) {
+                self.keep = keep
+                failed = false
+            }
+
+            /// Only a change from this screen moves the window, so the last known one stands.
+            mutating func failedToRefresh() {
+                failed = true
+            }
+
+            /// A failed change may have saved either window, so it stays unknown until read again.
+            mutating func changed(to keep: AttachmentKeepMediaFfi, saved: Bool) {
+                self.keep = saved ? keep : nil
+            }
+        }
+
         static func title(_ keep: AttachmentKeepMediaFfi) -> String {
             switch keep {
             case .forever: L10n.string("Forever")

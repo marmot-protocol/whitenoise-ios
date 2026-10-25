@@ -53,8 +53,7 @@ final class ManageStorageModel {
 
     private(set) var usageRefresh = ManageStoragePresentation.UsageRefresh()
     /// Kept through removals so the picker doesn't blank; re-read after each.
-    private(set) var keepMedia: AttachmentKeepMediaFfi?
-    private(set) var keepMediaFailed = false
+    private var keepMediaRefresh = ManageStoragePresentation.KeepMedia.Refresh()
     private(set) var chats = ChatPages(id: \.groupIdHex)
     private(set) var chatsFailed = false
     private(set) var isLoadingChats = false
@@ -75,6 +74,8 @@ final class ManageStorageModel {
     #endif
 
     var usage: ManageStoragePresentation.Usage? { usageRefresh.usage }
+    var keepMedia: AttachmentKeepMediaFfi? { keepMediaRefresh.keep }
+    var keepMediaFailed: Bool { keepMediaRefresh.failed }
 
     func identity(for groupIdHex: String) -> ChatIdentity {
         identities[groupIdHex]
@@ -96,8 +97,7 @@ final class ManageStorageModel {
         #endif
         guard let context = currentContext(appState) else {
             self.context = nil
-            keepMedia = nil
-            keepMediaFailed = false
+            keepMediaRefresh = .init()
             reset()
             return
         }
@@ -105,8 +105,7 @@ final class ManageStorageModel {
             self.context = context
             identities = [:]
             failedOperation = nil
-            keepMedia = nil
-            keepMediaFailed = false
+            keepMediaRefresh = .init()
         }
         reset()
         await refreshUsage(using: appState)
@@ -120,11 +119,10 @@ final class ManageStorageModel {
         do {
             let value = try await client.attachmentKeepMedia(accountRef: context.accountRef)
             guard isCurrent(context, epoch: epoch, appState) else { return }
-            keepMedia = value
-            keepMediaFailed = false
+            keepMediaRefresh.succeeded(value)
         } catch {
             guard !(error is CancellationError), isCurrent(context, epoch: epoch, appState) else { return }
-            keepMediaFailed = true
+            keepMediaRefresh.failedToRefresh()
         }
     }
 
@@ -262,7 +260,15 @@ final class ManageStorageModel {
         let started = context
         var removed: UInt64?
         await perform(.keepMedia, using: appState) { client, accountRef in
+            // Recorded before the re-read, which may fail and would otherwise leave the old window.
+            var saved = false
+            defer {
+                if let started, currentContext(appState) == started {
+                    keepMediaRefresh.changed(to: keep, saved: saved)
+                }
+            }
             removed = try await client.setAttachmentKeepMedia(accountRef: accountRef, keep: keep)
+            saved = true
         }
         guard let started, currentContext(appState) == started else { return nil }
         return removed
@@ -392,7 +398,7 @@ extension ManageStorageModel {
         let model = ManageStorageModel()
         model.isFixture = true
         model.usageRefresh.succeeded(ManageStoragePresentation.Usage(usage))
-        model.keepMedia = keepMedia
+        model.keepMediaRefresh.succeeded(keepMedia)
         for chat in chats {
             model.identities[chat.usage.groupIdHex] = ChatIdentity(title: chat.title, seed: chat.usage.groupIdHex,
                                                                    avatarAsset: nil)

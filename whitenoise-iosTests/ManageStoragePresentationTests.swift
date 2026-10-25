@@ -233,6 +233,39 @@ struct ManageStoragePresentationTests {
         #expect(KeepMedia.resultText(removed: 0, confirmed: false) == nil)
     }
 
+    /// A shorter window must still ask first after reading the saved one back fails.
+    @Test func aSavedKeepMediaWindowStandsWhenReadingItBackFails() {
+        typealias KeepMedia = ManageStoragePresentation.KeepMedia
+        var refresh = KeepMedia.Refresh()
+        refresh.succeeded(.thirtyDays)
+        refresh.changed(to: .forever, saved: true)
+        refresh.failedToRefresh()
+        #expect(refresh.keep == .forever)
+        #expect(refresh.failed)
+        #expect(refresh.keep.flatMap { KeepMedia.confirmation(from: $0, to: .sixMonths) } != nil)
+    }
+
+    @Test func aFailedKeepMediaChangeLeavesTheWindowUnknownUntilReadAgain() {
+        var refresh = ManageStoragePresentation.KeepMedia.Refresh()
+        refresh.succeeded(.thirtyDays)
+        refresh.changed(to: .forever, saved: false)
+        refresh.failedToRefresh()
+        #expect(refresh.keep == nil)
+        #expect(refresh.failed)
+
+        refresh.succeeded(.forever)
+        #expect(refresh.keep == .forever)
+        #expect(!refresh.failed)
+    }
+
+    @Test func otherFailedKeepMediaReadsKeepTheLastKnownWindow() {
+        var refresh = ManageStoragePresentation.KeepMedia.Refresh()
+        refresh.succeeded(.sixMonths)
+        refresh.failedToRefresh()
+        #expect(refresh.keep == .sixMonths)
+        #expect(refresh.failed)
+    }
+
     // MARK: Attachment rows
 
     /// Identity follows the original message and slot, so pages and removals
