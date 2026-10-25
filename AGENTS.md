@@ -171,6 +171,10 @@ explicit retry on a read miss. Voice notes follow the Audio preference. Preserve
 terminal acquisition states until an explicit user retry. Do not escalate automatic
 loads to explicit jobs. `StorageBlocked` is a download parked for free space, not a
 retry timer: stop waiting, ask the user to free space, and let the explicit Retry readmit it.
+`retainedBytes` no longer limits storage, so it is not offered; saves keep it at least
+the transfer limit, which MDK still validates. Keep media lives in Manage Storage.
+`setAttachmentKeepMedia` removes and counts in one call, so confirm a shorter window
+by name and report the returned count afterwards; never estimate it beforehand.
 Share sheets get documents from MDK's `openAttachmentHandoff` on the original slot,
 not a host plaintext export; in-app display stays on `readAttachmentAsset`. MDK
 writes the copy without complete Data Protection: set `.complete` on the leased file

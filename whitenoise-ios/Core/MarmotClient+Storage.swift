@@ -29,6 +29,15 @@ extension MarmotClient {
                                                     groupIdHex: groupIdHex)
     }
 
+    func attachmentKeepMedia(accountRef: String) async throws -> AttachmentKeepMediaFfi {
+        try await marmot.attachmentKeepMedia(accountRef: accountRef)
+    }
+
+    /// Saves the window, then removes everything already past it and returns the count.
+    func setAttachmentKeepMedia(accountRef: String, keep: AttachmentKeepMediaFfi) async throws -> UInt64 {
+        try await marmot.setAttachmentKeepMedia(accountRef: accountRef, keep: keep)
+    }
+
     /// One listing entry goes through the same Remove as a message's Downloads.
     /// Returns false when the attachment no longer reads locally.
     func removeRetainedAttachment(accountRef: String, groupIdHex: String,

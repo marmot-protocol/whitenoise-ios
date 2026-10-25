@@ -25,13 +25,19 @@ final class ManageStorageModel {
         case removeOlder(Scope)
         case removeChat(String)
         case removeAttachment(String)
+        case keepMedia
 
         /// Bulk removals report a count, not which plaintext they removed.
         var removesInBulk: Bool {
             switch self {
-            case .removeOlder, .removeChat: true
+            case .removeOlder, .removeChat, .keepMedia: true
             case .clearCache, .removeAttachment: false
             }
+        }
+
+        /// A failed bulk call (nil) may still have removed some; one that reported none removed nothing.
+        func dropsEveryDecryptedCopy(removed: UInt64?) -> Bool {
+            removesInBulk && removed != 0
         }
     }
 
@@ -51,6 +57,8 @@ final class ManageStorageModel {
     }
 
     private(set) var usageRefresh = ManageStoragePresentation.UsageRefresh()
+    /// Kept through removals so the picker doesn't blank; re-read after each.
+    private var keepMediaRefresh = ManageStoragePresentation.KeepMedia.Refresh()
     private(set) var chats = ChatPages(id: \.groupIdHex)
     private(set) var chatsFailed = false
     private(set) var isLoadingChats = false
@@ -71,6 +79,8 @@ final class ManageStorageModel {
     #endif
 
     var usage: ManageStoragePresentation.Usage? { usageRefresh.usage }
+    var keepMedia: AttachmentKeepMediaFfi? { keepMediaRefresh.keep }
+    var keepMediaFailed: Bool { keepMediaRefresh.failed }
 
     func identity(for groupIdHex: String) -> ChatIdentity {
         identities[groupIdHex]
@@ -92,6 +102,7 @@ final class ManageStorageModel {
         #endif
         guard let context = currentContext(appState) else {
             self.context = nil
+            keepMediaRefresh = .init()
             reset()
             return
         }
@@ -99,10 +110,25 @@ final class ManageStorageModel {
             self.context = context
             identities = [:]
             failedOperation = nil
+            keepMediaRefresh = .init()
         }
         reset()
         await refreshUsage(using: appState)
+        await refreshKeepMedia(using: appState)
         await loadMoreChats(using: appState)
+    }
+
+    func refreshKeepMedia(using appState: AppState) async {
+        guard let context, let client = client(for: context, appState) else { return }
+        let epoch = epoch
+        do {
+            let value = try await client.attachmentKeepMedia(accountRef: context.accountRef)
+            guard isCurrent(context, epoch: epoch, appState) else { return }
+            keepMediaRefresh.succeeded(value)
+        } catch {
+            guard !(error is CancellationError), isCurrent(context, epoch: epoch, appState) else { return }
+            keepMediaRefresh.failedToRefresh()
+        }
     }
 
     func refreshUsage(using appState: AppState) async {
@@ -220,6 +246,7 @@ final class ManageStorageModel {
             AvatarCacheErasure.begin()
             defer { AvatarCacheErasure.end() }
             try await client.clearAvatarCache(accountRef: accountRef)
+            return nil
         }
     }
 
@@ -228,14 +255,35 @@ final class ManageStorageModel {
                      using appState: AppState) async {
         let receivedBefore = cutoff.receivedBefore
         await perform(.removeOlder(scope), using: appState) { client, accountRef in
-            _ = try await client.removeAttachmentsOlderThan(accountRef: accountRef,
+            try await client.removeAttachmentsOlderThan(accountRef: accountRef,
                 receivedBefore: receivedBefore, groupIdHex: scope.groupIdHex)
         }
     }
 
+    /// Returns how many attachments MDK removed, or nil when the change failed
+    /// or the profile or runtime changed meanwhile.
+    func setKeepMedia(_ keep: AttachmentKeepMediaFfi, using appState: AppState) async -> UInt64? {
+        let started = context
+        var removed: UInt64?
+        await perform(.keepMedia, using: appState) { client, accountRef in
+            // Recorded before the re-read, which may fail and would otherwise leave the old window.
+            var saved = false
+            defer {
+                if let started, currentContext(appState) == started {
+                    keepMediaRefresh.changed(to: keep, saved: saved)
+                }
+            }
+            removed = try await client.setAttachmentKeepMedia(accountRef: accountRef, keep: keep)
+            saved = true
+            return removed
+        }
+        guard let started, currentContext(appState) == started else { return nil }
+        return removed
+    }
+
     func removeAllAttachments(inChat groupIdHex: String, using appState: AppState) async {
         await perform(.removeChat(groupIdHex), using: appState) { client, accountRef in
-            _ = try await client.removeChatAttachments(accountRef: accountRef, groupIdHex: groupIdHex)
+            try await client.removeChatAttachments(accountRef: accountRef, groupIdHex: groupIdHex)
         }
     }
 
@@ -253,16 +301,19 @@ final class ManageStorageModel {
                 _ = await MessageMediaCache.removeCachedData(forPlaintextHashes: [hash])
             }
             AttachmentPresentationState.shared.invalidate()
+            return nil
         }
     }
 
+    /// `body` returns how many attachments MDK removed, when it reports a count.
     private func perform(_ operation: Operation, using appState: AppState,
-                         _ body: (MarmotClient, String) async throws -> Void) async {
+                         _ body: (MarmotClient, String) async throws -> UInt64?) async {
         guard self.operation == nil, let context, currentContext(appState) == context else { return }
         self.operation = operation
         failedOperation = nil
         defer { self.operation = nil }
         var attempted = false
+        var removed: UInt64?
         do {
             let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
             defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
@@ -270,12 +321,11 @@ final class ManageStorageModel {
                 throw CancellationError()
             }
             attempted = true
-            try await body(lease.client, context.accountRef)
+            removed = try await body(lease.client, context.accountRef)
         } catch {
             if currentContext(appState) == context { failedOperation = operation }
         }
-        // A failed bulk call may still have removed some attachments.
-        if attempted, operation.removesInBulk {
+        if attempted, operation.dropsEveryDecryptedCopy(removed: removed) {
             await Self.purgeAllDecryptedMedia()
         }
         guard currentContext(appState) == context else { return }
@@ -352,10 +402,12 @@ extension ManageStorageModel {
     /// runtime, so nothing reaches MDK.
     static func fixture(usage: AttachmentStorageUsageFfi,
                         chats: [(usage: ChatAttachmentUsageFfi, title: String)],
-                        attachments: [RetainedAttachmentSummaryFfi]) -> ManageStorageModel {
+                        attachments: [RetainedAttachmentSummaryFfi],
+                        keepMedia: AttachmentKeepMediaFfi = .forever) -> ManageStorageModel {
         let model = ManageStorageModel()
         model.isFixture = true
         model.usageRefresh.succeeded(ManageStoragePresentation.Usage(usage))
+        model.keepMediaRefresh.succeeded(keepMedia)
         for chat in chats {
             model.identities[chat.usage.groupIdHex] = ChatIdentity(title: chat.title, seed: chat.usage.groupIdHex,
                                                                    avatarAsset: nil)
