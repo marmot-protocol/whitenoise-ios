@@ -323,10 +323,13 @@ final class NotificationService: UNNotificationServiceExtension {
         let task = Task { [additionalPresentations, applicationBadgeCount] in
             let avatars = await avatarsByUrl()
             for presentation in additionalPresentations {
+                // A wake alerts once, through its primary. Caught-up records
+                // and overflow summaries land quietly in Notification Center.
                 let content = NotificationCommunicationDecorator.decorated(
                     NotificationContentDecorator.makeContent(
                         for: presentation,
-                        applicationBadgeCount: applicationBadgeCount
+                        applicationBadgeCount: applicationBadgeCount,
+                        alerting: .quiet
                     ),
                     presentation: presentation,
                     avatarData: presentation.senderPictureUrl.flatMap { avatars[$0] }
@@ -382,8 +385,7 @@ final class NotificationService: UNNotificationServiceExtension {
         applyFallback(to: content)
         content.userInfo[LocalNotificationProjection.deliveryDispositionKey] =
             LocalNotificationProjection.quietDisposition
-        content.sound = nil
-        content.interruptionLevel = .passive
+        NotificationContentDecorator.applyAlerting(.quiet, to: content)
     }
 
     private func applyFallback(to content: UNMutableNotificationContent) {
