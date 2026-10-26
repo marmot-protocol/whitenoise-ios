@@ -1440,6 +1440,11 @@ the test device.
 - [ ] With Preview set to Generic, that notification reads
       "White Noise / New encrypted message" with no sender name or avatar, and
       an offline backlog delivers only generic extra notifications.
+- [ ] Put device B in Airplane Mode outside the app, send five messages to it
+      across two chats from device A, then turn Airplane Mode off. The wake
+      plays one sound and shows one banner. The other messages appear
+      silently in Notification Center, stacked under their chats, each with
+      its own preview and actions.
 - [ ] Turning Local Notifications off disables the Preview options; the
       selection survives the app being force-quit and relaunched.
 - [ ] The app-icon badge increases to the locally computed unread total after

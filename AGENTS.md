@@ -276,7 +276,7 @@ Rules for notification work:
 - The Notification Service Extension may enrich the visible notification only from local Marmot state after `collectNotificationsAfterWake`.
 - The Notification Service Extension must honor each account's `localNotificationsEnabled` setting before rendering decrypted sender or preview content.
 - The Notification Service Extension cannot suppress an alert that already woke it. If no local presentation exists, deliver the generic fallback content rather than blank content.
-- The Notification Service Extension should keep primary and additional local presentations alert-consistent, including `UNNotificationSound.default` when rendering visible message content.
+- A Notification Service Extension wake alerts once. Its primary presentation uses `UNNotificationSound.default` when rendering visible message content; additional presentations and overflow summaries use `NotificationContentDecorator.Alerting.quiet` (no sound, `.passive`), so a caught-up backlog lands in Notification Center without a burst of sounds.
 - Do not abandon additional NSE presentations after `collectNotificationsAfterWake`; those records have already been consumed from Marmot's background notification cursor.
 - Native push relay hints from configuration must be validated with the shared `RelayURL` normalizer; malformed hints should behave like an omitted hint.
 - Production and staging use different native-push server pubkeys (`WHITENOISE_PUSH_SERVER_PUBKEY_HEX`). The relay hint (`WHITENOISE_PUSH_RELAY_HINT`) is currently shared because both flavors use the same relays. See `Config/AGENTS.md`.
