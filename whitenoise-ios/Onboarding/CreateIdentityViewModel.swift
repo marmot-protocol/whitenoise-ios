@@ -482,7 +482,7 @@ final class CreateIdentityViewModel {
             case .Publish: return "publication"
             case .Runtime, .RuntimeBusy, .RuntimeStopping: return "runtime"
             case .Io: return "io"
-            case .StorageBusy, .StorageClosed: return "storage"
+            case .StorageBusy, .StorageClosed, .StorageFull: return "storage"
             default: return "sdk"
             }
         }

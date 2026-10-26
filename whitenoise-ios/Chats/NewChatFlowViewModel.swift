@@ -447,10 +447,10 @@ final class NewChatFlowViewModel {
             onOpen(groupIdHex)
         } catch let marmotError as MarmotKitError {
             Haptics.error()
-            if let account = MissingKeyPackageInvitationPresentation.accountIdHex(for: marmotError) {
+            if let recipient = MissingKeyPackageInvitationPresentation.recipient(for: marmotError) {
                 let message = MissingKeyPackageInvitationPresentation.message(
-                    accountIdHex: account,
-                    knownName: appState.knownDisplayName(forAccountIdHex: account)
+                    for: recipient,
+                    knownName: appState.knownDisplayName(forAccountIdHex: recipient.accountIdHex)
                 )
                 groupCreateError = message
                 appState.present(.error(L10n.string("Couldn't create chat"), message: message))

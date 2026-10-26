@@ -124,18 +124,34 @@ Install a published snapshot using its full `master` commit SHA:
 ./scripts/sync-bindings.sh <full-master-sha>
 ```
 
-Install a formal release using its version:
+Install a formal release or a dated nightly using its version:
 
 ```sh
 ./scripts/sync-bindings.sh 0.9.21
+./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-The app now pins the formal MarmotKit 0.11.0 release. For local reproduction only,
+The app pins the formal MarmotKit 0.14.0 release. Nightlies are for testing only
+and are deleted after 30 days; pin a formal release before shipping. For local
+reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
 Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten
 adapter using the released UniFFI native future cancellation API; preserve it on
 binding refresh and run its native cancellation test. Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+
+Every `Marmot` construction, including the NSE and tests, passes
+`marmotDeploymentWhiteNoise()`; its keychain service is the one existing installs
+use, so never substitute the neutral deployment or edit `keychainService`. Keep the
+shared Marmot root excluded from backups: MDK stores device-bound account databases
+and encrypted `media/` files there.
+
+Group changes (invite, remove, admin, profile, image, retention, disbanding, and the
+step-down before leaving) can fail with the advisory `GroupCatchingUp` or
+`GroupCommitUndelivered`. Run them through `GroupChangeAdvisoryRetry`: ask the user,
+acknowledge only after consent, then retry once. Acknowledgements admit one attempt
+and are not persisted. Choosing Wait is not an error toast. Attach
+`groupChangeAdvisoryAlert` to whichever view is on top when the change runs.
 
 Avatar metadata from presented rows, conversation headers and identity sidecars
 is authoritative. Request only visible `avatarAsset.target` values and read the
@@ -153,7 +169,22 @@ all runtimes in HostManaged mode before startup. Automatic loads use original-sl
 requestAutomaticAttachment and opaque local reads, never legacy downloadMedia or
 explicit retry on a read miss. Voice notes follow the Audio preference. Preserve
 terminal acquisition states until an explicit user retry. Do not escalate automatic
-loads to explicit jobs.
+loads to explicit jobs. `StorageBlocked` is a download parked for free space, not a
+retry timer: stop waiting, ask the user to free space, and let the explicit Retry readmit it.
+`retainedBytes` no longer limits storage, so it is not offered; saves keep it at least
+the transfer limit, which MDK still validates. Keep media lives in Manage Storage.
+`setAttachmentKeepMedia` removes and counts in one call, so confirm a shorter window
+by name and report the returned count afterwards; never estimate it beforehand.
+Share sheets get documents from MDK's `openAttachmentHandoff` on the original slot,
+not a host plaintext export; in-app display stays on `readAttachmentAsset`. MDK
+writes the copy without complete Data Protection: set `.complete` on the leased file
+before exposing its URL, and release the lease instead of sharing if that fails. Never
+change protection elsewhere in the Marmot root, which the NSE reads while locked. Release
+the lease on completion and on dismissal through the live runtime (idempotent; retry
+`Io`, `StorageClosed` and no open runtime, since a suspend closes the runtime that
+opened it). Cancel a copy only through its `MediaFileTransferControlFfi`, never by
+cancelling the awaiting task.
+Only bytes MDK has no slot for (an outgoing draft) use the host export.
 Conversation-open performance ends at rendered layout, uses the navigation consent
 ticket, and records unavailable/cancelled/timeout outcomes separately from success.
 
@@ -245,7 +276,7 @@ Rules for notification work:
 - The Notification Service Extension may enrich the visible notification only from local Marmot state after `collectNotificationsAfterWake`.
 - The Notification Service Extension must honor each account's `localNotificationsEnabled` setting before rendering decrypted sender or preview content.
 - The Notification Service Extension cannot suppress an alert that already woke it. If no local presentation exists, deliver the generic fallback content rather than blank content.
-- The Notification Service Extension should keep primary and additional local presentations alert-consistent, including `UNNotificationSound.default` when rendering visible message content.
+- A Notification Service Extension wake alerts once. Its primary presentation uses `UNNotificationSound.default` when rendering visible message content; additional presentations and overflow summaries use `NotificationContentDecorator.Alerting.quiet` (no sound, `.passive`), so a caught-up backlog lands in Notification Center without a burst of sounds.
 - Do not abandon additional NSE presentations after `collectNotificationsAfterWake`; those records have already been consumed from Marmot's background notification cursor.
 - Native push relay hints from configuration must be validated with the shared `RelayURL` normalizer; malformed hints should behave like an omitted hint.
 - Production and staging use different native-push server pubkeys (`WHITENOISE_PUSH_SERVER_PUBKEY_HEX`). The relay hint (`WHITENOISE_PUSH_RELAY_HINT`) is currently shared because both flavors use the same relays. See `Config/AGENTS.md`.

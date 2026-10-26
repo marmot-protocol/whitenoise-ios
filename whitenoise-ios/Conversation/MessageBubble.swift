@@ -36,16 +36,37 @@ final class ConversationMediaLoader {
     // https://github.com/swiftlang/swift/issues/88036
     nonisolated deinit {}
 
-    private let load: (MessageMediaAttachment) async throws -> Data
+    typealias OpenHandoff = (MessageMediaAttachment, MediaFileTransferControlFfi) async throws -> AttachmentHandoffLease?
 
-    init(_ load: @escaping (MessageMediaAttachment) async throws -> Data) {
+    private let load: (MessageMediaAttachment) async throws -> Data
+    private let openHandoff: OpenHandoff?
+
+    init(_ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil) {
         self.load = load
+        self.openHandoff = openHandoff
     }
 
     func data(for media: MessageMediaAttachment, demand: AttachmentDemand = .explicit) async throws -> Data {
         var requested = media
         requested.demand = demand
         return try await load(requested)
+    }
+
+    /// A file for the share sheet. MDK's handoff lease when it has a source slot for
+    /// the item; otherwise the host's own export of bytes it already holds.
+    func shareFile(for media: MessageMediaAttachment, demand: AttachmentDemand = .explicit,
+                   control: MediaFileTransferControlFfi) async throws -> AttachmentShareFile {
+        var requested = media
+        requested.demand = demand
+        if let openHandoff, let lease = try await openHandoff(requested, control) {
+            return AttachmentShareFile(lease: lease)
+        }
+        let producerEpoch = MessageMediaCache.currentProducerEpoch()
+        let data = try await load(requested)
+        guard let url = await MediaPlaybackFileStore.fileURL(for: media, data: data, producerEpoch: producerEpoch) else {
+            throw AttachmentReadError.unavailable
+        }
+        return AttachmentShareFile(hostURL: url)
     }
 
     func selectedPageData(for media: MessageMediaAttachment, isSelected: Bool,
@@ -3310,10 +3331,12 @@ private struct MessageDocumentAttachmentView: View {
 
     @State private var isLoading = false
     @State private var didFail = false
-    @State private var shareItem: MessageDocumentShareItem?
+    @State private var shareFile: AttachmentShareFile?
+    @State private var handoffControl: MediaFileTransferControlFfi?
 
     var body: some View {
         Button {
+            guard !isLoading else { return }
             Task { await openDocument() }
         } label: {
             HStack(spacing: 8) {
@@ -3355,9 +3378,11 @@ private struct MessageDocumentAttachmentView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open attachment")
-        .sheet(item: $shareItem) { shareItem in
-            MessageDocumentShareSheet(url: shareItem.url)
+        .sheet(item: $shareFile) { file in
+            ActivityShareSheet(items: [file.url], onComplete: file.finish)
+                .onDisappear(perform: file.finish)
         }
+        .onDisappear { handoffControl?.cancel() }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
@@ -3381,36 +3406,25 @@ private struct MessageDocumentAttachmentView: View {
 
     private func openDocument() async {
         let demand = AttachmentDemand.userTap(afterFailure: didFail)
+        let control = MediaFileTransferControlFfi()
+        handoffControl = control
         isLoading = true
         didFail = false
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            if handoffControl === control { handoffControl = nil }
+        }
         do {
-            let producerEpoch = MessageMediaCache.currentProducerEpoch()
-            let data = try await onLoadMedia.data(for: item, demand: demand)
-            guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
-                didFail = true
-                return
-            }
-            shareItem = MessageDocumentShareItem(url: url)
+            shareFile = try await onLoadMedia.shareFile(for: item, demand: demand, control: control)
+        } catch is CancellationError {
+            return
+        } catch AttachmentHandoffFailure.storageFull {
+            // The attachment is held; only the copy needs room, so a Retry would not help.
+            return
         } catch {
             didFail = true
         }
     }
-}
-
-private struct MessageDocumentShareItem: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
-private struct MessageDocumentShareSheet: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: [url], applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 enum MessageVideoThumbnailDecoder {

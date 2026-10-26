@@ -228,15 +228,10 @@ struct SharedMediaLibraryView: View {
     @State private var category = SharedMediaLibraryPresentation.Category.media
     @State private var gallery: MessageMediaGallery?
     @State private var loadingFileID: String?
-    @State private var fileShare: SharedMediaFileShare?
+    @State private var fileShare: AttachmentShareFile?
     @State private var fileOpenError: String?
     @State private var linkToOpen: SharedMediaLibraryPresentation.LinkItem?
     @Environment(\.openURL) private var openURL
-
-    private struct SharedMediaFileShare: Identifiable {
-        let id = UUID()
-        let url: URL
-    }
 
     private let columns = Array(
         repeating: GridItem(.flexible(minimum: 64), spacing: 3),
@@ -319,7 +314,8 @@ struct SharedMediaLibraryView: View {
             )
         }
         .sheet(item: $fileShare) { share in
-            ActivityShareSheet(items: [share.url])
+            ActivityShareSheet(items: [share.url], onComplete: share.finish)
+                .onDisappear(perform: share.finish)
         }
         .confirmationDialog(
             "Open this link?",
@@ -360,6 +356,8 @@ struct SharedMediaLibraryView: View {
     private var mediaLoader: ConversationMediaLoader {
         ConversationMediaLoader { media in
             try await conversation.data(for: media)
+        } openHandoff: { media, control in
+            try await conversation.openHandoff(for: media, control: control)
         }
     }
 
@@ -697,17 +695,10 @@ struct SharedMediaLibraryView: View {
         loadingFileID = item.id
         defer { loadingFileID = nil }
         do {
-            let producerEpoch = MessageMediaCache.currentProducerEpoch()
-            let data = try await mediaLoader.data(for: item.attachment)
-            guard !Task.isCancelled,
-                  let url = await MediaPlaybackFileStore.fileURL(
-                    for: item.attachment,
-                    data: data,
-                    producerEpoch: producerEpoch
-                  )
-            else { return }
-            fileShare = SharedMediaFileShare(url: url)
+            fileShare = try await mediaLoader.shareFile(for: item.attachment, control: MediaFileTransferControlFfi())
         } catch is CancellationError {
+            return
+        } catch AttachmentHandoffFailure.storageFull {
             return
         } catch {
             fileOpenError = UserFacingError.message(for: error)

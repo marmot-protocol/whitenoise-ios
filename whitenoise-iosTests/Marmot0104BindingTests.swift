@@ -16,7 +16,8 @@ struct Marmot0104BindingTests {
         defer { try? FileManager.default.removeItem(at: root) }
         func openRuntime() throws -> Marmot {
             try Marmot.newWithConfiguration(rootPath: root.path, relayUrls: [relayURL],
-                options: MarmotOptions(relayPolicy: .allowLoopback, attachmentAcquisitionMode: .hostManaged))
+                options: MarmotOptions(relayPolicy: .allowLoopback, attachmentAcquisitionMode: .hostManaged,
+                    deployment: marmotDeploymentWhiteNoise()))
         }
         let client = try openRuntime()
         let watchdog = Task {
@@ -115,12 +116,19 @@ struct Marmot0104BindingTests {
 
     @Test func terminalAttachmentStatesDoNotWaitOrRetryAutomatically() {
         for state in [AttachmentTransferStateFfi.previouslyAcquiredUnavailable, .completedUnretained,
-                      .retryExhausted, .removed, .cancelled, .failed, .policyBlocked, .paused, .unavailable] {
+                      .retryExhausted, .removed, .cancelled, .failed, .policyBlocked, .paused, .unavailable,
+                      .storageBlocked] {
             #expect(!AttachmentAcquisitionPresentation.canAwait(state))
         }
         for state in [AttachmentTransferStateFfi.queued, .downloading, .ready, .retryScheduled] {
             #expect(AttachmentAcquisitionPresentation.canAwait(state))
         }
+    }
+
+    @Test func storageBlockedDownloadsAskForSpaceInsteadOfShowingARetryTimer() {
+        let label = AttachmentTransferPresentation.label(.storageBlocked)
+        #expect(label == "Not enough storage. Free up space to download.")
+        #expect(label != AttachmentTransferPresentation.label(.retryScheduled))
     }
 }
 

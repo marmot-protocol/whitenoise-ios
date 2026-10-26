@@ -21,7 +21,7 @@ struct NotificationContentDecoratorTests {
         )
     }
 
-    @Test func applyRendersAlertConsistentContentIncludingDefaultSoundAndMergesUserInfo() {
+    @Test func applyRendersAudibleContentByDefaultAndMergesUserInfo() {
         let content = UNMutableNotificationContent()
         content.userInfo = ["existing": "keep"]
 
@@ -47,8 +47,55 @@ struct NotificationContentDecoratorTests {
         #expect(content.threadIdentifier == "thread-1")
         #expect(content.targetContentIdentifier == "id-1")
         #expect(content.sound == UNNotificationSound.default)
+        #expect(content.interruptionLevel == .active)
         #expect(content.userInfo["k"] as? String == "v")
         #expect(content.badge == 7)
+    }
+
+    @Test func quietContentKeepsItsThreadAndBadgeWithoutSoundOrInterruption() {
+        let content = NotificationContentDecorator.makeContent(
+            for: presentation(),
+            applicationBadgeCount: 7,
+            alerting: .quiet
+        )
+
+        #expect(content.title == "Alice")
+        #expect(content.body == "hello")
+        #expect(content.threadIdentifier == "thread-1")
+        #expect(content.targetContentIdentifier == "id-1")
+        #expect(content.sound == nil)
+        #expect(content.interruptionLevel == .passive)
+        #expect(content.userInfo["k"] as? String == "v")
+        #expect(content.badge == 7)
+    }
+
+    @Test func quietAlertingSilencesContentThatArrivedWithASound() {
+        let content = UNMutableNotificationContent()
+        content.sound = .default
+
+        NotificationContentDecorator.applyAlerting(.quiet, to: content)
+
+        #expect(content.sound == nil)
+        #expect(content.interruptionLevel == .passive)
+    }
+
+    @Test func communicationDecorationPreservesQuietAlerting() {
+        var notification = presentation()
+        notification.senderName = "Alice"
+        notification.senderAccountIdHex = "alice-id"
+        let content = NotificationContentDecorator.makeContent(
+            for: notification,
+            alerting: .quiet
+        )
+
+        let decorated = NotificationCommunicationDecorator.decorated(
+            content,
+            presentation: notification,
+            avatarData: nil
+        )
+
+        #expect(decorated.sound == nil)
+        #expect(decorated.interruptionLevel == .passive)
     }
 
     @Test func zeroApplicationBadgeClearsTheIconCount() {

@@ -4,7 +4,6 @@ import MarmotKit
 struct AttachmentStorageSettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var policy: AttachmentDownloadPolicyFfi?
-    @State private var retainedMiB = 2048
     @State private var reserveMiB = 256
     @State private var transferMiB = 64
     @State private var saving = false
@@ -15,17 +14,14 @@ struct AttachmentStorageSettingsView: View {
         Form {
             if policy != nil {
                 Section {
-                    Stepper(value: $retainedMiB, in: max(256, transferMiB)...32768, step: 256) {
-                        LabeledContent("Download storage limit", value: size(retainedMiB))
-                    }
                     Stepper(value: $reserveMiB, in: 0...8192, step: 256) {
                         LabeledContent("Keep disk space free", value: size(reserveMiB))
                     }
-                    Stepper(value: $transferMiB, in: 1...min(512, retainedMiB), step: 1) {
+                    Stepper(value: $transferMiB, in: 1...512, step: 1) {
                         LabeledContent("Automatic download size limit", value: size(transferMiB))
                     }
                 } footer: {
-                    Text("Limits apply to this profile. Downloads pause when storage is full; existing files are kept. Remove individual downloads from Message info. Automatic downloads also follow your media and network preferences.")
+                    Text("Limits apply to this profile. A download waits when it would leave less free space than this, and continues when you free up space. To remove attachments or choose how long to keep them, go to Manage Storage. Automatic downloads also follow your media and network preferences.")
                 }
                 Button("Save") { save() }.disabled(saving)
             } else if error == nil { ProgressView() }
@@ -47,7 +43,6 @@ struct AttachmentStorageSettingsView: View {
                 try Task.checkCancellation()
                 guard appState.activeAccountRef == account, appState.client === client else { return }
                 policy = value
-                retainedMiB = Int(value.retainedBytes / 1_048_576)
                 reserveMiB = Int(value.diskReserve / 1_048_576)
                 transferMiB = Int(value.transferLimit / 1_048_576)
             } catch is CancellationError { return }
@@ -63,7 +58,6 @@ struct AttachmentStorageSettingsView: View {
         guard !saving, let account = appState.activeAccountRef else { return }
         saving = true
         error = nil
-        let retained = UInt64(retainedMiB) * 1_048_576
         let reserve = UInt64(reserveMiB) * 1_048_576
         let transfer = UInt64(transferMiB) * 1_048_576
         Task { @MainActor in
@@ -71,10 +65,9 @@ struct AttachmentStorageSettingsView: View {
             do {
                 let client = try appState.currentMarmotClient()
                 // Read the current gate so editing quotas does not undo a network change.
-                var next = try await client.marmot.attachmentDownloadPolicy(accountRef: account)
-                next.retainedBytes = retained
-                next.diskReserve = reserve
-                next.transferLimit = transfer
+                let current = try await client.marmot.attachmentDownloadPolicy(accountRef: account)
+                let next = AttachmentDownloadLimits.applying(diskReserve: reserve, transferLimit: transfer,
+                                                             to: current)
                 try await AttachmentPolicyBridge.synchronize(client, updatedLimits: (account, next))
                 guard appState.activeAccountRef == account, appState.client === client else { return }
                 policy = next
@@ -84,5 +77,18 @@ struct AttachmentStorageSettingsView: View {
                 self.error = L10n.string("Couldn't save download settings.")
             }
         }
+    }
+}
+
+nonisolated enum AttachmentDownloadLimits {
+    /// Since MarmotKit 0.14.0 `retainedBytes` no longer limits storage, so it isn't
+    /// offered. MDK still rejects a policy whose value is below the transfer limit.
+    static func applying(diskReserve: UInt64, transferLimit: UInt64,
+                         to policy: AttachmentDownloadPolicyFfi) -> AttachmentDownloadPolicyFfi {
+        var next = policy
+        next.diskReserve = diskReserve
+        next.transferLimit = transferLimit
+        next.retainedBytes = max(policy.retainedBytes, transferLimit)
+        return next
     }
 }

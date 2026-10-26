@@ -38,6 +38,33 @@ struct ChatLeaveOperationTests {
         #expect(result == .blocked("Assign another admin"))
     }
 
+    @Test func waitingOnAnAdvisoryStepDownIsNeitherAFailureNorALeave() async {
+        var reads = 0
+        let result = await ChatLeaveOperation.perform(isCurrent: { true }, readState: {
+            reads += 1
+            return .init(canLeave: true, requiresSelfDemotion: true)
+        }, selfDemote: {
+            throw GroupChangeAdvisoryDeclined(advisory: .catchingUp)
+        }, leave: {
+            Issue.record("Choosing Wait must not publish a leave")
+        })
+        #expect(result == .waited(GroupChangeAdvisory.catchingUp.declinedMessage))
+        #expect(reads == 1)
+    }
+
+    @Test func waitingAfterTheContextChangedIsCancelled() async {
+        var current = true
+        let result = await ChatLeaveOperation.perform(isCurrent: { current }, readState: {
+            .init(canLeave: true, requiresSelfDemotion: true)
+        }, selfDemote: {
+            current = false
+            throw GroupChangeAdvisoryDeclined(advisory: .commitUndelivered)
+        }, leave: {
+            Issue.record("A stale wait must not publish a leave")
+        })
+        #expect(result == .cancelled)
+    }
+
     @Test func successfulAdminLeaveDemotesBeforePublishing() async {
         var calls: [String] = []
         let result = await ChatLeaveOperation.perform(isCurrent: { true }, readState: {

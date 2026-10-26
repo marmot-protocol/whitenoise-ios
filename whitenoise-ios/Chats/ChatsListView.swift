@@ -49,6 +49,8 @@ struct ChatsListView: View {
     @State private var updatingChatIds = Set<String>()
     @State private var leaveActionState = ChatListLeaveActionState()
     @State private var leaveConfirmationContext: ChatLeaveOperation.Context?
+    /// An admin's step-down before leaving is a group change MDK can refuse.
+    @State private var leaveAdvisoryPrompter = GroupChangeAdvisoryPrompter()
     @State private var bulkDeleteInProgress = false
     @State private var bulkLeave = ChatListBulkLeaveState()
     @State private var showBulkLeaveConfirmation = false
@@ -172,6 +174,8 @@ struct ChatsListView: View {
             .task(id: visibleRowsKey) {
                 selectedChatIds = ChatListSelection.reconcile(selectedChatIds, visibleIds: visibleRowIds)
             }
+            // The bulk-leave sheet stays up while it waits, so it shows the prompt itself.
+            .groupChangeAdvisoryAlert(leaveAdvisoryPrompter, isEnabled: !showBulkLeaveConfirmation)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -942,6 +946,7 @@ struct ChatsListView: View {
                 ChatListLeaveConfirmationSheet(count: request.targets.count) {
                     await confirmBulkLeave(request)
                 }
+                .groupChangeAdvisoryAlert(leaveAdvisoryPrompter)
             }
         }
     }
@@ -1454,16 +1459,23 @@ struct ChatsListView: View {
               confirmation.targets == request.targets,
               bulkLeave.approve(confirmation, isCurrent: leaveContextIsCurrent(context))
         else { return nil }
+        // Follows a consented retry onto a replacement runtime; account changes still stop the batch.
+        var batchContext = context
         guard let result = await bulkLeave.runApproved(isCurrent: {
-            leaveContextIsCurrent(context)
+            leaveContextIsCurrent(batchContext)
         }, leave: { target in
-            await performChatLeave(groupIdHex: target.groupIdHex, context: context)
+            await performChatLeave(groupIdHex: target.groupIdHex, context: &batchContext)
         }) else { return nil }
         guard result.failedIDs.isEmpty else {
             Haptics.error()
             return L10n.plural("Couldn't leave %lld chats. Try again.", Int64(result.failedIDs.count))
         }
         Haptics.warning()
+        // Choosing Wait is not a failure: close the sheet and say what didn't change.
+        if let notice = ChatListLeavePresentation.bulkWaitNotice(waitMessage: result.waitMessage,
+            waitedCount: result.waitedIDs.count, targetCount: request.targets.count) {
+            appState.present(.warning(notice))
+        }
         return nil
     }
 
@@ -1491,26 +1503,34 @@ struct ChatsListView: View {
         )
     }
 
+    /// `context` advances when a consented step-down runs on a runtime that
+    /// replaced the one that refused it, so callers keep following it.
     private func performChatLeave(
         groupIdHex: String,
-        context: ChatLeaveOperation.Context
+        context: inout ChatLeaveOperation.Context
     ) async -> ChatLeaveOperation.Result {
         var didLeave = false
+        let accountRef = context.accountRef
+        var liveContext = context
+        defer { context = liveContext }
         let result = await ChatLeaveOperation.perform(isCurrent: {
-            leaveContextIsCurrent(context)
+            leaveContextIsCurrent(liveContext)
         }, readState: {
-            try await readLeaveState(groupIdHex: groupIdHex, context: context)
+            try await readLeaveState(groupIdHex: groupIdHex, context: liveContext)
         }, selfDemote: {
-            _ = try await appState.currentMarmotClient().selfDemoteAdminDetailed(
-                accountRef: context.accountRef, groupIdHex: groupIdHex
-            )
+            _ = try await GroupChangeAdvisoryRetry.perform(prompter: leaveAdvisoryPrompter, client: {
+                liveContext = .init(accountRef: accountRef, runtimeGeneration: appState.runtimeGeneration)
+                return try appState.currentMarmotClient()
+            }, accountRef: accountRef, groupIdHex: groupIdHex) { client in
+                try await client.selfDemoteAdminDetailed(accountRef: accountRef, groupIdHex: groupIdHex)
+            }
         }, leave: {
             _ = try await appState.currentMarmotClient().leaveGroup(
-                accountRef: context.accountRef, groupIdHex: groupIdHex
+                accountRef: accountRef, groupIdHex: groupIdHex
             )
             didLeave = true
         })
-        guard leaveContextIsCurrent(context), !Task.isCancelled else { return .cancelled }
+        guard leaveContextIsCurrent(liveContext), !Task.isCancelled else { return .cancelled }
         switch result {
         case .left:
             if didLeave { viewModel?.markGroupLeft(groupIdHex: groupIdHex) }
@@ -1518,9 +1538,9 @@ struct ChatsListView: View {
         case .pending:
             viewModel?.markGroupLeavePending(groupIdHex: groupIdHex)
             await viewModel?.refreshRow(groupIdHex: groupIdHex)
-        case .failed, .blocked, .cancelled: break
+        case .failed, .blocked, .waited, .cancelled: break
         }
-        guard leaveContextIsCurrent(context), !Task.isCancelled else { return .cancelled }
+        guard leaveContextIsCurrent(liveContext), !Task.isCancelled else { return .cancelled }
         return result
     }
 
@@ -1565,12 +1585,15 @@ struct ChatsListView: View {
         leaveConfirmationContext = nil
         Task { @MainActor in
             defer { leaveActionState.finishLeave(groupIdHex: target.groupIdHex) }
-            switch await performChatLeave(groupIdHex: target.groupIdHex, context: context) {
+            var liveContext = context
+            switch await performChatLeave(groupIdHex: target.groupIdHex, context: &liveContext) {
             case .left, .pending:
                 Haptics.warning()
             case .blocked(let message):
                 Haptics.error()
                 appState.present(.error(ChatListLeavePresentation.failureTitle, message: message))
+            case .waited(let message):
+                appState.present(.warning(message))
             case .failed:
                 presentLeaveFailure()
             case .cancelled:
