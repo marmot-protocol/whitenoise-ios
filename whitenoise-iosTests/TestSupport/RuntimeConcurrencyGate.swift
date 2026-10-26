@@ -69,8 +69,8 @@ struct MarmotRuntimeConcurrencyLimit: SuiteTrait, TestTrait, TestScoping {
     }
 }
 
-/// Opt-in JSONL trace of gate waits, for the audit's critical-path analysis
-/// (`scripts/audit/gate-critical-path.py`). Enabled by `WN_TEST_GATE_TRACE=1`
+/// Opt-in JSONL trace of gate waits, for critical-path analysis (the audit's
+/// `gate-critical-path.py` is on tag `test-audit-2026-10`). Enabled by `WN_TEST_GATE_TRACE=1`
 /// in the host environment (pass `TEST_RUNNER_WN_TEST_GATE_TRACE=1` to
 /// xcodebuild); appends to `gate-trace-<pid>.jsonl` in the host's temporary
 /// directory, one file per host launch (Xcode launches the host for discovery

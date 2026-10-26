@@ -1,8 +1,0 @@
-{
-  "name": "scene-step-suspends-in-test-host",
-  "path": "whitenoise-ios/whitenoise_iosApp.swift",
-  "old": "            startsRuntime ? .suspendRuntime : .markSceneInactive\n",
-  "new": "            .suspendRuntime\n",
-  "grep": "SceneRuntimeStep",
-  "why": "wave 1 host guard: a never-bootstrapped host must not start runtime suspension"
-}

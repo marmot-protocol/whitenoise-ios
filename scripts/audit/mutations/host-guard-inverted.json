@@ -1,8 +1,0 @@
-{
-  "name": "host-guard-inverted",
-  "path": "whitenoise-ios/Core/AppLaunchPolicy.swift",
-  "old": "        guard isUnitTestHost else { return true }\n",
-  "new": "        guard isUnitTestHost else { return false }\n",
-  "grep": "AppLaunchPolicy",
-  "why": "sanity probe: the production launch path must start the runtime"
-}

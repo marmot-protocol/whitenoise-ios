@@ -1,8 +1,0 @@
-{
-  "name": "hex-normalize-keeps-case",
-  "path": "Shared/Hex.swift",
-  "old": "        else { return nil }\n        return trimmed.lowercased()\n    }\n\n    /// MLS group ids",
-  "new": "        else { return nil }\n        return trimmed\n    }\n\n    /// MLS group ids",
-  "grep": "normalized32Bytes",
-  "why": "AGENTS.md: hex public keys are normalized to lowercase before routing or staging"
-}
