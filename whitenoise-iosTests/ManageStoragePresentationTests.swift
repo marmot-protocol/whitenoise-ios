@@ -183,6 +183,89 @@ struct ManageStoragePresentationTests {
         #expect(titles.allSatisfy { !$0.isEmpty })
     }
 
+    // MARK: Keep media
+
+    /// Only a shorter window removes anything, so only that asks first.
+    @Test func onlyAShorterKeepMediaWindowAsksFirst() {
+        typealias KeepMedia = ManageStoragePresentation.KeepMedia
+        let options = KeepMedia.options
+        #expect(options == [.forever, .oneYear, .sixMonths, .thirtyDays])
+        for (currentIndex, current) in options.enumerated() {
+            for (nextIndex, next) in options.enumerated() {
+                let confirmation = KeepMedia.confirmation(from: current, to: next)
+                if nextIndex > currentIndex {
+                    #expect(confirmation?.keep == next, "\(current) → \(next) should ask")
+                } else {
+                    #expect(confirmation == nil, "\(current) → \(next) removes nothing")
+                }
+            }
+        }
+    }
+
+    @Test func keepMediaWindowsMatchMDK() {
+        typealias KeepMedia = ManageStoragePresentation.KeepMedia
+        #expect(KeepMedia.options.map(KeepMedia.days) == [nil, 365, 183, 30])
+        let titles = KeepMedia.options.map(KeepMedia.title)
+        #expect(Set(titles).count == titles.count)
+        #expect(titles.allSatisfy { !$0.isEmpty })
+    }
+
+    @Test func eachKeepMediaConfirmationNamesItsOwnWindow() {
+        let confirmations = [AttachmentKeepMediaFfi.oneYear, .sixMonths, .thirtyDays].compactMap {
+            ManageStoragePresentation.KeepMedia.confirmation(from: .forever, to: $0)
+        }
+        #expect(confirmations.count == 3)
+        let fields: [KeyPath<ManageStoragePresentation.KeepMedia.Confirmation, String>] = [\.title, \.message, \.action]
+        for field in fields {
+            let values = confirmations.map { $0[keyPath: field] }
+            #expect(Set(values).count == values.count)
+            #expect(values.allSatisfy { !$0.isEmpty })
+        }
+    }
+
+    /// The count comes from MDK after it removed them. A confirmed change always
+    /// reports; a longer window stays quiet unless something went.
+    @Test func keepMediaResultReportsMDKsCount() {
+        typealias KeepMedia = ManageStoragePresentation.KeepMedia
+        #expect(KeepMedia.resultText(removed: 42, confirmed: true)?.contains("42") == true)
+        #expect(KeepMedia.resultText(removed: 3, confirmed: false)?.contains("3") == true)
+        #expect(KeepMedia.resultText(removed: 0, confirmed: true)?.isEmpty == false)
+        #expect(KeepMedia.resultText(removed: 0, confirmed: false) == nil)
+    }
+
+    /// A shorter window must still ask first after reading the saved one back fails.
+    @Test func aSavedKeepMediaWindowStandsWhenReadingItBackFails() {
+        typealias KeepMedia = ManageStoragePresentation.KeepMedia
+        var refresh = KeepMedia.Refresh()
+        refresh.succeeded(.thirtyDays)
+        refresh.changed(to: .forever, saved: true)
+        refresh.failedToRefresh()
+        #expect(refresh.keep == .forever)
+        #expect(refresh.failed)
+        #expect(refresh.keep.flatMap { KeepMedia.confirmation(from: $0, to: .sixMonths) } != nil)
+    }
+
+    @Test func aFailedKeepMediaChangeLeavesTheWindowUnknownUntilReadAgain() {
+        var refresh = ManageStoragePresentation.KeepMedia.Refresh()
+        refresh.succeeded(.thirtyDays)
+        refresh.changed(to: .forever, saved: false)
+        refresh.failedToRefresh()
+        #expect(refresh.keep == nil)
+        #expect(refresh.failed)
+
+        refresh.succeeded(.forever)
+        #expect(refresh.keep == .forever)
+        #expect(!refresh.failed)
+    }
+
+    @Test func otherFailedKeepMediaReadsKeepTheLastKnownWindow() {
+        var refresh = ManageStoragePresentation.KeepMedia.Refresh()
+        refresh.succeeded(.sixMonths)
+        refresh.failedToRefresh()
+        #expect(refresh.keep == .sixMonths)
+        #expect(refresh.failed)
+    }
+
     // MARK: Attachment rows
 
     /// Identity follows the original message and slot, so pages and removals

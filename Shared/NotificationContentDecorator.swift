@@ -2,14 +2,22 @@ import Foundation
 import UserNotifications
 
 enum NotificationContentDecorator {
+    /// A quiet presentation lands in Notification Center, in its chat's stack,
+    /// without a banner, sound, or lit screen.
+    enum Alerting {
+        case audible
+        case quiet
+    }
+
     static func apply(
         _ presentation: LocalNotificationPresentation,
         to content: UNMutableNotificationContent,
-        applicationBadgeCount: Int? = nil
+        applicationBadgeCount: Int? = nil,
+        alerting: Alerting = .audible
     ) {
         content.title = presentation.title
         content.body = presentation.body
-        content.sound = .default
+        applyAlerting(alerting, to: content)
         content.threadIdentifier = presentation.threadIdentifier
         content.targetContentIdentifier = presentation.identifier
         if let applicationBadgeCount {
@@ -27,15 +35,30 @@ enum NotificationContentDecorator {
 
     static func makeContent(
         for presentation: LocalNotificationPresentation,
-        applicationBadgeCount: Int? = nil
+        applicationBadgeCount: Int? = nil,
+        alerting: Alerting = .audible
     ) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         apply(
             presentation,
             to: content,
-            applicationBadgeCount: applicationBadgeCount
+            applicationBadgeCount: applicationBadgeCount,
+            alerting: alerting
         )
         return content
+    }
+
+    static func applyAlerting(
+        _ alerting: Alerting,
+        to content: UNMutableNotificationContent
+    ) {
+        switch alerting {
+        case .audible:
+            content.sound = .default
+        case .quiet:
+            content.sound = nil
+            content.interruptionLevel = .passive
+        }
     }
 
     static func applyApplicationBadgeCount(

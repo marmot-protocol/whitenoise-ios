@@ -132,6 +132,90 @@ enum ManageStoragePresentation {
         }
     }
 
+    /// MDK's "Keep media" windows, longest first. Only a shorter window removes
+    /// anything, so only that asks first. MDK can't count what it will remove:
+    /// it removes and counts in one call, and a later download restarts an
+    /// attachment's age, which the app can't see.
+    enum KeepMedia {
+        static let options: [AttachmentKeepMediaFfi] = [.forever, .oneYear, .sixMonths, .thirtyDays]
+
+        struct Confirmation: Equatable {
+            let keep: AttachmentKeepMediaFfi
+            let title: String
+            let message: String
+            let action: String
+        }
+
+        /// The window MDK has saved, as far as this screen knows. Shorter windows
+        /// confirm against it, so it never holds a value that may be stale.
+        struct Refresh: Equatable {
+            private(set) var keep: AttachmentKeepMediaFfi?
+            private(set) var failed = false
+
+            mutating func succeeded(_ keep: AttachmentKeepMediaFfi) {
+                self.keep = keep
+                failed = false
+            }
+
+            /// Only a change from this screen moves the window, so the last known one stands.
+            mutating func failedToRefresh() {
+                failed = true
+            }
+
+            /// A failed change may have saved either window, so it stays unknown until read again.
+            mutating func changed(to keep: AttachmentKeepMediaFfi, saved: Bool) {
+                self.keep = saved ? keep : nil
+            }
+        }
+
+        static func title(_ keep: AttachmentKeepMediaFfi) -> String {
+            switch keep {
+            case .forever: L10n.string("Forever")
+            case .oneYear: L10n.string("1 Year")
+            case .sixMonths: L10n.string("6 Months")
+            case .thirtyDays: L10n.string("30 Days")
+            }
+        }
+
+        /// The window MDK applies, in days; nil keeps everything.
+        static func days(_ keep: AttachmentKeepMediaFfi) -> Int? {
+            switch keep {
+            case .forever: nil
+            case .oneYear: 365
+            case .sixMonths: 183
+            case .thirtyDays: 30
+            }
+        }
+
+        static func confirmation(from current: AttachmentKeepMediaFfi,
+                                 to next: AttachmentKeepMediaFfi) -> Confirmation? {
+            guard let nextDays = days(next) else { return nil }
+            if let currentDays = days(current), currentDays <= nextDays { return nil }
+            return switch next {
+            case .forever: nil
+            case .oneYear: Confirmation(
+                keep: next, title: L10n.string("Keep Media for 1 Year?"),
+                message: L10n.string("Attachments older than 1 year are removed from this device now and as they age. Messages stay, and you can download attachments again while they're still available."),
+                action: L10n.string("Keep for 1 Year"))
+            case .sixMonths: Confirmation(
+                keep: next, title: L10n.string("Keep Media for 6 Months?"),
+                message: L10n.string("Attachments older than 6 months are removed from this device now and as they age. Messages stay, and you can download attachments again while they're still available."),
+                action: L10n.string("Keep for 6 Months"))
+            case .thirtyDays: Confirmation(
+                keep: next, title: L10n.string("Keep Media for 30 Days?"),
+                message: L10n.string("Attachments older than 30 days are removed from this device now and as they age. Messages stay, and you can download attachments again while they're still available."),
+                action: L10n.string("Keep for 30 Days"))
+            }
+        }
+
+        /// Reports MDK's count once it has removed them. A longer window says
+        /// nothing unless it removed something.
+        static func resultText(removed: UInt64, confirmed: Bool) -> String? {
+            if removed > 0 { return L10n.plural("Removed %lld attachments", removed) }
+            return confirmed ? L10n.string("No attachments were old enough to remove.") : nil
+        }
+    }
+
     /// Stable across pages and removals: the original message and slot.
     static func attachmentID(_ attachment: RetainedAttachmentSummaryFfi) -> String {
         let target = attachment.target
