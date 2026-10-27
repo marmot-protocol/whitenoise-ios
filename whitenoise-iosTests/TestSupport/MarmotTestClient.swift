@@ -90,8 +90,9 @@ final class OwnedTestClient: Sendable {
 /// the suite. After each test case, returned or thrown, every owned
 /// `AppState` with a live runtime is suspended through the app's background
 /// path, then every owned client and any client a state still holds is shut
-/// down (`shutdownAndClose` is idempotent), and only then are owned roots
-/// removed. A close failure fails a passing test; a test's own error wins.
+/// down (`shutdownAndClose` is idempotent), and only if every shutdown
+/// succeeded are owned roots removed. A close failure fails a passing test;
+/// a test's own error wins.
 final class TestRuntimeScope: Sendable {
     @TaskLocal static var current: TestRuntimeScope?
 
@@ -162,6 +163,9 @@ final class TestRuntimeScope: Sendable {
                 errors.append(error)
             }
         }
+        // A failed shutdown may leave a runtime open on any owned root (an
+        // AppState can rebuild one there), so keep them all, as `withTestClient` does.
+        guard errors.isEmpty else { return errors }
         for root in snapshot.roots {
             try? FileManager.default.removeItem(atPath: root)
         }
