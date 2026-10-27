@@ -380,11 +380,67 @@ Do not add a second storage path for data Marmot already owns.
 - Conversation bottom-follow requests, including the scroll-to-bottom button, should route through the timeline scroll coordinator instead of calling `scrollToBottom` directly from SwiftUI event handlers.
 - Keep comments short and only where they explain a non-obvious constraint.
 
+## Tests
+
+- Locally and on CI, `scripts/test.sh` runs the whole suite (the Staging
+  scheme's test target); CI runs it on every pull request and master push.
+  To iterate on one suite, pass `-only-testing:` to `xcodebuild` and run the
+  whole suite before pushing.
+- Tests that open or start a Marmot runtime take
+  `.marmotRuntimeConcurrencyLimit`; never combine it with `.timeLimit`, which
+  would count time queued behind the gate.
+- The gate allows `max(1, cores/4)` runtimes: 1 on the 3-vCPU CI runner.
+  `TEST_RUNNER_WN_TEST_GATE_CORES=3` reproduces CI's single permit locally;
+  it changes only the permit count, not the CPUs the simulator gets.
+- Open runtimes with `withTestClient`, `OwnedTestClient` (stored fixtures) or
+  `TestRuntimeScope.own` under `.closesTestRuntimes`; reopen a root with
+  `closing`. Never leave a `MarmotClient.testClient()` unclosed. SwiftLint's
+  `no_unowned_test_client` rule enforces this outside `TestSupport/`.
+- Wait with `TestLatch`/`eventually`/`settleLayout` or a layout callback,
+  never a fixed sleep; only the `TestSupport/` helpers may sleep. SwiftLint's
+  `no_test_sleep` rule enforces this; a deliberate sleep that is not a wait
+  needs `// swiftlint:disable:next no_test_sleep` with the reason above it.
+  Host views through `withHostedWindow`.
+- No source-text assertions (see Architecture).
+- Test the app's decisions, not other code. Most suites the audit deleted
+  broke one of these rules:
+  - Don't test MarmotKit through one-line `MarmotClient` pass-throughs or
+    version-adoption smoke tests; MDK's behaviour belongs in MDK's tests.
+  - Don't pin literals: no `constant == literal`, memberwise-init or
+    synthesized-`Equatable` round-trips, or layout numbers restated from the
+    code. Assert relations and invariants ("fits", "doesn't grow",
+    "at least 44 pt").
+  - Search for an existing suite before adding one and extend it; name the
+    file after its suite. One behaviour, one owner.
+  - Build records with the shared fixtures (`hex`, `timelineRecord`,
+    `chatListRow`, `group`, `message`, … in `TestSupport/`); don't add
+    private copies. Build `AppState` with `AppState.test()`, never
+    `AppState(client:)`, and never touch `UserDefaults.standard` or other
+    process-wide state.
+  - When a decision only runs inside a view, a runtime or an async path,
+    extract a small pure helper and test that instead of hosting a window
+    or starting a runtime.
+  - Add catalog, manifest and config checks as scripts in the lint job, not
+    unit tests.
+  - Keep waits loud: a timed-out wait must still fail the test. If you
+    catch it (`try? await eventually`), assert the condition right after;
+    never write a helper that returns quietly on timeout. Keep the default
+    timeout unless a test has a reason.
+- The October 2026 test audit (per-suite ledger, verdicts, measurement,
+  mutation-probe and guardrail scripts) is archived on tag
+  `test-audit-2026-10`; see #1202.
+
 ## Validation
 
 Use the smallest test set that covers your change, then broaden when lifecycle, notification, or binding behavior changes.
 
+The unit-test host shows no content and never bootstraps the production Marmot runtime: `whitenoise_iosApp` gates its window content on `ProcessEnvironment.isUnitTestHost()`. Add an opt-in only when a real launch-path test needs one.
+
 Useful commands:
+
+```sh
+scripts/test.sh     # the whole suite on the Staging scheme, as CI runs it
+```
 
 ```sh
 xcodebuild test \

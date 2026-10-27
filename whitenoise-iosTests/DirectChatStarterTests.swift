@@ -7,7 +7,7 @@ struct DirectChatStarterTests {
     private let alice = String(repeating: "bb", count: 32)
 
     @Test func reopensAnExistingDirectChatWithoutCreating() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account"
         let starter = DirectChatStarter()
         starter.createGroupForTesting = { _, _ in
@@ -28,7 +28,7 @@ struct DirectChatStarterTests {
     }
 
     @Test func createsWhenNoDirectChatExistsAndClearsRowScopedProgress() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account"
         let starter = DirectChatStarter()
         var observedRefs: [String] = []
@@ -78,12 +78,13 @@ struct DirectChatStarterTests {
     }
 
     @Test func secondTapIsIgnoredWhileTheFirstCreateIsInFlight() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "account"
         let starter = DirectChatStarter()
-        let gate = CreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         starter.createGroupForTesting = { _, _ in
-            await gate.holdUntilReleased()
+            gate.entered.signal()
+            try? await gate.released.wait()
             return "new-group"
         }
 
@@ -95,7 +96,7 @@ struct DirectChatStarterTests {
                 using: appState
             )
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         #expect(starter.creatingAccountIdHex == alice)
 
         let second = await starter.start(
@@ -104,7 +105,7 @@ struct DirectChatStarterTests {
             existingGroupIdHex: nil,
             using: appState
         )
-        await gate.release()
+        gate.released.signal()
 
         #expect(second == .ignored)
         #expect(await first.value == .created(groupIdHex: "new-group"))
@@ -112,7 +113,7 @@ struct DirectChatStarterTests {
     }
 
     @Test func failsWithoutAnActiveAccount() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = nil
         let starter = DirectChatStarter()
 
@@ -226,32 +227,5 @@ struct DirectChatStarterTests {
 
     private enum TestError: Error {
         case unexpectedCreate
-    }
-}
-
-private actor CreateGate {
-    private var held = false
-    private var heldWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseContinuation: CheckedContinuation<Void, Never>?
-
-    func holdUntilReleased() async {
-        held = true
-        heldWaiters.forEach { $0.resume() }
-        heldWaiters.removeAll()
-        await withCheckedContinuation { continuation in
-            releaseContinuation = continuation
-        }
-    }
-
-    func waitUntilHeld() async {
-        guard !held else { return }
-        await withCheckedContinuation { continuation in
-            heldWaiters.append(continuation)
-        }
-    }
-
-    func release() {
-        releaseContinuation?.resume()
-        releaseContinuation = nil
     }
 }

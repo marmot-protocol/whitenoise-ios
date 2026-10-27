@@ -249,7 +249,3 @@ private func encryptedMediaTag() -> MessageTagFfi {
         "filename a.jpg",
     ])
 }
-
-private func hex(_ byte: String) -> String {
-    String(repeating: byte, count: 32)
-}

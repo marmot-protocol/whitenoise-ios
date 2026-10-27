@@ -11,6 +11,8 @@ struct ConversationTranscriptExportTests {
         let records = [
             timelineRecord(
                 messageIdHex: secondId,
+                sourceMessageIdHex: .absent,
+                sender: hex("99"),
                 plaintext: "final answer",
                 kind: MessageSemantics.kindChat,
                 tags: [
@@ -21,6 +23,8 @@ struct ConversationTranscriptExportTests {
             ),
             timelineRecord(
                 messageIdHex: firstId,
+                sourceMessageIdHex: .absent,
+                sender: hex("99"),
                 plaintext: "",
                 kind: MessageSemantics.kindAgentStreamStart,
                 tags: [
@@ -56,9 +60,24 @@ struct ConversationTranscriptExportTests {
         let earlierId = String(repeating: "11", count: 32)
         let laterId = String(repeating: "22", count: 32)
         let records = [
-            timelineRecord(messageIdHex: laterId, timelineAt: 5),
-            timelineRecord(messageIdHex: earlierId, timelineAt: 5),
-            timelineRecord(messageIdHex: String(repeating: "33", count: 32), timelineAt: 4),
+            timelineRecord(
+                messageIdHex: laterId,
+                sourceMessageIdHex: .absent,
+                sender: hex("99"),
+                timelineAt: 5
+            ),
+            timelineRecord(
+                messageIdHex: earlierId,
+                sourceMessageIdHex: .absent,
+                sender: hex("99"),
+                timelineAt: 5
+            ),
+            timelineRecord(
+                messageIdHex: String(repeating: "33", count: 32),
+                sourceMessageIdHex: .absent,
+                sender: hex("99"),
+                timelineAt: 4
+            ),
         ]
 
         let document = ConversationTranscriptExport.makeDocument(
@@ -108,14 +127,29 @@ struct ConversationTranscriptExportTests {
         let reader = FakeTranscriptTimelineReader(pages: [
             TimelinePageFfi(
                 messages: [
-                    timelineRecord(messageIdHex: newestId, timelineAt: 3),
-                    timelineRecord(messageIdHex: middleId, timelineAt: 2),
+                    timelineRecord(
+                        messageIdHex: newestId,
+                        sourceMessageIdHex: .absent,
+                        sender: hex("99"),
+                        timelineAt: 3
+                    ),
+                    timelineRecord(
+                        messageIdHex: middleId,
+                        sourceMessageIdHex: .absent,
+                        sender: hex("99"),
+                        timelineAt: 2
+                    ),
                 ],
                 hasMoreBefore: true,
                 hasMoreAfter: false
             ),
             TimelinePageFfi(
-                messages: [timelineRecord(messageIdHex: oldestId, timelineAt: 1)],
+                messages: [timelineRecord(
+                    messageIdHex: oldestId,
+                    sourceMessageIdHex: .absent,
+                    sender: hex("99"),
+                    timelineAt: 1
+                )],
                 hasMoreBefore: false,
                 hasMoreAfter: false
             ),
@@ -154,8 +188,18 @@ struct ConversationTranscriptExportTests {
         let groupId = String(repeating: "aa", count: 32)
         let page = TimelinePageFfi(
             messages: [
-                timelineRecord(messageIdHex: newestId, timelineAt: 4),
-                timelineRecord(messageIdHex: oldestId, timelineAt: 2),
+                timelineRecord(
+                    messageIdHex: newestId,
+                    sourceMessageIdHex: .absent,
+                    sender: hex("99"),
+                    timelineAt: 4
+                ),
+                timelineRecord(
+                    messageIdHex: oldestId,
+                    sourceMessageIdHex: .absent,
+                    sender: hex("99"),
+                    timelineAt: 2
+                ),
             ],
             hasMoreBefore: true,
             hasMoreAfter: false
@@ -233,42 +277,6 @@ private func testExportGroup(
         pendingConfirmation: false,
         welcomerAccountIdHex: nil,
         viaWelcomeMessageIdHex: nil
-    )
-}
-
-private func timelineRecord(
-    messageIdHex: String,
-    direction: String = "received",
-    sender: String = String(repeating: "99", count: 32),
-    plaintext: String = "hello",
-    kind: UInt64 = MessageSemantics.kindChat,
-    tags: [MessageTagFfi] = [],
-    timelineAt: UInt64,
-    agentTextStreamJson: String? = nil
-) -> TimelineMessageRecordFfi {
-    TimelineMessageRecordFfi(
-        messageIdHex: messageIdHex,
-        sourceMessageIdHex: nil,
-        direction: direction,
-        groupIdHex: String(repeating: "aa", count: 32),
-        sender: sender,
-        plaintext: plaintext,
-        contentTokens: MarkdownDocumentFfi.emptyDocument,
-        kind: kind,
-        tags: tags,
-        timelineAt: timelineAt,
-        receivedAt: timelineAt,
-        replyToMessageIdHex: nil,
-        replyPreview: nil,
-        mediaJson: nil,
-        media: [],
-        agentTextStreamJson: agentTextStreamJson,
-        groupSystem: nil,
-        reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
-        edit: nil,
-        deleted: false,
-        deletedByMessageIdHex: nil,
-        invalidationStatus: nil
     )
 }
 

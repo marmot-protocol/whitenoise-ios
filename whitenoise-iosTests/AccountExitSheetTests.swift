@@ -1,4 +1,5 @@
 import SwiftUI
+import Testing
 import UIKit
 import XCTest
 import MarmotKit
@@ -38,70 +39,62 @@ final class AccountExitSheetTests: XCTestCase {
         let state = fixture.state
         let appearance = AppAppearanceStore(defaults: fixture.defaults, themeApplier: { _ in })
         let lifetime = AccountExitFixtureLifetime(state: state, appearance: appearance)
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let previousKeyWindow = scene.keyWindow
         let host = UIHostingController(rootView: RootView()
             .environment(state)
             .environment(state.toastState)
             .environment(state.navigation)
             .environment(appearance)
             .environment(\.accountExitFixtureLifetime, lifetime))
-        let window = UIWindow(windowScene: scene)
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        defer {
-            host.dismiss(animated: false)
-            window.isHidden = true
-            window.rootViewController = nil
-            previousKeyWindow?.makeKey()
-        }
-        state.accountExitIntent = intent
-        var signOutPresenter: UIViewController?
-        if intent == .signOut {
-            try await waitUntil("Sign Out did not present") { host.presentedViewController != nil }
-            signOutPresenter = host.presentedViewController
-            try await waitUntil("Sign Out presentation did not finish") {
-                signOutPresenter?.isBeingPresented == false
+        return try await withHostedWindow(host) { _ in
+            defer { host.dismiss(animated: false) }
+            state.accountExitIntent = intent
+            var signOutPresenter: UIViewController?
+            if intent == .signOut {
+                try await waitUntil("Sign Out did not present") { host.presentedViewController != nil }
+                signOutPresenter = host.presentedViewController
+                try await waitUntil("Sign Out presentation did not finish") {
+                    signOutPresenter?.isBeingPresented == false
+                }
             }
-        }
 
-        if hasRemainingProfiles {
-            state.accountStore.accounts = [
-                AccountSummaryFfi(
-                    label: "remaining-profile", accountIdHex: String(repeating: "a", count: 64),
-                    localSigning: true, signedOut: false, running: false
-                ),
-            ]
-        }
-        state.accountStore.requestProfileSelection()
-        state.setPhase(hasRemainingProfiles ? .ready : .onboarding)
-        state.pendingWipeReport = WipeReport(stages: [
-            WipeStageReport(stage: .deletingKeyPackages, completedCount: 0,
-                            failures: [WipeFailureItem(subject: nil, reason: "Relay unavailable")]),
-        ])
-        state.accountExitIntent = nil
-        try await waitUntil("The cleanup report did not appear") {
-            guard let presenter = host.presentedViewController else { return false }
-            return self.containsTitle("Cleanup Details", in: presenter)
-        }
-        let presenter = try XCTUnwrap(host.presentedViewController)
-        if let signOutPresenter { XCTAssertTrue(presenter === signOutPresenter) }
-        XCTAssertNotNil(state.pendingWipeReport)
-
-        state.pendingWipeReport = nil
-        if hasRemainingProfiles {
-            try await waitUntil("Closing the report did not reveal profile selection") {
-                self.containsTitle("Choose a profile", in: presenter)
+            if hasRemainingProfiles {
+                state.accountStore.accounts = [
+                    AccountSummaryFfi(
+                        label: "remaining-profile", accountIdHex: String(repeating: "a", count: 64),
+                        localSigning: true, signedOut: false, running: false
+                    ),
+                ]
             }
-            XCTAssertTrue(host.presentedViewController === presenter)
-            // Leave selection to verify teardown without starting a real account.
-            state.setPhase(.onboarding)
+            state.accountStore.requestProfileSelection()
+            state.setPhase(hasRemainingProfiles ? .ready : .onboarding)
+            state.pendingWipeReport = WipeReport(stages: [
+                WipeStageReport(stage: .deletingKeyPackages, completedCount: 0,
+                                failures: [WipeFailureItem(subject: nil, reason: "Relay unavailable")]),
+            ])
+            state.accountExitIntent = nil
+            try await waitUntil("The cleanup report did not appear") {
+                guard let presenter = host.presentedViewController else { return false }
+                return self.containsTitle("Cleanup Details", in: presenter)
+            }
+            let presenter = try XCTUnwrap(host.presentedViewController)
+            if let signOutPresenter { XCTAssertTrue(presenter === signOutPresenter) }
+            XCTAssertNotNil(state.pendingWipeReport)
+
+            state.pendingWipeReport = nil
+            if hasRemainingProfiles {
+                try await waitUntil("Closing the report did not reveal profile selection") {
+                    self.containsTitle("Choose a profile", in: presenter)
+                }
+                XCTAssertTrue(host.presentedViewController === presenter)
+                // Leave selection to verify teardown without starting a real account.
+                state.setPhase(.onboarding)
+            }
+            try await waitUntil("Account exit did not dismiss above Welcome") {
+                host.presentedViewController == nil
+            }
+            XCTAssertNil(state.accountExitIntent)
+            return { [weak state, weak appearance] in state == nil && appearance == nil }
         }
-        try await waitUntil("Account exit did not dismiss above Welcome") {
-            host.presentedViewController == nil
-        }
-        XCTAssertNil(state.accountExitIntent)
-        return { [weak state, weak appearance] in state == nil && appearance == nil }
     }
 
     private func isolatedState() throws -> (state: AppState, defaults: UserDefaults, suite: String) {
@@ -124,17 +117,15 @@ final class AccountExitSheetTests: XCTestCase {
         line: UInt = #line,
         _ predicate: () -> Bool
     ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(4))
-        while !predicate(), ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        if !predicate() {
+        // UIKit reports presentation and release only through state, so this
+        // polls, within the shared bounded budget rather than a local 4 s one.
+        do {
+            try await eventually { predicate() }
+        } catch {
             XCTFail(message, file: file, line: line)
-            throw PresentationTimeout()
+            throw error
         }
     }
-
-    private struct PresentationTimeout: Error {}
 }
 
 // SwiftUI can release environment objects from an autorelease pool outside a

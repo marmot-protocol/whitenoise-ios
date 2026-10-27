@@ -10,33 +10,33 @@ final class PrivateKeyAutoFillTests: XCTestCase {
     private static let key = "nsec1" + String(repeating: "q", count: 58)
 
     func testProviderFillWhileThePickerHoldsFocusSettlesOnce() async throws {
-        let harness = try Harness()
-        defer { harness.close() }
-        try await harness.focusFromSwiftUI()
-        let changeCount = UIPasteboard.general.changeCount
+        try await Harness.run { harness in
+            try await harness.focusFromSwiftUI()
+            let changeCount = UIPasteboard.general.changeCount
 
-        harness.presentPicker()
-        XCTAssertFalse(harness.model.isFocused)
-        harness.provide(Self.key)
+            harness.presentPicker()
+            XCTAssertFalse(harness.model.isFocused)
+            harness.provide(Self.key)
 
-        XCTAssertTrue(harness.field.rightView is UIPasteControl, "Accessory waits for the insertion to unwind")
-        try await harness.settle()
-        XCTAssertEqual(harness.field.text, Self.key)
-        XCTAssertEqual(harness.model.text, Self.key)
-        XCTAssertEqual(harness.model.textWrites, 1)
-        XCTAssertTrue(harness.field.isFirstResponder)
-        XCTAssertTrue(harness.model.isFocused)
-        XCTAssertTrue(harness.field.isSecureTextEntry)
-        XCTAssertEqual(harness.field.textContentType, .password)
-        XCTAssertTrue(harness.field.rightView is UIButton)
-        XCTAssertEqual(harness.field.rightViewMode, .always)
-        let selection = try XCTUnwrap(harness.field.selectedTextRange)
-        XCTAssertEqual(harness.field.compare(selection.end, to: harness.field.endOfDocument), .orderedSame)
-        XCTAssertEqual(harness.model.pastes, 0)
-        XCTAssertEqual(UIPasteboard.general.changeCount, changeCount)
+            XCTAssertTrue(harness.field.rightView is UIPasteControl, "Accessory waits for the insertion to unwind")
+            try await harness.settle()
+            XCTAssertEqual(harness.field.text, Self.key)
+            XCTAssertEqual(harness.model.text, Self.key)
+            XCTAssertEqual(harness.model.textWrites, 1)
+            XCTAssertTrue(harness.field.isFirstResponder)
+            XCTAssertTrue(harness.model.isFocused)
+            XCTAssertTrue(harness.field.isSecureTextEntry)
+            XCTAssertEqual(harness.field.textContentType, .password)
+            XCTAssertTrue(harness.field.rightView is UIButton)
+            XCTAssertEqual(harness.field.rightViewMode, .always)
+            let selection = try XCTUnwrap(harness.field.selectedTextRange)
+            XCTAssertEqual(harness.field.compare(selection.end, to: harness.field.endOfDocument), .orderedSame)
+            XCTAssertEqual(harness.model.pastes, 0)
+            XCTAssertEqual(UIPasteboard.general.changeCount, changeCount)
 
-        harness.field.delegate?.textFieldShouldReturn?(harness.field)
-        XCTAssertEqual(harness.model.submits, 1)
+            harness.field.delegate?.textFieldShouldReturn?(harness.field)
+            XCTAssertEqual(harness.model.submits, 1)
+        }
     }
 
     func testTextFillWhileUnfocusedReachesTheBinding() async throws {
@@ -52,102 +52,102 @@ final class PrivateKeyAutoFillTests: XCTestCase {
     }
 
     private func checkFillWithoutEditingChanged(_ delivery: SilentFill) async throws {
-        let harness = try Harness()
-        defer { harness.close() }
-        try await harness.focusFromSwiftUI()
+        try await Harness.run { harness in
+            try await harness.focusFromSwiftUI()
 
-        harness.presentPicker()
-        harness.fillSilently(Self.key, delivery)
-        harness.model.showsAccessory = false
-        harness.controller.view.layoutIfNeeded()
-        harness.model.showsAccessory = true
-        try await harness.settle()
+            harness.presentPicker()
+            harness.fillSilently(Self.key, delivery)
+            harness.model.showsAccessory = false
+            harness.controller.view.layoutIfNeeded()
+            harness.model.showsAccessory = true
+            try await harness.settle()
 
-        XCTAssertEqual(harness.field.text, Self.key)
-        XCTAssertEqual(harness.model.text, Self.key)
-        XCTAssertEqual(harness.model.textWrites, 1)
-        XCTAssertTrue(harness.field.rightView is UIButton)
-        XCTAssertTrue(harness.field.isFirstResponder)
-        XCTAssertTrue(harness.model.isFocused)
-        XCTAssertEqual(harness.model.pastes, 0)
+            XCTAssertEqual(harness.field.text, Self.key)
+            XCTAssertEqual(harness.model.text, Self.key)
+            XCTAssertEqual(harness.model.textWrites, 1)
+            XCTAssertTrue(harness.field.rightView is UIButton)
+            XCTAssertTrue(harness.field.isFirstResponder)
+            XCTAssertTrue(harness.model.isFocused)
+            XCTAssertEqual(harness.model.pastes, 0)
+        }
     }
 
     func testCancellingThePickerLeavesTheFieldUntouched() async throws {
-        let harness = try Harness()
-        defer { harness.close() }
-        try await harness.focusFromSwiftUI()
+        try await Harness.run { harness in
+            try await harness.focusFromSwiftUI()
 
-        harness.presentPicker()
-        harness.field.becomeFirstResponder()
-        try await harness.settle()
+            harness.presentPicker()
+            harness.field.becomeFirstResponder()
+            try await harness.settle()
 
-        XCTAssertTrue(harness.field.text?.isEmpty ?? true)
-        XCTAssertEqual(harness.model.textWrites, 0)
-        XCTAssertTrue(harness.model.isFocused)
-        XCTAssertTrue(harness.field.isFirstResponder)
-        XCTAssertTrue(harness.field.rightView is UIPasteControl)
+            XCTAssertTrue(harness.field.text?.isEmpty ?? true)
+            XCTAssertEqual(harness.model.textWrites, 0)
+            XCTAssertTrue(harness.model.isFocused)
+            XCTAssertTrue(harness.field.isFirstResponder)
+            XCTAssertTrue(harness.field.rightView is UIPasteControl)
+        }
     }
 
     func testRepeatedAndEmptyProviderFillsKeepTheLatestValue() async throws {
-        let harness = try Harness()
-        defer { harness.close() }
-        try await harness.focusFromSwiftUI()
+        try await Harness.run { harness in
+            try await harness.focusFromSwiftUI()
 
-        for credential in ["nsec1first", Self.key, Self.key] {
+            for credential in ["nsec1first", Self.key, Self.key] {
+                harness.presentPicker()
+                harness.provide(credential)
+            }
+            try await harness.settle()
+            XCTAssertEqual(harness.model.text, Self.key)
+            XCTAssertEqual(harness.model.textWrites, 2)
+            XCTAssertTrue(harness.field.rightView is UIButton)
+
             harness.presentPicker()
-            harness.provide(credential)
+            harness.provide("")
+            try await harness.settle()
+            XCTAssertTrue(harness.model.text.isEmpty)
+            XCTAssertTrue(harness.field.rightView is UIPasteControl)
+            XCTAssertTrue(harness.field.isFirstResponder)
+            XCTAssertTrue(harness.model.isFocused)
         }
-        try await harness.settle()
-        XCTAssertEqual(harness.model.text, Self.key)
-        XCTAssertEqual(harness.model.textWrites, 2)
-        XCTAssertTrue(harness.field.rightView is UIButton)
-
-        harness.presentPicker()
-        harness.provide("")
-        try await harness.settle()
-        XCTAssertTrue(harness.model.text.isEmpty)
-        XCTAssertTrue(harness.field.rightView is UIPasteControl)
-        XCTAssertTrue(harness.field.isFirstResponder)
-        XCTAssertTrue(harness.model.isFocused)
     }
 
     func testSwiftUIFocusAndAccessoryChangesApplyAfterTheUpdate() async throws {
-        let harness = try Harness()
-        defer { harness.close() }
-        try await harness.focusFromSwiftUI()
-        harness.presentPicker()
-        harness.provide(Self.key)
-        try await harness.settle()
+        try await Harness.run { harness in
+            try await harness.focusFromSwiftUI()
+            harness.presentPicker()
+            harness.provide(Self.key)
+            try await harness.settle()
 
-        harness.model.showsAccessory = false
-        harness.model.isFocused = false
-        try await harness.settle()
-        XCTAssertEqual(harness.field.rightViewMode, .never)
-        XCTAssertFalse(harness.field.isFirstResponder)
+            harness.model.showsAccessory = false
+            harness.model.isFocused = false
+            try await harness.settle()
+            XCTAssertEqual(harness.field.rightViewMode, .never)
+            XCTAssertFalse(harness.field.isFirstResponder)
 
-        harness.model.showsAccessory = true
-        harness.model.text = ""
-        try await harness.settle()
-        XCTAssertTrue(harness.field.text?.isEmpty ?? true)
-        XCTAssertTrue(harness.field.rightView is UIPasteControl)
-        XCTAssertEqual(harness.field.rightViewMode, .always)
-        XCTAssertFalse(harness.model.isFocused)
+            harness.model.showsAccessory = true
+            harness.model.text = ""
+            try await harness.settle()
+            XCTAssertTrue(harness.field.text?.isEmpty ?? true)
+            XCTAssertTrue(harness.field.rightView is UIPasteControl)
+            XCTAssertEqual(harness.field.rightViewMode, .always)
+            XCTAssertFalse(harness.model.isFocused)
+        }
     }
 
     func testRemovingTheFieldWithPendingWorkLeavesNoResponder() async throws {
-        let harness = try Harness()
-        defer { harness.close() }
-        try await harness.focusFromSwiftUI()
+        try await Harness.run { harness in
+            try await harness.focusFromSwiftUI()
 
-        harness.presentPicker()
-        harness.provide(Self.key)
-        harness.model.isFocused = false
-        harness.model.showsField = false
-        try await harness.settle()
+            harness.presentPicker()
+            harness.provide(Self.key)
+            harness.model.isFocused = false
+            harness.model.showsField = false
+            try await harness.settle()
 
-        XCTAssertNil(harness.field.window)
-        XCTAssertFalse(harness.field.isFirstResponder)
-        XCTAssertEqual(harness.model.text, Self.key)
+            XCTAssertNil(harness.field.window)
+            XCTAssertFalse(harness.field.isFirstResponder)
+            XCTAssertEqual(harness.model.text, Self.key)
+        }
     }
 }
 
@@ -191,22 +191,20 @@ private struct HarnessView: View {
 
 @MainActor
 private struct Harness {
-    let model = HarnessModel()
-    let window: UIWindow
-    let previousKeyWindow: UIWindow?
+    let model: HarnessModel
     let controller: UIHostingController<HarnessView>
     let field: PasteInterceptingSecureTextField
 
-    init() throws {
-        controller = UIHostingController(rootView: HarnessView(model: model))
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        previousKeyWindow = scene.keyWindow
-        window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: 402, height: 700)
-        window.rootViewController = controller
-        window.makeKeyAndVisible()
-        controller.view.layoutIfNeeded()
-        field = try XCTUnwrap(Self.secureField(in: controller.view))
+    /// Hosts the field in a key window for `body`, then resigns it and tears
+    /// the window down, restoring the previous key window.
+    static func run(_ body: (Harness) async throws -> Void) async throws {
+        let model = HarnessModel()
+        let controller = UIHostingController(rootView: HarnessView(model: model))
+        try await withHostedWindow(controller, frame: CGRect(x: 0, y: 0, width: 402, height: 700)) { _ in
+            let field = try XCTUnwrap(secureField(in: controller.view))
+            defer { field.resignFirstResponder() }
+            try await body(Harness(model: model, controller: controller, field: field))
+        }
     }
 
     func focusFromSwiftUI() async throws {
@@ -243,18 +241,42 @@ private struct Harness {
         controller.view.layoutIfNeeded()
     }
 
-    func settle() async throws {
-        for _ in 0..<5 {
-            try await Task.sleep(for: .milliseconds(10))
-            controller.view.layoutIfNeeded()
-        }
+    /// Everything the tests assert on, compared between drain rounds.
+    private struct Observed: Equatable {
+        let text: String?
+        let modelText: String
+        let textWrites: Int
+        let modelFocused: Bool
+        let firstResponder: Bool
+        let rightView: ObjectIdentifier?
+        let rightViewMode: UITextField.ViewMode
+        let inWindow: Bool
+        let secureEntry: Bool
+        let contentType: UITextContentType?
+        let selection: [Int]?
+        let pastes: Int
+        let submits: Int
+        let pasteboardChanges: Int
     }
 
-    func close() {
-        field.resignFirstResponder()
-        window.isHidden = true
-        window.rootViewController = nil
-        previousKeyWindow?.makeKey()
+    private func observed() -> Observed {
+        Observed(
+            text: field.text, modelText: model.text, textWrites: model.textWrites, modelFocused: model.isFocused,
+            firstResponder: field.isFirstResponder, rightView: field.rightView.map(ObjectIdentifier.init),
+            rightViewMode: field.rightViewMode, inWindow: field.window != nil,
+            secureEntry: field.isSecureTextEntry, contentType: field.textContentType,
+            selection: field.selectedTextRange.map { [
+                field.offset(from: field.beginningOfDocument, to: $0.start),
+                field.offset(from: field.beginningOfDocument, to: $0.end),
+            ] },
+            pastes: model.pastes, submits: model.submits, pasteboardChanges: UIPasteboard.general.changeCount
+        )
+    }
+
+    /// Drains the field's deferred focus and accessory tasks by ordering
+    /// rather than time (see `settleLayout`).
+    func settle() async throws {
+        try await settleLayout(controller.view) { observed() }
     }
 
     private static func secureField(in view: UIView) -> PasteInterceptingSecureTextField? {

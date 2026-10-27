@@ -4,6 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
+@Suite
 struct ComposerTextInputLayoutTests {
     private struct Harness: View {
         @State private var text = ""

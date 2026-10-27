@@ -235,46 +235,49 @@ struct RemoteImageLoaderTests {
         #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
     }
 
-    @Test func groupAvatarDrainBlocksNewLoadsAndSeedsUntilDecodeSettles() async throws {
-        let client = try MarmotClient.testClient()
-        let request = GroupAvatarImageRequest(accountRef: "drain-\(UUID())", groupIdHex: "group",
-                                              imageHashHex: "image", maxPixelSize: 8)
-        let data = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
-            UIColor.green.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
-        }.pngData())
-        let probe = RemoteImageFetchProbe(data: data)
-        GroupAvatarImageLoader.beforeDecodeForTesting = { _ = await probe.fetch() }
-        defer { GroupAvatarImageLoader.beforeDecodeForTesting = nil }
-        GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
-                                   groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
-        let load = Task {
-            try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func groupAvatarDrainBlocksNewLoadsAndSeedsUntilDecodeSettles() async throws {
+        try await withTestClient { client in
+            let request = GroupAvatarImageRequest(accountRef: "drain-\(UUID())", groupIdHex: "group",
+                                                  imageHashHex: "image", maxPixelSize: 8)
+            let data = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+                UIColor.green.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+            }.pngData())
+            let probe = RemoteImageFetchProbe(data: data)
+            GroupAvatarImageLoader.beforeDecodeForTesting = { _ = await probe.fetch() }
+            defer { GroupAvatarImageLoader.beforeDecodeForTesting = nil }
+            GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
+                                       groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
+            let load = Task {
+                try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+            }
+            await probe.waitUntilStarted()
+            let cleanup = Task { await GroupAvatarImageLoader.clearCachesAndDrain() }
+            for _ in 0..<1_000 where !GroupAvatarImageLoader.isDrainingForTesting { await Task.yield() }
+            #expect(GroupAvatarImageLoader.isDrainingForTesting)
+            GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
+                                       groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
+            #expect(!GroupAvatarImageLoader.hasSeedForTesting(accountRef: request.accountRef, groupIdHex: request.groupIdHex))
+            await #expect(throws: CancellationError.self) {
+                try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+            }
+            await probe.release()
+            await cleanup.value
+            await #expect(throws: CancellationError.self) { _ = try await load.value }
+            #expect(GroupAvatarImageLoader.cachedImage(for: request) == nil)
+            let dataKey = GroupAvatarCacheKey.rawData(accountRef: request.accountRef, imageHashHex: request.imageHashHex)
+            #expect(!(await RemoteAvatarDiskCache.groupShared.cachedFileExistsForTesting(forKey: dataKey)))
+            GroupAvatarImageLoader.beforeDecodeForTesting = nil
+            GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
+                                       groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
+            _ = try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+            await GroupAvatarImageLoader.clearCachesAndDrain()
         }
-        await probe.waitUntilStarted()
-        let cleanup = Task { await GroupAvatarImageLoader.clearCachesAndDrain() }
-        for _ in 0..<1_000 where !GroupAvatarImageLoader.isDrainingForTesting { await Task.yield() }
-        #expect(GroupAvatarImageLoader.isDrainingForTesting)
-        GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
-                                   groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
-        #expect(!GroupAvatarImageLoader.hasSeedForTesting(accountRef: request.accountRef, groupIdHex: request.groupIdHex))
-        await #expect(throws: CancellationError.self) {
-            try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
-        }
-        await probe.release()
-        await cleanup.value
-        await #expect(throws: CancellationError.self) { _ = try await load.value }
-        #expect(GroupAvatarImageLoader.cachedImage(for: request) == nil)
-        let dataKey = GroupAvatarCacheKey.rawData(accountRef: request.accountRef, imageHashHex: request.imageHashHex)
-        #expect(!(await RemoteAvatarDiskCache.groupShared.cachedFileExistsForTesting(forKey: dataKey)))
-        GroupAvatarImageLoader.beforeDecodeForTesting = nil
-        GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
-                                   groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
-        _ = try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
-        await GroupAvatarImageLoader.clearCachesAndDrain()
     }
 
-    @Test func erasureKeepsBothLoadersBlockedAfterTheirIndividualDrains() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func erasureKeepsBothLoadersBlockedAfterTheirIndividualDrains() async throws {
         AvatarCacheErasure.begin()
         defer { AvatarCacheErasure.end() }
         await RemoteAvatarImageLoader.clearCachesAndDrain()
@@ -283,10 +286,11 @@ struct RemoteImageLoaderTests {
         await #expect(throws: CancellationError.self) {
             try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, fetch: { _ in Data() })
         }
-        let client = try MarmotClient.testClient()
         let request = GroupAvatarImageRequest(accountRef: "erasure", groupIdHex: "group", imageHashHex: "hash", maxPixelSize: 8)
-        await #expect(throws: CancellationError.self) {
-            try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+        _ = try await withTestClient { client in
+            await #expect(throws: CancellationError.self) {
+                try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+            }
         }
     }
 
@@ -367,7 +371,8 @@ struct RemoteImageLoaderTests {
         ) == nil)
     }
 
-    @Test func groupAvatarPersistentThumbnailBypassesTheFullImageDownload() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func groupAvatarPersistentThumbnailBypassesTheFullImageDownload() async throws {
         let accountRef = "thumbnail-account-\(UUID().uuidString)"
         let imageHashHex = UUID().uuidString
         let request = GroupAvatarImageRequest(
@@ -390,18 +395,16 @@ struct RemoteImageLoaderTests {
         defer { GroupAvatarImageLoader.resetForTesting() }
 
         await RemoteAvatarDiskCache.groupThumbnailShared.store(thumbnailData, forKey: key)
-        let image = try await GroupAvatarImageLoader.image(
-            request: request,
-            scale: 1,
-            priority: .chatList,
-            client: try MarmotClient.testClient()
-        )
+        let image = try await withTestClient { client in
+            try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .chatList, client: client)
+        }
 
         #expect(image.cgImage?.width == 56)
         #expect(image.cgImage?.height == 56)
     }
 
-    @Test func groupAvatarLoaderPromotesTheLegacyGroupScopedDiskEntry() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func groupAvatarLoaderPromotesTheLegacyGroupScopedDiskEntry() async throws {
         let accountRef = "legacy-account-\(UUID().uuidString)"
         let groupIdHex = "legacy-group"
         let imageHashHex = UUID().uuidString
@@ -423,22 +426,25 @@ struct RemoteImageLoaderTests {
         defer { GroupAvatarImageLoader.resetForTesting() }
         await RemoteAvatarDiskCache.groupShared.store(imageData, forKey: legacyKey)
 
-        _ = try await GroupAvatarImageLoader.image(
-            request: GroupAvatarImageRequest(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                imageHashHex: imageHashHex,
-                maxPixelSize: 56
-            ),
-            scale: 1,
-            priority: .chatList,
-            client: try MarmotClient.testClient()
-        )
+        _ = try await withTestClient { client in
+            try await GroupAvatarImageLoader.image(
+                request: GroupAvatarImageRequest(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    imageHashHex: imageHashHex,
+                    maxPixelSize: 56
+                ),
+                scale: 1,
+                priority: .chatList,
+                client: client
+            )
+        }
 
         #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: contentKey) == imageData)
     }
 
-    @Test func groupAvatarSeedWaitsForTheReplacementHashAndAvoidsNetwork() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func groupAvatarSeedWaitsForTheReplacementHashAndAvoidsNetwork() async throws {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80))
         let imageData = try #require(renderer.image { context in
             UIColor.purple.setFill()
@@ -464,17 +470,19 @@ struct RemoteImageLoaderTests {
             groupIdHex: groupIdHex
         ))
 
-        let loaded = try await GroupAvatarImageLoader.image(
-            request: GroupAvatarImageRequest(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                imageHashHex: "new-hash",
-                maxPixelSize: 56
-            ),
-            scale: 1,
-            priority: .foreground,
-            client: try MarmotClient.testClient()
-        )
+        let loaded = try await withTestClient { client in
+            try await GroupAvatarImageLoader.image(
+                request: GroupAvatarImageRequest(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    imageHashHex: "new-hash",
+                    maxPixelSize: 56
+                ),
+                scale: 1,
+                priority: .foreground,
+                client: client
+            )
+        }
 
         #expect(loaded.cgImage?.width == 56)
         #expect(!GroupAvatarImageLoader.hasSeedForTesting(
@@ -503,7 +511,7 @@ struct RemoteImageLoaderTests {
             await order.append("list")
             await limiter.release(reservation)
         }
-        while await limiter.snapshot().waiting < 1 { await Task.yield() }
+        try await eventually { await limiter.snapshot().waiting >= 1 }
         let foregroundTask = Task {
             guard let reservation = await limiter.acquire(priority: GroupAvatarLoadPriority.foreground.rawValue) else {
                 return
@@ -511,7 +519,7 @@ struct RemoteImageLoaderTests {
             await order.append("foreground")
             await limiter.release(reservation)
         }
-        while await limiter.snapshot().waiting < 2 { await Task.yield() }
+        try await eventually { await limiter.snapshot().waiting >= 2 }
 
         await limiter.release(first)
         await listTask.value

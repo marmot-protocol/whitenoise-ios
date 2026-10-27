@@ -131,83 +131,80 @@ struct ChatListDraftHandoffTests {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .marmotRuntimeConcurrencyLimit)
 struct ChatListDraftHandoffBindingTests {
     @Test func publishedBinaryCorrelatesSendRevisionWithChatListDraftVersion() async throws {
-        let client = try MarmotClient.testClient()
-        let defaults = try #require(UserDefaults(suiteName: "DraftHandoffTests.\(UUID())"))
-        let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-        let state = AppState.test(client: client, notifications: .shared, conversationDraftStore: store,
-            accountDefaults: defaults, erasureDefaults: defaults)
-        state.setPhase(.ready)
-        let watchdog = MarmotFixtureWatchdog.start("Draft handoff did not complete", breaking: client)
-        defer { watchdog.cancel() }
-        func draft(_ text: String) -> ConversationDraftSnapshot {
-            ConversationDraftSnapshot(canonicalText: text, replyToMessageIdHex: nil, mediaAttachments: [])
-        }
-        do {
-            try await client.startRuntime()
-            let account = try await client.marmot.createIdentityWithProfile(
-                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
-            ).account
-            func group(_ name: String) async throws -> String {
-                try await client.createGroupWithOptionsDetailed(accountRef: account.label, name: name, memberRefs: [],
-                    options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)).groupIdHex
+        try await withTestClient { client in
+            let defaults = try #require(UserDefaults(suiteName: "DraftHandoffTests.\(UUID())"))
+            let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+            let state = AppState.test(client: client, conversationDraftStore: store,
+                accountDefaults: defaults, erasureDefaults: defaults)
+            state.setPhase(.ready)
+            let watchdog = MarmotFixtureWatchdog.start("Draft handoff did not complete", breaking: client)
+            defer { watchdog.cancel() }
+            func draft(_ text: String) -> ConversationDraftSnapshot {
+                ConversationDraftSnapshot(canonicalText: text, replyToMessageIdHex: nil, mediaAttachments: [])
             }
-            func row(_ groupIdHex: String) async throws -> PresentedChatRowFfi {
-                try #require(try await client.presentedChatListRow(accountRef: account.label, groupIdHex: groupIdHex))
+            do {
+                try await client.startRuntime()
+                let account = try await client.marmot.createIdentityWithProfile(
+                    defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
+                ).account
+                func group(_ name: String) async throws -> String {
+                    try await client.createGroupWithOptionsDetailed(accountRef: account.label, name: name, memberRefs: [],
+                        options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)).groupIdHex
+                }
+                func row(_ groupIdHex: String) async throws -> PresentedChatRowFfi {
+                    try #require(try await client.presentedChatListRow(accountRef: account.label, groupIdHex: groupIdHex))
+                }
+
+                // Rejected before acceptance: the row covered by the send shows its
+                // draft again, and the draft was never deleted on that basis.
+                let rejected = try await group("Rejected")
+                let generation = store.pendingSendHandoffGeneration
+                let revision = try await store.prepareSend(draft("see you soon"), accountRef: account.label, groupIdHex: rejected)
+                #expect(store.pendingSendHandoffGeneration != generation)
+                let handoff = try #require(store.pendingSendHandoff(accountRef: account.label, groupIdHex: rejected))
+                let sent = try await row(rejected)
+                #expect(ChatListDraftHandoff.coversDraftPreview(sent.preview, draftVersion: sent.draftVersion,
+                                                                sentRevision: handoff.revision))
+                let pending = ChatsListViewModel.Item(row: sent.row, avatarURL: nil, title: "Rejected",
+                                                      prepared: sent, pendingSend: handoff)
+                #expect(pending.draftPreview == nil)
+                #expect(pending.pendingSendPreview == "see you soon")
+                // Saving identical text is a newer edit and must stay visible.
+                _ = try await client.saveMessageDraftIfRevision(accountRef: account.label, revision: revision,
+                                                                snapshot: draft("see you soon"))
+                let resaved = try await row(rejected)
+                #expect(!ChatListDraftHandoff.coversDraftPreview(resaved.preview, draftVersion: resaved.draftVersion,
+                                                                 sentRevision: revision))
+                #expect(ChatsListViewModel.Item(row: resaved.row, avatarURL: nil, title: "Rejected", prepared: resaved,
+                                                pendingSend: handoff).draftPreview == "see you soon")
+                await store.finishSend(accountRef: account.label, groupIdHex: rejected, accepted: false)
+                #expect(store.pendingSendHandoff(accountRef: account.label, groupIdHex: rejected) == nil)
+                #expect(try await client.selectedMessageDraft(accountRef: account.label, groupIdHex: rejected)
+                    .draft?.content == "see you soon")
+
+                // Accepted: MDK consumes exactly the sent revision; the handoff
+                // stays for stale snapshots but never covers a later draft.
+                let accepted = try await group("Accepted")
+                let acceptedRevision = try await store.prepareSend(draft("on my way"), accountRef: account.label, groupIdHex: accepted)
+                _ = try await client.sendDraftWithClientToken(accountRef: account.label, revision: acceptedRevision,
+                                                              attachments: [], clientToken: UUID().uuidString)
+                await store.finishSend(accountRef: account.label, groupIdHex: accepted, accepted: true)
+                let retained = try #require(store.pendingSendHandoff(accountRef: account.label, groupIdHex: accepted))
+                let consumed = try await row(accepted)
+                #expect(consumed.preview != draftPreview("on my way"))
+                #expect(!ChatListDraftHandoff.coversDraftPreview(consumed.preview, draftVersion: consumed.draftVersion,
+                                                                 sentRevision: retained.revision))
+                store.setDraft(draft("next thought"), accountRef: account.label, groupIdHex: accepted)
+                await store.flush()
+                let next = try await row(accepted)
+                #expect(!ChatListDraftHandoff.coversDraftPreview(next.preview, draftVersion: next.draftVersion,
+                                                                 sentRevision: retained.revision))
+                #expect(ChatsListViewModel.Item(row: next.row, avatarURL: nil, title: "Accepted", prepared: next,
+                                                pendingSend: retained).draftPreview == "next thought")
             }
-
-            // Rejected before acceptance: the row covered by the send shows its
-            // draft again, and the draft was never deleted on that basis.
-            let rejected = try await group("Rejected")
-            let generation = store.pendingSendHandoffGeneration
-            let revision = try await store.prepareSend(draft("see you soon"), accountRef: account.label, groupIdHex: rejected)
-            #expect(store.pendingSendHandoffGeneration != generation)
-            let handoff = try #require(store.pendingSendHandoff(accountRef: account.label, groupIdHex: rejected))
-            let sent = try await row(rejected)
-            #expect(ChatListDraftHandoff.coversDraftPreview(sent.preview, draftVersion: sent.draftVersion,
-                                                            sentRevision: handoff.revision))
-            let pending = ChatsListViewModel.Item(row: sent.row, avatarURL: nil, title: "Rejected",
-                                                  prepared: sent, pendingSend: handoff)
-            #expect(pending.draftPreview == nil)
-            #expect(pending.pendingSendPreview == "see you soon")
-            // Saving identical text is a newer edit and must stay visible.
-            _ = try await client.saveMessageDraftIfRevision(accountRef: account.label, revision: revision,
-                                                            snapshot: draft("see you soon"))
-            let resaved = try await row(rejected)
-            #expect(!ChatListDraftHandoff.coversDraftPreview(resaved.preview, draftVersion: resaved.draftVersion,
-                                                             sentRevision: revision))
-            #expect(ChatsListViewModel.Item(row: resaved.row, avatarURL: nil, title: "Rejected", prepared: resaved,
-                                            pendingSend: handoff).draftPreview == "see you soon")
-            await store.finishSend(accountRef: account.label, groupIdHex: rejected, accepted: false)
-            #expect(store.pendingSendHandoff(accountRef: account.label, groupIdHex: rejected) == nil)
-            #expect(try await client.selectedMessageDraft(accountRef: account.label, groupIdHex: rejected)
-                .draft?.content == "see you soon")
-
-            // Accepted: MDK consumes exactly the sent revision; the handoff
-            // stays for stale snapshots but never covers a later draft.
-            let accepted = try await group("Accepted")
-            let acceptedRevision = try await store.prepareSend(draft("on my way"), accountRef: account.label, groupIdHex: accepted)
-            _ = try await client.sendDraftWithClientToken(accountRef: account.label, revision: acceptedRevision,
-                                                          attachments: [], clientToken: UUID().uuidString)
-            await store.finishSend(accountRef: account.label, groupIdHex: accepted, accepted: true)
-            let retained = try #require(store.pendingSendHandoff(accountRef: account.label, groupIdHex: accepted))
-            let consumed = try await row(accepted)
-            #expect(consumed.preview != draftPreview("on my way"))
-            #expect(!ChatListDraftHandoff.coversDraftPreview(consumed.preview, draftVersion: consumed.draftVersion,
-                                                             sentRevision: retained.revision))
-            store.setDraft(draft("next thought"), accountRef: account.label, groupIdHex: accepted)
-            await store.flush()
-            let next = try await row(accepted)
-            #expect(!ChatListDraftHandoff.coversDraftPreview(next.preview, draftVersion: next.draftVersion,
-                                                             sentRevision: retained.revision))
-            #expect(ChatsListViewModel.Item(row: next.row, avatarURL: nil, title: "Accepted", prepared: next,
-                                            pendingSend: retained).draftPreview == "next thought")
-            try await client.marmot.shutdownAndClose()
-        } catch {
-            try? await client.marmot.shutdownAndClose()
-            throw error
         }
     }
 }

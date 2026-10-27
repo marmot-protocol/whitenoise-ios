@@ -508,11 +508,13 @@ struct GroupSystemEventPresentationTests {
     @MainActor
     @Test func groupSystemTimelineRowIsVisibleWithoutStreamingDebug() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let row = timelineRecord(
             messageIdHex: hex("aa"),
+            sourceMessageIdHex: .absent,
+            groupIdHex: hex("bb"),
             plaintext: "not json",
             kind: MessageSemantics.kindGroupSystem,
             tags: [MessageTagFfi(values: ["system", "member_added"])],
@@ -549,11 +551,13 @@ struct GroupSystemEventPresentationTests {
     @MainActor
     @Test func groupSystemTimelineDisplayTextIsCachedPerProjectionGeneration() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState.test(client: try MarmotClient.testClient()),
+            appState: AppState.test(),
             group: testGroup()
         )
         let row = timelineRecord(
             messageIdHex: hex("aa"),
+            sourceMessageIdHex: .absent,
+            groupIdHex: hex("bb"),
             plaintext: #"{"v":1,"system_type":"member_added","text":"Member added"}"#,
             kind: MessageSemantics.kindGroupSystem,
             tags: [MessageTagFfi(values: ["system", "member_added"])],
@@ -631,40 +635,6 @@ private func groupSystemRecord(plaintext: String, sender: String = hex("11")) ->
     )
 }
 
-private func timelineRecord(
-    messageIdHex: String,
-    plaintext: String,
-    kind: UInt64,
-    tags: [MessageTagFfi],
-    timelineAt: UInt64,
-    groupSystem: GroupSystemEventFfi? = nil
-) -> TimelineMessageRecordFfi {
-    TimelineMessageRecordFfi(
-        messageIdHex: messageIdHex,
-        sourceMessageIdHex: nil,
-        direction: "received",
-        groupIdHex: hex("bb"),
-        sender: hex("11"),
-        plaintext: plaintext,
-        contentTokens: MarkdownDocumentFfi.emptyDocument,
-        kind: kind,
-        tags: tags,
-        timelineAt: timelineAt,
-        receivedAt: timelineAt,
-        replyToMessageIdHex: nil,
-        replyPreview: nil,
-        mediaJson: nil,
-        media: [],
-        agentTextStreamJson: nil,
-        groupSystem: groupSystem,
-        reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
-        edit: nil,
-        deleted: false,
-        deletedByMessageIdHex: nil,
-        invalidationStatus: nil
-    )
-}
-
 private func testGroup() -> AppGroupRecordFfi {
     AppGroupRecordFfi(
         groupIdHex: hex("bb"),
@@ -692,8 +662,4 @@ private func testGroup() -> AppGroupRecordFfi {
         welcomerAccountIdHex: nil,
         viaWelcomeMessageIdHex: nil
     )
-}
-
-private func hex(_ byte: String) -> String {
-    String(repeating: byte, count: 32)
 }

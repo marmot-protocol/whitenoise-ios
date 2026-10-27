@@ -97,8 +97,7 @@ struct DraftMediaPreuploadsTests {
     }
 
     @Test func composerUploadsStagedMediaWhileTheUserIsStillWriting() async throws {
-        let client = try MarmotClient.testClient()
-        let state = AppState.test(client: client)
+        let state = AppState.test()
         state.activeAccountRef = "account-ref"
         let probe = UploadProbe()
         let composer = ComposerModel(
@@ -113,12 +112,10 @@ struct DraftMediaPreuploadsTests {
         await probe.waitForCalls(1)
 
         #expect(probe.calls == [UploadCall(accountRef: "account-ref", fileName: "photo.jpg", cancelled: false)])
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func composerCancelsTheUploadOfMediaRemovedBeforeSend() async throws {
-        let client = try MarmotClient.testClient()
-        let state = AppState.test(client: client)
+        let state = AppState.test()
         state.activeAccountRef = "account-ref"
         let probe = UploadProbe()
         let composer = ComposerModel(
@@ -134,7 +131,6 @@ struct DraftMediaPreuploadsTests {
         await probe.waitForCalls(1)
 
         #expect(probe.calls == [UploadCall(accountRef: "account-ref", fileName: "photo.jpg", cancelled: true)])
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test(arguments: [
@@ -231,8 +227,4 @@ private func reference(_ fileName: String, sourceEpoch: UInt64 = 1) -> MediaAtta
         dim: nil,
         thumbhash: nil
     )
-}
-
-private func hex(_ byte: String) -> String {
-    String(repeating: byte, count: 32)
 }

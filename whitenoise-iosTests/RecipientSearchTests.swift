@@ -253,9 +253,9 @@ struct RecipientSearchTests {
     // Full-suite native fixtures can delay MainActor scheduling beyond one minute on CI.
     @MainActor
     @Test(.timeLimit(.minutes(5)), arguments: [SearchUpdateTriggerFfi.resultsFound(radius: 1), .cachedResultsFound])
-    func streamedResultsDoNotWaitForFollowEnrichment(trigger: SearchUpdateTriggerFfi) async {
+    func streamedResultsDoNotWaitForFollowEnrichment(trigger: SearchUpdateTriggerFfi) async throws {
         let model = RecipientUserSearch()
-        let follows = RecipientSearchFollowsGate()
+        let follows = (entered: TestLatch(), released: TestLatch())
         let result = searchResult(alice, radius: 1, field: .name, quality: .exact)
         let subscription = RecipientSearchSubscriptionStub(updates: [
             UserSearchUpdateFfi(
@@ -274,20 +274,22 @@ struct RecipientSearchTests {
             RecipientUserSearchOperations(
                 searchUsers: { subscription },
                 accountFollows: {
-                    await follows.suspendUntilReleased()
+                    follows.entered.signal()
+                    try await follows.released.wait()
                     return [self.alice]
                 }
             )
         }
 
-        await follows.waitUntilStarted()
+        // Waits match the 5-minute limit's CI allowance, not the 30 s default.
+        try await follows.entered.wait(timeout: .seconds(240))
         await model.awaitSearchForTesting()
 
         #expect(model.results == [result])
         #expect(!model.isSearching)
 
-        await follows.release()
-        await waitForRecipientSearch {
+        follows.released.signal()
+        try await eventually(timeout: .seconds(240)) {
             model.followedAccountIds == [self.alice]
                 && model.candidates.first?.isFollowedBySearcher == true
         }
@@ -453,64 +455,6 @@ private actor RecipientSearchSubscriptionStub: UserSearchSubscriptionProtocol {
         guard !updates.isEmpty else { return nil }
         return updates.removeFirst()
     }
-}
-
-private actor RecipientSearchFollowsGate {
-    private var started = false
-    private var released = false
-    private var startedWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseWaiter: CheckedContinuation<Void, Never>?
-
-    func suspendUntilReleased() async {
-        started = true
-        for waiter in startedWaiters {
-            waiter.resume()
-        }
-        startedWaiters.removeAll()
-        guard !released else { return }
-        await withCheckedContinuation { continuation in
-            releaseWaiter = continuation
-        }
-    }
-
-    func waitUntilStarted() async {
-        guard !started else { return }
-        await withCheckedContinuation { continuation in
-            startedWaiters.append(continuation)
-        }
-    }
-
-    func release() {
-        released = true
-        releaseWaiter?.resume()
-        releaseWaiter = nil
-    }
-}
-
-@MainActor
-private func waitForRecipientSearch(
-    timeout: Duration = .seconds(10),
-    minimumSchedulingOpportunities: Int = 400,
-    interval: Duration = .milliseconds(5),
-    sourceLocation: SourceLocation = #_sourceLocation,
-    condition: () -> Bool
-) async {
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: timeout)
-    var schedulingOpportunities = 0
-    while schedulingOpportunities < minimumSchedulingOpportunities || clock.now < deadline {
-        if condition() { return }
-        schedulingOpportunities += 1
-        try? await Task.sleep(for: interval)
-    }
-    if condition() { return }
-    Issue.record(
-        """
-        recipient search condition never became true within \(timeout) \
-        or \(schedulingOpportunities) main-actor scheduling opportunities
-        """,
-        sourceLocation: sourceLocation
-    )
 }
 
 private enum MembershipReadFailure: Error {

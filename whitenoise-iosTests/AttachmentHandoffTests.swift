@@ -20,12 +20,9 @@ struct AttachmentHandoffTests {
 
     private let lease = String(repeating: "a", count: 32)
 
+    /// Callers assert on the returned leases, so a timeout still fails the test.
     private func waitForReleases(_ releaser: FakeReleaser, count: Int) async -> [String] {
-        for _ in 0..<200 {
-            let leases = await releaser.leases
-            if leases.count >= count { return leases }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
+        try? await eventually { await releaser.leases.count >= count }
         return await releaser.leases
     }
 
@@ -300,7 +297,7 @@ struct AttachmentHandoffTests {
         }
         caller.cancel()
         // The shielded call is still running: only the control saw the cancellation.
-        for _ in 0..<200 where !control.isCancelled() { try await Task.sleep(for: .milliseconds(5)) }
+        try await eventually { control.isCancelled() }
         #expect(control.isCancelled())
         gate.continuation.finish()
         #expect(try await caller.value == "lease")

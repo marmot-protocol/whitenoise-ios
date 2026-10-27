@@ -62,8 +62,8 @@ struct MissingKeyPackageInvitationPresentationTests {
 struct NewGroupMissingKeyPackageTests {
     private let peerHex = String(repeating: "c", count: 64)
 
-    private func makeAppState(client: MarmotClient, knownName: String?, defaults: UserDefaults) -> AppState {
-        let appState = AppState(client: client)
+    private func makeAppState(knownName: String?, defaults: UserDefaults) -> AppState {
+        let appState = AppState.test()
         appState.activeAccountRef = "account"
         appState.profileStore.contactNicknameDefaults = defaults
         appState.profileStore.profileProjectionCache[peerHex] = ProfileDisplayProjection(
@@ -90,12 +90,10 @@ struct NewGroupMissingKeyPackageTests {
     }
 
     @Test func namedMissingKeyPackageToastsAndKeepsSelectionForRetry() async throws {
-        let client = try MarmotClient.testClient()
-        defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
         let suiteName = "MissingKeyPackage.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let appState = makeAppState(client: client, knownName: "Alex", defaults: defaults)
+        let appState = makeAppState(knownName: "Alex", defaults: defaults)
         let (model, member) = makeModel()
 
         var opened: String?
@@ -114,16 +112,13 @@ struct NewGroupMissingKeyPackageTests {
         await model.createGroup(name: "Test", description: "", retentionSeconds: 0, using: appState) { opened = $0 }
         #expect(opened == "created")
         #expect(model.groupCreateError == nil)
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func unnamedMissingKeyPackageUsesGenericCopy() async throws {
-        let client = try MarmotClient.testClient()
-        defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
         let suiteName = "MissingKeyPackage.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let appState = makeAppState(client: client, knownName: nil, defaults: defaults)
+        let appState = makeAppState(knownName: nil, defaults: defaults)
         let (model, member) = makeModel()
 
         await model.createGroup(name: "Test", description: "", retentionSeconds: 0, using: appState) { _ in }
@@ -131,6 +126,5 @@ struct NewGroupMissingKeyPackageTests {
         #expect(appState.activeToast?.title == "Couldn't create chat")
         #expect(appState.activeToast?.message == "This user isn't on White Noise yet.")
         #expect(model.groupSelection.memberRefs == [member.memberRef])
-        try await client.marmot.shutdownAndClose()
     }
 }

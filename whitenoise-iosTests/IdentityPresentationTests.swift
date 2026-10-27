@@ -327,7 +327,7 @@ struct IdentityPresentationAdapterTests {
     }
 
     @Test func memberRowNamesUnknownMembersByNpub() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let member = GroupMemberDetailsFfi(
             memberIdHex: Fixture.hex,
             account: Fixture.hex,
@@ -344,7 +344,7 @@ struct IdentityPresentationAdapterTests {
     }
 
     @Test func stagedRecipientNamesUnknownMembersByNpub() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let member = MemberRefFfi(
             memberRef: Fixture.npub,
             accountIdHex: Fixture.hex,
@@ -357,7 +357,7 @@ struct IdentityPresentationAdapterTests {
     }
 
     @Test func directMessageChatTitleNamesUnknownPeerByNpub() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         let title = appState.displayName(forAccountIdHex: Fixture.hex)
 
         #expect(title == IdentityFormatter.short(Fixture.npub))
@@ -365,7 +365,7 @@ struct IdentityPresentationAdapterTests {
     }
 
     @Test func copyableNpubIsWithheldRatherThanFallingBackToHex() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
 
         #expect(appState.npub(forAccountIdHex: Fixture.hex) == Fixture.npub)
         #expect(appState.npub(forAccountIdHex: "not-a-key") == nil)
@@ -376,7 +376,7 @@ struct IdentityPresentationAdapterTests {
     /// (the cold/relaunch/notification-extension case) and must render an npub;
     /// a later profile promotes the same call to a name and never regresses.
     @Test func presentationUpgradesFromNpubToNameWithoutEverShowingHex() throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
 
         let firstFrame = appState.displayName(forAccountIdHex: Fixture.hex)
         #expect(firstFrame.hasPrefix("npub1"))
@@ -398,39 +398,6 @@ struct IdentityPresentationAdapterTests {
         #expect(hydrated == "Hydrated Name")
         #expect(!containsHex(hydrated, Fixture.hex))
     }
-}
-
-private func notificationUpdate(
-    senderAccountIdHex: String,
-    senderName: String?
-) -> NotificationUpdateFfi {
-    NotificationUpdateFfi(
-        notificationKey: "notif-identity",
-        conversationKey: "conv-identity",
-        trigger: .newMessage,
-        accountRef: "account-identity",
-        accountIdHex: String(repeating: "11", count: 32),
-        groupIdHex: "group-identity",
-        groupName: nil,
-        isDm: true,
-        isMention: false,
-        messageIdHex: "message-identity",
-        sender: NotificationUserFfi(
-            accountIdHex: senderAccountIdHex,
-            displayName: senderName,
-            pictureUrl: nil
-        ),
-        receiver: NotificationUserFfi(
-            accountIdHex: String(repeating: "11", count: 32),
-            displayName: "Me",
-            pictureUrl: nil
-        ),
-        previewText: "Hello",
-        reactionEmoji: nil,
-        reactedToPreview: nil,
-        timestampMs: 1_700_000_000_123,
-        isFromSelf: false
-    )
 }
 
 /// The npub a recipient row prints *under* a name. The row also titles itself

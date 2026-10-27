@@ -95,6 +95,10 @@ struct whitenoise_iosApp: App {
     @State private var appState: AppState
     @State private var appearance: AppAppearanceStore
     @State private var appLockOverlay = AppLockOverlayPresenter()
+    /// False while the app only hosts the unit-test bundle: the scene stays
+    /// (window-hosting tests attach to it) but shows nothing and never boots
+    /// the production runtime.
+    private let startsRuntime = !ProcessEnvironment.isUnitTestHost()
 
     init() {
         let windowInitStartedAt = ContinuousClock.now
@@ -110,63 +114,65 @@ struct whitenoise_iosApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environment(appState)
-                .environment(appState.toastState)
-                .environment(appState.navigation)
-                .environment(appearance)
-                .onChange(of: appState.appDataErasureGeneration) {
-                    appearance.setTheme(.system)
-                    AppLanguage.setCurrentRawValue(AppLanguage.system.rawValue)
-                }
-                .appAppearance(appearance)
-                .dismissesKeyboardOnTap()
-                .task {
-                    appState.noteHostWindowInitialized()
-                    // The path monitor lives in this lazy singleton; touch it
-                    // at launch so connectivity-restored events fire even in
-                    // sessions that never read a media setting.
-                    _ = MediaAutoDownloadStore.shared
-                    handleScenePhase(scenePhase, isInitial: true)
-                    appLockOverlay.update(
-                        for: appState.appLock.shield,
-                        controller: appState.appLock,
-                        appearance: appearance
-                    )
-                    await appState.bootstrap()
-                }
-                .task(id: "\(appState.runtimeGeneration)/\(appState.canUseRuntimeForLocalForegroundWork)/\(appState.accounts.map { "\($0.accountIdHex):\($0.signedOut)" }.joined())") {
-                    guard appState.canUseRuntimeForLocalForegroundWork,
-                          let client = try? appState.currentMarmotClient() else { return }
-                    do { try await AttachmentPolicyBridge.synchronize(client) }
-                    catch is CancellationError { return }
-                    catch { appState.present(UserFacingError.toast(title: L10n.string("Couldn't update download settings"), error: error)) }
-                }
-                .onOpenURL { url in
-                    appState.handle(url: url)
-                }
-                .onChange(of: scenePhase) { _, phase in
-                    handleScenePhase(phase, isInitial: false)
-                }
-                .onReceive(NotificationCenter.default.publisher(for: MediaAutoDownloadStore.connectivityRestored)) { _ in
-                    // Wake MDK's durable outbound retries before the ordinary
-                    // relay catch-up when the path monitor sees the network return.
-                    appState.scheduleConnectivityCatchUp(connectivityRestored: true)
-                }
-                .onChange(of: appState.activeAccount?.accountIdHex, initial: true) { _, accountIdHex in
-                    MediaAutoDownloadStore.shared.setActiveAccount(accountIdHex)
-                }
-                .onChange(of: appState.appLock.shield) { _, shield in
-                    appLockOverlay.update(
-                        for: shield,
-                        controller: appState.appLock,
-                        appearance: appearance
-                    )
-                }
-                .background {
-                    ScreenPrivacyProtection(isEnabled: appState.blockScreenshots)
-                        .allowsHitTesting(false)
-                }
+            if startsRuntime {
+                RootView()
+                    .environment(appState)
+                    .environment(appState.toastState)
+                    .environment(appState.navigation)
+                    .environment(appearance)
+                    .onChange(of: appState.appDataErasureGeneration) {
+                        appearance.setTheme(.system)
+                        AppLanguage.setCurrentRawValue(AppLanguage.system.rawValue)
+                    }
+                    .appAppearance(appearance)
+                    .dismissesKeyboardOnTap()
+                    .task {
+                        appState.noteHostWindowInitialized()
+                        // The path monitor lives in this lazy singleton; touch it
+                        // at launch so connectivity-restored events fire even in
+                        // sessions that never read a media setting.
+                        _ = MediaAutoDownloadStore.shared
+                        handleScenePhase(scenePhase, isInitial: true)
+                        appLockOverlay.update(
+                            for: appState.appLock.shield,
+                            controller: appState.appLock,
+                            appearance: appearance
+                        )
+                        await appState.bootstrap()
+                    }
+                    .task(id: "\(appState.runtimeGeneration)/\(appState.canUseRuntimeForLocalForegroundWork)/\(appState.accounts.map { "\($0.accountIdHex):\($0.signedOut)" }.joined())") {
+                        guard appState.canUseRuntimeForLocalForegroundWork,
+                              let client = try? appState.currentMarmotClient() else { return }
+                        do { try await AttachmentPolicyBridge.synchronize(client) }
+                        catch is CancellationError { return }
+                        catch { appState.present(UserFacingError.toast(title: L10n.string("Couldn't update download settings"), error: error)) }
+                    }
+                    .onOpenURL { url in
+                        appState.handle(url: url)
+                    }
+                    .onChange(of: scenePhase) { _, phase in
+                        handleScenePhase(phase, isInitial: false)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: MediaAutoDownloadStore.connectivityRestored)) { _ in
+                        // Wake MDK's durable outbound retries before the ordinary
+                        // relay catch-up when the path monitor sees the network return.
+                        appState.scheduleConnectivityCatchUp(connectivityRestored: true)
+                    }
+                    .onChange(of: appState.activeAccount?.accountIdHex, initial: true) { _, accountIdHex in
+                        MediaAutoDownloadStore.shared.setActiveAccount(accountIdHex)
+                    }
+                    .onChange(of: appState.appLock.shield) { _, shield in
+                        appLockOverlay.update(
+                            for: shield,
+                            controller: appState.appLock,
+                            appearance: appearance
+                        )
+                    }
+                    .background {
+                        ScreenPrivacyProtection(isEnabled: appState.blockScreenshots)
+                            .allowsHitTesting(false)
+                    }
+            }
         }
     }
 

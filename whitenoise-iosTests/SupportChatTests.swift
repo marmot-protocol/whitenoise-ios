@@ -12,7 +12,7 @@ struct SupportChatTests {
     }
 
     @Test func existingSupportChatOpensWithoutCreatingADuplicate() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: "existing-support-dm")
         flow.starter.createGroupForTesting = { _, _ in
@@ -31,7 +31,7 @@ struct SupportChatTests {
     }
 
     @Test func missingSupportChatCreatesThroughTheNormalDirectChatPath() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         var createdAccountRef: String?
@@ -55,7 +55,7 @@ struct SupportChatTests {
     }
 
     @Test func openingSupportAgainReusesTheConversation() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: "existing-support-dm")
         flow.starter.createGroupForTesting = { _, _ in
@@ -79,7 +79,7 @@ struct SupportChatTests {
     }
 
     @Test func discardedRoutingCanReopenTheCompletedConversation() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         var creations = 0
@@ -104,7 +104,7 @@ struct SupportChatTests {
     }
 
     @Test func supportChatFailureIsRecoverableWithoutSurfacingEngineCopy() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         var attempt = 0
@@ -140,7 +140,7 @@ struct SupportChatTests {
     }
 
     @Test func failedExistingChatLookupNeverCreatesADuplicate() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
         var lookupAttempt = 0
@@ -226,12 +226,13 @@ struct SupportChatTests {
     }
 
     @Test func supportChatReportsLoadingWhileCreationIsInFlight() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         flow.starter.createGroupForTesting = { _, _ in
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             return "support-dm"
         }
         let model = SupportChatViewModel(chatFlow: flow)
@@ -239,23 +240,24 @@ struct SupportChatTests {
         let task = Task {
             await model.start(using: appState) { _ in }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
 
         #expect(model.phase == .loading)
         #expect(model.isCreatingChat)
 
-        await gate.release()
+        gate.released.signal()
         await task.value
         #expect(model.phase == .routing)
     }
 
     @Test func cancellingWhileLookingForAnExistingChatDoesNotCreateOne() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         flow.existingDirectChatGroupIdForTesting = { _ in
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             return nil
         }
         var didCreate = false
@@ -268,9 +270,9 @@ struct SupportChatTests {
         let task = Task {
             await model.start(using: appState) { _ in }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         task.cancel()
-        await gate.release()
+        gate.released.signal()
         await task.value
 
         #expect(!didCreate)
@@ -279,7 +281,7 @@ struct SupportChatTests {
 
     @Test(arguments: [false, true])
     func cancelledCreationDoesNotOpenSupportButCanBeReopened(isRetry: Bool) async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         let model = SupportChatViewModel(chatFlow: flow)
@@ -291,11 +293,12 @@ struct SupportChatTests {
             #expect(model.phase == .failed)
         }
 
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         var creationCompleted = false
         flow.starter.createGroupForTesting = { _, _ in
             // Like the native operation, this completion can arrive after cancellation.
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             creationCompleted = true
             return "created-support-dm"
         }
@@ -306,9 +309,9 @@ struct SupportChatTests {
                 await model.start(using: appState) { openedGroupIds.append($0) }
             }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         task.cancel()
-        await gate.release()
+        gate.released.signal()
         await task.value
 
         #expect(creationCompleted)
@@ -327,7 +330,7 @@ struct SupportChatTests {
 
     @Test(arguments: [false, true])
     func settingsEntryOnlyLooksUpSupport(hasExistingChat: Bool) async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: hasExistingChat ? "support-dm" : nil)
         flow.starter.createGroupForTesting = { _, _ in
@@ -345,18 +348,18 @@ struct SupportChatTests {
     }
 
     @Test func settingsKeepsProgressVisibleUntilTheDestinationIsPrepared() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         let task = Task {
-            await entry.prepare(using: appState) { _ in await gate.hold() }
+            await entry.prepare(using: appState) { _ in gate.entered.signal(); try? await gate.released.wait() }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         #expect(entry.isLoading)
         #expect(entry.destination == nil)
 
-        await gate.release()
+        gate.released.signal()
         await task.value
         #expect(entry.destination?.chatTarget?.groupIdHex == "support-dm")
         #expect(!entry.isLoading)
@@ -364,17 +367,17 @@ struct SupportChatTests {
 
     @Test(arguments: [false, true])
     func settingsDiscardsAPreparedDestinationAfterLeavingOrSwitchingAccount(switchAccount: Bool) async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         let task = Task {
-            await entry.prepare(using: appState) { _ in await gate.hold() }
+            await entry.prepare(using: appState) { _ in gate.entered.signal(); try? await gate.released.wait() }
         }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         if switchAccount { appState.activeAccountRef = "replacement" }
         else { task.cancel() }
-        await gate.release()
+        gate.released.signal()
         await task.value
 
         #expect(entry.destination == nil)
@@ -383,7 +386,7 @@ struct SupportChatTests {
     }
 
     @Test func settingsLookupFailureOffersRetryWithoutShowingStartChat() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
         var attempt = 0
@@ -404,25 +407,26 @@ struct SupportChatTests {
     }
 
     @Test func cancelledSettingsLookupDoesNotNavigateAndCanBeRetried() async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         var lookups = 0
         flow.existingDirectChatGroupIdForTesting = { _ in
             lookups += 1
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             return "support-dm"
         }
         let entry = SupportChatEntryModel(chatFlow: flow)
         let task = Task { await entry.prepare(using: appState) }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         #expect(entry.isLoading)
         await entry.prepare(using: appState)
         #expect(lookups == 1)
 
         task.cancel()
-        await gate.release()
+        gate.released.signal()
         await task.value
         #expect(entry.destination == nil)
         #expect(!entry.showsFailure)
@@ -435,20 +439,21 @@ struct SupportChatTests {
 
     @Test(arguments: [false, true])
     func settingsLookupDiscardsResultsAfterAccountChange(lookupFails: Bool) async throws {
-        let appState = AppState.test(client: try MarmotClient.testClient())
+        let appState = AppState.test()
         appState.activeAccountRef = "original"
         let flow = NewChatFlowViewModel()
-        let gate = SupportChatCreateGate()
+        let gate = (entered: TestLatch(), released: TestLatch())
         flow.existingDirectChatGroupIdForTesting = { _ in
-            await gate.hold()
+            gate.entered.signal()
+            try? await gate.released.wait()
             if lookupFails { throw TestFailure.existingChatLookupFailed }
             return "original-account-support-dm"
         }
         let entry = SupportChatEntryModel(chatFlow: flow)
         let task = Task { await entry.prepare(using: appState) }
-        await gate.waitUntilHeld()
+        try await gate.entered.wait()
         appState.activeAccountRef = "replacement"
-        await gate.release()
+        gate.released.signal()
         await task.value
 
         #expect(entry.destination == nil)
@@ -485,32 +490,5 @@ struct SupportChatTests {
     private enum TestFailure: Error {
         case sensitiveEngineDetail
         case existingChatLookupFailed
-    }
-}
-
-private actor SupportChatCreateGate {
-    private var isHeld = false
-    private var heldWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseContinuation: CheckedContinuation<Void, Never>?
-
-    func hold() async {
-        isHeld = true
-        heldWaiters.forEach { $0.resume() }
-        heldWaiters.removeAll()
-        await withCheckedContinuation { continuation in
-            releaseContinuation = continuation
-        }
-    }
-
-    func waitUntilHeld() async {
-        guard !isHeld else { return }
-        await withCheckedContinuation { continuation in
-            heldWaiters.append(continuation)
-        }
-    }
-
-    func release() {
-        releaseContinuation?.resume()
-        releaseContinuation = nil
     }
 }

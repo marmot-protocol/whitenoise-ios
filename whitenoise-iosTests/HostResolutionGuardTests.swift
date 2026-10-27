@@ -1,4 +1,5 @@
 import Foundation
+import MarmotKit
 import Testing
 @testable import whitenoise_ios
 
@@ -77,5 +78,20 @@ struct HostResolutionGuardTests {
         #expect(throws: HostResolutionGuard.GuardError.resolutionFailed) {
             try HostResolutionGuard.resolvedPublicAddresses("nxdomain.example", resolver: resolver)
         }
+    }
+
+    @Test func mediaLocatorResolutionFailsClosedOnPrivateOrMissingDns() {
+        let locators = [
+            MediaLocatorFfi(kind: EncryptedMediaLocatorValidation.blossomKind, value: "https://media.example/blob"),
+        ]
+        #expect(EncryptedMediaLocatorValidation.resolvesOnlyToPublicAddresses(locators) { _ in
+            ["93.184.216.34"]
+        })
+        #expect(!EncryptedMediaLocatorValidation.resolvesOnlyToPublicAddresses(locators) { _ in
+            ["10.0.0.5"]
+        })
+        #expect(!EncryptedMediaLocatorValidation.resolvesOnlyToPublicAddresses(locators) { _ in
+            []
+        })
     }
 }
