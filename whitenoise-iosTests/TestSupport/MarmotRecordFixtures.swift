@@ -372,6 +372,7 @@ func keyPackage(
 }
 
 func relayLists(
+    defaultRelays: [String] = [],
     bootstrapRelays: [String],
     nip65: [String],
     inbox: [String]
@@ -379,9 +380,14 @@ func relayLists(
     AccountRelayListsFfi(
         complete: true,
         missing: [],
-        defaultRelays: [],
+        defaultRelays: defaultRelays,
         bootstrapRelays: bootstrapRelays,
-        nip65: RelayListFfi(kind: 10002, relays: nip65),
-        inbox: RelayListFfi(kind: 39000, relays: inbox)
+        nip65: RelayListFfi(kind: 10_002, relays: nip65),
+        inbox: RelayListFfi(kind: 10_050, relays: inbox)
     )
+}
+
+/// Relay lists that name the same relays for every role.
+func relayLists(_ relays: [String]) -> AccountRelayListsFfi {
+    relayLists(defaultRelays: relays, bootstrapRelays: relays, nip65: relays, inbox: relays)
 }
