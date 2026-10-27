@@ -107,3 +107,23 @@ custom_rules:
     included: '.*whitenoise-iosTests/.*\.swift'
     message: "Tests must assert on behavior, not source text. Don't read a .swift file with String(contentsOf:) to check how code is spelled."
     severity: error
+  no_test_sleep:
+    name: "Fixed sleep in a test"
+    regex: '\b(Task|Thread)\.sleep\s*\('
+    included: '.*whitenoise-iosTests/.*\.swift'
+    excluded: '.*whitenoise-iosTests/TestSupport/.*'
+    excluded_match_kinds:
+    - comment
+    - doccomment
+    message: "Don't wait with a fixed sleep. Use TestLatch, eventually or settleLayout from TestSupport, or a layout callback."
+    severity: error
+  no_unowned_test_client:
+    name: "Unowned test runtime"
+    regex: '^(?![^\n]*(TestRuntimeScope\.own\(|ownsRoot:))[^\n]*MarmotClient\.testClient\('
+    included: '.*whitenoise-iosTests/.*\.swift'
+    excluded: '.*whitenoise-iosTests/TestSupport/.*'
+    excluded_match_kinds:
+    - comment
+    - doccomment
+    message: "Open test runtimes with withTestClient, OwnedTestClient or TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot:) so they are always closed."
+    severity: error

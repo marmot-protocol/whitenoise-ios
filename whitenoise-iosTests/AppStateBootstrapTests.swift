@@ -17,7 +17,7 @@ private let notificationDefaultsTestGate = AsyncTestGate()
 /// boundary between MarmotKit and the iOS code, plus pure-Swift helpers.
 @MainActor
 // Keep .marmotRuntimeConcurrencyLimit before .closesTestRuntimes so cleanup runs inside the gate.
-@Suite(.marmotRuntimeConcurrencyLimit, .closesTestRuntimes, .tags(.runtime))
+@Suite(.marmotRuntimeConcurrencyLimit, .closesTestRuntimes)
 struct AppStateBootstrapTests {
 
     private let accountDefaults = IsolatedAccountDefaults.make()
@@ -1224,6 +1224,8 @@ struct AppStateBootstrapTests {
         }
 
         await Task.yield()
+        // Checks that suspension has *not* finished; nothing signals that. #1224.
+        // swiftlint:disable:next no_test_sleep
         try await Task.sleep(nanoseconds: 50_000_000)
 
         #expect(!suspensionCompleted)
@@ -1513,6 +1515,8 @@ struct AppStateBootstrapTests {
         }
 
         await Task.yield()
+        // Checks that suspension has *not* finished; nothing signals that. #1224.
+        // swiftlint:disable:next no_test_sleep
         try await Task.sleep(nanoseconds: 50_000_000)
 
         #expect(!suspensionCompleted)

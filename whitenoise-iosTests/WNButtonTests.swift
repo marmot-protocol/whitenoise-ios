@@ -103,7 +103,7 @@ struct WNButtonTests {
     }
 
     @MainActor
-    @Test(.tags(.uiHosting)) func windowTintTracksThemeChanges() throws {
+    @Test func windowTintTracksThemeChanges() throws {
         let window = UIWindow()
         let asset = try #require(UIColor(named: "AccentColor"))
         for theme in [AppearanceTheme.light, .dark, .system] {

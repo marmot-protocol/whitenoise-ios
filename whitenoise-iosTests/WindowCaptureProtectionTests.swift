@@ -3,7 +3,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.uiHosting))
+@Suite
 struct WindowCaptureProtectionTests {
     @Test func foregroundContentRemainsVisibleWithoutCapture() {
         #expect(!ScreenPrivacyPolicy.shouldCover(enabled: true, sceneIsActive: true, isCaptured: false))

@@ -120,7 +120,7 @@ private struct PaginationScrollHarness: View {
 }
 
 @MainActor
-@Suite(.serialized, .tags(.uiHosting))
+@Suite(.serialized)
 struct TimelinePaginationVisibilityTests {
     /// The only claim rendering alone can make: `onScrollVisibilityChange`
     /// reports the mounted-but-offscreen edge as invisible, where `onAppear`

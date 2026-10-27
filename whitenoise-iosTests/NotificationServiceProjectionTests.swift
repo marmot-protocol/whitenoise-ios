@@ -555,7 +555,7 @@ struct NotificationServiceProjectionTests {
         })
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func notificationServiceStorageReaderProjectsSmallValuesOffMain() async throws {
         try await withTestClient { client in
             try await client.startRuntime()

@@ -4,7 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.tags(.uiHosting))
+@Suite
 struct ConversationNavigationBarVisibilityTests {
     @Test func conversationHidesTheBarAndRestoresItForDetailsAndBack() async throws {
         let root = UIViewController()

@@ -3,7 +3,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized, .tags(.uiHosting))
+@Suite(.serialized)
 struct InteractivePopGestureEnablerTests {
     private func makeStack() throws -> (UIWindow, UINavigationController, UIViewController) {
         let windowScene = try #require(

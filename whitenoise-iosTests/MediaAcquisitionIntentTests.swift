@@ -173,7 +173,7 @@ struct MediaAcquisitionIntentTests {
 
     // A local miss whose demand MDK does not queue must surface `.unavailable`
     // rather than wait on a transfer that will never start.
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func explicitAcquisitionOfAnUnknownSlotThrowsUnavailable() async throws {
         try await withTestClient { client in
             let watchdog = MarmotFixtureWatchdog.start("Attachment acquisition guard did not finish", breaking: client)

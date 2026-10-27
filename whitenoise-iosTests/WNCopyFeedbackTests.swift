@@ -5,7 +5,7 @@ import UIKit
 
 struct WNCopyFeedbackTests {
     @MainActor
-    @Test(.tags(.uiHosting)) func confirmationKeepsTheCopyRowSizeAtStandardAndAccessibleTextSizes() {
+    @Test func confirmationKeepsTheCopyRowSizeAtStandardAndAccessibleTextSizes() {
         for size in [DynamicTypeSize.large, .accessibility1] {
             let dimensions = [false, true].map { copied in
                 let host = UIHostingController(rootView:

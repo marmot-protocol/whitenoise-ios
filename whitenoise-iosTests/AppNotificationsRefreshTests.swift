@@ -87,6 +87,8 @@ struct AppNotificationsRefreshTests {
         let events = Mutex<[String]>([])
         let notifications = AppNotifications(
             pendingNotificationRequestsRemover: { identifiers in
+                // Models a slow synchronous removal, not a wait.
+                // swiftlint:disable:next no_test_sleep
                 Thread.sleep(forTimeInterval: 0.05)
                 events.withLock { $0.append(contentsOf: identifiers.map { "remove \($0)" }) }
             },

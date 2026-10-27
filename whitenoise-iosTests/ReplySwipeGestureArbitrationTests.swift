@@ -54,7 +54,7 @@ private final class ConversationPopHarness {
 }
 
 @MainActor
-@Suite(.serialized, .tags(.uiHosting))
+@Suite(.serialized)
 struct ReplySwipeGestureArbitrationTests {
     private struct Stack {
         let window: UIWindow

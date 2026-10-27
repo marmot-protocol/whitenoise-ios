@@ -10,7 +10,7 @@ import Testing
 /// These tests assert only that a pending wait ends in `CancellationError`
 /// and leaves the runtime usable.
 @MainActor
-@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit)
+@Suite(.serialized, .marmotRuntimeConcurrencyLimit)
 struct CancellableSubscriptionAdapterTests {
     enum Adapter: String, CaseIterable, Sendable, CustomTestStringConvertible {
         case conversationWindow, accountAttention, blockList, chatListWindow

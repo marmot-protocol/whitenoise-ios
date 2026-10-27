@@ -23,7 +23,7 @@ struct AuditV5AdoptionTests {
     }
 
     // A destination the native runtime refused would silently disable audit export.
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func nativeRuntimeAcceptsTheAppAuditDestination() async throws {
         try await withTestClient { client in
             let applied = try client.marmot.setAuditOtlpConfigV5(
@@ -35,7 +35,7 @@ struct AuditV5AdoptionTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func runtimeStartsWhenTheAuditDestinationIsRejected() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

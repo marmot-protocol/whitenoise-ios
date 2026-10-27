@@ -673,7 +673,7 @@ struct CreateIdentityOnboardingTests {
         #expect(service.storedAccounts == [service.identity])
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func unreadableDraftDoesNotAbortAccountRefreshAndCanBeDiscarded() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -700,7 +700,7 @@ struct CreateIdentityOnboardingTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func retryRestorationClosesRecoveryWhenTheSavedDraftIsGone() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -724,7 +724,7 @@ struct CreateIdentityOnboardingTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit, arguments: [false, true])
+    @Test(.marmotRuntimeConcurrencyLimit, arguments: [false, true])
     func missingOrUnidentifiedAccountOffersRecoveryWithoutChangingAccounts(unknownID: Bool) async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -749,7 +749,7 @@ struct CreateIdentityOnboardingTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func restorationReadFailureBlocksOnlyTheRecordedSignUpAccount() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -780,7 +780,7 @@ struct CreateIdentityOnboardingTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func restorationFromAReplacedRuntimePreservesTheDraftForRetry() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

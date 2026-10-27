@@ -235,7 +235,7 @@ struct RemoteImageLoaderTests {
         #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func groupAvatarDrainBlocksNewLoadsAndSeedsUntilDecodeSettles() async throws {
         try await withTestClient { client in
             let request = GroupAvatarImageRequest(accountRef: "drain-\(UUID())", groupIdHex: "group",
@@ -276,7 +276,7 @@ struct RemoteImageLoaderTests {
         }
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func erasureKeepsBothLoadersBlockedAfterTheirIndividualDrains() async throws {
         AvatarCacheErasure.begin()
         defer { AvatarCacheErasure.end() }
@@ -371,7 +371,7 @@ struct RemoteImageLoaderTests {
         ) == nil)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func groupAvatarPersistentThumbnailBypassesTheFullImageDownload() async throws {
         let accountRef = "thumbnail-account-\(UUID().uuidString)"
         let imageHashHex = UUID().uuidString
@@ -403,7 +403,7 @@ struct RemoteImageLoaderTests {
         #expect(image.cgImage?.height == 56)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func groupAvatarLoaderPromotesTheLegacyGroupScopedDiskEntry() async throws {
         let accountRef = "legacy-account-\(UUID().uuidString)"
         let groupIdHex = "legacy-group"
@@ -443,7 +443,7 @@ struct RemoteImageLoaderTests {
         #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: contentKey) == imageData)
     }
 
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func groupAvatarSeedWaitsForTheReplacementHashAndAvoidsNetwork() async throws {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80))
         let imageData = try #require(renderer.image { context in

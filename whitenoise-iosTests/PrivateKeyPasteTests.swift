@@ -3,7 +3,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized, .tags(.uiHosting))
+@Suite(.serialized)
 struct PrivateKeyPasteTests {
     @Test(arguments: [false, true])
     func itemProviderPasteReportsTheInsertedText(alreadyFocused: Bool) async throws {

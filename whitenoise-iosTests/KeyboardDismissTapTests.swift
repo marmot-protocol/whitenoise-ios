@@ -37,7 +37,7 @@ struct KeyboardDismissTapTests {
         #expect(KeyboardDismissTap.resignsKeyboard(touching: label))
     }
 
-    @Test(.tags(.uiHosting)) func inputChromeProtectsOnlyItsVisibleAreaInItsOwnWindow() {
+    @Test func inputChromeProtectsOnlyItsVisibleAreaInItsOwnWindow() {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
         window.isHidden = false
         defer { window.isHidden = true }
@@ -52,7 +52,7 @@ struct KeyboardDismissTapTests {
         #expect(!KeyboardInputRegion.contains(CGPoint(x: 25, y: 105), in: window))
     }
 
-    @Test(.tags(.uiHosting)) func coveredInputDoesNotProtectBackgroundInAnotherPresentation() {
+    @Test func coveredInputDoesNotProtectBackgroundInAnotherPresentation() {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
         let presenter = UIViewController()
         window.rootViewController = presenter

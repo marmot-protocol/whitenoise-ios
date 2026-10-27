@@ -99,7 +99,7 @@ struct AppearanceThemeTests {
         #expect(defaults.string(forKey: AppearanceTheme.storageKey) == AppearanceTheme.dark.rawValue)
     }
 
-    @Test(.tags(.uiHosting)) func returningToSystemClearsForcedWindowStyle() {
+    @Test func returningToSystemClearsForcedWindowStyle() {
         let window = UIWindow()
 
         AppAppearanceRuntime.apply(theme: .light, to: [window])

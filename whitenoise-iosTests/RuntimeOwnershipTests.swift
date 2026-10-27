@@ -92,7 +92,7 @@ private actor RuntimeRetryGate {
 }
 
 @MainActor
-@Suite(.serialized, .tags(.runtime), .marmotRuntimeConcurrencyLimit, .closesTestRuntimes)
+@Suite(.serialized, .marmotRuntimeConcurrencyLimit, .closesTestRuntimes)
 struct RuntimeOwnershipTests {
     // The native cancellation test for the handwritten CancellablePresentedChatList
     // adapter (AGENTS.md, Rust Bindings): keep it and run it on every binding refresh.

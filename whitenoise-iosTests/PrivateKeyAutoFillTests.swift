@@ -4,7 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized, .tags(.uiHosting))
+@Suite(.serialized)
 struct PrivateKeyAutoFillTests {
     private static let key = "nsec1" + String(repeating: "q", count: 58)
 

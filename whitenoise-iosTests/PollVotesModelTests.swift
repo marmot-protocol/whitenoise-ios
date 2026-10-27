@@ -344,7 +344,7 @@ struct PollVotesModelTests {
     /// A re-vote for the same option changes only the voter's `votedAt`: the
     /// window path sees an identical poll row and skips it, so the runtime
     /// projection event MDK emits for the response is what invalidates.
-    @Test(.tags(.runtime), .marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit)
     func aSameTallyReVoteInvalidatesThroughRuntimeEventsAfterTheWindowDeduplicatesIt() async throws {
         let row = pollRecord(id: Self.pollA, votes: [2, 1])
         let store = TimelineStore(appState: nil, groupIdHex: Self.group)
