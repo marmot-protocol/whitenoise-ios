@@ -28,7 +28,9 @@ catalog value and require translations in every shipped language.
 After each Release build, run
 `python3 scripts/check-privacy-release-config.py <path-to-built.app>`.
 This checks the actual localized plist resources and both host manifests without
-printing ingestion keys or other build credentials.
+printing ingestion keys or other build credentials. The Privacy workflow runs it
+on both Release builds whenever one of its inputs changes (plists, the host
+manifest, `InfoPlist.xcstrings`, `Config/`, the project file or the script).
 
 Photo selection uses `PHPickerViewController`; contact sharing uses
 `CNContactPickerViewController`. These provide the person's selected items and

@@ -1,0 +1,97 @@
+name: Privacy
+
+# Builds both Release apps (about 13 minutes) and runs the built-bundle
+# privacy check, only when an input of that check changes. Release bumps
+# edit the project file, so every shipment is checked too.
+on:
+  pull_request:
+    paths:
+      - "Info.plist"
+      - "NotificationServiceExtension/Info.plist"
+      - "Shared/PrivacyInfo.xcprivacy"
+      - "whitenoise-ios/InfoPlist.xcstrings"
+      - "Config/**"
+      - "whitenoise-ios.xcodeproj/**"
+      - "scripts/check-privacy-release-config.py"
+      - ".github/workflows/privacy.yml"
+  push:
+    branches: [master]
+    paths:
+      - "Info.plist"
+      - "NotificationServiceExtension/Info.plist"
+      - "Shared/PrivacyInfo.xcprivacy"
+      - "whitenoise-ios/InfoPlist.xcstrings"
+      - "Config/**"
+      - "whitenoise-ios.xcodeproj/**"
+      - "scripts/check-privacy-release-config.py"
+      - ".github/workflows/privacy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: privacy-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  release-privacy:
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26"
+
+      # Same cleanup as the Tests workflow: two Release builds need the disk
+      # that the image's unused Xcodes and simulator runtimes occupy.
+      - name: Free runner disk
+        run: |
+          df -h /
+          keep="$(dirname "$(dirname "$(xcode-select -p)")")"
+          for x in /Applications/Xcode*.app; do
+            [ "$(cd "$x" && pwd -P)" = "$(cd "$keep" && pwd -P)" ] || sudo rm -rf "$x" &
+          done
+          xcrun simctl runtime list -j \
+            | python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items()]' \
+            | xargs -n1 xcrun simctl runtime delete || true
+          sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.ghcup &
+          wait
+          df -h /
+
+      - name: Cache Swift package artifacts
+        uses: actions/cache@v4
+        with:
+          path: build/SourcePackages
+          key: spm-${{ runner.os }}-xcode26-${{ hashFiles('Packages/MarmotKit/Package.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-xcode26-
+
+      - name: Build both Release apps
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          for pair in "Whitenoise (Production):Release-Production" "Whitenoise (Staging):Release-Staging"; do
+            scheme="${pair%%:*}"
+            config="${pair##*:}"
+            xcodebuild build -project whitenoise-ios.xcodeproj -scheme "$scheme" -configuration "$config" \
+              -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData \
+              -clonedSourcePackagesDirPath build/SourcePackages CODE_SIGNING_ALLOWED=NO -quiet
+          done
+
+      - name: Check privacy configuration
+        run: |
+          set -euo pipefail
+          apps=(build/DerivedData/Build/Products/Release-*-iphoneos/*.app)
+          [ "${#apps[@]}" -eq 2 ] || { echo "Expected 2 Release apps, found ${#apps[@]}: ${apps[*]}"; exit 1; }
+          for app in "${apps[@]}"; do
+            echo "== $app"
+            python3 scripts/check-privacy-release-config.py "$app"
+          done

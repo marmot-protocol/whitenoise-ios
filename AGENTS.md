@@ -465,7 +465,8 @@ For TestFlight-facing changes, also walk the relevant items in `docs/manual-test
 
 Keep permission descriptions aligned with the active APIs and translate them in
 `whitenoise-ios/InfoPlist.xcstrings`. Run `scripts/check-privacy-release-config.py`
-against both Release app bundles. See `docs/app-store-permissions.md` for host
+against both Release app bundles; the Privacy workflow runs it in CI when one of its
+inputs changes, so keep its path filter in step with the files the script reads. See `docs/app-store-permissions.md` for host
 privacy manifests and the separate native SDK/export/App Store Connect checks.
 
 ## Git Hygiene
