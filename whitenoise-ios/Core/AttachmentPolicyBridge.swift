@@ -56,23 +56,16 @@ enum AttachmentPolicyBridge {
                     if updatedLimits != nil { throw CancellationError() }
                     return
                 }
-                var policy = try await client.marmot.attachmentDownloadPolicy(accountRef: account.accountIdHex)
-                let old = policy
-                if let limits = updatedLimits, limits.account == account.accountIdHex || limits.account == account.label {
-                    appliedLimits = true
-                    policy.retainedBytes = limits.policy.retainedBytes
-                    policy.diskReserve = limits.policy.diskReserve
-                    policy.transferLimit = limits.policy.transferLimit
-                }
-                // Previous iOS versions used this flag as an all-category network gate.
-                // HostManaged's runtime permission now owns that decision.
-                policy.automatic = true
+                let old = try await client.marmot.attachmentDownloadPolicy(accountRef: account.accountIdHex)
+                let update = policy(old, for: account, applying: updatedLimits)
+                appliedLimits = appliedLimits || update.appliesLimits
                 guard revision == event, activeClient === client else {
                     if updatedLimits != nil { throw CancellationError() }
                     return
                 }
-                if policy != old {
-                    try await client.marmot.setAttachmentDownloadPolicy(accountRef: account.accountIdHex, policy: policy)
+                if update.policy != old {
+                    try await client.marmot.setAttachmentDownloadPolicy(accountRef: account.accountIdHex,
+                                                                        policy: update.policy)
                 }
                 guard !beforeStart, revision == event, activeClient === client else { continue }
                 let permission = MediaAutoDownloadStore.shared.attachmentPermission(accountID: account.accountIdHex)
@@ -88,5 +81,26 @@ enum AttachmentPolicyBridge {
         }
         policyTail = application
         return application
+    }
+
+    /// The policy to store for `account`: edited limits only when they name this
+    /// account by key or label, and `automatic` always on.
+    nonisolated static func policy(
+        _ current: AttachmentDownloadPolicyFfi,
+        for account: AccountSummaryFfi,
+        applying limits: (account: String, policy: AttachmentDownloadPolicyFfi)?
+    ) -> (policy: AttachmentDownloadPolicyFfi, appliesLimits: Bool) {
+        var policy = current
+        var appliesLimits = false
+        if let limits, limits.account == account.accountIdHex || limits.account == account.label {
+            appliesLimits = true
+            policy.retainedBytes = limits.policy.retainedBytes
+            policy.diskReserve = limits.policy.diskReserve
+            policy.transferLimit = limits.policy.transferLimit
+        }
+        // Previous iOS versions used this flag as an all-category network gate.
+        // HostManaged's runtime permission now owns that decision.
+        policy.automatic = true
+        return (policy, appliesLimits)
     }
 }
