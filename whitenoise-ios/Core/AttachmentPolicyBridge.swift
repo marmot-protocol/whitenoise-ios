@@ -106,7 +106,7 @@ enum AttachmentPolicyBridge {
     }
 
     /// A save of edited limits that matched no configurable account fails, so
-    /// Settings shows the save as unavailable instead of saved.
+    /// Settings reports the save as failed instead of saved.
     nonisolated static func finishEvent(limitsEdited: Bool, appliedLimits: Bool) throws {
         if limitsEdited, !appliedLimits { throw AttachmentReadError.unavailable }
     }

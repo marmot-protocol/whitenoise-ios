@@ -88,7 +88,7 @@ extension AttachmentPolicyBridgeTests {
 
     @Test func onlyTheCurrentEventAfterStartupGrantsThePermission() {
         #expect(AttachmentPolicyBridge.grantsPermission(beforeStart: false, isCurrentEvent: true))
-        // A superseded event, or a replaced client, never grants its stale generation.
+        // An event that is no longer current never grants its stale generation.
         #expect(!AttachmentPolicyBridge.grantsPermission(beforeStart: false, isCurrentEvent: false))
         // A sync before startup writes policy only.
         #expect(!AttachmentPolicyBridge.grantsPermission(beforeStart: true, isCurrentEvent: true))

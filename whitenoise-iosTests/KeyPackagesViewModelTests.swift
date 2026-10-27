@@ -3,12 +3,15 @@ import MarmotKit
 @testable import whitenoise_ios
 
 /// The key package screen's store. Loading itself goes through MDK; these
-/// check the decisions around it that need no runtime: one account's packages
-/// never show under another, and publish and delete never overlap.
+/// check the decisions around it that need no runtime: the screen is cleared
+/// before another account loads and kept for a failed reload of the same one,
+/// and publish and delete never overlap. The guards that stop a slower,
+/// older reload from committing its result are not covered yet (#1228).
 ///
 /// `AppState.test()` opens no runtime, so a load fails at
 /// `currentMarmotClient()`, and a publish or delete that gets past its guard
-/// shows a failure toast. The guard tests rely on that toast.
+/// shows a failure toast. The control tests prove that; the guard tests rely
+/// on the absence of that toast.
 @MainActor
 struct KeyPackagesViewModelTests {
     /// A screen showing `account`'s packages, history and relays mid-reload.
@@ -51,6 +54,7 @@ struct KeyPackagesViewModelTests {
 
     @Test func signingOutClearsTheScreen() async {
         let model = loadedModel(for: "account")
+        model.loadError = "old load error"
         #expect(model.presentation.current != nil)
 
         await model.reload(using: AppState.test())
@@ -73,25 +77,49 @@ struct KeyPackagesViewModelTests {
         #expect(model.loadError != nil)
     }
 
-    /// A failed reload of the account already on screen keeps what it showed,
-    /// so pull to refresh never blanks the list.
-    @Test func aFailedReloadOfTheSameAccountKeepsItsScreen() async {
+    /// A failed reload of the account already on screen keeps its cached data
+    /// and reports the error.
+    @Test func aFailedReloadOfTheSameAccountKeepsItsCachedData() async {
         let model = loadedModel(for: "account")
         let appState = AppState.test()
         appState.activeAccountRef = "account"
 
         await model.reload(using: appState)
 
-        #expect(model.packages.count == 2)
-        #expect(model.presentation.current != nil)
-        #expect(model.relayHistory.count == 1)
-        #expect(model.lists != nil)
+        #expect(model.packages.map(\.eventIdHex) == ["current", "other"])
+        #expect(model.presentation.current?.publishedAt == 2)
+        #expect(model.relayHistory.map(\.eventIdHex) == ["history"])
+        #expect(model.lists?.bootstrapRelays == ["wss://account.example"])
+        #expect(model.loadedRef == "account")
         #expect(model.hasLoaded)
         #expect(!model.isLoading)
         #expect(model.loadError != nil)
     }
 
-    @Test func publishingWaitsForAnInFlightDelete() async {
+    @Test func anAllowedPublishReachesTheRuntime() async {
+        let model = KeyPackagesViewModel()
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+
+        await model.publishNew(using: appState)
+
+        #expect(appState.toastState.activeToast != nil)
+        #expect(!model.isPublishing)
+    }
+
+    @Test func publishingIsIgnoredWhileAPublishIsInFlight() async {
+        let model = KeyPackagesViewModel()
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+        model.isPublishing = true
+
+        await model.publishNew(using: appState)
+
+        #expect(appState.toastState.activeToast == nil)
+        #expect(model.isPublishing)
+    }
+
+    @Test func publishingIsIgnoredWhileADeleteIsInFlight() async {
         let model = KeyPackagesViewModel()
         let appState = AppState.test()
         appState.activeAccountRef = "account"
@@ -102,7 +130,7 @@ struct KeyPackagesViewModelTests {
         #expect(appState.toastState.activeToast == nil)
     }
 
-    @Test func deletingWaitsForAnInFlightPublish() async {
+    @Test func deletingIsIgnoredWhileAPublishIsInFlight() async {
         let model = KeyPackagesViewModel()
         let appState = AppState.test()
         appState.activeAccountRef = "account"
@@ -124,5 +152,19 @@ struct KeyPackagesViewModelTests {
         // The first delete still owns the id; the second never reached the runtime.
         #expect(model.deletingEventIds == ["event"])
         #expect(appState.toastState.activeToast == nil)
+    }
+
+    /// Only the same package is blocked: deleting another one while a delete is
+    /// in flight still reaches the runtime, and releases only its own id.
+    @Test func deletingAnotherPackageWhileOneIsInFlightReachesTheRuntime() async {
+        let model = KeyPackagesViewModel()
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+        model.deletingEventIds = ["event"]
+
+        await model.delete(keyPackage(eventId: "other", local: true, relay: true), using: appState)
+
+        #expect(appState.toastState.activeToast != nil)
+        #expect(model.deletingEventIds == ["event"])
     }
 }
