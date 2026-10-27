@@ -2,10 +2,12 @@ import Testing
 import MarmotKit
 @testable import whitenoise_ios
 
-/// The per-account policy `AttachmentPolicyBridge.synchronize` writes to MDK.
-/// The bridge's other rules (revoking in event order, granting only the
-/// captured generation, skipping superseded events and unready accounts) run
-/// against a live runtime and have no test yet; see #1228.
+/// The decisions `AttachmentPolicyBridge.synchronize` makes for each account:
+/// the policy it writes, and the per-event rules for unready accounts,
+/// superseded events, granting and the save result. These test the pure
+/// decisions only. How `synchronize` wires them, revoking in event order and
+/// forwarding only the captured generation run against a live runtime and
+/// have no test yet; see #1228.
 struct AttachmentPolicyBridgeTests {
     private static let alice = AccountSummaryFfi(label: "alice", accountIdHex: hex("aa"), localSigning: true,
                                                  signedOut: false, running: true)
@@ -65,10 +67,7 @@ struct AttachmentPolicyBridgeTests {
     }
 }
 
-/// The per-event rules `AttachmentPolicyBridge.synchronize` applies around each
-/// account. Revoking in event order and forwarding only the captured generation
-/// need a runtime or a fake client and are not covered here.
-struct AttachmentPolicyBridgeEventTests {
+extension AttachmentPolicyBridgeTests {
     @Test func accountsStillInOnboardingKeepTheirPolicy() {
         #expect(!AttachmentPolicyBridge.configures(onboardingReady: false))
         #expect(AttachmentPolicyBridge.configures(onboardingReady: true))

@@ -16,7 +16,8 @@ final class KeyPackagesViewModel {
     var lists: AccountRelayListsFfi?
     var presentation = KeyPackagesPresentation()
     var hasLoaded = false
-    private var loadedRef: String?
+    /// The account whose packages are on screen.
+    var loadedRef: String?
     // Overlapping reloads (pull-to-refresh racing the task restart) must not
     // let an older result overwrite a newer one, even for the same account.
     private var reloadTicket = 0
