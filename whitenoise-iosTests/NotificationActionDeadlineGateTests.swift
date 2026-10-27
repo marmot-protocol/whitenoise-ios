@@ -24,23 +24,24 @@ struct NotificationActionDeadlineGateTests {
     @Test func aWaiterParkedBeforeTheOutcomeReceivesIt() async throws {
         let gate = NotificationActionDeadlineGate()
         let waiting = TestLatch()
-        let waiter = Task { @MainActor in
+        let received = TestLatch()
+        var outcome: NotificationActionDeadlineGate.Outcome?
+        Task { @MainActor in
             waiting.signal()
-            return await gate.wait()
+            outcome = await gate.wait()
+            received.signal()
         }
+        // The waiter parks on the gate before this resumes: both run on the
+        // MainActor and nothing suspends between the signal and the park.
         try await waiting.wait()
 
         gate.resolve(.expired)
         gate.resolve(.completed(succeeded: true))
+        // Bounded, so a parked waiter that is never resumed fails the test.
+        try await received.wait()
 
-        #expect(await waiter.value == .expired)
-    }
-
-    @Test func everyLaterWaitSeesTheSameOutcome() async {
-        let gate = NotificationActionDeadlineGate()
-        gate.resolve(.completed(succeeded: true))
-
-        #expect(await gate.wait() == .completed(succeeded: true))
-        #expect(await gate.wait() == .completed(succeeded: true))
+        #expect(outcome == .expired)
+        // A later wait sees the same outcome; waiting does not consume it.
+        #expect(await gate.wait() == .expired)
     }
 }

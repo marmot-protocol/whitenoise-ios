@@ -3,68 +3,131 @@ import Testing
 
 /// The recipient search field's state machine. Classification itself is
 /// `RecipientIdentifierQueryTests`; this checks what the model does with it:
-/// public keys resolve locally, NIP-05 addresses wait for a debounced lookup,
-/// and a cleared or replaced query never adopts a stale lookup.
+/// public keys resolve locally, NIP-05 results map to resolution states, and
+/// a cleared or replaced query never adopts a stale lookup. Lookups are
+/// injected, so nothing here touches the network.
 @MainActor
 struct RecipientQueryModelTests {
     private let accountIdHex = hex("ab")
     private var npub: String { NostrProfileReference.npub(fromAccountIdHex: accountIdHex) ?? "" }
 
-    @Test func plainTextStaysIdleAndBrowsesKnownPeople() {
-        let model = RecipientQueryModel()
-        model.text = "  Alice  "
+    /// A lookup that answers per address once the test releases it.
+    @MainActor
+    private final class ControlledLookup {
+        var answers: [String: Nip05Resolver.Resolution] = [:]
+        var gates: [String: TestLatch] = [:]
+        private(set) var started: [String] = []
 
-        model.queryChanged(using: AppState.test())
-
-        #expect(model.resolution == .idle)
-        #expect(!model.isIdentifierQuery)
-        #expect(model.trimmedText == "Alice")
+        func lookUp(_ name: String, _ domain: String) async -> Nip05Resolver.Resolution {
+            let address = "\(name)@\(domain)"
+            started.append(address)
+            if let gate = gates[address] { await gate.hold() }
+            return answers[address] ?? .failed
+        }
     }
 
-    @Test func aPublicKeyResolvesLocallyWithoutALookup() {
-        let model = RecipientQueryModel()
+    private func model(_ lookup: ControlledLookup) -> RecipientQueryModel {
+        RecipientQueryModel(lookUpNip05: { await lookup.lookUp($0, $1) }, debounceNanoseconds: 0)
+    }
+
+    @Test func aPublicKeyResolvesLocallyWithoutALookup() async {
+        let lookup = ControlledLookup()
+        let model = model(lookup)
         model.text = npub
 
         model.queryChanged(using: AppState.test())
+        await model.awaitResolutionForTesting()
 
-        #expect(model.isIdentifierQuery)
         #expect(model.resolution == .resolved(ResolvedRecipient(
             accountIdHex: accountIdHex, memberRef: npub, queriedNip05: nil)))
+        #expect(lookup.started.isEmpty)
     }
 
-    @Test func aNip05AddressWaitsForItsLookup() {
-        let model = RecipientQueryModel()
-        model.text = "alice@example.com"
+    @Test func plainTextReplacesAResolvedRecipientWithIdle() {
+        let model = model(ControlledLookup())
+        let appState = AppState.test()
+        model.text = npub
+        model.queryChanged(using: appState)
+
+        model.text = "Alice"
+        model.queryChanged(using: appState)
+
+        #expect(model.resolution == .idle)
+    }
+
+    @Test(arguments: [
+        (Nip05Resolver.Resolution.noProfile, RecipientResolutionState.noProfile),
+        (.failed, .failed),
+        (.invalidAddress, .invalid),
+    ])
+    func aNip05OutcomeBecomesTheResolution(_ outcome: Nip05Resolver.Resolution,
+                                           _ expected: RecipientResolutionState) async {
+        let lookup = ControlledLookup()
+        lookup.answers["alice@example.com"] = outcome
+        let model = model(lookup)
+        model.text = "Alice@Example.com"
 
         model.queryChanged(using: AppState.test())
-
-        #expect(model.isIdentifierQuery)
         #expect(model.resolution == .resolving)
-        model.clear()
+        await model.awaitResolutionForTesting()
+
+        #expect(lookup.started == ["alice@example.com"])
+        #expect(model.resolution == expected)
     }
 
-    @Test func clearingAPendingLookupResetsTheField() {
-        let model = RecipientQueryModel()
+    /// A NIP-05 match selects the resolved key, not the address, and keeps
+    /// the address so the row can show whether the profile declares it.
+    @Test func aNip05MatchResolvesToItsKeyAndRemembersTheAddress() async {
+        let lookup = ControlledLookup()
+        lookup.answers["alice@example.com"] = .resolved(accountIdHex: accountIdHex)
+        let model = model(lookup)
+        model.text = "alice@example.com"
+
+        model.queryChanged(using: AppState.test())
+        await model.awaitResolutionForTesting()
+
+        #expect(model.resolution == .resolved(ResolvedRecipient(
+            accountIdHex: accountIdHex, memberRef: accountIdHex, queriedNip05: "alice@example.com")))
+    }
+
+    @Test func aClearedQueryNeverAdoptsItsLookup() async throws {
+        let lookup = ControlledLookup()
+        let release = TestLatch()
+        lookup.gates["alice@example.com"] = release
+        lookup.answers["alice@example.com"] = .resolved(accountIdHex: accountIdHex)
+        let model = model(lookup)
         model.text = "alice@example.com"
         model.queryChanged(using: AppState.test())
+        try await eventually { lookup.started == ["alice@example.com"] }
 
         model.clear()
+        release.signal()
+        await model.awaitResolutionForTesting()
 
         #expect(model.text.isEmpty)
         #expect(model.resolution == .idle)
-        #expect(!model.isIdentifierQuery)
     }
 
-    @Test func aPublicKeyReplacesAPendingLookupAtOnce() {
-        let model = RecipientQueryModel()
+    @Test func aReplacedQueryKeepsTheNewerResult() async throws {
+        let lookup = ControlledLookup()
+        let releaseAlice = TestLatch()
+        lookup.gates["alice@example.com"] = releaseAlice
+        lookup.answers["alice@example.com"] = .resolved(accountIdHex: accountIdHex)
+        lookup.answers["bob@example.com"] = .noProfile
+        let model = model(lookup)
         let appState = AppState.test()
         model.text = "alice@example.com"
         model.queryChanged(using: appState)
+        try await eventually { lookup.started == ["alice@example.com"] }
 
-        model.text = npub
+        model.text = "bob@example.com"
         model.queryChanged(using: appState)
+        try await eventually { model.resolution == .noProfile }
+        // Alice's lookup answers only after Bob's result is in place.
+        releaseAlice.signal()
+        await model.awaitResolutionForTesting()
 
-        #expect(model.resolution == .resolved(ResolvedRecipient(
-            accountIdHex: accountIdHex, memberRef: npub, queriedNip05: nil)))
+        #expect(lookup.started == ["alice@example.com", "bob@example.com"])
+        #expect(model.resolution == .noProfile)
     }
 }

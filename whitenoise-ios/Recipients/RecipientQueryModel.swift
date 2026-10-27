@@ -18,8 +18,23 @@ final class RecipientQueryModel {
 
     private var resolveTask: Task<Void, Never>?
     private var resolveGeneration = 0
+#if DEBUG
+    private var lookupTasksForTesting: [Task<Void, Never>] = []
+#endif
 
     static let nip05DebounceNanoseconds: UInt64 = 350_000_000
+
+    typealias Nip05Lookup = @MainActor (_ name: String, _ domain: String) async -> Nip05Resolver.Resolution
+    private let lookUpNip05: Nip05Lookup
+    private let debounceNanoseconds: UInt64
+
+    init(
+        lookUpNip05: @escaping Nip05Lookup = { await Nip05Resolver.resolve(name: $0, domain: $1) },
+        debounceNanoseconds: UInt64 = RecipientQueryModel.nip05DebounceNanoseconds
+    ) {
+        self.lookUpNip05 = lookUpNip05
+        self.debounceNanoseconds = debounceNanoseconds
+    }
 
     var trimmedText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -59,7 +74,7 @@ final class RecipientQueryModel {
             warmProfile(resolved.accountIdHex, using: appState)
         case .nip05(let name, let domain):
             resolution = .resolving
-            resolveTask = Task { [weak self] in
+            let task = Task<Void, Never> { [weak self] in
                 await self?.resolveNip05(
                     name: name,
                     domain: domain,
@@ -67,6 +82,10 @@ final class RecipientQueryModel {
                     using: appState
                 )
             }
+            resolveTask = task
+#if DEBUG
+            lookupTasksForTesting.append(task)
+#endif
         }
     }
 
@@ -76,9 +95,9 @@ final class RecipientQueryModel {
         generation: Int,
         using appState: AppState
     ) async {
-        try? await Task.sleep(nanoseconds: Self.nip05DebounceNanoseconds)
+        try? await Task.sleep(nanoseconds: debounceNanoseconds)
         guard !Task.isCancelled else { return }
-        let result = await Nip05Resolver.resolve(name: name, domain: domain)
+        let result = await lookUpNip05(name, domain)
         guard !Task.isCancelled else { return }
         switch result {
         case .resolved(let accountIdHex):
@@ -106,8 +125,12 @@ final class RecipientQueryModel {
     }
 
 #if DEBUG
+    /// Waits for every NIP-05 lookup started so far, including cancelled or
+    /// replaced ones, so a test can check that a stale result is never adopted.
     func awaitResolutionForTesting() async {
-        await resolveTask?.value
+        let tasks = lookupTasksForTesting
+        lookupTasksForTesting.removeAll()
+        for task in tasks { await task.value }
     }
 #endif
 
