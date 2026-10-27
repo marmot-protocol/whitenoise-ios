@@ -841,10 +841,8 @@ final class AppState {
         recordSwitch(.success)
     }
 
-    /// Set after a destructive Sign Out & Wipe finished with best-effort
-    /// failures, so the partial-failure report survives the account teardown:
-    /// routing to onboarding (last account) or switching accounts pops the
-    /// screen that started the wipe. Hosted by `RootView`. Observed by SwiftUI.
+    /// Keeps completed sign-out/cleanup issues visible after account routing
+    /// removes the initiating screen. Hosted by `RootView`.
     var pendingWipeReport: WipeReport?
 
     /// Root-hosted presentation survives Settings disappearing during account exit.
@@ -929,11 +927,16 @@ final class AppState {
             return false
         }
 
-        _ = await completeSignOut(
+        let failures = await completeSignOut(
             removedRef: signingOut,
             removedAccountIdHex: signingOutAccountIdHex,
             destructive: false
         )
+        if !failures.isEmpty {
+            pendingWipeReport = WipeReport(stages: [
+                WipeStageReport(stage: .wipingLocalData, completedCount: nil, failures: failures),
+            ], didWipeData: false)
+        }
         return true
     }
 
@@ -967,13 +970,15 @@ final class AppState {
             if await !NotificationCommunicationDecorator.deleteAllDonatedInteractions() {
                 localCleanupFailures.append(WipeFailureItem(
                     subject: nil,
-                    reason: L10n.string("Some notification previews may remain on this device.")
+                    reason: L10n.string("Some notification previews may remain on this device."),
+                    kind: .notificationPreviews
                 ))
             }
             if await !MessageMediaCache.purgeAllDecryptedMedia() {
                 localCleanupFailures.append(WipeFailureItem(
                     subject: nil,
-                    reason: L10n.string("Some decrypted media may remain on this device.")
+                    reason: L10n.string("Some decrypted media may remain on this device."),
+                    kind: .decryptedMedia
                 ))
             }
         }
@@ -986,14 +991,11 @@ final class AppState {
             }
             accountUnreadStore.pruneToCurrentAccounts(accounts)
             scheduleApplicationBadgeSynchronization()
-            if destructive {
-                localCleanupFailures.append(WipeFailureItem(
-                    subject: nil,
-                    reason: "\(L10n.string("Couldn't refresh accounts")): \(UserFacingError.message(for: error))"
-                ))
-            } else {
-                present(UserFacingError.toast(title: L10n.string("Couldn't refresh accounts"), error: error))
-            }
+            localCleanupFailures.append(WipeFailureItem(
+                subject: nil,
+                reason: UserFacingError.message(for: error),
+                kind: .accountRefresh
+            ))
         }
 
         accountStore.requestProfileSelection()

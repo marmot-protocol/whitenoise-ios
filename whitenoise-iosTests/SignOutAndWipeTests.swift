@@ -3,9 +3,7 @@ import Foundation
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-/// Pure decisions behind the destructive Sign Out & Wipe: the engine-outcome
-/// report projection and the suspension-safety gate
-/// that decides whether the teardown may begin.
+/// Outcome presentation and the foreground gate for Sign Out & Wipe.
 struct SignOutAndWipeTests {
 
     @Test func readyRootRoutesToProfileSelectionWithoutAnActiveAccount() {
@@ -113,6 +111,30 @@ struct SignOutAndWipeTests {
         let bounded = WipeReportProjection.boundedReason(huge)
         #expect(bounded.count == WipeReportProjection.maxReasonLength + 1) // + the ellipsis
         #expect(bounded.hasSuffix("…"))
+    }
+
+    @Test func profileRefreshFailureDoesNotClaimLocalDataRemains() {
+        let report = WipeReportProjection.report(
+            from: outcome(),
+            additionalLocalFailures: [WipeFailureItem(subject: nil, reason: "timeout", kind: .accountRefresh)]
+        )
+        #expect(!report.clean)
+        #expect(!report.hasCleanupIssues)
+        #expect(!report.stages[2].hasCleanupIssues)
+        #expect(report.stages[2].failures.first?.kind == .accountRefresh)
+    }
+
+    @Test func mediaCleanupFailureStillWarnsWhenProfileRefreshAlsoFails() {
+        let report = WipeReportProjection.report(
+            from: outcome(),
+            additionalLocalFailures: [
+                WipeFailureItem(subject: nil, reason: "media residue", kind: .decryptedMedia),
+                WipeFailureItem(subject: nil, reason: "timeout", kind: .accountRefresh),
+            ]
+        )
+        #expect(report.hasCleanupIssues)
+        #expect(report.stages[2].hasCleanupIssues)
+        #expect(report.stages[2].failures.map(\.kind) == [.decryptedMedia, .accountRefresh])
     }
 
     // MARK: - Suspension-safety gate

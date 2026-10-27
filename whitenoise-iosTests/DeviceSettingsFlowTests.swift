@@ -88,14 +88,29 @@ struct DeviceSettingsFlowTests {
     }
 
     @Test func destructiveProfileConfirmationIsExactAndBoundToTheDisplayedName() {
-        #expect(ProfileExitConfirmation.canSignOut(wiping: true, input: "  Alice  ", profileName: "Alice", busy: false))
+        #expect(ProfileExitConfirmation.canSignOut(wiping: true, input: "Alice", profileName: "Alice", busy: false))
+        #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: "  Alice  ", profileName: "Alice", busy: false))
         #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: "alice", profileName: "Alice", busy: false))
         #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: "Alice", profileName: "Bob", busy: false))
         #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: "", profileName: "", busy: false))
         #expect(ProfileExitConfirmation.canSignOut(wiping: false, input: "", profileName: "Alice", busy: false))
         #expect(!ProfileExitConfirmation.canSignOut(wiping: false, input: "", profileName: "Alice", busy: true))
+        #expect(ProfileExitConfirmation.matches("  apple bird cloud  ", expected: "apple bird cloud"))
         #expect(!ProfileExitConfirmation.matches("apple  bird cloud", expected: "apple bird cloud"))
         #expect(ProfileExitConfirmation.erasePhrase().split(separator: " ").count == 3)
+    }
+
+    @Test func profileNameWhitespaceHintOnlyExplainsAnOtherwiseMatchingName() {
+        for input in [" Alice", "Alice ", "\nAlice\t"] {
+            #expect(ProfileExitConfirmation.hasExtraSurroundingWhitespace(input, profileName: "Alice"))
+            #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: input, profileName: "Alice", busy: false))
+        }
+        for input in ["Alice", "", " ", "alice ", "Bob ", "Ali ce"] {
+            #expect(!ProfileExitConfirmation.hasExtraSurroundingWhitespace(input, profileName: "Alice"))
+        }
+        #expect(!ProfileExitConfirmation.hasExtraSurroundingWhitespace(" ", profileName: ""))
+        #expect(!ProfileExitConfirmation.hasExtraSurroundingWhitespace(" Alice ", profileName: " Alice "))
+        #expect(ProfileExitConfirmation.canSignOut(wiping: true, input: " Alice ", profileName: " Alice ", busy: false))
     }
 
     @Test func erasurePreservesLockInodeAndRefusesAConcurrentOwner() throws {
