@@ -144,8 +144,18 @@ final class RuntimeLifecycle {
     /// app actually reaches `.background`.
     @ObservationIgnored private var bootstrapNeedsBackgroundSuspensionRecheck = false
 #if DEBUG
+    enum BackgroundSuspensionWait {
+        /// Bootstrap is still running and owns the phase change.
+        case bootstrap
+        /// A notification action or other runtime work holds the suspension gate.
+        case runtimeWork
+    }
+
     @ObservationIgnored var afterBootstrapRuntimeStartForTesting: (() async -> Void)?
     @ObservationIgnored var afterForegroundRuntimeCreatedForTesting: (() async -> Void)?
+    /// Called just before background suspension parks on work it must not
+    /// tear down underneath, so a test can assert it is still waiting.
+    @ObservationIgnored var backgroundSuspensionWillWaitForTesting: ((BackgroundSuspensionWait) -> Void)?
     @ObservationIgnored var hostPerformanceObserverForTesting: ((
         HostPerformanceOperationFfi,
         UInt64,
@@ -741,6 +751,9 @@ final class RuntimeLifecycle {
         // real teardown outside the UIKit assertion attached to this task.
         if appState?.phase == .bootstrapping {
             await waitForBootstrapRegistrationIfNeeded()
+#if DEBUG
+            if bootstrapTask != nil { backgroundSuspensionWillWaitForTesting?(.bootstrap) }
+#endif
             await bootstrapTask?.value
             guard !isAppSceneActive else {
                 await drainForegroundMaintenance(cancellation)
@@ -760,6 +773,9 @@ final class RuntimeLifecycle {
         // the action releases it; closing underneath the lease would invalidate
         // an in-flight reply or mark-read FFI call. This gate is independent of
         // the maintenance drains moved below terminal storage closure.
+#if DEBUG
+        if runtimeWorkIsSuspending { backgroundSuspensionWillWaitForTesting?(.runtimeWork) }
+#endif
         await waitForRuntimeSuspensionToFinish()
         guard !isAppSceneActive,
               phaseOwnsLiveRuntime,

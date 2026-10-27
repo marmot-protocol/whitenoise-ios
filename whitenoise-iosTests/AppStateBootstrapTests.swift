@@ -1216,6 +1216,10 @@ struct AppStateBootstrapTests {
         #expect(appState.phase == .bootstrapping)
         #expect(appState.client != nil)
 
+        let waitingForBootstrap = TestLatch()
+        appState.runtimeLifecycle.backgroundSuspensionWillWaitForTesting = { wait in
+            if wait == .bootstrap { waitingForBootstrap.signal() }
+        }
         let suspensionTask = appState.startRuntimeSuspension()
         var suspensionCompleted = false
         let observer = Task { @MainActor in
@@ -1223,10 +1227,8 @@ struct AppStateBootstrapTests {
             suspensionCompleted = true
         }
 
-        await Task.yield()
-        // Checks that suspension has *not* finished; nothing signals that. #1224.
-        // swiftlint:disable:next no_test_sleep
-        try await Task.sleep(nanoseconds: 50_000_000)
+        // Suspension is now parked on the bootstrap, which the checkpoint holds.
+        try await waitingForBootstrap.wait()
 
         #expect(!suspensionCompleted)
         #expect(appState.phase == .bootstrapping)
@@ -1507,6 +1509,10 @@ struct AppStateBootstrapTests {
         #expect(lease.client === appState.client)
         #expect(appState.runtimeLifecycle.isRuntimeSuspendingNow)
 
+        let waitingForLease = TestLatch()
+        appState.runtimeLifecycle.backgroundSuspensionWillWaitForTesting = { wait in
+            if wait == .runtimeWork { waitingForLease.signal() }
+        }
         let suspension = appState.startRuntimeSuspension()
         var suspensionCompleted = false
         let observer = Task { @MainActor in
@@ -1514,10 +1520,8 @@ struct AppStateBootstrapTests {
             suspensionCompleted = true
         }
 
-        await Task.yield()
-        // Checks that suspension has *not* finished; nothing signals that. #1224.
-        // swiftlint:disable:next no_test_sleep
-        try await Task.sleep(nanoseconds: 50_000_000)
+        // Suspension is now parked on the lease, which only the release below ends.
+        try await waitingForLease.wait()
 
         #expect(!suspensionCompleted)
         #expect(appState.client === lease.client)
