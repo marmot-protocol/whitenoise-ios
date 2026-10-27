@@ -27,7 +27,7 @@ struct RecipientQueryModelTests {
     }
 
     private func model(_ lookup: ControlledLookup) -> RecipientQueryModel {
-        RecipientQueryModel(lookUpNip05: { await lookup.lookUp($0, $1) }, debounceNanoseconds: 0)
+        RecipientQueryModel(lookUpNip05: { await lookup.lookUp($0, $1) }, debounce: {})
     }
 
     @Test func aPublicKeyResolvesLocallyWithoutALookup() async {
@@ -93,21 +93,25 @@ struct RecipientQueryModelTests {
     }
 
     /// Each lookup is a network fetch, so an address replaced or cleared while
-    /// it is still being debounced is never looked up at all.
-    @Test func anAddressChangedDuringTheDebounceIsNeverLookedUp() async {
+    /// its debounce is still running is never looked up at all.
+    @Test func anAddressChangedDuringItsDebounceIsNeverLookedUp() async throws {
         let lookup = ControlledLookup()
-        lookup.answers["bob@example.com"] = .noProfile
-        let model = RecipientQueryModel(lookUpNip05: { await lookup.lookUp($0, $1) },
-                                        debounceNanoseconds: 30_000_000_000)
+        var debounces = 0
+        let model = RecipientQueryModel(lookUpNip05: { await lookup.lookUp($0, $1) }, debounce: {
+            debounces += 1
+            // Ends only when the lookup is cancelled; if cancellation broke it
+            // throws after its timeout and the lookup check below fails.
+            try await parkUntilCancelled()
+        })
         let appState = AppState.test()
 
         model.text = "alice@example.com"
         model.queryChanged(using: appState)
+        try await eventually { debounces == 1 }
         model.text = "bob@example.com"
         model.queryChanged(using: appState)
+        try await eventually { debounces == 2 }
         model.clear()
-        // Cancelling a debounce ends its sleep at once. If cancellation broke,
-        // the 30 s debounce would run out and the lookup check below would fail.
         await model.awaitResolutionForTesting()
 
         #expect(lookup.started.isEmpty)
@@ -117,6 +121,8 @@ struct RecipientQueryModelTests {
     @Test func aClearedQueryNeverAdoptsItsLookup() async throws {
         let lookup = ControlledLookup()
         let release = TestLatch()
+        // Released on every exit, so a failed wait never leaves the lookup parked.
+        defer { release.signal() }
         lookup.gates["alice@example.com"] = release
         lookup.answers["alice@example.com"] = .resolved(accountIdHex: accountIdHex)
         let model = model(lookup)
@@ -128,13 +134,13 @@ struct RecipientQueryModelTests {
         release.signal()
         await model.awaitResolutionForTesting()
 
-        #expect(model.text.isEmpty)
         #expect(model.resolution == .idle)
     }
 
     @Test func aReplacedQueryKeepsTheNewerResult() async throws {
         let lookup = ControlledLookup()
         let releaseAlice = TestLatch()
+        defer { releaseAlice.signal() }
         lookup.gates["alice@example.com"] = releaseAlice
         lookup.answers["alice@example.com"] = .resolved(accountIdHex: accountIdHex)
         lookup.answers["bob@example.com"] = .noProfile

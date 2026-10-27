@@ -9,16 +9,19 @@ import Testing
 struct NotificationActionDeadlineGateTests {
     typealias Outcome = NotificationActionDeadlineGate.Outcome
 
+    static let outcomes: [Outcome] = [.completed(succeeded: true), .completed(succeeded: false), .expired]
+
+    /// A different outcome that arrives late.
+    private func late(after first: Outcome) -> Outcome {
+        first == .expired ? .completed(succeeded: true) : .expired
+    }
+
     /// Waits on the gate from its own task, with a bound, so a gate that never
     /// answers fails the test instead of hanging the run.
-    private func outcome(
-        of gate: NotificationActionDeadlineGate,
-        parked: TestLatch? = nil
-    ) async throws -> Outcome? {
+    private func outcome(of gate: NotificationActionDeadlineGate) async throws -> Outcome? {
         let received = TestLatch()
         var outcome: Outcome?
         Task { @MainActor in
-            parked?.signal()
             outcome = await gate.wait()
             received.signal()
         }
@@ -26,33 +29,38 @@ struct NotificationActionDeadlineGateTests {
         return outcome
     }
 
-    @Test(arguments: [
-        Outcome.completed(succeeded: true),
-        .completed(succeeded: false),
-        .expired,
-    ])
+    @Test(arguments: outcomes)
     func theFirstOutcomeWinsOverLaterOnes(_ first: Outcome) async throws {
         let gate = NotificationActionDeadlineGate()
 
         gate.resolve(first)
-        gate.resolve(first == .expired ? .completed(succeeded: true) : .expired)
+        gate.resolve(late(after: first))
 
         #expect(try await outcome(of: gate) == first)
         // Waiting does not consume the outcome.
         #expect(try await outcome(of: gate) == first)
     }
 
-    @Test func aWaiterParkedBeforeTheOutcomeReceivesIt() async throws {
+    @Test(arguments: outcomes)
+    func aWaiterParkedBeforeTheOutcomeReceivesIt(_ first: Outcome) async throws {
         let gate = NotificationActionDeadlineGate()
         let parked = TestLatch()
-        async let received = outcome(of: gate, parked: parked)
+        let received = TestLatch()
+        var outcome: Outcome?
+        Task { @MainActor in
+            parked.signal()
+            outcome = await gate.wait()
+            received.signal()
+        }
         // The waiter parks on the gate before this resumes: both run on the
         // MainActor and nothing suspends between the signal and the park.
         try await parked.wait()
+        #expect(!received.isSignalled)
 
-        gate.resolve(.expired)
-        gate.resolve(.completed(succeeded: true))
+        gate.resolve(first)
+        gate.resolve(late(after: first))
+        try await received.wait()
 
-        #expect(try await received == .expired)
+        #expect(outcome == first)
     }
 }

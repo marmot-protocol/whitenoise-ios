@@ -27,15 +27,17 @@ final class RecipientQueryModel {
     static let nip05DebounceNanoseconds: UInt64 = 350_000_000
 
     typealias Nip05Lookup = @MainActor (_ name: String, _ domain: String) async -> Nip05Resolver.Resolution
+    /// Waits out the debounce; throws when the lookup is cancelled meanwhile.
+    typealias Debounce = @MainActor () async throws -> Void
     private let lookUpNip05: Nip05Lookup
-    private let debounceNanoseconds: UInt64
+    private let debounce: Debounce
 
     init(
         lookUpNip05: @escaping Nip05Lookup = { await Nip05Resolver.resolve(name: $0, domain: $1) },
-        debounceNanoseconds: UInt64 = RecipientQueryModel.nip05DebounceNanoseconds
+        debounce: @escaping Debounce = { try await Task.sleep(nanoseconds: RecipientQueryModel.nip05DebounceNanoseconds) }
     ) {
         self.lookUpNip05 = lookUpNip05
-        self.debounceNanoseconds = debounceNanoseconds
+        self.debounce = debounce
     }
 
     var trimmedText: String {
@@ -97,7 +99,7 @@ final class RecipientQueryModel {
         generation: Int,
         using appState: AppState
     ) async {
-        try? await Task.sleep(nanoseconds: debounceNanoseconds)
+        try? await debounce()
         guard !Task.isCancelled else { return }
         let result = await lookUpNip05(name, domain)
         guard !Task.isCancelled else { return }
@@ -129,6 +131,8 @@ final class RecipientQueryModel {
 #if DEBUG
     /// Waits for every NIP-05 lookup started so far, including cancelled or
     /// replaced ones, so a test can check that a stale result is never adopted.
+    /// Unbounded: injected lookups and debounces must finish, as `TestLatch.hold`
+    /// and `parkUntilCancelled` do.
     func awaitResolutionForTesting() async {
         let tasks = lookupTasksForTesting
         lookupTasksForTesting.removeAll()
