@@ -51,7 +51,9 @@ jobs:
           xcode-version: "26"
 
       # Same cleanup as the Tests workflow: two Release builds need the disk
-      # that the image's unused Xcodes and simulator runtimes occupy.
+      # that the image's unused Xcodes and simulator runtimes occupy. Keep the
+      # iOS 26 simulator runtime: without it xcodebuild reports the iOS
+      # platform as not installed and rejects the generic device destination.
       - name: Free runner disk
         run: |
           df -h /
@@ -60,7 +62,7 @@ jobs:
             [ "$(cd "$x" && pwd -P)" = "$(cd "$keep" && pwd -P)" ] || sudo rm -rf "$x" &
           done
           xcrun simctl runtime list -j \
-            | python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items()]' \
+            | python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items() if not v["platformIdentifier"].endswith("iphonesimulator") or not v["version"].startswith("26")]' \
             | xargs -n1 xcrun simctl runtime delete || true
           sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.ghcup &
           wait
