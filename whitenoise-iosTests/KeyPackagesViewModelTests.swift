@@ -3,10 +3,12 @@ import MarmotKit
 @testable import whitenoise_ios
 
 /// The key package screen's store. Loading itself goes through MDK; these
-/// check the decisions around it that need no runtime: the screen is cleared
-/// before another account loads and kept for a failed reload of the same one,
-/// and publish and delete never overlap. The guards that stop a slower,
-/// older reload from committing its result are not covered yet (#1228).
+/// check the decisions around it that need no runtime: a failed load for
+/// another account shows nothing of the previous one, a failed reload of the
+/// same account keeps its cached data, and a publish or delete is ignored while
+/// one that blocks it is in flight. Setting the busy flags, and the guards that
+/// stop a slower, older reload from committing its result, are not covered yet
+/// (#1228).
 ///
 /// `AppState.test()` opens no runtime, so a load fails at
 /// `currentMarmotClient()`, and a publish or delete that gets past its guard
@@ -64,8 +66,7 @@ struct KeyPackagesViewModelTests {
         #expect(model.loadError == nil)
     }
 
-    /// Switching accounts clears the previous account's screen before loading,
-    /// so even a failed load never shows it under the new account.
+    /// A failed load for another account shows nothing of the previous one.
     @Test func switchingAccountsClearsThePreviousAccountsScreen() async {
         let model = loadedModel(for: "account")
         let appState = AppState.test()
@@ -90,6 +91,8 @@ struct KeyPackagesViewModelTests {
         #expect(model.presentation.current?.publishedAt == 2)
         #expect(model.relayHistory.map(\.eventIdHex) == ["history"])
         #expect(model.lists?.bootstrapRelays == ["wss://account.example"])
+        #expect(model.relayHistoryError == "old history error")
+        #expect(model.maintenanceLoadError == "old maintenance error")
         #expect(model.loadedRef == "account")
         #expect(model.hasLoaded)
         #expect(!model.isLoading)

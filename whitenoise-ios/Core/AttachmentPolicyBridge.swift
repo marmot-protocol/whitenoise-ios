@@ -86,8 +86,9 @@ enum AttachmentPolicyBridge {
         return application
     }
 
-    /// Accounts still in onboarding keep their policy until setup finishes; an
-    /// account with no checkpoint is configured.
+    /// Accounts still in onboarding keep their stored policy and are not granted
+    /// the permission again until they are ready; an account with no checkpoint
+    /// is configured.
     nonisolated static func configures(onboardingReady: Bool?) -> Bool {
         onboardingReady ?? true
     }
