@@ -826,6 +826,7 @@ struct AccountSetupTests {
 
     @Test func suspensionWaitsForWorkAlreadyBeingDrainedByReconnect() async throws {
         let gate = TestLatch()
+        defer { gate.signal() }
         let old = SetupTestClient(initial: snapshot(), runGate: gate)
         let fresh = SetupTestClient(initial: snapshot())
         let model = AccountSetupModel(snapshot: snapshot())
@@ -966,7 +967,9 @@ private actor SetupTestClient: AccountSetupClient {
         switch command {
         case .run:
             runCount += 1
-            try await runGate?.wait()
+            // The test opens the gate itself on every exit, so a timeout can only
+            // come from a runner stall, which must not release the run early.
+            try await runGate?.wait(timeout: .seconds(600))
         case .discovery: return discoveryResult ?? initial
         case .suggestRelayRepair(let step):
             relayRepairPreviews.append(step)
