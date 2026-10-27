@@ -64,3 +64,48 @@ struct AttachmentPolicyBridgeTests {
         #expect(update.policy.automatic)
     }
 }
+
+/// The per-event rules `AttachmentPolicyBridge.synchronize` applies around each
+/// account. Revoking in event order and forwarding only the captured generation
+/// need a runtime or a fake client and are not covered here.
+struct AttachmentPolicyBridgeEventTests {
+    @Test func accountsStillInOnboardingKeepTheirPolicy() {
+        #expect(!AttachmentPolicyBridge.configures(onboardingReady: false))
+        #expect(AttachmentPolicyBridge.configures(onboardingReady: true))
+        // An account without an onboarding checkpoint is configured.
+        #expect(AttachmentPolicyBridge.configures(onboardingReady: nil))
+    }
+
+    /// Settings must never report a superseded save as saved; a background
+    /// resync that a newer event replaced just stops.
+    @Test func aSupersededSaveFailsButASupersededResyncStopsQuietly() {
+        #expect(throws: CancellationError.self) {
+            try AttachmentPolicyBridge.endSupersededEvent(limitsEdited: true)
+        }
+        #expect(throws: Never.self) {
+            try AttachmentPolicyBridge.endSupersededEvent(limitsEdited: false)
+        }
+    }
+
+    @Test func onlyTheCurrentEventAfterStartupGrantsThePermission() {
+        #expect(AttachmentPolicyBridge.grantsPermission(beforeStart: false, isCurrentEvent: true))
+        // A superseded event, or a replaced client, never grants its stale generation.
+        #expect(!AttachmentPolicyBridge.grantsPermission(beforeStart: false, isCurrentEvent: false))
+        // A sync before startup writes policy only.
+        #expect(!AttachmentPolicyBridge.grantsPermission(beforeStart: true, isCurrentEvent: true))
+        #expect(!AttachmentPolicyBridge.grantsPermission(beforeStart: true, isCurrentEvent: false))
+    }
+
+    @Test func editedLimitsThatMatchedNoAccountReportTheSaveAsUnavailable() {
+        #expect(throws: AttachmentReadError.unavailable) {
+            try AttachmentPolicyBridge.finishEvent(limitsEdited: true, appliedLimits: false)
+        }
+        #expect(throws: Never.self) {
+            try AttachmentPolicyBridge.finishEvent(limitsEdited: true, appliedLimits: true)
+        }
+        // A resync without edited limits has nothing to apply and still succeeds.
+        #expect(throws: Never.self) {
+            try AttachmentPolicyBridge.finishEvent(limitsEdited: false, appliedLimits: false)
+        }
+    }
+}

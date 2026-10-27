@@ -350,3 +350,23 @@ func conversationMessage(
         reactions: reactions
     ))
 }
+
+func keyPackage(
+    eventId: String = "event",
+    publishedAt: UInt64 = 1,
+    local: Bool,
+    relay: Bool
+) -> AccountKeyPackageFfi {
+    AccountKeyPackageFfi(
+        accountRef: nil,
+        accountIdHex: "account",
+        keyPackageId: "keyPackageId-\(eventId)",
+        keyPackageRefHex: "keyPackageRef-\(eventId)",
+        eventIdHex: eventId,
+        publishedAt: publishedAt,
+        keyPackageBytes: 32,
+        sourceRelays: relay ? ["wss://relay.example"] : [],
+        local: local,
+        relay: relay
+    )
+}
