@@ -38,15 +38,16 @@ struct IdentityProfileSetupView: View {
     let onCompletion: (() -> Void)?
     @State private var profileFailure: AccountSetupProfilePresentation.Failure?
     @State private var profileExit: ProfileExit?
-    @State private var activeProfileSnapshot: OnboardingSnapshotFfi?
-    @State private var activeProfileAction: AccountSetupProfilePresentation.Action?
+    @State private var activeProfileOperation: (
+        snapshot: OnboardingSnapshotFfi, action: AccountSetupProfilePresentation.Action
+    )?
     @State private var profileActionCompleted = false
     @State private var pendingProfileDiscard: AccountSetupProfilePresentation.PendingDiscard?
 
     private enum ProfileExit { case close, skip, cancelRepair }
 
     private var recovery: AccountSetupProfilePresentation? {
-        accountSetup.map { AccountSetupProfilePresentation(snapshot: activeProfileSnapshot ?? $0.snapshot) }
+        accountSetup.map { AccountSetupProfilePresentation(snapshot: activeProfileOperation?.snapshot ?? $0.snapshot) }
     }
 
     private var showsProfileFields: Bool {
@@ -71,26 +72,16 @@ struct IdentityProfileSetupView: View {
         _isFormReady = State(initialValue: accountSetup != nil)
     }
 
-    private var importedProfileStatus: OnboardingStatusFfi? {
-        accountSetup?.snapshot.steps.first { $0.step == .profile }?.status
-    }
-
     private var isSetupConnectionBlocked: Bool {
         accountSetup?.hasConnectionFailure ?? false
     }
 
-    private var didCompleteProfileDiscard: Bool {
-        guard scenePhase == .active, let setup = accountSetup, setup.isConnected, !setup.isBusy else { return false }
-        return pendingProfileDiscard?.isComplete(in: setup.snapshot) ?? false
-    }
-
-    private var profileFailureMessage: String? { profileFailure?.message }
-
     private var shouldDismissProfile: Bool {
         guard let setup = accountSetup, scenePhase == .active, setup.isConnected,
-              activeProfileSnapshot == nil else { return false }
-        return profileActionCompleted || importedProfileStatus == .passed || importedProfileStatus == .skipped
-            || didCompleteProfileDiscard
+              activeProfileOperation == nil else { return false }
+        let status = setup.snapshot.steps.first { $0.step == .profile }?.status
+        return profileActionCompleted || status == .passed || status == .skipped
+            || (!setup.isBusy && pendingProfileDiscard?.isComplete(in: setup.snapshot) == true)
     }
 
     private var hasFooterActions: Bool {
@@ -106,7 +97,7 @@ struct IdentityProfileSetupView: View {
         !isSetupConnectionBlocked && (accountSetup == nil || showsProfileFields)
     }
 
-    private var isSaving: Bool { model.isSavingProfile || activeProfileSnapshot != nil || (accountSetup?.isBusy ?? false) }
+    private var isSaving: Bool { model.isSavingProfile || activeProfileOperation != nil || (accountSetup?.isBusy ?? false) }
     private var isBusy: Bool { isRestarting || model.isBusy || isSaving }
     private var allowsBackNavigation: Bool {
         !isRestarting && (accountSetup == nil ? model.allowsBackNavigation : !isSaving)
@@ -118,7 +109,7 @@ struct IdentityProfileSetupView: View {
         ) {
             profileForm
         }
-        .disabled(isBusy || isSaving)
+        .disabled(isBusy)
         .wnPhotoSourceMenu(
             selection: $photoMenuAction,
             confirmsPublicUpload: false,
@@ -364,12 +355,12 @@ struct IdentityProfileSetupView: View {
             if let recovery {
                 Section {
                     AccountSetupProfileStatus(
-                        presentation: recovery, failureMessage: profileFailureMessage,
-                        failedAction: profileFailure?.action, isBusy: isSaving, activeAction: activeProfileAction
+                        presentation: recovery, failureMessage: profileFailure?.message,
+                        failedAction: profileFailure?.action, isBusy: isSaving, activeAction: activeProfileOperation?.action
                     ) {
                         if recovery.canEdit || recovery.profile != nil {
                             Divider()
-                            privacyText
+                            WNProfilePrivacyNote(showsIcon: false, onLearnMore: openPrivacyDetails)
                         }
                     }
                     .padding(.vertical, 4)
@@ -417,10 +408,6 @@ struct IdentityProfileSetupView: View {
         .scrollIndicatorsFlash(onAppear: true)
     }
 
-    private var privacyText: some View {
-        WNProfilePrivacyNote(showsIcon: false, onLearnMore: openPrivacyDetails)
-    }
-
     private func openPrivacyDetails() {
         focusedField = nil
         showPrivacyDetails = true
@@ -431,21 +418,31 @@ struct IdentityProfileSetupView: View {
             WNOnboardingButton(title: "Back to Sign In") { requestProfileExit(.close) }
                 .disabled(!allowsBackNavigation)
         } else if let accountSetup, let recovery {
-            recoveryActions(accountSetup, presentation: recovery)
+            VStack(spacing: 8) {
+                if let primary = recovery.primaryAction(failure: profileFailure) {
+                    WNOnboardingButton(
+                        title: primary.isRetry ? "Try Again" : "Save",
+                        isLoading: isSaving && activeProfileOperation?.action != .skip
+                            && activeProfileOperation?.action != .cancelRepair
+                    ) {
+                        if primary.action == .save { submitProfile() }
+                        else { performProfileAction(.retry) }
+                    }
+                    .disabled(primary.action == .save && !hasValidName)
+                    .accessibilityIdentifier(primary.isRetry ? "account-setup.retry-profile" : "account-setup.save-profile")
+                }
+                if recovery.canSkip {
+                    WNButton(title: "Not Now", emphasis: .secondary) { requestProfileExit(.skip) }
+                }
+            }
+            .disabled(isBusy || !accountSetup.isConnected)
         } else {
-            signUpActions
-        }
-    }
-
-    private var signUpActions: some View {
-        VStack(spacing: 8) {
             WNOnboardingButton(
                 title: LocalizedStringKey(primaryActionTitle),
                 layoutTitle: "Sign Up",
-                isLoading: isSaving || model.isSubmitting
-            ) {
-                submitProfile()
-            }
+                isLoading: isSaving || model.isSubmitting,
+                action: submitProfile
+            )
             .disabled(isBusy || (!hasValidName && !model.isResetPending))
             .accessibilityLabel(primaryActionTitle)
             .accessibilityIdentifier("sign-up.create")
@@ -478,15 +475,11 @@ struct IdentityProfileSetupView: View {
         let discard = action == .cancelRepair ? AccountSetupProfilePresentation.PendingDiscard(snapshot: setup.snapshot) : nil
         let startingSnapshot = setup.snapshot
         guard let operation = setup.send(command) else { return }
-        activeProfileSnapshot = startingSnapshot
-        activeProfileAction = action
+        activeProfileOperation = (startingSnapshot, action)
         profileFailure = nil
         pendingProfileDiscard = discard
         submissionTask = Task {
-            defer {
-                activeProfileSnapshot = nil
-                activeProfileAction = nil
-            }
+            defer { activeProfileOperation = nil }
             await operation.value
             guard !Task.isCancelled, setup.isConnected else { return }
             pendingProfileDiscard = nil
@@ -495,26 +488,6 @@ struct IdentityProfileSetupView: View {
                 profileActionCompleted = true
             } else {
                 profileFailure = setup.errorMessage.map { .init(action: action, message: $0) }
-            }
-        }
-    }
-
-    private func recoveryActions(_ setup: AccountSetupModel, presentation: AccountSetupProfilePresentation) -> some View {
-        VStack(spacing: 8) {
-            if let primary = presentation.primaryAction(failure: profileFailure) {
-                WNOnboardingButton(
-                    title: primary.isRetry ? "Try Again" : "Save",
-                    isLoading: isSaving && activeProfileAction != .skip && activeProfileAction != .cancelRepair
-                ) {
-                    if primary.action == .save { submitProfile() }
-                    else { performProfileAction(.retry) }
-                }
-                .disabled(isBusy || !setup.isConnected || (primary.action == .save && !hasValidName))
-                .accessibilityIdentifier(primary.isRetry ? "account-setup.retry-profile" : "account-setup.save-profile")
-            }
-            if presentation.canSkip {
-                WNButton(title: "Not Now", emphasis: .secondary) { requestProfileExit(.skip) }
-                    .disabled(isBusy || !setup.isConnected)
             }
         }
     }
@@ -617,13 +590,9 @@ struct IdentityProfileSetupView: View {
         )
         guard let profile = draft.merging(with: setup.snapshot.proposal?.profile) else { return }
         let avatar = model.avatarDraft.map { AccountSetupAvatar(data: $0.data, mediaType: $0.mediaType) }
-        activeProfileSnapshot = setup.snapshot
-        activeProfileAction = .save
+        activeProfileOperation = (setup.snapshot, .save)
         profileFailure = nil
-        defer {
-            activeProfileSnapshot = nil
-            activeProfileAction = nil
-        }
+        defer { activeProfileOperation = nil }
         let saved = await setup.saveProfile(profile, avatar: avatar)
         guard !Task.isCancelled, setup.isConnected else { return }
         if saved {
