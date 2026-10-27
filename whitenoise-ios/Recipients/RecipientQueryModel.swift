@@ -19,6 +19,8 @@ final class RecipientQueryModel {
     private var resolveTask: Task<Void, Never>?
     private var resolveGeneration = 0
 #if DEBUG
+    /// Kept only in the unit-test host, so Debug app sessions never collect them.
+    private let recordsLookupsForTesting = ProcessEnvironment.isUnitTestHost()
     private var lookupTasksForTesting: [Task<Void, Never>] = []
 #endif
 
@@ -84,7 +86,7 @@ final class RecipientQueryModel {
             }
             resolveTask = task
 #if DEBUG
-            lookupTasksForTesting.append(task)
+            if recordsLookupsForTesting { lookupTasksForTesting.append(task) }
 #endif
         }
     }

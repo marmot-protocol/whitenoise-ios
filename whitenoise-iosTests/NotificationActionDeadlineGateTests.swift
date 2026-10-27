@@ -7,41 +7,52 @@ import Testing
 /// that already went out.
 @MainActor
 struct NotificationActionDeadlineGateTests {
+    typealias Outcome = NotificationActionDeadlineGate.Outcome
+
+    /// Waits on the gate from its own task, with a bound, so a gate that never
+    /// answers fails the test instead of hanging the run.
+    private func outcome(
+        of gate: NotificationActionDeadlineGate,
+        parked: TestLatch? = nil
+    ) async throws -> Outcome? {
+        let received = TestLatch()
+        var outcome: Outcome?
+        Task { @MainActor in
+            parked?.signal()
+            outcome = await gate.wait()
+            received.signal()
+        }
+        try await received.wait()
+        return outcome
+    }
+
     @Test(arguments: [
-        NotificationActionDeadlineGate.Outcome.completed(succeeded: true),
+        Outcome.completed(succeeded: true),
         .completed(succeeded: false),
         .expired,
     ])
-    func theFirstOutcomeWinsOverLaterOnes(_ first: NotificationActionDeadlineGate.Outcome) async {
+    func theFirstOutcomeWinsOverLaterOnes(_ first: Outcome) async throws {
         let gate = NotificationActionDeadlineGate()
 
         gate.resolve(first)
         gate.resolve(first == .expired ? .completed(succeeded: true) : .expired)
 
-        #expect(await gate.wait() == first)
+        #expect(try await outcome(of: gate) == first)
+        // Waiting does not consume the outcome.
+        #expect(try await outcome(of: gate) == first)
     }
 
     @Test func aWaiterParkedBeforeTheOutcomeReceivesIt() async throws {
         let gate = NotificationActionDeadlineGate()
-        let waiting = TestLatch()
-        let received = TestLatch()
-        var outcome: NotificationActionDeadlineGate.Outcome?
-        Task { @MainActor in
-            waiting.signal()
-            outcome = await gate.wait()
-            received.signal()
-        }
+        let parked = TestLatch()
+        async let received = outcome(of: gate, parked: parked)
         // The waiter parks on the gate before this resumes: both run on the
         // MainActor and nothing suspends between the signal and the park.
-        try await waiting.wait()
+        try await parked.wait()
 
         gate.resolve(.expired)
         gate.resolve(.completed(succeeded: true))
-        // Bounded, so a parked waiter that is never resumed fails the test.
-        try await received.wait()
 
-        #expect(outcome == .expired)
-        // A later wait sees the same outcome; waiting does not consume it.
-        #expect(await gate.wait() == .expired)
+        #expect(try await received == .expired)
     }
 }

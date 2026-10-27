@@ -48,6 +48,8 @@ struct RecipientQueryModelTests {
         let appState = AppState.test()
         model.text = npub
         model.queryChanged(using: appState)
+        #expect(model.resolution == .resolved(ResolvedRecipient(
+            accountIdHex: accountIdHex, memberRef: npub, queriedNip05: nil)))
 
         model.text = "Alice"
         model.queryChanged(using: appState)
@@ -88,6 +90,28 @@ struct RecipientQueryModelTests {
 
         #expect(model.resolution == .resolved(ResolvedRecipient(
             accountIdHex: accountIdHex, memberRef: accountIdHex, queriedNip05: "alice@example.com")))
+    }
+
+    /// Each lookup is a network fetch, so an address replaced or cleared while
+    /// it is still being debounced is never looked up at all.
+    @Test func anAddressChangedDuringTheDebounceIsNeverLookedUp() async {
+        let lookup = ControlledLookup()
+        lookup.answers["bob@example.com"] = .noProfile
+        let model = RecipientQueryModel(lookUpNip05: { await lookup.lookUp($0, $1) },
+                                        debounceNanoseconds: 30_000_000_000)
+        let appState = AppState.test()
+
+        model.text = "alice@example.com"
+        model.queryChanged(using: appState)
+        model.text = "bob@example.com"
+        model.queryChanged(using: appState)
+        model.clear()
+        // Cancelling a debounce ends its sleep at once. If cancellation broke,
+        // the 30 s debounce would run out and the lookup check below would fail.
+        await model.awaitResolutionForTesting()
+
+        #expect(lookup.started.isEmpty)
+        #expect(model.resolution == .idle)
     }
 
     @Test func aClearedQueryNeverAdoptsItsLookup() async throws {
