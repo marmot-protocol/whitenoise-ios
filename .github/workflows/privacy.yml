@@ -30,8 +30,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request replaces its older run. Every master commit gets
+# its own group: a group holds only one pending run, so a shared master group
+# would let a later push cancel a waiting release-bump run before it checked.
 concurrency:
-  group: privacy-${{ github.ref }}
+  group: privacy-${{ github.ref == 'refs/heads/master' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
