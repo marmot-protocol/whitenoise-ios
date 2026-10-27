@@ -39,6 +39,18 @@ struct AttachmentPolicyBridgeTests {
         #expect(update.policy.automatic)
     }
 
+    /// Saving limits that are already stored still counts as applied; otherwise
+    /// `synchronize` would report the save as unavailable.
+    @Test func editedLimitsEqualToTheStoredOnesStillApply() {
+        var stored = Self.stored
+        stored.automatic = true
+        let update = AttachmentPolicyBridge.policy(stored, for: Self.alice,
+                                                   applying: (account: "alice", policy: stored))
+
+        #expect(update.appliesLimits)
+        #expect(update.policy == stored)
+    }
+
     @Test func editedLimitsLeaveOtherAccountsAlone() {
         let current = Self.stored
         let edited = attachmentPolicy(retained: 2_048 * mebibyte, reserve: 0, transfer: 1_024 * mebibyte)

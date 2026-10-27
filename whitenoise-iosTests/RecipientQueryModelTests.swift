@@ -134,6 +134,7 @@ struct RecipientQueryModelTests {
         release.signal()
         await model.awaitResolutionForTesting()
 
+        #expect(model.text.isEmpty)
         #expect(model.resolution == .idle)
     }
 
