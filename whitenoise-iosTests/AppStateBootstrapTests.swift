@@ -1216,30 +1216,30 @@ struct AppStateBootstrapTests {
         #expect(appState.phase == .bootstrapping)
         #expect(appState.client != nil)
 
+        var events: [String] = []
         let waitingForBootstrap = TestLatch()
-        appState.runtimeLifecycle.backgroundSuspensionWillWaitForTesting = { wait in
-            if wait == .bootstrap { waitingForBootstrap.signal() }
+        appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = { wait, isWaiting in
+            guard wait == .bootstrap else { return }
+            events.append(isWaiting ? "waiting" : "stopped waiting")
+            if isWaiting { waitingForBootstrap.signal() }
         }
+        defer { appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = nil }
         let suspensionTask = appState.startRuntimeSuspension()
-        var suspensionCompleted = false
-        let observer = Task { @MainActor in
-            await suspensionTask.value
-            suspensionCompleted = true
-        }
 
-        // Suspension is now parked on the bootstrap, which the checkpoint holds.
-        try await waitingForBootstrap.wait()
-
-        #expect(!suspensionCompleted)
+        // `hold` records a missing signal and carries on, so the checkpoint is
+        // still released below and the test fails instead of hanging.
+        await waitingForBootstrap.hold()
+        #expect(events == ["waiting"])
         #expect(appState.phase == .bootstrapping)
         #expect(appState.client != nil)
 
+        events.append("bootstrap released")
         await checkpoint.release()
         await bootstrapTask.value
         await suspensionTask.value
-        await observer.value
 
-        #expect(suspensionCompleted)
+        // The same suspension waited until bootstrap was released, then tore down.
+        #expect(events == ["waiting", "bootstrap released", "stopped waiting"])
         #expect(appState.phase == .onboarding)
         #expect(!appState.isAppSceneActive)
         #expect(appState.runtimeSuspendedForBackground)
@@ -1509,29 +1509,29 @@ struct AppStateBootstrapTests {
         #expect(lease.client === appState.client)
         #expect(appState.runtimeLifecycle.isRuntimeSuspendingNow)
 
+        var events: [String] = []
         let waitingForLease = TestLatch()
-        appState.runtimeLifecycle.backgroundSuspensionWillWaitForTesting = { wait in
-            if wait == .runtimeWork { waitingForLease.signal() }
+        appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = { wait, isWaiting in
+            guard wait == .runtimeWork else { return }
+            events.append(isWaiting ? "waiting" : "stopped waiting")
+            if isWaiting { waitingForLease.signal() }
         }
+        defer { appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = nil }
         let suspension = appState.startRuntimeSuspension()
-        var suspensionCompleted = false
-        let observer = Task { @MainActor in
-            await suspension.value
-            suspensionCompleted = true
-        }
 
-        // Suspension is now parked on the lease, which only the release below ends.
-        try await waitingForLease.wait()
-
-        #expect(!suspensionCompleted)
+        // `hold` records a missing signal and carries on, so the lease is still
+        // released below; otherwise runtime cleanup would wait on it forever.
+        await waitingForLease.hold()
+        #expect(events == ["waiting"])
         #expect(appState.client === lease.client)
         #expect(!appState.runtimeSuspendedForBackground)
 
+        events.append("lease released")
         await appState.runtimeLifecycle.suspendRuntimeAfterNotificationAction(lease)
         await suspension.value
-        await observer.value
 
-        #expect(suspensionCompleted)
+        // The same suspension waited until the lease was released, then tore down.
+        #expect(events == ["waiting", "lease released", "stopped waiting"])
         #expect(appState.client == nil)
         #expect(appState.runtimeSuspendedForBackground)
 
