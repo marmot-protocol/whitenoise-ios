@@ -247,6 +247,10 @@ struct SignOutForm<ProfileSummary: View>: View {
             .accessibilityIdentifier("wipe-profile.confirmation-field")
             Text(confirmationHint)
                 .wnInputFooter()
+            if ProfileExitConfirmation.hasExtraSurroundingWhitespace(confirmation, profileName: profileName) {
+                Text("Remove extra spaces before or after the profile name.")
+                    .wnInputFooter()
+            }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
             confirmationHeight = $0
