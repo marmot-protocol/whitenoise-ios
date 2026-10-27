@@ -1221,7 +1221,12 @@ struct AppStateBootstrapTests {
         appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = { wait, isWaiting in
             guard wait == .bootstrap else { return }
             events.append(isWaiting ? "waiting" : "stopped waiting")
-            if isWaiting { waitingForBootstrap.signal() }
+            if isWaiting {
+                waitingForBootstrap.signal()
+            } else {
+                // The wait ends only once bootstrap has finished promoting the phase.
+                #expect(appState.phase != .bootstrapping)
+            }
         }
         defer { appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = nil }
         let suspensionTask = appState.startRuntimeSuspension()
@@ -1514,7 +1519,12 @@ struct AppStateBootstrapTests {
         appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = { wait, isWaiting in
             guard wait == .runtimeWork else { return }
             events.append(isWaiting ? "waiting" : "stopped waiting")
-            if isWaiting { waitingForLease.signal() }
+            if isWaiting {
+                waitingForLease.signal()
+            } else {
+                // The wait ends only once the lease has released the suspension gate.
+                #expect(!appState.runtimeLifecycle.isRuntimeSuspendingNow)
+            }
         }
         defer { appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = nil }
         let suspension = appState.startRuntimeSuspension()
