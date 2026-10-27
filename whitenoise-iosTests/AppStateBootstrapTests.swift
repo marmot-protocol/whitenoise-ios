@@ -1238,7 +1238,7 @@ struct AppStateBootstrapTests {
         await bootstrapTask.value
         await suspensionTask.value
 
-        // The same suspension waited until bootstrap was released, then tore down.
+        // Suspension waited until bootstrap was released, then tore down.
         #expect(events == ["waiting", "bootstrap released", "stopped waiting"])
         #expect(appState.phase == .onboarding)
         #expect(!appState.isAppSceneActive)
@@ -1530,7 +1530,7 @@ struct AppStateBootstrapTests {
         await appState.runtimeLifecycle.suspendRuntimeAfterNotificationAction(lease)
         await suspension.value
 
-        // The same suspension waited until the lease was released, then tore down.
+        // Suspension waited until the lease was released, then tore down.
         #expect(events == ["waiting", "lease released", "stopped waiting"])
         #expect(appState.client == nil)
         #expect(appState.runtimeSuspendedForBackground)

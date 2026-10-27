@@ -153,9 +153,9 @@ final class RuntimeLifecycle {
 
     @ObservationIgnored var afterBootstrapRuntimeStartForTesting: (() async -> Void)?
     @ObservationIgnored var afterForegroundRuntimeCreatedForTesting: (() async -> Void)?
-    /// Called with `true` just before background suspension parks on work it
-    /// must not tear down underneath, and with `false` once it stops waiting,
-    /// so a test can tell that the wait ended only after the work released it.
+    /// Called with `true` just before background suspension waits on a running
+    /// bootstrap or on runtime work, and with `false` once it stops waiting, so
+    /// a test can tell that the wait ended only after that work released it.
     @ObservationIgnored var backgroundSuspensionWaitForTesting: ((BackgroundSuspensionWait, _ isWaiting: Bool) -> Void)?
     @ObservationIgnored var hostPerformanceObserverForTesting: ((
         HostPerformanceOperationFfi,
