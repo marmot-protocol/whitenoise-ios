@@ -239,6 +239,12 @@ class StringsCatalogTests(FixtureCase):
                 "de": {**unit("%#@n@"), "substitutions": {"n": {"argNum": 1, "formatSpecifier": "lld",
                        "variations": {"plural": {"one": unit("%lld photo"), "other": unit("%lld photos")}}}}},
             }},
+            "%lld clips": {"localizations": {
+                "en": plural({"one": "%lld clip", "other": "%lld clips"}, substitution=True),
+                "de": plural({"one": "%lld clip", "other": "%lld Clips"}),
+                "it": plural({"one": "%lld filmato", "other": "%lld filmati"}),
+                "ru": plural({"one": "%lld клип", "few": "%lld clips", "many": "%lld clips", "other": "%lld клипа"}),
+            }},
             "%lld songs": {"localizations": {
                 "en": plural({"one": "%lld song", "other": "%lld songs"}, substitution=True),
                 "de": plural({"one": "%lld Lied", "other": "%lld Lieder"}, substitution=True),
@@ -248,6 +254,7 @@ class StringsCatalogTests(FixtureCase):
             }},
             # Format-only copy has no words to translate.
             "%@ · %@": {"localizations": {"de": unit("%@ · %@"), "it": unit("%@ · %@"), "ru": unit("%@ · %@")}},
+            "1.5×": {"localizations": {"de": unit("1.5×"), "it": unit("1.5×"), "ru": unit("1.5×")}},
             # Placeholder numbering doesn't show.
             "Uploads %@ to %@.": {"localizations": {
                 "en": unit("Uploads %1$@ to %2$@."), "de": unit("Uploads %@ to %@."),
@@ -271,6 +278,8 @@ class StringsCatalogTests(FixtureCase):
             }},
         }), locales=("de", "it", "ru"))
         self.assertEqual([error for error in errors if "English copy" in error], [
+            "de: '%lld clips' still shows the English copy",
+            "ru: '%lld clips' still shows the English copy",
             "de: '%lld left' still shows the English copy",
             "it: '%lld left' still shows the English copy",
             "de: '%lld photos' still shows the English copy",
@@ -320,20 +329,22 @@ class StringsCatalogTests(FixtureCase):
             # Renaming a substitution changes nothing shown.
             "de": forms(english_files, english_folders, files_name="dateien"),
         }}}), locales=("de", "it", "ru"))
-        def counts(shell):
-            return {**unit(shell), "substitutions": {
-                name: {"argNum": arg, "formatSpecifier": "lld", "variations": {"plural": {
-                    "one": unit("%lld"), "other": unit("%lld")}}} for arg, name in ((1, "a"), (2, "b"))}}
         errors += self.errors({"search.found": {"localizations": {
-            "en": counts("Found %#@a@ files in %#@b@ folders"),
+            "en": {**unit("Found %#@a@ in %#@b@"), "substitutions": {
+                name: {"argNum": arg, "formatSpecifier": "lld", "variations": {"plural": {
+                    "one": unit(f"%lld {noun}"), "other": unit(f"%lld {noun}s")}}}
+                for arg, name, noun in ((1, "a", "file"), (2, "b", "folder"))}},
             # Matches only once both English counts are filled in.
             "de": unit("Found %lld files in %lld folders"),
-            "ru": counts("Найдено файлов: %#@a@, папок: %#@b@"),
+            # Mixed singular and plural counts are English too.
+            "ru": plural({"one": "Found %lld file in %lld folders", "few": "Found %lld files in %lld folder",
+                          "many": "Найдено %lld файлов в %lld папках", "other": "Найдено %lld файла в %lld папках"}),
         }}})
         self.assertEqual([error for error in errors if "English copy" in error], [
             "de: '%lld files and %lld folders' still shows the English copy",
             "ru: '%lld files and %lld folders' still shows the English copy",
             "de: 'search.found' still shows the English copy",
+            "ru: 'search.found' still shows the English copy",
         ])
 
     def test_shared_spelling_that_no_longer_applies_fails(self):
@@ -439,7 +450,7 @@ class RepositoryCatalogTests(unittest.TestCase):
     def test_removing_a_required_key_fails(self):
         self.assertIn("missing required key 'Leave “%@”?'", self.broken(lambda s: s.pop("Leave “%@”?")))
 
-    def test_sign_in_as_english_copy_fails(self):
+    def test_sign_in_left_in_english_breaks_its_pin(self):
         def english(strings):
             strings["Sign In"]["localizations"]["de"]["stringUnit"]["value"] = "Sign In"
         errors = self.broken(english)

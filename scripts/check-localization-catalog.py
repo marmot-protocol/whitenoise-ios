@@ -27,6 +27,7 @@ auto-extracted `new` entries that mirror the key.
 """
 
 import argparse
+import itertools
 import json
 import re
 import sys
@@ -163,7 +164,8 @@ DONATION_KEYS = (
 # These families must keep existing; the English-copy rule covers their translations.
 ONCE_ENGLISH_KEYS = ("Sign In", "Sign Up") + RETENTION_KEYS + DONATION_KEYS
 # Copy whose correct translation is spelled like English. Names and identifiers
-# may stay English in any locale; words only in the listed locales.
+# may stay English in any locale; words only in the listed locales. "Native Push"
+# is the feature's name: every locale's notification footers keep it as such.
 SHARED_NAMES = (
     "Claude Code", "Codex", "GIF", "GIPHY", "Hermes", "NIP-65", "Native Push", "OpenClaw", "OpenCode", "Pi",
     "QUIC · %@", "URL", "White Noise", "White Noise · %@", "https://example.com/image.jpg", "npub", "nsec1…",
@@ -338,8 +340,8 @@ def plural_requirement_errors(key, localizations, locales, require=True):
 
 
 def displayed(localization):
-    """The texts one localization can show, one per plural category, with each
-    `%#@name@` filled from its substitution and `%2$@` read as `%@`."""
+    """The texts one localization can show: each plural form, or its shell with
+    every combination of its substitutions' forms filled in, `%2$@` read as `%@`."""
     value = localization.get("stringUnit", {}).get("value")
     plural = localization.get("variations", {}).get("plural")
     if isinstance(plural, dict):
@@ -347,15 +349,17 @@ def displayed(localization):
     elif value is None:
         texts = set()
     else:
-        forms = {name: substitution.get("variations", {}).get("plural") or {}
-                 for name, substitution in localization.get("substitutions", {}).items()}
-
-        def filled(category):
-            def form(match):
-                chosen = forms.get(match.group(1), {})
-                return chosen.get(category, chosen.get("other", {})).get("stringUnit", {}).get("value", "")
-            return re.sub(r"%#@(\w+)@", form, value)
-        texts = {filled(category) for category in set().union(*forms.values(), {"other"})}
+        substitutions = localization.get("substitutions", {})
+        choices = [
+            [form.get("stringUnit", {}).get("value", "")
+             for form in (substitutions.get(name, {}).get("variations", {}).get("plural") or {}).values()]
+            or [f"%#@{name}@"]
+            for name in re.findall(r"%#@(\w+)@", value)
+        ]
+        texts = set()
+        for combination in itertools.product(*choices):
+            filled = iter(combination)
+            texts.add(re.sub(r"%#@\w+@", lambda _: next(filled), value))
     return {re.sub(r"%\d+\$", "%", text) for text in texts}
 
 
