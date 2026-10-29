@@ -353,10 +353,11 @@ final class NotificationService: UNNotificationServiceExtension {
     private static func fetchAvatars(
         for presentations: [LocalNotificationPresentation]
     ) async -> [String: Data] {
+        let urls = NotificationCommunicationDecorator.avatarURLs(for: presentations)
         var avatars: [String: Data] = [:]
         let clock = ContinuousClock()
         let start = clock.now
-        for url in NotificationCommunicationDecorator.avatarURLs(for: presentations) {
+        for url in urls {
             guard !Task.isCancelled,
                   let deadline = NotificationCommunicationDecorator.avatarFetchDeadline(
                       elapsed: clock.now - start

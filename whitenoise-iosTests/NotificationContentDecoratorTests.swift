@@ -5,20 +5,7 @@ import UserNotifications
 
 struct NotificationContentDecoratorTests {
     private func presentation() -> LocalNotificationPresentation {
-        LocalNotificationPresentation(
-            identifier: "id-1",
-            threadIdentifier: "thread-1",
-            title: "Alice",
-            body: "hello",
-            route: LocalNotificationRoute(
-                accountRef: "acct",
-                groupIdHex: "group",
-                notificationKey: "key",
-                messageIdHex: "msg"
-            ),
-            timestamp: Date(timeIntervalSince1970: 1_700_000_000),
-            userInfo: ["k": "v"]
-        )
+        notificationPresentation(userInfo: ["k": "v"])
     }
 
     @Test func applyRendersAudibleContentByDefaultAndMergesUserInfo() {
@@ -182,21 +169,29 @@ struct NotificationContentDecoratorTests {
 
         NotificationContentDecorator.applyFallback(to: content)
 
-        #expect(content.title == L10n.string("White Noise"))
-        #expect(content.body == L10n.string("New encrypted message"))
+        // Indistinguishable from generic preview mode, which must match the fallback.
+        let generic = LocalNotificationProjection.genericContentText()
+        #expect(content.title == generic.title)
+        #expect(content.body == generic.body)
         #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
             == LocalNotificationProjection.fallbackDisposition)
     }
 
-    @Test func fallbackKeepsCopyThePushAlreadyCarries() {
+    /// Only a blank field is replaced; copy the push already carries stays, and
+    /// the wake is still marked as a fallback so the app won't route it.
+    @Test(arguments: [("Server title", ""), ("", "Server body"), ("Server title", "Server body")])
+    func fallbackReplacesOnlyBlankFields(title: String, body: String) {
         let content = UNMutableNotificationContent()
-        content.title = "Server title"
-        content.body = "Server body"
+        content.title = title
+        content.body = body
 
         NotificationContentDecorator.applyFallback(to: content)
 
-        #expect(content.title == "Server title")
-        #expect(content.body == "Server body")
+        let generic = LocalNotificationProjection.genericContentText()
+        #expect(content.title == (title.isEmpty ? generic.title : title))
+        #expect(content.body == (body.isEmpty ? generic.body : body))
+        #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
+            == LocalNotificationProjection.fallbackDisposition)
     }
 
     /// A fully muted wake keeps the generic copy but lands silently in
@@ -207,8 +202,9 @@ struct NotificationContentDecoratorTests {
 
         NotificationContentDecorator.applyQuietDelivery(to: content)
 
-        #expect(content.title == L10n.string("White Noise"))
-        #expect(content.body == L10n.string("New encrypted message"))
+        let generic = LocalNotificationProjection.genericContentText()
+        #expect(content.title == generic.title)
+        #expect(content.body == generic.body)
         #expect(content.sound == nil)
         #expect(content.interruptionLevel == .passive)
         #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String

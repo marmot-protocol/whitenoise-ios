@@ -104,24 +104,24 @@ struct NotificationAvatarBudgetTests {
     }
 
     /// One wake fetches each sender picture once, in arrival order, and no more
-    /// than the per-wake cap, however many notifications it carries.
+    /// than the per-wake cap. Arrival order keeps the primary sender, which the
+    /// extension puts first, inside the cap.
     @Test func avatarURLsAreDistinctInArrivalOrderAndCapped() {
-        func presentation(_ url: String?) -> LocalNotificationPresentation {
-            var presentation = LocalNotificationPresentation(
-                identifier: UUID().uuidString, threadIdentifier: "thread", title: "t", body: "b",
-                route: LocalNotificationRoute(accountRef: "acct", groupIdHex: "group",
-                                              notificationKey: "key", messageIdHex: "msg"),
-                timestamp: Date(timeIntervalSince1970: 0), userInfo: [:])
-            presentation.senderPictureUrl = url
-            return presentation
-        }
-        let presentations = ["https://a/1", nil, "https://a/2", "https://a/1", "https://a/3", "https://a/4"]
-            .map(presentation)
+        // Deliberately not in sorted order, so sorting would fail the order checks.
+        let arrivals = ["https://z/primary", nil, "https://m/2", "https://z/primary", "https://a/3",
+                        "https://c/4", "https://b/5"]
+        let presentations = arrivals.map { notificationPresentation(senderPictureUrl: $0) }
+        let distinct = ["https://z/primary", "https://m/2", "https://a/3", "https://c/4", "https://b/5"]
 
-        #expect(NotificationCommunicationDecorator.avatarURLs(for: presentations, limit: 3)
-            == ["https://a/1", "https://a/2", "https://a/3"])
-        #expect(NotificationCommunicationDecorator.avatarURLs(for: presentations, limit: 10)
-            == ["https://a/1", "https://a/2", "https://a/3", "https://a/4"])
-        #expect(NotificationCommunicationDecorator.avatarURLs(for: [presentation(nil)]).isEmpty)
+        // The production default caps a busy wake at the per-wake limit.
+        let capped = NotificationCommunicationDecorator.avatarURLs(for: presentations)
+        let cap = NotificationCommunicationDecorator.maxAvatarFetchesPerWake
+        #expect(cap < distinct.count)
+        #expect(capped == Array(distinct.prefix(cap)))
+
+        #expect(NotificationCommunicationDecorator.avatarURLs(for: presentations, limit: distinct.count + 1)
+            == distinct)
+        #expect(NotificationCommunicationDecorator.avatarURLs(
+            for: [notificationPresentation(senderPictureUrl: nil)]).isEmpty)
     }
 }
