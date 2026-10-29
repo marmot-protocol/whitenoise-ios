@@ -1,3 +1,4 @@
+// swiftlint:disable no_test_hook_in_app_code
 import CryptoKit
 import Foundation
 import ImageIO
