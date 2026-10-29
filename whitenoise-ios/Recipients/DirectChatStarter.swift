@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 
@@ -98,9 +97,35 @@ final class DirectChatStarter {
     /// Support opens quietly while other entry points keep their existing feedback.
     var playsSuccessHaptic = true
 
-#if DEBUG
-    @ObservationIgnored var createGroupForTesting: (@MainActor (String, String) async throws -> String)?
-#endif
+    /// Creates the unnamed two-member group for `accountRef` and `memberRef`.
+    typealias CreateGroup = @MainActor (
+        _ appState: AppState,
+        _ accountRef: String,
+        _ memberRef: String
+    ) async throws -> CreatedGroupFfi
+
+    @ObservationIgnored private let createGroup: CreateGroup
+
+    init(createGroup: @escaping CreateGroup = DirectChatStarter.createGroupInMarmot) {
+        self.createGroup = createGroup
+    }
+
+    private static func createGroupInMarmot(
+        appState: AppState,
+        accountRef: String,
+        memberRef: String
+    ) async throws -> CreatedGroupFfi {
+        try await appState.currentMarmotClient().createGroupWithOptionsDetailed(
+            accountRef: accountRef,
+            name: "",
+            memberRefs: [memberRef],
+            options: CreateGroupOptionsFfi(
+                description: nil,
+                initialImage: nil,
+                disappearingMessageSecs: 0
+            )
+        )
+    }
 
     /// Opens `existingGroupIdHex` when the person already shares an open
     /// direct chat; otherwise creates an unnamed two-member group. The guard
@@ -127,44 +152,9 @@ final class DirectChatStarter {
         defer { creatingAccountIdHex = nil }
         let performance = HostActionPerformance.begin()
         do {
-            let groupIdHex: String
-            var createdRow: ChatListRowFfi?
-#if DEBUG
-            if let createGroupForTesting {
-                groupIdHex = try await createGroupForTesting(accountRef, memberRef)
-            } else {
-                let client = try appState.currentMarmotClient()
-                let created = try await client.createGroupWithOptionsDetailed(
-                    accountRef: accountRef,
-                    name: "",
-                    memberRefs: [memberRef],
-                    options: CreateGroupOptionsFfi(
-                        description: nil,
-                        initialImage: nil,
-                        disappearingMessageSecs: 0
-                    )
-                )
-                groupIdHex = created.groupIdHex
-                createdRow = created.chatListRow
-            }
-#else
-            let client = try appState.currentMarmotClient()
-            let created = try await client.createGroupWithOptionsDetailed(
-                accountRef: accountRef,
-                name: "",
-                memberRefs: [memberRef],
-                options: CreateGroupOptionsFfi(
-                    description: nil,
-                    initialImage: nil,
-                    disappearingMessageSecs: 0
-                )
-            )
-            groupIdHex = created.groupIdHex
-            createdRow = created.chatListRow
-#endif
-            if let createdRow {
-                appState.noteCreatedChatListRow(accountRef: accountRef, row: createdRow)
-            }
+            let created = try await createGroup(appState, accountRef, memberRef)
+            let groupIdHex = created.groupIdHex
+            appState.noteCreatedChatListRow(accountRef: accountRef, row: created.chatListRow)
             HostActionPerformance.groupBecameCanonical(
                 groupIdHex: groupIdHex,
                 since: performance

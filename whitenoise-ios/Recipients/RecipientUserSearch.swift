@@ -1,10 +1,16 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 
 struct RecipientUserSearchOperations {
     let searchUsers: @MainActor () async throws -> any UserSearchSubscriptionProtocol
     let accountFollows: @MainActor () async throws -> Set<String>
+}
+
+/// The active account and normalized query one search runs for.
+struct RecipientUserSearchRequest: Equatable {
+    let accountIdHex: String
+    let accountRef: String
+    let query: String
 }
 
 private enum RecipientUserSearchError: Error {
@@ -38,6 +44,43 @@ final class RecipientUserSearch {
     private static let radiusStart: UInt8 = 1
     private static let radiusEnd: UInt8 = 2
 
+    /// Builds a request's operations once its debounce has elapsed.
+    typealias MakeOperations = @MainActor (
+        _ appState: AppState,
+        _ request: RecipientUserSearchRequest
+    ) throws -> RecipientUserSearchOperations
+
+    @ObservationIgnored private let debounce: Duration
+    @ObservationIgnored private let makeOperations: MakeOperations
+
+    init(
+        debounce: Duration = .milliseconds(300),
+        makeOperations: @escaping MakeOperations = RecipientUserSearch.marmotOperations
+    ) {
+        self.debounce = debounce
+        self.makeOperations = makeOperations
+    }
+
+    private static func marmotOperations(
+        appState: AppState,
+        request: RecipientUserSearchRequest
+    ) throws -> RecipientUserSearchOperations {
+        let client = try appState.currentMarmotClient()
+        return RecipientUserSearchOperations(
+            searchUsers: {
+                try await client.marmot.searchUsers(
+                    accountIdHex: request.accountIdHex,
+                    query: request.query,
+                    radiusStart: Self.radiusStart,
+                    radiusEnd: Self.radiusEnd
+                )
+            },
+            accountFollows: {
+                try await client.accountFollows(accountRef: request.accountRef)
+            }
+        )
+    }
+
     var candidates: [RecipientCandidate] {
         results.map {
             RecipientCandidate(
@@ -66,38 +109,16 @@ final class RecipientUserSearch {
               let accountRef = appState.activeAccountRef
         else { return }
 
-        startRequest(query: query, debounce: .milliseconds(300)) { [weak appState] in
+        let request = RecipientUserSearchRequest(
+            accountIdHex: accountIdHex,
+            accountRef: accountRef,
+            query: query
+        )
+        let makeOperations = makeOperations
+        startRequest(query: query, debounce: debounce) { [weak appState] in
             guard let appState else { throw RecipientUserSearchError.appStateUnavailable }
-            let client = try appState.currentMarmotClient()
-            return RecipientUserSearchOperations(
-                searchUsers: {
-                    try await client.marmot.searchUsers(
-                        accountIdHex: accountIdHex,
-                        query: query,
-                        radiusStart: Self.radiusStart,
-                        radiusEnd: Self.radiusEnd
-                    )
-                },
-                accountFollows: {
-                    try await client.accountFollows(accountRef: accountRef)
-                }
-            )
+            return try makeOperations(appState, request)
         }
-    }
-
-    func updateForTesting(
-        query rawQuery: String,
-        debounce: Duration = .zero,
-        makeOperations: @escaping @MainActor () throws -> RecipientUserSearchOperations
-    ) {
-        let query = Self.normalizedQuery(rawQuery)
-        resetForUpdate(query: query)
-        guard Self.shouldSearch(query: query, isIdentifierQuery: false) else { return }
-        startRequest(query: query, debounce: debounce, makeOperations: makeOperations)
-    }
-
-    func awaitSearchForTesting() async {
-        await task?.value
     }
 
     private func startRequest(

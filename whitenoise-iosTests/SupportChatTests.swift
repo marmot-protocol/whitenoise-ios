@@ -14,8 +14,7 @@ struct SupportChatTests {
     @Test func existingSupportChatOpensWithoutCreatingADuplicate() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = testFlow(existingGroupIdHex: "existing-support-dm")
-        flow.starter.createGroupForTesting = { _, _ in
+        let flow = testFlow(existingGroupIdHex: "existing-support-dm") { _, _ in
             Issue.record("must not create a duplicate support chat")
             return "unexpected"
         }
@@ -33,10 +32,9 @@ struct SupportChatTests {
     @Test func missingSupportChatCreatesThroughTheNormalDirectChatPath() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = testFlow(existingGroupIdHex: nil)
         var createdAccountRef: String?
         var createdMemberRef: String?
-        flow.starter.createGroupForTesting = { accountRef, memberRef in
+        let flow = testFlow(existingGroupIdHex: nil) { accountRef, memberRef in
             createdAccountRef = accountRef
             createdMemberRef = memberRef
             return "new-support-dm"
@@ -57,8 +55,7 @@ struct SupportChatTests {
     @Test func openingSupportAgainReusesTheConversation() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = testFlow(existingGroupIdHex: "existing-support-dm")
-        flow.starter.createGroupForTesting = { _, _ in
+        let flow = testFlow(existingGroupIdHex: "existing-support-dm") { _, _ in
             Issue.record("reopening support must reuse the existing conversation")
             return "unexpected"
         }
@@ -81,9 +78,8 @@ struct SupportChatTests {
     @Test func discardedRoutingCanReopenTheCompletedConversation() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = testFlow(existingGroupIdHex: nil)
         var creations = 0
-        flow.starter.createGroupForTesting = { _, _ in
+        let flow = testFlow(existingGroupIdHex: nil) { _, _ in
             creations += 1
             return "created-support-dm"
         }
@@ -106,9 +102,8 @@ struct SupportChatTests {
     @Test func supportChatFailureIsRecoverableWithoutSurfacingEngineCopy() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = testFlow(existingGroupIdHex: nil)
         var attempt = 0
-        flow.starter.createGroupForTesting = { _, _ in
+        let flow = testFlow(existingGroupIdHex: nil) { _, _ in
             attempt += 1
             if attempt == 1 {
                 throw TestFailure.sensitiveEngineDetail
@@ -142,7 +137,11 @@ struct SupportChatTests {
     @Test func failedExistingChatLookupNeverCreatesADuplicate() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = NewChatFlowViewModel()
+        var didCreate = false
+        let flow = NewChatFlowViewModel(starter: directChatStarter { _, _ in
+            didCreate = true
+            return "duplicate-support-dm"
+        })
         var lookupAttempt = 0
         flow.existingDirectChatGroupIdForTesting = { _ in
             lookupAttempt += 1
@@ -150,11 +149,6 @@ struct SupportChatTests {
                 throw TestFailure.existingChatLookupFailed
             }
             return "existing-support-dm"
-        }
-        var didCreate = false
-        flow.starter.createGroupForTesting = { _, _ in
-            didCreate = true
-            return "duplicate-support-dm"
         }
         let model = SupportChatViewModel(chatFlow: flow)
         var openedGroupIdHex: String?
@@ -228,11 +222,10 @@ struct SupportChatTests {
     @Test func supportChatReportsLoadingWhileCreationIsInFlight() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = testFlow(existingGroupIdHex: nil)
         let gate = (entered: TestLatch(), released: TestLatch())
-        flow.starter.createGroupForTesting = { _, _ in
+        let flow = testFlow(existingGroupIdHex: nil) { _, _ in
             gate.entered.signal()
-            try? await gate.released.wait()
+            await gate.released.hold()
             return "support-dm"
         }
         let model = SupportChatViewModel(chatFlow: flow)
@@ -253,17 +246,16 @@ struct SupportChatTests {
     @Test func cancellingWhileLookingForAnExistingChatDoesNotCreateOne() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = NewChatFlowViewModel()
+        var didCreate = false
+        let flow = NewChatFlowViewModel(starter: directChatStarter { _, _ in
+            didCreate = true
+            return "unexpected"
+        })
         let gate = (entered: TestLatch(), released: TestLatch())
         flow.existingDirectChatGroupIdForTesting = { _ in
             gate.entered.signal()
-            try? await gate.released.wait()
+            await gate.released.hold()
             return nil
-        }
-        var didCreate = false
-        flow.starter.createGroupForTesting = { _, _ in
-            didCreate = true
-            return "unexpected"
         }
         let model = SupportChatViewModel(chatFlow: flow)
 
@@ -283,25 +275,34 @@ struct SupportChatTests {
     func cancelledCreationDoesNotOpenSupportButCanBeReopened(isRetry: Bool) async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = testFlow(existingGroupIdHex: nil)
+        let gate = (entered: TestLatch(), released: TestLatch())
+        var creationCompleted = false
+        var creations = 0
+        // A retry first needs a failed creation to retry.
+        let failedCreations = isRetry ? 1 : 0
+        let flow = testFlow(existingGroupIdHex: nil) { _, _ in
+            creations += 1
+            if creations <= failedCreations {
+                throw TestFailure.sensitiveEngineDetail
+            }
+            guard creations == failedCreations + 1 else {
+                Issue.record("a later Start Chat must reuse the completed conversation")
+                return "unexpected"
+            }
+            // Like the native operation, this completion can arrive after cancellation.
+            gate.entered.signal()
+            await gate.released.hold()
+            creationCompleted = true
+            return "created-support-dm"
+        }
         let model = SupportChatViewModel(chatFlow: flow)
         var openedGroupIds: [String] = []
 
         if isRetry {
-            flow.starter.createGroupForTesting = { _, _ in throw TestFailure.sensitiveEngineDetail }
             await model.start(using: appState) { openedGroupIds.append($0) }
             #expect(model.phase == .failed)
         }
 
-        let gate = (entered: TestLatch(), released: TestLatch())
-        var creationCompleted = false
-        flow.starter.createGroupForTesting = { _, _ in
-            // Like the native operation, this completion can arrive after cancellation.
-            gate.entered.signal()
-            try? await gate.released.wait()
-            creationCompleted = true
-            return "created-support-dm"
-        }
         let task = Task {
             if isRetry {
                 await model.retry(using: appState) { openedGroupIds.append($0) }
@@ -319,10 +320,6 @@ struct SupportChatTests {
         #expect(model.phase == .idle)
 
         flow.existingDirectChatGroupIdForTesting = { _ in "created-support-dm" }
-        flow.starter.createGroupForTesting = { _, _ in
-            Issue.record("a later Start Chat must reuse the completed conversation")
-            return "unexpected"
-        }
         await model.start(using: appState) { openedGroupIds.append($0) }
         #expect(openedGroupIds == ["created-support-dm"])
         #expect(model.phase == .routing)
@@ -332,8 +329,7 @@ struct SupportChatTests {
     func settingsEntryOnlyLooksUpSupport(hasExistingChat: Bool) async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = testFlow(existingGroupIdHex: hasExistingChat ? "support-dm" : nil)
-        flow.starter.createGroupForTesting = { _, _ in
+        let flow = testFlow(existingGroupIdHex: hasExistingChat ? "support-dm" : nil) { _, _ in
             Issue.record("opening the Settings entry must never create a conversation")
             return "unexpected"
         }
@@ -353,7 +349,7 @@ struct SupportChatTests {
         let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
         let gate = (entered: TestLatch(), released: TestLatch())
         let task = Task {
-            await entry.prepare(using: appState) { _ in gate.entered.signal(); try? await gate.released.wait() }
+            await entry.prepare(using: appState) { _ in gate.entered.signal(); await gate.released.hold() }
         }
         try await gate.entered.wait()
         #expect(entry.isLoading)
@@ -372,7 +368,7 @@ struct SupportChatTests {
         let entry = SupportChatEntryModel(chatFlow: testFlow(existingGroupIdHex: "support-dm"))
         let gate = (entered: TestLatch(), released: TestLatch())
         let task = Task {
-            await entry.prepare(using: appState) { _ in gate.entered.signal(); try? await gate.released.wait() }
+            await entry.prepare(using: appState) { _ in gate.entered.signal(); await gate.released.hold() }
         }
         try await gate.entered.wait()
         if switchAccount { appState.activeAccountRef = "replacement" }
@@ -415,7 +411,7 @@ struct SupportChatTests {
         flow.existingDirectChatGroupIdForTesting = { _ in
             lookups += 1
             gate.entered.signal()
-            try? await gate.released.wait()
+            await gate.released.hold()
             return "support-dm"
         }
         let entry = SupportChatEntryModel(chatFlow: flow)
@@ -445,7 +441,7 @@ struct SupportChatTests {
         let gate = (entered: TestLatch(), released: TestLatch())
         flow.existingDirectChatGroupIdForTesting = { _ in
             gate.entered.signal()
-            try? await gate.released.wait()
+            await gate.released.hold()
             if lookupFails { throw TestFailure.existingChatLookupFailed }
             return "original-account-support-dm"
         }
@@ -461,8 +457,14 @@ struct SupportChatTests {
         #expect(!entry.isLoading)
     }
 
-    private func testFlow(existingGroupIdHex: String?) -> NewChatFlowViewModel {
-        let flow = NewChatFlowViewModel()
+    private func testFlow(
+        existingGroupIdHex: String?,
+        create: @escaping @MainActor (_ accountRef: String, _ memberRef: String) async throws -> String = { _, _ in
+            Issue.record("this flow must not create a conversation")
+            return "unexpected"
+        }
+    ) -> NewChatFlowViewModel {
+        let flow = NewChatFlowViewModel(starter: directChatStarter(create: create))
         flow.existingDirectChatGroupIdForTesting = { _ in existingGroupIdHex }
         return flow
     }

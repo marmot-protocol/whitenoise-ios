@@ -103,13 +103,12 @@ struct ConversationChoiceProjectionTests {
     @Test func startNewConversationCreatesEvenWhenExistingChoicesArePresent() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
-        let model = NewChatFlowViewModel()
-        model.conversationChooser = chooser()
         var createdMemberRef: String?
-        model.starter.createGroupForTesting = { _, memberRef in
+        let model = NewChatFlowViewModel(starter: directChatStarter { _, memberRef in
             createdMemberRef = memberRef
             return "new-conversation"
-        }
+        })
+        model.conversationChooser = chooser()
         var openedGroupIdHex: String?
 
         await model.startNewConversation(using: appState) {
@@ -124,13 +123,12 @@ struct ConversationChoiceProjectionTests {
     @Test func openingAChoiceNeverCreatesAnotherGroup() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
-        let model = NewChatFlowViewModel()
-        let chooser = chooser()
-        model.conversationChooser = chooser
-        model.starter.createGroupForTesting = { _, _ in
+        let model = NewChatFlowViewModel(starter: directChatStarter { _, _ in
             Issue.record("opening an existing choice must not create")
             throw TestFailure.unexpectedCreate
-        }
+        })
+        let chooser = chooser()
+        model.conversationChooser = chooser
         var openedGroupIdHex: String?
 
         await model.openConversation(
@@ -147,20 +145,19 @@ struct ConversationChoiceProjectionTests {
     @Test func retryAfterStartNewFailureRetriesTheExactCreateIntent() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
-        let model = NewChatFlowViewModel()
-        model.conversationChooser = chooser()
-        var lookupCount = 0
-        model.existingDirectChatGroupIdForTesting = { _ in
-            lookupCount += 1
-            return "existing"
-        }
         var createCount = 0
-        model.starter.createGroupForTesting = { _, _ in
+        let model = NewChatFlowViewModel(starter: directChatStarter { _, _ in
             createCount += 1
             if createCount == 1 {
                 throw TestFailure.createFailed
             }
             return "new-after-retry"
+        })
+        model.conversationChooser = chooser()
+        var lookupCount = 0
+        model.existingDirectChatGroupIdForTesting = { _ in
+            lookupCount += 1
+            return "existing"
         }
         var openedGroupIdHex: String?
 
