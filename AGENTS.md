@@ -412,13 +412,14 @@ Do not add a second storage path for data Marmot already owns.
   above it, on every line the rule flags. The rule's limits:
   - It catches only names containing `ForTesting` or starting with
     `forTesting`. Review covers the rest, such as `AppLanguage`'s
-    `testCurrentOverride` (#1241, slice 2).
+    `testCurrentOverride` and `testDefaults` (#1241, slice 2).
   - Files that still have hooks start with
     `// swiftlint:disable no_test_hook_in_app_code`, so a new hook in one
-    of them passes. Never add that directive to another file. When you
-    change a hook or the code it serves, replace that hook, and remove the
-    directive once its last hook is gone (`superfluous_disable_command`
-    fails the lint job otherwise).
+    of them passes. Never add that directive to another file; a hook that
+    moves to a new file takes `disable:next` on each flagged line. When
+    you change a hook or the code it serves, replace that hook with an
+    injected dependency, and remove the directive once its last hook is
+    gone (`superfluous_disable_command` fails the lint job otherwise).
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:
