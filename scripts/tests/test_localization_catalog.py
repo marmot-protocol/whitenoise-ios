@@ -35,13 +35,13 @@ class FixtureCase(unittest.TestCase):
     """Name-keyed tables are emptied so fixtures exercise one rule at a time."""
 
     TABLES = ("REQUIRED_KEYS", "REQUIRED_PLURAL_KEYS", "PLURAL_GAPS", "PINNED_VALUES", "ENGLISH_COPY_KEYS",
-              "INFOPLIST_REQUIRED_KEYS", "INFOPLIST_PINNED_VALUES")
+              "SHARED_SPELLINGS", "INFOPLIST_REQUIRED_KEYS", "INFOPLIST_PINNED_VALUES")
 
     def setUp(self):
         for name in self.TABLES:
-            self.addCleanup(setattr, CHECK, name, getattr(CHECK, name))
-            empty = {} if isinstance(getattr(CHECK, name), dict) else ()
-            setattr(CHECK, name, frozenset() if name == "PLURAL_GAPS" else empty)
+            table = getattr(CHECK, name)
+            self.addCleanup(setattr, CHECK, name, table)
+            setattr(CHECK, name, {} if isinstance(table, dict) else frozenset() if isinstance(table, frozenset) else ())
 
     def errors(self, strings):
         return CHECK.check_strings_catalog(catalog(strings), locales=LOCALES)
@@ -191,13 +191,45 @@ class StringsCatalogTests(FixtureCase):
         errors = self.errors({"Sign In": {"localizations": {"de": unit("Einloggen"), "ru": unit("Войти")}}})
         self.assertEqual(errors, ["de: 'Sign In' is 'Einloggen', pinned 'Anmelden'"])
 
-    def test_english_copy_family_fails_unless_shared_spelling(self):
-        CHECK.ENGLISH_COPY_KEYS = ("Minutes", "Off")
+    def test_english_copy_key_must_exist(self):
+        CHECK.ENGLISH_COPY_KEYS = ("Off",)
+        self.assertEqual(self.errors({}), ["missing key 'Off'"])
+
+    def test_english_copy_fails_unless_shared_spelling(self):
+        CHECK.SHARED_SPELLINGS = frozenset({("Minutes", "fr"), ("GIF", "*")})
         errors = CHECK.check_strings_catalog(catalog({
             "Minutes": {"localizations": {"fr": unit("Minutes"), "de": unit("Minuten")}},
+            "GIF": {"localizations": {"fr": unit("GIF"), "de": unit("GIF")}},
             "Off": {"localizations": {"en": unit("Off"), "fr": unit("Off"), "de": unit("Aus")}},
         }), locales=("de", "fr"))
         self.assertEqual(errors, ["fr: 'Off' still shows the English copy"])
+
+    def test_english_copy_compares_every_worded_leaf(self):
+        english = plural({"one": "%lld video", "other": "%lld videos"}, substitution=True)
+        errors = self.errors({
+            "%lld videos": {"localizations": {
+                "en": english,
+                # One form shared with English, the other translated: not English copy.
+                "de": plural({"one": "%lld video", "other": "%lld video"}, substitution=True),
+                "ru": plural({"one": "%lld video", "few": "%lld videos", "many": "%lld videos",
+                              "other": "%lld videos"}, substitution=True),
+            }},
+            # Format-only copy has no words to translate.
+            "%@ · %@": {"localizations": {"de": unit("%@ · %@"), "ru": unit("%@ · %@")}},
+        })
+        self.assertEqual(errors, ["ru: '%lld videos' still shows the English copy"])
+
+    def test_shared_spelling_that_no_longer_applies_fails(self):
+        CHECK.SHARED_SPELLINGS = frozenset({("Minutes", "de"), ("GIF", "*"), ("Gone", "ru"), ("Minutes", "fr")})
+        errors = self.errors({
+            "Minutes": {"localizations": {"de": unit("Minuten"), "ru": unit("Минуты")}},
+            "GIF": {"localizations": {"de": unit("GIF-Datei"), "ru": unit("ГИФ")}},
+        })
+        self.assertEqual(errors, [
+            "remove ('GIF', '*') from SHARED_SPELLINGS: no locale shows it as English",
+            "remove ('Gone', 'ru') from SHARED_SPELLINGS: no locale shows it as English",
+            "remove ('Minutes', 'de') from SHARED_SPELLINGS: no locale shows it as English",
+        ])
 
 
 class InfoPlistCatalogTests(FixtureCase):
@@ -272,6 +304,11 @@ class RepositoryCatalogTests(unittest.TestCase):
         errors = self.broken(english)
         self.assertIn("de: 'Sign In' is 'Sign In', pinned 'Anmelden'", errors)
         self.assertIn("de: 'Sign In' still shows the English copy", errors)
+
+    def test_any_key_left_as_english_copy_fails(self):
+        def english(strings):
+            strings["Playback speed"]["localizations"]["tr"]["stringUnit"]["value"] = "Playback speed"
+        self.assertIn("tr: 'Playback speed' still shows the English copy", self.broken(english))
 
     def test_specifier_type_swap_in_a_real_entry_fails(self):
         def swap(strings):

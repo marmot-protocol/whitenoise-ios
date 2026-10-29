@@ -13,8 +13,10 @@ Shared catalog, for every key and every shipped locale:
     the source and every locale for REQUIRED_PLURAL_KEYS and for any key that
     has them in some locale, except PLURAL_GAPS, which must be pruned once
     the gap closes;
-  * REQUIRED_KEYS exist, PINNED_VALUES match exactly, and ENGLISH_COPY_KEYS
-    are not left as the English source.
+  * REQUIRED_KEYS and ENGLISH_COPY_KEYS exist and PINNED_VALUES match exactly;
+  * no locale still shows the English copy, meaning every leaf with words
+    equals the English leaf at the same path, except SHARED_SPELLINGS, which
+    must be pruned once an entry no longer shows English.
 InfoPlist catalog: INFOPLIST_REQUIRED_KEYS exist; every key except
 CFBundleDisplayName is non-empty in English and every locale; usage
 descriptions are translated; INFOPLIST_PINNED_VALUES match; and
@@ -159,8 +161,32 @@ DONATION_KEYS = (
     "Your donation succeeded, but history couldn't be saved on this device.",
 )
 ENGLISH_COPY_KEYS = ("Sign In", "Sign Up") + RETENTION_KEYS + DONATION_KEYS
-# (key, locale) pairs, or (key, "*"), whose correct translation is spelled like English.
-SHARED_SPELLINGS = frozenset({("Minutes", "fr"), ("USD", "*")})
+# Copy whose correct translation is spelled like English. Names and identifiers
+# may stay English in any locale; words only in the listed locales.
+SHARED_NAMES = (
+    "%@ (IDN/punycode)", "%@ (IDN/punycode: %@)", "Claude Code", "Codex", "GIF", "GIPHY", "Hermes", "Hex",
+    "NIP-65", "Native Push", "OpenClaw", "OpenCode", "Pi", "QUIC · %@", "URL", "USD", "White Noise",
+    "White Noise · %@", "Wi-Fi", "https://example.com/image.jpg", "id: %@", "npub", "nsec1…", "stream %@",
+    "wss://relay.example.com",
+)
+SHARED_WORDS = {
+    "%lld images": "fr", "%lld notifications": "fr", "%lld videos": "es", "%lld votes": "fr", "Admin": "de",
+    "Audio": "de es fr it", "Cache": "de fr it pt", "Chats": "de es", "Conversation": "fr", "Debugging": "de",
+    "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Filter": "de", "GIF via GIPHY": "fr pt",
+    "GIFs": "de es pt", "Image": "fr", "Info": "de it", "Links": "de pt", "Live": "de", "Maintenance": "fr",
+    "Malware": "it", "Media": "it", "Mentions": "fr", "Message": "fr", "Minutes": "fr", "Mode": "fr",
+    "Moderation": "de", "Name": "de", "Notifications": "fr", "OK": "de it pt", "Online": "de",
+    "Option %lld": "de fr", "Options": "fr", "Original": "de es pt", "Passphrase": "de it", "Photo": "fr",
+    "Photos": "fr", "Provisional": "es", "Question": "fr", "Relay": "de es it pt", "Scan": "de",
+    "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "Streaming…": "de fr it",
+    "System": "de", "Version": "de fr", "Version %lld": "de fr", "Video": "de es it tr", "Videos": "de es",
+    "Votes": "fr", "White Noise Support": "de", "local": "es pt", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt",
+}
+# (key, locale) pairs, or (key, "*"); an entry that no longer shows English fails the check.
+SHARED_SPELLINGS = frozenset(
+    {(key, "*") for key in SHARED_NAMES}
+    | {(key, locale) for key, locales in SHARED_WORDS.items() for locale in locales.split()}
+)
 
 INFOPLIST_REQUIRED_KEYS = (
     "CFBundleName", "NSCameraUsageDescription", "NSMicrophoneUsageDescription", "NSFaceIDUsageDescription",
@@ -309,6 +335,36 @@ def source_value(key, localizations):
     return unit.get("value", key) if unit else key
 
 
+def leaf_units(localization, path=()):
+    """(path, string unit) for every leaf of one localization: its unit, plural forms and substitution forms."""
+    if "stringUnit" in localization:
+        yield path, localization["stringUnit"]
+    for kind, forms in localization.get("variations", {}).items():
+        for form, variation in forms.items():
+            yield from leaf_units(variation, path + (kind, form))
+    for name, substitution in localization.get("substitutions", {}).items():
+        yield from leaf_units(substitution, path + (name,))
+
+
+def has_words(value):
+    return re.search(r"[^\W\d_]", SPECIFIER.sub("", value)) is not None
+
+
+def shows_english(key, localizations, locale):
+    """Every leaf of `locale` that has words equals the English leaf at the same path.
+
+    A plural form English lacks (Russian `few`) compares with English `other`.
+    Format-only leaves ("%@ · %@", a `%#@count@` shell) say nothing either way.
+    """
+    english = {path: unit.get("value") for path, unit in leaf_units(localizations.get(SOURCE, {}))}
+    fallback = source_value(key, localizations)
+    worded = [(path, unit.get("value", "")) for path, unit in leaf_units(localizations.get(locale, {}))
+              if has_words(unit.get("value", ""))]
+    return bool(worded) and all(
+        value == english.get(path, english.get(path[:-1] + ("other",), fallback)) for path, value in worded
+    )
+
+
 def check_strings_catalog(catalog, locales=LOCALES):
     errors = []
     strings = catalog.get("strings", {})
@@ -323,8 +379,11 @@ def check_strings_catalog(catalog, locales=LOCALES):
             localization = localizations.get(locale)
             if localization is None:
                 errors.append(f"{locale}: missing localization for {key!r}")
-            else:
-                errors += localization_errors(locale, key, localization, key_arguments)
+                continue
+            errors += localization_errors(locale, key, localization, key_arguments)
+            shared = (key, locale) in SHARED_SPELLINGS or (key, "*") in SHARED_SPELLINGS
+            if not shared and shows_english(key, localizations, locale):
+                errors.append(f"{locale}: {key!r} still shows the English copy")
 
         inferred = any(has_plurals(loc) for loc in localizations.values())
         if key in REQUIRED_PLURAL_KEYS:
@@ -350,18 +409,16 @@ def check_strings_catalog(catalog, locales=LOCALES):
                 errors.append(f"{locale}: {key!r} is {actual!r}, pinned {expected!r}")
 
     for key in ENGLISH_COPY_KEYS:
-        entry = strings.get(key)
-        if entry is None:
+        if key not in strings:
             errors.append(f"missing key {key!r}")
+
+    for key, locale in sorted(SHARED_SPELLINGS):
+        scope = locales if locale == "*" else tuple(set(locales) & {locale})
+        if not scope:
             continue
-        localizations = entry.get("localizations", {})
-        english = source_value(key, localizations)
-        for locale in locales:
-            if (key, locale) in SHARED_SPELLINGS or (key, "*") in SHARED_SPELLINGS:
-                continue
-            unit = localizations.get(locale, {}).get("stringUnit", {})
-            if unit.get("value") == english:
-                errors.append(f"{locale}: {key!r} still shows the English copy")
+        localizations = strings.get(key, {}).get("localizations")
+        if localizations is None or not any(shows_english(key, localizations, each) for each in scope):
+            errors.append(f"remove ({key!r}, {locale!r}) from SHARED_SPELLINGS: no locale shows it as English")
     return errors
 
 
