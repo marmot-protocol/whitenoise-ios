@@ -412,7 +412,7 @@ Do not add a second storage path for data Marmot already owns.
   above it, on every line the rule flags. The rule's limits:
   - It catches only names containing `ForTesting` or starting with
     `forTesting`. Review covers the rest, such as `AppLanguage`'s
-    `testCurrentOverride` and `testDefaults` (#1241, slice 2).
+    `testCurrentOverride` and `testDefaults` (#1241, item 3).
   - Files that still have hooks start with
     `// swiftlint:disable no_test_hook_in_app_code`, so a new hook in one
     of them passes. Never add that directive to another file; a hook that
