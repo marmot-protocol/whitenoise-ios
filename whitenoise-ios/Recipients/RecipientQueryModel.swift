@@ -21,6 +21,28 @@ final class RecipientQueryModel {
 
     static let nip05DebounceNanoseconds: UInt64 = 350_000_000
 
+    typealias Nip05Lookup = @MainActor (_ name: String, _ domain: String) async -> Nip05Resolver.Resolution
+    /// Waits out the debounce; throws when the lookup is cancelled meanwhile.
+    typealias Debounce = @MainActor () async throws -> Void
+    /// Starts a lookup as its own task; tests inject one that keeps the tasks
+    /// so they can wait for cancelled and replaced lookups to finish. The
+    /// returned task must be the one running `work`: clearing or replacing the
+    /// query cancels the lookup through it.
+    typealias StartLookup = @MainActor (_ work: @escaping @MainActor () async -> Void) -> Task<Void, Never>
+    private let lookUpNip05: Nip05Lookup
+    private let debounce: Debounce
+    private let startLookup: StartLookup
+
+    init(
+        lookUpNip05: @escaping Nip05Lookup = { await Nip05Resolver.resolve(name: $0, domain: $1) },
+        debounce: @escaping Debounce = { try await Task.sleep(nanoseconds: RecipientQueryModel.nip05DebounceNanoseconds) },
+        startLookup: @escaping StartLookup = { work in Task { await work() } }
+    ) {
+        self.lookUpNip05 = lookUpNip05
+        self.debounce = debounce
+        self.startLookup = startLookup
+    }
+
     var trimmedText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -59,7 +81,7 @@ final class RecipientQueryModel {
             warmProfile(resolved.accountIdHex, using: appState)
         case .nip05(let name, let domain):
             resolution = .resolving
-            resolveTask = Task { [weak self] in
+            resolveTask = startLookup { [weak self] in
                 await self?.resolveNip05(
                     name: name,
                     domain: domain,
@@ -76,9 +98,9 @@ final class RecipientQueryModel {
         generation: Int,
         using appState: AppState
     ) async {
-        try? await Task.sleep(nanoseconds: Self.nip05DebounceNanoseconds)
+        try? await debounce()
         guard !Task.isCancelled else { return }
-        let result = await Nip05Resolver.resolve(name: name, domain: domain)
+        let result = await lookUpNip05(name, domain)
         guard !Task.isCancelled else { return }
         switch result {
         case .resolved(let accountIdHex):
@@ -104,12 +126,6 @@ final class RecipientQueryModel {
         guard resolveGeneration == generation else { return }
         resolution = state
     }
-
-#if DEBUG
-    func awaitResolutionForTesting() async {
-        await resolveTask?.value
-    }
-#endif
 
     private func warmProfile(_ accountIdHex: String, using appState: AppState) {
         _ = appState.profile(forAccountIdHex: accountIdHex)

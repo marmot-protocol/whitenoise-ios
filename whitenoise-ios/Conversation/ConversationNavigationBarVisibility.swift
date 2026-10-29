@@ -12,16 +12,10 @@ struct ConversationNavigationBarVisibility: UIViewControllerRepresentable {
 
     final class Controller: UIViewController {
         private var isConversationVisible = false
-        private var isBeingRemoved = false
 
         override func loadView() {
             view = UIView()
             view.isUserInteractionEnabled = false
-        }
-
-        override func willMove(toParent parent: UIViewController?) {
-            super.willMove(toParent: parent)
-            isBeingRemoved = parent == nil
         }
 
         override func viewWillAppear(_ animated: Bool) {
@@ -37,22 +31,19 @@ struct ConversationNavigationBarVisibility: UIViewControllerRepresentable {
             }
         }
 
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            guard let navigationController, !navigationController.isNavigationBarHidden else { return }
+            navigationController.setNavigationBarHidden(true, animated: false)
+        }
+
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
             isConversationVisible = false
             guard let navigationController else { return }
-            guard isBeingRemoved else {
-                navigationController.setNavigationBarHidden(false, animated: false)
-                return
-            }
-            // Rebuilt in place: its replacement may already be showing the conversation.
-            Task { @MainActor [weak navigationController] in
-                guard let navigationController,
-                      let top = navigationController.topViewController,
-                      !Self.showsConversation(top)
-                else { return }
-                navigationController.setNavigationBarHidden(false, animated: false)
-            }
+            // A conversation that replaced this one may have appeared first.
+            if let top = navigationController.topViewController, Self.showsConversation(top) { return }
+            navigationController.setNavigationBarHidden(false, animated: false)
         }
 
         private static func showsConversation(_ controller: UIViewController) -> Bool {

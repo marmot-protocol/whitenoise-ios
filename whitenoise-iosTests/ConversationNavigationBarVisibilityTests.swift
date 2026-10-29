@@ -54,6 +54,59 @@ struct ConversationNavigationBarVisibilityTests {
             #expect(!navigation.navigationBar.isHidden)
         }
     }
+
+    @Test func conversationKeepsTheBarHiddenWhenAReplacedConversationLeavesLate() async throws {
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        try await withHostedWindow(navigation) { window in
+            let (outgoingScreen, outgoing) = ManualAppearanceScreen.make()
+            navigation.pushViewController(outgoingScreen, animated: false)
+            outgoing.beginAppearanceTransition(true, animated: false)
+            outgoing.endAppearanceTransition()
+            window.layoutIfNeeded()
+
+            navigation.pushViewController(
+                UIHostingController(rootView:
+                    Text("Conversation")
+                        .background { ConversationNavigationBarVisibility() }
+                ),
+                animated: false
+            )
+            window.layoutIfNeeded()
+            #expect(navigation.navigationBar.isHidden)
+
+            outgoing.beginAppearanceTransition(false, animated: false)
+            outgoing.endAppearanceTransition()
+            window.layoutIfNeeded()
+            #expect(navigation.navigationBar.isHidden)
+        }
+    }
+
+    @Test func conversationHidesTheBarWhenItAppearsBeforeJoiningTheStack() async throws {
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        try await withHostedWindow(navigation) { window in
+            let (screen, conversation) = ManualAppearanceScreen.make()
+            conversation.beginAppearanceTransition(true, animated: false)
+            navigation.pushViewController(screen, animated: false)
+            window.layoutIfNeeded()
+
+            conversation.endAppearanceTransition()
+            window.layoutIfNeeded()
+            #expect(navigation.navigationBar.isHidden)
+        }
+    }
+}
+
+private final class ManualAppearanceScreen: UIViewController {
+    override var shouldAutomaticallyForwardAppearanceMethods: Bool { false }
+
+    static func make() -> (ManualAppearanceScreen, ConversationNavigationBarVisibility.Controller) {
+        let screen = ManualAppearanceScreen()
+        let conversation = ConversationNavigationBarVisibility.Controller()
+        screen.addChild(conversation)
+        screen.view.addSubview(conversation.view)
+        conversation.didMove(toParent: screen)
+        return (screen, conversation)
+    }
 }
 
 @MainActor @Observable

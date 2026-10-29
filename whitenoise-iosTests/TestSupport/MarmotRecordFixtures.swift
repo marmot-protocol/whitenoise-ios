@@ -104,6 +104,18 @@ func hex(_ byte: String) -> String {
     String(repeating: byte, count: 32)
 }
 
+let mebibyte: UInt64 = 1_048_576
+
+func attachmentPolicy(
+    automatic: Bool = true,
+    retained: UInt64 = 512 * mebibyte,
+    reserve: UInt64 = 256 * mebibyte,
+    transfer: UInt64 = 64 * mebibyte
+) -> AttachmentDownloadPolicyFfi {
+    AttachmentDownloadPolicyFfi(automatic: automatic, retainedBytes: retained, diskReserve: reserve,
+                                transferLimit: transfer)
+}
+
 func encryptedMediaReference(
     fileName: String = "a.jpg",
     plaintextByte: String = "33",
