@@ -9537,43 +9537,43 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld-Mitglieder müssen White Noise aktualisieren, bevor Sie diese Gruppe beenden können."
+            "value" : "%lld Mitglieder müssen White Noise aktualisieren, bevor Sie diese Gruppe beenden können."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld los miembros deben actualizar White Noise antes de poder finalizar este grupo."
+            "value" : "%lld miembros deben actualizar White Noise antes de que puedas finalizar este grupo."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les membres %lld doivent mettre à jour White Noise avant que vous puissiez mettre fin à ce groupe."
+            "value" : "%lld membres doivent mettre à jour White Noise avant que vous puissiez mettre fin à ce groupe."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I membri %lld devono aggiornare White Noise prima che tu possa chiudere questo gruppo."
+            "value" : "%lld membri devono aggiornare White Noise prima che tu possa chiudere questo gruppo."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Os membros do %lld devem atualizar White Noise antes que você possa encerrar este grupo."
+            "value" : "%lld membros devem atualizar o White Noise antes que você possa encerrar este grupo."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Участники %lld должны обновить White Noise, прежде чем вы сможете закрыть эту группу."
+            "value" : "Чтобы закрыть эту группу, участникам (%lld) нужно обновить White Noise."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu grubu sonlandırabilmeniz için %lld üyelerin White Noise'i güncellemesi gerekir."
+            "value" : "Bu grubu sonlandırabilmeniz için %lld üyenin White Noise'i güncellemesi gerekir."
           }
         },
         "zh-Hans" : {
@@ -16408,7 +16408,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Administración"
+            "value" : "Administrador"
           }
         },
         "fr" : {
@@ -16420,7 +16420,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ammin"
+            "value" : "Amministratore"
           }
         },
         "pt" : {
@@ -18443,13 +18443,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "APNS 代币"
+            "value" : "APNS 令牌"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "APNS 代幣"
+            "value" : "APNS 令牌"
           }
         }
       }
@@ -22060,13 +22060,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "相机访问被拒绝。在“设置”中启用它来扫描 QR 代码。"
+            "value" : "相机访问被拒绝。在“设置”中启用它来扫描二维码。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "相機訪問被拒絕。在「設定」中啟用它來掃描 QR 代碼。"
+            "value" : "相機存取被拒絕。在「設定」中啟用它來掃描 QR 碼。"
           }
         }
       }
@@ -23851,7 +23851,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Чат отключён"
+            "value" : "Звук чата отключён"
           }
         },
         "tr" : {
@@ -27972,7 +27972,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Contacter"
+            "value" : "Contact"
           }
         },
         "it" : {
@@ -28656,7 +28656,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Copias %@"
+            "value" : "Copia %@"
           }
         },
         "fr" : {
@@ -28668,37 +28668,37 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Copie %@"
+            "value" : "Copia %@"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cópias %@"
+            "value" : "Copia %@"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Копии %@"
+            "value" : "Копирует %@"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kopyalar %@"
+            "value" : "%@ değerini kopyalar"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "副本 %@"
+            "value" : "复制%@"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "副本 %@"
+            "value" : "複製%@"
           }
         }
       }
@@ -36956,7 +36956,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Создаёт уведомления о сообщениях на этом iPhone. Без Native Push доставка может ждать, пока White Noise активен."
+            "value" : "Создаёт уведомления о сообщениях на этом iPhone. Без Native Push доставка может задерживаться, пока White Noise не станет активным."
           }
         },
         "tr" : {
@@ -40847,13 +40847,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Revelador"
+            "value" : "Desarrollador"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Promoteur"
+            "value" : "Développeur"
           }
         },
         "it" : {
@@ -40883,13 +40883,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "开发商"
+            "value" : "开发者"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開發商"
+            "value" : "開發者"
           }
         }
       }
@@ -47710,13 +47710,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "时代"
+            "value" : "纪元"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "時代"
+            "value" : "紀元"
           }
         }
       }
@@ -54377,7 +54377,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Iscrizione al gruppo aggiornata"
+            "value" : "Appartenenza al gruppo aggiornata"
           }
         },
         "pt" : {
@@ -58299,13 +58299,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "资料"
+            "value" : "信息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "資料"
+            "value" : "資訊"
           }
         }
       }
@@ -58637,7 +58637,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Invitare"
+            "value" : "Invita"
           }
         },
         "pt" : {
@@ -58649,13 +58649,13 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Приглашать"
+            "value" : "Пригласить"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Davet etmek"
+            "value" : "Davet et"
           }
         },
         "zh-Hans" : {
@@ -59206,7 +59206,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mitglieder einladen…"
+            "value" : "Mitglieder werden eingeladen…"
           }
         },
         "es" : {
@@ -59218,7 +59218,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inviter les membres…"
+            "value" : "Invitation des membres…"
           }
         },
         "it" : {
@@ -59248,13 +59248,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "邀请会员..."
+            "value" : "正在邀请成员…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "邀請會員..."
+            "value" : "正在邀請成員…"
           }
         }
       }
@@ -62092,7 +62092,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wenn Sie das Unternehmen verlassen, werden Sie zunächst als Administrator entlassen."
+            "value" : "Wenn Sie die Gruppe verlassen, treten Sie zuerst als Administrator zurück."
           }
         },
         "es" : {
@@ -62116,13 +62116,13 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sair o deixará como administrador primeiro."
+            "value" : "Ao sair, você deixará primeiro o cargo de administrador."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Если вы выйдете из игры, вы сначала уйдете с поста администратора."
+            "value" : "Если вы выйдете из группы, вы сначала уйдете с поста администратора."
           }
         },
         "tr" : {
@@ -63159,7 +63159,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vivere"
+            "value" : "In diretta"
           }
         },
         "pt" : {
@@ -63782,7 +63782,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Carregando pacotes principais"
+            "value" : "Carregando pacotes de chaves"
           }
         },
         "ru" : {
@@ -63800,13 +63800,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加载关键包"
+            "value" : "正在加载密钥包"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "載入關鍵包"
+            "value" : "正在載入金鑰套件"
           }
         }
       }
@@ -64096,13 +64096,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加载继电器"
+            "value" : "正在加载中继"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加載繼電器"
+            "value" : "正在載入中繼站"
           }
         }
       }
@@ -64202,7 +64202,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "местный"
+            "value" : "локальный"
           }
         },
         "tr" : {
@@ -64214,13 +64214,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当地的"
+            "value" : "本地"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "當地的"
+            "value" : "本機"
           }
         }
       }
@@ -64714,7 +64714,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fichaje local"
+            "value" : "Firma local"
           }
         },
         "fr" : {
@@ -64750,13 +64750,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本地签约"
+            "value" : "本地签名"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本地簽約"
+            "value" : "本機簽署"
           }
         }
       }
@@ -65345,7 +65345,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Administrador hecho"
+            "value" : "Nombrado administrador"
           }
         },
         "fr" : {
@@ -65369,7 +65369,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сделано администратором"
+            "value" : "Назначен администратором"
           }
         },
         "tr" : {
@@ -65518,7 +65518,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Machen Sie Admin"
+            "value" : "Zum Admin machen"
           }
         },
         "es" : {
@@ -65536,7 +65536,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diventa amministratore"
+            "value" : "Rendi amministratore"
           }
         },
         "pt" : {
@@ -65636,7 +65636,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Administrator erstellen…"
+            "value" : "Wird zum Admin ernannt…"
           }
         },
         "es" : {
@@ -65648,13 +65648,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Faire de l'administrateur…"
+            "value" : "Nomination comme administrateur…"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Creazione dell'amministratore..."
+            "value" : "Nomina ad amministratore…"
           }
         },
         "pt" : {
@@ -65666,7 +65666,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Создание администратора…"
+            "value" : "Назначение администратором…"
           }
         },
         "tr" : {
@@ -65678,13 +65678,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "进行管理员..."
+            "value" : "正在设为管理员…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "進行管理員..."
+            "value" : "正在設為管理員…"
           }
         }
       }
@@ -66890,13 +66890,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "会员已删除"
+            "value" : "成员已移除"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "會員已刪除"
+            "value" : "成員已移除"
           }
         }
       }
@@ -67127,13 +67127,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "会员资格变更"
+            "value" : "成员资格已变更"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "會員資格變更"
+            "value" : "成員資格已變更"
           }
         }
       }
@@ -70351,7 +70351,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Manca la configurazione nativa del server push."
+            "value" : "Manca la configurazione del server push nativo."
           }
         },
         "pt" : {
@@ -70363,7 +70363,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Отсутствует собственная конфигурация push-сервера."
+            "value" : "Отсутствует конфигурация сервера нативных push-уведомлений."
           }
         },
         "tr" : {
@@ -70375,13 +70375,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "缺少本机推送服务器配置。"
+            "value" : "缺少原生推送服务器配置。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "缺少本機推送伺服器配置。"
+            "value" : "缺少原生推播伺服器配置。"
           }
         }
       }
@@ -73477,13 +73477,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未配置继电器。"
+            "value" : "未配置中继。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未配置繼電器。"
+            "value" : "未設定中繼站。"
           }
         }
       }
@@ -76240,13 +76240,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "DE ACUERDO"
+            "value" : "Aceptar"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "D'ACCORD"
+            "value" : "OK"
           }
         },
         "it" : {
@@ -76264,13 +76264,13 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ХОРОШО"
+            "value" : "ОК"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "TAMAM"
+            "value" : "Tamam"
           }
         },
         "zh-Hans" : {
@@ -76838,13 +76838,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只有管​​理员可以添加或管理成员。"
+            "value" : "只有管理员可以添加或管理成员。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只有管​​理員可以新增或管理成員。"
+            "value" : "只有管理員可以新增或管理成員。"
           }
         }
       }
@@ -76897,13 +76897,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只有管​​理员可以管理群组成员。"
+            "value" : "只有管理员可以管理群组成员。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只有管​​理員可以管理群組成員。"
+            "value" : "只有管理員可以管理群組成員。"
           }
         }
       }
@@ -80738,13 +80738,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "允许"
+            "value" : "权限"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "允許"
+            "value" : "權限"
           }
         }
       }
@@ -81873,55 +81873,55 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Richten Sie die Kamera auf ein White Noise-Profil QR"
+            "value" : "Richten Sie die Kamera auf den QR-Code eines White Noise-Profils"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apunte la cámara a un perfil White Noise QR"
+            "value" : "Apunte la cámara al código QR de un perfil de White Noise"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pointez la caméra vers un profil White Noise QR"
+            "value" : "Pointez l’appareil photo vers le code QR d’un profil White Noise"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Punta la fotocamera su un profilo White Noise QR"
+            "value" : "Punta la fotocamera sul codice QR di un profilo White Noise"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aponte a câmera para um perfil White Noise QR"
+            "value" : "Aponte a câmera para o código QR de um perfil do White Noise"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Наведите камеру на профиль White Noise QR."
+            "value" : "Наведите камеру на QR-код профиля White Noise"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kamerayı bir White Noise profili QR'ya doğrultun"
+            "value" : "Kamerayı bir White Noise profil QR koduna doğrultun"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将相机对准 White Noise 配置文件 QR"
+            "value" : "将相机对准 White Noise 个人资料二维码"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "將相機對準 White Noise 設定檔 QR"
+            "value" : "將相機對準 White Noise 個人檔案 QR 碼"
           }
         }
       }
@@ -84383,25 +84383,25 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Publier un Nouveau Paquet de Clés"
+            "value" : "Publier un nouveau paquet de clés"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pubblica Nuovo Pacchetto Chiavi"
+            "value" : "Pubblica nuovo pacchetto di chiavi"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Publicar Novo Pacote de Chaves"
+            "value" : "Publicar novo pacote de chaves"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Опубликовать Новый Пакет Ключей"
+            "value" : "Опубликовать новый пакет ключей"
           }
         },
         "tr" : {
@@ -85904,7 +85904,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sunucuyu itin"
+            "value" : "Push sunucusu"
           }
         },
         "zh-Hans" : {
@@ -91859,7 +91859,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fordern Sie das APNS-Token an"
+            "value" : "APNS-Token anfordern"
           }
         },
         "es" : {
@@ -95270,7 +95270,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Balayage"
+            "value" : "Scanner"
           }
         },
         "it" : {
@@ -95282,7 +95282,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Digitalizar"
+            "value" : "Escanear"
           }
         },
         "ru" : {
@@ -99352,25 +99352,25 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Отправил"
+            "value" : "Отправлено"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gönderilmiş"
+            "value" : "Gönderildi"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "发送"
+            "value" : "已发送"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "傳送"
+            "value" : "已傳送"
           }
         }
       }
@@ -104903,25 +104903,25 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "abgestanden"
+            "value" : "veraltet"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "duro"
+            "value" : "obsoleto"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "vicié"
+            "value" : "obsolète"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "stantio"
+            "value" : "obsoleto"
           }
         },
         "pt" : {
@@ -104933,13 +104933,13 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "несвежий"
+            "value" : "устаревший"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "bayat"
+            "value" : "eski"
           }
         },
         "zh-Hans" : {
@@ -109070,13 +109070,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "该 QR 代码不是 White Noise 配置文件。"
+            "value" : "该二维码不是 White Noise 个人资料。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此 QR 程式碼不是 White Noise 設定檔。"
+            "value" : "此 QR 碼不是 White Noise 個人檔案。"
           }
         }
       }
@@ -110046,13 +110046,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "该群组并未因为您不再是成员而结束。"
+            "value" : "由于您已不再是成员，群组未被结束。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "該群組並未因為您不再是成員而結束。"
+            "value" : "由於您已不再是成員，群組未被結束。"
           }
         }
       }
@@ -116388,7 +116388,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Huella digital simbólica"
+            "value" : "Huella del token"
           }
         },
         "fr" : {
@@ -116400,13 +116400,13 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Token dell'impronta digitale"
+            "value" : "Impronta del token"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impressão digital simbólica"
+            "value" : "Impressão do token"
           }
         },
         "ru" : {
@@ -116568,7 +116568,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fichas"
+            "value" : "Tokens"
           }
         },
         "fr" : {
@@ -116580,13 +116580,13 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gettoni"
+            "value" : "Token"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fichas"
+            "value" : "Tokens"
           }
         },
         "ru" : {
@@ -116604,13 +116604,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "代币"
+            "value" : "令牌"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "代幣"
+            "value" : "權杖"
           }
         }
       }
@@ -118746,7 +118746,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lösen"
+            "value" : "Loslösen"
           }
         },
         "es" : {
