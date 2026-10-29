@@ -144,8 +144,19 @@ final class RuntimeLifecycle {
     /// app actually reaches `.background`.
     @ObservationIgnored private var bootstrapNeedsBackgroundSuspensionRecheck = false
 #if DEBUG
+    enum BackgroundSuspensionWait {
+        /// Bootstrap is still running and owns the phase change.
+        case bootstrap
+        /// A notification action or other runtime work holds the suspension gate.
+        case runtimeWork
+    }
+
     @ObservationIgnored var afterBootstrapRuntimeStartForTesting: (() async -> Void)?
     @ObservationIgnored var afterForegroundRuntimeCreatedForTesting: (() async -> Void)?
+    /// Called with `true` just before background suspension waits on a running
+    /// bootstrap or on runtime work, and with `false` once it stops waiting, so
+    /// a test can tell that the wait ended only after that work released it.
+    @ObservationIgnored var backgroundSuspensionWaitForTesting: ((BackgroundSuspensionWait, _ isWaiting: Bool) -> Void)?
     @ObservationIgnored var hostPerformanceObserverForTesting: ((
         HostPerformanceOperationFfi,
         UInt64,
@@ -741,7 +752,14 @@ final class RuntimeLifecycle {
         // real teardown outside the UIKit assertion attached to this task.
         if appState?.phase == .bootstrapping {
             await waitForBootstrapRegistrationIfNeeded()
+#if DEBUG
+            let waitsForBootstrap = bootstrapTask != nil
+            if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, true) }
+#endif
             await bootstrapTask?.value
+#if DEBUG
+            if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, false) }
+#endif
             guard !isAppSceneActive else {
                 await drainForegroundMaintenance(cancellation)
                 startForegroundActivation()
@@ -760,7 +778,15 @@ final class RuntimeLifecycle {
         // the action releases it; closing underneath the lease would invalidate
         // an in-flight reply or mark-read FFI call. This gate is independent of
         // the maintenance drains moved below terminal storage closure.
+#if DEBUG
+        // Same condition as the wait loop, so a cancelled task never reports a wait.
+        let waitsForRuntimeWork = runtimeWorkIsSuspending && !Task.isCancelled
+        if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, true) }
+#endif
         await waitForRuntimeSuspensionToFinish()
+#if DEBUG
+        if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, false) }
+#endif
         guard !isAppSceneActive,
               phaseOwnsLiveRuntime,
               !runtimeSuspendedForBackground
