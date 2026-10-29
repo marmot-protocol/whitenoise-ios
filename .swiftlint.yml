@@ -127,3 +127,43 @@ custom_rules:
     - doccomment
     message: "Open test runtimes with withTestClient, OwnedTestClient or TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot:) so they are always closed."
     severity: error
+  # App code takes test seams as injected dependencies, not test-only hooks
+  # (#1241). The excluded files still have hooks; each slice that replaces a
+  # file's hooks removes that file from the list, which only ever shrinks.
+  no_test_hook_in_app_code:
+    name: "Test hook in app code"
+    regex: '\b[A-Za-z]+ForTesting\b'
+    included: '.*/(whitenoise-ios|Shared|NotificationServiceExtension)/.*\.swift'
+    excluded:
+    - '.*/whitenoise-iosTests/.*'
+    - '.*/Shared/L10n\.swift'
+    - '.*/whitenoise-ios/Chats/ChatsListViewModel\.swift'
+    - '.*/whitenoise-ios/Chats/NewChatFlowViewModel\.swift'
+    - '.*/whitenoise-ios/Conversation/ComposerModel\.swift'
+    - '.*/whitenoise-ios/Conversation/ConversationAgentEventProjectionCache\.swift'
+    - '.*/whitenoise-ios/Conversation/ConversationDaySectionProjectionCache\.swift'
+    - '.*/whitenoise-ios/Conversation/ConversationMarkdownProjectionCache\.swift'
+    - '.*/whitenoise-ios/Conversation/ConversationMediaProjectionCache\.swift'
+    - '.*/whitenoise-ios/Conversation/ConversationViewModel\.swift'
+    - '.*/whitenoise-ios/Conversation/StreamWatcher\.swift'
+    - '.*/whitenoise-ios/Conversation/TimelineStore\.swift'
+    - '.*/whitenoise-ios/Conversation/VoiceMessageRecorder\.swift'
+    - '.*/whitenoise-ios/Core/AppState\+Profiles\.swift'
+    - '.*/whitenoise-ios/Core/AppState\.swift'
+    - '.*/whitenoise-ios/Core/GroupAvatarImageLoader\.swift'
+    - '.*/whitenoise-ios/Core/MarkdownTimestampRefresh\.swift'
+    - '.*/whitenoise-ios/Core/NotificationCoordinator\.swift'
+    - '.*/whitenoise-ios/Core/ProfileStore\.swift'
+    - '.*/whitenoise-ios/Core/RelativeTime\.swift'
+    - '.*/whitenoise-ios/Core/RemoteImageLoader\.swift'
+    - '.*/whitenoise-ios/Core/RuntimeLifecycle\.swift'
+    - '.*/whitenoise-ios/Group/GroupDetailsViewModel\.swift'
+    - '.*/whitenoise-ios/Group/GroupMemberOrdering\.swift'
+    - '.*/whitenoise-ios/Recipients/DirectChatStarter\.swift'
+    - '.*/whitenoise-ios/Recipients/RecipientQueryModel\.swift'
+    - '.*/whitenoise-ios/Recipients/RecipientUserSearch\.swift'
+    excluded_match_kinds:
+    - comment
+    - doccomment
+    message: "Don't add test-only hooks to app code. Take the dependency as an init parameter with the production default, and inject a test double from the test (#1241)."
+    severity: error

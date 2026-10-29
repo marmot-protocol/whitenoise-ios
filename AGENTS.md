@@ -420,6 +420,13 @@ Do not add a second storage path for data Marmot already owns.
   - When a decision only runs inside a view, a runtime or an async path,
     extract a small pure helper and test that instead of hosting a window
     or starting a runtime.
+  - Don't add test-only hooks to app code (`…ForTesting` members, or
+    `#if DEBUG` blocks that exist only so tests can pause, replace or
+    inspect something). Take the dependency as an init parameter with the
+    production default and inject a test double instead. When you change
+    code that still has a hook, replace it in the same PR and drop the
+    file from SwiftLint's `no_test_hook_in_app_code` exclusions (#1241).
+    SwiftUI previews and intentional debug/release build flags are fine.
   - Add catalog, manifest and config checks as scripts in the lint job, not
     unit tests.
   - Keep waits loud: a timed-out wait must still fail the test. If you
