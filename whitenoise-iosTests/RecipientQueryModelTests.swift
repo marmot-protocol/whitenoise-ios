@@ -11,12 +11,15 @@ struct RecipientQueryModelTests {
     private let accountIdHex = hex("ab")
     private var npub: String { NostrProfileReference.npub(fromAccountIdHex: accountIdHex) ?? "" }
 
-    /// A lookup that answers per address once the test releases it.
+    /// A lookup that answers per address once the test releases it, and that
+    /// starts each lookup as a task the test can wait for, including cancelled
+    /// and replaced ones.
     @MainActor
     private final class ControlledLookup {
         var answers: [String: Nip05Resolver.Resolution] = [:]
         var gates: [String: TestLatch] = [:]
         private(set) var started: [String] = []
+        private var tasks: [Task<Void, Never>] = []
 
         func lookUp(_ name: String, _ domain: String) async -> Nip05Resolver.Resolution {
             let address = "\(name)@\(domain)"
@@ -24,10 +27,25 @@ struct RecipientQueryModelTests {
             if let gate = gates[address] { await gate.hold() }
             return answers[address] ?? .failed
         }
+
+        func start(_ work: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+            let task = Task { await work() }
+            tasks.append(task)
+            return task
+        }
+
+        /// Waits for every lookup started so far. Bounded because each one ends
+        /// within `hold`'s or `parkUntilCancelled`'s timeout.
+        func finishLookups() async {
+            let started = tasks
+            tasks.removeAll()
+            for task in started { await task.value }
+        }
     }
 
     private func model(_ lookup: ControlledLookup) -> RecipientQueryModel {
-        RecipientQueryModel(lookUpNip05: { await lookup.lookUp($0, $1) }, debounce: {})
+        RecipientQueryModel(lookUpNip05: { await lookup.lookUp($0, $1) }, debounce: {},
+                            startLookup: { lookup.start($0) })
     }
 
     @Test func aPublicKeyResolvesLocallyWithoutALookup() async {
@@ -36,7 +54,7 @@ struct RecipientQueryModelTests {
         model.text = npub
 
         model.queryChanged(using: AppState.test())
-        await model.awaitResolutionForTesting()
+        await lookup.finishLookups()
 
         #expect(model.resolution == .resolved(ResolvedRecipient(
             accountIdHex: accountIdHex, memberRef: npub, queriedNip05: nil)))
@@ -71,7 +89,7 @@ struct RecipientQueryModelTests {
 
         model.queryChanged(using: AppState.test())
         #expect(model.resolution == .resolving)
-        await model.awaitResolutionForTesting()
+        await lookup.finishLookups()
 
         #expect(lookup.started == ["alice@example.com"])
         #expect(model.resolution == expected)
@@ -86,7 +104,7 @@ struct RecipientQueryModelTests {
         model.text = "alice@example.com"
 
         model.queryChanged(using: AppState.test())
-        await model.awaitResolutionForTesting()
+        await lookup.finishLookups()
 
         #expect(model.resolution == .resolved(ResolvedRecipient(
             accountIdHex: accountIdHex, memberRef: accountIdHex, queriedNip05: "alice@example.com")))
@@ -102,7 +120,7 @@ struct RecipientQueryModelTests {
             // Ends only when the lookup is cancelled; if cancellation broke it
             // throws after its timeout and the lookup check below fails.
             try await parkUntilCancelled()
-        })
+        }, startLookup: { lookup.start($0) })
         let appState = AppState.test()
 
         model.text = "alice@example.com"
@@ -112,7 +130,7 @@ struct RecipientQueryModelTests {
         model.queryChanged(using: appState)
         try await eventually { debounces == 2 }
         model.clear()
-        await model.awaitResolutionForTesting()
+        await lookup.finishLookups()
 
         #expect(lookup.started.isEmpty)
         #expect(model.resolution == .idle)
@@ -132,7 +150,7 @@ struct RecipientQueryModelTests {
 
         model.clear()
         release.signal()
-        await model.awaitResolutionForTesting()
+        await lookup.finishLookups()
 
         #expect(model.text.isEmpty)
         #expect(model.resolution == .idle)
@@ -156,7 +174,7 @@ struct RecipientQueryModelTests {
         try await eventually { model.resolution == .noProfile }
         // Alice's lookup answers only after Bob's result is in place.
         releaseAlice.signal()
-        await model.awaitResolutionForTesting()
+        await lookup.finishLookups()
 
         #expect(lookup.started == ["alice@example.com", "bob@example.com"])
         #expect(model.resolution == .noProfile)
