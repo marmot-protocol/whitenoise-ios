@@ -114,6 +114,10 @@ nonisolated enum ComposerAvailabilityPresentation {
         disabledMessage == nil
     }
 
+    static func sendBlockedNotice(sendBlockedMessage: String?, hasSendableContent: Bool) -> String? {
+        hasSendableContent ? sendBlockedMessage : nil
+    }
+
     static func awaitsLiveConversationState(
         usesLiveWindow: Bool,
         hasWindowSnapshot: Bool,
@@ -203,6 +207,7 @@ struct ComposerBar: View {
     let replyPreview: ComposerReplyPreview?
     let mediaEnabled: Bool
     let disabledMessage: String?
+    var sendBlockedMessage: String?
     let voiceRecordingActive: Bool
     let voiceRecordingLocked: Bool
     let voiceRecordingSamples: [CGFloat]
@@ -265,6 +270,13 @@ struct ComposerBar: View {
             VStack(spacing: 6) {
                 if !mentionCandidates.isEmpty {
                     ComposerMentionPicker(candidates: mentionCandidates, onSelect: onMentionSelect)
+                }
+
+                if let notice = ComposerAvailabilityPresentation.sendBlockedNotice(
+                    sendBlockedMessage: sendBlockedMessage,
+                    hasSendableContent: hasSendableContent
+                ) {
+                    inactiveComposerMessage(notice)
                 }
 
                 if ComposerAvailabilityPresentation.showsInput(disabledMessage: disabledMessage) {
@@ -592,7 +604,7 @@ struct ComposerBar: View {
     }
 
     private var canSend: Bool {
-        inputEnabled && !isSending && hasSendableContent && submissionEnabled
+        inputEnabled && sendBlockedMessage == nil && !isSending && hasSendableContent && submissionEnabled
     }
 
     private var showsSend: Bool {

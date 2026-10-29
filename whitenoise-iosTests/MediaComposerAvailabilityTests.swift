@@ -18,6 +18,7 @@ struct MediaComposerAvailabilityTests {
         )
 
         #expect(viewModel.canSendMediaAttachments)
+        #expect(viewModel.canAddMediaAttachments)
     }
 
     @Test func v1MediaComponentStillEnablesAttachments() throws {
@@ -57,6 +58,7 @@ struct MediaComposerAvailabilityTests {
         )
 
         #expect(!viewModel.canSendMediaAttachments)
+        #expect(!viewModel.canAddMediaAttachments)
     }
 
     @Test func pendingInviteDisablesComposerAndAttachments() throws {
@@ -68,6 +70,8 @@ struct MediaComposerAvailabilityTests {
         #expect(viewModel.hasPendingInvite)
         #expect(!viewModel.canSendMessages)
         #expect(!viewModel.canSendMediaAttachments)
+        #expect(!viewModel.canAddMediaAttachments)
+        #expect(viewModel.sendBlockedMessage == nil)
     }
 
     @Test func inactiveMembershipDisablesComposerAndAttachments() throws {
@@ -110,6 +114,7 @@ struct MediaComposerAvailabilityTests {
         #expect(!viewModel.canSendMessages)
         #expect(viewModel.inactiveGroupMessage == GroupManagementPresentation.inactiveGroupComposerMessage)
         #expect(!viewModel.canSendMediaAttachments)
+        #expect(!viewModel.canAddMediaAttachments)
     }
 
     @Test func durablePendingLeaveFromGroupDetailsDisablesComposer() throws {
@@ -217,6 +222,17 @@ struct MediaComposerAvailabilityTests {
         #expect(!ComposerAvailabilityPresentation.showsInput(
             disabledMessage: GroupManagementPresentation.leftGroupComposerMessage
         ))
+    }
+
+    @Test func sendBlockedNoticeWaitsForADraft() {
+        let blocked = L10n.string("This chat is still getting ready. Give it a moment.")
+
+        #expect(ComposerAvailabilityPresentation.sendBlockedNotice(
+            sendBlockedMessage: blocked, hasSendableContent: false) == nil)
+        #expect(ComposerAvailabilityPresentation.sendBlockedNotice(
+            sendBlockedMessage: blocked, hasSendableContent: true) == blocked)
+        #expect(ComposerAvailabilityPresentation.sendBlockedNotice(
+            sendBlockedMessage: nil, hasSendableContent: true) == nil)
     }
 
     @Test func openingConversationWindowAwaitsLiveState() {

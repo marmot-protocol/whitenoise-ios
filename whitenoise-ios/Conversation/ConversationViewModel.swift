@@ -677,16 +677,27 @@ final class ConversationViewModel {
         if group.selfMembership == .left {
             return GroupManagementPresentation.leftGroupComposerMessage
         }
-        if isAwaitingLiveConversationState { return nil }
-        if isActiveParticipant { return L10n.string("Conversation unavailable") }
+        if isAwaitingLiveConversationState || isActiveParticipant { return nil }
         return GroupManagementPresentation.inactiveGroupComposerMessage
     }
 
-    var canSendMediaAttachments: Bool {
-        canSendMessages
-            && group.encryptedMedia.required
+    var sendBlockedMessage: String? {
+        guard !canSendMessages, !hasPendingInvite, inactiveGroupMessage == nil else { return nil }
+        return L10n.string("This chat is still getting ready. Give it a moment.")
+    }
+
+    private var groupSupportsEncryptedMedia: Bool {
+        group.encryptedMedia.required
             && MessageSemantics.supportsEncryptedMediaVersion(group.encryptedMedia.version)
             && group.encryptedMedia.allowedLocatorKinds.contains("blossom-v1")
+    }
+
+    var canSendMediaAttachments: Bool {
+        canSendMessages && groupSupportsEncryptedMedia
+    }
+
+    var canAddMediaAttachments: Bool {
+        groupSupportsEncryptedMedia && !hasPendingInvite && inactiveGroupMessage == nil
     }
 
     var hasPendingInvite: Bool {

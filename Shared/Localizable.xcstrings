@@ -132396,6 +132396,72 @@
         }
       }
     },
+    "This chat is still getting ready. Give it a moment." : {
+      "comment" : "Shown above the composer when the user has typed a message but the chat cannot send yet.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Chat wird noch vorbereitet. Einen Moment bitte."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This chat is still getting ready. Give it a moment."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este chat aún se está preparando. Dale un momento."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette discussion est encore en préparation. Patientez un instant."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa chat è ancora in preparazione. Attendi un momento."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este bate-papo ainda está sendo preparado. Aguarde um momento."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот чат ещё готовится. Подождите немного."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu sohbet henüz hazırlanıyor. Lütfen biraz bekleyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天仍在准备中，请稍候。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天仍在準備中，請稍候。"
+          }
+        }
+      }
+    },
     "Last group change not delivered" : {
       "extractionState" : "manual",
       "localizations" : {
