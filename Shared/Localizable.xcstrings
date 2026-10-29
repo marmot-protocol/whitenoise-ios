@@ -9555,7 +9555,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld membri devono aggiornare White Noise prima che tu possa chiudere questo gruppo."
+            "value" : "%lld membri devono aggiornare White Noise prima che tu possa terminare questo gruppo."
           }
         },
         "pt" : {
@@ -9567,7 +9567,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Чтобы закрыть эту группу, участникам (%lld) нужно обновить White Noise."
+            "value" : "Чтобы завершить эту группу, участникам (%lld) нужно обновить White Noise."
           }
         },
         "tr" : {
@@ -15754,7 +15754,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "添加中继器"
+            "value" : "添加中继"
           }
         },
         "zh-Hant" : {
@@ -22024,7 +22024,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Acceso a la cámara denegado. Habilítelo en Configuración para escanear códigos QR."
+            "value" : "Acceso a la cámara denegado. Actívalo en Configuración para escanear códigos QR."
           }
         },
         "fr" : {
@@ -27996,19 +27996,19 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İletişim"
+            "value" : "Kişi"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "联系方式"
+            "value" : "联系人"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "聯絡方式"
+            "value" : "聯絡人"
           }
         }
       }
@@ -28662,7 +28662,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Copies %@"
+            "value" : "Copie %@"
           }
         },
         "it" : {
@@ -58299,13 +58299,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "信息"
+            "value" : "详细信息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "資訊"
+            "value" : "詳細資訊"
           }
         }
       }
@@ -59265,7 +59265,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Einladend…"
+            "value" : "Wird eingeladen…"
           }
         },
         "es" : {
@@ -59277,19 +59277,19 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attrayant…"
+            "value" : "Invitation…"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Invitante…"
+            "value" : "Invito in corso…"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Convidativo…"
+            "value" : "Convidando…"
           }
         },
         "ru" : {
@@ -59307,13 +59307,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "邀请…"
+            "value" : "正在邀请…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "邀請…"
+            "value" : "正在邀請…"
           }
         }
       }
@@ -63171,7 +63171,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Прямой эфир"
+            "value" : "В реальном времени"
           }
         },
         "tr" : {
@@ -64054,7 +64054,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Laderelais"
+            "value" : "Relais werden geladen"
           }
         },
         "es" : {
@@ -64066,13 +64066,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Relais de chargement"
+            "value" : "Chargement des relais"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Relè di caricamento"
+            "value" : "Caricamento dei relay"
           }
         },
         "pt" : {
@@ -64084,7 +64084,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Реле нагрузки"
+            "value" : "Загрузка реле"
           }
         },
         "tr" : {
@@ -70381,7 +70381,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "缺少原生推播伺服器配置。"
+            "value" : "缺少原生推播伺服器設定。"
           }
         }
       }
@@ -76276,13 +76276,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "好的"
+            "value" : "好"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "好的"
+            "value" : "好"
           }
         }
       }
@@ -81879,7 +81879,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apunte la cámara al código QR de un perfil de White Noise"
+            "value" : "Apunta la cámara al código QR de un perfil de White Noise"
           }
         },
         "fr" : {
@@ -89116,7 +89116,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "中继器 URL"
+            "value" : "中继 URL"
           }
         },
         "zh-Hant" : {
@@ -89235,7 +89235,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "中继器"
+            "value" : "中继"
           }
         },
         "zh-Hant" : {
@@ -89542,13 +89542,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "删除管理员"
+            "value" : "移除管理员"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "刪除管理員"
+            "value" : "移除管理員"
           }
         }
       }
@@ -90722,13 +90722,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在删除管理员..."
+            "value" : "正在移除管理员…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在刪除管理員..."
+            "value" : "正在移除管理員…"
           }
         }
       }
@@ -91895,7 +91895,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "APNS Token Talebi"
+            "value" : "APNS Jetonu İste"
           }
         },
         "zh-Hans" : {
@@ -116406,7 +116406,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impressão do token"
+            "value" : "Impressão digital do token"
           }
         },
         "ru" : {
@@ -118764,7 +118764,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rimuovi"
+            "value" : "Non fissare"
           }
         },
         "pt" : {
@@ -119973,7 +119973,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请使用以 wss:// 开头的安全 WebSocket 中继器 URL。"
+            "value" : "请使用以 wss:// 开头的安全 WebSocket 中继 URL。"
           }
         },
         "zh-Hant" : {
