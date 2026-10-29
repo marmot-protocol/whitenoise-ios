@@ -133,7 +133,7 @@ custom_rules:
   # scripts/check-test-hook-exclusions.py fails on an entry with no hook left.
   no_test_hook_in_app_code:
     name: "Test hook in app code"
-    regex: '\b\w*ForTesting\b'
+    regex: '\b(?:\w*ForTesting|forTesting)\w*'
     included: '(^|.*/)(whitenoise-ios|Shared|NotificationServiceExtension)/.*\.swift'
     excluded:
     - '(^|/)whitenoise-iosTests/'

@@ -5,7 +5,9 @@ The rule's `excluded` list names app files that still have test-only hooks
 (#1241). An entry whose file is gone or no longer has a `…ForTesting` name in
 code would let a new hook into that file unnoticed, so every file entry must
 exist and still have one. Comments and string literals don't count, matching
-the rule's `excluded_match_kinds`.
+the rule's `excluded_match_kinds`; the stripping is approximate (a hook used
+only inside a string interpolation or a nested block comment can disagree with
+SwiftLint), which is enough to spot a file whose hooks are gone.
 """
 
 import argparse
@@ -14,7 +16,9 @@ import sys
 from pathlib import Path
 
 RULE = "no_test_hook_in_app_code"
-HOOK = re.compile(r"\b\w*ForTesting\b")
+HOOK = re.compile(r"\b(?:\w*ForTesting|forTesting)\w*")
+# The tests target, the only directory the rule excludes.
+TESTS_ENTRY = "(^|/)whitenoise-iosTests/"
 # A file entry, as written in .swiftlint.yml: '(^|/)<escaped relative path>\.swift$'.
 FILE_ENTRY = re.compile(r"^\(\^\|/\)(?P<path>.+\\\.swift)\$$")
 # Line and block comments, then string literals (multi-line first). Good enough
@@ -33,14 +37,17 @@ def excluded_entries(config: str) -> list[str]:
     for line in lines[start + 1:]:
         if re.match(r"^  \S", line):  # next custom rule
             break
-        if line.startswith("    excluded:"):
-            in_excluded = True
+        if re.match(r"^    \w+:", line):  # a key of this rule
+            in_excluded = line.startswith("    excluded:")
+            if in_excluded and line.strip() != "excluded:":
+                sys.exit(f"error: write `{RULE}`'s exclusions as a list, one '- ...' item per line")
             continue
-        if in_excluded:
-            item = re.match(r"^    - '(.*)'$", line)
-            if not item:
-                break
-            entries.append(item.group(1))
+        if not in_excluded or not line.strip() or line.lstrip().startswith("#"):
+            continue
+        item = re.match(r"^    - '(.*)'$", line)
+        if not item:
+            sys.exit(f"error: unexpected line in `{RULE}`'s exclusions: {line.strip()}")
+        entries.append(item.group(1))
     if not entries:
         sys.exit(f"error: `{RULE}` has no `excluded` list")
     return entries
@@ -57,8 +64,8 @@ def main() -> int:
 
     problems: list[str] = []
     for entry in excluded_entries((root / ".swiftlint.yml").read_text(encoding="utf-8")):
-        if entry.endswith("/"):
-            continue  # a directory, such as the tests target
+        if entry == TESTS_ENTRY:
+            continue
         match = FILE_ENTRY.match(entry)
         if not match:
             problems.append(f"{entry}: write file exclusions as '(^|/)<path>\\.swift$'")
