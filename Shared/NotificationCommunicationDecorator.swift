@@ -24,7 +24,8 @@ nonisolated enum NotificationCommunicationDecorator {
     static let maxAvatarPixelDimension = 4_096
     static let maxAvatarPixelCount = 16_777_216
     static let maxAvatarFrames = 8
-    /// Avatars fetched per wake; the aggregate budget bounds their time too.
+    /// Distinct sender pictures resolved per wake, cache hits included; the
+    /// aggregate budget bounds their time too.
     static let maxAvatarFetchesPerWake = 3
 
     /// The sender pictures one wake fetches: each distinct URL once, in the

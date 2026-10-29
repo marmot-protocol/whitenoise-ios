@@ -213,16 +213,18 @@ struct NotificationContentDecoratorTests {
         #expect(content.userInfo["push"] as? String == "data")
     }
 
-    /// A fully muted wake keeps the generic copy but lands silently in
-    /// Notification Center: no sound, no banner.
-    @Test func quietDeliveryIsSilentGenericContent() {
-        let content = pushContent(title: "", body: "")
+    /// A fully muted wake keeps its copy (generic when blank) and the push's
+    /// data, but lands silently in Notification Center: no sound, no banner.
+    @Test(arguments: [("", ""), ("Server title", "Server body")])
+    func quietDeliveryKeepsCopyButIsSilent(title: String, body: String) {
+        let content = pushContent(title: title, body: body)
 
         NotificationContentDecorator.applyQuietDelivery(to: content)
 
         let generic = LocalNotificationProjection.genericContentText()
-        #expect(content.title == generic.title)
-        #expect(content.body == generic.body)
+        #expect(content.title == (title.isEmpty ? generic.title : title))
+        #expect(content.body == (body.isEmpty ? generic.body : body))
+        #expect(content.userInfo["push"] as? String == "data")
         #expect(content.sound == nil)
         #expect(content.interruptionLevel == .passive)
         #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
