@@ -25,7 +25,9 @@ final class RecipientQueryModel {
     /// Waits out the debounce; throws when the lookup is cancelled meanwhile.
     typealias Debounce = @MainActor () async throws -> Void
     /// Starts a lookup as its own task; tests inject one that keeps the tasks
-    /// so they can wait for cancelled and replaced lookups to finish.
+    /// so they can wait for cancelled and replaced lookups to finish. The
+    /// returned task must be the one running `work`: clearing or replacing the
+    /// query cancels the lookup through it.
     typealias StartLookup = @MainActor (_ work: @escaping @MainActor () async -> Void) -> Task<Void, Never>
     private let lookUpNip05: Nip05Lookup
     private let debounce: Debounce
@@ -124,7 +126,6 @@ final class RecipientQueryModel {
         guard resolveGeneration == generation else { return }
         resolution = state
     }
-
 
     private func warmProfile(_ accountIdHex: String, using appState: AppState) {
         _ = appState.profile(forAccountIdHex: accountIdHex)
