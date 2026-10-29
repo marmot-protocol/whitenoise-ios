@@ -102,4 +102,26 @@ struct NotificationAvatarBudgetTests {
         }
         #expect(result == Data([0x1]))
     }
+
+    /// One wake fetches each sender picture once, in arrival order, and no more
+    /// than the per-wake cap, however many notifications it carries.
+    @Test func avatarURLsAreDistinctInArrivalOrderAndCapped() {
+        func presentation(_ url: String?) -> LocalNotificationPresentation {
+            var presentation = LocalNotificationPresentation(
+                identifier: UUID().uuidString, threadIdentifier: "thread", title: "t", body: "b",
+                route: LocalNotificationRoute(accountRef: "acct", groupIdHex: "group",
+                                              notificationKey: "key", messageIdHex: "msg"),
+                timestamp: Date(timeIntervalSince1970: 0), userInfo: [:])
+            presentation.senderPictureUrl = url
+            return presentation
+        }
+        let presentations = ["https://a/1", nil, "https://a/2", "https://a/1", "https://a/3", "https://a/4"]
+            .map(presentation)
+
+        #expect(NotificationCommunicationDecorator.avatarURLs(for: presentations, limit: 3)
+            == ["https://a/1", "https://a/2", "https://a/3"])
+        #expect(NotificationCommunicationDecorator.avatarURLs(for: presentations, limit: 10)
+            == ["https://a/1", "https://a/2", "https://a/3", "https://a/4"])
+        #expect(NotificationCommunicationDecorator.avatarURLs(for: [presentation(nil)]).isEmpty)
+    }
 }

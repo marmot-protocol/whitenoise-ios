@@ -171,4 +171,47 @@ struct NotificationContentDecoratorTests {
 
         #expect(NotificationServiceDiagnostics.lastSnapshot(defaults: defaults) == snapshot)
     }
+
+    /// The extension can't drop the alert that woke it, so a wake with no local
+    /// presentation still says something: never a blank notification.
+    @Test(arguments: ["", "   ", "\n"])
+    func fallbackFillsBlankCopyWithTheGenericTitleAndBody(_ blank: String) {
+        let content = UNMutableNotificationContent()
+        content.title = blank
+        content.body = blank
+
+        NotificationContentDecorator.applyFallback(to: content)
+
+        #expect(content.title == L10n.string("White Noise"))
+        #expect(content.body == L10n.string("New encrypted message"))
+        #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
+            == LocalNotificationProjection.fallbackDisposition)
+    }
+
+    @Test func fallbackKeepsCopyThePushAlreadyCarries() {
+        let content = UNMutableNotificationContent()
+        content.title = "Server title"
+        content.body = "Server body"
+
+        NotificationContentDecorator.applyFallback(to: content)
+
+        #expect(content.title == "Server title")
+        #expect(content.body == "Server body")
+    }
+
+    /// A fully muted wake keeps the generic copy but lands silently in
+    /// Notification Center: no sound, no banner.
+    @Test func quietDeliveryIsSilentGenericContent() {
+        let content = UNMutableNotificationContent()
+        content.sound = .default
+
+        NotificationContentDecorator.applyQuietDelivery(to: content)
+
+        #expect(content.title == L10n.string("White Noise"))
+        #expect(content.body == L10n.string("New encrypted message"))
+        #expect(content.sound == nil)
+        #expect(content.interruptionLevel == .passive)
+        #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
+            == LocalNotificationProjection.quietDisposition)
+    }
 }

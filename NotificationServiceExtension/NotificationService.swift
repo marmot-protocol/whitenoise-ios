@@ -210,21 +210,21 @@ final class NotificationService: UNNotificationServiceExtension {
                 )
             } catch {
                 recordDiagnostic(outcome: .failed)
-                applyFallback(to: content)
+                NotificationContentDecorator.applyFallback(to: content)
             }
             if let marmot = takeActiveMarmotForShutdown(marmot) {
                 try? await marmot.shutdownAndClose()
             }
         } catch let error as MarmotKitError where error.isRuntimeOwnershipContention {
             recordDiagnostic(outcome: .runtimeOwnershipContention)
-            applyFallback(to: content)
+            NotificationContentDecorator.applyFallback(to: content)
             finish()
             return
         } catch {
             // Keep the provider payload generic when collection fails. The main
             // app will catch up when it next starts or receives a local event.
             recordDiagnostic(outcome: .failed)
-            applyFallback(to: content)
+            NotificationContentDecorator.applyFallback(to: content)
         }
 
         finish()
@@ -301,9 +301,9 @@ final class NotificationService: UNNotificationServiceExtension {
             self.additionalPresentationTask = nil
             avatarFetchTask = nil
         case .deliverQuietly:
-            applyQuietDelivery(to: content)
+            NotificationContentDecorator.applyQuietDelivery(to: content)
         case .fallback:
-            applyFallback(to: content)
+            NotificationContentDecorator.applyFallback(to: content)
         }
     }
 
@@ -353,16 +353,10 @@ final class NotificationService: UNNotificationServiceExtension {
     private static func fetchAvatars(
         for presentations: [LocalNotificationPresentation]
     ) async -> [String: Data] {
-        var distinct: [String] = []
-        for presentation in presentations {
-            if let url = presentation.senderPictureUrl, !distinct.contains(url) {
-                distinct.append(url)
-            }
-        }
         var avatars: [String: Data] = [:]
         let clock = ContinuousClock()
         let start = clock.now
-        for url in distinct.prefix(3) {
+        for url in NotificationCommunicationDecorator.avatarURLs(for: presentations) {
             guard !Task.isCancelled,
                   let deadline = NotificationCommunicationDecorator.avatarFetchDeadline(
                       elapsed: clock.now - start
@@ -376,27 +370,6 @@ final class NotificationService: UNNotificationServiceExtension {
             }
         }
         return avatars
-    }
-
-    /// Without the filtering entitlement the extension cannot drop the alert
-    /// that woke it, so a fully muted wake keeps the generic content but sheds
-    /// its banner and sound: the record lands silently in Notification Center.
-    private func applyQuietDelivery(to content: UNMutableNotificationContent) {
-        applyFallback(to: content)
-        content.userInfo[LocalNotificationProjection.deliveryDispositionKey] =
-            LocalNotificationProjection.quietDisposition
-        NotificationContentDecorator.applyAlerting(.quiet, to: content)
-    }
-
-    private func applyFallback(to content: UNMutableNotificationContent) {
-        content.userInfo[LocalNotificationProjection.deliveryDispositionKey] =
-            LocalNotificationProjection.fallbackDisposition
-        if content.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            content.title = L10n.string("White Noise")
-        }
-        if content.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            content.body = L10n.string("New encrypted message")
-        }
     }
 
     private func finish(
@@ -413,7 +386,7 @@ final class NotificationService: UNNotificationServiceExtension {
             applyingFallbackForTimeout: applyingFallbackForTimeout,
             didApplyRenderDecision: didApplyRenderDecision
         ) {
-            applyFallback(to: bestAttemptContent)
+            NotificationContentDecorator.applyFallback(to: bestAttemptContent)
         } else if let decoratedContent {
             deliverable = decoratedContent
         }
