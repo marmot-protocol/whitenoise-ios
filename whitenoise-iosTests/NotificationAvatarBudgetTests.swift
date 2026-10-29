@@ -117,6 +117,7 @@ struct NotificationAvatarBudgetTests {
         let capped = NotificationCommunicationDecorator.avatarURLs(for: presentations)
         let cap = NotificationCommunicationDecorator.maxAvatarFetchesPerWake
         #expect(cap < distinct.count)
+        #expect(capped.first == "https://z/primary")
         #expect(capped == Array(distinct.prefix(cap)))
 
         #expect(NotificationCommunicationDecorator.avatarURLs(for: presentations, limit: distinct.count + 1)

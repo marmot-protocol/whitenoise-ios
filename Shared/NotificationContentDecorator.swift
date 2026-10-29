@@ -67,7 +67,7 @@ enum NotificationContentDecorator {
     static func applyFallback(to content: UNMutableNotificationContent) {
         content.userInfo[LocalNotificationProjection.deliveryDispositionKey] =
             LocalNotificationProjection.fallbackDisposition
-        // The same copy generic preview mode delivers, so the two can't be told apart.
+        // The same title and body generic preview mode delivers.
         let generic = LocalNotificationProjection.genericContentText()
         if content.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             content.title = generic.title
