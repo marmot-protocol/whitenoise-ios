@@ -203,7 +203,7 @@ class StringsCatalogTests(FixtureCase):
             "Minutes": {"localizations": {"fr": unit("Minutes"), "de": unit("Minutes")}},
             "GIF": {"localizations": {"fr": unit("GIF"), "de": unit("GIF")}},
             "Off": {"localizations": {"en": unit("Off"), "fr": unit("Off"), "de": unit("Aus")}},
-            # Compared with the English value, not the key, and case-sensitively.
+            # Compared with the English value as well as the key, and case-sensitively.
             "toggle.off": {"localizations": {"en": unit("Turned off"), "fr": unit("Turned off"),
                                              "de": unit("Turned Off")}},
             # The key's own text fails too: older English wording or a raw identifier.
@@ -369,15 +369,18 @@ class StringsCatalogTests(FixtureCase):
                               ("%lld videos", "de"): frozenset({"%lld video"}),
                               ("%lld videos", "pt-BR"): frozenset({"%lld video"})}
         english = plural({"one": "%lld video", "other": "%lld videos"}, substitution=True)
-        errors = self.errors({"%lld videos": {"localizations": {
+        errors = CHECK.check_strings_catalog(catalog({"%lld videos": {"localizations": {
             "en": english,
+            # A shared form belongs to its locale: Italian has none listed.
+            "it": plural({"one": "%lld video", "other": "%lld video"}, substitution=True),
             # English copied whole: the shared singular doesn't cover "videos".
             "ru": plural({"one": "%lld video", "few": "%lld videos", "many": "%lld videos", "other": "%lld videos"},
                          substitution=True),
             # Translated now, so the shared form is stale.
             "de": plural({"one": "%lld Video", "other": "%lld Videos"}, substitution=True),
-        }}})
+        }}}), locales=("de", "it", "ru"))
         self.assertEqual(errors, [
+            "it: '%lld videos' still shows the English copy",
             "ru: '%lld videos' still shows the English copy",
             "remove '%lld video' from SHARED_FORMS[('%lld videos', 'de')]: de no longer shows it",
             "('%lld videos', 'pt-BR') in SHARED_FORMS names a locale that does not ship",
