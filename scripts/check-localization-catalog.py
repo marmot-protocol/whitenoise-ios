@@ -352,28 +352,54 @@ def has_words(value):
     return re.search(r"[^\W\d_]", SPECIFIER.sub("", value)) is not None
 
 
-def shows_english(key, localizations, locale):
-    """Every leaf of `locale` that has words equals the English leaf at the same path.
+def plural_forms_by_argument(localization):
+    """{argument: {category: value}}: each plural dict of one localization, keyed by the
+    substitution's argNum (None for direct variations)."""
+    found = {}
+    sources = [(None, localization)] + [(s.get("argNum"), s) for s in localization.get("substitutions", {}).values()]
+    for argument, source in sources:
+        plural = source.get("variations", {}).get("plural")
+        if isinstance(plural, dict):
+            found[argument] = {category: form.get("stringUnit", {}).get("value") for category, form in plural.items()}
+    return found
 
-    The counterpart is English's leaf at the same path when it has words, else
-    English's form of the same plural category, else its `other` form, else
-    its text: so Russian `few`, a flat string against an English plural, or a
-    different substitution name still compare. Format-only leaves ("%@ · %@",
-    a `%#@count@` shell) say nothing either way.
+
+def shows_english(key, localizations, locale):
+    """Every leaf of `locale` that has words equals its English counterpart.
+
+    The counterpart is English's leaf at the same path when it has words; for a
+    plural form, English's form of the same category (else `other`) for the
+    same argument, so Russian `few` and a renamed substitution still compare;
+    for a flat string against an English plural, English `other`; else the
+    English text. Format-only leaves ("%@ · %@", a `%#@count@` shell) say
+    nothing either way.
     """
-    english = {path: unit.get("value") for path, unit in leaf_units(localizations.get(SOURCE, {}))}
-    forms = {path[-1]: value for path, value in english.items() if path[-2:-1] == ("plural",)}
-    fallback = forms.get("other", source_value(key, localizations))
+    source = localizations.get(SOURCE, {})
+    english = {path: unit.get("value") for path, unit in leaf_units(source)}
+    english_forms = plural_forms_by_argument(source)
+    only_forms = next(iter(english_forms.values())) if len(english_forms) == 1 else None
+    fallback = (only_forms or {}).get("other") or source_value(key, localizations)
+    substitutions = localizations.get(locale, {}).get("substitutions", {})
 
     def counterpart(path):
         value = english.get(path)
         if value is not None and has_words(value):
             return value
-        return forms.get(path[-1], fallback) if path[-2:-1] == ("plural",) else fallback
+        if path[-2:-1] != ("plural",):
+            return fallback
+        argument = substitutions.get(path[0], {}).get("argNum") if len(path) > 2 else None
+        forms = english_forms.get(argument, only_forms) or {}
+        return forms.get(path[-1], forms.get("other", fallback))
 
     worded = [(path, unit.get("value", "")) for path, unit in leaf_units(localizations.get(locale, {}))
               if has_words(unit.get("value", ""))]
-    return bool(worded) and all(value == counterpart(path) for path, value in worded)
+    return bool(worded) and all(normalized(value) == normalized(counterpart(path)) for path, value in worded)
+
+
+def normalized(value):
+    """Drop what doesn't show: `%2$@` → `%@` (English `%1$@ to %2$@` against its key's
+    `%@ to %@`) and substitution names (`%#@count@` against `%#@n@`)."""
+    return re.sub(r"%#@\w+@", "%#@@", re.sub(r"%\d+\$", "%", value or ""))
 
 
 def check_strings_catalog(catalog, locales=LOCALES):

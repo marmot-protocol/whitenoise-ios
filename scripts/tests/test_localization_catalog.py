@@ -191,10 +191,15 @@ class StringsCatalogTests(FixtureCase):
         errors = self.errors({"Sign In": {"localizations": {"de": unit("Einloggen"), "ru": unit("Войти")}}})
         self.assertEqual(errors, ["de: 'Sign In' is 'Einloggen', pinned 'Anmelden'"])
 
+    def test_once_english_keys_must_exist(self):
+        CHECK.ONCE_ENGLISH_KEYS = ("Off",)
+        self.assertEqual(self.errors({}), ["missing required key 'Off'"])
+
     def test_english_copy_fails_unless_shared_spelling(self):
         CHECK.SHARED_SPELLINGS = frozenset({("Minutes", "fr"), ("GIF", "*")})
         errors = CHECK.check_strings_catalog(catalog({
-            "Minutes": {"localizations": {"fr": unit("Minutes"), "de": unit("Minuten")}},
+            # Exempt for French only: German left as English still fails.
+            "Minutes": {"localizations": {"fr": unit("Minutes"), "de": unit("Minutes")}},
             "GIF": {"localizations": {"fr": unit("GIF"), "de": unit("GIF")}},
             "Off": {"localizations": {"en": unit("Off"), "fr": unit("Off"), "de": unit("Aus")}},
             # Compared with the English value, not the key, and case-sensitively.
@@ -202,6 +207,7 @@ class StringsCatalogTests(FixtureCase):
                                              "de": unit("Turned Off")}},
         }), locales=("de", "fr"))
         self.assertEqual(errors, [
+            "de: 'Minutes' still shows the English copy",
             "fr: 'Off' still shows the English copy",
             "fr: 'toggle.off' still shows the English copy",
         ])
@@ -230,12 +236,57 @@ class StringsCatalogTests(FixtureCase):
             }},
             # Format-only copy has no words to translate.
             "%@ · %@": {"localizations": {"de": unit("%@ · %@"), "it": unit("%@ · %@"), "ru": unit("%@ · %@")}},
+            # Placeholder numbering and substitution names don't show: still the English copy.
+            "Uploads %@ to %@.": {"localizations": {
+                "en": unit("Uploads %1$@ to %2$@."), "de": unit("Uploads %@ to %@."),
+                "it": unit("Carica %1$@ su %2$@."), "ru": unit("Uploads %2$@ to %1$@."),
+            }},
+            "%lld left": {"localizations": {
+                "en": {**unit("%#@count@ left"), "substitutions": {"count": {"argNum": 1, "formatSpecifier": "lld",
+                       "variations": {"plural": {"one": unit("%lld"), "other": unit("%lld")}}}}},
+                "de": {**unit("%#@n@ left"), "substitutions": {"n": {"argNum": 1, "formatSpecifier": "lld",
+                       "variations": {"plural": {"one": unit("%lld"), "other": unit("%lld")}}}}},
+                "it": unit("%lld rimasti"), "ru": unit("Осталось %lld"),
+            }},
+            # A flat English value that isn't its key is what plural forms compare with.
+            "files.count": {"localizations": {
+                "en": unit("%lld files"), "de": plural({"one": "%lld files", "other": "%lld files"}),
+                "it": unit("%lld file"), "ru": unit("%lld файлов"),
+            }},
         }), locales=("de", "it", "ru"))
         self.assertEqual([error for error in errors if "English copy" in error], [
+            "de: '%lld left' still shows the English copy",
             "de: '%lld photos' still shows the English copy",
             "ru: '%lld photos' still shows the English copy",
             "de: '%lld videos' still shows the English copy",
             "ru: '%lld videos' still shows the English copy",
+            "de: 'Uploads %@ to %@.' still shows the English copy",
+            "ru: 'Uploads %@ to %@.' still shows the English copy",
+            "de: 'files.count' still shows the English copy",
+        ])
+
+    def test_plural_forms_compare_with_the_same_argument(self):
+        def forms(files, folders, files_name="files"):
+            return {**unit(f"%#@{files_name}@ and %#@folders@"), "substitutions": {
+                files_name: {"argNum": 1, "formatSpecifier": "lld",
+                             "variations": {"plural": {k: unit(v) for k, v in files.items()}}},
+                "folders": {"argNum": 2, "formatSpecifier": "lld",
+                            "variations": {"plural": {k: unit(v) for k, v in folders.items()}}},
+            }}
+        english_files = {"one": "%lld file", "other": "%lld files"}
+        english_folders = {"one": "%lld folder", "other": "%lld folders"}
+        errors = self.errors({"%lld files and %lld folders": {"localizations": {
+            "en": forms(english_files, english_folders),
+            # English throughout: few/many follow each substitution's own `other`.
+            "ru": forms({"one": "%lld file", "few": "%lld files", "many": "%lld files", "other": "%lld files"},
+                        {"one": "%lld folder", "few": "%lld folders", "many": "%lld folders",
+                         "other": "%lld folders"}),
+            # A renamed substitution matches by argument.
+            "de": forms(english_files, english_folders, files_name="dateien"),
+        }}})
+        self.assertEqual([error for error in errors if "English copy" in error], [
+            "de: '%lld files and %lld folders' still shows the English copy",
+            "ru: '%lld files and %lld folders' still shows the English copy",
         ])
 
     def test_shared_spelling_that_no_longer_applies_fails(self):
