@@ -13,10 +13,10 @@ Shared catalog, for every key and every shipped locale:
     the source and every locale for REQUIRED_PLURAL_KEYS and for any key that
     has them in some locale, except PLURAL_GAPS, which must be pruned once
     the gap closes;
-  * REQUIRED_KEYS and ENGLISH_COPY_KEYS exist and PINNED_VALUES match exactly;
+  * REQUIRED_KEYS and ONCE_ENGLISH_KEYS exist and PINNED_VALUES match exactly;
   * no locale still shows the English copy, meaning every leaf with words
-    equals the English leaf at the same path, except SHARED_SPELLINGS, which
-    must be pruned once an entry no longer shows English.
+    equals its English counterpart, except SHARED_SPELLINGS, which must name
+    shipped locales and be pruned once an entry no longer shows English.
 InfoPlist catalog: INFOPLIST_REQUIRED_KEYS exist; every key except
 CFBundleDisplayName is non-empty in English and every locale; usage
 descriptions are translated; INFOPLIST_PINNED_VALUES match; and
@@ -160,16 +160,18 @@ DONATION_KEYS = (
     "More billing activity couldn't be loaded. Try again.", "A new donation won't restore earlier payments.",
     "Your donation succeeded, but history couldn't be saved on this device.",
 )
-ENGLISH_COPY_KEYS = ("Sign In", "Sign Up") + RETENTION_KEYS + DONATION_KEYS
+# These families must keep existing; the English-copy rule covers their translations.
+ONCE_ENGLISH_KEYS = ("Sign In", "Sign Up") + RETENTION_KEYS + DONATION_KEYS
 # Copy whose correct translation is spelled like English. Names and identifiers
 # may stay English in any locale; words only in the listed locales.
 SHARED_NAMES = (
-    "%@ (IDN/punycode)", "%@ (IDN/punycode: %@)", "Claude Code", "Codex", "GIF", "GIPHY", "Hermes", "Hex",
-    "NIP-65", "Native Push", "OpenClaw", "OpenCode", "Pi", "QUIC · %@", "URL", "USD", "White Noise",
-    "White Noise · %@", "Wi-Fi", "https://example.com/image.jpg", "id: %@", "npub", "nsec1…", "stream %@",
-    "wss://relay.example.com",
+    "Claude Code", "Codex", "GIF", "GIPHY", "Hermes", "NIP-65", "Native Push", "OpenClaw", "OpenCode", "Pi",
+    "QUIC · %@", "URL", "White Noise", "White Noise · %@", "https://example.com/image.jpg", "npub", "nsec1…",
 )
 SHARED_WORDS = {
+    "%@ (IDN/punycode)": "es fr it pt ru tr", "%@ (IDN/punycode: %@)": "es it pt ru tr",
+    "Hex": "de es fr it pt ru tr", "USD": "de es fr it pt ru tr", "Wi-Fi": "es fr it pt ru tr zh-Hans zh-Hant",
+    "id: %@": "es it pt ru tr", "stream %@": "es it pt", "wss://relay.example.com": "de it pt ru tr zh-Hans zh-Hant",
     "%lld images": "fr", "%lld notifications": "fr", "%lld videos": "es", "%lld votes": "fr", "Admin": "de",
     "Audio": "de es fr it", "Cache": "de fr it pt", "Chats": "de es", "Conversation": "fr", "Debugging": "de",
     "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Filter": "de", "GIF via GIPHY": "fr pt",
@@ -353,22 +355,31 @@ def has_words(value):
 def shows_english(key, localizations, locale):
     """Every leaf of `locale` that has words equals the English leaf at the same path.
 
-    A plural form English lacks (Russian `few`) compares with English `other`.
-    Format-only leaves ("%@ · %@", a `%#@count@` shell) say nothing either way.
+    The counterpart is English's leaf at the same path when it has words, else
+    English's form of the same plural category, else its `other` form, else
+    its text: so Russian `few`, a flat string against an English plural, or a
+    different substitution name still compare. Format-only leaves ("%@ · %@",
+    a `%#@count@` shell) say nothing either way.
     """
     english = {path: unit.get("value") for path, unit in leaf_units(localizations.get(SOURCE, {}))}
-    fallback = source_value(key, localizations)
+    forms = {path[-1]: value for path, value in english.items() if path[-2:-1] == ("plural",)}
+    fallback = forms.get("other", source_value(key, localizations))
+
+    def counterpart(path):
+        value = english.get(path)
+        if value is not None and has_words(value):
+            return value
+        return forms.get(path[-1], fallback) if path[-2:-1] == ("plural",) else fallback
+
     worded = [(path, unit.get("value", "")) for path, unit in leaf_units(localizations.get(locale, {}))
               if has_words(unit.get("value", ""))]
-    return bool(worded) and all(
-        value == english.get(path, english.get(path[:-1] + ("other",), fallback)) for path, value in worded
-    )
+    return bool(worded) and all(value == counterpart(path) for path, value in worded)
 
 
 def check_strings_catalog(catalog, locales=LOCALES):
     errors = []
     strings = catalog.get("strings", {})
-    for key in REQUIRED_KEYS + REQUIRED_PLURAL_KEYS:
+    for key in REQUIRED_KEYS + REQUIRED_PLURAL_KEYS + ONCE_ENGLISH_KEYS:
         if key not in strings:
             errors.append(f"missing required key {key!r}")
 
@@ -408,11 +419,10 @@ def check_strings_catalog(catalog, locales=LOCALES):
             if actual != expected:
                 errors.append(f"{locale}: {key!r} is {actual!r}, pinned {expected!r}")
 
-    for key in ENGLISH_COPY_KEYS:
-        if key not in strings:
-            errors.append(f"missing key {key!r}")
-
     for key, locale in sorted(SHARED_SPELLINGS):
+        if locale != "*" and locale not in LOCALES:
+            errors.append(f"({key!r}, {locale!r}) in SHARED_SPELLINGS names a locale that does not ship")
+            continue
         scope = locales if locale == "*" else tuple(set(locales) & {locale})
         if not scope:
             continue

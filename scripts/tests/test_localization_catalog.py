@@ -34,14 +34,14 @@ def catalog(strings):
 class FixtureCase(unittest.TestCase):
     """Name-keyed tables are emptied so fixtures exercise one rule at a time."""
 
-    TABLES = ("REQUIRED_KEYS", "REQUIRED_PLURAL_KEYS", "PLURAL_GAPS", "PINNED_VALUES", "ENGLISH_COPY_KEYS",
+    TABLES = ("REQUIRED_KEYS", "REQUIRED_PLURAL_KEYS", "PLURAL_GAPS", "PINNED_VALUES", "ONCE_ENGLISH_KEYS",
               "SHARED_SPELLINGS", "INFOPLIST_REQUIRED_KEYS", "INFOPLIST_PINNED_VALUES")
 
     def setUp(self):
         for name in self.TABLES:
             table = getattr(CHECK, name)
             self.addCleanup(setattr, CHECK, name, table)
-            setattr(CHECK, name, {} if isinstance(table, dict) else frozenset() if isinstance(table, frozenset) else ())
+            setattr(CHECK, name, {dict: {}, frozenset: frozenset()}.get(type(table), ()))
 
     def errors(self, strings):
         return CHECK.check_strings_catalog(catalog(strings), locales=LOCALES)
@@ -191,44 +191,68 @@ class StringsCatalogTests(FixtureCase):
         errors = self.errors({"Sign In": {"localizations": {"de": unit("Einloggen"), "ru": unit("Войти")}}})
         self.assertEqual(errors, ["de: 'Sign In' is 'Einloggen', pinned 'Anmelden'"])
 
-    def test_english_copy_key_must_exist(self):
-        CHECK.ENGLISH_COPY_KEYS = ("Off",)
-        self.assertEqual(self.errors({}), ["missing key 'Off'"])
-
     def test_english_copy_fails_unless_shared_spelling(self):
         CHECK.SHARED_SPELLINGS = frozenset({("Minutes", "fr"), ("GIF", "*")})
         errors = CHECK.check_strings_catalog(catalog({
             "Minutes": {"localizations": {"fr": unit("Minutes"), "de": unit("Minuten")}},
             "GIF": {"localizations": {"fr": unit("GIF"), "de": unit("GIF")}},
             "Off": {"localizations": {"en": unit("Off"), "fr": unit("Off"), "de": unit("Aus")}},
+            # Compared with the English value, not the key, and case-sensitively.
+            "toggle.off": {"localizations": {"en": unit("Turned off"), "fr": unit("Turned off"),
+                                             "de": unit("Turned Off")}},
         }), locales=("de", "fr"))
-        self.assertEqual(errors, ["fr: 'Off' still shows the English copy"])
+        self.assertEqual(errors, [
+            "fr: 'Off' still shows the English copy",
+            "fr: 'toggle.off' still shows the English copy",
+        ])
 
     def test_english_copy_compares_every_worded_leaf(self):
         english = plural({"one": "%lld video", "other": "%lld videos"}, substitution=True)
-        errors = self.errors({
+        errors = CHECK.check_strings_catalog(catalog({
             "%lld videos": {"localizations": {
                 "en": english,
-                # One form shared with English, the other translated: not English copy.
-                "de": plural({"one": "%lld video", "other": "%lld video"}, substitution=True),
+                # Italian "video" is invariable: one form matches English, the other doesn't.
+                "it": plural({"one": "%lld video", "other": "%lld video"}, substitution=True),
+                # Russian few/many have no English form; they compare with English `other`.
                 "ru": plural({"one": "%lld video", "few": "%lld videos", "many": "%lld videos",
                               "other": "%lld videos"}, substitution=True),
+                # Plain variations without a substitution shell, left in English.
+                "de": plural({"one": "%lld video", "other": "%lld videos"}),
+            }},
+            "%lld photos": {"localizations": {
+                "en": plural({"one": "%lld photo", "other": "%lld photos"}, substitution=True),
+                # Only the last form is English: still translated.
+                "it": plural({"one": "%lld foto", "other": "%lld photos"}, substitution=True),
+                # A flat string or another substitution name against English's plural.
+                "ru": unit("%lld photos"),
+                "de": {**unit("%#@n@"), "substitutions": {"n": {"argNum": 1, "formatSpecifier": "lld",
+                       "variations": {"plural": {"one": unit("%lld photo"), "other": unit("%lld photos")}}}}},
             }},
             # Format-only copy has no words to translate.
-            "%@ · %@": {"localizations": {"de": unit("%@ · %@"), "ru": unit("%@ · %@")}},
-        })
-        self.assertEqual(errors, ["ru: '%lld videos' still shows the English copy"])
+            "%@ · %@": {"localizations": {"de": unit("%@ · %@"), "it": unit("%@ · %@"), "ru": unit("%@ · %@")}},
+        }), locales=("de", "it", "ru"))
+        self.assertEqual([error for error in errors if "English copy" in error], [
+            "de: '%lld photos' still shows the English copy",
+            "ru: '%lld photos' still shows the English copy",
+            "de: '%lld videos' still shows the English copy",
+            "ru: '%lld videos' still shows the English copy",
+        ])
 
     def test_shared_spelling_that_no_longer_applies_fails(self):
-        CHECK.SHARED_SPELLINGS = frozenset({("Minutes", "de"), ("GIF", "*"), ("Gone", "ru"), ("Minutes", "fr")})
+        CHECK.SHARED_SPELLINGS = frozenset({
+            ("Minutes", "de"), ("GIF", "*"), ("Gone", "ru"), ("Minutes", "fr"), ("Spam", "*"), ("Spam", "pt-BR"),
+        })
         errors = self.errors({
             "Minutes": {"localizations": {"de": unit("Minuten"), "ru": unit("Минуты")}},
             "GIF": {"localizations": {"de": unit("GIF-Datei"), "ru": unit("ГИФ")}},
+            # Still English in one checked locale, so the exemption stands.
+            "Spam": {"localizations": {"de": unit("Spam"), "ru": unit("Спам")}},
         })
         self.assertEqual(errors, [
             "remove ('GIF', '*') from SHARED_SPELLINGS: no locale shows it as English",
             "remove ('Gone', 'ru') from SHARED_SPELLINGS: no locale shows it as English",
             "remove ('Minutes', 'de') from SHARED_SPELLINGS: no locale shows it as English",
+            "('Spam', 'pt-BR') in SHARED_SPELLINGS names a locale that does not ship",
         ])
 
 

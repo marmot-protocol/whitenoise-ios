@@ -6847,13 +6847,13 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ упомянул вас"
+            "value" : "%@ упомянул(а) вас"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ senden bahsetti"
+            "value" : "%@ sizden bahsetti"
           }
         },
         "zh-Hans" : {
@@ -6912,13 +6912,13 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ упомянул вас: %@"
+            "value" : "%@ упомянул(а) вас: %@"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ senden bahsetti: %@"
+            "value" : "%@ sizden bahsetti: %@"
           }
         },
         "zh-Hans" : {
@@ -68660,7 +68660,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sessizde"
+            "value" : "Sessize alındı"
           }
         },
         "zh-Hans" : {
