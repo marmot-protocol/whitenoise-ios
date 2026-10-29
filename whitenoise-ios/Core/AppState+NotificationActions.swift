@@ -1,9 +1,11 @@
 import Foundation
 import MarmotKit
 
+/// Settles a notification action once: whichever of completion, the deadline
+/// or UIKit's background expiration resolves first wins.
 @MainActor
-private final class NotificationActionDeadlineGate {
-    enum Outcome {
+final class NotificationActionDeadlineGate {
+    enum Outcome: Equatable {
         case completed(succeeded: Bool)
         case expired
     }
