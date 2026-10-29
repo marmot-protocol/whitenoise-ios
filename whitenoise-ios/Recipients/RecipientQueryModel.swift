@@ -18,26 +18,29 @@ final class RecipientQueryModel {
 
     private var resolveTask: Task<Void, Never>?
     private var resolveGeneration = 0
-#if DEBUG
-    /// Kept only in the unit-test host, so Debug app sessions never collect them.
-    private let recordsLookupsForTesting = ProcessEnvironment.isUnitTestHost()
-    private var lookupTasksForTesting: [Task<Void, Never>] = []
-#endif
 
     static let nip05DebounceNanoseconds: UInt64 = 350_000_000
 
     typealias Nip05Lookup = @MainActor (_ name: String, _ domain: String) async -> Nip05Resolver.Resolution
     /// Waits out the debounce; throws when the lookup is cancelled meanwhile.
     typealias Debounce = @MainActor () async throws -> Void
+    /// Starts a lookup as its own task; tests inject one that keeps the tasks
+    /// so they can wait for cancelled and replaced lookups to finish. The
+    /// returned task must be the one running `work`: clearing or replacing the
+    /// query cancels the lookup through it.
+    typealias StartLookup = @MainActor (_ work: @escaping @MainActor () async -> Void) -> Task<Void, Never>
     private let lookUpNip05: Nip05Lookup
     private let debounce: Debounce
+    private let startLookup: StartLookup
 
     init(
         lookUpNip05: @escaping Nip05Lookup = { await Nip05Resolver.resolve(name: $0, domain: $1) },
-        debounce: @escaping Debounce = { try await Task.sleep(nanoseconds: RecipientQueryModel.nip05DebounceNanoseconds) }
+        debounce: @escaping Debounce = { try await Task.sleep(nanoseconds: RecipientQueryModel.nip05DebounceNanoseconds) },
+        startLookup: @escaping StartLookup = { work in Task { await work() } }
     ) {
         self.lookUpNip05 = lookUpNip05
         self.debounce = debounce
+        self.startLookup = startLookup
     }
 
     var trimmedText: String {
@@ -78,7 +81,7 @@ final class RecipientQueryModel {
             warmProfile(resolved.accountIdHex, using: appState)
         case .nip05(let name, let domain):
             resolution = .resolving
-            let task = Task<Void, Never> { [weak self] in
+            resolveTask = startLookup { [weak self] in
                 await self?.resolveNip05(
                     name: name,
                     domain: domain,
@@ -86,10 +89,6 @@ final class RecipientQueryModel {
                     using: appState
                 )
             }
-            resolveTask = task
-#if DEBUG
-            if recordsLookupsForTesting { lookupTasksForTesting.append(task) }
-#endif
         }
     }
 
@@ -127,18 +126,6 @@ final class RecipientQueryModel {
         guard resolveGeneration == generation else { return }
         resolution = state
     }
-
-#if DEBUG
-    /// Waits for every NIP-05 lookup started so far, including cancelled or
-    /// replaced ones, so a test can check that a stale result is never adopted.
-    /// Unbounded: injected lookups and debounces must finish, as `TestLatch.hold`
-    /// and `parkUntilCancelled` do.
-    func awaitResolutionForTesting() async {
-        let tasks = lookupTasksForTesting
-        lookupTasksForTesting.removeAll()
-        for task in tasks { await task.value }
-    }
-#endif
 
     private func warmProfile(_ accountIdHex: String, using appState: AppState) {
         _ = appState.profile(forAccountIdHex: accountIdHex)
