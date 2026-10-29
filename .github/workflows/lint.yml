@@ -41,6 +41,10 @@ jobs:
       - name: Test the localization catalog check
         run: python3 -m unittest discover -s scripts/tests -p 'test_localization_catalog.py'
 
+      # The exclusion check itself runs inside scripts/lint.sh below.
+      - name: Test the test-hook exclusion check
+        run: python3 -m unittest discover -s scripts/tests -p 'test_test_hook_exclusions.py'
+
       - name: Install SwiftLint
         env:
           # Keep in lockstep with REQUIRED_SWIFTLINT_VERSION in scripts/lint.sh.

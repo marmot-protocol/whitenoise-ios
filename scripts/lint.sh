@@ -13,7 +13,8 @@
 #
 # Exits non-zero on:
 #   - a string-catalog problem (scripts/check-localization-catalog.py)
-#   - a stale test-hook exclusion (scripts/check-test-hook-exclusions.py)
+#   - a new, stale or missing test-hook exclusion, or a whole-file disable of
+#     that rule (scripts/check-test-hook-exclusions.py)
 #   - swiftlint not installed
 #   - swiftlint version not the exact pin (must match CI)
 #   - any lint violation (--strict)

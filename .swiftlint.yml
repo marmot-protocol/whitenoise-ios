@@ -130,7 +130,10 @@ custom_rules:
   # App code takes test seams as injected dependencies, not test-only hooks
   # (#1241). The excluded files still have hooks; a file leaves the list once
   # its last hook is gone, and the list only ever shrinks.
-  # scripts/check-test-hook-exclusions.py fails on an entry with no hook left.
+  # scripts/check-test-hook-exclusions.py fails on a new, missing or stale
+  # entry, and reads this rule's regex. CI's checkout path contains
+  # `whitenoise-ios/`, so `included` matches every file there: the top-level
+  # `included` list is what keeps this rule to the app directories.
   no_test_hook_in_app_code:
     name: "Test hook in app code"
     regex: '\b(?:\w*ForTesting|forTesting)\w*'
@@ -161,7 +164,6 @@ custom_rules:
     - '(^|/)whitenoise-ios/Group/GroupDetailsViewModel\.swift$'
     - '(^|/)whitenoise-ios/Group/GroupMemberOrdering\.swift$'
     - '(^|/)whitenoise-ios/Recipients/DirectChatStarter\.swift$'
-    - '(^|/)whitenoise-ios/Recipients/RecipientQueryModel\.swift$'
     - '(^|/)whitenoise-ios/Recipients/RecipientUserSearch\.swift$'
     excluded_match_kinds:
     - comment

@@ -409,16 +409,16 @@ Do not add a second storage path for data Marmot already owns.
   `no_test_hook_in_app_code` rule enforces this in `whitenoise-ios/`,
   `Shared/` and `NotificationServiceExtension/`; a deliberate exception
   needs `// swiftlint:disable:next no_test_hook_in_app_code` with the reason
-  above it, on every line the rule flags. Its limits:
+  above it, on every line the rule flags (never a whole-file disable).
+  `scripts/check-test-hook-exclusions.py` fails the lint job on an
+  exclusion that is new, missing or has no hook left, and on a whole-file
+  disable of the rule. Its limits:
   - It catches only names containing `ForTesting` or starting with
     `forTesting`. Review covers the rest, such as `AppLanguage`'s
     `testCurrentOverride` (#1241, slice 2).
   - Files that still have hooks are excluded whole, so a new hook in one
-    of them passes. Never add a file to the exclusions. When you change a
-    hook or the code it serves, replace that hook; drop the file from the
-    exclusions once its last hook is gone.
-    `scripts/check-test-hook-exclusions.py` fails the lint job on an
-    excluded file with no hook left.
+    of them passes. When you change a hook or the code it serves, replace
+    that hook; drop the file from the exclusions once its last hook is gone.
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:
