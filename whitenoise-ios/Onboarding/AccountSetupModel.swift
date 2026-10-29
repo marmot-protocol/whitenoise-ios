@@ -1,5 +1,6 @@
 import Foundation
 import MarmotKit
+import os
 
 nonisolated enum AccountSetupCommand: Sendable {
     case run, cancel, retry(OnboardingStepFfi), skip(OnboardingStepFfi)
@@ -144,6 +145,10 @@ final class AccountSetupModel {
     @ObservationIgnored private var operation: Task<Void, Never>?
     @ObservationIgnored private var session = UUID()
     @ObservationIgnored private var lastAutomaticRevision: UInt64?
+    private static let log = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.whitenoise.ios",
+        category: "account-setup"
+    )
 
     init(snapshot: OnboardingSnapshotFfi) { self.snapshot = snapshot }
 
@@ -219,6 +224,7 @@ final class AccountSetupModel {
                 if let result { self.apply(result) } else { self.cancelled = true }
             } catch {
                 guard let self, self.session == id, !Task.isCancelled else { return }
+                Self.log.error("Setup \(AccountSetupLogLabel.caseName(command), privacy: .public) failed: \(AccountSetupLogLabel.caseName(error), privacy: .public)")
                 if let error = error as? MarmotKitError, case .OnboardingActionUnavailable = error {
                     self.failure = .settingsChanged
                 } else {
@@ -350,5 +356,14 @@ nonisolated enum AccountSetupPolicy {
         guard let step = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }),
               step.step == .follows, step.actions.contains(.continueWithout) else { return nil }
         return .skip(.follows)
+    }
+}
+
+nonisolated enum AccountSetupLogLabel {
+    static func caseName(_ value: Any) -> String {
+        let mirror = Mirror(reflecting: value)
+        if mirror.displayStyle == .enum, let label = mirror.children.first?.label { return label }
+        if mirror.displayStyle == .enum, !(value is CustomStringConvertible) { return String(describing: value) }
+        return String(describing: type(of: value))
     }
 }
