@@ -172,3 +172,6 @@ enum RelativeTime {
 
     #endif
 }
+
+// Temporary canary for #1242.
+let excludedCanaryForTesting = 0
