@@ -14,8 +14,8 @@ Shared catalog, for every key and every shipped locale:
     has them in some locale, except PLURAL_GAPS, which must be pruned once
     the gap closes;
   * REQUIRED_KEYS and ONCE_ENGLISH_KEYS exist and PINNED_VALUES match exactly;
-  * no locale still shows the English copy, meaning every leaf with words
-    equals its English counterpart, except SHARED_SPELLINGS, which must name
+  * no locale still shows the English copy, meaning any displayed text with
+    words that English also shows, except SHARED_SPELLINGS, which must name
     shipped locales and be pruned once an entry no longer shows English.
 InfoPlist catalog: INFOPLIST_REQUIRED_KEYS exist; every key except
 CFBundleDisplayName is non-empty in English and every locale; usage
@@ -172,7 +172,7 @@ SHARED_WORDS = {
     "%@ (IDN/punycode)": "es fr it pt ru tr", "%@ (IDN/punycode: %@)": "es it pt ru tr",
     "Hex": "de es fr it pt ru tr", "USD": "de es fr it pt ru tr", "Wi-Fi": "es fr it pt ru tr zh-Hans zh-Hant",
     "id: %@": "es it pt ru tr", "stream %@": "es it pt", "wss://relay.example.com": "de it pt ru tr zh-Hans zh-Hant",
-    "%lld images": "fr", "%lld notifications": "fr", "%lld videos": "es", "%lld votes": "fr", "Admin": "de",
+    "%lld images": "fr", "%lld notifications": "fr", "%lld videos": "es it tr", "%lld votes": "fr", "Admin": "de",
     "Audio": "de es fr it", "Cache": "de fr it pt", "Chats": "de es", "Conversation": "fr", "Debugging": "de",
     "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Filter": "de", "GIF via GIPHY": "fr pt",
     "GIFs": "de es pt", "Image": "fr", "Info": "de it", "Links": "de pt", "Live": "de", "Maintenance": "fr",
@@ -332,80 +332,64 @@ def plural_requirement_errors(key, localizations, locales, require=True):
     return errors
 
 
-def source_value(key, localizations):
-    unit = localizations.get(SOURCE, {}).get("stringUnit")
-    return unit.get("value", key) if unit else key
+def displayed(localization):
+    """The texts one localization can show, one per plural category, with each
+    `%#@name@` filled from its substitution and `%2$@` read as `%@`."""
+    value = localization.get("stringUnit", {}).get("value")
+    plural = localization.get("variations", {}).get("plural")
+    if isinstance(plural, dict):
+        texts = {form.get("stringUnit", {}).get("value", "") for form in plural.values()}
+    elif value is None:
+        texts = set()
+    else:
+        forms = {name: substitution.get("variations", {}).get("plural") or {}
+                 for name, substitution in localization.get("substitutions", {}).items()}
 
-
-def leaf_units(localization, path=()):
-    """(path, string unit) for every leaf of one localization: its unit, plural forms and substitution forms."""
-    if "stringUnit" in localization:
-        yield path, localization["stringUnit"]
-    for kind, forms in localization.get("variations", {}).items():
-        for form, variation in forms.items():
-            yield from leaf_units(variation, path + (kind, form))
-    for name, substitution in localization.get("substitutions", {}).items():
-        yield from leaf_units(substitution, path + (name,))
+        def filled(category):
+            def form(match):
+                chosen = forms.get(match.group(1), {})
+                return chosen.get(category, chosen.get("other", {})).get("stringUnit", {}).get("value", "")
+            return re.sub(r"%#@(\w+)@", form, value)
+        texts = {filled(category) for category in set().union(*forms.values(), {"other"})}
+    return {re.sub(r"%\d+\$", "%", text) for text in texts}
 
 
 def has_words(value):
     return re.search(r"[^\W\d_]", SPECIFIER.sub("", value)) is not None
 
 
-def plural_forms_by_argument(localization):
-    """{argument: {category: value}}: each plural dict of one localization, keyed by the
-    substitution's argNum (None for direct variations)."""
-    found = {}
-    sources = [(None, localization)] + [(s.get("argNum"), s) for s in localization.get("substitutions", {}).values()]
-    for argument, source in sources:
-        plural = source.get("variations", {}).get("plural")
-        if isinstance(plural, dict):
-            found[argument] = {category: form.get("stringUnit", {}).get("value") for category, form in plural.items()}
-    return found
+def forms_by_argument(localization):
+    """{argNum: plural forms} of one localization's substitutions, `%2$@` read as `%@`."""
+    return {
+        substitution.get("argNum"): {re.sub(r"%\d+\$", "%", form.get("stringUnit", {}).get("value", ""))
+                                     for form in (substitution.get("variations", {}).get("plural") or {}).values()}
+        for substitution in localization.get("substitutions", {}).values()
+    }
 
 
 def shows_english(key, localizations, locale):
-    """Every leaf of `locale` that has words equals its English counterpart.
-
-    The counterpart is English's leaf at the same path when it has words; for a
-    plural form, English's form of the same category (else `other`) for the
-    same argument, so Russian `few` and a renamed substitution still compare;
-    for a flat string against an English plural, English `other`; else the
-    English text. Format-only leaves ("%@ · %@", a `%#@count@` shell) say
-    nothing either way.
+    """Some text with words that `locale` can show is one English shows, so a
+    plural left half in English still fails. Displayed text is compared, so
+    plural layout, substitution names and placeholder numbering don't matter;
+    so is each substitution's forms against English's for the same argument,
+    which catches English counts inside a translated sentence. Without an `en`
+    localization the key is the English copy, so a count key needs English
+    plurals for its singular to count. Format-only text ("%@ · %@", "%lld")
+    says nothing either way.
     """
-    source = localizations.get(SOURCE, {})
-    english = {path: unit.get("value") for path, unit in leaf_units(source)}
-    english_forms = plural_forms_by_argument(source)
-    only_forms = next(iter(english_forms.values())) if len(english_forms) == 1 else None
-    fallback = (only_forms or {}).get("other") or source_value(key, localizations)
-    substitutions = localizations.get(locale, {}).get("substitutions", {})
-
-    def counterpart(path):
-        value = english.get(path)
-        if value is not None and has_words(value):
-            return value
-        if path[-2:-1] != ("plural",):
-            return fallback
-        argument = substitutions.get(path[0], {}).get("argNum") if len(path) > 2 else None
-        forms = english_forms.get(argument, only_forms) or {}
-        return forms.get(path[-1], forms.get("other", fallback))
-
-    worded = [(path, unit.get("value", "")) for path, unit in leaf_units(localizations.get(locale, {}))
-              if has_words(unit.get("value", ""))]
-    return bool(worded) and all(normalized(value) == normalized(counterpart(path)) for path, value in worded)
-
-
-def normalized(value):
-    """Drop what doesn't show: `%2$@` → `%@` (English `%1$@ to %2$@` against its key's
-    `%@ to %@`) and substitution names (`%#@count@` against `%#@n@`)."""
-    return re.sub(r"%#@\w+@", "%#@@", re.sub(r"%\d+\$", "%", value or ""))
+    source, target = localizations.get(SOURCE, {}), localizations.get(locale, {})
+    english = displayed(source) or displayed({"stringUnit": {"value": key}})
+    if any(has_words(text) and text in english for text in displayed(target)):
+        return True
+    english_forms = forms_by_argument(source)
+    return any(has_words(form) and form in english_forms.get(argument, ())
+               for argument, forms in forms_by_argument(target).items() for form in forms)
 
 
 def check_strings_catalog(catalog, locales=LOCALES):
     errors = []
     strings = catalog.get("strings", {})
-    for key in REQUIRED_KEYS + REQUIRED_PLURAL_KEYS + ONCE_ENGLISH_KEYS:
+    for key in dict.fromkeys(REQUIRED_KEYS + REQUIRED_PLURAL_KEYS + ONCE_ENGLISH_KEYS):
         if key not in strings:
             errors.append(f"missing required key {key!r}")
 
