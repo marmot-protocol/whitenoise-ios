@@ -13,6 +13,7 @@
 #
 # Exits non-zero on:
 #   - a string-catalog problem (scripts/check-localization-catalog.py)
+#   - a stale test-hook exclusion (scripts/check-test-hook-exclusions.py)
 #   - swiftlint not installed
 #   - swiftlint version not the exact pin (must match CI)
 #   - any lint violation (--strict)
@@ -27,6 +28,10 @@ cd "$ROOT_DIR"
 # ── string catalogs ──────────────────────────────────────────────────
 echo "==> localization catalogs"
 python3 "$ROOT_DIR/scripts/check-localization-catalog.py"
+
+# ── test-hook exclusions ─────────────────────────────────────────────
+echo "==> test-hook exclusions"
+python3 "$ROOT_DIR/scripts/check-test-hook-exclusions.py"
 
 # ── precheck: swiftlint installed ────────────────────────────────────
 if ! command -v swiftlint >/dev/null 2>&1; then

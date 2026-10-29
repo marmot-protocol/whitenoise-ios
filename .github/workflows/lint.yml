@@ -10,6 +10,7 @@ on:
       - '.swiftlint.yml'
       - 'scripts/lint.sh'
       - 'scripts/check-localization-catalog.py'
+      - 'scripts/check-test-hook-exclusions.py'
       - 'scripts/tests/**'
       - 'justfile'
       - '.github/workflows/lint.yml'

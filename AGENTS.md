@@ -401,6 +401,22 @@ Do not add a second storage path for data Marmot already owns.
   `no_test_sleep` rule enforces this; a deliberate sleep that is not a wait
   needs `// swiftlint:disable:next no_test_sleep` with the reason above it.
   Host views through `withHostedWindow`.
+- Don't add test-only hooks to app code: no `…ForTesting` members, and no
+  `#if DEBUG` blocks that exist only so tests can pause, replace or inspect
+  something. Take the dependency as an init parameter with the production
+  default and inject a test double from the test. SwiftUI previews and
+  intentional debug/release build flags are fine. SwiftLint's
+  `no_test_hook_in_app_code` rule enforces this in `whitenoise-ios/`,
+  `Shared/` and `NotificationServiceExtension/`; a deliberate exception
+  needs `// swiftlint:disable:next no_test_hook_in_app_code` with the reason
+  above it. Its limits:
+  - It catches only `…ForTesting` names. Review covers the rest, such as
+    `AppLanguage`'s `testCurrentOverride` (#1241, slice 2).
+  - Files that still have hooks are excluded whole, so a new hook in one
+    of them passes. When you change a hook or the code it serves, replace
+    that hook; drop the file from the exclusions once its last hook is
+    gone. `scripts/check-test-hook-exclusions.py` fails the lint job on an
+    excluded file with no hook left.
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:
@@ -420,13 +436,6 @@ Do not add a second storage path for data Marmot already owns.
   - When a decision only runs inside a view, a runtime or an async path,
     extract a small pure helper and test that instead of hosting a window
     or starting a runtime.
-  - Don't add test-only hooks to app code (`…ForTesting` members, or
-    `#if DEBUG` blocks that exist only so tests can pause, replace or
-    inspect something). Take the dependency as an init parameter with the
-    production default and inject a test double instead. When you change
-    code that still has a hook, replace it in the same PR and drop the
-    file from SwiftLint's `no_test_hook_in_app_code` exclusions (#1241).
-    SwiftUI previews and intentional debug/release build flags are fine.
   - Add catalog, manifest and config checks as scripts in the lint job, not
     unit tests.
   - Keep waits loud: a timed-out wait must still fail the test. If you
