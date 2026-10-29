@@ -479,18 +479,18 @@ struct ComposerBar: View {
 
     @ViewBuilder
     private var preparedContent: some View {
+        if let replyPreview {
+            ComposerReplyPreviewView(
+                preview: replyPreview,
+                onCancel: onCancelReply
+            )
+        }
+
         if !preparedAttachments.isEmpty {
             MediaDraftStrip(
                 attachments: preparedAttachments,
                 onRemove: onRemovePreparedAttachment,
                 onPreviewVisual: onPreviewPreparedMedia
-            )
-        }
-
-        if let replyPreview {
-            ComposerReplyPreviewView(
-                preview: replyPreview,
-                onCancel: onCancelReply
             )
         }
     }
