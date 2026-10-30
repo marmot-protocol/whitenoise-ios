@@ -23,13 +23,14 @@ struct MaintenanceDiagnosticsPresentationTests {
 
     // The enums aren't CaseIterable. The exhaustive switches below stop
     // compiling when MDK adds a case, as a reminder to list it here too.
-    // Evolution's .supersededByConvergence shares the phase's label on purpose.
     private let phases: [MaintenancePhaseFfi] = [
         .catchUp, .eoseTimeout, .grace, .quiet, .jitter, .overdue, .paused, .clockSkewBlocked,
         .pendingPublication, .fanout, .retry, .supersededByConvergence, .complete, .failed
     ]
     private let triggers: [MaintenanceTriggerFfi] = [.postJoin, .periodic, .manual]
-    private let evolutionPhases: [GroupEvolutionPhaseFfi] = [.preparing, .prepared, .attempting, .confirmed]
+    private let evolutionPhases: [GroupEvolutionPhaseFfi] = [
+        .preparing, .prepared, .attempting, .confirmed, .supersededByConvergence
+    ]
 
     private static func listed(_ phase: MaintenancePhaseFfi) {
         switch phase {

@@ -78,6 +78,10 @@ struct GroupPushDebugPresentationTests {
                 == "Registriert, nativer Push aus, kein lokales Token"
         )
         #expect(
+            summary(registration(registered: false, nativePush: false, tokenCached: true), Locale(identifier: "de"))
+                == "Nicht registriert, nativer Push aus, Token zwischengespeichert"
+        )
+        #expect(
             summary(registration(registered: false, nativePush: true, tokenCached: false), Locale(identifier: "zh-Hant"))
                 == "未註冊，原生推播已開啟，無本機權杖"
         )
