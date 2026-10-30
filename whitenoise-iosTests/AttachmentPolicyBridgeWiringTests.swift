@@ -4,9 +4,10 @@ import MarmotKit
 
 /// How `AttachmentPolicyBridge.synchronize` wires its decisions against a
 /// runtime: revoking in event order, forwarding only the generation it began,
-/// keeping policy writes in event order, and stopping an event that a newer one
-/// superseded while the account list, a policy read or write, or a grant is
-/// pending. The decisions themselves are in `AttachmentPolicyBridgeTests`.
+/// keeping policy writes in event order, stopping an event that a newer one
+/// superseded while the account list, a policy read or a policy write was
+/// pending, and keeping it from reporting a grant that was pending. The
+/// decisions themselves are in `AttachmentPolicyBridgeTests`.
 // The limit sits above two chained 30-second latch waits, so their own
 // timeouts report first.
 @MainActor
@@ -52,22 +53,24 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(try runtime.grants.map(\.generation) == [runtime.secondGeneration()])
     }
 
-    @Test func anEventSupersededDuringThePolicyReadNeitherWritesNorGrants() async throws {
+    /// The superseded event is a save, so it must also fail as cancelled rather
+    /// than report saved limits it never wrote.
+    @Test func aSaveSupersededDuringItsPolicyReadNeitherWritesNorGrantsAndFails() async throws {
         let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
         let permissions = FakePermissionSource()
         let bridge = AttachmentPolicyBridge(permissions: { permissions })
         let hold = runtime.hold(.read)
         let edited = attachmentPolicy(transfer: 8 * mebibyte)
 
-        let first = try await start(bridge, runtime)
-        try await hold.entered.wait()
         let save = try await start(bridge, runtime, updatedLimits: (Self.alice.accountIdHex, edited))
+        try await hold.entered.wait()
+        let resync = try await start(bridge, runtime)
         hold.release.signal()
-        try await first.value
-        try await save.value
+        await #expect(throws: CancellationError.self) { try await save.value }
+        try await resync.value
 
-        // Only the save wrote; the superseded event stopped after its read.
-        #expect(runtime.writes.map(\.policy.transferLimit) == [edited.transferLimit])
+        // Only the resync wrote, with the stored limits.
+        #expect(runtime.writes.map(\.policy.transferLimit) == [attachmentPolicy().transferLimit])
         #expect(try runtime.grants.map(\.generation) == [runtime.secondGeneration()])
         #expect(permissions.appliedCount == 1)
     }
@@ -238,8 +241,8 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(runtime.grants.isEmpty)
     }
 
-    /// A failed event doesn't poison the queues: the next event still revokes,
-    /// writes and grants.
+    /// A failed event doesn't poison the queues: the next event still revokes
+    /// and grants.
     @Test func aFailedEventDoesNotBlockTheNextOne() async throws {
         let runtime = FakeAttachmentRuntime(accounts: [Self.alice, Self.bob],
                                             checkpoints: [Self.bob.accountIdHex: .unready],
@@ -252,11 +255,15 @@ struct AttachmentPolicyBridgeWiringTests {
             try await bridge.synchronize(runtime, updatedLimits: (Self.bob.accountIdHex, edited))
         }
 
+        let earlierBegun = runtime.begun.count, earlierGrants = runtime.grants.count
+
         try await bridge.synchronize(runtime)
 
-        let lastBegun = runtime.begun.last { $0.account == Self.alice.accountIdHex }
-        #expect(runtime.grants.last?.account == Self.alice.accountIdHex)
-        #expect(runtime.grants.last?.generation == lastBegun?.generation)
+        let begun = runtime.begun.dropFirst(earlierBegun).first { $0.account == Self.alice.accountIdHex }
+        let grants = runtime.grants.dropFirst(earlierGrants)
+        #expect(grants.map(\.account) == [Self.alice.accountIdHex])
+        #expect(grants.first?.generation == begun?.generation)
+        #expect(begun != nil)
     }
 
     @Test func anUnchangedPolicyIsNotRewritten() async throws {
