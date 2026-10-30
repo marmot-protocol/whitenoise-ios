@@ -271,6 +271,13 @@ class StringsCatalogTests(FixtureCase):
                        "variations": {"plural": {"one": unit("%lld"), "few": unit("%lld"), "many": unit("%lld"),
                                                  "other": unit("%lld")}}}}},
             }},
+            # A numbered substitution token is filled like any other.
+            "items.left": {"localizations": {
+                "en": {**unit("%1$#@count@ left"), "substitutions": {"count": {"argNum": 1, "formatSpecifier": "lld",
+                       "variations": {"plural": {"one": unit("%lld"), "other": unit("%lld")}}}}},
+                "de": plural({"one": "%lld left", "other": "%lld left"}),
+                "it": plural({"one": "%lld rimasto", "other": "%lld rimasti"}), "ru": unit("Осталось %lld"),
+            }},
             # A flat English value that isn't its key is the English copy.
             "files.count": {"localizations": {
                 "en": unit("%lld files"), "de": plural({"one": "%lld files", "other": "%lld files"}),
@@ -290,6 +297,7 @@ class StringsCatalogTests(FixtureCase):
             "de: 'Uploads %@ to %@.' still shows the English copy",
             "ru: 'Uploads %@ to %@.' still shows the English copy",
             "de: 'files.count' still shows the English copy",
+            "de: 'items.left' still shows the English copy",
         ])
 
     def test_english_counts_inside_a_translated_sentence_fail(self):

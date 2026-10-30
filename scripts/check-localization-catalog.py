@@ -339,6 +339,9 @@ def plural_requirement_errors(key, localizations, locales, require=True):
     return errors
 
 
+SUBSTITUTION_TOKEN = re.compile(r"%(?:\d+\$)?#@(\w+)@")
+
+
 def displayed(localization):
     """The texts one localization can show: each plural form, or its shell with
     every combination of its substitutions' forms filled in, `%2$@` read as `%@`."""
@@ -354,12 +357,12 @@ def displayed(localization):
             [form.get("stringUnit", {}).get("value", "")
              for form in (substitutions.get(name, {}).get("variations", {}).get("plural") or {}).values()]
             or [f"%#@{name}@"]
-            for name in re.findall(r"%#@(\w+)@", value)
+            for name in SUBSTITUTION_TOKEN.findall(value)
         ]
         texts = set()
         for combination in itertools.product(*choices):
             filled = iter(combination)
-            texts.add(re.sub(r"%#@\w+@", lambda _: next(filled), value))
+            texts.add(SUBSTITUTION_TOKEN.sub(lambda _: next(filled), value))
     return {re.sub(r"%\d+\$", "%", text) for text in texts}
 
 
