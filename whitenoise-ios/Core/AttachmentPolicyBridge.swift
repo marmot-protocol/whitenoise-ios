@@ -45,29 +45,32 @@ enum AttachmentPolicyBridge {
             let generations = try await revocation.value
             // Keep durable quota writes ordered while revocation runs promptly.
             _ = try? await previousPolicy?.value
-            var appliedLimits = updatedLimits == nil
+            let limitsEdited = updatedLimits != nil
+            var appliedLimits = false
             var appliedPermission = false
             for (account, generation) in generations {
                 do {
-                    if let checkpoint = try await client.onboardingSnapshot(accountID: account.accountIdHex), !checkpoint.ready { continue }
+                    let checkpoint = try await client.onboardingSnapshot(accountID: account.accountIdHex)
+                    guard configures(onboardingReady: checkpoint?.ready) else { continue }
                 } catch is CancellationError { throw CancellationError() }
                 catch { continue }
                 guard revision == event, activeClient === client else {
-                    if updatedLimits != nil { throw CancellationError() }
+                    try endSupersededEvent(limitsEdited: limitsEdited)
                     return
                 }
                 let old = try await client.marmot.attachmentDownloadPolicy(accountRef: account.accountIdHex)
                 let update = policy(old, for: account, applying: updatedLimits)
                 appliedLimits = appliedLimits || update.appliesLimits
                 guard revision == event, activeClient === client else {
-                    if updatedLimits != nil { throw CancellationError() }
+                    try endSupersededEvent(limitsEdited: limitsEdited)
                     return
                 }
                 if update.policy != old {
                     try await client.marmot.setAttachmentDownloadPolicy(accountRef: account.accountIdHex,
                                                                         policy: update.policy)
                 }
-                guard !beforeStart, revision == event, activeClient === client else { continue }
+                guard grantsPermission(beforeStart: beforeStart,
+                                       isCurrentEvent: revision == event && activeClient === client) else { continue }
                 let permission = MediaAutoDownloadStore.shared.attachmentPermission(accountID: account.accountIdHex)
                 // A stale generation is consumed as-is; never mint a replacement for this event.
                 let applied = try await client.marmot.setAttachmentAutomaticPermission(accountRef: account.accountIdHex,
@@ -77,10 +80,36 @@ enum AttachmentPolicyBridge {
             if appliedPermission, revision == event, activeClient === client {
                 MediaAutoDownloadStore.shared.didApplyAttachmentPermission()
             }
-            guard appliedLimits else { throw AttachmentReadError.unavailable }
+            try finishEvent(limitsEdited: limitsEdited, appliedLimits: appliedLimits)
         }
         policyTail = application
         return application
+    }
+
+    /// Accounts still in onboarding keep their stored policy and are not granted
+    /// the permission again until they are ready; an account with no checkpoint
+    /// is configured.
+    nonisolated static func configures(onboardingReady: Bool?) -> Bool {
+        onboardingReady ?? true
+    }
+
+    /// Ends an event that a newer event or a replaced client superseded. A save
+    /// of edited limits fails as cancelled, so Settings never reports it as
+    /// saved; a background resync just stops.
+    nonisolated static func endSupersededEvent(limitsEdited: Bool) throws {
+        if limitsEdited { throw CancellationError() }
+    }
+
+    /// The captured permission is granted only by the current event, and never
+    /// by a `beforeStart` sync, which writes policy only.
+    nonisolated static func grantsPermission(beforeStart: Bool, isCurrentEvent: Bool) -> Bool {
+        !beforeStart && isCurrentEvent
+    }
+
+    /// A save of edited limits that matched no configurable account fails, so
+    /// Settings reports the save as failed instead of saved.
+    nonisolated static func finishEvent(limitsEdited: Bool, appliedLimits: Bool) throws {
+        if limitsEdited, !appliedLimits { throw AttachmentReadError.unavailable }
     }
 
     /// The policy to store for `account`: edited limits only when they name this

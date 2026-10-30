@@ -172,18 +172,3 @@ private final class FakeAccountRelayListManager: AccountRelayListManaging {
         return lists
     }
 }
-
-private func relayLists(
-    bootstrapRelays: [String],
-    nip65: [String],
-    inbox: [String]
-) -> AccountRelayListsFfi {
-    AccountRelayListsFfi(
-        complete: true,
-        missing: [],
-        defaultRelays: [],
-        bootstrapRelays: bootstrapRelays,
-        nip65: RelayListFfi(kind: 10002, relays: nip65),
-        inbox: RelayListFfi(kind: 39000, relays: inbox)
-    )
-}

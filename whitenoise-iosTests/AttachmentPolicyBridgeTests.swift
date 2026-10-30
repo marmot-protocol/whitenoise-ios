@@ -2,10 +2,12 @@ import Testing
 import MarmotKit
 @testable import whitenoise_ios
 
-/// The per-account policy `AttachmentPolicyBridge.synchronize` writes to MDK.
-/// The bridge's other rules (revoking in event order, granting only the
-/// captured generation, skipping superseded events and unready accounts) run
-/// against a live runtime and have no test yet; see #1228.
+/// The decisions `AttachmentPolicyBridge.synchronize` makes for each account:
+/// the policy it writes, and the per-event rules for unready accounts,
+/// superseded events, granting and the save result. These test the pure
+/// decisions only. How `synchronize` wires them, revoking in event order and
+/// forwarding only the captured generation run against a live runtime and
+/// have no test yet; see #1228.
 struct AttachmentPolicyBridgeTests {
     private static let alice = AccountSummaryFfi(label: "alice", accountIdHex: hex("aa"), localSigning: true,
                                                  signedOut: false, running: true)
@@ -62,5 +64,47 @@ struct AttachmentPolicyBridgeTests {
         #expect(update.policy.diskReserve == current.diskReserve)
         #expect(update.policy.transferLimit == current.transferLimit)
         #expect(update.policy.automatic)
+    }
+}
+
+extension AttachmentPolicyBridgeTests {
+    @Test func accountsStillInOnboardingKeepTheirPolicy() {
+        #expect(!AttachmentPolicyBridge.configures(onboardingReady: false))
+        #expect(AttachmentPolicyBridge.configures(onboardingReady: true))
+        // An account without an onboarding checkpoint is configured.
+        #expect(AttachmentPolicyBridge.configures(onboardingReady: nil))
+    }
+
+    /// Settings must never report a superseded save as saved; a background
+    /// resync that a newer event replaced just stops.
+    @Test func aSupersededSaveFailsButASupersededResyncStopsQuietly() {
+        #expect(throws: CancellationError.self) {
+            try AttachmentPolicyBridge.endSupersededEvent(limitsEdited: true)
+        }
+        #expect(throws: Never.self) {
+            try AttachmentPolicyBridge.endSupersededEvent(limitsEdited: false)
+        }
+    }
+
+    @Test func onlyTheCurrentEventAfterStartupGrantsThePermission() {
+        #expect(AttachmentPolicyBridge.grantsPermission(beforeStart: false, isCurrentEvent: true))
+        // An event that is no longer current never grants its stale generation.
+        #expect(!AttachmentPolicyBridge.grantsPermission(beforeStart: false, isCurrentEvent: false))
+        // A sync before startup writes policy only.
+        #expect(!AttachmentPolicyBridge.grantsPermission(beforeStart: true, isCurrentEvent: true))
+        #expect(!AttachmentPolicyBridge.grantsPermission(beforeStart: true, isCurrentEvent: false))
+    }
+
+    @Test func editedLimitsThatMatchedNoAccountReportTheSaveAsUnavailable() {
+        #expect(throws: AttachmentReadError.unavailable) {
+            try AttachmentPolicyBridge.finishEvent(limitsEdited: true, appliedLimits: false)
+        }
+        #expect(throws: Never.self) {
+            try AttachmentPolicyBridge.finishEvent(limitsEdited: true, appliedLimits: true)
+        }
+        // A resync without edited limits has nothing to apply and still succeeds.
+        #expect(throws: Never.self) {
+            try AttachmentPolicyBridge.finishEvent(limitsEdited: false, appliedLimits: false)
+        }
     }
 }
