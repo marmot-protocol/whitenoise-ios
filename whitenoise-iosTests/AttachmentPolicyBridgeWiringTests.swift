@@ -153,6 +153,26 @@ struct AttachmentPolicyBridgeWiringTests {
         }
     }
 
+    /// A resync that follows a save reads the policy only after the save wrote
+    /// it, so it can't write the old limits back.
+    @Test func aResyncAfterASaveKeepsTheSavedLimits() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        let hold = runtime.hold(.write)
+        let edited = attachmentPolicy(transfer: 8 * mebibyte)
+
+        let save = try await start(bridge, runtime, updatedLimits: (Self.alice.accountIdHex, edited))
+        try await hold.entered.wait()
+        let resync = try await start(bridge, runtime)
+        try await eventually { runtime.begun.count == 2 }
+        hold.release.signal()
+        try await save.value
+        try await resync.value
+
+        #expect(runtime.writes.map(\.policy.transferLimit) == [edited.transferLimit])
+        #expect(try runtime.storedPolicy(Self.alice.accountIdHex).transferLimit == edited.transferLimit)
+    }
+
     /// The new runtime's sync starts a newer event, which supersedes the old
     /// runtime's save: the save fails and the old runtime is revoked but its
     /// policy is never read, written or granted.
@@ -178,14 +198,16 @@ struct AttachmentPolicyBridgeWiringTests {
     }
 
     @Test func aStartupSyncRevokesAndWritesThePolicyButGrantsNothing() async throws {
-        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
+        let accounts = [Self.alice, Self.bob]
+        let runtime = FakeAttachmentRuntime(accounts: accounts, stored: attachmentPolicy(automatic: false))
         let permissions = FakePermissionSource()
         let bridge = AttachmentPolicyBridge(permissions: { permissions })
 
         try await bridge.synchronize(runtime, beforeStart: true)
 
-        #expect(runtime.begun.map(\.account) == [Self.alice.accountIdHex])
-        #expect(runtime.writes.map(\.policy.automatic) == [true])
+        #expect(runtime.begun.map(\.account) == accounts.map(\.accountIdHex))
+        #expect(runtime.writes.map(\.account) == accounts.map(\.accountIdHex))
+        #expect(!runtime.writes.map(\.policy.automatic).contains(false))
         #expect(runtime.grants.isEmpty)
         #expect(permissions.appliedCount == 0)
     }
@@ -266,6 +288,34 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(begun != nil)
     }
 
+    /// One applied grant is reported even when a later account's grant isn't.
+    @Test func anAppliedGrantIsReportedEvenIfALaterOneIsNot() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice, Self.bob], rejectedGrants: [Self.bob.accountIdHex])
+        let permissions = FakePermissionSource()
+        let bridge = AttachmentPolicyBridge(permissions: { permissions })
+
+        try await bridge.synchronize(runtime)
+
+        #expect(runtime.grants.count == 2)
+        #expect(permissions.appliedCount == 1)
+    }
+
+    /// Each event grants the preference as it is when the event runs.
+    @Test func aLaterEventGrantsTheChangedPermission() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice])
+        let permissions = FakePermissionSource()
+        let bridge = AttachmentPolicyBridge(permissions: { permissions })
+        try await bridge.synchronize(runtime)
+        let changed = AttachmentAutomaticPermissionFfi(images: false, videos: false, audio: false, files: false)
+        permissions.override = changed
+
+        try await bridge.synchronize(runtime)
+
+        #expect(runtime.grants.map(\.permission).last == changed)
+        #expect(runtime.grants.map(\.permission).first != changed)
+        #expect(runtime.grants.map(\.generation).last == runtime.begun.map(\.generation).last)
+    }
+
     @Test func anUnchangedPolicyIsNotRewritten() async throws {
         let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: true))
         let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
@@ -277,7 +327,7 @@ struct AttachmentPolicyBridgeWiringTests {
     }
 
     @Test func aGrantTheRuntimeDidNotApplyIsNotReported() async throws {
-        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], appliesGrants: false)
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], rejectedGrants: [Self.alice.accountIdHex])
         let permissions = FakePermissionSource()
         let bridge = AttachmentPolicyBridge(permissions: { permissions })
 
@@ -340,7 +390,7 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
     private let checkpoints: [String: Checkpoint]
     private let signedOutDuringRevocation: Set<String>
     var failingRevocation: Set<String>
-    private let appliesGrants: Bool
+    private let rejectedGrants: Set<String>
     private var stored: [String: AttachmentDownloadPolicyFfi]
     private var holds: [Step: Hold] = [:]
     private var issued = 0
@@ -353,14 +403,18 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
     init(accounts: [AccountSummaryFfi], stored: AttachmentDownloadPolicyFfi = attachmentPolicy(),
          checkpoints: [String: Checkpoint] = [:], signedOutDuringRevocation: Set<String> = [],
          failingRevocation: Set<String> = [],
-         appliesGrants: Bool = true, cursorPersistence: CursorPersistenceFfi = .advance) {
+         rejectedGrants: Set<String> = [], cursorPersistence: CursorPersistenceFfi = .advance) {
         self.accounts = accounts
         self.stored = Dictionary(uniqueKeysWithValues: accounts.map { ($0.accountIdHex, stored) })
         self.checkpoints = checkpoints
         self.signedOutDuringRevocation = signedOutDuringRevocation
         self.failingRevocation = failingRevocation
-        self.appliesGrants = appliesGrants
+        self.rejectedGrants = rejectedGrants
         self.cursorPersistence = cursorPersistence
+    }
+
+    func storedPolicy(_ account: String) throws -> AttachmentDownloadPolicyFfi {
+        try #require(stored[account])
     }
 
     /// The generation the second event began, for tests that run two events.
@@ -398,8 +452,7 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
         case .unready: ready = false
         case .ready: ready = true
         }
-        return OnboardingSnapshotFfi(accountIdHex: accountID, recoveryEpoch: nil, revision: 1, ready: ready, steps: [],
-                                     proposal: nil, singleDeviceNotice: nil, cancellationPending: false)
+        return onboardingCheckpoint(accountID: accountID, ready: ready)
     }
 
     func beginAttachmentPermissionUpdate(accountRef: String) async throws -> String {
@@ -428,16 +481,19 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
                                           permission: AttachmentAutomaticPermissionFfi) async throws -> Bool {
         try await pass(.grant)
         grants.append(Grant(account: accountRef, generation: generation, permission: permission))
-        return appliesGrants
+        return !rejectedGrants.contains(accountRef)
     }
 }
 
 @MainActor
 private final class FakePermissionSource: AttachmentPermissionSource {
     private(set) var appliedCount = 0
+    /// When set, every account gets this permission.
+    var override: AttachmentAutomaticPermissionFfi?
 
     /// Differs per account, so a permission forwarded to the wrong account shows.
     func attachmentPermission(accountID: String) -> AttachmentAutomaticPermissionFfi {
+        if let override { return override }
         let images = accountID.hasPrefix("a")
         return AttachmentAutomaticPermissionFfi(images: images, videos: !images, audio: true, files: false)
     }
