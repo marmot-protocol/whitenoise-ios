@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 
@@ -29,25 +28,60 @@ final class NewChatFlowViewModel {
     var groupCreateError: String?
     private var retryStartMode = RetryStartMode.canonicalLookup
 
-#if DEBUG
-    @ObservationIgnored var existingDirectChatGroupIdForTesting: (
-        @MainActor (String) async throws -> String?
-    )?
-    @ObservationIgnored var createGroupForTesting: (
-        @MainActor (String, String, [String], String?) async throws -> String
-    )?
-    @ObservationIgnored var createGroupWithInitialImageForTesting: (
-        @MainActor (String, String, [String], String?, InitialGroupImageFfi) async throws -> String
-    )?
-    @ObservationIgnored var createGroupWithOptionsForTesting: (
-        @MainActor (String, String, [String], CreateGroupOptionsFfi) async throws -> String
-    )?
-#endif
+    /// Looks up the existing two-person conversation with `peerAccountId`.
+    typealias FindExistingDirectChat = @MainActor (
+        _ appState: AppState,
+        _ accountRef: String,
+        _ peerAccountId: String
+    ) async throws -> ExistingDirectConversationFfi?
+
+    /// Creates a group for `accountRef` with `memberRefs`.
+    typealias CreateGroup = @MainActor (
+        _ appState: AppState,
+        _ accountRef: String,
+        _ name: String,
+        _ memberRefs: [String],
+        _ options: CreateGroupOptionsFfi
+    ) async throws -> CreatedGroupFfi
 
     @ObservationIgnored private let keyPackagePrewarmer = MemberKeyPackagePrewarmer()
+    @ObservationIgnored private let findExistingDirectChat: FindExistingDirectChat
+    @ObservationIgnored private let createGroupOperation: CreateGroup
 
-    init(starter: DirectChatStarter? = nil) {
+    init(
+        starter: DirectChatStarter? = nil,
+        findExistingDirectChat: @escaping FindExistingDirectChat = NewChatFlowViewModel.existingDirectChatInMarmot,
+        createGroup: @escaping CreateGroup = NewChatFlowViewModel.createGroupInMarmot
+    ) {
         self.starter = starter ?? DirectChatStarter()
+        self.findExistingDirectChat = findExistingDirectChat
+        self.createGroupOperation = createGroup
+    }
+
+    private static func existingDirectChatInMarmot(
+        appState: AppState,
+        accountRef: String,
+        peerAccountId: String
+    ) async throws -> ExistingDirectConversationFfi? {
+        try await appState.currentMarmotClient().existingDirectConversation(
+            accountRef: accountRef,
+            peerAccountId: peerAccountId
+        )
+    }
+
+    private static func createGroupInMarmot(
+        appState: AppState,
+        accountRef: String,
+        name: String,
+        memberRefs: [String],
+        options: CreateGroupOptionsFfi
+    ) async throws -> CreatedGroupFfi {
+        try await appState.currentMarmotClient().createGroupWithOptionsDetailed(
+            accountRef: accountRef,
+            name: name,
+            memberRefs: memberRefs,
+            options: options
+        )
     }
 
     var isBusy: Bool {
@@ -285,19 +319,10 @@ final class NewChatFlowViewModel {
         using appState: AppState
     ) async throws -> String? {
         let normalized = accountIdHex.lowercased()
-#if DEBUG
-        if let existingDirectChatGroupIdForTesting {
-            return try await existingDirectChatGroupIdForTesting(normalized)
-        }
-#endif
         guard let accountRef = appState.activeAccountRef else {
             throw DirectChatLookupError.noActiveAccount
         }
-        let client = try appState.currentMarmotClient()
-        let existing = try await client.existingDirectConversation(
-            accountRef: accountRef,
-            peerAccountId: normalized
-        )
+        let existing = try await findExistingDirectChat(appState, accountRef, normalized)
         return existing?.reusable == true ? existing?.groupIdHex : nil
     }
 
@@ -386,53 +411,14 @@ final class NewChatFlowViewModel {
                 initialImage: image?.initialImage,
                 disappearingMessageSecs: retentionSeconds
             )
-            let groupIdHex: String
-            var createdRow: ChatListRowFfi?
-#if DEBUG
-            if let createGroupWithOptionsForTesting {
-                groupIdHex = try await createGroupWithOptionsForTesting(
-                    accountRef,
-                    normalizedName,
-                    groupSelection.memberRefs,
-                    options
-                )
-            } else if let image, let createGroupWithInitialImageForTesting {
-                groupIdHex = try await createGroupWithInitialImageForTesting(
-                    accountRef,
-                    normalizedName,
-                    groupSelection.memberRefs,
-                    normalizedDescription,
-                    image.initialImage
-                )
-            } else if image == nil, let createGroupForTesting {
-                groupIdHex = try await createGroupForTesting(
-                    accountRef,
-                    normalizedName,
-                    groupSelection.memberRefs,
-                    normalizedDescription
-                )
-            } else {
-                let client = try appState.currentMarmotClient()
-                let created = try await client.createGroupWithOptionsDetailed(
-                    accountRef: accountRef,
-                    name: normalizedName,
-                    memberRefs: groupSelection.memberRefs,
-                    options: options
-                )
-                groupIdHex = created.groupIdHex
-                createdRow = created.chatListRow
-            }
-#else
-            let client = try appState.currentMarmotClient()
-            let created = try await client.createGroupWithOptionsDetailed(
-                accountRef: accountRef,
-                name: normalizedName,
-                memberRefs: groupSelection.memberRefs,
-                options: options
+            let created = try await createGroupOperation(
+                appState,
+                accountRef,
+                normalizedName,
+                groupSelection.memberRefs,
+                options
             )
-            groupIdHex = created.groupIdHex
-            createdRow = created.chatListRow
-#endif
+            let groupIdHex = created.groupIdHex
             if let image {
                 GroupAvatarImageLoader.seed(
                     data: image.data,
@@ -441,9 +427,7 @@ final class NewChatFlowViewModel {
                     replacingImageHashHex: nil
                 )
             }
-            if let createdRow {
-                appState.noteCreatedChatListRow(accountRef: accountRef, row: createdRow)
-            }
+            appState.noteCreatedChatListRow(accountRef: accountRef, row: created.chatListRow)
             HostActionPerformance.groupBecameCanonical(
                 groupIdHex: groupIdHex,
                 since: performance

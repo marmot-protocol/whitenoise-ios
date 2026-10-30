@@ -78,15 +78,16 @@ struct NewGroupMissingKeyPackageTests {
         return appState
     }
 
-    private func makeModel() -> (NewChatFlowViewModel, MemberRefFfi) {
-        let model = NewChatFlowViewModel()
+    private func makeModel() -> (NewChatFlowViewModel, MemberRefFfi, NewChatFlowMarmotDouble) {
+        let marmot = NewChatFlowMarmotDouble()
+        let model = newChatFlow(marmot: marmot)
         let member = MemberRefFfi(memberRef: "npub1alex", accountIdHex: peerHex, npub: "npub1alex")
         model.groupSelection.add(member)
         let peerHex = peerHex
-        model.createGroupForTesting = { _, _, _, _ in
+        marmot.createGroup = { _, _, _, _ in
             throw MarmotKitError.MissingKeyPackage(account: peerHex, reason: .notFound)
         }
-        return (model, member)
+        return (model, member, marmot)
     }
 
     @Test func namedMissingKeyPackageToastsAndKeepsSelectionForRetry() async throws {
@@ -94,7 +95,7 @@ struct NewGroupMissingKeyPackageTests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let appState = makeAppState(knownName: "Alex", defaults: defaults)
-        let (model, member) = makeModel()
+        let (model, member, marmot) = makeModel()
 
         var opened: String?
         await model.createGroup(name: "Test", description: "", retentionSeconds: 0, using: appState) { opened = $0 }
@@ -105,7 +106,7 @@ struct NewGroupMissingKeyPackageTests {
         #expect(appState.activeToast?.message == "Alex isn't on White Noise yet.")
         #expect(model.groupSelection.memberRefs == [member.memberRef])
 
-        model.createGroupForTesting = { _, _, refs, _ in
+        marmot.createGroup = { _, _, refs, _ in
             #expect(refs == [member.memberRef])
             return "created"
         }
@@ -119,7 +120,7 @@ struct NewGroupMissingKeyPackageTests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let appState = makeAppState(knownName: nil, defaults: defaults)
-        let (model, member) = makeModel()
+        let (model, member, _) = makeModel()
 
         await model.createGroup(name: "Test", description: "", retentionSeconds: 0, using: appState) { _ in }
         #expect(model.groupCreateError == "This user isn't on White Noise yet.")
