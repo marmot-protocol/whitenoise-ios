@@ -391,3 +391,8 @@ func relayLists(
 func relayLists(_ relays: [String]) -> AccountRelayListsFfi {
     relayLists(defaultRelays: relays, bootstrapRelays: relays, nip65: relays, inbox: relays)
 }
+
+func accountSummary(_ label: String, byte: String, signedOut: Bool = false) -> AccountSummaryFfi {
+    AccountSummaryFfi(label: label, accountIdHex: hex(byte), localSigning: true, signedOut: signedOut,
+                      running: !signedOut)
+}
