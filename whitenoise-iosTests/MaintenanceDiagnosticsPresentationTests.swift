@@ -6,12 +6,6 @@ import Testing
 struct MaintenanceDiagnosticsPresentationTests {
     @Test func maintenanceLabelsAreTranslatedForTheGivenLocale() {
         let presentation = MaintenanceDiagnosticsPresentation.self
-        let english = Locale(identifier: "en")
-        #expect(presentation.phaseLabel(.pendingPublication, locale: english) == "Pending publication")
-        #expect(presentation.phaseLabel(.retry, locale: english) == "Retrying")
-        #expect(presentation.triggerLabel(.postJoin, locale: english) == "Post-join")
-        #expect(presentation.evolutionPhaseLabel(.attempting, locale: english) == "Attempting")
-
         let german = Locale(identifier: "de")
         #expect(presentation.phaseLabel(.eoseTimeout, locale: german) == "EOSE-Zeitüberschreitung")
         #expect(presentation.phaseLabel(.clockSkewBlocked, locale: german) == "Durch Uhrabweichung blockiert")
@@ -27,27 +21,36 @@ struct MaintenanceDiagnosticsPresentationTests {
             == "已被收斂取代")
     }
 
-    /// Every case resolves to its own catalog entry: a label that falls back
-    /// to its English key, or two cases sharing one by mistake, shows up here.
-    @Test func everyMaintenanceLabelHasADistinctTranslation() {
+    // The enums aren't CaseIterable, so a new MDK case needs adding here.
+    // Evolution's .supersededByConvergence shares the phase's label on purpose.
+    private let phases: [MaintenancePhaseFfi] = [
+        .catchUp, .eoseTimeout, .grace, .quiet, .jitter, .overdue, .paused, .clockSkewBlocked,
+        .pendingPublication, .fanout, .retry, .supersededByConvergence, .complete, .failed
+    ]
+    private let triggers: [MaintenanceTriggerFfi] = [.postJoin, .periodic, .manual]
+    private let evolutionPhases: [GroupEvolutionPhaseFfi] = [.preparing, .prepared, .attempting, .confirmed]
+
+    private func labels(_ locale: Locale) -> [String] {
         let presentation = MaintenanceDiagnosticsPresentation.self
-        let phases: [MaintenancePhaseFfi] = [
-            .catchUp, .eoseTimeout, .grace, .quiet, .jitter, .overdue, .paused, .clockSkewBlocked,
-            .pendingPublication, .fanout, .retry, .supersededByConvergence, .complete, .failed
-        ]
-        let triggers: [MaintenanceTriggerFfi] = [.postJoin, .periodic, .manual]
-        let evolutionPhases: [GroupEvolutionPhaseFfi] = [.preparing, .prepared, .attempting, .confirmed]
+        return phases.map { presentation.phaseLabel($0, locale: locale) }
+            + triggers.map { presentation.triggerLabel($0, locale: locale) }
+            + evolutionPhases.map { presentation.evolutionPhaseLabel($0, locale: locale) }
+    }
+
+    @Test func everyMaintenanceCaseHasItsOwnLabel() {
+        let english = labels(Locale(identifier: "en"))
+        #expect(Set(english).count == english.count)
+    }
+
+    /// A code key the catalog doesn't contain falls back to the English key.
+    /// The catalog lint can't see code keys, so this checks them here, in
+    /// locales where none of these labels is spelled like the English.
+    @Test func everyMaintenanceLabelResolvesToACatalogTranslation() {
+        let english = labels(Locale(identifier: "en"))
         for locale in ["de", "ru", "zh-Hans"].map(Locale.init(identifier:)) {
-            let english = Locale(identifier: "en")
-            let labels = phases.map { (presentation.phaseLabel($0, locale: english), presentation.phaseLabel($0, locale: locale)) }
-                + triggers.map { (presentation.triggerLabel($0, locale: english), presentation.triggerLabel($0, locale: locale)) }
-                + evolutionPhases.map {
-                    (presentation.evolutionPhaseLabel($0, locale: english), presentation.evolutionPhaseLabel($0, locale: locale))
-                }
-            for (source, translated) in labels {
+            for (source, translated) in zip(english, labels(locale)) {
                 #expect(translated != source, "\(source) is untranslated in \(locale.identifier)")
             }
-            #expect(Set(labels.map(\.1)).count == labels.count)
         }
     }
 

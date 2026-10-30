@@ -386,7 +386,7 @@ struct ChatDeveloperToolsView: View {
                 Text(IdentityFormatter.short(fanout.idHex))
                     .font(.caption.monospaced())
                 Spacer()
-                Text(fanout.evolutionConfirmed ? L10n.string("Confirmed") : L10n.string("Pending"))
+                Text(fanout.evolutionConfirmed ? "Confirmed" : "Pending")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(fanout.evolutionConfirmed ? Color.green : Color.secondary)
             }

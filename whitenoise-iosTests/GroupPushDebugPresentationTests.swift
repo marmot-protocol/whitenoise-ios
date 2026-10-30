@@ -26,10 +26,12 @@ struct GroupPushDebugPresentationTests {
         nativePush: Bool,
         tokenCached: Bool
     ) -> LocalPushRegistrationDebugFfi {
+        // The fields the summary doesn't show take the opposite of
+        // `registered`, so reading one of them instead fails.
         LocalPushRegistrationDebugFfi(
             registered: registered,
-            shareable: registered,
-            localNotificationsEnabled: registered,
+            shareable: !registered,
+            localNotificationsEnabled: !registered,
             nativePushEnabled: nativePush,
             localLeafIndex: nil,
             localTokenCached: tokenCached
@@ -72,12 +74,12 @@ struct GroupPushDebugPresentationTests {
                 == "Not registered, native push off, no local token"
         )
         #expect(
-            summary(registration(registered: true, nativePush: false, tokenCached: true), Locale(identifier: "de"))
-                == "Registriert, nativer Push aus, Token zwischengespeichert"
+            summary(registration(registered: true, nativePush: false, tokenCached: false), Locale(identifier: "de"))
+                == "Registriert, nativer Push aus, kein lokales Token"
         )
         #expect(
-            summary(registration(registered: false, nativePush: true, tokenCached: false), Locale(identifier: "zh-Hant"))
-                == "未註冊，原生推播已開啟，無本機權杖"
+            summary(registration(registered: false, nativePush: true, tokenCached: true), Locale(identifier: "zh-Hant"))
+                == "未註冊，原生推播已開啟，權杖已快取"
         )
     }
 
