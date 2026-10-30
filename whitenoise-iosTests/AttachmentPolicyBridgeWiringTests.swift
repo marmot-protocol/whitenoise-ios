@@ -45,8 +45,9 @@ struct AttachmentPolicyBridgeWiringTests {
 
         // The earlier event began first, so the current event's generation is the
         // second one; a newer revocation that ran ahead would have taken the first.
-        #expect(runtime.begun.count == 2)
-        #expect(runtime.grants.map(\.generation) == [runtime.begun[1].generation])
+        // The newer revocation was queued on the main actor before the release, so
+        // one that didn't wait would run first.
+        #expect(try runtime.grants.map(\.generation) == [runtime.secondGeneration()])
     }
 
     @Test func anEventSupersededDuringThePolicyReadNeitherWritesNorGrants() async throws {
@@ -65,7 +66,7 @@ struct AttachmentPolicyBridgeWiringTests {
 
         // Only the save wrote; the superseded event stopped after its read.
         #expect(runtime.writes.map(\.policy.transferLimit) == [edited.transferLimit])
-        #expect(runtime.grants.map(\.generation) == [runtime.begun[1].generation])
+        #expect(try runtime.grants.map(\.generation) == [runtime.secondGeneration()])
         #expect(permissions.appliedCount == 1)
     }
 
@@ -81,7 +82,7 @@ struct AttachmentPolicyBridgeWiringTests {
         try await first.value
         try await second.value
 
-        #expect(runtime.grants.map(\.generation) == [runtime.begun[1].generation])
+        #expect(try runtime.grants.map(\.generation) == [runtime.secondGeneration()])
     }
 
     @Test func anEventSupersededDuringItsGrantDoesNotReportIt() async throws {
@@ -111,14 +112,40 @@ struct AttachmentPolicyBridgeWiringTests {
         let first = try await start(bridge, runtime)
         try await hold.entered.wait()
         let save = try await start(bridge, runtime, updatedLimits: (Self.alice.accountIdHex, edited))
-        // The newer revocation doesn't wait for the held write; once it has
-        // run, an unordered write would run ahead of the held one.
+        // The newer revocation doesn't wait for the held write. Once it has run,
+        // the save's application is queued on the main actor ahead of the
+        // release, so a write that didn't wait would land first.
         try await eventually { runtime.begun.count == 2 }
         hold.release.signal()
         try await first.value
         try await save.value
 
         #expect(runtime.writes.map(\.policy.transferLimit) == [attachmentPolicy().transferLimit, edited.transferLimit])
+    }
+
+    @Test func editedLimitsReachOnlyTheAccountTheyName() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice, Self.bob])
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        let edited = attachmentPolicy(transfer: 8 * mebibyte)
+
+        // Bob, whom the limits don't name, comes after Alice and must not undo the save.
+        try await bridge.synchronize(runtime, updatedLimits: (Self.alice.accountIdHex, edited))
+
+        #expect(runtime.writes.map(\.account) == [Self.alice.accountIdHex])
+        #expect(runtime.writes.map(\.policy.transferLimit) == [edited.transferLimit])
+    }
+
+    /// Settings must report a save as failed when its account isn't configured.
+    @Test func aSaveForAnAccountStillInOnboardingIsUnavailable() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice, Self.bob],
+                                            checkpoints: [Self.bob.accountIdHex: .unready])
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        let edited = attachmentPolicy(transfer: 8 * mebibyte)
+
+        await #expect(throws: AttachmentReadError.unavailable) {
+            try await bridge.synchronize(runtime, updatedLimits: (Self.bob.accountIdHex, edited))
+        }
+        #expect(runtime.writes.allSatisfy { $0.policy.transferLimit != edited.transferLimit })
     }
 
     /// The new runtime's sync supersedes the old runtime's save, so the save
@@ -163,21 +190,24 @@ struct AttachmentPolicyBridgeWiringTests {
     /// only its own account.
     @Test func onlyAccountsPastOnboardingAreConfiguredAndGranted() async throws {
         let runtime = FakeAttachmentRuntime(
-            accounts: [Self.alice, Self.bob, Self.dave, Self.erin], stored: attachmentPolicy(automatic: false),
+            accounts: [Self.alice, Self.erin, Self.bob, Self.dave], stored: attachmentPolicy(automatic: false),
             checkpoints: [Self.bob.accountIdHex: .unready, Self.dave.accountIdHex: .ready,
                           Self.erin.accountIdHex: .unreadable])
         let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
 
         try await bridge.synchronize(runtime)
 
-        let all = [Self.alice, Self.bob, Self.dave, Self.erin].map(\.accountIdHex)
+        let all = [Self.alice, Self.erin, Self.bob, Self.dave].map(\.accountIdHex)
         let configured = [Self.alice.accountIdHex, Self.dave.accountIdHex]
         #expect(runtime.begun.map(\.account) == all)
         #expect(runtime.writes.map(\.account) == configured)
         #expect(runtime.grants.map(\.account) == configured)
     }
 
-    @Test func cancellationWhileReadingACheckpointCancelsTheEvent() async throws {
+    /// Defensive: `MarmotClient` reads checkpoints in a detached task, so task
+    /// cancellation doesn't reach this read today. A `CancellationError` from it
+    /// still ends the event instead of being treated as an unreadable checkpoint.
+    @Test func aCancellationErrorFromACheckpointReadEndsTheEvent() async throws {
         let runtime = FakeAttachmentRuntime(accounts: [Self.alice, Self.bob],
                                             checkpoints: [Self.alice.accountIdHex: .cancelled])
         let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
@@ -252,6 +282,9 @@ struct AttachmentPolicyBridgeWiringTests {
     }
 }
 
+/// Models the order of runtime calls, not MDK's own rules: a grant is
+/// accepted whatever its generation, so tests assert on the generations the
+/// bridge forwards rather than on what MDK would reject.
 @MainActor
 private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
     enum Step { case listing, read, write, grant }
@@ -285,6 +318,12 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
         self.signedOutDuringRevocation = signedOutDuringRevocation
         self.appliesGrants = appliesGrants
         self.cursorPersistence = cursorPersistence
+    }
+
+    /// The generation the second event began, for tests that run two events.
+    func secondGeneration() throws -> String {
+        try #require(begun.count == 2)
+        return begun[1].generation
     }
 
     /// Parks the next call of `step` until `release` is signalled; `entered`
