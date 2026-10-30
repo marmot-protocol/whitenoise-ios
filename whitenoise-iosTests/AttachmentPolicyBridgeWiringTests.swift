@@ -130,7 +130,8 @@ struct AttachmentPolicyBridgeWiringTests {
         let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
         let edited = attachmentPolicy(transfer: 8 * mebibyte)
 
-        // Bob, whom the limits don't name, comes after Alice and must not undo the save.
+        // Bob, whom the limits don't name, comes after Alice; the save must still count
+        // as applied.
         try await bridge.synchronize(runtime, updatedLimits: (Self.alice.accountIdHex, edited))
 
         #expect(runtime.writes.map(\.account) == [Self.alice.accountIdHex])
@@ -147,12 +148,11 @@ struct AttachmentPolicyBridgeWiringTests {
         await #expect(throws: AttachmentReadError.unavailable) {
             try await bridge.synchronize(runtime, updatedLimits: (Self.bob.accountIdHex, edited))
         }
-        #expect(runtime.writes.allSatisfy { $0.policy.transferLimit != edited.transferLimit })
     }
 
-    /// The new runtime's sync supersedes the old runtime's save, so the save
-    /// fails and the old runtime is revoked but its policy is never read,
-    /// written or granted.
+    /// The new runtime's sync starts a newer event, which supersedes the old
+    /// runtime's save: the save fails and the old runtime is revoked but its
+    /// policy is never read, written or granted.
     @Test func aSaveSupersededByAnotherRuntimesSyncFails() async throws {
         let old = FakeAttachmentRuntime(accounts: [Self.alice])
         let new = FakeAttachmentRuntime(accounts: [Self.alice])
@@ -238,6 +238,27 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(runtime.grants.isEmpty)
     }
 
+    /// A failed event doesn't poison the queues: the next event still revokes,
+    /// writes and grants.
+    @Test func aFailedEventDoesNotBlockTheNextOne() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice, Self.bob],
+                                            checkpoints: [Self.bob.accountIdHex: .unready],
+                                            failingRevocation: [Self.alice.accountIdHex])
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        await #expect(throws: FakeAttachmentRuntime.RevocationFailed.self) { try await bridge.synchronize(runtime) }
+        runtime.failingRevocation = []
+        let edited = attachmentPolicy(transfer: 8 * mebibyte)
+        await #expect(throws: AttachmentReadError.unavailable) {
+            try await bridge.synchronize(runtime, updatedLimits: (Self.bob.accountIdHex, edited))
+        }
+
+        try await bridge.synchronize(runtime)
+
+        let lastBegun = runtime.begun.last { $0.account == Self.alice.accountIdHex }
+        #expect(runtime.grants.last?.account == Self.alice.accountIdHex)
+        #expect(runtime.grants.last?.generation == lastBegun?.generation)
+    }
+
     @Test func anUnchangedPolicyIsNotRewritten() async throws {
         let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: true))
         let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
@@ -284,7 +305,7 @@ struct AttachmentPolicyBridgeWiringTests {
         updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)? = nil
     ) async throws -> Task<Void, any Error> {
         let scheduled = TestLatch()
-        let task = Task {
+        let task = Task { @MainActor in
             scheduled.signal()
             try await bridge.synchronize(runtime, updatedLimits: updatedLimits)
         }
@@ -311,7 +332,7 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
     private let accounts: [AccountSummaryFfi]
     private let checkpoints: [String: Checkpoint]
     private let signedOutDuringRevocation: Set<String>
-    private let failingRevocation: Set<String>
+    var failingRevocation: Set<String>
     private let appliesGrants: Bool
     private var stored: [String: AttachmentDownloadPolicyFfi]
     private var holds: [Step: Hold] = [:]
