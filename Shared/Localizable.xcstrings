@@ -28644,7 +28644,7 @@
       }
     },
     "Copies %@" : {
-      "comment" : "Accessibility hint for a row that copies a value to the clipboard. The argument is the row's localized title, such as “Group ID”.",
+      "comment" : "Accessibility hint describing what tapping a row does: a third-person verb phrase (it copies), not the noun “copies”. The argument is the row's localized title, such as “Group ID”.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
