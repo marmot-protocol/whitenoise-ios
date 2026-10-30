@@ -45,10 +45,10 @@ nonisolated enum MaintenanceDiagnosticsPresentation {
         locale: Locale = AppLanguage.currentLocale
     ) -> String {
         L10n.formatted(
-            "%@ total, %@ overdue",
+            "%@, %@",
             arguments: [
-                LocalizedNumberLabel.decimal(total, locale: locale),
-                LocalizedNumberLabel.decimal(overdue, locale: locale)
+                L10n.plural("%llu total", total, locale: locale),
+                L10n.plural("%llu overdue", overdue, locale: locale)
             ],
             locale: locale
         )
