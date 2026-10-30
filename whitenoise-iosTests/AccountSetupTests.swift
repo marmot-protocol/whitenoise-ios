@@ -5,6 +5,22 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func discoverySearchFailsOnlyOnAThrownErrorOrLostUpdates() {
+        #expect(AccountSetupDiscoveryOutcome.failure(nil, isConnected: true) == nil)
+        #expect(AccountSetupDiscoveryOutcome.failure(.operation, isConnected: true) == .discovery)
+        #expect(AccountSetupDiscoveryOutcome.failure(.settingsChanged, isConnected: true) == .settingsChanged)
+        #expect(AccountSetupDiscoveryOutcome.failure(nil, isConnected: false) == .updatesStopped)
+    }
+
+    @Test func setupFailureLogsCaseNamesWithoutPayloads() {
+        let relay = "wss://private.example.com"
+        let command = AccountSetupLogLabel.caseName(AccountSetupCommand.discovery([relay]))
+        let error = AccountSetupLogLabel.caseName(MarmotKitError.UnknownAccount(accountRef: relay))
+        #expect(!command.contains(relay) && !command.isEmpty)
+        #expect(!error.contains(relay) && !error.isEmpty)
+        #expect(AccountSetupLogLabel.caseName(MarmotKitError.OnboardingActionUnavailable) != AccountSetupLogLabel.caseName(MarmotKitError.UserBlocked))
+    }
+
     @Test func profileProgressDistinguishesLookupFromPublicationAndExitActions() {
         var value = proposalSnapshot(step: .profile)
         value.steps[0].actions = [.retry]

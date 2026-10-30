@@ -122860,6 +122860,71 @@
         }
       }
     },
+    "We couldn’t check your inbox relays. If you already have an inbox relay list, the default relays will replace it, and relays left out will stop receiving your invitations. You’ll review the change before anything is published." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wir konnten deine Inbox-Relays nicht prüfen. Wenn du bereits eine Inbox-Relay-Liste hast, wird sie durch die Standard-Relays ersetzt, und nicht enthaltene Relays empfangen deine Einladungen nicht mehr. Du prüfst die Änderung, bevor etwas veröffentlicht wird."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t check your inbox relays. If you already have an inbox relay list, the default relays will replace it, and relays left out will stop receiving your invitations. You’ll review the change before anything is published."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pudimos comprobar los relays de tu bandeja de entrada. Si ya tienes una lista de relays de bandeja de entrada, los relays predeterminados la reemplazarán y los relays que queden fuera dejarán de recibir tus invitaciones. Revisarás el cambio antes de que se publique nada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous n’avons pas pu vérifier vos relais de réception. Si vous avez déjà une liste de relais de réception, les relais par défaut la remplaceront, et les relais exclus ne recevront plus vos invitations. Vous vérifierez la modification avant toute publication."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non siamo riusciti a controllare i tuoi relay della posta in arrivo. Se hai già un elenco di relay della posta in arrivo, i relay predefiniti lo sostituiranno e i relay esclusi non riceveranno più i tuoi inviti. Rivedrai la modifica prima che venga pubblicato qualcosa."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não conseguimos verificar seus relays da caixa de entrada. Se você já tem uma lista de relays da caixa de entrada, os relays padrão vão substituí-la, e os relays que ficarem de fora deixarão de receber seus convites. Você vai revisar a alteração antes que algo seja publicado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось проверить ваши ретрансляторы входящих сообщений. Если у вас уже есть список ретрансляторов входящих сообщений, ретрансляторы по умолчанию заменят его, а не вошедшие в него ретрансляторы перестанут получать ваши приглашения. Вы проверите изменение, прежде чем что-либо будет опубликовано."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gelen kutusu rölelerini kontrol edemedik. Zaten bir gelen kutusu röle listen varsa varsayılan röleler onun yerini alır ve listede olmayan röleler davetlerini almayı bırakır. Herhangi bir şey yayımlanmadan önce değişikliği gözden geçireceksin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我们无法检查你的收件箱中继。如果你已有收件箱中继列表，默认中继将替换它，未包含的中继将不再接收你的邀请。在发布任何内容之前，你会先查看这项更改。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我們無法檢查你的收件匣中繼。如果你已有收件匣中繼列表，預設中繼將取代它，未包含的中繼將不再接收你的邀請。在發布任何內容之前，你會先檢視這項變更。"
+          }
+        }
+      }
+    },
     "We couldn’t connect to the service that provides your profile." : {
       "extractionState" : "manual",
       "localizations" : {
