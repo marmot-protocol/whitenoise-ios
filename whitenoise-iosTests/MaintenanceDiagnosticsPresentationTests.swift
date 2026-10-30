@@ -21,7 +21,8 @@ struct MaintenanceDiagnosticsPresentationTests {
             == "已被收斂取代")
     }
 
-    // The enums aren't CaseIterable, so a new MDK case needs adding here.
+    // The enums aren't CaseIterable. The exhaustive switches below stop
+    // compiling when MDK adds a case, as a reminder to list it here too.
     // Evolution's .supersededByConvergence shares the phase's label on purpose.
     private let phases: [MaintenancePhaseFfi] = [
         .catchUp, .eoseTimeout, .grace, .quiet, .jitter, .overdue, .paused, .clockSkewBlocked,
@@ -30,16 +31,42 @@ struct MaintenanceDiagnosticsPresentationTests {
     private let triggers: [MaintenanceTriggerFfi] = [.postJoin, .periodic, .manual]
     private let evolutionPhases: [GroupEvolutionPhaseFfi] = [.preparing, .prepared, .attempting, .confirmed]
 
-    private func labels(_ locale: Locale) -> [String] {
+    private static func listed(_ phase: MaintenancePhaseFfi) {
+        switch phase {
+        case .catchUp, .eoseTimeout, .grace, .quiet, .jitter, .overdue, .paused, .clockSkewBlocked,
+             .pendingPublication, .fanout, .retry, .supersededByConvergence, .complete, .failed: break
+        }
+    }
+
+    private static func listed(_ trigger: MaintenanceTriggerFfi) {
+        switch trigger {
+        case .postJoin, .periodic, .manual: break
+        }
+    }
+
+    private static func listed(_ phase: GroupEvolutionPhaseFfi) {
+        switch phase {
+        case .preparing, .prepared, .attempting, .confirmed, .supersededByConvergence: break
+        }
+    }
+
+    private func labelsByEnum(_ locale: Locale) -> [[String]] {
         let presentation = MaintenanceDiagnosticsPresentation.self
-        return phases.map { presentation.phaseLabel($0, locale: locale) }
-            + triggers.map { presentation.triggerLabel($0, locale: locale) }
-            + evolutionPhases.map { presentation.evolutionPhaseLabel($0, locale: locale) }
+        return [
+            phases.map { presentation.phaseLabel($0, locale: locale) },
+            triggers.map { presentation.triggerLabel($0, locale: locale) },
+            evolutionPhases.map { presentation.evolutionPhaseLabel($0, locale: locale) }
+        ]
+    }
+
+    private func labels(_ locale: Locale) -> [String] {
+        labelsByEnum(locale).flatMap(\.self)
     }
 
     @Test func everyMaintenanceCaseHasItsOwnLabel() {
-        let english = labels(Locale(identifier: "en"))
-        #expect(Set(english).count == english.count)
+        for english in labelsByEnum(Locale(identifier: "en")) {
+            #expect(Set(english).count == english.count)
+        }
     }
 
     /// A code key the catalog doesn't contain falls back to the English key.

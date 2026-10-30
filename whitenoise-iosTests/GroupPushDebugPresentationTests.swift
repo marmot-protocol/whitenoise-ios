@@ -43,7 +43,7 @@ struct GroupPushDebugPresentationTests {
         let tokens = info(total: 3, active: 2, stale: 1)
         #expect(summary(tokens, Locale(identifier: "en")) == "3 total, 2 active, 1 stale")
         #expect(summary(tokens, Locale(identifier: "de")) == "3 gesamt, 2 aktiv, 1 veraltet")
-        #expect(summary(tokens, Locale(identifier: "zh-Hans")) == "共 3 项，2 个有效，1 个陈旧")
+        #expect(summary(tokens, Locale(identifier: "zh-Hans")) == "共 3 项，有效 2 项，陈旧 1 项")
         #expect(
             summary(info(total: 5, active: 3, stale: 1), Locale(identifier: "ru"))
                 == "всего 5, 3 активных, 1 устаревший"

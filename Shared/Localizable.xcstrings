@@ -140063,7 +140063,7 @@
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu 个有效"
+                  "value" : "有效 %llu 项"
                 }
               }
             }
@@ -140075,7 +140075,7 @@
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu 個有效"
+                  "value" : "有效 %llu 項"
                 }
               }
             }
@@ -140243,7 +140243,7 @@
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu 个陈旧"
+                  "value" : "陈旧 %llu 项"
                 }
               }
             }
@@ -140255,7 +140255,7 @@
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu 個陳舊"
+                  "value" : "陳舊 %llu 項"
                 }
               }
             }
@@ -141200,7 +141200,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Рассылка"
+            "value" : "Идёт рассылка"
           }
         },
         "tr" : {
@@ -141434,7 +141434,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Falhou"
+            "value" : "Com falha"
           }
         },
         "ru" : {
