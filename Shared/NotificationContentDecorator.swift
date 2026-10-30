@@ -61,6 +61,32 @@ enum NotificationContentDecorator {
         }
     }
 
+    /// Content for a wake the extension can't present from local state. It
+    /// cannot drop the alert that woke it, so empty copy becomes the generic
+    /// title and body rather than a blank notification.
+    static func applyFallback(to content: UNMutableNotificationContent) {
+        content.userInfo[LocalNotificationProjection.deliveryDispositionKey] =
+            LocalNotificationProjection.fallbackDisposition
+        // The same title and body generic preview mode delivers.
+        let generic = LocalNotificationProjection.genericContentText()
+        if content.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content.title = generic.title
+        }
+        if content.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content.body = generic.body
+        }
+    }
+
+    /// Without the filtering entitlement the extension cannot drop the alert
+    /// that woke it, so a fully muted wake keeps the generic content but sheds
+    /// its banner and sound: the record lands silently in Notification Center.
+    static func applyQuietDelivery(to content: UNMutableNotificationContent) {
+        applyFallback(to: content)
+        content.userInfo[LocalNotificationProjection.deliveryDispositionKey] =
+            LocalNotificationProjection.quietDisposition
+        applyAlerting(.quiet, to: content)
+    }
+
     static func applyApplicationBadgeCount(
         _ count: Int,
         to content: UNMutableNotificationContent
