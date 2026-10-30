@@ -31,18 +31,18 @@ struct MaintenanceDiagnosticsPresentationTests {
 
     @Test func summariesFollowTheSelectedAppLanguageByDefault() {
         let presentation = MaintenanceDiagnosticsPresentation.self
-        withAppLanguage(.german) {
-            #expect(
-                presentation.obligationSummary(total: 3, overdue: 1)
-                    == presentation.obligationSummary(total: 3, overdue: 1, locale: Locale(identifier: "de"))
-            )
+        let english = Locale(identifier: "en")
+        let obligations = withAppLanguage(.german) {
+            presentation.obligationSummary(total: 3, overdue: 1)
         }
-        withAppLanguage(.russian) {
-            #expect(
-                presentation.fanoutSummary(records: 3, failedTargets: 5)
-                    == presentation.fanoutSummary(records: 3, failedTargets: 5, locale: Locale(identifier: "ru"))
-            )
+        #expect(obligations == presentation.obligationSummary(total: 3, overdue: 1, locale: Locale(identifier: "de")))
+        #expect(obligations != presentation.obligationSummary(total: 3, overdue: 1, locale: english))
+
+        let fanouts = withAppLanguage(.russian) {
+            presentation.fanoutSummary(records: 3, failedTargets: 5)
         }
+        #expect(fanouts == presentation.fanoutSummary(records: 3, failedTargets: 5, locale: Locale(identifier: "ru")))
+        #expect(fanouts != presentation.fanoutSummary(records: 3, failedTargets: 5, locale: english))
     }
 
     @Test func peerControlledFailureCodeIsBoundedAndSanitized() throws {

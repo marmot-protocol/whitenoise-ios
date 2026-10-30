@@ -139011,7 +139011,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wartungsaufgaben"
+            "value" : "Aufgaben"
           }
         },
         "es" : {
@@ -139023,7 +139023,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Obligations de maintenance"
+            "value" : "Tâches"
           }
         },
         "it" : {
@@ -139053,13 +139053,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "维护任务"
+            "value" : "任务"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "維護任務"
+            "value" : "任務"
           }
         }
       }
