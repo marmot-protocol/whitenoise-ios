@@ -39,6 +39,36 @@ nonisolated enum MaintenanceDiagnosticsPresentation {
         }
     }
 
+    static func obligationSummary(
+        total: UInt64,
+        overdue: UInt64,
+        locale: Locale = AppLanguage.currentLocale
+    ) -> String {
+        L10n.formatted(
+            "%@ total, %@ overdue",
+            arguments: [
+                LocalizedNumberLabel.decimal(total, locale: locale),
+                LocalizedNumberLabel.decimal(overdue, locale: locale)
+            ],
+            locale: locale
+        )
+    }
+
+    static func fanoutSummary(
+        records: UInt64,
+        failedTargets: UInt64,
+        locale: Locale = AppLanguage.currentLocale
+    ) -> String {
+        L10n.formatted(
+            "%@, %@",
+            arguments: [
+                L10n.plural("%llu records", records, locale: locale),
+                L10n.plural("%llu failed targets", failedTargets, locale: locale)
+            ],
+            locale: locale
+        )
+    }
+
     static func failureCode(_ raw: String?) -> String? {
         ContentSanitizer.compactSingleLine(raw, maxLength: 120)
     }

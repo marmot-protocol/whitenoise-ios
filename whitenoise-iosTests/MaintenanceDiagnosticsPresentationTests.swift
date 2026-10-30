@@ -11,6 +11,22 @@ struct MaintenanceDiagnosticsPresentationTests {
         #expect(MaintenanceDiagnosticsPresentation.triggerLabel(.postJoin) == "Post-join")
     }
 
+    @Test func obligationSummaryIsTranslatedForTheGivenLocale() {
+        let summary = MaintenanceDiagnosticsPresentation.obligationSummary
+        #expect(summary(3, 1, Locale(identifier: "en")) == "3 total, 1 overdue")
+        #expect(summary(3, 1, Locale(identifier: "de")) == "3 gesamt, 1 überfällig")
+        #expect(summary(3, 1, Locale(identifier: "zh-Hans")) == "共 3 项，1 项逾期")
+    }
+
+    @Test func fanoutSummaryPluralizesEachCountForTheGivenLocale() {
+        let summary = MaintenanceDiagnosticsPresentation.fanoutSummary
+        let english = Locale(identifier: "en")
+        #expect(summary(1, 1, english) == "1 record, 1 failed target")
+        #expect(summary(2, 0, english) == "2 records, 0 failed targets")
+        #expect(summary(3, 5, Locale(identifier: "ru")) == "3 записи, 5 неудачных целей")
+        #expect(summary(2, 1, Locale(identifier: "zh-Hant")) == "2 筆記錄，1 個目標失敗")
+    }
+
     @Test func peerControlledFailureCodeIsBoundedAndSanitized() throws {
         let code = try #require(MaintenanceDiagnosticsPresentation.failureCode(
             "  retry\u{202E}\nfailed  " + String(repeating: "x", count: 200)
