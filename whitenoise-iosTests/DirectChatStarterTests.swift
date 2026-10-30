@@ -9,8 +9,7 @@ struct DirectChatStarterTests {
     @Test func reopensAnExistingDirectChatWithoutCreating() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
-        let starter = DirectChatStarter()
-        starter.createGroupForTesting = { _, _ in
+        let starter = directChatStarter { _, _ in
             Issue.record("must not create when an open direct chat exists")
             throw TestError.unexpectedCreate
         }
@@ -30,9 +29,8 @@ struct DirectChatStarterTests {
     @Test func createsWhenNoDirectChatExistsAndClearsRowScopedProgress() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
-        let starter = DirectChatStarter()
         var observedRefs: [String] = []
-        starter.createGroupForTesting = { accountRef, memberRef in
+        let starter = directChatStarter { accountRef, memberRef in
             observedRefs = [accountRef, memberRef]
             return "new-group"
         }
@@ -47,6 +45,7 @@ struct DirectChatStarterTests {
         #expect(outcome == .created(groupIdHex: "new-group"))
         #expect(observedRefs == ["account", alice])
         #expect(appState.directChatPeerAccountId(accountRef: "account", groupIdHex: "new-group") == alice)
+        #expect(appState.createdChatListRow(accountRef: "account", groupIdHex: "new-group")?.groupIdHex == "new-group")
         #expect(starter.creatingAccountIdHex == nil)
     }
 
@@ -65,14 +64,14 @@ struct DirectChatStarterTests {
 
     @Test func createdChatRowHandoffIsAccountScopedAndBounded() {
         var store = RecentCreatedChatRowStore(maximumRows: 1)
-        store.record(accountRef: "first", row: chatRow(id: "old"))
-        store.record(accountRef: "first", row: chatRow(id: "new"))
+        store.record(accountRef: "first", row: chatListRow(groupIdHex: "old", title: "old"))
+        store.record(accountRef: "first", row: chatListRow(groupIdHex: "new", title: "new"))
 
         #expect(store.row(accountRef: "first", groupIdHex: "old") == nil)
         #expect(store.row(accountRef: "first", groupIdHex: "new")?.title == "new")
         #expect(store.row(accountRef: "second", groupIdHex: "new") == nil)
 
-        store.record(accountRef: "second", row: chatRow(id: "other"))
+        store.record(accountRef: "second", row: chatListRow(groupIdHex: "other", title: "other"))
         #expect(store.row(accountRef: "first", groupIdHex: "new") == nil)
         #expect(store.row(accountRef: "second", groupIdHex: "other")?.title == "other")
     }
@@ -80,11 +79,10 @@ struct DirectChatStarterTests {
     @Test func secondTapIsIgnoredWhileTheFirstCreateIsInFlight() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
-        let starter = DirectChatStarter()
         let gate = (entered: TestLatch(), released: TestLatch())
-        starter.createGroupForTesting = { _, _ in
+        let starter = directChatStarter { _, _ in
             gate.entered.signal()
-            try? await gate.released.wait()
+            await gate.released.hold()
             return "new-group"
         }
 
@@ -115,7 +113,10 @@ struct DirectChatStarterTests {
     @Test func failsWithoutAnActiveAccount() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = nil
-        let starter = DirectChatStarter()
+        let starter = directChatStarter { _, _ in
+            Issue.record("no conversation may be created without an active account")
+            return "unexpected"
+        }
 
         let outcome = await starter.start(
             accountIdHex: alice,
@@ -191,38 +192,6 @@ struct DirectChatStarterTests {
     @Test func promptKindFollowsTheFailureTaxonomy() {
         #expect(StartChatPrompt.kind(for: .missingSetup) == .invite)
         #expect(StartChatPrompt.kind(for: .other(message: "boom")) == .error(message: "boom"))
-    }
-
-    private func chatRow(id: String) -> ChatListRowFfi {
-        ChatListRowFfi(
-            groupIdHex: id,
-            pinned: false,
-            pinnedPosition: nil,
-            archived: false,
-            pendingConfirmation: false,
-            title: id,
-            groupName: id,
-            avatarUrl: nil,
-            avatar: nil,
-            lastMessage: nil,
-            unreadCount: 0,
-            hasUnread: false,
-            manuallyMarkedUnread: false,
-            unreadMentionCount: 0,
-            unreadMention: false,
-            firstUnreadMessageIdHex: nil,
-            lastReadMessageIdHex: nil,
-            lastReadTimelineAt: nil,
-            conversationCreatedAt: 1,
-            activitySortAt: 1,
-            updatedAt: 1,
-            selfMembership: .member,
-            conversationKind: .group,
-            muted: false,
-            mutedUntilMs: nil,
-            leaveRequestPending: false,
-            leaveRequestedAtMs: nil
-        )
     }
 
     private enum TestError: Error {

@@ -7,6 +7,7 @@ struct RecipientSearchTests {
     private let alice = String(repeating: "aa", count: 32)
     private let bob = String(repeating: "bb", count: 32)
     private let carol = String(repeating: "cc", count: 32)
+    private let owner = hex("dd")
 
     @Test func membershipPagesAreUniqueBoundedAndStable() {
         let ids = (0..<205).map { "group-\($0)" } + ["group-4", "group-204"]
@@ -217,6 +218,45 @@ struct RecipientSearchTests {
         #expect(!RecipientUserSearch.shouldSearch(query: "alice", isIdentifierQuery: true))
     }
 
+    @MainActor
+    @Test func identifierQueriesAndMissingAccountsStartNoLiveSearch() {
+        let model = RecipientUserSearch(debounce: .zero) { _, _ in
+            RecipientUserSearchOperations(searchUsers: { throw CancellationError() }, accountFollows: { [] })
+        }
+        let appState = searchingAppState()
+
+        model.update(query: "alice", isIdentifierQuery: true, using: appState)
+        #expect(!model.isSearching)
+
+        model.update(query: "alice", isIdentifierQuery: false, using: AppState.test())
+        #expect(!model.isSearching)
+
+        // The same model searches once the query is free text for an active account.
+        model.update(query: "alice", isIdentifierQuery: false, using: appState)
+        #expect(model.isSearching)
+        model.cancel()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(5))) func aNewerQuerySupersedesAPendingSearch() async throws {
+        let subscription = RecipientSearchSubscriptionStub(updates: [
+            UserSearchUpdateFfi(trigger: .searchCompleted, newResults: [], updatedResults: [], totalResultCount: 0),
+        ])
+        var queries: [String] = []
+        let model = RecipientUserSearch(debounce: .zero) { _, request in
+            queries.append(request.query)
+            return RecipientUserSearchOperations(searchUsers: { subscription }, accountFollows: { [] })
+        }
+        let appState = searchingAppState()
+
+        model.update(query: "al", isIdentifierQuery: false, using: appState)
+        model.update(query: "alice", isIdentifierQuery: false, using: appState)
+        // Waits match the 5-minute limit's CI allowance, not the 30 s default.
+        try await eventually(timeout: .seconds(240)) { !model.isSearching }
+
+        #expect(queries == ["alice"])
+    }
+
     @Test func streamedResultsRerankAcrossBatchesAndDeduplicateBestMatch() {
         let results = RecipientUserSearch.sortedUniqueResults([
             searchResult(bob, radius: 2, field: .displayName, quality: .prefix),
@@ -254,7 +294,6 @@ struct RecipientSearchTests {
     @MainActor
     @Test(.timeLimit(.minutes(5)), arguments: [SearchUpdateTriggerFfi.resultsFound(radius: 1), .cachedResultsFound])
     func streamedResultsDoNotWaitForFollowEnrichment(trigger: SearchUpdateTriggerFfi) async throws {
-        let model = RecipientUserSearch()
         let follows = (entered: TestLatch(), released: TestLatch())
         let result = searchResult(alice, radius: 1, field: .name, quality: .exact)
         let subscription = RecipientSearchSubscriptionStub(updates: [
@@ -270,8 +309,10 @@ struct RecipientSearchTests {
             ),
         ])
 
-        model.updateForTesting(query: "alice") {
-            RecipientUserSearchOperations(
+        var requests: [RecipientUserSearchRequest] = []
+        let model = RecipientUserSearch(debounce: .zero) { _, request in
+            requests.append(request)
+            return RecipientUserSearchOperations(
                 searchUsers: { subscription },
                 accountFollows: {
                     follows.entered.signal()
@@ -280,11 +321,15 @@ struct RecipientSearchTests {
                 }
             )
         }
+        let appState = searchingAppState()
+
+        model.update(query: "  alice ", isIdentifierQuery: false, using: appState)
 
         // Waits match the 5-minute limit's CI allowance, not the 30 s default.
         try await follows.entered.wait(timeout: .seconds(240))
-        await model.awaitSearchForTesting()
+        try await eventually(timeout: .seconds(240)) { !model.isSearching }
 
+        #expect(requests == [RecipientUserSearchRequest(accountIdHex: owner, accountRef: "me", query: "alice")])
         #expect(model.results == [result])
         #expect(!model.isSearching)
 
@@ -300,7 +345,7 @@ struct RecipientSearchTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(5)))
-    func nativeSearchReplacementsSupersedeCachedRowsAndPreserveExplicitUnfollow() async {
+    func nativeSearchReplacementsSupersedeCachedRowsAndPreserveExplicitUnfollow() async throws {
         let cached = searchResult(alice, radius: 1, field: .name, quality: .exact)
         var replacement = cached
         replacement.radius = 2
@@ -311,12 +356,12 @@ struct RecipientSearchTests {
             UserSearchUpdateFfi(trigger: .searchCompleted, newResults: [],
                                updatedResults: [replacement], totalResultCount: 1),
         ])
-        let model = RecipientUserSearch()
-        model.updateForTesting(query: "alice") {
+        let model = RecipientUserSearch(debounce: .zero) { _, _ in
             RecipientUserSearchOperations(searchUsers: { subscription }, accountFollows: { [] })
         }
-        await model.awaitSearchForTesting()
-        #expect(!model.isSearching)
+        let appState = searchingAppState()
+        model.update(query: "alice", isIdentifierQuery: false, using: appState)
+        try await eventually(timeout: .seconds(240)) { !model.isSearching }
         #expect(model.results == [replacement])
         #expect(model.candidates.first?.isFollowedBySearcher == true)
         model.setFollowStatus(accountIdHex: alice, isFollowing: false)
@@ -376,6 +421,16 @@ struct RecipientSearchTests {
         #expect(RecipientSearch.resultContext(for: merged[0], query: "bo") == .youFollow)
         #expect(RecipientSearch.resultContext(for: merged[1], query: "bo") == .searchResult)
         #expect(RecipientSearch.resultContext(for: merged[0], query: "  ") == nil)
+    }
+
+    @MainActor
+    private func searchingAppState() -> AppState {
+        let appState = AppState.test()
+        appState.accountStore.accounts = [
+            AccountSummaryFfi(label: "me", accountIdHex: owner, localSigning: true, signedOut: false, running: true)
+        ]
+        appState.activeAccountRef = "me"
+        return appState
     }
 
     private func candidate(_ hex: String) -> RecipientCandidate {

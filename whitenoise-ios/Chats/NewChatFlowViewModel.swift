@@ -15,7 +15,7 @@ final class NewChatFlowViewModel {
     nonisolated deinit {}
 
     let directory = RecipientDirectory()
-    let starter = DirectChatStarter()
+    let starter: DirectChatStarter
     let groupSelection = RecipientSelection()
     let messageQuery = RecipientQueryModel()
     let groupQuery = RecipientQueryModel()
@@ -45,6 +45,10 @@ final class NewChatFlowViewModel {
 #endif
 
     @ObservationIgnored private let keyPackagePrewarmer = MemberKeyPackagePrewarmer()
+
+    init(starter: DirectChatStarter? = nil) {
+        self.starter = starter ?? DirectChatStarter()
+    }
 
     var isBusy: Bool {
         choosingAccountIdHex != nil || starter.isCreating || isCreatingGroup
