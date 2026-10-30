@@ -406,6 +406,25 @@ Do not add a second storage path for data Marmot already owns.
   `no_test_sleep` rule enforces this; a deliberate sleep that is not a wait
   needs `// swiftlint:disable:next no_test_sleep` with the reason above it.
   Host views through `withHostedWindow`.
+- Don't add test-only hooks to app code: no `…ForTesting` members, and no
+  `#if DEBUG` blocks that exist only so tests can pause, replace or inspect
+  something. Take the dependency as an init parameter with the production
+  default and inject a test double from the test. SwiftUI previews and
+  intentional debug/release build flags are fine. SwiftLint's
+  `no_test_hook_in_app_code` rule enforces this in `whitenoise-ios/`,
+  `Shared/` and `NotificationServiceExtension/`; a deliberate exception
+  needs `// swiftlint:disable:next no_test_hook_in_app_code` with the reason
+  above it, on every line the rule flags. The rule's limits:
+  - It catches only names containing `ForTesting` or starting with
+    `forTesting`. Review covers the rest, such as `AppLanguage`'s
+    `testCurrentOverride` and `testDefaults` (#1241, item 3).
+  - Files that still have hooks start with
+    `// swiftlint:disable no_test_hook_in_app_code`, so a new hook in one
+    of them passes. Never add that directive to another file; a hook that
+    moves to a new file takes `disable:next` on each flagged line. When
+    you change a hook or the code it serves, replace that hook with an
+    injected dependency, and remove the directive once its last hook is
+    gone (`superfluous_disable_command` fails the lint job otherwise).
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:
