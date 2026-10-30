@@ -350,3 +350,44 @@ func conversationMessage(
         reactions: reactions
     ))
 }
+
+func keyPackage(
+    eventId: String = "event",
+    publishedAt: UInt64 = 1,
+    local: Bool,
+    relay: Bool
+) -> AccountKeyPackageFfi {
+    AccountKeyPackageFfi(
+        accountRef: nil,
+        accountIdHex: "account",
+        keyPackageId: "keyPackageId-\(eventId)",
+        keyPackageRefHex: "keyPackageRef-\(eventId)",
+        eventIdHex: eventId,
+        publishedAt: publishedAt,
+        keyPackageBytes: 32,
+        sourceRelays: relay ? ["wss://relay.example"] : [],
+        local: local,
+        relay: relay
+    )
+}
+
+func relayLists(
+    defaultRelays: [String] = [],
+    bootstrapRelays: [String],
+    nip65: [String],
+    inbox: [String]
+) -> AccountRelayListsFfi {
+    AccountRelayListsFfi(
+        complete: true,
+        missing: [],
+        defaultRelays: defaultRelays,
+        bootstrapRelays: bootstrapRelays,
+        nip65: RelayListFfi(kind: 10_002, relays: nip65),
+        inbox: RelayListFfi(kind: 10_050, relays: inbox)
+    )
+}
+
+/// Relay lists that name the same relays for every role.
+func relayLists(_ relays: [String]) -> AccountRelayListsFfi {
+    relayLists(defaultRelays: relays, bootstrapRelays: relays, nip65: relays, inbox: relays)
+}

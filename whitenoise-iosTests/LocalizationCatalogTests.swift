@@ -54,24 +54,35 @@ struct LocalizationCatalogTests {
         )
     }
 
-    @Test func localizationBundleLookupIsMemoizedForSelectedLanguage() {
-        let bundle = Bundle(for: L10nBundleCacheProbe.self)
-        L10n.resetBundleCacheForTesting()
-        #expect(L10n.bundleCacheCountForTesting(in: bundle) == 0)
-        _ = L10n.formatted(
-            "Settings",
-            arguments: [],
-            locale: Locale(identifier: "fr"),
-            baseBundle: bundle
-        )
-        #expect(L10n.bundleCacheCountForTesting(in: bundle) == 1)
-        _ = L10n.formatted(
-            "Done",
-            arguments: [],
-            locale: Locale(identifier: "fr"),
-            baseBundle: bundle
-        )
-        #expect(L10n.bundleCacheCountForTesting(in: bundle) == 1)
+    @Test func bundleLookupIsResolvedOncePerBaseAndPreferenceUntilTheLanguageChanges() {
+        let notificationCenter = NotificationCenter()
+        let cache = L10nBundleCache(notificationCenter: notificationCenter)
+        let probe = Bundle(for: L10nBundleCacheProbe.self)
+        var resolutions = 0
+        // Resolves to a bundle other than the base, so a hit that returns the
+        // base instead of the stored bundle is caught.
+        @discardableResult
+        func lookUp(_ preference: String, in base: Bundle) -> Bundle {
+            cache.bundle(forPreference: preference, in: base) {
+                resolutions += 1
+                return base === probe ? Bundle.main : probe
+            }
+        }
+
+        let resolved = lookUp("fr", in: probe)
+        #expect(resolved === Bundle.main)
+        #expect(lookUp("fr", in: probe) === resolved)
+        #expect(resolutions == 1)
+
+        lookUp("de", in: probe)
+        lookUp("fr", in: .main)
+        #expect(resolutions == 3)
+        lookUp("fr", in: probe)
+        #expect(resolutions == 3)
+
+        notificationCenter.post(name: AppLanguage.didChangeNotification, object: nil)
+        lookUp("fr", in: probe)
+        #expect(resolutions == 4)
     }
 
     @Test func permissionDescriptionsMatchBuiltAppAndCoverEveryLanguage() throws {

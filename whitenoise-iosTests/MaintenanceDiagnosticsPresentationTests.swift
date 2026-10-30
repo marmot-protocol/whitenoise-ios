@@ -11,6 +11,53 @@ struct MaintenanceDiagnosticsPresentationTests {
         #expect(MaintenanceDiagnosticsPresentation.triggerLabel(.postJoin) == "Post-join")
     }
 
+    @Test func obligationSummaryIsTranslatedForTheGivenLocale() {
+        let summary = MaintenanceDiagnosticsPresentation.obligationSummary
+        #expect(summary(3, 1, Locale(identifier: "en")) == "3 total, 1 overdue")
+        #expect(summary(3, 1, Locale(identifier: "de")) == "3 gesamt, 1 überfällig")
+        #expect(summary(3, 1, Locale(identifier: "zh-Hans")) == "共 3 项，1 项逾期")
+        #expect(summary(5, 2, Locale(identifier: "ru")) == "всего 5, просрочено 2")
+    }
+
+    @Test func fanoutSummaryPluralizesEachCountForTheGivenLocale() {
+        let summary = MaintenanceDiagnosticsPresentation.fanoutSummary
+        let english = Locale(identifier: "en")
+        #expect(summary(1, 1, english) == "1 record, 1 failed target")
+        #expect(summary(2, 0, english) == "2 records, 0 failed targets")
+        let russian = Locale(identifier: "ru")
+        #expect(summary(3, 5, russian) == "3 записи, 5 целей с ошибкой")
+        #expect(summary(21, 1, russian) == "21 запись, 1 цель с ошибкой")
+        #expect(summary(2, 1, Locale(identifier: "zh-Hant")) == "2 筆記錄，1 個目標失敗")
+    }
+
+    /// Two app languages with different results, so no single host language
+    /// can satisfy both if a default stops following the selected language.
+    @Test func summariesFollowTheSelectedAppLanguageByDefault() {
+        let presentation = MaintenanceDiagnosticsPresentation.self
+        let german = Locale(identifier: "de")
+        let russian = Locale(identifier: "ru")
+        #expect(
+            presentation.obligationSummary(total: 3, overdue: 1, locale: german)
+                != presentation.obligationSummary(total: 3, overdue: 1, locale: russian)
+        )
+        #expect(
+            presentation.fanoutSummary(records: 3, failedTargets: 5, locale: german)
+                != presentation.fanoutSummary(records: 3, failedTargets: 5, locale: russian)
+        )
+        for (language, locale) in [(AppLanguage.german, german), (.russian, russian)] {
+            withAppLanguage(language) {
+                #expect(
+                    presentation.obligationSummary(total: 3, overdue: 1)
+                        == presentation.obligationSummary(total: 3, overdue: 1, locale: locale)
+                )
+                #expect(
+                    presentation.fanoutSummary(records: 3, failedTargets: 5)
+                        == presentation.fanoutSummary(records: 3, failedTargets: 5, locale: locale)
+                )
+            }
+        }
+    }
+
     @Test func peerControlledFailureCodeIsBoundedAndSanitized() throws {
         let code = try #require(MaintenanceDiagnosticsPresentation.failureCode(
             "  retry\u{202E}\nfailed  " + String(repeating: "x", count: 200)

@@ -444,14 +444,3 @@ private func privacyProjection(auditEnabled: Bool) -> PrivacySecuritySettingsPro
         auditFileRows: []
     )
 }
-
-private func relayLists(_ relays: [String]) -> AccountRelayListsFfi {
-    AccountRelayListsFfi(
-        complete: true,
-        missing: [],
-        defaultRelays: relays,
-        bootstrapRelays: relays,
-        nip65: RelayListFfi(kind: 10_002, relays: relays),
-        inbox: RelayListFfi(kind: 10_050, relays: relays)
-    )
-}
