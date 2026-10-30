@@ -1144,6 +1144,7 @@ struct ConversationView: View {
             .sheet(isPresented: $showLocationPicker) {
                 LocationPickerView(
                     onSend: { coordinate in
+                        guard admitSendOrWarn() else { return }
                         showLocationPicker = false
                         sendSharedLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
                     },
@@ -1294,8 +1295,8 @@ struct ConversationView: View {
             .onReceive(NotificationCenter.default.publisher(for: AppLanguage.didChangeNotification)) { _ in
                 viewModel?.refreshProfileDependentTimelineProjections()
             }
-            .onChange(of: viewModel?.canSendMessages ?? true) { _, canSendMessages in
-                handleComposerAvailabilityChange(canSendMessages: canSendMessages)
+            .onChange(of: viewModel?.inactiveGroupMessage != nil) { _, composerHidden in
+                handleComposerAvailabilityChange(composerHidden: composerHidden)
             }
     }
 
@@ -1434,8 +1435,9 @@ struct ConversationView: View {
                     replyPreview: editSession == nil
                         ? viewModel.flatMap(composerReplyPreview(viewModel:))
                         : nil,
-                    mediaEnabled: editSession == nil && (viewModel?.canSendMediaAttachments ?? false),
+                    mediaEnabled: editSession == nil && (viewModel?.canAddMediaAttachments ?? false),
                     disabledMessage: viewModel?.inactiveGroupMessage,
+                    sendBlockedMessage: viewModel?.sendBlockedMessage,
                     voiceRecordingActive: voiceRecorder.isActive,
                     voiceRecordingLocked: voiceRecorder.isLocked,
                     voiceRecordingSamples: voiceRecorder.waveformSamples,
@@ -3061,11 +3063,18 @@ struct ConversationView: View {
         viewModel.settleSizeRejectedSend(staged, rejection: rejection, restoredToComposer: restored != nil)
     }
 
-    private func handleComposerAvailabilityChange(canSendMessages: Bool) {
-        guard !canSendMessages else { return }
-        editSession = nil
-        // This also runs on chat entry, before any recording interaction.
-        voiceRecorder.cancelIfActive()
+    private func admitSendOrWarn() -> Bool {
+        if viewModel?.canSendMessages == true { return true }
+        if let message = viewModel?.sendBlockedMessage { appState.present(.warning(message)) }
+        return false
+    }
+
+    private func handleComposerAvailabilityChange(composerHidden: Bool) {
+        guard composerHidden else { return }
+        cancelEdit()
+        if let recording = voiceRecorder.finishIfActive() {
+            addVoiceRecording(recording)
+        }
         showCameraCapture = false
         showPhotoLibraryPicker = false
         composerMediaSelection = nil
@@ -3206,7 +3215,7 @@ struct ConversationView: View {
 
     private func openLocationPicker() {
         guard editSession == nil else { return }
-        guard viewModel?.canSendMessages == true else { return }
+        guard admitSendOrWarn() else { return }
         showLocationPicker = true
     }
 
@@ -3223,7 +3232,7 @@ struct ConversationView: View {
 
     private func openGiphySearch() {
         guard editSession == nil else { return }
-        guard viewModel?.canSendMessages == true else { return }
+        guard admitSendOrWarn() else { return }
         guard GiphyBuildConfig.current().isAvailable else {
             appState.present(.warning(L10n.string("GIF search isn't configured in this build.")))
             return
@@ -3232,7 +3241,7 @@ struct ConversationView: View {
     }
 
     private func sendGiphyResult(_ result: GiphySearchResult) {
-        guard let viewModel, viewModel.canSendMessages else { return }
+        guard admitSendOrWarn(), let viewModel else { return }
         Task { await viewModel.sendPreparedComposerText(result.media.wireText) }
     }
 
@@ -3310,7 +3319,7 @@ struct ConversationView: View {
     }
 
     private func addPhotoLibrarySelections(_ selections: [PhotoLibrarySelection]) {
-        guard let viewModel, viewModel.canSendMediaAttachments else {
+        guard let viewModel, viewModel.canAddMediaAttachments else {
             appState.present(.warning(L10n.string("Media is not available in this group")))
             return
         }
@@ -3382,7 +3391,7 @@ struct ConversationView: View {
     }
 
     private func addFileAttachments(_ urls: [URL]) {
-        guard let viewModel, viewModel.canSendMediaAttachments else {
+        guard let viewModel, viewModel.canAddMediaAttachments else {
             appState.present(.warning(L10n.string("Media is not available in this group")))
             return
         }
@@ -3470,7 +3479,7 @@ struct ConversationView: View {
     private func canBeginMediaSelection() -> Bool {
         // A custom emoji send in flight owns the composer until it settles.
         guard viewModel?.composerAdmitsNewAttachments != false else { return false }
-        guard let viewModel, viewModel.canSendMediaAttachments else {
+        guard let viewModel, viewModel.canAddMediaAttachments else {
             appState.present(.warning(L10n.string("Media is not available in this group")))
             return false
         }
