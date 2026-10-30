@@ -17110,7 +17110,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle Relais-Listen sind veröffentlicht."
+            "value" : "Alle Relay-Listen sind veröffentlicht."
           }
         },
         "es" : {
@@ -22030,7 +22030,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Accès à l’appareil photo refusé. Activez-le dans Paramètres pour scanner les codes QR."
+            "value" : "Accès à la caméra refusé. Activez-le dans Réglages pour scanner les codes QR."
           }
         },
         "it" : {
@@ -35492,7 +35492,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impossible de quitter le rôle d’administrateur"
+            "value" : "Impossible de démissionner"
           }
         },
         "it" : {
@@ -35504,7 +35504,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não foi possível renunciar"
+            "value" : "Não foi possível deixar o cargo"
           }
         },
         "ru" : {
@@ -59878,7 +59878,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantenere almeno un relè."
+            "value" : "Mantieni almeno un relay."
           }
         },
         "pt" : {
@@ -62075,13 +62075,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在退出群组…"
+            "value" : "正在离开群组…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在退出群組…"
+            "value" : "正在離開群組…"
           }
         }
       }
@@ -62134,13 +62134,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "离开将首先让您辞去管理员职务。"
+            "value" : "离开群组时，将先卸任管理员。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "離開將首先讓您辭去管理員職務。"
+            "value" : "離開群組時，將先卸任管理員。"
           }
         }
       }
@@ -68342,7 +68342,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mancante: %@. Aggiungi un relè per pubblicarli."
+            "value" : "Mancante: %@. Aggiungi un relay per pubblicarli."
           }
         },
         "pt" : {
@@ -70369,7 +70369,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yerel push sunucusu yapılandırması eksik."
+            "value" : "Native Push sunucu yapılandırması eksik."
           }
         },
         "zh-Hans" : {
@@ -73453,7 +73453,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nessun relè configurato."
+            "value" : "Nessun relay configurato."
           }
         },
         "pt" : {
@@ -73512,7 +73512,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nessun relè pubblicato"
+            "value" : "Nessun relay pubblicato"
           }
         },
         "pt" : {
@@ -81885,7 +81885,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pointez l’appareil photo vers le code QR d’un profil White Noise"
+            "value" : "Pointez la caméra vers le code QR d’un profil White Noise"
           }
         },
         "it" : {
@@ -85287,7 +85287,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elenchi di inoltro pubblicati"
+            "value" : "Elenchi di relay pubblicati"
           }
         },
         "pt" : {
@@ -88831,7 +88831,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Relais-Listen aktualisiert"
+            "value" : "Relay-Listen aktualisiert"
           }
         },
         "es" : {
@@ -88849,7 +88849,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elenchi relè aggiornati"
+            "value" : "Elenchi di relay aggiornati"
           }
         },
         "pt" : {
@@ -89032,7 +89032,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aggiornamento del relè non riuscito"
+            "value" : "Aggiornamento del relay non riuscito"
           }
         },
         "pt" : {
@@ -105900,7 +105900,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yönetici Olarak Görevden Ayrılın"
+            "value" : "Yöneticilikten Ayrıl"
           }
         },
         "zh-Hans" : {
@@ -106053,7 +106053,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Retrait du rôle d’administrateur avant de quitter le groupe…"
+            "value" : "Démission avant de quitter le groupe…"
           }
         },
         "it" : {
@@ -106077,7 +106077,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ayrılmadan önce yöneticilikten çıkılıyor…"
+            "value" : "Ayrılmadan önce yöneticilikten ayrılınıyor…"
           }
         },
         "zh-Hans" : {
@@ -106112,7 +106112,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Retrait du rôle d’administrateur…"
+            "value" : "Démission en cours…"
           }
         },
         "it" : {
@@ -107177,7 +107177,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yerel Kaydı Senkronize Et"
+            "value" : "Native Push Kaydını Senkronize Et"
           }
         },
         "zh-Hans" : {
@@ -116598,7 +116598,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Token’ler"
+            "value" : "Tokenler"
           }
         },
         "zh-Hans" : {
@@ -120715,7 +120715,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use o White Noise em ecrã inteiro e tente digitalizar novamente."
+            "value" : "Use o White Noise em tela cheia e tente escanear novamente."
           }
         },
         "ru" : {
@@ -128521,13 +128521,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "您将首先辞去管理员身份，然后停止接收来自该群组的消息。"
+            "value" : "您将先卸任管理员，然后不再接收此群组的消息。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "您將首先辭去管理員身份，然後停止接收來自該群組的訊息。"
+            "value" : "您將先卸任管理員，然後不再接收此群組的訊息。"
           }
         }
       }
