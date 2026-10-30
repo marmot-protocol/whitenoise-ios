@@ -35492,7 +35492,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impossible de démissionner"
+            "value" : "Impossible de démissionner du poste d'administrateur"
           }
         },
         "it" : {
@@ -35504,7 +35504,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não foi possível deixar o cargo"
+            "value" : "Não foi possível deixar o cargo de administrador"
           }
         },
         "ru" : {
@@ -106053,7 +106053,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Démission avant de quitter le groupe…"
+            "value" : "Démission du poste d'administrateur avant de quitter le groupe…"
           }
         },
         "it" : {
@@ -106112,7 +106112,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Démission en cours…"
+            "value" : "Démission du poste d'administrateur…"
           }
         },
         "it" : {
@@ -110046,13 +110046,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "由于您已不再是成员，群组未被结束。"
+            "value" : "该群组并未结束，因为您已不再是成员。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "由於您已不再是成員，群組未被結束。"
+            "value" : "該群組並未結束，因為您已不再是成員。"
           }
         }
       }
