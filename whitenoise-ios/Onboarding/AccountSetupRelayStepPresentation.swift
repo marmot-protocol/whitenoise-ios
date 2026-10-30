@@ -20,6 +20,7 @@ nonisolated struct AccountSetupRelayStepPresentation {
     let hasOperationError: Bool
     let lastAction: Action?
     let needsEarlierReview: Bool
+    let lookupFailed: Bool
     /// The list Replace With Default Relays would propose for this step.
     let defaultRelays: [String]
     /// MDK's typed relay-list diff for this step's proposal, when it has one.
@@ -28,7 +29,7 @@ nonisolated struct AccountSetupRelayStepPresentation {
     init(
         step: OnboardingStepFfi, actions: [OnboardingActionFfi], proposal: OnboardingRepairProposalFfi?,
         childFailureSource: AccountSetupRecoveryPresentation.ChildFailure.Source? = nil, hasOperationError: Bool = false,
-        lastAction: Action? = nil, needsEarlierReview: Bool = false, defaultRelays: [String] = []
+        lastAction: Action? = nil, needsEarlierReview: Bool = false, lookupFailed: Bool = false, defaultRelays: [String] = []
     ) {
         self.step = step
         self.actions = actions
@@ -37,6 +38,7 @@ nonisolated struct AccountSetupRelayStepPresentation {
         self.hasOperationError = hasOperationError
         self.lastAction = lastAction
         self.needsEarlierReview = needsEarlierReview
+        self.lookupFailed = lookupFailed
         self.defaultRelays = defaultRelays
         repair = AccountSetupRelayRepairPresentation(proposal: proposal, step: step)
     }
@@ -75,7 +77,15 @@ nonisolated struct AccountSetupRelayStepPresentation {
     /// Replacing with the defaults is an explicit edit offered from manual review,
     /// hidden when the current list already declares exactly the defaults.
     var canReplaceWithDefaults: Bool {
-        isManualReview && allows(.editRelays) && repair?.offersDefaultReplacement(defaults: defaultRelays, step: step) == true
+        if isManualReview {
+            return allows(.editRelays) && repair?.offersDefaultReplacement(defaults: defaultRelays, step: step) == true
+        }
+        return replacesUncheckedInbox
+    }
+
+    var replacesUncheckedInbox: Bool {
+        step == .inboxRelays && lookupFailed && proposal == nil && !isInterrupted
+            && allows(.editRelays) && !allows(.useRecommendedRelays)
     }
 
     /// Editing opens the editor without withdrawing anything first.
@@ -83,7 +93,7 @@ nonisolated struct AccountSetupRelayStepPresentation {
 
     /// Withdrawing a reviewable proposal loses it; a manual-review preview has no change to lose.
     func needsConfirmation(_ action: Action) -> Bool {
-        !isManualReview && (action == .discard || (action == .edit && proposal != nil))
+        !isManualReview && (action == .discard || (action == .edit && proposal != nil) || action == .replaceWithDefaults)
     }
 
     static func needsEarlierReview(in snapshot: OnboardingSnapshotFfi, step: OnboardingStepFfi) -> Bool {

@@ -75,7 +75,12 @@ Relay recovery offers another discovery relay or the app's two seed relays,
 with the exact destinations and publication explained before the action.
 Save/default-relay actions may propose and approve as one explicit user action,
 using the returned proposal revision. Never auto-approve restored proposals or
-replace settings after an inconclusive lookup. Cancel and
+replace settings after an inconclusive lookup on the user's behalf. When a failed
+inbox lookup still offers `editRelays`, Replace With Default Relays is an explicit
+at-your-own-risk action: confirm with a warning that it replaces any existing list,
+then show the proposal for review before approval. A discovery search that MDK
+completes without throwing dismisses its sheet and leaves the step's findings on
+screen; only a thrown error is a search failure. Cancel and
 drain onboarding subscriptions and operations when suspending the runtime, and
 retain checkpoints as an internal readiness gate after launch, without reopening
 setup or offering a deferred-setup selector. A new explicit Sign In restarts
@@ -412,7 +417,7 @@ Do not add a second storage path for data Marmot already owns.
   above it, on every line the rule flags. The rule's limits:
   - It catches only names containing `ForTesting` or starting with
     `forTesting`. Review covers the rest, such as `AppLanguage`'s
-    `testCurrentOverride` and `testDefaults` (#1241, slice 2).
+    `testCurrentOverride` and `testDefaults` (#1241, item 3).
   - Files that still have hooks start with
     `// swiftlint:disable no_test_hook_in_app_code`, so a new hook in one
     of them passes. Never add that directive to another file; a hook that
