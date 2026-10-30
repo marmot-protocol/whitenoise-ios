@@ -171,20 +171,21 @@ SHARED_NAMES = (
     "QUIC · %@", "URL", "White Noise", "White Noise · %@", "https://example.com/image.jpg", "npub", "nsec1…",
 )
 SHARED_WORDS = {
-    "%@ (IDN/punycode)": "es fr it pt ru tr", "%@ (IDN/punycode: %@)": "es it pt ru tr",
-    "Hex": "de es fr it pt ru tr", "USD": "de es fr it pt ru tr", "Wi-Fi": "es fr it pt ru tr zh-Hans zh-Hant",
-    "id: %@": "es it pt ru tr", "stream %@": "es it pt", "wss://relay.example.com": "de it pt ru tr zh-Hans zh-Hant",
-    "%lld images": "fr", "%lld notifications": "fr", "%lld videos": "es", "%lld votes": "fr", "Admin": "de",
-    "Audio": "de es fr it", "Cache": "de fr it pt", "Chats": "de es", "Contact": "fr", "Conversation": "fr",
-    "Debugging": "de", "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Filter": "de",
-    "GIF via GIPHY": "fr pt", "GIFs": "de es pt", "Image": "fr", "Info": "de it", "Links": "de pt", "Live": "de",
-    "Maintenance": "fr", "Malware": "it", "Media": "it", "Mentions": "fr", "Message": "fr", "Minutes": "fr",
-    "Mode": "fr", "Moderation": "de", "Name": "de", "Notifications": "fr", "OK": "de fr it pt", "Online": "de",
+    "%@ (IDN/punycode)": "es fr it pt ru tr", "%@ (IDN/punycode: %@)": "es it pt ru tr", "%lld images": "fr",
+    "%lld notifications": "fr", "%lld videos": "es", "%lld votes": "fr", "Admin": "de", "Audio": "de es fr it",
+    "Cache": "de fr it pt", "Chats": "de es", "Contact": "fr", "Conversation": "fr", "Debugging": "de",
+    "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Fanouts": "de es fr pt", "Filter": "de",
+    "GIF via GIPHY": "fr pt", "GIFs": "de es pt", "Hex": "de es fr it pt ru tr", "id: %@": "es it pt ru tr",
+    "Image": "fr", "Info": "de it", "Links": "de pt", "Live": "de", "local": "es fr pt", "Maintenance": "fr",
+    "Malware": "it", "Media": "it", "Mentions": "fr", "Message": "fr", "Minutes": "fr", "Mode": "fr",
+    "Moderation": "de", "Name": "de", "Notifications": "fr", "Obligations": "fr", "OK": "de fr it pt", "Online": "de",
     "Option %lld": "de fr", "Options": "fr", "Original": "de es pt", "Passphrase": "de it", "Photo": "fr",
     "Photos": "fr", "Provisional": "es", "Question": "fr", "Relay": "de es it pt", "Scan": "de",
-    "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "Streaming…": "de fr it", "System": "de",
-    "Tokens": "es pt", "Version": "de fr", "Version %lld": "de fr", "Video": "de es it tr", "Videos": "de es",
-    "Votes": "fr", "White Noise Support": "de", "local": "es fr pt", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt",
+    "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "stream %@": "es it pt",
+    "Streaming…": "de fr it", "System": "de", "Tokens": "es pt", "USD": "de es fr it pt ru tr", "Version": "de fr",
+    "Version %lld": "de fr", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt", "Video": "de es it tr",
+    "Videos": "de es", "Votes": "fr", "White Noise Support": "de", "Wi-Fi": "es fr it pt ru tr zh-Hans zh-Hant",
+    "wss://relay.example.com": "de it pt ru tr zh-Hans zh-Hant",
 }
 # (key, locale) pairs, or (key, "*"); an entry that no longer shows English fails the check.
 SHARED_SPELLINGS = frozenset(
