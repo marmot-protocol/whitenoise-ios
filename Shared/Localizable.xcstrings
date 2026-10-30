@@ -139137,7 +139137,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ en total, %2$@ atrasadas"
+            "value" : "%1$@ en total, %2$@ con retraso"
           }
         },
         "fr" : {
@@ -139155,7 +139155,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ no total, %2$@ atrasadas"
+            "value" : "%1$@ no total, %2$@ em atraso"
           }
         },
         "ru" : {
@@ -139185,7 +139185,7 @@
       }
     },
     "%@, %@" : {
-      "comment" : "Joins two counts in the value of the Fanouts row in Chat Developer Tools, such as “2 records” and “1 failed target”. Use the language's usual list separator.",
+      "comment" : "Joins two parts of a short list, such as “2 records” and “1 failed target” in the Fanouts row of Chat Developer Tools. Use the language's usual list separator.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
@@ -139326,13 +139326,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu registrazione"
+                  "value" : "%llu voce"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu registrazioni"
+                  "value" : "%llu voci"
                 }
               }
             }
@@ -139506,13 +139506,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu destinazione non riuscita"
+                  "value" : "%llu destinazione con errore"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu destinazioni non riuscite"
+                  "value" : "%llu destinazioni con errore"
                 }
               }
             }
@@ -139542,25 +139542,25 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu неудачная цель"
+                  "value" : "%llu цель с ошибкой"
                 }
               },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu неудачные цели"
+                  "value" : "%llu цели с ошибкой"
                 }
               },
               "many" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu неудачных целей"
+                  "value" : "%llu целей с ошибкой"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%llu неудачной цели"
+                  "value" : "%llu цели с ошибкой"
                 }
               }
             }

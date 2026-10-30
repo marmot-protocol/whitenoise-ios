@@ -23,8 +23,26 @@ struct MaintenanceDiagnosticsPresentationTests {
         let english = Locale(identifier: "en")
         #expect(summary(1, 1, english) == "1 record, 1 failed target")
         #expect(summary(2, 0, english) == "2 records, 0 failed targets")
-        #expect(summary(3, 5, Locale(identifier: "ru")) == "3 записи, 5 неудачных целей")
+        let russian = Locale(identifier: "ru")
+        #expect(summary(3, 5, russian) == "3 записи, 5 целей с ошибкой")
+        #expect(summary(21, 1, russian) == "21 запись, 1 цель с ошибкой")
         #expect(summary(2, 1, Locale(identifier: "zh-Hant")) == "2 筆記錄，1 個目標失敗")
+    }
+
+    @Test func summariesFollowTheSelectedAppLanguageByDefault() {
+        let presentation = MaintenanceDiagnosticsPresentation.self
+        withAppLanguage(.german) {
+            #expect(
+                presentation.obligationSummary(total: 3, overdue: 1)
+                    == presentation.obligationSummary(total: 3, overdue: 1, locale: Locale(identifier: "de"))
+            )
+        }
+        withAppLanguage(.russian) {
+            #expect(
+                presentation.fanoutSummary(records: 3, failedTargets: 5)
+                    == presentation.fanoutSummary(records: 3, failedTargets: 5, locale: Locale(identifier: "ru"))
+            )
+        }
     }
 
     @Test func peerControlledFailureCodeIsBoundedAndSanitized() throws {
