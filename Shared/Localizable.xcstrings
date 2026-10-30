@@ -16467,13 +16467,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Administrador eliminado"
+            "value" : "Permisos de administrador quitados"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Administrateur supprimé"
+            "value" : "Droits d’administrateur retirés"
           }
         },
         "it" : {
@@ -16491,7 +16491,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Администратор удален"
+            "value" : "Права администратора сняты"
           }
         },
         "tr" : {
@@ -16503,13 +16503,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "管理员已删除"
+            "value" : "已取消管理员"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "管理員已刪除"
+            "value" : "已取消管理員"
           }
         }
       }
@@ -18437,7 +18437,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "APNS jetonu"
+            "value" : "APNS belirteci"
           }
         },
         "zh-Hans" : {
@@ -31733,7 +31733,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No pude abandonar el grupo"
+            "value" : "No se pudo salir del grupo"
           }
         },
         "fr" : {
@@ -33684,13 +33684,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法删除成员"
+            "value" : "无法移除成员"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法刪除成員"
+            "value" : "無法移除成員"
           }
         }
       }
@@ -35486,19 +35486,19 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No pude renunciar"
+            "value" : "No se pudo dejar de ser administrador"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Je ne pouvais pas démissionner"
+            "value" : "Impossible de quitter le rôle d’administrateur"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Non potevo dimettermi"
+            "value" : "Impossibile dimettersi da amministratore"
           }
         },
         "pt" : {
@@ -35510,25 +35510,25 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не мог уйти в отставку"
+            "value" : "Не удалось уйти с поста администратора"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geri adım atamadım"
+            "value" : "Yöneticilikten ayrılınamadı"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法下台"
+            "value" : "无法卸任管理员"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法下台"
+            "value" : "無法卸任管理員"
           }
         }
       }
@@ -53175,13 +53175,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "群组存档"
+            "value" : "群组已归档"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "群組存檔"
+            "value" : "群組已封存"
           }
         }
       }
@@ -55096,7 +55096,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gruppe nicht archiviert"
+            "value" : "Gruppe dearchiviert"
           }
         },
         "es" : {
@@ -55114,7 +55114,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gruppo annullato"
+            "value" : "Gruppo rimosso dall’archivio"
           }
         },
         "pt" : {
@@ -55138,13 +55138,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "组未归档"
+            "value" : "群组已取消归档"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "組未歸檔"
+            "value" : "群組已取消封存"
           }
         }
       }
@@ -62033,7 +62033,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gruppe verlassen…"
+            "value" : "Gruppe wird verlassen…"
           }
         },
         "es" : {
@@ -62045,7 +62045,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quitter le groupe…"
+            "value" : "Départ du groupe…"
           }
         },
         "it" : {
@@ -62069,19 +62069,19 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gruptan ayrılıyoruz…"
+            "value" : "Gruptan ayrılınıyor…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "离团…"
+            "value" : "正在退出群组…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "離團…"
+            "value" : "正在退出群組…"
           }
         }
       }
@@ -65339,7 +65339,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zum Admin gemacht"
+            "value" : "Zum Admin ernannt"
           }
         },
         "es" : {
@@ -65357,13 +65357,13 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fatto amministratore"
+            "value" : "Nominato amministratore"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Feito administrador"
+            "value" : "Promovido a administrador"
           }
         },
         "ru" : {
@@ -65530,7 +65530,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Faire administrateur"
+            "value" : "Nommer administrateur"
           }
         },
         "it" : {
@@ -65583,13 +65583,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Convierta a otro miembro en administrador antes de eliminar al último administrador."
+            "value" : "Convierte a otro miembro en administrador antes de quitar los permisos al último administrador."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Faites d’un autre membre un administrateur avant de supprimer le dernier administrateur."
+            "value" : "Nommez un autre membre administrateur avant de retirer les droits du dernier administrateur."
           }
         },
         "it" : {
@@ -65607,7 +65607,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сделайте другого участника администратором, прежде чем удалять последнего администратора."
+            "value" : "Назначьте администратором другого участника, прежде чем снимать права с последнего администратора."
           }
         },
         "tr" : {
@@ -65619,13 +65619,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在删除最后一个管理员之前，先让另一个成员成为管理员。"
+            "value" : "取消最后一位管理员之前，请先将另一位成员设为管理员。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在刪除最後一個管理員之前，先讓另一個成員成為管理員。"
+            "value" : "取消最後一位管理員之前，請先將另一位成員設為管理員。"
           }
         }
       }
@@ -65642,7 +65642,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Haciendo administrador…"
+            "value" : "Nombrando administrador…"
           }
         },
         "fr" : {
@@ -70859,13 +70859,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新密钥包发布"
+            "value" : "已发布新的密钥包"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新密鑰包發布"
+            "value" : "已發布新的金鑰套件"
           }
         }
       }
@@ -75130,13 +75130,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有要求"
+            "value" : "未请求"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "沒有要求"
+            "value" : "未請求"
           }
         }
       }
@@ -85572,7 +85572,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aktualisierung der Veröffentlichungsgruppe."
+            "value" : "Gruppenänderung wird veröffentlicht."
           }
         },
         "es" : {
@@ -85584,13 +85584,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mise à jour du groupe de publication."
+            "value" : "Publication de la mise à jour du groupe."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aggiornamento del gruppo di pubblicazione."
+            "value" : "Pubblicazione dell’aggiornamento del gruppo."
           }
         },
         "pt" : {
@@ -85602,7 +85602,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Обновление издательской группы."
+            "value" : "Публикация обновления группы."
           }
         },
         "tr" : {
@@ -85614,13 +85614,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "出版组更新。"
+            "value" : "正在发布群组更新。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "出版組更新。"
+            "value" : "正在發布群組更新。"
           }
         }
       }
@@ -85695,13 +85695,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Publicación…"
+            "value" : "Publicando…"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Édition…"
+            "value" : "Publication…"
           }
         },
         "it" : {
@@ -85719,7 +85719,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Издательский…"
+            "value" : "Публикация…"
           }
         },
         "tr" : {
@@ -85731,13 +85731,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "出版…"
+            "value" : "正在发布…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "出版…"
+            "value" : "正在發布…"
           }
         }
       }
@@ -88304,7 +88304,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "APNS Token Yenile"
+            "value" : "APNS Belirtecini Yenile"
           }
         },
         "zh-Hans" : {
@@ -89506,13 +89506,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eliminar administrador"
+            "value" : "Quitar permisos de administrador"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Supprimer l'administrateur"
+            "value" : "Retirer les droits d’administrateur"
           }
         },
         "it" : {
@@ -89530,7 +89530,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Удалить администратора"
+            "value" : "Снять права администратора"
           }
         },
         "tr" : {
@@ -90686,13 +90686,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eliminando administrador…"
+            "value" : "Quitando permisos de administrador…"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Suppression de l'administrateur…"
+            "value" : "Retrait des droits d’administrateur…"
           }
         },
         "it" : {
@@ -90710,7 +90710,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Удаление администратора…"
+            "value" : "Снятие прав администратора…"
           }
         },
         "tr" : {
@@ -90741,7 +90741,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle entfernen und das endgültige Gruppenupdate veröffentlichen."
+            "value" : "Alle werden entfernt und das endgültige Gruppenupdate wird veröffentlicht."
           }
         },
         "es" : {
@@ -90753,7 +90753,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Supprimer tout le monde et publier la mise à jour finale du groupe."
+            "value" : "Suppression de tous les membres et publication de la mise à jour finale du groupe."
           }
         },
         "it" : {
@@ -90783,13 +90783,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "删除所有人并发布最终的群组更新。"
+            "value" : "正在移除所有人并发布最终的群组更新。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "刪除所有人並發布最終的群組更新。"
+            "value" : "正在移除所有人並發布最終的群組更新。"
           }
         }
       }
@@ -90842,13 +90842,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在删除成员..."
+            "value" : "正在移除成员…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在刪除成員..."
+            "value" : "正在移除成員…"
           }
         }
       }
@@ -91895,7 +91895,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "APNS Jetonu İste"
+            "value" : "APNS Belirtecini İste"
           }
         },
         "zh-Hans" : {
@@ -105965,13 +105965,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在离开小组之前辞去管理员职务。"
+            "value" : "离开群组前，请先卸任管理员。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在離開小組之前辭去管理員職務。"
+            "value" : "離開群組前，請先卸任管理員。"
           }
         }
       }
@@ -106041,55 +106041,55 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vor dem Verlassen zurücktreten …"
+            "value" : "Rücktritt als Admin vor dem Verlassen…"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Renunciar antes de irse..."
+            "value" : "Dejando de ser administrador antes de salir…"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se retirer avant de partir…"
+            "value" : "Retrait du rôle d’administrateur avant de quitter…"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dimettersi prima di partire..."
+            "value" : "Dimissioni da amministratore prima di uscire…"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Descendo antes de sair…"
+            "value" : "Deixando o cargo de administrador antes de sair…"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Уйти перед уходом…"
+            "value" : "Уход с поста администратора перед выходом…"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ayrılmadan önce istifa etmek…"
+            "value" : "Ayrılmadan önce yöneticilikten çıkılıyor…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "离开前先下台……"
+            "value" : "退出前正在卸任管理员…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "離開前先下台…"
+            "value" : "退出前正在卸任管理員…"
           }
         }
       }
@@ -106100,55 +106100,55 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rücktritt …"
+            "value" : "Rücktritt als Admin…"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bajando…"
+            "value" : "Dejando de ser administrador…"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se retirer…"
+            "value" : "Retrait du rôle d’administrateur…"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dimettersi…"
+            "value" : "Dimissioni da amministratore…"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Descendo…"
+            "value" : "Deixando o cargo de administrador…"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Уходя…"
+            "value" : "Уход с поста администратора…"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geri adım atıyorum…"
+            "value" : "Yöneticilikten ayrılınıyor…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下台…"
+            "value" : "正在卸任管理员…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下台…"
+            "value" : "正在卸任管理員…"
           }
         }
       }
@@ -107183,13 +107183,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "同步本机注册"
+            "value" : "同步原生注册"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "同步本機註冊"
+            "value" : "同步原生註冊"
           }
         }
       }
@@ -110022,7 +110022,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il gruppo non è stato chiuso perché non sei più un membro."
+            "value" : "Il gruppo non è stato terminato perché non sei più un membro."
           }
         },
         "pt" : {
@@ -110034,7 +110034,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Группа не была закрыта, потому что вы больше не являетесь ее участником."
+            "value" : "Группа не была завершена, потому что вы больше не являетесь её участником."
           }
         },
         "tr" : {
@@ -113124,7 +113124,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Эту группу невозможно закрыть прямо сейчас."
+            "value" : "Эту группу сейчас нельзя завершить."
           }
         },
         "tr" : {
@@ -116418,7 +116418,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jeton parmak izi"
+            "value" : "Belirteç parmak izi"
           }
         },
         "zh-Hans" : {
@@ -118764,7 +118764,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Non fissare"
+            "value" : "Non fissare più"
           }
         },
         "pt" : {
