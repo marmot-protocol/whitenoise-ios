@@ -5,10 +5,12 @@ import MarmotKit
 /// How `AttachmentPolicyBridge.synchronize` wires its decisions against a
 /// runtime: revoking in event order, forwarding only the generation it began,
 /// keeping policy writes in event order, and stopping an event that a newer one
-/// superseded at each suspension point. The decisions themselves are in
-/// `AttachmentPolicyBridgeTests`.
+/// superseded while the account list, a policy read or write, or a grant is
+/// pending. The decisions themselves are in `AttachmentPolicyBridgeTests`.
+// The limit sits above two chained 30-second latch waits, so their own
+// timeouts report first.
 @MainActor
-@Suite(.timeLimit(.minutes(1)))
+@Suite(.timeLimit(.minutes(2)))
 struct AttachmentPolicyBridgeWiringTests {
     private static let alice = accountSummary("alice", byte: "aa")
     private static let bob = accountSummary("bob", byte: "bb")
@@ -227,6 +229,15 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(runtime.grants.map(\.account) == [Self.bob.accountIdHex])
     }
 
+    @Test func aRevocationFailureOtherThanSignOutFailsTheEvent() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice, Self.bob],
+                                            failingRevocation: [Self.alice.accountIdHex])
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+
+        await #expect(throws: FakeAttachmentRuntime.RevocationFailed.self) { try await bridge.synchronize(runtime) }
+        #expect(runtime.grants.isEmpty)
+    }
+
     @Test func anUnchangedPolicyIsNotRewritten() async throws {
         let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: true))
         let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
@@ -294,11 +305,13 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
     struct Write { let account: String; let policy: AttachmentDownloadPolicyFfi }
     struct Grant { let account: String; let generation: String; let permission: AttachmentAutomaticPermissionFfi }
     struct Unreadable: Error {}
+    struct RevocationFailed: Error {}
 
     let cursorPersistence: CursorPersistenceFfi
     private let accounts: [AccountSummaryFfi]
     private let checkpoints: [String: Checkpoint]
     private let signedOutDuringRevocation: Set<String>
+    private let failingRevocation: Set<String>
     private let appliesGrants: Bool
     private var stored: [String: AttachmentDownloadPolicyFfi]
     private var holds: [Step: Hold] = [:]
@@ -311,11 +324,13 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
 
     init(accounts: [AccountSummaryFfi], stored: AttachmentDownloadPolicyFfi = attachmentPolicy(),
          checkpoints: [String: Checkpoint] = [:], signedOutDuringRevocation: Set<String> = [],
+         failingRevocation: Set<String> = [],
          appliesGrants: Bool = true, cursorPersistence: CursorPersistenceFfi = .advance) {
         self.accounts = accounts
         self.stored = Dictionary(uniqueKeysWithValues: accounts.map { ($0.accountIdHex, stored) })
         self.checkpoints = checkpoints
         self.signedOutDuringRevocation = signedOutDuringRevocation
+        self.failingRevocation = failingRevocation
         self.appliesGrants = appliesGrants
         self.cursorPersistence = cursorPersistence
     }
@@ -361,6 +376,7 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
 
     func beginAttachmentPermissionUpdate(accountRef: String) async throws -> String {
         if signedOutDuringRevocation.contains(accountRef) { throw MarmotKitError.AttachmentAccountSignedOut }
+        if failingRevocation.contains(accountRef) { throw RevocationFailed() }
         issued += 1
         let generation = "generation-\(issued)"
         begun.append(Begun(account: accountRef, generation: generation))
