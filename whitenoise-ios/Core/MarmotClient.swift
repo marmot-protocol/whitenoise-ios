@@ -1148,7 +1148,7 @@ nonisolated final class MarmotClient: Sendable {
         // Optional exporters cannot turn missing consent/configuration into a startup failure.
         try? await configureTelemetryRuntime()
         try? await configureProductAnalytics()
-        try await AttachmentPolicyBridge.synchronize(self, beforeStart: true)
+        try await AttachmentPolicyBridge.shared.synchronize(self, beforeStart: true)
         try await marmot.start()
     }
 

@@ -169,7 +169,7 @@ nonisolated struct MediaAutoDownloadMatrix: Equatable {
 @MainActor
 @Observable
 final class MediaAutoDownloadStore {
-    static let shared = MediaAutoDownloadStore(onPolicyChange: AttachmentPolicyBridge.policyDidChange)
+    static let shared = MediaAutoDownloadStore(onPolicyChange: { AttachmentPolicyBridge.shared.policyDidChange() })
     static let storageKey = "media.autoDownloadMatrix"
     /// Posted on the offline→online transition — the app's cue to run the
     /// same relay catch-up it runs on foreground activation.

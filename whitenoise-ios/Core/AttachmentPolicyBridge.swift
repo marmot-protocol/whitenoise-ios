@@ -1,29 +1,80 @@
 import Foundation
 import MarmotKit
 
+/// The runtime operations `AttachmentPolicyBridge` orders. `MarmotClient`
+/// conforms; tests substitute a fake to observe the order.
+protocol AttachmentPolicyRuntime: AnyObject {
+    var cursorPersistence: CursorPersistenceFfi { get }
+    func listAccounts() async throws -> [AccountSummaryFfi]
+    func onboardingSnapshot(accountID: String) async throws -> OnboardingSnapshotFfi?
+    func beginAttachmentPermissionUpdate(accountRef: String) async throws -> String
+    func attachmentDownloadPolicy(accountRef: String) async throws -> AttachmentDownloadPolicyFfi
+    func setAttachmentDownloadPolicy(accountRef: String, policy: AttachmentDownloadPolicyFfi) async throws
+    func setAttachmentAutomaticPermission(accountRef: String, generation: String,
+                                          permission: AttachmentAutomaticPermissionFfi) async throws -> Bool
+}
+
+/// Where the bridge reads each account's captured permission and reports that
+/// one was applied. `MediaAutoDownloadStore` conforms.
+protocol AttachmentPermissionSource: AnyObject {
+    func attachmentPermission(accountID: String) -> AttachmentAutomaticPermissionFfi
+    func didApplyAttachmentPermission()
+}
+
+nonisolated extension MarmotClient: AttachmentPolicyRuntime {
+    func beginAttachmentPermissionUpdate(accountRef: String) async throws -> String {
+        try await marmot.beginAttachmentPermissionUpdate(accountRef: accountRef)
+    }
+
+    func attachmentDownloadPolicy(accountRef: String) async throws -> AttachmentDownloadPolicyFfi {
+        try await marmot.attachmentDownloadPolicy(accountRef: accountRef)
+    }
+
+    func setAttachmentDownloadPolicy(accountRef: String, policy: AttachmentDownloadPolicyFfi) async throws {
+        try await marmot.setAttachmentDownloadPolicy(accountRef: accountRef, policy: policy)
+    }
+
+    func setAttachmentAutomaticPermission(accountRef: String, generation: String,
+                                          permission: AttachmentAutomaticPermissionFfi) async throws -> Bool {
+        try await marmot.setAttachmentAutomaticPermission(accountRef: accountRef, generation: generation,
+                                                          permission: permission)
+    }
+}
+
+extension MediaAutoDownloadStore: AttachmentPermissionSource {}
+
 /// Revokes in event order; obsolete policy evaluations never grant a newer generation.
 @MainActor
-enum AttachmentPolicyBridge {
-    private static weak var activeClient: MarmotClient?
-    private static var revision: UInt64 = 0
-    private static var policyTail: Task<Void, Error>?
-    private static var revocationTail: Task<[(AccountSummaryFfi, String)], Error>?
+final class AttachmentPolicyBridge {
+    static let shared = AttachmentPolicyBridge()
 
-    static func policyDidChange() {
+    private weak var activeClient: (any AttachmentPolicyRuntime)?
+    private var revision: UInt64 = 0
+    private var policyTail: Task<Void, Error>?
+    private var revocationTail: Task<[(AccountSummaryFfi, String)], Error>?
+    private let permissions: () -> any AttachmentPermissionSource
+
+    /// `permissions` is read per event so the shared bridge and
+    /// `MediaAutoDownloadStore.shared` can refer to each other.
+    init(permissions: @escaping () -> any AttachmentPermissionSource = { MediaAutoDownloadStore.shared }) {
+        self.permissions = permissions
+    }
+
+    func policyDidChange() {
         guard let client = activeClient else { return }
         let task = schedule(client, beforeStart: false, updatedLimits: nil)
         Task { _ = try? await task.value }
     }
 
-    static func synchronize(_ client: MarmotClient, beforeStart: Bool = false,
-                            updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)? = nil) async throws {
+    func synchronize(_ client: any AttachmentPolicyRuntime, beforeStart: Bool = false,
+                     updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)? = nil) async throws {
         guard client.cursorPersistence == .advance else { return }
         activeClient = client
         try await schedule(client, beforeStart: beforeStart, updatedLimits: updatedLimits).value
     }
 
-    private static func schedule(_ client: MarmotClient, beforeStart: Bool,
-                                 updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)?) -> Task<Void, Error> {
+    private func schedule(_ client: any AttachmentPolicyRuntime, beforeStart: Bool,
+                          updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)?) -> Task<Void, Error> {
         revision &+= 1
         let event = revision
         let previous = revocationTail
@@ -33,7 +84,7 @@ enum AttachmentPolicyBridge {
             var generations: [(AccountSummaryFfi, String)] = []
             for account in accounts where !account.signedOut {
                 do {
-                    let generation = try await client.marmot.beginAttachmentPermissionUpdate(accountRef: account.accountIdHex)
+                    let generation = try await client.beginAttachmentPermissionUpdate(accountRef: account.accountIdHex)
                     generations.append((account, generation))
                 } catch MarmotKitError.AttachmentAccountSignedOut { continue }
             }
@@ -51,36 +102,36 @@ enum AttachmentPolicyBridge {
             for (account, generation) in generations {
                 do {
                     let checkpoint = try await client.onboardingSnapshot(accountID: account.accountIdHex)
-                    guard configures(onboardingReady: checkpoint?.ready) else { continue }
+                    guard Self.configures(onboardingReady: checkpoint?.ready) else { continue }
                 } catch is CancellationError { throw CancellationError() }
                 catch { continue }
                 guard revision == event, activeClient === client else {
-                    try endSupersededEvent(limitsEdited: limitsEdited)
+                    try Self.endSupersededEvent(limitsEdited: limitsEdited)
                     return
                 }
-                let old = try await client.marmot.attachmentDownloadPolicy(accountRef: account.accountIdHex)
-                let update = policy(old, for: account, applying: updatedLimits)
+                let old = try await client.attachmentDownloadPolicy(accountRef: account.accountIdHex)
+                let update = Self.policy(old, for: account, applying: updatedLimits)
                 appliedLimits = appliedLimits || update.appliesLimits
                 guard revision == event, activeClient === client else {
-                    try endSupersededEvent(limitsEdited: limitsEdited)
+                    try Self.endSupersededEvent(limitsEdited: limitsEdited)
                     return
                 }
                 if update.policy != old {
-                    try await client.marmot.setAttachmentDownloadPolicy(accountRef: account.accountIdHex,
-                                                                        policy: update.policy)
+                    try await client.setAttachmentDownloadPolicy(accountRef: account.accountIdHex,
+                                                                 policy: update.policy)
                 }
-                guard grantsPermission(beforeStart: beforeStart,
-                                       isCurrentEvent: revision == event && activeClient === client) else { continue }
-                let permission = MediaAutoDownloadStore.shared.attachmentPermission(accountID: account.accountIdHex)
+                guard Self.grantsPermission(beforeStart: beforeStart,
+                                            isCurrentEvent: revision == event && activeClient === client) else { continue }
+                let permission = permissions().attachmentPermission(accountID: account.accountIdHex)
                 // A stale generation is consumed as-is; never mint a replacement for this event.
-                let applied = try await client.marmot.setAttachmentAutomaticPermission(accountRef: account.accountIdHex,
+                let applied = try await client.setAttachmentAutomaticPermission(accountRef: account.accountIdHex,
                     generation: generation, permission: permission)
                 appliedPermission = appliedPermission || applied
             }
             if appliedPermission, revision == event, activeClient === client {
-                MediaAutoDownloadStore.shared.didApplyAttachmentPermission()
+                permissions().didApplyAttachmentPermission()
             }
-            try finishEvent(limitsEdited: limitsEdited, appliedLimits: appliedLimits)
+            try Self.finishEvent(limitsEdited: limitsEdited, appliedLimits: appliedLimits)
         }
         policyTail = application
         return application
