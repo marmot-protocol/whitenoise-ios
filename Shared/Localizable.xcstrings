@@ -75023,6 +75023,7 @@
       }
     },
     "Not registered" : {
+      "comment" : "Chat Developer Tools status (Local Push and Registration rows): this device is not registered for push notifications in this chat.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
@@ -88319,6 +88320,7 @@
       }
     },
     "Registered" : {
+      "comment" : "Chat Developer Tools status (Local Push and Registration rows): this device is registered for push notifications in this chat.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
@@ -141324,7 +141326,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yakınsama nedeniyle geçersiz kaldı"
+            "value" : "Yakınsama ile yerine başkası geçti"
           }
         },
         "zh-Hans" : {
