@@ -48,8 +48,10 @@ struct AttachmentPolicyBridgeWiringTests {
 
         // The earlier event began first, so the current event's generation is the
         // second one; a newer revocation that ran ahead would have taken the first.
-        // The newer revocation was queued on the main actor before the release, so
-        // one that didn't wait would run first.
+        // The newer revocation was queued on the main actor before the release, and
+        // the main queue runs jobs in order, so one that didn't wait would run
+        // first. Swift doesn't promise that order; it decides only how reliably a
+        // broken bridge fails here, never whether a correct one passes.
         #expect(try runtime.grants.map(\.generation) == [runtime.secondGeneration()])
     }
 
@@ -119,7 +121,8 @@ struct AttachmentPolicyBridgeWiringTests {
         let save = try await start(bridge, runtime, updatedLimits: (Self.alice.accountIdHex, edited))
         // The newer revocation doesn't wait for the held write. Once it has run,
         // the save's application is queued on the main actor ahead of the
-        // release, so a write that didn't wait would land first.
+        // release, so on the in-order main queue a write that didn't wait would
+        // land first.
         try await eventually { runtime.begun.count == 2 }
         hold.release.signal()
         try await first.value
