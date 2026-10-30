@@ -9579,13 +9579,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld 成员必须更新 White Noise 才能结束此群组。"
+            "value" : "%lld 位成员必须更新 White Noise 才能结束此群组。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld 成員必須更新 White Noise 才能結束此群組。"
+            "value" : "%lld 位成員必須更新 White Noise 才能結束此群組。"
           }
         }
       }
@@ -59277,7 +59277,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Invitation…"
+            "value" : "Invitation en cours…"
           }
         },
         "it" : {
@@ -63776,7 +63776,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Caricamento dei pacchetti chiave"
+            "value" : "Caricamento dei pacchetti di chiavi"
           }
         },
         "pt" : {
@@ -65369,7 +65369,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Назначен администратором"
+            "value" : "Администратор назначен"
           }
         },
         "tr" : {
@@ -65648,7 +65648,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nomination comme administrateur…"
+            "value" : "Nomination en tant qu’administrateur…"
           }
         },
         "it" : {
@@ -70363,7 +70363,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Отсутствует конфигурация сервера нативных push-уведомлений."
+            "value" : "Отсутствует конфигурация сервера Native Push."
           }
         },
         "tr" : {
@@ -70375,13 +70375,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "缺少原生推送服务器配置。"
+            "value" : "缺少 Native Push 服务器配置。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "缺少原生推播伺服器設定。"
+            "value" : "缺少 Native Push 伺服器設定。"
           }
         }
       }
@@ -90741,7 +90741,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle werden entfernt und die letzte Gruppenänderung wird veröffentlicht."
+            "value" : "Alle werden entfernt und die abschließende Gruppenänderung wird veröffentlicht."
           }
         },
         "es" : {
@@ -106041,7 +106041,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rücktritt als Admin vor dem Verlassen…"
+            "value" : "Rücktritt als Admin vor dem Verlassen der Gruppe…"
           }
         },
         "es" : {
@@ -106083,13 +106083,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "退出前正在卸任管理员…"
+            "value" : "离开前正在卸任管理员…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "退出前正在卸任管理員…"
+            "value" : "離開前正在卸任管理員…"
           }
         }
       }
@@ -107171,7 +107171,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Синхронизировать нативную регистрацию"
+            "value" : "Синхронизировать регистрацию Native Push"
           }
         },
         "tr" : {
@@ -107183,13 +107183,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "同步原生注册"
+            "value" : "同步 Native Push 注册"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "同步原生註冊"
+            "value" : "同步 Native Push 註冊"
           }
         }
       }
