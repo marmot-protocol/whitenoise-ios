@@ -34,14 +34,14 @@ def catalog(strings):
 class FixtureCase(unittest.TestCase):
     """Name-keyed tables are emptied so fixtures exercise one rule at a time."""
 
-    TABLES = ("REQUIRED_KEYS", "REQUIRED_PLURAL_KEYS", "PLURAL_GAPS", "PINNED_VALUES", "ENGLISH_COPY_KEYS",
-              "INFOPLIST_REQUIRED_KEYS", "INFOPLIST_PINNED_VALUES")
+    TABLES = ("REQUIRED_KEYS", "REQUIRED_PLURAL_KEYS", "PLURAL_GAPS", "PINNED_VALUES", "ONCE_ENGLISH_KEYS",
+              "SHARED_SPELLINGS", "SHARED_FORMS", "INFOPLIST_REQUIRED_KEYS", "INFOPLIST_PINNED_VALUES")
 
     def setUp(self):
         for name in self.TABLES:
-            self.addCleanup(setattr, CHECK, name, getattr(CHECK, name))
-            empty = {} if isinstance(getattr(CHECK, name), dict) else ()
-            setattr(CHECK, name, frozenset() if name == "PLURAL_GAPS" else empty)
+            table = getattr(CHECK, name)
+            self.addCleanup(setattr, CHECK, name, table)
+            setattr(CHECK, name, {dict: {}, frozenset: frozenset()}.get(type(table), ()))
 
     def errors(self, strings):
         return CHECK.check_strings_catalog(catalog(strings), locales=LOCALES)
@@ -191,13 +191,208 @@ class StringsCatalogTests(FixtureCase):
         errors = self.errors({"Sign In": {"localizations": {"de": unit("Einloggen"), "ru": unit("Войти")}}})
         self.assertEqual(errors, ["de: 'Sign In' is 'Einloggen', pinned 'Anmelden'"])
 
-    def test_english_copy_family_fails_unless_shared_spelling(self):
-        CHECK.ENGLISH_COPY_KEYS = ("Minutes", "Off")
+    def test_once_english_keys_must_exist(self):
+        CHECK.REQUIRED_KEYS = ("Off",)
+        CHECK.ONCE_ENGLISH_KEYS = ("Off", "Sign Up")
+        self.assertEqual(self.errors({}), ["missing required key 'Off'", "missing required key 'Sign Up'"])
+
+    def test_english_copy_fails_unless_shared_spelling(self):
+        CHECK.SHARED_SPELLINGS = frozenset({("Minutes", "fr"), ("GIF", "*")})
         errors = CHECK.check_strings_catalog(catalog({
-            "Minutes": {"localizations": {"fr": unit("Minutes"), "de": unit("Minuten")}},
+            # Exempt for French only: German left as English still fails.
+            "Minutes": {"localizations": {"fr": unit("Minutes"), "de": unit("Minutes")}},
+            "GIF": {"localizations": {"fr": unit("GIF"), "de": unit("GIF")}},
             "Off": {"localizations": {"en": unit("Off"), "fr": unit("Off"), "de": unit("Aus")}},
+            # Compared with the English value as well as the key, and case-sensitively.
+            "toggle.off": {"localizations": {"en": unit("Turned off"), "fr": unit("Turned off"),
+                                             "de": unit("Turned Off")}},
+            # The key's own text fails too: older English wording or a raw identifier.
+            "Sign in": {"localizations": {"en": unit("Sign in to White Noise"), "fr": unit("Se connecter"),
+                                          "de": unit("Sign in")}},
         }), locales=("de", "fr"))
-        self.assertEqual(errors, ["fr: 'Off' still shows the English copy"])
+        self.assertEqual(errors, [
+            "de: 'Minutes' still shows the English copy",
+            "fr: 'Off' still shows the English copy",
+            "de: 'Sign in' still shows the English copy",
+            "fr: 'toggle.off' still shows the English copy",
+        ])
+
+    def test_english_copy_compares_displayed_text(self):
+        CHECK.SHARED_FORMS = {("%lld videos", "it"): frozenset({"%lld video"})}
+        errors = CHECK.check_strings_catalog(catalog({
+            "%lld videos": {"localizations": {
+                "en": plural({"one": "%lld video", "other": "%lld videos"}, substitution=True),
+                # Italian "video" is invariable, so it shares English "%lld video": exempt as a form.
+                "it": plural({"one": "%lld video", "other": "%lld video"}, substitution=True),
+                # English copied into every Russian form, few/many included.
+                "ru": plural({"one": "%lld videos", "few": "%lld videos", "many": "%lld videos",
+                              "other": "%lld videos"}, substitution=True),
+                # Plain variations without a substitution shell, left in English.
+                "de": plural({"one": "%lld video", "other": "%lld videos"}),
+            }},
+            "%lld photos": {"localizations": {
+                "en": plural({"one": "%lld photo", "other": "%lld photos"}, substitution=True),
+                # Half translated still ships English.
+                "it": plural({"one": "%lld foto", "other": "%lld photos"}, substitution=True),
+                # A flat string or a renamed substitution against English's plural.
+                "ru": unit("%lld photo"),
+                "de": {**unit("%#@n@"), "substitutions": {"n": {"argNum": 1, "formatSpecifier": "lld",
+                       "variations": {"plural": {"one": unit("%lld photo"), "other": unit("%lld photos")}}}}},
+            }},
+            "%lld clips": {"localizations": {
+                "en": plural({"one": "%lld clip", "other": "%lld clips"}, substitution=True),
+                "de": plural({"one": "%lld clip", "other": "%lld Clips"}),
+                "it": plural({"one": "%lld filmato", "other": "%lld filmati"}),
+                "ru": plural({"one": "%lld клип", "few": "%lld clips", "many": "%lld clips", "other": "%lld клипа"}),
+            }},
+            "%lld songs": {"localizations": {
+                "en": plural({"one": "%lld song", "other": "%lld songs"}, substitution=True),
+                "de": plural({"one": "%lld Lied", "other": "%lld Lieder"}, substitution=True),
+                "it": plural({"one": "%lld brano", "other": "%lld brani"}, substitution=True),
+                "ru": plural({"one": "%lld песня", "few": "%lld песни", "many": "%lld песен",
+                              "other": "%lld песни"}, substitution=True),
+            }},
+            # Format-only copy has no words to translate.
+            "%@ · %@": {"localizations": {"de": unit("%@ · %@"), "it": unit("%@ · %@"), "ru": unit("%@ · %@")}},
+            "1.5×": {"localizations": {"de": unit("1.5×"), "it": unit("1.5×"), "ru": unit("1.5×")}},
+            # Placeholder numbering doesn't show.
+            "Uploads %@ to %@.": {"localizations": {
+                "en": unit("Uploads %1$@ to %2$@."), "de": unit("Uploads %@ to %@."),
+                "it": unit("Carica %1$@ su %2$@."), "ru": unit("Uploads %2$@ to %1$@."),
+            }},
+            # Neither does the layout: English fills a shell, German renames it, Italian spells each form out.
+            "%lld left": {"localizations": {
+                "en": {**unit("%#@count@ left"), "substitutions": {"count": {"argNum": 1, "formatSpecifier": "lld",
+                       "variations": {"plural": {"one": unit("%lld"), "other": unit("%lld")}}}}},
+                "de": {**unit("%#@n@ left"), "substitutions": {"n": {"argNum": 1, "formatSpecifier": "lld",
+                       "variations": {"plural": {"one": unit("%lld"), "other": unit("%lld")}}}}},
+                "it": plural({"one": "%lld left", "other": "%lld left"}),
+                "ru": {**unit("Осталось %#@n@"), "substitutions": {"n": {"argNum": 1, "formatSpecifier": "lld",
+                       "variations": {"plural": {"one": unit("%lld"), "few": unit("%lld"), "many": unit("%lld"),
+                                                 "other": unit("%lld")}}}}},
+            }},
+            # A numbered substitution token is filled like any other.
+            "items.left": {"localizations": {
+                "en": {**unit("%1$#@count@ left"), "substitutions": {"count": {"argNum": 1, "formatSpecifier": "lld",
+                       "variations": {"plural": {"one": unit("%lld"), "other": unit("%lld")}}}}},
+                "de": plural({"one": "%lld left", "other": "%lld left"}),
+                "it": plural({"one": "%lld rimasto", "other": "%lld rimasti"}), "ru": unit("Осталось %lld"),
+            }},
+            # A flat English value that isn't its key is the English copy.
+            "files.count": {"localizations": {
+                "en": unit("%lld files"), "de": plural({"one": "%lld files", "other": "%lld files"}),
+                "it": unit("%lld file"), "ru": unit("%lld файлов"),
+            }},
+        }), locales=("de", "it", "ru"))
+        self.assertEqual([error for error in errors if "English copy" in error], [
+            "de: '%lld clips' still shows the English copy",
+            "ru: '%lld clips' still shows the English copy",
+            "de: '%lld left' still shows the English copy",
+            "it: '%lld left' still shows the English copy",
+            "de: '%lld photos' still shows the English copy",
+            "it: '%lld photos' still shows the English copy",
+            "ru: '%lld photos' still shows the English copy",
+            "de: '%lld videos' still shows the English copy",
+            "ru: '%lld videos' still shows the English copy",
+            "de: 'Uploads %@ to %@.' still shows the English copy",
+            "ru: 'Uploads %@ to %@.' still shows the English copy",
+            "de: 'files.count' still shows the English copy",
+            "de: 'items.left' still shows the English copy",
+        ])
+
+    def test_english_counts_inside_a_translated_sentence_fail(self):
+        def left(shell, one, other):
+            return {**unit(shell), "substitutions": {"c": {"argNum": 1, "formatSpecifier": "lld",
+                    "variations": {"plural": {"one": unit(one), "other": unit(other)}}}}}
+        errors = CHECK.check_strings_catalog(catalog({"%lld files left": {"localizations": {
+            "en": left("%#@c@ left", "%lld file", "%lld files"),
+            "de": left("Noch %#@c@", "%lld file", "%lld files"),
+            "it": left("Ancora %#@c@", "%1$lld file", "%1$lld files"),
+            "ru": plural({"one": "Остался %lld файл", "few": "Осталось %lld файла", "many": "Осталось %lld файлов",
+                          "other": "Осталось %lld файла"}),
+        }}}), locales=("de", "it", "ru"))
+        self.assertEqual([error for error in errors if "English copy" in error], [
+            "de: '%lld files left' still shows the English copy",
+            "it: '%lld files left' still shows the English copy",
+        ])
+
+    def test_english_copy_fills_every_substitution(self):
+        def forms(files, folders, files_name="files"):
+            return {**unit(f"%#@{files_name}@ and %#@folders@"), "substitutions": {
+                files_name: {"argNum": 1, "formatSpecifier": "lld",
+                             "variations": {"plural": {k: unit(v) for k, v in files.items()}}},
+                "folders": {"argNum": 2, "formatSpecifier": "lld",
+                            "variations": {"plural": {k: unit(v) for k, v in folders.items()}}},
+            }}
+        english_files = {"one": "%lld file", "other": "%lld files"}
+        english_folders = {"one": "%lld folder", "other": "%lld folders"}
+        errors = CHECK.check_strings_catalog(catalog({"%lld files and %lld folders": {"localizations": {
+            "en": forms(english_files, english_folders),
+            # Folder forms that happen to spell English file forms: a different argument, not English.
+            "it": forms({"one": "%lld documento", "other": "%lld documenti"}, english_files),
+            # English throughout: few/many render like English `other`.
+            "ru": forms({"one": "%lld file", "few": "%lld files", "many": "%lld files", "other": "%lld files"},
+                        {"one": "%lld folder", "few": "%lld folders", "many": "%lld folders",
+                         "other": "%lld folders"}),
+            # Renaming a substitution changes nothing shown.
+            "de": forms(english_files, english_folders, files_name="dateien"),
+        }}}), locales=("de", "it", "ru"))
+        errors += self.errors({"search.found": {"localizations": {
+            "en": {**unit("Found %#@a@ in %#@b@"), "substitutions": {
+                name: {"argNum": arg, "formatSpecifier": "lld", "variations": {"plural": {
+                    "one": unit(f"%lld {noun}"), "other": unit(f"%lld {noun}s")}}}
+                for arg, name, noun in ((1, "a", "file"), (2, "b", "folder"))}},
+            # Matches only once both English counts are filled in.
+            "de": unit("Found %lld files in %lld folders"),
+            # Mixed singular and plural counts are English too.
+            "ru": plural({"one": "Found %lld file in %lld folders", "few": "Found %lld files in %lld folder",
+                          "many": "Найдено %lld файлов в %lld папках", "other": "Найдено %lld файла в %lld папках"}),
+        }}})
+        self.assertEqual([error for error in errors if "English copy" in error], [
+            "de: '%lld files and %lld folders' still shows the English copy",
+            "ru: '%lld files and %lld folders' still shows the English copy",
+            "de: 'search.found' still shows the English copy",
+            "ru: 'search.found' still shows the English copy",
+        ])
+
+    def test_shared_spelling_that_no_longer_applies_fails(self):
+        CHECK.SHARED_SPELLINGS = frozenset({
+            ("Minutes", "de"), ("GIF", "*"), ("Gone", "ru"), ("Minutes", "fr"), ("Spam", "*"), ("Spam", "pt-BR"),
+        })
+        errors = self.errors({
+            "Minutes": {"localizations": {"de": unit("Minuten"), "ru": unit("Минуты")}},
+            "GIF": {"localizations": {"de": unit("GIF-Datei"), "ru": unit("ГИФ")}},
+            # Still English in one checked locale (not the first), so the exemption stands.
+            "Spam": {"localizations": {"de": unit("Spam-Nachricht"), "ru": unit("Spam")}},
+        })
+        self.assertEqual(errors, [
+            "remove ('GIF', '*') from SHARED_SPELLINGS: no locale shows it as English",
+            "remove ('Gone', 'ru') from SHARED_SPELLINGS: no locale shows it as English",
+            "remove ('Minutes', 'de') from SHARED_SPELLINGS: no locale shows it as English",
+            "('Spam', 'pt-BR') in SHARED_SPELLINGS names a locale that does not ship",
+        ])
+
+    def test_shared_form_covers_only_that_form(self):
+        CHECK.SHARED_FORMS = {("%lld videos", "ru"): frozenset({"%lld video"}),
+                              ("%lld videos", "de"): frozenset({"%lld video"}),
+                              ("%lld videos", "pt-BR"): frozenset({"%lld video"})}
+        english = plural({"one": "%lld video", "other": "%lld videos"}, substitution=True)
+        errors = CHECK.check_strings_catalog(catalog({"%lld videos": {"localizations": {
+            "en": english,
+            # A shared form belongs to its locale: Italian has none listed.
+            "it": plural({"one": "%lld video", "other": "%lld video"}, substitution=True),
+            # English copied whole: the shared singular doesn't cover "videos".
+            "ru": plural({"one": "%lld video", "few": "%lld videos", "many": "%lld videos", "other": "%lld videos"},
+                         substitution=True),
+            # Translated now, so the shared form is stale.
+            "de": plural({"one": "%lld Video", "other": "%lld Videos"}, substitution=True),
+        }}}), locales=("de", "it", "ru"))
+        self.assertEqual(errors, [
+            "it: '%lld videos' still shows the English copy",
+            "ru: '%lld videos' still shows the English copy",
+            "remove '%lld video' from SHARED_FORMS[('%lld videos', 'de')]: de no longer shows it",
+            "('%lld videos', 'pt-BR') in SHARED_FORMS names a locale that does not ship",
+        ])
 
 
 class InfoPlistCatalogTests(FixtureCase):
@@ -266,12 +461,16 @@ class RepositoryCatalogTests(unittest.TestCase):
     def test_removing_a_required_key_fails(self):
         self.assertIn("missing required key 'Leave “%@”?'", self.broken(lambda s: s.pop("Leave “%@”?")))
 
-    def test_sign_in_as_english_copy_fails(self):
+    def test_sign_in_left_in_english_breaks_its_pin(self):
         def english(strings):
             strings["Sign In"]["localizations"]["de"]["stringUnit"]["value"] = "Sign In"
         errors = self.broken(english)
         self.assertIn("de: 'Sign In' is 'Sign In', pinned 'Anmelden'", errors)
-        self.assertIn("de: 'Sign In' still shows the English copy", errors)
+
+    def test_any_key_left_as_english_copy_fails(self):
+        def english(strings):
+            strings["Playback speed"]["localizations"]["tr"]["stringUnit"]["value"] = "Playback speed"
+        self.assertIn("tr: 'Playback speed' still shows the English copy", self.broken(english))
 
     def test_specifier_type_swap_in_a_real_entry_fails(self):
         def swap(strings):
@@ -279,13 +478,11 @@ class RepositoryCatalogTests(unittest.TestCase):
         self.assertIn("de: specifiers ['%1$lld', '%2$@'] for '%1$lld of %2$lld' expect ['%1$lld', '%2$lld']",
                       self.broken(swap))
 
-    def test_broken_retention_and_russian_plural_fail(self):
+    def test_broken_russian_plural_and_missing_locale_fail(self):
         def damage(strings):
-            strings["Off"]["localizations"]["de"] = unit("Off")
             strings["%lld members"]["localizations"]["ru"]["substitutions"]["count"]["variations"]["plural"].pop("few")
             del strings["Settings"]["localizations"]["fr"]
         errors = self.broken(damage)
-        self.assertIn("de: 'Off' still shows the English copy", errors)
         self.assertIn("ru: '%lld members' needs one/few/many/other plural forms", errors)
         self.assertIn("fr: missing localization for 'Settings'", errors)
 
