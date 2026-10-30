@@ -219,7 +219,10 @@ struct ChatDeveloperToolsView: View {
                 let overdueCount = status.obligations.lazy.filter(\.overdue).count
                 statusRow(
                     "Obligations",
-                    value: "\(status.obligations.count) total, \(overdueCount) overdue",
+                    value: MaintenanceDiagnosticsPresentation.obligationSummary(
+                        total: UInt64(status.obligations.count),
+                        overdue: UInt64(overdueCount)
+                    ),
                     isWarning: overdueCount > 0
                 )
                 let failedFanouts = status.fanouts.reduce(UInt64.zero) { partial, fanout in
@@ -230,7 +233,10 @@ struct ChatDeveloperToolsView: View {
                 }
                 statusRow(
                     "Fanouts",
-                    value: "\(status.fanouts.count) records, \(failedFanouts) failed targets",
+                    value: MaintenanceDiagnosticsPresentation.fanoutSummary(
+                        records: UInt64(status.fanouts.count),
+                        failedTargets: failedFanouts
+                    ),
                     isWarning: failedFanouts > 0
                 )
                 LabeledContent(
@@ -286,14 +292,15 @@ struct ChatDeveloperToolsView: View {
         }
     }
 
-    private func statusRow(_ title: String, value: String, isWarning: Bool) -> some View {
-        LabeledContent(title) {
+    private func statusRow(_ title: String.LocalizationValue, value: String, isWarning: Bool) -> some View {
+        LabeledContent(L10n.string(title)) {
             Text(value).foregroundStyle(isWarning ? Color.orange : Color.primary)
         }
     }
 
-    private func copyableValue(_ title: String, value: String) -> some View {
-        WNCopyButton(value: value, accessibilityTitle: L10n.formatted("Copy %@", title)) { copied in
+    private func copyableValue(_ key: String.LocalizationValue, value: String) -> some View {
+        let title = L10n.string(key)
+        return WNCopyButton(value: value, accessibilityTitle: L10n.formatted("Copy %@", title)) { copied in
             LabeledContent(title) {
                 HStack(spacing: 6) {
                     Text(IdentityFormatter.short(value, head: 12, tail: 6))
