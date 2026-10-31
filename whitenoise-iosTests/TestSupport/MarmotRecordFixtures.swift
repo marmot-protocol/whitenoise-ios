@@ -397,3 +397,14 @@ func keyPackageRelayEvent(eventId: String, account: String = "account") -> Accou
         accountIdHex: account, keyPackageId: "history", keyPackageRefHex: "history-ref", eventIdHex: eventId,
         createdAt: 1, keyPackageBytes: 32, sourceRelays: ["wss://relay.example"], isCurrent: false)
 }
+
+/// A maintenance status naming `record` as the current key package.
+func maintenanceStatus(currentKeyPackage record: AccountKeyPackageFfi) -> KeyPackageMaintenanceStatusFfi {
+    KeyPackageMaintenanceStatusFfi(
+        stableSlotId: "slot", phase: .quiet, currentKeyPackageRefHex: record.keyPackageRefHex, currentNotBefore: nil,
+        currentNotAfter: nil, authoredEventIdHex: record.eventIdHex, authoredEventCreatedAt: record.publishedAt,
+        acceptedFanoutTargets: 0, unattemptedFanoutTargets: 0, failedFanoutTargets: 0,
+        policyProhibitedFanoutTargets: 0, refreshAt: nil, lastConsumedKeyPackageRefHex: nil,
+        retainedPrivateMaterialCount: 0, pendingEventIdHex: nil, pendingAttemptCount: 0,
+        pendingLastFailureCode: nil)
+}

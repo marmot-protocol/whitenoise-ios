@@ -390,6 +390,18 @@ extension KeyPackagesViewModelTests {
         #expect(model.loadedRef == "account")
     }
 
+    @Test func aSuccessfulReloadClearsAnEarlierError() async throws {
+        let runtime = FakeKeyPackageRuntime()
+        let model = KeyPackagesViewModel(runtime: { _ in runtime })
+        model.loadError = "old load error"
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+
+        await model.reload(using: appState)
+
+        #expect(model.loadError == nil)
+    }
+
     @Test func aPlainReloadShowsTheLocalPackagesWithoutRefreshing() async throws {
         let runtime = FakeKeyPackageRuntime()
         let model = KeyPackagesViewModel(runtime: { _ in runtime })
@@ -453,7 +465,7 @@ extension KeyPackagesViewModelTests {
         try await hold.entered.wait()
         #expect(model.isPublishing)
         hold.release.signal()
-        // Still busy through the refresh that follows, so a second publish waits.
+        // Still busy through the refresh that follows.
         try await refresh.entered.wait()
         #expect(model.isPublishing)
         refresh.release.signal()
@@ -607,13 +619,8 @@ final class FakeKeyPackageRuntime: KeyPackageRuntime {
         try await pass("\(Step.maintenance)")
         if failing.contains(.maintenance) { throw Failed() }
         guard statusNamesLocalPackage else { return nil }
-        let id = packageId(for: accountRef, version: version)
-        return KeyPackageMaintenanceStatusFfi(
-            stableSlotId: "slot", phase: .quiet, currentKeyPackageRefHex: "keyPackageRef-\(id)", currentNotBefore: nil,
-            currentNotAfter: nil, authoredEventIdHex: id, authoredEventCreatedAt: 1, acceptedFanoutTargets: 0,
-            unattemptedFanoutTargets: 0, failedFanoutTargets: 0, policyProhibitedFanoutTargets: 0, refreshAt: nil,
-            lastConsumedKeyPackageRefHex: nil, retainedPrivateMaterialCount: 0, pendingEventIdHex: nil,
-            pendingAttemptCount: 0, pendingLastFailureCode: nil)
+        return maintenanceStatus(
+            currentKeyPackage: keyPackage(eventId: packageId(for: accountRef, version: version), local: true, relay: true))
     }
 
     func keyPackageRelayEvents(accountRef: String, bootstrapRelays: [String]) async throws
