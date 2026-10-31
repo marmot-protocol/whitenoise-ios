@@ -1064,8 +1064,9 @@ struct GroupDetailsView: View {
         return viewModel.managementState == nil && isAdmin && !viewModel.isLastAdmin
     }
 
-    private func copyableDeveloperValueRow(title: String, value: String) -> some View {
-        WNCopyButton(value: value, accessibilityTitle: L10n.formatted("Copy %@", title)) { copied in
+    private func copyableDeveloperValueRow(title key: String.LocalizationValue, value: String) -> some View {
+        let title = L10n.string(key)
+        return WNCopyButton(value: value, accessibilityTitle: L10n.formatted("Copy %@", title)) { copied in
             LabeledContent(title) {
                 HStack(spacing: 6) {
                     Text(value)

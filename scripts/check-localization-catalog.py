@@ -13,8 +13,10 @@ Shared catalog, for every key and every shipped locale:
     the source and every locale for REQUIRED_PLURAL_KEYS and for any key that
     has them in some locale, except PLURAL_GAPS, which must be pruned once
     the gap closes;
-  * REQUIRED_KEYS exist, PINNED_VALUES match exactly, and ENGLISH_COPY_KEYS
-    are not left as the English source.
+  * REQUIRED_KEYS and ONCE_ENGLISH_KEYS exist and PINNED_VALUES match exactly;
+  * no locale still shows the English copy, meaning any displayed text with
+    words that English also shows, except SHARED_SPELLINGS and SHARED_FORMS,
+    which must name shipped locales and be pruned once an entry no longer applies.
 InfoPlist catalog: INFOPLIST_REQUIRED_KEYS exist; every key except
 CFBundleDisplayName is non-empty in English and every locale; usage
 descriptions are translated; INFOPLIST_PINNED_VALUES match; and
@@ -25,6 +27,7 @@ auto-extracted `new` entries that mirror the key.
 """
 
 import argparse
+import itertools
 import json
 import re
 import sys
@@ -158,9 +161,42 @@ DONATION_KEYS = (
     "More billing activity couldn't be loaded. Try again.", "A new donation won't restore earlier payments.",
     "Your donation succeeded, but history couldn't be saved on this device.",
 )
-ENGLISH_COPY_KEYS = ("Sign In", "Sign Up") + RETENTION_KEYS + DONATION_KEYS
-# (key, locale) pairs, or (key, "*"), whose correct translation is spelled like English.
-SHARED_SPELLINGS = frozenset({("Minutes", "fr"), ("USD", "*")})
+# These families must keep existing; the English-copy rule covers their translations.
+ONCE_ENGLISH_KEYS = ("Sign In", "Sign Up") + RETENTION_KEYS + DONATION_KEYS
+# Copy whose correct translation is spelled like English. Names and identifiers
+# may stay English in any locale; words only in the listed locales. "Native Push"
+# is the feature's name: every locale's notification footers keep it as such.
+SHARED_NAMES = (
+    "Claude Code", "Codex", "GIF", "GIPHY", "Hermes", "NIP-65", "Native Push", "OpenClaw", "OpenCode", "Pi",
+    "QUIC · %@", "URL", "White Noise", "White Noise · %@", "https://example.com/image.jpg", "npub", "nsec1…",
+)
+SHARED_WORDS = {
+    "%@ (IDN/punycode)": "es fr it pt ru tr", "%@ (IDN/punycode: %@)": "es it pt ru tr", "%lld images": "fr",
+    "%lld notifications": "fr", "%lld videos": "es", "%lld votes": "fr", "Admin": "de", "Audio": "de es fr it",
+    "Cache": "de fr it pt", "Chats": "de es", "Contact": "fr", "Conversation": "fr", "Debugging": "de",
+    "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Fanouts": "de es fr pt", "Filter": "de",
+    "GIF via GIPHY": "fr pt", "GIFs": "de es pt", "Hex": "de es fr it pt ru tr", "id: %@": "es it pt ru tr",
+    "Image": "fr", "Info": "de it", "Links": "de pt", "Live": "de", "local": "es fr pt", "Maintenance": "fr",
+    "Malware": "it", "Manual": "es pt", "Media": "it", "Mentions": "fr", "Message": "fr", "Minutes": "fr",
+    "Mode": "fr", "Moderation": "de", "Name": "de", "Notifications": "fr", "Obligations": "fr", "OK": "de fr it pt",
+    "Online": "de", "Option %lld": "de fr", "Options": "fr", "Original": "de es pt", "Passphrase": "de it", "Photo": "fr",
+    "Photos": "fr", "Provisional": "es", "Question": "fr", "Relay": "de es it pt", "Scan": "de",
+    "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "stream %@": "es it pt",
+    "Streaming…": "de fr it", "System": "de", "Tokens": "es pt", "USD": "de es fr it pt ru tr", "Version": "de fr",
+    "Version %lld": "de fr", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt", "Video": "de es it tr",
+    "Videos": "de es", "Votes": "fr", "White Noise Support": "de", "Wi-Fi": "es fr it pt ru tr zh-Hans zh-Hant",
+    "wss://relay.example.com": "de it pt ru tr zh-Hans zh-Hant",
+}
+# (key, locale) pairs, or (key, "*"); an entry that no longer shows English fails the check.
+SHARED_SPELLINGS = frozenset(
+    {(key, "*") for key in SHARED_NAMES}
+    | {(key, locale) for key, locales in SHARED_WORDS.items() for locale in locales.split()}
+)
+# Invariable plurals: the one form a locale shares with English, so the rest stays checked.
+SHARED_FORMS = {
+    ("%lld videos", "it"): frozenset({"%lld video"}),
+    ("%lld videos", "tr"): frozenset({"%lld video"}),
+}
 
 INFOPLIST_REQUIRED_KEYS = (
     "CFBundleName", "NSCameraUsageDescription", "NSMicrophoneUsageDescription", "NSFaceIDUsageDescription",
@@ -304,15 +340,69 @@ def plural_requirement_errors(key, localizations, locales, require=True):
     return errors
 
 
-def source_value(key, localizations):
-    unit = localizations.get(SOURCE, {}).get("stringUnit")
-    return unit.get("value", key) if unit else key
+SUBSTITUTION_TOKEN = re.compile(r"%(?:\d+\$)?#@(\w+)@")
+
+
+def displayed(localization):
+    """The texts one localization can show: each plural form, or its shell with
+    every combination of its substitutions' forms filled in, `%2$@` read as `%@`."""
+    value = localization.get("stringUnit", {}).get("value")
+    plural = localization.get("variations", {}).get("plural")
+    if isinstance(plural, dict):
+        texts = {form.get("stringUnit", {}).get("value", "") for form in plural.values()}
+    elif value is None:
+        texts = set()
+    else:
+        substitutions = localization.get("substitutions", {})
+        choices = [
+            [form.get("stringUnit", {}).get("value", "")
+             for form in (substitutions.get(name, {}).get("variations", {}).get("plural") or {}).values()]
+            or [f"%#@{name}@"]
+            for name in SUBSTITUTION_TOKEN.findall(value)
+        ]
+        texts = set()
+        for combination in itertools.product(*choices):
+            filled = iter(combination)
+            texts.add(SUBSTITUTION_TOKEN.sub(lambda _: next(filled), value))
+    return {re.sub(r"%\d+\$", "%", text) for text in texts}
+
+
+def has_words(value):
+    return re.search(r"[^\W\d_]", SPECIFIER.sub("", value)) is not None
+
+
+def forms_by_argument(localization):
+    """{argNum: plural forms} of one localization's substitutions, `%2$@` read as `%@`."""
+    return {
+        substitution.get("argNum"): {re.sub(r"%\d+\$", "%", form.get("stringUnit", {}).get("value", ""))
+                                     for form in (substitution.get("variations", {}).get("plural") or {}).values()}
+        for substitution in localization.get("substitutions", {}).values()
+    }
+
+
+def english_shown(key, localizations, locale):
+    """The texts with words that `locale` can show and English shows too, so a
+    plural left half in English still fails. Displayed text is compared, so
+    plural layout, substitution names and placeholder numbering don't matter;
+    so is each substitution's forms against English's for the same argument,
+    which catches English counts inside a translated sentence. The key's own
+    text counts as English too (older wording, or an identifier shown raw); a
+    count key needs English plurals for its singular to count. Matching is
+    exact, so English words inside a translated sentence pass. Format-only
+    text ("%@ · %@", "%lld") says nothing either way.
+    """
+    source, target = localizations.get(SOURCE, {}), localizations.get(locale, {})
+    english = displayed(source) | displayed({"stringUnit": {"value": key}})
+    english_forms = forms_by_argument(source)
+    shown = {text for text in displayed(target) if has_words(text) and text in english}
+    return shown | {form for argument, forms in forms_by_argument(target).items() for form in forms
+                    if has_words(form) and form in english_forms.get(argument, ())}
 
 
 def check_strings_catalog(catalog, locales=LOCALES):
     errors = []
     strings = catalog.get("strings", {})
-    for key in REQUIRED_KEYS + REQUIRED_PLURAL_KEYS:
+    for key in dict.fromkeys(REQUIRED_KEYS + REQUIRED_PLURAL_KEYS + ONCE_ENGLISH_KEYS):
         if key not in strings:
             errors.append(f"missing required key {key!r}")
 
@@ -323,8 +413,11 @@ def check_strings_catalog(catalog, locales=LOCALES):
             localization = localizations.get(locale)
             if localization is None:
                 errors.append(f"{locale}: missing localization for {key!r}")
-            else:
-                errors += localization_errors(locale, key, localization, key_arguments)
+                continue
+            errors += localization_errors(locale, key, localization, key_arguments)
+            shared = (key, locale) in SHARED_SPELLINGS or (key, "*") in SHARED_SPELLINGS
+            if not shared and english_shown(key, localizations, locale) - SHARED_FORMS.get((key, locale), set()):
+                errors.append(f"{locale}: {key!r} still shows the English copy")
 
         inferred = any(has_plurals(loc) for loc in localizations.values())
         if key in REQUIRED_PLURAL_KEYS:
@@ -349,19 +442,24 @@ def check_strings_catalog(catalog, locales=LOCALES):
             if actual != expected:
                 errors.append(f"{locale}: {key!r} is {actual!r}, pinned {expected!r}")
 
-    for key in ENGLISH_COPY_KEYS:
-        entry = strings.get(key)
-        if entry is None:
-            errors.append(f"missing key {key!r}")
+    for key, locale in sorted(SHARED_SPELLINGS):
+        if locale != "*" and locale not in LOCALES:
+            errors.append(f"({key!r}, {locale!r}) in SHARED_SPELLINGS names a locale that does not ship")
             continue
-        localizations = entry.get("localizations", {})
-        english = source_value(key, localizations)
-        for locale in locales:
-            if (key, locale) in SHARED_SPELLINGS or (key, "*") in SHARED_SPELLINGS:
-                continue
-            unit = localizations.get(locale, {}).get("stringUnit", {})
-            if unit.get("value") == english:
-                errors.append(f"{locale}: {key!r} still shows the English copy")
+        scope = locales if locale == "*" else tuple(set(locales) & {locale})
+        if not scope:
+            continue
+        localizations = strings.get(key, {}).get("localizations")
+        if localizations is None or not any(english_shown(key, localizations, each) for each in scope):
+            errors.append(f"remove ({key!r}, {locale!r}) from SHARED_SPELLINGS: no locale shows it as English")
+
+    for (key, locale), forms in sorted(SHARED_FORMS.items()):
+        if locale not in LOCALES:
+            errors.append(f"({key!r}, {locale!r}) in SHARED_FORMS names a locale that does not ship")
+        elif locale in locales:
+            localizations = strings.get(key, {}).get("localizations", {})
+            for form in sorted(forms - english_shown(key, localizations, locale)):
+                errors.append(f"remove {form!r} from SHARED_FORMS[({key!r}, {locale!r})]: {locale} no longer shows it")
     return errors
 
 

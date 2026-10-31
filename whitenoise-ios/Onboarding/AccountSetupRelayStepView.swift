@@ -27,7 +27,7 @@ struct AccountSetupRelayStepView: View {
         .init(step: selectedStep, actions: step?.actions ?? [], proposal: proposal, childFailureSource: childFailure?.source,
               hasOperationError: model.errorMessage != nil, lastAction: lastAction,
               needsEarlierReview: AccountSetupRelayStepPresentation.needsEarlierReview(in: presentation.snapshot, step: selectedStep),
-              defaultRelays: defaultRelays)
+              lookupFailed: step?.status == .retryableFailure, defaultRelays: defaultRelays)
     }
 
     init(model: AccountSetupModel, selectedStep: OnboardingStepFfi) {
@@ -136,22 +136,33 @@ struct AccountSetupRelayStepView: View {
                 .appAppearance()
             }
         }
-        .alert(discardAction == .edit ? editTitle : "Discard relay changes?", isPresented: $confirmsDiscard) {
-            if discardAction == .edit {
-                Button(editTitle) { perform(.edit) }
-            } else {
-                Button("Discard Changes", role: .destructive) { perform(.discard) }
+        .alert(confirmationTitle, isPresented: $confirmsDiscard) {
+            switch discardAction {
+            case .edit: Button(editTitle) { perform(.edit) }
+            case .replaceWithDefaults:
+                Button("Replace With Default Relays", role: .destructive) { perform(.replaceWithDefaults) }
+            default: Button("Discard Changes", role: .destructive) { perform(.discard) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            if discardAction == .edit {
+            switch discardAction {
+            case .edit:
                 Text("Editing withdraws this proposal and keeps the addresses in your draft. Nothing is published until you review and save again.")
-            } else {
-                Text("This discards the proposed relay list without publishing it.")
+            case .replaceWithDefaults:
+                Text("We couldn’t check your inbox relays. If you already have an inbox relay list, the default relays will replace it, and relays left out will stop receiving your invitations. You’ll review the change before anything is published.")
+            default: Text("This discards the proposed relay list without publishing it.")
             }
         }
         .onChange(of: model.snapshot) { updatePresentation() }
         .onChange(of: model.isBusy) { updatePresentation() }
+    }
+
+    private var confirmationTitle: LocalizedStringKey {
+        switch discardAction {
+        case .edit: return editTitle
+        case .replaceWithDefaults: return "Replace With Default Relays"
+        default: return "Discard relay changes?"
+        }
     }
 
     private var statusTitle: LocalizedStringKey {
@@ -339,12 +350,6 @@ struct AccountSetupRelayStepView: View {
             await operation.value
             activeAction = nil
             operationPrimary = nil
-            if action == .searchDefaults, model.errorMessage != nil
-                || model.snapshot.steps.first(where: { $0.step == selectedStep })?.status == .retryableFailure {
-                presentation.reportChildFailure(source: .discovery,
-                                                failure: model.failure ?? .discovery,
-                                                revision: model.snapshot.revision)
-            }
             updatePresentation()
             guard model.isConnected, let proposalChange,
                   proposalChange.isComplete(in: model.snapshot, hasError: model.errorMessage != nil) else { return }

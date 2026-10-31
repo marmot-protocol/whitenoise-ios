@@ -5,20 +5,7 @@ import UserNotifications
 
 struct NotificationContentDecoratorTests {
     private func presentation() -> LocalNotificationPresentation {
-        LocalNotificationPresentation(
-            identifier: "id-1",
-            threadIdentifier: "thread-1",
-            title: "Alice",
-            body: "hello",
-            route: LocalNotificationRoute(
-                accountRef: "acct",
-                groupIdHex: "group",
-                notificationKey: "key",
-                messageIdHex: "msg"
-            ),
-            timestamp: Date(timeIntervalSince1970: 1_700_000_000),
-            userInfo: ["k": "v"]
-        )
+        notificationPresentation(userInfo: ["k": "v"])
     }
 
     @Test func applyRendersAudibleContentByDefaultAndMergesUserInfo() {
@@ -170,5 +157,77 @@ struct NotificationContentDecoratorTests {
         NotificationServiceDiagnostics.record(snapshot, defaults: defaults)
 
         #expect(NotificationServiceDiagnostics.lastSnapshot(defaults: defaults) == snapshot)
+    }
+
+    /// The extension can't drop the alert that woke it, so a wake with no local
+    /// presentation still says something: never a blank notification.
+    @Test(arguments: ["", "   ", "\n"])
+    func fallbackFillsBlankCopyWithTheGenericTitleAndBody(_ blank: String) {
+        let content = pushContent(title: blank, body: blank)
+
+        NotificationContentDecorator.applyFallback(to: content)
+
+        // The same title and body generic preview mode delivers.
+        let generic = LocalNotificationProjection.genericContentText()
+        #expect(content.title == generic.title)
+        #expect(content.body == generic.body)
+        #expect(!content.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        #expect(!content.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
+            == LocalNotificationProjection.fallbackDisposition)
+        expectStillAlertsWithPushData(content)
+    }
+
+    /// Only a blank field is replaced; copy the push already carries stays, and
+    /// the wake is still marked as a fallback so the foreground app won't
+    /// present it again.
+    @Test(arguments: [("Server title", ""), ("", "Server body"), ("Server title", "Server body")])
+    func fallbackReplacesOnlyBlankFields(title: String, body: String) {
+        let content = pushContent(title: title, body: body)
+
+        NotificationContentDecorator.applyFallback(to: content)
+
+        let generic = LocalNotificationProjection.genericContentText()
+        #expect(content.title == (title.isEmpty ? generic.title : title))
+        #expect(content.body == (body.isEmpty ? generic.body : body))
+        #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
+            == LocalNotificationProjection.fallbackDisposition)
+        expectStillAlertsWithPushData(content)
+    }
+
+    /// Push content as it reaches the extension: audible, with its own userInfo.
+    private func pushContent(title: String, body: String) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.interruptionLevel = .active
+        content.userInfo = ["push": "data"]
+        return content
+    }
+
+    /// Unlike quiet delivery, a fallback still alerts and keeps what the push carried.
+    private func expectStillAlertsWithPushData(_ content: UNMutableNotificationContent) {
+        #expect(content.sound != nil)
+        #expect(content.interruptionLevel == .active)
+        #expect(content.userInfo["push"] as? String == "data")
+    }
+
+    /// A fully muted wake keeps its copy (generic when blank) and the push's
+    /// data, but lands silently in Notification Center: no sound, no banner.
+    @Test(arguments: [("", ""), ("Server title", "Server body")])
+    func quietDeliveryKeepsCopyButIsSilent(title: String, body: String) {
+        let content = pushContent(title: title, body: body)
+
+        NotificationContentDecorator.applyQuietDelivery(to: content)
+
+        let generic = LocalNotificationProjection.genericContentText()
+        #expect(content.title == (title.isEmpty ? generic.title : title))
+        #expect(content.body == (body.isEmpty ? generic.body : body))
+        #expect(content.userInfo["push"] as? String == "data")
+        #expect(content.sound == nil)
+        #expect(content.interruptionLevel == .passive)
+        #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
+            == LocalNotificationProjection.quietDisposition)
     }
 }

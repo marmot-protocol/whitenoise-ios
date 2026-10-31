@@ -127,3 +127,20 @@ custom_rules:
     - doccomment
     message: "Open test runtimes with withTestClient, OwnedTestClient or TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot:) so they are always closed."
     severity: error
+  # App code takes test seams as injected dependencies, not test-only hooks
+  # (#1241). Files that still have hooks start with a file-wide
+  # `swiftlint:disable no_test_hook_in_app_code`; superfluous_disable_command
+  # fails once a file's last hook is gone, so the directive must go with it.
+  # The top-level `included` keeps this rule to the app directories; the
+  # tests exclusion is what keeps it out of the tests on CI.
+  no_test_hook_in_app_code:
+    name: "Test hook in app code"
+    regex: '\b(?:\w*ForTesting|forTesting)\w*'
+    excluded:
+    - '(^|/)whitenoise-iosTests/'
+    excluded_match_kinds:
+    - comment
+    - doccomment
+    - string
+    message: "Don't add test-only hooks to app code. Take the dependency as an init parameter with the production default, and inject a test double from the test (#1241)."
+    severity: error

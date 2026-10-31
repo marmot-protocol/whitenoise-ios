@@ -72,15 +72,23 @@ struct AccountSetupDiscoverySheet: View {
         isSubmitting = true
         Task {
             await operation.value
-            if model.errorMessage == nil, model.isConnected,
-               model.snapshot.steps.first(where: { $0.step == step })?.status != .retryableFailure {
-                dismiss()
-            } else {
+            if let failure = AccountSetupDiscoveryOutcome.failure(model.failure, isConnected: model.isConnected) {
                 isSubmitting = false
-                let failure = model.failure ?? .discovery
                 lookupError = failure.message
                 onFailure?(failure)
+            } else {
+                dismiss()
             }
+        }
+    }
+}
+
+nonisolated enum AccountSetupDiscoveryOutcome {
+    static func failure(_ failure: AccountSetupFailure?, isConnected: Bool) -> AccountSetupFailure? {
+        switch failure {
+        case .operation: .discovery
+        case .some(let failure): failure
+        case nil: isConnected ? nil : .updatesStopped
         }
     }
 }

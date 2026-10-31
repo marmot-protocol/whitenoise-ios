@@ -46,6 +46,29 @@ struct AccountSetupRelayStepPresentationTests {
         #expect(presentation.status == .discoveryFailure)
     }
 
+    @Test func failedInboxLookupOffersConfirmedDefaultReplacementWhenEditingIsAllowed() {
+        let presentation = Presentation(
+            step: .inboxRelays, actions: [.retry, .editRelays, .editDiscoveryRelays], proposal: nil, lookupFailed: true
+        )
+        #expect(presentation.secondaryActions.contains(.replaceWithDefaults))
+        #expect(presentation.primaryAction?.action != .replaceWithDefaults)
+        #expect(presentation.needsConfirmation(.replaceWithDefaults))
+    }
+
+    @Test(arguments: [
+        (OnboardingStepFfi.inboxRelays, [OnboardingActionFfi.retry, .editDiscoveryRelays], true),
+        (.inboxRelays, [.retry, .editRelays, .editDiscoveryRelays], false),
+        (.inboxRelays, [.useRecommendedRelays, .editRelays, .editDiscoveryRelays], true),
+        (.relays, [.retry, .editRelays, .editDiscoveryRelays], true),
+    ])
+    func defaultReplacementStaysHiddenOutsideAFailedEditableInboxLookup(
+        _ step: OnboardingStepFfi, _ actions: [OnboardingActionFfi], _ lookupFailed: Bool
+    ) {
+        let presentation = Presentation(step: step, actions: actions, proposal: nil, lookupFailed: lookupFailed)
+        #expect(!presentation.canReplaceWithDefaults)
+        #expect(!presentation.secondaryActions.contains(.replaceWithDefaults))
+    }
+
     @Test func secondaryActionsNeverRepeatThePrimary() {
         let presentation = Presentation(
             step: .relays, actions: [.useRecommendedRelays, .retry, .editRelays, .editDiscoveryRelays], proposal: nil

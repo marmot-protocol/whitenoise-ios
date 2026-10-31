@@ -101,25 +101,11 @@ nonisolated enum L10n {
     }
 
     private static let bundleCache = L10nBundleCache()
-
-#if DEBUG
-    static func resetBundleCacheForTesting() {
-        bundleCache.removeAll()
-    }
-
-    static var bundleCacheCountForTesting: Int {
-        bundleCache.count
-    }
-
-    static func bundleCacheCountForTesting(in base: Bundle) -> Int {
-        bundleCache.count(in: base)
-    }
-#endif
 }
 
 // L10n remains synchronous; NSLock guards all mutable cache state across actors.
 // swiftlint:disable:next no_unchecked_sendable
-private nonisolated final class L10nBundleCache: @unchecked Sendable {
+nonisolated final class L10nBundleCache: @unchecked Sendable {
     private struct Key: Hashable {
         let base: ObjectIdentifier
         let preference: String
@@ -168,22 +154,9 @@ private nonisolated final class L10nBundleCache: @unchecked Sendable {
         return resolved
     }
 
-    func removeAll() {
+    private func removeAll() {
         lock.lock()
         bundles.removeAll()
         lock.unlock()
-    }
-
-    var count: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return bundles.count
-    }
-
-    func count(in base: Bundle) -> Int {
-        let baseID = ObjectIdentifier(base)
-        lock.lock()
-        defer { lock.unlock() }
-        return bundles.keys.filter { $0.base == baseID }.count
     }
 }

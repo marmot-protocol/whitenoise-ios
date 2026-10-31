@@ -54,8 +54,8 @@ struct KeyPackageRelayPreviewTests {
     }
 
     @Test func currentPackageUsesLifecycleReferenceInsteadOfNewestTimestamp() {
-        let current = package(eventId: "current", publishedAt: 10, local: true, relay: true)
-        let other = package(eventId: "other", publishedAt: 100, local: false, relay: true)
+        let current = keyPackage(eventId: "current", publishedAt: 10, local: true, relay: true)
+        let other = keyPackage(eventId: "other", publishedAt: 100, local: false, relay: true)
         let presentation = KeyPackagesPresentation(
             packages: [other, current],
             currentReference: current.keyPackageRefHex,
@@ -67,7 +67,7 @@ struct KeyPackageRelayPreviewTests {
     }
 
     @Test func normalCurrentPackageHasNoAdditionalRelaySection() {
-        let current = package(local: true, relay: true)
+        let current = keyPackage(local: true, relay: true)
         let presentation = KeyPackagesPresentation(
             packages: [current],
             currentReference: current.keyPackageRefHex,
@@ -78,10 +78,10 @@ struct KeyPackageRelayPreviewTests {
     }
 
     @Test func additionalPackagesRequireRelayEvidenceRegardlessOfLocalOwnership() {
-        let local = package(eventId: "local", local: true, relay: false)
-        let unclassified = package(eventId: "unknown", local: false, relay: false)
-        let retained = package(eventId: "retained", local: true, relay: true)
-        let remote = package(eventId: "remote", publishedAt: 10, local: false, relay: true)
+        let local = keyPackage(eventId: "local", local: true, relay: false)
+        let unclassified = keyPackage(eventId: "unknown", local: false, relay: false)
+        let retained = keyPackage(eventId: "retained", local: true, relay: true)
+        let remote = keyPackage(eventId: "remote", publishedAt: 10, local: false, relay: true)
         let presentation = KeyPackagesPresentation(
             packages: [local, unclassified, retained, remote, remote],
             currentReference: "current-ref",
@@ -91,7 +91,7 @@ struct KeyPackageRelayPreviewTests {
     }
 
     @Test func relayCopiesOfCurrentMaterialAreNotOtherPackages() {
-        let current = package(local: true, relay: true)
+        let current = keyPackage(local: true, relay: true)
         var echo = current
         echo.eventIdHex = "different-event"
         echo.local = false
@@ -114,7 +114,7 @@ struct KeyPackageRelayPreviewTests {
 
     @Test func missingLifecycleNeverPromotesAnArbitraryLocalOrRelayPackage() {
         let presentation = KeyPackagesPresentation(
-            packages: [package(local: true, relay: true)],
+            packages: [keyPackage(local: true, relay: true)],
             currentReference: nil, currentEventID: nil
         )
         #expect(presentation.current == nil)
@@ -122,7 +122,7 @@ struct KeyPackageRelayPreviewTests {
     }
 
     @Test func absentAuthoredEventCanUseMatchingReference() {
-        let current = package(local: true, relay: false)
+        let current = keyPackage(local: true, relay: false)
         let presentation = KeyPackagesPresentation(
             packages: [current], currentReference: current.keyPackageRefHex, currentEventID: nil
         )
@@ -131,7 +131,7 @@ struct KeyPackageRelayPreviewTests {
     }
 
     @Test func newLifecycleEventDoesNotBorrowOldPublicationDetails() {
-        let old = package(local: true, relay: true)
+        let old = keyPackage(local: true, relay: true)
         let presentation = KeyPackagesPresentation(
             packages: [old], currentReference: old.keyPackageRefHex,
             currentEventID: "new-event", publishedAt: 55
@@ -141,32 +141,12 @@ struct KeyPackageRelayPreviewTests {
         #expect(presentation.current?.bytes == nil)
         #expect(presentation.otherRelayPackages.isEmpty)
     }
-
-    private func package(
-        eventId: String = "event",
-        publishedAt: UInt64 = 1,
-        local: Bool,
-        relay: Bool
-    ) -> AccountKeyPackageFfi {
-        AccountKeyPackageFfi(
-            accountRef: nil,
-            accountIdHex: "account",
-            keyPackageId: "keyPackageId-\(eventId)",
-            keyPackageRefHex: "keyPackageRef-\(eventId)",
-            eventIdHex: eventId,
-            publishedAt: publishedAt,
-            keyPackageBytes: 32,
-            sourceRelays: relay ? ["wss://relay.example"] : [],
-            local: local,
-            relay: relay
-        )
-    }
 }
 
 extension KeyPackageRelayPreviewTests {
     @Test func typedInventoryDoesNotElectTheNewestRelayPackageAsCurrent() {
-        let local = package(eventId: "local", publishedAt: 1, local: true, relay: false)
-        let remote = package(eventId: "remote", publishedAt: 100, local: false, relay: true)
+        let local = keyPackage(eventId: "local", publishedAt: 1, local: true, relay: false)
+        let remote = keyPackage(eventId: "remote", publishedAt: 100, local: false, relay: true)
         let presentation = KeyPackagesPresentation(inventory: [
             AccountKeyPackageInventoryEntryFfi(record: remote, localState: .notLocal),
             AccountKeyPackageInventoryEntryFfi(record: local, localState: .current),
