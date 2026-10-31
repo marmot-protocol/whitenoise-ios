@@ -79,7 +79,8 @@ struct SupportChatTests {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
         var creations = 0
-        let flow = testFlow(existingGroupIdHex: nil) { _, _ in
+        let marmot = NewChatFlowMarmotDouble()
+        let flow = testFlow(existingGroupIdHex: nil, marmot: marmot) { _, _ in
             creations += 1
             return "created-support-dm"
         }
@@ -90,7 +91,7 @@ struct SupportChatTests {
         // The view rejects navigation if the runtime changes during destination preparation.
         model.resetRouting()
         #expect(model.phase == .idle)
-        flow.existingDirectChatGroupIdForTesting = { _ in "created-support-dm" }
+        marmot.existingDirectChat = { _, _ in "created-support-dm" }
         var openedGroupId: String?
         await model.start(using: appState) { openedGroupId = $0 }
 
@@ -138,12 +139,13 @@ struct SupportChatTests {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
         var didCreate = false
-        let flow = NewChatFlowViewModel(starter: directChatStarter { _, _ in
+        let marmot = NewChatFlowMarmotDouble()
+        let flow = newChatFlow(starter: directChatStarter { _, _ in
             didCreate = true
             return "duplicate-support-dm"
-        })
+        }, marmot: marmot)
         var lookupAttempt = 0
-        flow.existingDirectChatGroupIdForTesting = { _ in
+        marmot.existingDirectChat = { _, _ in
             lookupAttempt += 1
             if lookupAttempt == 1 {
                 throw TestFailure.existingChatLookupFailed
@@ -247,12 +249,13 @@ struct SupportChatTests {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
         var didCreate = false
-        let flow = NewChatFlowViewModel(starter: directChatStarter { _, _ in
+        let marmot = NewChatFlowMarmotDouble()
+        let flow = newChatFlow(starter: directChatStarter { _, _ in
             didCreate = true
             return "unexpected"
-        })
+        }, marmot: marmot)
         let gate = (entered: TestLatch(), released: TestLatch())
-        flow.existingDirectChatGroupIdForTesting = { _ in
+        marmot.existingDirectChat = { _, _ in
             gate.entered.signal()
             await gate.released.hold()
             return nil
@@ -280,7 +283,8 @@ struct SupportChatTests {
         var creations = 0
         // A retry first needs a failed creation to retry.
         let failedCreations = isRetry ? 1 : 0
-        let flow = testFlow(existingGroupIdHex: nil) { _, _ in
+        let marmot = NewChatFlowMarmotDouble()
+        let flow = testFlow(existingGroupIdHex: nil, marmot: marmot) { _, _ in
             creations += 1
             if creations <= failedCreations {
                 throw TestFailure.sensitiveEngineDetail
@@ -319,7 +323,7 @@ struct SupportChatTests {
         #expect(openedGroupIds.isEmpty)
         #expect(model.phase == .idle)
 
-        flow.existingDirectChatGroupIdForTesting = { _ in "created-support-dm" }
+        marmot.existingDirectChat = { _, _ in "created-support-dm" }
         await model.start(using: appState) { openedGroupIds.append($0) }
         #expect(openedGroupIds == ["created-support-dm"])
         #expect(model.phase == .routing)
@@ -384,9 +388,10 @@ struct SupportChatTests {
     @Test func settingsLookupFailureOffersRetryWithoutShowingStartChat() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = NewChatFlowViewModel()
+        let marmot = NewChatFlowMarmotDouble()
+        let flow = newChatFlow(marmot: marmot)
         var attempt = 0
-        flow.existingDirectChatGroupIdForTesting = { _ in
+        marmot.existingDirectChat = { _, _ in
             attempt += 1
             if attempt == 1 { throw TestFailure.existingChatLookupFailed }
             return "support-dm"
@@ -405,10 +410,11 @@ struct SupportChatTests {
     @Test func cancelledSettingsLookupDoesNotNavigateAndCanBeRetried() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active"
-        let flow = NewChatFlowViewModel()
+        let marmot = NewChatFlowMarmotDouble()
+        let flow = newChatFlow(marmot: marmot)
         let gate = (entered: TestLatch(), released: TestLatch())
         var lookups = 0
-        flow.existingDirectChatGroupIdForTesting = { _ in
+        marmot.existingDirectChat = { _, _ in
             lookups += 1
             gate.entered.signal()
             await gate.released.hold()
@@ -428,7 +434,7 @@ struct SupportChatTests {
         #expect(!entry.showsFailure)
         #expect(!entry.isLoading)
 
-        flow.existingDirectChatGroupIdForTesting = { _ in "support-dm" }
+        marmot.existingDirectChat = { _, _ in "support-dm" }
         await entry.prepare(using: appState)
         #expect(entry.destination?.chatTarget?.groupIdHex == "support-dm")
     }
@@ -437,9 +443,10 @@ struct SupportChatTests {
     func settingsLookupDiscardsResultsAfterAccountChange(lookupFails: Bool) async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "original"
-        let flow = NewChatFlowViewModel()
+        let marmot = NewChatFlowMarmotDouble()
+        let flow = newChatFlow(marmot: marmot)
         let gate = (entered: TestLatch(), released: TestLatch())
-        flow.existingDirectChatGroupIdForTesting = { _ in
+        marmot.existingDirectChat = { _, _ in
             gate.entered.signal()
             await gate.released.hold()
             if lookupFails { throw TestFailure.existingChatLookupFailed }
@@ -457,16 +464,19 @@ struct SupportChatTests {
         #expect(!entry.isLoading)
     }
 
+    /// A flow whose existing-chat lookup finds `existingGroupIdHex`. Pass
+    /// `marmot` to change the lookup later in the test.
     private func testFlow(
         existingGroupIdHex: String?,
+        marmot: NewChatFlowMarmotDouble? = nil,
         create: @escaping @MainActor (_ accountRef: String, _ memberRef: String) async throws -> String = { _, _ in
             Issue.record("this flow must not create a conversation")
             return "unexpected"
         }
     ) -> NewChatFlowViewModel {
-        let flow = NewChatFlowViewModel(starter: directChatStarter(create: create))
-        flow.existingDirectChatGroupIdForTesting = { _ in existingGroupIdHex }
-        return flow
+        let marmot = marmot ?? NewChatFlowMarmotDouble()
+        marmot.existingDirectChat = { _, _ in existingGroupIdHex }
+        return newChatFlow(starter: directChatStarter(create: create), marmot: marmot)
     }
 
     private func directChatSnapshot(

@@ -146,16 +146,17 @@ struct ConversationChoiceProjectionTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
         var createCount = 0
-        let model = NewChatFlowViewModel(starter: directChatStarter { _, _ in
+        let marmot = NewChatFlowMarmotDouble()
+        let model = newChatFlow(starter: directChatStarter { _, _ in
             createCount += 1
             if createCount == 1 {
                 throw TestFailure.createFailed
             }
             return "new-after-retry"
-        })
+        }, marmot: marmot)
         model.conversationChooser = chooser()
         var lookupCount = 0
-        model.existingDirectChatGroupIdForTesting = { _ in
+        marmot.existingDirectChat = { _, _ in
             lookupCount += 1
             return "existing"
         }

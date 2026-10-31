@@ -8,10 +8,11 @@ struct NewChatFlowViewModelTests {
     @Test func finalCreateFailureKeepsSelectionAndAllowsRetry() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
-        let model = NewChatFlowViewModel()
+        let marmot = NewChatFlowMarmotDouble()
+        let model = newChatFlow(marmot: marmot)
         let member = MemberRefFfi(memberRef: "npub1alice", accountIdHex: String(repeating: "a", count: 64), npub: "npub1alice")
         model.groupSelection.add(member)
-        model.createGroupForTesting = { _, _, _, _ in
+        marmot.createGroup = { _, _, _, _ in
             throw MarmotKitError.Runtime(details: "recipient KeyPackage incompatible")
         }
         var opened: String?
@@ -23,7 +24,7 @@ struct NewChatFlowViewModelTests {
         #expect(appState.activeToast?.message == "Recipient KeyPackage incompatible")
         #expect(model.groupSelection.memberRefs == [member.memberRef])
 
-        model.createGroupForTesting = { _, _, refs, _ in
+        marmot.createGroup = { _, _, refs, _ in
             #expect(refs == [member.memberRef])
             return "created"
         }
@@ -62,13 +63,15 @@ struct NewChatFlowViewModelTests {
     @Test func namedEmptyGroupCreationSendsSanitizedRequestWithoutMemberRefs() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active-account"
-        let model = NewChatFlowViewModel()
+        let marmot = NewChatFlowMarmotDouble()
+        let model = newChatFlow(marmot: marmot)
         var capturedAccountRef: String?
         var capturedName: String?
         var capturedMemberRefs: [String]?
         var capturedDescription: String?
         var openedGroupId: String?
-        model.createGroupWithOptionsForTesting = { accountRef, name, memberRefs, options in
+        var rowNotedBeforeOpening = false
+        marmot.createGroup = { accountRef, name, memberRefs, options in
             capturedAccountRef = accountRef
             capturedName = name
             capturedMemberRefs = memberRefs
@@ -81,7 +84,13 @@ struct NewChatFlowViewModelTests {
             description: "  Planning room  ",
             retentionSeconds: 0,
             using: appState,
-            onOpen: { openedGroupId = $0 }
+            onOpen: { groupIdHex in
+                openedGroupId = groupIdHex
+                rowNotedBeforeOpening = appState.createdChatListRow(
+                    accountRef: "active-account",
+                    groupIdHex: groupIdHex
+                ) != nil
+            }
         )
 
         #expect(capturedAccountRef == "active-account")
@@ -89,12 +98,37 @@ struct NewChatFlowViewModelTests {
         #expect(capturedMemberRefs == [])
         #expect(capturedDescription == "Planning room")
         #expect(openedGroupId == "empty-group")
+        #expect(rowNotedBeforeOpening)
+    }
+
+    @Test func existingDirectChatLookupNeedsAnActiveAccountAndOnlyReturnsReusableChats() async throws {
+        let appState = AppState.test()
+        var lookups: [String] = []
+        let model = NewChatFlowViewModel(findExistingDirectChat: { _, accountRef, peerAccountId in
+            lookups.append("\(accountRef):\(peerAccountId)")
+            return existingDirectConversation(groupIdHex: "dm-\(peerAccountId)", reusable: peerAccountId == "aa")
+        })
+
+        // A cancellation would be dropped silently instead of telling the user.
+        do {
+            _ = try await model.existingDirectChatGroupIdHex(accountIdHex: "aa", using: appState)
+            Issue.record("a lookup without an active account must fail")
+        } catch {
+            #expect(!(error is CancellationError))
+        }
+        #expect(lookups.isEmpty)
+
+        appState.activeAccountRef = "account"
+        #expect(try await model.existingDirectChatGroupIdHex(accountIdHex: "AA", using: appState) == "dm-aa")
+        #expect(try await model.existingDirectChatGroupIdHex(accountIdHex: "bb", using: appState) == nil)
+        #expect(lookups == ["account:aa", "account:bb"])
     }
 
     @Test func newGroupCreationPassesEncryptedInitialImageInput() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active-account"
-        let model = NewChatFlowViewModel()
+        let marmot = NewChatFlowMarmotDouble()
+        let model = newChatFlow(marmot: marmot)
         let draft = GroupImageUploadDraft(
             data: Data([4, 5, 6]),
             mediaType: "image/jpeg",
@@ -104,7 +138,7 @@ struct NewChatFlowViewModelTests {
         )
         var capturedImage: InitialGroupImageFfi?
         var openedGroupId: String?
-        model.createGroupWithOptionsForTesting = { _, _, _, options in
+        marmot.createGroup = { _, _, _, options in
             capturedImage = options.initialImage
             return "group-with-image"
         }
@@ -127,10 +161,11 @@ struct NewChatFlowViewModelTests {
     @Test func newGroupCreationIncludesFoundingRetentionBeforeOpening() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "active-account"
-        let model = NewChatFlowViewModel()
+        let marmot = NewChatFlowMarmotDouble()
+        let model = newChatFlow(marmot: marmot)
         var events: [String] = []
         var capturedOptions: CreateGroupOptionsFfi?
-        model.createGroupWithOptionsForTesting = { _, _, _, options in
+        marmot.createGroup = { _, _, _, options in
             capturedOptions = options
             return "retained-group"
         }
