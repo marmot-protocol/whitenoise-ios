@@ -391,3 +391,9 @@ func relayLists(
 func relayLists(_ relays: [String]) -> AccountRelayListsFfi {
     relayLists(defaultRelays: relays, bootstrapRelays: relays, nip65: relays, inbox: relays)
 }
+
+func keyPackageRelayEvent(eventId: String, account: String = "account") -> AccountKeyPackageRelayEventFfi {
+    AccountKeyPackageRelayEventFfi(
+        accountIdHex: account, keyPackageId: "history", keyPackageRefHex: "history-ref", eventIdHex: eventId,
+        createdAt: 1, keyPackageBytes: 32, sourceRelays: ["wss://relay.example"], isCurrent: false)
+}

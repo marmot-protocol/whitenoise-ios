@@ -27,10 +27,7 @@ struct KeyPackagesViewModelTests {
         model.inventory = inventory
         model.packages = [current, other]
         model.presentation = KeyPackagesPresentation(inventory: inventory)
-        model.relayHistory = [AccountKeyPackageRelayEventFfi(
-            accountIdHex: "account", keyPackageId: "history", keyPackageRefHex: "history-ref",
-            eventIdHex: "history", createdAt: 1, keyPackageBytes: 32, sourceRelays: ["wss://relay.example"],
-            isCurrent: false)]
+        model.relayHistory = [keyPackageRelayEvent(eventId: "history")]
         model.lists = relayLists(bootstrapRelays: ["wss://account.example"], nip65: [], inbox: [])
         model.hasLoaded = true
         model.loadedRef = account
@@ -190,7 +187,7 @@ extension KeyPackagesViewModelTests {
         hold.release.signal()
         await older.value
 
-        #expect(model.packages.map(\.eventIdHex) == [runtime.packageId(for: "account", version: 2, refreshed: true)])
+        expectShowing(model, runtime.packageId(for: "account", version: 2, refreshed: true))
         // The older reload stopped at its next check: each later step ran once, for the newer reload.
         for later in FakeKeyPackageRuntime.Step.allCases.drop(while: { $0 != step }).dropFirst() {
             #expect(runtime.calls[later] == 1)
@@ -220,7 +217,7 @@ extension KeyPackagesViewModelTests {
         // Only the first step's packages were committed, while the account was current.
         #expect(model.lists == nil)
         #expect(model.relayHistory.isEmpty)
-        #expect(model.packages.map(\.eventIdHex) == [runtime.packageId(for: "account", version: 1)])
+        expectShowing(model, runtime.packageId(for: "account", version: 1))
     }
 
     @Test func aReloadWhoseAccountChangedDuringTheLocalReadCommitsNothing() async throws {
@@ -282,6 +279,16 @@ extension KeyPackagesViewModelTests {
         #expect(model.loadError == nil)
     }
 
+    /// The screen shows exactly `id`: its packages, the ownership inventory and
+    /// the current-package card.
+    private func expectShowing(
+        _ model: KeyPackagesViewModel, _ id: String, sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        #expect(model.packages.map(\.eventIdHex) == [id], sourceLocation: sourceLocation)
+        #expect(model.inventory.map(\.record.eventIdHex) == [id], sourceLocation: sourceLocation)
+        #expect(model.presentation.current?.identifier == id, sourceLocation: sourceLocation)
+    }
+
     private func expectNoLaterSteps(
         after step: FakeKeyPackageRuntime.Step, in runtime: FakeKeyPackageRuntime,
         sourceLocation: SourceLocation = #_sourceLocation
@@ -289,6 +296,56 @@ extension KeyPackagesViewModelTests {
         for later in FakeKeyPackageRuntime.Step.allCases.drop(while: { $0 != step }).dropFirst() {
             #expect(runtime.calls[later, default: 0] == 0, sourceLocation: sourceLocation)
         }
+    }
+
+    /// An older reload of the same account that fails after a newer one
+    /// finished doesn't put its error over the newer result.
+    @Test func aFailureOfAnOlderReloadIsNotReported() async throws {
+        let runtime = FakeKeyPackageRuntime()
+        runtime.failingListsVersion = 1
+        let model = KeyPackagesViewModel(runtime: { _ in runtime })
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+        let hold = runtime.hold(.lists)
+
+        let older = Task { await model.reload(using: appState) }
+        try await hold.entered.wait()
+        runtime.version = 2
+        await model.reload(using: appState)
+        hold.release.signal()
+        await older.value
+
+        #expect(model.loadError == nil)
+        expectShowing(model, runtime.packageId(for: "account", version: 2))
+    }
+
+    /// With no current package on this device, the card shows the one the
+    /// maintenance status names.
+    @Test func theMaintenanceStatusNamesTheCurrentPackageWhenThisDeviceHasNone() async throws {
+        let runtime = FakeKeyPackageRuntime()
+        runtime.localState = .notLocal
+        runtime.statusNamesLocalPackage = true
+        let model = KeyPackagesViewModel(runtime: { _ in runtime })
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+
+        await model.reload(using: appState)
+
+        #expect(model.presentation.current?.identifier == runtime.packageId(for: "account", version: 1))
+    }
+
+    @Test func aRefreshFailureKeepsTheLocalPackagesAndReportsIt() async throws {
+        let runtime = FakeKeyPackageRuntime()
+        runtime.failing = [.refresh]
+        let model = KeyPackagesViewModel(runtime: { _ in runtime })
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+
+        await model.reload(using: appState, refresh: true)
+
+        #expect(model.loadError != nil)
+        expectShowing(model, runtime.packageId(for: "account", version: 1))
+        #expect(model.lists == nil)
     }
 
     /// A superseded reload that finishes first leaves the newer reload's
@@ -325,7 +382,7 @@ extension KeyPackagesViewModelTests {
         let relays = runtime.lists(for: "account", version: 1).bootstrapRelays
         #expect(runtime.refreshRelays == [relays])
         #expect(runtime.historyRelays == [relays])
-        #expect(model.packages.map(\.eventIdHex) == [runtime.packageId(for: "account", version: 1, refreshed: true)])
+        expectShowing(model, runtime.packageId(for: "account", version: 1, refreshed: true))
         #expect(model.hasLoaded)
         #expect(model.loadedRef == "account")
     }
@@ -339,7 +396,7 @@ extension KeyPackagesViewModelTests {
         await model.reload(using: appState)
 
         #expect(runtime.refreshRelays.isEmpty)
-        #expect(model.packages.map(\.eventIdHex) == [runtime.packageId(for: "account", version: 1)])
+        expectShowing(model, runtime.packageId(for: "account", version: 1))
     }
 
     /// The maintenance status and relay history are optional: their failures
@@ -357,7 +414,7 @@ extension KeyPackagesViewModelTests {
         #expect(model.relayHistoryError != nil)
         #expect(model.relayHistory.isEmpty)
         #expect(model.lists == runtime.lists(for: "account", version: 1))
-        #expect(model.packages.map(\.eventIdHex) == [runtime.packageId(for: "account", version: 1)])
+        expectShowing(model, runtime.packageId(for: "account", version: 1))
         #expect(model.loadError == nil)
     }
 
@@ -373,7 +430,7 @@ extension KeyPackagesViewModelTests {
         await model.reload(using: appState)
 
         #expect(model.loadError != nil)
-        #expect(model.packages.map(\.eventIdHex) == [runtime.packageId(for: "account", version: 1)])
+        expectShowing(model, runtime.packageId(for: "account", version: 1))
         #expect(model.lists == nil)
         #expect(!model.isLoading)
     }
@@ -406,7 +463,7 @@ extension KeyPackagesViewModelTests {
         await model.publishNew(using: appState)
 
         #expect(appState.activeToast?.style == .error)
-        #expect(runtime.localReads == 0)
+        #expect(runtime.calls[.local, default: 0] == 0)
         #expect(!model.isPublishing)
     }
 
@@ -443,7 +500,7 @@ extension KeyPackagesViewModelTests {
 
         #expect(appState.activeToast?.style == .error)
         #expect(model.deletingEventIds.isEmpty)
-        #expect(runtime.localReads == 0)
+        #expect(runtime.calls[.local, default: 0] == 0)
     }
 }
 
@@ -454,15 +511,19 @@ extension KeyPackagesViewModelTests {
 final class FakeKeyPackageRuntime: KeyPackageRuntime {
     nonisolated enum Step: CaseIterable, Sendable { case local, lists, refresh, maintenance, history }
     enum Action { case publish, delete }
-    enum Failure: Hashable { case lists, maintenance, history, publish, delete }
+    enum Failure: Hashable { case lists, refresh, maintenance, history, publish, delete }
     struct Hold { let entered = TestLatch(); let release = TestLatch() }
     struct Failed: Error {}
 
     /// Read when each step is called, so a held step keeps the version it began with.
     var version = 1
     var failing: Set<Failure> = []
+    /// The relay-list read fails only for a reload that began at this version.
+    var failingListsVersion: Int?
+    var localState: AccountKeyPackageLocalStateFfi = .current
+    /// The maintenance status names the local package as current.
+    var statusNamesLocalPackage = false
     private var holds: [String: Hold] = [:]
-    private(set) var localReads = 0
     private(set) var calls: [Step: Int] = [:]
     private(set) var refreshRelays: [[String]] = []
     private(set) var historyRelays: [[String]] = []
@@ -480,7 +541,9 @@ final class FakeKeyPackageRuntime: KeyPackageRuntime {
     private func pass(_ key: String) async throws {
         guard let hold = holds.removeValue(forKey: key) else { return }
         hold.entered.signal()
-        try await hold.release.wait()
+        // A missed release fails the test here; the store would otherwise
+        // swallow the timeout as an ordinary runtime error.
+        await hold.release.hold()
     }
 
     func packageId(for account: String, version: Int, refreshed: Bool = false) -> String {
@@ -495,11 +558,10 @@ final class FakeKeyPackageRuntime: KeyPackageRuntime {
 
     private func inventory(_ id: String) -> [AccountKeyPackageInventoryEntryFfi] {
         [AccountKeyPackageInventoryEntryFfi(record: keyPackage(eventId: id, local: true, relay: true),
-                                            localState: .current)]
+                                            localState: localState)]
     }
 
     func localKeyPackages(accountRef: String) async throws -> [AccountKeyPackageInventoryEntryFfi] {
-        localReads += 1
         calls[.local, default: 0] += 1
         let version = version
         try await pass("\(Step.local)")
@@ -510,7 +572,7 @@ final class FakeKeyPackageRuntime: KeyPackageRuntime {
         calls[.lists, default: 0] += 1
         let version = version
         try await pass("\(Step.lists)")
-        if failing.contains(.lists) { throw Failed() }
+        if failing.contains(.lists) || failingListsVersion == version { throw Failed() }
         return lists(for: accountRef, version: version)
     }
 
@@ -520,14 +582,23 @@ final class FakeKeyPackageRuntime: KeyPackageRuntime {
         calls[.refresh, default: 0] += 1
         let version = version
         try await pass("\(Step.refresh)")
+        if failing.contains(.refresh) { throw Failed() }
         return inventory(packageId(for: accountRef, version: version, refreshed: true))
     }
 
     func keyPackageMaintenanceStatus(accountRef: String) async throws -> KeyPackageMaintenanceStatusFfi? {
         calls[.maintenance, default: 0] += 1
+        let version = version
         try await pass("\(Step.maintenance)")
         if failing.contains(.maintenance) { throw Failed() }
-        return nil
+        guard statusNamesLocalPackage else { return nil }
+        let id = packageId(for: accountRef, version: version)
+        return KeyPackageMaintenanceStatusFfi(
+            stableSlotId: "slot", phase: .quiet, currentKeyPackageRefHex: "keyPackageRef-\(id)", currentNotBefore: nil,
+            currentNotAfter: nil, authoredEventIdHex: id, authoredEventCreatedAt: 1, acceptedFanoutTargets: 0,
+            unattemptedFanoutTargets: 0, failedFanoutTargets: 0, policyProhibitedFanoutTargets: 0, refreshAt: nil,
+            lastConsumedKeyPackageRefHex: nil, retainedPrivateMaterialCount: 0, pendingEventIdHex: nil,
+            pendingAttemptCount: 0, pendingLastFailureCode: nil)
     }
 
     func keyPackageRelayEvents(accountRef: String, bootstrapRelays: [String]) async throws
@@ -537,10 +608,7 @@ final class FakeKeyPackageRuntime: KeyPackageRuntime {
         let version = version
         try await pass("\(Step.history)")
         if failing.contains(.history) { throw Failed() }
-        return [AccountKeyPackageRelayEventFfi(
-            accountIdHex: accountRef, keyPackageId: "history", keyPackageRefHex: "history-ref",
-            eventIdHex: historyId(for: accountRef, version: version), createdAt: 1, keyPackageBytes: 32,
-            sourceRelays: ["wss://relay.example"], isCurrent: false)]
+        return [keyPackageRelayEvent(eventId: historyId(for: accountRef, version: version), account: accountRef)]
     }
 
     func publishNewKeyPackage(accountRef: String) async throws -> UInt64 {
