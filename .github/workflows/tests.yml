@@ -30,6 +30,16 @@ concurrency:
 
 jobs:
   test:
+    # D2 benchmark only, do not merge: compare 1 and 2 runtime gate permits.
+    name: test (${{ matrix.permits }} permit${{ matrix.permits > 1 && 's' || '' }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - permits: 1
+            gate-cores: 3
+          - permits: 2
+            gate-cores: 8
     runs-on: macos-15
     # Allow runner setup and artifact upload around the bounded 40-minute test step.
     timeout-minutes: 55
@@ -38,6 +48,8 @@ jobs:
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
       WN_TEST_SOURCE_PACKAGES: ${{ github.workspace }}/build/SourcePackages
       WN_TEST_COMPILATION_CACHE: ${{ github.workspace }}/build/CompilationCache
+      TEST_RUNNER_WN_TEST_GATE_CORES: ${{ matrix.gate-cores }}
+      TEST_RUNNER_WN_TEST_GATE_TRACE: "1"
 
     steps:
       - name: Checkout
@@ -104,6 +116,25 @@ jobs:
         timeout-minutes: 40
         run: ./scripts/test.sh
 
+      # Proves the permit count reached the test host: the most runtime
+      # tests that ever held the gate at once.
+      - name: Gate trace summary
+        if: always()
+        run: |
+          find ~/Library/Developer/CoreSimulator/Devices -name 'gate-trace-*.jsonl' -print0 \
+            | xargs -0 python3 -c '
+          import json, os, sys
+          for path in sys.argv[1:]:
+              recs = [json.loads(l) for l in open(path) if l.strip()]
+              events = sorted([(r["acquired"], 1) for r in recs] + [(r["released"], -1) for r in recs])
+              held = peak = 0
+              for _, d in events:
+                  held += d
+                  peak = max(peak, held)
+              wait = sum(r["acquired"] - r["requested"] for r in recs)
+              print(f"gate trace {os.path.basename(path)}: {len(recs)} gated tests, peak concurrent holders {peak}, total wait {wait:.0f}s")
+          '
+
       - name: Save compilation cache
         if: always() && github.ref == 'refs/heads/master'
         uses: actions/cache/save@v4
@@ -115,6 +146,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: TestResults
+          name: TestResults-${{ matrix.permits }}-permits-attempt-${{ github.run_attempt }}
           path: build/TestResults.xcresult
           if-no-files-found: warn
