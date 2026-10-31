@@ -391,3 +391,15 @@ func relayLists(
 func relayLists(_ relays: [String]) -> AccountRelayListsFfi {
     relayLists(defaultRelays: relays, bootstrapRelays: relays, nip65: relays, inbox: relays)
 }
+
+/// Profile metadata with only a display name.
+func profileMetadata(displayName: String) -> UserProfileMetadataFfi {
+    UserProfileMetadataFfi(
+        name: nil,
+        displayName: displayName,
+        about: nil,
+        picture: nil,
+        nip05: nil,
+        lud16: nil
+    )
+}

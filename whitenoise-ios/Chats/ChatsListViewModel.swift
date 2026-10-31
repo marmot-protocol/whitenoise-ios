@@ -349,9 +349,7 @@ final class ChatsListViewModel {
     private nonisolated static let inviterLookupFailureLimit = 3
 
     #if DEBUG
-    @ObservationIgnored var mentionDisplayNameForTesting: MarkdownMentionResolver?
     @ObservationIgnored var presentedRowForTesting: ((String, String) async throws -> PresentedChatRowFfi?)?
-    @ObservationIgnored private(set) var publishedItemsMutationCountForTesting = 0
     #endif
 
     init(appState: AppState) {
@@ -1144,12 +1142,7 @@ final class ChatsListViewModel {
                 draftStore.pendingSendHandoff(accountRef: $0, groupIdHex: row.groupIdHex)
             },
             mentionDisplayName: { [weak appState] entity in
-                #if DEBUG
-                if let name = self.mentionDisplayNameForTesting?(entity) {
-                    return name
-                }
-                #endif
-                return appState?.mentionDisplayName(for: entity)
+                appState?.mentionDisplayName(for: entity)
             },
             systemEventNaming: GroupSystemEventNaming(
                 currentAccountIdHex: muteLookup.accountIdHex,
@@ -1432,9 +1425,6 @@ final class ChatsListViewModel {
         items = nextItems
         archivedItems = nextArchivedItems
         visibleRowsRevision &+= 1
-        #if DEBUG
-        publishedItemsMutationCountForTesting += 1
-        #endif
         return true
     }
 
