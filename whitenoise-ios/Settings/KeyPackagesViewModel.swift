@@ -1,6 +1,43 @@
 import Foundation
 import MarmotKit
 
+/// The runtime operations the key package screen uses. `MarmotClient` conforms;
+/// tests substitute a fake to control when each one finishes.
+protocol KeyPackageRuntime: AnyObject {
+    func localKeyPackages(accountRef: String) async throws -> [AccountKeyPackageInventoryEntryFfi]
+    func keyPackageRelayLists(accountRef: String) async throws -> AccountRelayListsFfi
+    func refreshKeyPackages(accountRef: String, bootstrapRelays: [String]) async throws
+        -> [AccountKeyPackageInventoryEntryFfi]
+    func keyPackageMaintenanceStatus(accountRef: String) async throws -> KeyPackageMaintenanceStatusFfi?
+    func keyPackageRelayEvents(accountRef: String, bootstrapRelays: [String]) async throws
+        -> [AccountKeyPackageRelayEventFfi]
+    func publishNewKeyPackage(accountRef: String) async throws -> UInt64
+    func deleteAccountKeyPackage(accountRef: String, eventIdHex: String, relays: [String]) async throws -> UInt64
+}
+
+nonisolated extension MarmotClient: KeyPackageRuntime {
+    /// The local read is a synchronous FFI call, so it runs off the caller's actor.
+    func localKeyPackages(accountRef: String) async throws -> [AccountKeyPackageInventoryEntryFfi] {
+        try await Task.detached { [marmot] in
+            try marmot.localAccountKeyPackages(accountRef: accountRef)
+        }.value
+    }
+
+    func keyPackageRelayLists(accountRef: String) async throws -> AccountRelayListsFfi {
+        try await accountRelayLists(accountRef: accountRef)
+    }
+
+    func refreshKeyPackages(accountRef: String, bootstrapRelays: [String]) async throws
+        -> [AccountKeyPackageInventoryEntryFfi] {
+        try await marmot.refreshAccountKeyPackages(accountRef: accountRef, bootstrapRelays: bootstrapRelays)
+    }
+
+    func keyPackageRelayEvents(accountRef: String, bootstrapRelays: [String]) async throws
+        -> [AccountKeyPackageRelayEventFfi] {
+        try await marmot.accountKeyPackageRelayEvents(accountRef: accountRef, bootstrapRelays: bootstrapRelays)
+    }
+}
+
 /// Screen store for `KeyPackagesView`: owns the key-package list + UI state and
 /// the load/publish/delete actions, so the view is pure rendering. The pure
 /// presentation helpers (byte/date formatting,
@@ -27,6 +64,11 @@ final class KeyPackagesViewModel {
     var deletingEventIds: Set<String> = []
     var loadError: String?
     var maintenanceLoadError: String?
+    private let runtime: (AppState) throws -> any KeyPackageRuntime
+
+    init(runtime: @escaping (AppState) throws -> any KeyPackageRuntime = { try $0.currentMarmotClient() }) {
+        self.runtime = runtime
+    }
 
     var bootstrapRelays: [String] {
         lists.map(RelaySettings.bootstrapRelays(from:)) ?? MarmotClient.seedRelays
@@ -73,17 +115,15 @@ final class KeyPackagesViewModel {
         }
 
         do {
-            let client = try appState.currentMarmotClient()
-            let local = try await Task.detached { [client] in
-                try client.marmot.localAccountKeyPackages(accountRef: ref)
-            }.value
+            let client = try runtime(appState)
+            let local = try await client.localKeyPackages(accountRef: ref)
             guard !Task.isCancelled, reloadTicket == ticket, appState.activeAccountRef == ref else { return }
             inventory = local
             packages = local.map(\.record)
             presentation = KeyPackagesPresentation(inventory: local)
             hasLoaded = true
             loadedRef = ref
-            let loadedLists = try await client.accountRelayLists(accountRef: ref)
+            let loadedLists = try await client.keyPackageRelayLists(accountRef: ref)
             // The screen's task restarts on account change, but the cancelled
             // body still runs to completion — a straggling load must not
             // render the previous account's key packages and bootstrap relays
@@ -92,7 +132,7 @@ final class KeyPackagesViewModel {
             // mixed-account state.
             guard !Task.isCancelled, reloadTicket == ticket, appState.activeAccountRef == ref else { return }
             let loadedInventory = refresh
-                ? try await client.marmot.refreshAccountKeyPackages(
+                ? try await client.refreshKeyPackages(
                     accountRef: ref, bootstrapRelays: RelaySettings.bootstrapRelays(from: loadedLists))
                 : local
             let loadedPackages = loadedInventory.map(\.record)
@@ -112,7 +152,7 @@ final class KeyPackagesViewModel {
             let history: [AccountKeyPackageRelayEventFfi]
             let historyError: String?
             do {
-                history = try await client.marmot.accountKeyPackageRelayEvents(accountRef: ref,
+                history = try await client.keyPackageRelayEvents(accountRef: ref,
                     bootstrapRelays: RelaySettings.bootstrapRelays(from: loadedLists))
                 historyError = nil
             } catch {
@@ -141,7 +181,7 @@ final class KeyPackagesViewModel {
         defer { isPublishing = false }
 
         do {
-            let client = try appState.currentMarmotClient()
+            let client = try runtime(appState)
             _ = try await client.publishNewKeyPackage(accountRef: ref)
             Haptics.success()
             appState.present(.success(L10n.string("New key package published")))
@@ -160,7 +200,7 @@ final class KeyPackagesViewModel {
         defer { deletingEventIds.remove(eventId) }
 
         do {
-            let client = try appState.currentMarmotClient()
+            let client = try runtime(appState)
             _ = try await client.deleteAccountKeyPackage(
                 accountRef: ref,
                 eventIdHex: eventId,
