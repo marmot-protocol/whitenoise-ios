@@ -258,6 +258,7 @@ extension KeyPackagesViewModelTests {
         if step == .local {
             #expect(model.packages.isEmpty)
         }
+        #expect(!model.isLoading)
     }
 
     /// A reload whose account changed while it was pending reports none of its
@@ -345,6 +346,8 @@ extension KeyPackagesViewModelTests {
 
         #expect(model.loadError != nil)
         expectShowing(model, runtime.packageId(for: "account", version: 1))
+        #expect(model.hasLoaded)
+        #expect(model.loadedRef == "account")
         #expect(model.lists == nil)
     }
 
@@ -401,18 +404,19 @@ extension KeyPackagesViewModelTests {
 
     /// The maintenance status and relay history are optional: their failures
     /// show their own error, and the rest of the screen still loads.
-    @Test func maintenanceAndHistoryFailuresStillShowTheRestOfTheScreen() async throws {
+    @Test(arguments: [FakeKeyPackageRuntime.Failure.maintenance, .history])
+    func anOptionalFailureShowsOnlyItsOwnError(_ failure: FakeKeyPackageRuntime.Failure) async throws {
         let runtime = FakeKeyPackageRuntime()
-        runtime.failing = [.maintenance, .history]
+        runtime.failing = [failure]
         let model = KeyPackagesViewModel(runtime: { _ in runtime })
         let appState = AppState.test()
         appState.activeAccountRef = "account"
 
         await model.reload(using: appState)
 
-        #expect(model.maintenanceLoadError != nil)
-        #expect(model.relayHistoryError != nil)
-        #expect(model.relayHistory.isEmpty)
+        #expect((model.maintenanceLoadError != nil) == (failure == .maintenance))
+        #expect((model.relayHistoryError != nil) == (failure == .history))
+        #expect(model.relayHistory.isEmpty == (failure == .history))
         #expect(model.lists == runtime.lists(for: "account", version: 1))
         expectShowing(model, runtime.packageId(for: "account", version: 1))
         #expect(model.loadError == nil)
@@ -431,6 +435,8 @@ extension KeyPackagesViewModelTests {
 
         #expect(model.loadError != nil)
         expectShowing(model, runtime.packageId(for: "account", version: 1))
+        #expect(model.hasLoaded)
+        #expect(model.loadedRef == "account")
         #expect(model.lists == nil)
         #expect(!model.isLoading)
     }
@@ -441,11 +447,16 @@ extension KeyPackagesViewModelTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
         let hold = runtime.hold(.publish)
+        let refresh = runtime.hold(.refresh)
 
         let publish = Task { await model.publishNew(using: appState) }
         try await hold.entered.wait()
         #expect(model.isPublishing)
         hold.release.signal()
+        // Still busy through the refresh that follows, so a second publish waits.
+        try await refresh.entered.wait()
+        #expect(model.isPublishing)
+        refresh.release.signal()
         await publish.value
 
         #expect(!model.isPublishing)
@@ -475,11 +486,15 @@ extension KeyPackagesViewModelTests {
         await model.reload(using: appState)
         let package = try #require(model.packages.first)
         let hold = runtime.hold(.delete)
+        let refresh = runtime.hold(.refresh)
 
         let delete = Task { await model.delete(package, using: appState) }
         try await hold.entered.wait()
         #expect(model.deletingEventIds == [package.eventIdHex])
         hold.release.signal()
+        try await refresh.entered.wait()
+        #expect(model.deletingEventIds == [package.eventIdHex])
+        refresh.release.signal()
         await delete.value
 
         #expect(model.deletingEventIds.isEmpty)
@@ -511,7 +526,7 @@ extension KeyPackagesViewModelTests {
 final class FakeKeyPackageRuntime: KeyPackageRuntime {
     nonisolated enum Step: CaseIterable, Sendable { case local, lists, refresh, maintenance, history }
     enum Action { case publish, delete }
-    enum Failure: Hashable { case lists, refresh, maintenance, history, publish, delete }
+    nonisolated enum Failure: Hashable, Sendable { case lists, refresh, maintenance, history, publish, delete }
     struct Hold { let entered = TestLatch(); let release = TestLatch() }
     struct Failed: Error {}
 
