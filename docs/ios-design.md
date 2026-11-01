@@ -22,7 +22,8 @@ acceptance authority.
   separate; do not require a personal checkout path or copy its mock state,
   platform assumptions, or different destructive-action semantics.
 - Check the project's deployment targets, device families, and CI toolchain.
-  Currently the app supports iOS 18 and iPhone/iPad, and CI uses Xcode 26.
+  Currently the app supports iOS 18 and iPhone/iPad. The Tests job uses Xcode
+  27.1 on GitHub's macOS 27 `xcode-27` runner, with an iPhone Air on iOS 27.0.
   Preserve availability checks and older-system fallbacks for newer APIs and
   symbols; do not raise requirements as part of visual polish.
 
