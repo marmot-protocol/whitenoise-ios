@@ -81,7 +81,7 @@ Build production for a simulator:
 xcodebuild build \
   -project whitenoise-ios.xcodeproj \
   -scheme "Whitenoise (Production)" \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone Air'
 ```
 
 Run unit tests with the production scheme:
@@ -90,7 +90,7 @@ Run unit tests with the production scheme:
 xcodebuild test \
   -project whitenoise-ios.xcodeproj \
   -scheme "Whitenoise (Production)" \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone Air'
 ```
 
 Build the production device release artifact:
