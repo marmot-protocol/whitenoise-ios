@@ -2,8 +2,11 @@ import Foundation
 import MarmotKit
 
 nonisolated enum MaintenanceDiagnosticsPresentation {
-    static func phaseLabel(_ phase: MaintenancePhaseFfi) -> String {
-        switch phase {
+    static func phaseLabel(
+        _ phase: MaintenancePhaseFfi,
+        locale: Locale = AppLanguage.currentLocale
+    ) -> String {
+        let label: String.LocalizationValue = switch phase {
         case .catchUp: "Catch-up"
         case .eoseTimeout: "EOSE timeout"
         case .grace: "Grace"
@@ -14,29 +17,38 @@ nonisolated enum MaintenanceDiagnosticsPresentation {
         case .clockSkewBlocked: "Clock skew blocked"
         case .pendingPublication: "Pending publication"
         case .fanout: "Fanout"
-        case .retry: "Retry"
+        case .retry: "Retrying"
         case .supersededByConvergence: "Superseded by convergence"
         case .complete: "Complete"
         case .failed: "Failed"
         }
+        return L10n.formatted(label, arguments: [], locale: locale)
     }
 
-    static func triggerLabel(_ trigger: MaintenanceTriggerFfi) -> String {
-        switch trigger {
+    static func triggerLabel(
+        _ trigger: MaintenanceTriggerFfi,
+        locale: Locale = AppLanguage.currentLocale
+    ) -> String {
+        let label: String.LocalizationValue = switch trigger {
         case .postJoin: "Post-join"
         case .periodic: "Periodic"
         case .manual: "Manual"
         }
+        return L10n.formatted(label, arguments: [], locale: locale)
     }
 
-    static func evolutionPhaseLabel(_ phase: GroupEvolutionPhaseFfi) -> String {
-        switch phase {
+    static func evolutionPhaseLabel(
+        _ phase: GroupEvolutionPhaseFfi,
+        locale: Locale = AppLanguage.currentLocale
+    ) -> String {
+        let label: String.LocalizationValue = switch phase {
         case .preparing: "Preparing"
         case .prepared: "Prepared"
         case .attempting: "Attempting"
         case .confirmed: "Confirmed"
         case .supersededByConvergence: "Superseded by convergence"
         }
+        return L10n.formatted(label, arguments: [], locale: locale)
     }
 
     static func obligationSummary(
