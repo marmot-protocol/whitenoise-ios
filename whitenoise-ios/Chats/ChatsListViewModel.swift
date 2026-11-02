@@ -317,8 +317,7 @@ final class ChatsListViewModel {
     @ObservationIgnored private var titleFallbackGrace = ChatTitleFallbackGrace()
     @ObservationIgnored private var titleFallbackGraceTask: Task<Void, Never>?
     private var chatListTaskID: UUID?
-    private var avatarURLTask: Task<Void, Never>?
-    private var avatarEnrichmentTaskID: UUID?
+    private var avatarEnrichmentTask = OwnedTask()
     private var pendingChatListUpdateTask: Task<Void, Never>?
     private var currentAccount: String?
     private var rowByGroupId: [String: ChatListRowFfi] = [:]
@@ -365,7 +364,7 @@ final class ChatsListViewModel {
         titleFallbackGraceTask?.cancel()
         chatListTask?.cancel()
         windowCommandTask?.cancel()
-        avatarURLTask?.cancel()
+        avatarEnrichmentTask.cancel()
         pendingChatListUpdateTask?.cancel()
     }
 
@@ -406,9 +405,7 @@ final class ChatsListViewModel {
         deferredPresentedSnapshot = nil
         muteExpiryTask?.cancel()
         muteExpiryTask = nil
-        avatarURLTask?.cancel()
-        avatarURLTask = nil
-        avatarEnrichmentTaskID = nil
+        avatarEnrichmentTask.cancel()
         pendingChatListUpdateTask?.cancel()
         pendingChatListUpdateTask = nil
         defersPinOrderSnapshots = false
@@ -1505,10 +1502,9 @@ final class ChatsListViewModel {
         guard !groupIds.isEmpty else { return }
 
         pendingDirectPeerRefreshGroupIds.formUnion(groupIds)
-        guard avatarURLTask == nil else { return }
+        guard !avatarEnrichmentTask.isActive else { return }
         let taskID = UUID()
-        avatarEnrichmentTaskID = taskID
-        avatarURLTask = Task { @MainActor [weak self, weak appState] in
+        avatarEnrichmentTask.install(taskID, Task { @MainActor [weak self, weak appState] in
             defer { self?.finishAvatarEnrichmentTask(taskID: taskID) }
             guard let self, let appState else { return }
             while !Task.isCancelled,
@@ -1667,7 +1663,7 @@ final class ChatsListViewModel {
                     }
                 }
             }
-        }
+        })
     }
 
     private func ownsChatListTask(taskID: UUID, accountRef: String) -> Bool {
@@ -1681,13 +1677,11 @@ final class ChatsListViewModel {
     }
 
     private func ownsAvatarEnrichmentTask(taskID: UUID, accountRef: String) -> Bool {
-        currentAccount == accountRef && avatarEnrichmentTaskID == taskID
+        currentAccount == accountRef && avatarEnrichmentTask.owns(taskID)
     }
 
     private func finishAvatarEnrichmentTask(taskID: UUID) {
-        guard avatarEnrichmentTaskID == taskID else { return }
-        avatarURLTask = nil
-        avatarEnrichmentTaskID = nil
+        avatarEnrichmentTask.finish(taskID)
     }
 
     /// Resolve the rows a user is most likely to see first. The previous set
@@ -1750,18 +1744,6 @@ final class ChatsListViewModel {
 
     func setLoadErrorForTesting(_ error: String?) {
         loadError = error
-    }
-
-    var avatarEnrichmentTaskIDForTesting: UUID? { avatarEnrichmentTaskID }
-
-    func installAvatarEnrichmentTaskForTesting(taskID: UUID) {
-        avatarURLTask?.cancel()
-        avatarURLTask = Task {}
-        avatarEnrichmentTaskID = taskID
-    }
-
-    func finishAvatarEnrichmentTaskForTesting(taskID: UUID) {
-        finishAvatarEnrichmentTask(taskID: taskID)
     }
     #endif
 

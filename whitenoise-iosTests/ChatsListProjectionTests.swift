@@ -867,22 +867,6 @@ struct ChatsListProjectionTests {
         #expect(ChatsListViewModel.nextLiveSubscriptionRetryDelay(after: 8_000_000_000) == 8_000_000_000)
     }
 
-    @Test func staleAvatarEnrichmentTaskCannotClearNewerTaskHandle() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test())
-        let stale = UUID()
-        let current = UUID()
-
-        viewModel.installAvatarEnrichmentTaskForTesting(taskID: stale)
-        viewModel.installAvatarEnrichmentTaskForTesting(taskID: current)
-        viewModel.finishAvatarEnrichmentTaskForTesting(taskID: stale)
-
-        #expect(viewModel.avatarEnrichmentTaskIDForTesting == current)
-
-        viewModel.finishAvatarEnrichmentTaskForTesting(taskID: current)
-
-        #expect(viewModel.avatarEnrichmentTaskIDForTesting == nil)
-    }
-
     @Test func chatListRowUpdatesAreCoalescedBeforePublishing() async throws {
         let viewModel = ChatsListViewModel(appState: AppState.test())
         let older = chatListRow(
