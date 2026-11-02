@@ -30,11 +30,14 @@ concurrency:
 
 jobs:
   test:
-    runs-on: macos-15
+    runs-on: xcode-27
     # Allow runner setup and artifact upload around the bounded 40-minute test step.
     timeout-minutes: 55
 
     env:
+      # D2 on #1202 keeps CI at one runtime permit; pin it so a runner with more
+      # cores doesn't raise it.
+      TEST_RUNNER_WN_TEST_GATE_CORES: "3"
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
       WN_TEST_SOURCE_PACKAGES: ${{ github.workspace }}/build/SourcePackages
       WN_TEST_COMPILATION_CACHE: ${{ github.workspace }}/build/CompilationCache
@@ -46,9 +49,10 @@ jobs:
           persist-credentials: false
 
       - name: Select Xcode
+        id: xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: "26"
+          xcode-version: "27"
 
       # Extracting the compiler cache ran out of disk alongside the image's
       # unused Xcodes, simulator runtimes and toolchains, so drop them first.
@@ -60,11 +64,17 @@ jobs:
             [ "$(cd "$x" && pwd -P)" = "$(cd "$keep" && pwd -P)" ] || sudo rm -rf "$x" &
           done
           xcrun simctl runtime list -j \
-            | python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items() if not v["platformIdentifier"].endswith("iphonesimulator") or not v["version"].startswith("26")]' \
+            | python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items() if not v["platformIdentifier"].endswith("iphonesimulator") or not v["version"].startswith("27")]' \
             | xargs -n1 xcrun simctl runtime delete || true
           sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.ghcup &
           wait
           df -h /
+
+      - name: Pick simulator
+        # Test on an iPhone Air, on the newest iOS runtime that has one.
+        run: |
+          destination=$(WN_TEST_DEVICE_NAME="iPhone Air" scripts/pick-simulator.sh)
+          echo "WN_TEST_DESTINATION=$destination" >> "$GITHUB_ENV"
 
       - name: Verify published MarmotKit provenance
         run: python3 scripts/check-marmotkit-bindings.py
@@ -78,9 +88,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/SourcePackages
-          key: spm-${{ runner.os }}-xcode26-${{ hashFiles('Packages/MarmotKit/Package.swift') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('Packages/MarmotKit/Package.swift') }}
           restore-keys: |
-            spm-${{ runner.os }}-xcode26-
+            spm-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-
 
       - name: Isolate simulator clipboard
         # Host clipboard sync can stall UIPasteboard reads and block MainActor tests.
@@ -95,9 +105,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: build/CompilationCache
-          key: cas-${{ runner.os }}-xcode26-${{ github.sha }}
+          key: cas-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-${{ github.sha }}
           restore-keys: |
-            cas-${{ runner.os }}-xcode26-
+            cas-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-
 
       - name: Run tests
         # End the step before the job deadline so failure artifacts can upload.
@@ -109,7 +119,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: build/CompilationCache
-          key: cas-${{ runner.os }}-xcode26-${{ github.sha }}
+          key: cas-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-${{ github.sha }}
 
       - name: Upload test results
         if: failure()
