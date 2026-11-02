@@ -284,12 +284,27 @@ struct ChatsListProjectionTests {
         let published = viewModel.visibleRowsRevision
         #expect(published != initial)
 
+        // A changed row republishes, live or in a snapshot.
+        let changed = chatListRow(
+            groupIdHex: hex("a9"),
+            title: "Stable",
+            lastMessage: chatListPreview(messageIdHex: hex("f2"), plaintext: "changed", timelineAt: 11),
+            updatedAt: 11
+        )
+        viewModel.applyChatListRow(changed)
+        let afterLiveChange = viewModel.visibleRowsRevision
+        #expect(afterLiveChange != published)
+
+        viewModel.applyChatListSnapshot([row])
+        let afterSnapshotChange = viewModel.visibleRowsRevision
+        #expect(afterSnapshotChange != afterLiveChange)
+
         // An identical row, live or in a snapshot, must not republish the lists,
         // and neither must a preview refresh that changes nothing.
         viewModel.applyChatListRow(row)
         viewModel.applyChatListSnapshot([row])
         viewModel.refreshExpiredPreviews()
-        #expect(viewModel.visibleRowsRevision == published)
+        #expect(viewModel.visibleRowsRevision == afterSnapshotChange)
         #expect(viewModel.items.map(\.id) == [row.groupIdHex])
     }
 
