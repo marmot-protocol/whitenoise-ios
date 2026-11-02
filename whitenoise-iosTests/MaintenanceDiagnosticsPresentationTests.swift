@@ -4,11 +4,82 @@ import Testing
 @testable import MarmotKit
 
 struct MaintenanceDiagnosticsPresentationTests {
-    @Test func maintenancePhasesHaveStableDeveloperLabels() {
-        #expect(MaintenanceDiagnosticsPresentation.phaseLabel(.pendingPublication) == "Pending publication")
-        #expect(MaintenanceDiagnosticsPresentation.phaseLabel(.clockSkewBlocked) == "Clock skew blocked")
-        #expect(MaintenanceDiagnosticsPresentation.evolutionPhaseLabel(.attempting) == "Attempting")
-        #expect(MaintenanceDiagnosticsPresentation.triggerLabel(.postJoin) == "Post-join")
+    @Test func maintenanceLabelsAreTranslatedForTheGivenLocale() {
+        let presentation = MaintenanceDiagnosticsPresentation.self
+        let german = Locale(identifier: "de")
+        #expect(presentation.phaseLabel(.eoseTimeout, locale: german) == "EOSE-Zeitüberschreitung")
+        #expect(presentation.phaseLabel(.clockSkewBlocked, locale: german) == "Durch Uhrabweichung blockiert")
+        #expect(presentation.triggerLabel(.periodic, locale: german) == "Regelmäßig")
+        #expect(presentation.evolutionPhaseLabel(.confirmed, locale: german) == "Bestätigt")
+
+        let russian = Locale(identifier: "ru")
+        #expect(presentation.phaseLabel(.paused, locale: russian) == "Приостановлено")
+        #expect(presentation.triggerLabel(.manual, locale: russian) == "Вручную")
+        #expect(presentation.evolutionPhaseLabel(.supersededByConvergence, locale: russian)
+            == "Заменено в результате конвергенции")
+        #expect(presentation.phaseLabel(.supersededByConvergence, locale: Locale(identifier: "zh-Hant"))
+            == "已被收斂取代")
+    }
+
+    // The enums aren't CaseIterable. The exhaustive switches below stop
+    // compiling when MDK adds a case, as a reminder to list it here too.
+    private let phases: [MaintenancePhaseFfi] = [
+        .catchUp, .eoseTimeout, .grace, .quiet, .jitter, .overdue, .paused, .clockSkewBlocked,
+        .pendingPublication, .fanout, .retry, .supersededByConvergence, .complete, .failed
+    ]
+    private let triggers: [MaintenanceTriggerFfi] = [.postJoin, .periodic, .manual]
+    private let evolutionPhases: [GroupEvolutionPhaseFfi] = [
+        .preparing, .prepared, .attempting, .confirmed, .supersededByConvergence
+    ]
+
+    private static func listed(_ phase: MaintenancePhaseFfi) {
+        switch phase {
+        case .catchUp, .eoseTimeout, .grace, .quiet, .jitter, .overdue, .paused, .clockSkewBlocked,
+             .pendingPublication, .fanout, .retry, .supersededByConvergence, .complete, .failed: break
+        }
+    }
+
+    private static func listed(_ trigger: MaintenanceTriggerFfi) {
+        switch trigger {
+        case .postJoin, .periodic, .manual: break
+        }
+    }
+
+    private static func listed(_ phase: GroupEvolutionPhaseFfi) {
+        switch phase {
+        case .preparing, .prepared, .attempting, .confirmed, .supersededByConvergence: break
+        }
+    }
+
+    private func labelsByEnum(_ locale: Locale) -> [[String]] {
+        let presentation = MaintenanceDiagnosticsPresentation.self
+        return [
+            phases.map { presentation.phaseLabel($0, locale: locale) },
+            triggers.map { presentation.triggerLabel($0, locale: locale) },
+            evolutionPhases.map { presentation.evolutionPhaseLabel($0, locale: locale) }
+        ]
+    }
+
+    private func labels(_ locale: Locale) -> [String] {
+        labelsByEnum(locale).flatMap(\.self)
+    }
+
+    @Test func everyMaintenanceCaseHasItsOwnLabel() {
+        for english in labelsByEnum(Locale(identifier: "en")) {
+            #expect(Set(english).count == english.count)
+        }
+    }
+
+    /// A code key the catalog doesn't contain falls back to the English key.
+    /// The catalog lint can't see code keys, so this checks them here, in
+    /// locales where none of these labels is spelled like the English.
+    @Test func everyMaintenanceLabelResolvesToACatalogTranslation() {
+        let english = labels(Locale(identifier: "en"))
+        for locale in ["de", "ru", "zh-Hans"].map(Locale.init(identifier:)) {
+            for (source, translated) in zip(english, labels(locale)) {
+                #expect(translated != source, "\(source) is untranslated in \(locale.identifier)")
+            }
+        }
     }
 
     @Test func obligationSummaryIsTranslatedForTheGivenLocale() {
@@ -32,7 +103,7 @@ struct MaintenanceDiagnosticsPresentationTests {
 
     /// Two app languages with different results, so no single host language
     /// can satisfy both if a default stops following the selected language.
-    @Test func summariesFollowTheSelectedAppLanguageByDefault() {
+    @Test func summariesAndLabelsFollowTheSelectedAppLanguageByDefault() {
         let presentation = MaintenanceDiagnosticsPresentation.self
         let german = Locale(identifier: "de")
         let russian = Locale(identifier: "ru")
@@ -44,6 +115,15 @@ struct MaintenanceDiagnosticsPresentationTests {
             presentation.fanoutSummary(records: 3, failedTargets: 5, locale: german)
                 != presentation.fanoutSummary(records: 3, failedTargets: 5, locale: russian)
         )
+        #expect(presentation.phaseLabel(.grace, locale: german) != presentation.phaseLabel(.grace, locale: russian))
+        #expect(
+            presentation.triggerLabel(.postJoin, locale: german)
+                != presentation.triggerLabel(.postJoin, locale: russian)
+        )
+        #expect(
+            presentation.evolutionPhaseLabel(.prepared, locale: german)
+                != presentation.evolutionPhaseLabel(.prepared, locale: russian)
+        )
         for (language, locale) in [(AppLanguage.german, german), (.russian, russian)] {
             withAppLanguage(language) {
                 #expect(
@@ -53,6 +133,12 @@ struct MaintenanceDiagnosticsPresentationTests {
                 #expect(
                     presentation.fanoutSummary(records: 3, failedTargets: 5)
                         == presentation.fanoutSummary(records: 3, failedTargets: 5, locale: locale)
+                )
+                #expect(presentation.phaseLabel(.grace) == presentation.phaseLabel(.grace, locale: locale))
+                #expect(presentation.triggerLabel(.postJoin) == presentation.triggerLabel(.postJoin, locale: locale))
+                #expect(
+                    presentation.evolutionPhaseLabel(.prepared)
+                        == presentation.evolutionPhaseLabel(.prepared, locale: locale)
                 )
             }
         }

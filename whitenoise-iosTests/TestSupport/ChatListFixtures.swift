@@ -122,3 +122,18 @@ extension PresentedChatRowFfi {
         )
     }
 }
+
+/// An existing two-person conversation as Marmot's direct-chat lookup returns it.
+func existingDirectConversation(groupIdHex: String, reusable: Bool = true) -> ExistingDirectConversationFfi {
+    ExistingDirectConversationFfi(
+        groupIdHex: groupIdHex,
+        reusable: reusable,
+        lifecycleState: .stable,
+        selfMembership: .member,
+        pendingConfirmation: false,
+        leaveRequestPending: false,
+        disbanding: false,
+        archived: false,
+        activitySortAt: 0
+    )
+}

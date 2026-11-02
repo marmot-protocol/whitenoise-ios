@@ -394,9 +394,10 @@ Do not add a second storage path for data Marmot already owns.
 - Tests that open or start a Marmot runtime take
   `.marmotRuntimeConcurrencyLimit`; never combine it with `.timeLimit`, which
   would count time queued behind the gate.
-- The gate allows `max(1, cores/4)` runtimes: 1 on the 3-vCPU CI runner.
-  `TEST_RUNNER_WN_TEST_GATE_CORES=3` reproduces CI's single permit locally;
-  it changes only the permit count, not the CPUs the simulator gets.
+- The gate allows `max(1, cores/4)` runtimes. CI pins
+  `TEST_RUNNER_WN_TEST_GATE_CORES=3` in `tests.yml`, so it runs 1 permit on
+  any runner; the same setting reproduces CI's single permit locally. It
+  changes only the permit count, not the CPUs the simulator gets.
 - Open runtimes with `withTestClient`, `OwnedTestClient` (stored fixtures) or
   `TestRuntimeScope.own` under `.closesTestRuntimes`; reopen a root with
   `closing`. Never leave a `MarmotClient.testClient()` unclosed. SwiftLint's
@@ -470,7 +471,7 @@ scripts/test.sh     # the whole suite on the Staging scheme, as CI runs it
 xcodebuild test \
   -project whitenoise-ios.xcodeproj \
   -scheme "Whitenoise (Production)" \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone Air'
 ```
 
 ```sh

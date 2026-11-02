@@ -68,7 +68,7 @@ struct AttachmentStorageSettingsView: View {
                 let current = try await client.marmot.attachmentDownloadPolicy(accountRef: account)
                 let next = AttachmentDownloadLimits.applying(diskReserve: reserve, transferLimit: transfer,
                                                              to: current)
-                try await AttachmentPolicyBridge.synchronize(client, updatedLimits: (account, next))
+                try await AttachmentPolicyBridge.shared.synchronize(client, updatedLimits: (account, next))
                 guard appState.activeAccountRef == account, appState.client === client else { return }
                 policy = next
                 appState.present(.success(L10n.string("Download settings saved")))

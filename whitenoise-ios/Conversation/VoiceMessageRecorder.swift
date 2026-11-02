@@ -170,6 +170,20 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         reset(deleteFile: true)
     }
 
+    func finishIfActive() -> VoiceRecordingResult? {
+        holdTask?.cancel()
+        holdTask = nil
+        switch state {
+        case .idle:
+            return nil
+        case .pressing:
+            reset(deleteFile: true)
+            return nil
+        case .recording:
+            return finishRecording()
+        }
+    }
+
     func cancelIfActive() {
         guard state.isActive else { return }
         cancel()

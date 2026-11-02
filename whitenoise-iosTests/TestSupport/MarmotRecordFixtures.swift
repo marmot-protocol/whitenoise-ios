@@ -403,3 +403,13 @@ func profileMetadata(displayName: String) -> UserProfileMetadataFfi {
         lud16: nil
     )
 }
+
+func accountSummary(_ label: String, byte: String, signedOut: Bool = false) -> AccountSummaryFfi {
+    AccountSummaryFfi(label: label, accountIdHex: hex(byte), localSigning: true, signedOut: signedOut,
+                      running: !signedOut)
+}
+
+func onboardingCheckpoint(accountID: String, ready: Bool) -> OnboardingSnapshotFfi {
+    OnboardingSnapshotFfi(accountIdHex: accountID, recoveryEpoch: nil, revision: 1, ready: ready, steps: [],
+                          proposal: nil, singleDeviceNotice: nil, cancellationPending: false)
+}

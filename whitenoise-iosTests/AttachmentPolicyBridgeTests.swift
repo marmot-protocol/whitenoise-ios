@@ -4,13 +4,10 @@ import MarmotKit
 
 /// The decisions `AttachmentPolicyBridge.synchronize` makes for each account:
 /// the policy it writes, and the per-event rules for unready accounts,
-/// superseded events, granting and the save result. These test the pure
-/// decisions only. How `synchronize` wires them, revoking in event order and
-/// forwarding only the captured generation run against a live runtime and
-/// have no test yet; see #1228.
+/// superseded events, granting and the save result. How `synchronize` wires
+/// them is in `AttachmentPolicyBridgeWiringTests`.
 struct AttachmentPolicyBridgeTests {
-    private static let alice = AccountSummaryFfi(label: "alice", accountIdHex: hex("aa"), localSigning: true,
-                                                 signedOut: false, running: true)
+    private static let alice = accountSummary("alice", byte: "aa")
     /// Customised limits, so preserving them can't be confused with resetting to defaults.
     private static let stored = attachmentPolicy(automatic: false, retained: 3_000 * mebibyte,
                                                  reserve: 700 * mebibyte, transfer: 90 * mebibyte)
