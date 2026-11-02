@@ -15,7 +15,9 @@ struct PresentedChatListTests {
         let model = ChatsListViewModel(appState: state)
         var preview = chatListPreview(messageIdHex: "expiring", plaintext: "Secret preview")
         preview.retentionSeconds = 60
-        preview.retentionExpiresAt = UInt64(Date().timeIntervalSince1970) + 1
+        // Whole-second expiry: round up so the visible check below starts at
+        // least 2 s before expiry, whatever the fractional second.
+        preview.retentionExpiresAt = UInt64(Date().timeIntervalSince1970.rounded(.up)) + 2
         let row = chatListRow(groupIdHex: "expiry", title: "Chat", lastMessage: preview)
         model.applyPresentedSnapshot(presentedChatSnapshot([row]))
         #expect(model.items.first?.searchHaystack.contains("secret preview") == true)
