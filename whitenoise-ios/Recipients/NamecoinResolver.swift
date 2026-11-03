@@ -4,7 +4,7 @@ import Foundation
 /// `d/example`, `id/alice` -> Nostr pubkey hex (+ optional relay hints).
 ///
 /// Same closed loop the NIP-05 HTTPS verifier serves for DNS names, but over
-/// Namecoin's censorship-resistant name index (no DNS, no TLS CA) via
+/// Namecoin's censorship-resistant name index via
 /// ElectrumX WSS. Ported from whitenoise-linux `app/namecoin.odin`
 /// (79447095f2).
 ///
@@ -42,10 +42,15 @@ import Foundation
 nonisolated enum NamecoinResolver {
     /// Resolution outcome. Distinguishing not-found from unavailable so the
     /// UI can tell "name doesn't exist" apart from "can't reach ElectrumX".
-    enum Resolution: Equatable {
+    enum Resolution: Equatable, Sendable {
         case resolved(Resolved)
         case notFound
         case unavailable
+    }
+
+    struct ResolutionOutcome: Equatable, Sendable {
+        let resolution: Resolution
+        let diagnostic: String?
     }
 
     struct Resolved: Equatable, Sendable {
@@ -115,12 +120,9 @@ nonisolated enum NamecoinResolver {
 
     // MARK: - ElectrumX endpoints
 
-    /// The public Namecoin ElectrumX operators ship self-signed certs by
-    /// convention (no browser-trusted CA has issued for these hosts, and none
-    /// is expected to). To trust them safely we pin the leaf public key by
-    /// SHA-256; the TLS handshake succeeds only when the server presents a
-    /// matching pubkey, and any MITM / rotated cert fails the handshake
-    /// before any data flows.
+    /// Pins belong to individual operators, never to the transport globally.
+    /// The testls.space endpoints use ordinary system CA/hostname validation;
+    /// the bitcoins.sk and relay.testls.bit endpoints pin their leaf SPKIs.
     ///
     /// Rotation runbook: when a pinned server rotates its cert, regenerate
     /// the pin with
@@ -133,35 +135,45 @@ nonisolated enum NamecoinResolver {
     /// and update the entry. Removing a pin without replacing it opens the
     /// server to trivial MITM.
     static let defaultServers: [ElectrumXTransport.Server] = [
-        // bitcoins.sk community ElectrumX peer (Slovakia). Self-signed;
-        // pubkey pin matches the leaf served on 2026-09-22.
+        ElectrumXTransport.Server(
+            host: "electrumx.testls.space",
+            port: 50002,
+            pinnedPublicKeySHA256: nil
+        ),
         ElectrumXTransport.Server(
             host: "nmc2.bitcoins.sk",
             port: 57002,
             pinnedPublicKeySHA256: "tkCCQ6AZPqU4Te1poKHeS5l/CRWYHz5n7J4LH22/LxQ="
         ),
-        // testls.space community ElectrumX peer. Self-signed; the leaf CN
-        // (`electrum.testls.space`) does not match the deploy hostname
-        // (`electrumx.testls.space`), so a chain check would fail anyway.
-        // Pin matches the leaf served on 2026-09-22.
         ElectrumXTransport.Server(
-            host: "electrumx.testls.space",
-            port: 50004,
-            pinnedPublicKeySHA256: "YQAbKuAPFnlb9hr6x7O20dgjW5HfVRc2juKlhVWH8Ww="
+            host: "46.229.238.187",
+            port: 57002,
+            pinnedPublicKeySHA256: "tkCCQ6AZPqU4Te1poKHeS5l/CRWYHz5n7J4LH22/LxQ=",
+            tlsServerName: "nmc2.bitcoins.sk"
         ),
-        // relay.testls.bit peer (Namecoin `.bit` resolved via a separate
-        // resolver on the host). Pin matches the leaf served on 2026-09-22.
         ElectrumXTransport.Server(
             host: "relay.testls.bit",
-            port: 50004,
+            port: 50012,
             pinnedPublicKeySHA256: "Y9Zu+VV8eoqOBanmpk5QzJtnHwqzxb0ynJGiMRKVJBw="
+        ),
+        ElectrumXTransport.Server(
+            host: "23.158.233.10",
+            port: 50012,
+            pinnedPublicKeySHA256: "Y9Zu+VV8eoqOBanmpk5QzJtnHwqzxb0ynJGiMRKVJBw=",
+            tlsServerName: "relay.testls.bit"
+        ),
+        ElectrumXTransport.Server(
+            host: "electrumx2.testls.space",
+            port: 50002,
+            pinnedPublicKeySHA256: nil
         ),
     ]
 
-    /// Per-server request budget, applied to the whole "connect + handshake +
-    /// one JSON-RPC round trip" that one transport call performs. Matches
-    /// NC_REQUEST_TIMEOUT_MS.
-    static let requestTimeoutNanoseconds: UInt64 = 8_000_000_000
+    static let connectTimeoutNanoseconds: UInt64 = 10_000_000_000
+    static let readTimeoutNanoseconds: UInt64 = 15_000_000_000
+    static let overallLookupTimeoutNanoseconds: UInt64 = 20_000_000_000
+    static let hedgeDelayNanoseconds: UInt64 = 1_500_000_000
+    static let negativeGraceNanoseconds: UInt64 = 1_500_000_000
 
     /// Name value older than this many blocks is treated as expired. Matches
     /// NC_NAME_EXPIRE_DEPTH.
@@ -185,7 +197,8 @@ nonisolated enum NamecoinResolver {
             server: server,
             request: request,
             wantId: wantId,
-            timeoutNanoseconds: requestTimeoutNanoseconds
+            connectTimeoutNanoseconds: connectTimeoutNanoseconds,
+            readTimeoutNanoseconds: readTimeoutNanoseconds
         )
     }
 
@@ -199,14 +212,23 @@ nonisolated enum NamecoinResolver {
         servers: [ElectrumXTransport.Server] = defaultServers,
         roundTrip: @escaping RoundTrip = pinnedRoundTrip
     ) async -> Resolution {
-        guard let parsed = parse(identifier) else { return .notFound }
+        await resolveWithDiagnostics(identifier, servers: servers, roundTrip: roundTrip).resolution
+    }
+
+    static func resolveWithDiagnostics(
+        _ identifier: String,
+        servers: [ElectrumXTransport.Server] = defaultServers,
+        roundTrip: @escaping RoundTrip = pinnedRoundTrip
+    ) async -> ResolutionOutcome {
+        guard let parsed = parse(identifier) else {
+            return ResolutionOutcome(resolution: .notFound, diagnostic: nil)
+        }
         let key = normalize(identifier)
         if let cached = await SessionCache.shared.lookup(key) {
-            return cached
+            return ResolutionOutcome(resolution: cached, diagnostic: nil)
         }
-        return await SessionCache.shared.resolveOnce(key) {
-            let resolution = await lookup(parsed, servers: servers, roundTrip: roundTrip)
-            return resolution
+        return await SessionCache.shared.resolveOnceDetailed(key) {
+            await lookupDetailed(parsed, servers: servers, roundTrip: roundTrip)
         }
     }
 
@@ -223,7 +245,7 @@ nonisolated enum NamecoinResolver {
 
         private var positive: [String: Resolution] = [:]
         private var negative: Set<String> = []
-        private var inflight: [String: Task<Resolution, Never>] = [:]
+        private var inflight: [String: Task<ResolutionOutcome, Never>] = [:]
 
         func lookup(_ key: String) -> Resolution? {
             if let hit = positive[key] { return hit }
@@ -235,16 +257,29 @@ nonisolated enum NamecoinResolver {
             _ key: String,
             perform: @escaping @Sendable () async -> Resolution
         ) async -> Resolution {
+            await resolveOnceDetailed(key) {
+                ResolutionOutcome(resolution: await perform(), diagnostic: nil)
+            }.resolution
+        }
+
+        func resolveOnceDetailed(
+            _ key: String,
+            perform: @escaping @Sendable () async -> ResolutionOutcome
+        ) async -> ResolutionOutcome {
             if let existing = inflight[key] {
-                return await existing.value
+                return await withTaskCancellationHandler {
+                    await existing.value
+                } onCancel: { existing.cancel() }
             }
             let task = Task { await perform() }
             inflight[key] = task
-            let resolution = await task.value
+            let outcome = await withTaskCancellationHandler {
+                await task.value
+            } onCancel: { task.cancel() }
             inflight[key] = nil
-            switch resolution {
+            switch outcome.resolution {
             case .resolved:
-                positive[key] = resolution
+                positive[key] = outcome.resolution
                 negative.remove(key)
             case .notFound:
                 if positive[key] == nil {
@@ -253,67 +288,207 @@ nonisolated enum NamecoinResolver {
             case .unavailable:
                 break
             }
-            return resolution
+            return outcome
         }
     }
 
     // MARK: - lookup pipeline
 
-    private static func lookup(
+    private static func lookupDetailed(
         _ parsed: ParsedIdentifier,
         servers: [ElectrumXTransport.Server],
-        roundTrip: RoundTrip
-    ) async -> Resolution {
-        // Root lookup with server fallback.
-        switch await nameShowWithFallback(parsed.namecoinName, servers: servers, roundTrip: roundTrip) {
+        roundTrip: @escaping RoundTrip
+    ) async -> ResolutionOutcome {
+        let attempt = await hedgedNameShowDetailed(
+            parsed.namecoinName,
+            servers: servers,
+            roundTrip: roundTrip,
+            hedgeDelayNanoseconds: hedgeDelayNanoseconds,
+            negativeGraceNanoseconds: negativeGraceNanoseconds,
+            overallTimeoutNanoseconds: overallLookupTimeoutNanoseconds
+        )
+        switch attempt.value {
         case .unavailable:
-            return .unavailable
+            return ResolutionOutcome(
+                resolution: .unavailable,
+                diagnostic: attempt.diagnostics.joined(separator: "\n")
+            )
         case .notFound:
-            return .notFound
+            return ResolutionOutcome(resolution: .notFound, diagnostic: nil)
         case .value(let valueJSON):
-            // Walk the ifa-0001 `import` chain. Sub-import unavailability
-            // collapses to "empty imported object" — only the root's
-            // availability drives the top-level tri-state signal.
             guard let merged = await resolveValueWithImports(
                 valueJSON,
                 maxDepth: importMaxDepth,
                 servers: servers,
                 roundTrip: roundTrip
-            ) else { return .notFound }
-            return extractNostr(from: merged, parsed: parsed)
+            ) else { return ResolutionOutcome(resolution: .notFound, diagnostic: nil) }
+            return ResolutionOutcome(resolution: extractNostr(from: merged, parsed: parsed), diagnostic: nil)
         }
     }
 
     /// Intermediate tri-state for the raw name-value fetch: the value JSON
     /// string, a definitive miss, or a transport-level failure.
-    enum NameValue: Equatable {
+    enum NameValue: Equatable, Sendable {
         case value(String)
         case notFound
         case unavailable
     }
 
-    /// Server fallback: walk the server list in order. Any server returning a
-    /// definitive miss latches Not_Found but we continue in case a later
-    /// server has fresher indexing; transport failures try the next server.
-    /// Returns Unavailable only when every server failed transport with no
-    /// definitive miss.
+    struct NameAttempt: Equatable, Sendable {
+        let value: NameValue
+        let diagnostics: [String]
+
+        init(_ value: NameValue, diagnostics: [String] = []) {
+            self.value = value
+            self.diagnostics = diagnostics
+        }
+    }
+
+    private enum HedgeEvent: Sendable {
+        case completed(Int, NameAttempt)
+        case launch(Int, Int)
+        case negativeGraceExpired
+        case overallDeadline
+    }
+
+    /// Quartz-style staggered hedging: start the first endpoint immediately,
+    /// then one every 1.5 seconds (or immediately after a transport failure).
+    /// A positive always wins. A definitive miss stops new launches but leaves
+    /// existing attempts a short grace period so a slow positive can beat it.
     static func nameShowWithFallback(
         _ name: String,
         servers: [ElectrumXTransport.Server],
-        roundTrip: RoundTrip
+        roundTrip: @escaping RoundTrip
     ) async -> NameValue {
-        var definitiveMiss = false
-        for server in servers {
-            switch await nameShow(name, server: server, roundTrip: roundTrip) {
-            case .value(let value):
-                return .value(value)
-            case .notFound:
-                definitiveMiss = true
-            case .unavailable:
-                continue
+        await hedgedNameShow(
+            name,
+            servers: servers,
+            roundTrip: roundTrip,
+            hedgeDelayNanoseconds: hedgeDelayNanoseconds,
+            negativeGraceNanoseconds: negativeGraceNanoseconds,
+            overallTimeoutNanoseconds: overallLookupTimeoutNanoseconds
+        )
+    }
+
+    static func hedgedNameShow(
+        _ name: String,
+        servers: [ElectrumXTransport.Server],
+        roundTrip: @escaping RoundTrip,
+        hedgeDelayNanoseconds: UInt64,
+        negativeGraceNanoseconds: UInt64,
+        overallTimeoutNanoseconds: UInt64
+    ) async -> NameValue {
+        await hedgedNameShowDetailed(
+            name,
+            servers: servers,
+            roundTrip: roundTrip,
+            hedgeDelayNanoseconds: hedgeDelayNanoseconds,
+            negativeGraceNanoseconds: negativeGraceNanoseconds,
+            overallTimeoutNanoseconds: overallTimeoutNanoseconds
+        ).value
+    }
+
+    static func hedgedNameShowDetailed(
+        _ name: String,
+        servers: [ElectrumXTransport.Server],
+        roundTrip: @escaping RoundTrip,
+        hedgeDelayNanoseconds: UInt64,
+        negativeGraceNanoseconds: UInt64,
+        overallTimeoutNanoseconds: UInt64
+    ) async -> NameAttempt {
+        guard let first = servers.first else { return NameAttempt(.unavailable) }
+        return await withTaskGroup(of: HedgeEvent.self) { group in
+            group.addTask {
+                .completed(0, await nameShowAttempt(name, server: first, roundTrip: roundTrip))
             }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: hedgeDelayNanoseconds)
+                return .launch(0, 1)
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: overallTimeoutNanoseconds)
+                return .overallDeadline
+            }
+
+            var active: Set<Int> = [0]
+            var nextIndex = 1
+            var launchGeneration = 0
+            var definitiveMiss = false
+            var graceScheduled = false
+            var diagnostics: [String] = []
+
+            while let event = await group.next() {
+                switch event {
+                case .completed(let index, let attempt):
+                    let outcome = attempt.value
+                    if case .value(let value) = outcome {
+                        group.cancelAll()
+                        return NameAttempt(.value(value), diagnostics: diagnostics)
+                    }
+                    active.remove(index)
+                    diagnostics.append(contentsOf: attempt.diagnostics)
+                    if outcome == .notFound { definitiveMiss = true }
+
+                    if definitiveMiss {
+                        launchGeneration += 1 // invalidate pending launch timers
+                        if !graceScheduled, !active.isEmpty {
+                            graceScheduled = true
+                            group.addTask {
+                                try? await Task.sleep(nanoseconds: negativeGraceNanoseconds)
+                                return .negativeGraceExpired
+                            }
+                        }
+                    } else if nextIndex < servers.count {
+                        // A failed predecessor launches the next endpoint now.
+                        launchGeneration += 1
+                        let generation = launchGeneration
+                        let launched = nextIndex
+                        nextIndex += 1
+                        active.insert(launched)
+                        let server = servers[launched]
+                        group.addTask {
+                            .completed(launched, await nameShowAttempt(name, server: server, roundTrip: roundTrip))
+                        }
+                        if nextIndex < servers.count {
+                            let followingIndex = nextIndex
+                            group.addTask {
+                                try? await Task.sleep(nanoseconds: hedgeDelayNanoseconds)
+                                return .launch(generation, followingIndex)
+                            }
+                        }
+                    }
+
+                    if active.isEmpty, definitiveMiss || nextIndex == servers.count {
+                        group.cancelAll()
+                        return NameAttempt(definitiveMiss ? .notFound : .unavailable, diagnostics: diagnostics)
+                    }
+                case .launch(let generation, let index):
+                    guard generation == launchGeneration, !definitiveMiss,
+                          index == nextIndex, index < servers.count
+                    else { continue }
+                    nextIndex += 1
+                    active.insert(index)
+                    let server = servers[index]
+                    group.addTask {
+                        .completed(index, await nameShowAttempt(name, server: server, roundTrip: roundTrip))
+                    }
+                    if nextIndex < servers.count {
+                        let followingIndex = nextIndex
+                        group.addTask {
+                            try? await Task.sleep(nanoseconds: hedgeDelayNanoseconds)
+                            return .launch(generation, followingIndex)
+                        }
+                    }
+                case .negativeGraceExpired:
+                    group.cancelAll()
+                    return NameAttempt(.notFound, diagnostics: diagnostics)
+                case .overallDeadline:
+                    group.cancelAll()
+                    return NameAttempt(definitiveMiss ? .notFound : .unavailable, diagnostics: diagnostics)
+                }
+            }
+            return NameAttempt(definitiveMiss ? .notFound : .unavailable, diagnostics: diagnostics)
         }
-        return definitiveMiss ? .notFound : .unavailable
     }
 
     /// One name -> value lookup against one ElectrumX server. Ported from
@@ -323,14 +498,28 @@ nonisolated enum NamecoinResolver {
     static func nameShow(
         _ name: String,
         server: ElectrumXTransport.Server,
-        roundTrip: RoundTrip
+        roundTrip: @escaping RoundTrip
     ) async -> NameValue {
+        await nameShowAttempt(name, server: server, roundTrip: roundTrip).value
+    }
+
+    static func nameShowAttempt(
+        _ name: String,
+        server: ElectrumXTransport.Server,
+        roundTrip: RoundTrip
+    ) async -> NameAttempt {
+        func failure(_ stage: String, _ error: Error) -> NameAttempt {
+            NameAttempt(.unavailable, diagnostics: [
+                "\(server.host):\(server.port) \(stage): \(String(reflecting: error))"
+            ])
+        }
         // server.version handshake — some ElectrumX operators reject calls
         // before it. A handshake failure marks the whole server unavailable.
         let versionRequest =
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server.version\",\"params\":[\"whitenoise-ios/namecoin\",\"1.4\"]}"
-        guard (try? await call(server: server, request: versionRequest, wantId: 1, roundTrip: roundTrip)) != nil
-        else { return .unavailable }
+        do {
+            _ = try await call(server: server, request: versionRequest, wantId: 1, roundTrip: roundTrip)
+        } catch { return failure("server.version", error) }
 
         // Derive the ElectrumX scripthash key for this name — locally, never
         // by asking the server.
@@ -339,33 +528,33 @@ nonisolated enum NamecoinResolver {
 
         let historyRequest =
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"blockchain.scripthash.get_history\",\"params\":[\"\(scriptHash)\"]}"
-        guard let historyBody = try? await call(
-            server: server,
-            request: historyRequest,
-            wantId: 2,
-            roundTrip: roundTrip
-        ) else { return .unavailable }
+        let historyBody: Data
+        do {
+            historyBody = try await call(
+                server: server, request: historyRequest, wantId: 2, roundTrip: roundTrip
+            )
+        } catch { return failure("blockchain.scripthash.get_history", error) }
         guard let (txHash, height) = lastHistoryEntry(in: historyBody) else {
             // Empty history is a definitive Namecoin miss (name has never
             // been registered / has no ops).
-            return .notFound
+            return NameAttempt(.notFound)
         }
 
         let txRequest =
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"blockchain.transaction.get\",\"params\":[\"\(txHash)\",true]}"
-        guard let txBody = try? await call(
-            server: server,
-            request: txRequest,
-            wantId: 3,
-            roundTrip: roundTrip
-        ) else { return .unavailable }
+        let txBody: Data
+        do {
+            txBody = try await call(
+                server: server, request: txRequest, wantId: 3, roundTrip: roundTrip
+            )
+        } catch { return failure("blockchain.transaction.get", error) }
 
         // Best-effort expiry check via headers.subscribe.
         let headRequest = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"blockchain.headers.subscribe\",\"params\":[]}"
         if let headBody = try? await call(server: server, request: headRequest, wantId: 4, roundTrip: roundTrip) {
             let currentHeight = headerHeight(in: headBody)
             if currentHeight > 0, height > 0, currentHeight - height >= nameExpireDepth {
-                return .notFound
+                return NameAttempt(.notFound)
             }
         }
 
@@ -373,9 +562,9 @@ nonisolated enum NamecoinResolver {
             // The tx we got back does not carry this name's value. Treat as
             // definitive miss — the history entry pointed at something that
             // is not our name payload.
-            return .notFound
+            return NameAttempt(.notFound)
         }
-        return .value(value)
+        return NameAttempt(.value(value))
     }
 
     /// One JSON-RPC round trip; succeeds iff the transport returned a body
@@ -451,7 +640,7 @@ nonisolated enum NamecoinResolver {
         _ valueJSON: String,
         maxDepth: Int,
         servers: [ElectrumXTransport.Server],
-        roundTrip: RoundTrip
+        roundTrip: @escaping RoundTrip
     ) async -> [String: Any]? {
         guard let root = try? JSONSerialization.jsonObject(with: Data(valueJSON.utf8)) as? [String: Any]
         else { return nil }
@@ -467,7 +656,7 @@ nonisolated enum NamecoinResolver {
         budget: Int,
         visited: inout Set<String>,
         servers: [ElectrumXTransport.Server],
-        roundTrip: RoundTrip
+        roundTrip: @escaping RoundTrip
     ) async -> [String: Any] {
         // Start with a copy of everything except `import`.
         var base = object

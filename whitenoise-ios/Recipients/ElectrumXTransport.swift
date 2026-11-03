@@ -12,10 +12,9 @@ import Synchronization
 /// messages, so the C shim's byte-level frame codec has no equivalent here.
 /// What IS carried over:
 ///
-///   * TLS trust is pinned leaf-pubkey SHA-256 equality (the moral equivalent
-///     of `CURLOPT_PINNEDPUBLICKEY`), NOT system CA verification — the pinned
-///     Namecoin ElectrumX operators serve self-signed certs by convention, and
-///     one serves a leaf whose CN does not even match the deploy hostname.
+///   * TLS trust is endpoint-specific: pinned operators use leaf-pubkey
+///     SHA-256 equality (the moral equivalent of CURLOPT_PINNEDPUBLICKEY),
+///     while the other endpoints retain system CA and hostname verification.
 ///   * Replies are filtered to the request's `id` by a byte-level walker that
 ///     only matches `"id"` at object depth 1 (exact port of `nc_message_id`),
 ///     then re-parsed with a real JSON parser before any payload is trusted.
@@ -46,13 +45,23 @@ nonisolated enum ElectrumXTransport {
         let host: String
         let port: UInt16
         let path: String
-        let pinnedPublicKeySHA256: String
+        let pinnedPublicKeySHA256: String?
+        /// Certificate/SNI identity. IP endpoints use their operator's DNS
+        /// name so the same leaf-key pin and TLS identity apply to both.
+        let tlsServerName: String
 
-        init(host: String, port: UInt16, path: String = "/", pinnedPublicKeySHA256: String) {
+        init(
+            host: String,
+            port: UInt16,
+            path: String = "/",
+            pinnedPublicKeySHA256: String?,
+            tlsServerName: String? = nil
+        ) {
             self.host = host
             self.port = port
             self.path = path
             self.pinnedPublicKeySHA256 = pinnedPublicKeySHA256
+            self.tlsServerName = tlsServerName ?? host
         }
     }
 
@@ -69,20 +78,16 @@ nonisolated enum ElectrumXTransport {
         server: Server,
         request: String,
         wantId: Int,
-        timeoutNanoseconds: UInt64
+        connectTimeoutNanoseconds: UInt64 = 10_000_000_000,
+        readTimeoutNanoseconds: UInt64 = 15_000_000_000
     ) async throws -> Data {
-        try await withThrowingTaskGroup(of: Data.self) { group in
-            group.addTask {
-                try await performCall(server: server, request: request, wantId: wantId)
-            }
-            group.addTask {
-                try await Task.sleep(nanoseconds: timeoutNanoseconds)
-                throw TransportError.timeout
-            }
-            guard let first = try await group.next() else { throw TransportError.connectionFailed }
-            group.cancelAll()
-            return first
-        }
+        try await performCall(
+            server: server,
+            request: request,
+            wantId: wantId,
+            connectTimeoutNanoseconds: connectTimeoutNanoseconds,
+            readTimeoutNanoseconds: readTimeoutNanoseconds
+        )
     }
 
     private static let networkQueue = DispatchQueue(
@@ -90,25 +95,33 @@ nonisolated enum ElectrumXTransport {
         qos: .utility
     )
 
-    private static func performCall(server: Server, request: String, wantId: Int) async throws -> Data {
-        guard let pin = Data(base64Encoded: server.pinnedPublicKeySHA256), pin.count == 32 else {
-            throw TransportError.connectionFailed
-        }
+    private static func performCall(
+        server: Server,
+        request: String,
+        wantId: Int,
+        connectTimeoutNanoseconds: UInt64,
+        readTimeoutNanoseconds: UInt64
+    ) async throws -> Data {
         let tls = NWProtocolTLS.Options()
-        sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, server.host)
-        // Pinning replaces chain-of-trust verification: the handshake succeeds
-        // only when the leaf's public key SHA-256 equals the pin. A wrong pin
-        // (rotated cert, MITM) fails before any data flows. Hostname and CA
-        // checks are deliberately NOT performed — see the type doc.
-        let expectedPin = pin
-        sec_protocol_options_set_verify_block(
-            tls.securityProtocolOptions,
-            { metadata, trust, complete in
-                complete(leafPublicKeySHA256(from: trust) == expectedPin)
-            },
-            networkQueue
-        )
+        sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, server.tlsServerName)
+        if let encodedPin = server.pinnedPublicKeySHA256 {
+            guard let pin = Data(base64Encoded: encodedPin), pin.count == 32 else {
+                throw TransportError.connectionFailed
+            }
+            // A pin replaces chain-of-trust only for this endpoint. Endpoints
+            // without a pin retain Network.framework's normal CA/hostname check.
+            sec_protocol_options_set_verify_block(
+                tls.securityProtocolOptions,
+                { _, trust, complete in
+                    complete(leafPublicKeySHA256(from: trust) == pin)
+                },
+                networkQueue
+            )
+        }
         let tcp = NWProtocolTCP.Options()
+        // Configure the connect deadline before starting TCP/TLS. The async
+        // start phase below enforces the same bound and cancels real I/O.
+        tcp.connectionTimeout = Int(connectTimeoutNanoseconds / 1_000_000_000)
         let parameters = NWParameters(tls: tls, tcp: tcp)
         let webSocket = NWProtocolWebSocket.Options()
         parameters.defaultProtocolStack.applicationProtocols.insert(webSocket, at: 0)
@@ -124,20 +137,64 @@ nonisolated enum ElectrumXTransport {
         let cancellation = ConnectionCancellation(connection: connection)
         return try await withTaskCancellationHandler {
             defer { connection.cancel() }
-            try await start(connection)
-            try await send(Data(request.utf8), on: connection)
-            // Read messages until one carries the reply id. Notifications and
-            // mismatched ids are skipped; oversize messages fail the call.
-            while true {
-                let message = try await receiveMessage(from: connection)
-                guard message.count <= hardMessageCap else {
-                    throw TransportError.messageTooLarge
+            try await withPhaseTimeout(nanoseconds: connectTimeoutNanoseconds, onTimeout: {
+                cancellation.cancel()
+            }) {
+                try await start(connection)
+            }
+            return try await roundTrip(
+                on: connection,
+                request: request,
+                wantId: wantId,
+                readTimeoutNanoseconds: readTimeoutNanoseconds,
+                cancellation: cancellation
+            )
+        } onCancel: {
+            cancellation.cancel()
+        }
+    }
+
+    static func roundTrip(
+        on connection: NWConnection,
+        request: String,
+        wantId: Int,
+        readTimeoutNanoseconds: UInt64,
+        cancellation: ConnectionCancellation
+    ) async throws -> Data {
+        try await withTaskCancellationHandler {
+            try await withPhaseTimeout(nanoseconds: readTimeoutNanoseconds, onTimeout: {
+                cancellation.cancel()
+            }) {
+                try await send(Data(request.utf8), on: connection)
+                while true {
+                    let message = try await receiveMessage(from: connection)
+                    guard message.count <= hardMessageCap else {
+                        throw TransportError.messageTooLarge
+                    }
+                    guard messageId(in: message) == wantId else { continue }
+                    return message
                 }
-                guard messageId(in: message) == wantId else { continue }
-                return message
             }
         } onCancel: {
             cancellation.cancel()
+        }
+    }
+
+    static func withPhaseTimeout<Value: Sendable>(
+        nanoseconds: UInt64,
+        onTimeout: @escaping @Sendable () -> Void = {},
+        operation: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        try await withThrowingTaskGroup(of: Value.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: nanoseconds)
+                onTimeout()
+                throw TransportError.timeout
+            }
+            guard let first = try await group.next() else { throw TransportError.connectionFailed }
+            group.cancelAll()
+            return first
         }
     }
 
@@ -149,12 +206,60 @@ nonisolated enum ElectrumXTransport {
         guard let chain = SecTrustCopyCertificateChain(secTrust) as? [SecCertificate],
               let leaf = chain.first,
               let key = SecCertificateCopyKey(leaf),
-              let spki = SecKeyCopyExternalRepresentation(key, nil) as? Data
+              let spki = subjectPublicKeyInfo(for: key)
         else { return nil }
         return Data(SHA256.hash(data: spki))
     }
 
-    private static func start(_ connection: NWConnection) async throws {
+    /// SecKey returns PKCS#1 for RSA and X9.63 for EC public keys. Curl's
+    /// pinned-public-key contract hashes the enclosing DER SPKI instead.
+    static func subjectPublicKeyInfo(for key: SecKey) -> Data? {
+        guard let external = SecKeyCopyExternalRepresentation(key, nil) as? Data,
+              let attributes = SecKeyCopyAttributes(key) as? [String: Any],
+              let keyType = attributes[kSecAttrKeyType as String] as? String,
+              let bits = attributes[kSecAttrKeySizeInBits as String] as? NSNumber
+        else { return nil }
+
+        let algorithm: Data
+        if keyType == (kSecAttrKeyTypeRSA as String) {
+            algorithm = Data([0x30, 0x0d, 0x06, 0x09,
+                              0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
+                              0x05, 0x00])
+        } else if keyType == (kSecAttrKeyTypeECSECPrimeRandom as String) {
+            let curveOID: [UInt8]
+            switch bits.intValue {
+            case 256: curveOID = [0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]
+            case 384: curveOID = [0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22]
+            case 521: curveOID = [0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x23]
+            default: return nil
+            }
+            algorithm = der(0x30, contents: Data(
+                [0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01] + curveOID
+            ))
+        } else {
+            return nil
+        }
+        let bitString = der(0x03, contents: Data([0]) + external)
+        return der(0x30, contents: algorithm + bitString)
+    }
+
+    private static func der(_ tag: UInt8, contents: Data) -> Data {
+        var result = Data([tag])
+        let length = contents.count
+        if length < 128 {
+            result.append(UInt8(length))
+        } else {
+            var bigEndian = UInt(length).bigEndian
+            let bytes = withUnsafeBytes(of: &bigEndian) { Data($0) }
+            let significant = bytes.drop(while: { $0 == 0 })
+            result.append(0x80 | UInt8(significant.count))
+            result.append(contentsOf: significant)
+        }
+        result.append(contentsOf: contents)
+        return result
+    }
+
+    static func start(_ connection: NWConnection) async throws {
         let gate = ThrowingContinuationGate<Void>()
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             gate.install(continuation)
@@ -194,7 +299,7 @@ nonisolated enum ElectrumXTransport {
         }
     }
 
-    private static func receiveMessage(from connection: NWConnection) async throws -> Data {
+    static func receiveMessage(from connection: NWConnection) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             connection.receiveMessage { data, _, _, error in
                 if let error {
@@ -313,7 +418,7 @@ nonisolated enum ElectrumXTransport {
 /// exists solely so task cancellation can close the connection across
 /// isolation domains. Same pattern as PinnedHTTPSFetcher's.
 // swiftlint:disable:next no_unchecked_sendable
-nonisolated private final class ConnectionCancellation: @unchecked Sendable {
+nonisolated final class ConnectionCancellation: @unchecked Sendable {
     private let connection = Mutex<NWConnection?>(nil)
 
     init(connection: NWConnection) {

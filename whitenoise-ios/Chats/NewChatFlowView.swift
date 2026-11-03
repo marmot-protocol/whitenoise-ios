@@ -596,6 +596,24 @@ struct RecipientResolutionSection: View {
                         systemImage: "wifi.exclamationmark"
                     )
                     .foregroundStyle(.secondary)
+                    if let diagnostic = query.namecoinDiagnostic, !diagnostic.isEmpty {
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(diagnostic)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            WNCopyButton(
+                                value: diagnostic,
+                                accessibilityTitle: L10n.string("Copy diagnostics")
+                            ) { copied in
+                                WNCopyIcon(copied: copied)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(.rect)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
                 } else {
                     Label("Couldn't check that address.", systemImage: "wifi.exclamationmark")
                         .foregroundStyle(.secondary)

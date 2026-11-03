@@ -343,6 +343,31 @@ struct NamecoinResolverTests {
 
     // MARK: - nameShow pipeline over a stubbed transport
 
+    @Test func currentServersKeepTrustPerEndpoint() {
+        let servers = NamecoinResolver.defaultServers
+        #expect(servers.map(\.host) == [
+            "electrumx.testls.space",
+            "nmc2.bitcoins.sk",
+            "46.229.238.187",
+            "relay.testls.bit",
+            "23.158.233.10",
+            "electrumx2.testls.space",
+        ])
+        #expect(servers.map(\.port) == [50002, 57002, 57002, 50012, 50012, 50002])
+        #expect(servers[0].pinnedPublicKeySHA256 == nil)
+        #expect(servers[5].pinnedPublicKeySHA256 == nil)
+        let nmcPin = servers[1].pinnedPublicKeySHA256
+        let relayPin = servers[3].pinnedPublicKeySHA256
+        #expect(nmcPin == "tkCCQ6AZPqU4Te1poKHeS5l/CRWYHz5n7J4LH22/LxQ=")
+        #expect(relayPin == "Y9Zu+VV8eoqOBanmpk5QzJtnHwqzxb0ynJGiMRKVJBw=")
+        #expect(servers[2].pinnedPublicKeySHA256 == nmcPin)
+        #expect(servers[4].pinnedPublicKeySHA256 == relayPin)
+        #expect(nmcPin != relayPin)
+        #expect(servers[2].tlsServerName == "nmc2.bitcoins.sk")
+        #expect(servers[4].tlsServerName == "relay.testls.bit")
+        #expect(!servers.contains { $0.host == "electrum.nmc.ethicnology.com" })
+    }
+
     @Test func nameShowWalksHistoryToValue() async {
         let name = "d/example"
         let valueJSON = "{\"nostr\":{\"pubkey\":\"\(String(repeating: "f", count: 64))\"}}"
@@ -413,28 +438,20 @@ struct NamecoinResolverTests {
         #expect(result == .notFound)
     }
 
-    @Test func fallbackLatchesDefinitiveMissButPrefersValue() async {
-        // First server definitively misses, second errors transport-level,
-        // third has the value: the value must win (fresher indexing).
+    @Test func failureLaunchesNextServerAndPositiveWins() async {
         let name = "d/example"
         let valueJSON = "{\"nostr\":\"\(String(repeating: "1", count: 64))\"}"
         let voutScript = nameVoutScript(name: name, value: valueJSON)
         let servers = [
-            ElectrumXTransport.Server(host: "miss.test", port: 1, pinnedPublicKeySHA256: ""),
             ElectrumXTransport.Server(host: "fail.test", port: 1, pinnedPublicKeySHA256: ""),
             ElectrumXTransport.Server(host: "hit.test", port: 1, pinnedPublicKeySHA256: ""),
+            ElectrumXTransport.Server(host: "miss.test", port: 1, pinnedPublicKeySHA256: ""),
         ]
         let roundTrip: NamecoinResolver.RoundTrip = { server, _, wantId in
             switch server.host {
-            case "miss.test":
-                switch wantId {
-                case 1: return Data("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[\"t\",\"1.4\"]}".utf8)
-                case 2: return Data("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":[]}".utf8)
-                default: throw ElectrumXTransport.TransportError.noMatchingReply
-                }
             case "fail.test":
                 throw ElectrumXTransport.TransportError.timeout
-            default: // hit.test
+            default: // miss.test is not launched after the fast positive.
                 switch wantId {
                 case 1: return Data("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[\"t\",\"1.4\"]}".utf8)
                 case 2: return Data("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":[{\"tx_hash\":\"ab\",\"height\":1}]}".utf8)
@@ -450,14 +467,103 @@ struct NamecoinResolverTests {
         let result = await NamecoinResolver.nameShowWithFallback(name, servers: servers, roundTrip: roundTrip)
         #expect(result == .value(valueJSON))
 
-        // Miss + transport failure only: the latched miss wins over
-        // unavailability (a definitive answer exists).
-        let missThenFail = await NamecoinResolver.nameShowWithFallback(
+    }
+
+    @Test func slowPositiveBeatsFastNegativeDuringGrace() async {
+        let name = "d/example"
+        let value = "{\"nostr\":\"\(String(repeating: "1", count: 64))\"}"
+        let recorder = NamecoinAttemptRecorder()
+        let positive = stubbedNameValues([name: value])
+        let negative = stubbedNameValues([:])
+        let roundTrip: NamecoinResolver.RoundTrip = { server, request, id in
+            await recorder.start(server.host)
+            if server.host == "slow-positive.test" {
+                // Deliberate socket-latency model, not a condition wait.
+                if id == 1 {
+                    // swiftlint:disable:next no_test_sleep
+                    try await Task.sleep(nanoseconds: 60_000_000)
+                }
+                return try await positive(server, request, id)
+            }
+            return try await negative(server, request, id)
+        }
+        let result = await NamecoinResolver.hedgedNameShow(
             name,
-            servers: Array(servers.prefix(2)),
-            roundTrip: roundTrip
+            servers: [
+                .init(host: "slow-positive.test", port: 1, pinnedPublicKeySHA256: ""),
+                .init(host: "fast-negative.test", port: 1, pinnedPublicKeySHA256: ""),
+                .init(host: "must-not-start.test", port: 1, pinnedPublicKeySHA256: ""),
+            ],
+            roundTrip: roundTrip,
+            hedgeDelayNanoseconds: 10_000_000,
+            negativeGraceNanoseconds: 150_000_000,
+            overallTimeoutNanoseconds: 1_000_000_000
         )
-        #expect(missThenFail == .notFound)
+        #expect(result == .value(value))
+        #expect(await recorder.hosts == ["slow-positive.test", "fast-negative.test"])
+    }
+
+    @Test func negativeStopsLaunchesAndExpiresGrace() async {
+        let recorder = NamecoinAttemptRecorder()
+        let negative = stubbedNameValues([:])
+        let roundTrip: NamecoinResolver.RoundTrip = { server, request, id in
+            await recorder.start(server.host)
+            if server.host == "slow.test", id == 1 {
+                // Deliberate stalled-attempt model, cancelled by the grace deadline.
+                // swiftlint:disable:next no_test_sleep
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+            return try await negative(server, request, id)
+        }
+        let result = await NamecoinResolver.hedgedNameShow(
+            "d/example",
+            servers: [
+                .init(host: "slow.test", port: 1, pinnedPublicKeySHA256: ""),
+                .init(host: "negative.test", port: 1, pinnedPublicKeySHA256: ""),
+                .init(host: "must-not-start.test", port: 1, pinnedPublicKeySHA256: ""),
+            ],
+            roundTrip: roundTrip,
+            hedgeDelayNanoseconds: 10_000_000,
+            negativeGraceNanoseconds: 30_000_000,
+            overallTimeoutNanoseconds: 1_000_000_000
+        )
+        #expect(result == .notFound)
+        #expect(await recorder.hosts == ["slow.test", "negative.test"])
+    }
+
+    @Test func emptyServerListIsUnavailable() async {
+        let result = await NamecoinResolver.nameShowWithFallback(
+            "d/example", servers: [], roundTrip: failingRoundTrip
+        )
+        #expect(result == .unavailable)
+    }
+
+    @Test func overallDeadlineCancelsStalledAttempts() async {
+        let stalled: NamecoinResolver.RoundTrip = { _, _, _ in
+            // Deliberate non-answering server, cancelled by the overall budget.
+            // swiftlint:disable:next no_test_sleep
+            try await Task.sleep(nanoseconds: 5_000_000_000)
+            throw ElectrumXTransport.TransportError.timeout
+        }
+        let result = await NamecoinResolver.hedgedNameShow(
+            "d/example",
+            servers: [server],
+            roundTrip: stalled,
+            hedgeDelayNanoseconds: 1_500_000_000,
+            negativeGraceNanoseconds: 1_500_000_000,
+            overallTimeoutNanoseconds: 30_000_000
+        )
+        #expect(result == .unavailable)
+    }
+
+    @Test func transportFailureDiagnosticNamesEndpointAndRPCStage() async {
+        let attempt = await NamecoinResolver.nameShowAttempt(
+            "d/example", server: server, roundTrip: failingRoundTrip
+        )
+        #expect(attempt.value == .unavailable)
+        #expect(attempt.diagnostics.count == 1)
+        #expect(attempt.diagnostics[0].contains("electrumx.test:50004 server.version"))
+        #expect(attempt.diagnostics[0].contains("timeout"))
     }
 
     @Test func unavailableOnlyWhenEveryServerFailsTransport() async {
@@ -578,5 +684,12 @@ struct NamecoinResolverTests {
 
     private var failingRoundTrip: NamecoinResolver.RoundTrip {
         { _, _, _ in throw ElectrumXTransport.TransportError.timeout }
+    }
+}
+
+private actor NamecoinAttemptRecorder {
+    private(set) var hosts: [String] = []
+    func start(_ host: String) {
+        if !hosts.contains(host) { hosts.append(host) }
     }
 }

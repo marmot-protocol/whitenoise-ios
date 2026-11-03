@@ -15,6 +15,7 @@ final class RecipientQueryModel {
 
     var text = ""
     private(set) var resolution: RecipientResolutionState = .idle
+    private(set) var namecoinDiagnostic: String?
 
     private var resolveTask: Task<Void, Never>?
     private var resolveGeneration = 0
@@ -78,12 +79,14 @@ final class RecipientQueryModel {
         resolveGeneration += 1
         text = ""
         resolution = .idle
+        namecoinDiagnostic = nil
     }
 
     func queryChanged(using appState: AppState) {
         resolveTask?.cancel()
         resolveTask = nil
         resolveGeneration += 1
+        namecoinDiagnostic = nil
         let generation = resolveGeneration
         switch RecipientIdentifierQuery.classify(text) {
         case .none:
@@ -124,12 +127,19 @@ final class RecipientQueryModel {
     ) async {
         try? await debounce()
         guard !Task.isCancelled else { return }
+        let outcome: NamecoinResolver.ResolutionOutcome
 #if DEBUG
-        let resolve = namecoinResolverForTesting ?? { await NamecoinResolver.resolve($0) }
+        if let resolve = namecoinResolverForTesting {
+            outcome = NamecoinResolver.ResolutionOutcome(
+                resolution: await resolve(identifier), diagnostic: nil
+            )
+        } else {
+            outcome = await NamecoinResolver.resolveWithDiagnostics(identifier)
+        }
 #else
-        let resolve = { await NamecoinResolver.resolve($0) }
+        outcome = await NamecoinResolver.resolveWithDiagnostics(identifier)
 #endif
-        let result = await resolve(identifier)
+        let result = outcome.resolution
         guard !Task.isCancelled else { return }
         switch result {
         case .resolved(let resolved):
@@ -147,6 +157,7 @@ final class RecipientQueryModel {
         case .notFound:
             adopt(.noProfile, generation: generation)
         case .unavailable:
+            if resolveGeneration == generation { namecoinDiagnostic = outcome.diagnostic }
             adopt(.failed, generation: generation)
         }
     }
