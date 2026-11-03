@@ -45,7 +45,13 @@ final class IdentityViewModel {
     }
 
     var rawKeyRequest: RawKeyRequest?
-    var showEncryptedExportSheet = false
+    var showEncryptedExportSheet = false {
+        didSet {
+            // Cancel and swipe dismissal must clear the sheet's error before
+            // the underlying form becomes visible during the animation.
+            if !showEncryptedExportSheet { exportError = nil }
+        }
+    }
     var exportShareText: String?
     private var pendingEncryptedShareText: String?
     private(set) var revealedNsec: String?
@@ -56,12 +62,14 @@ final class IdentityViewModel {
     var exportError: String?
     private var presentationID = UUID()
 
+    /// Captures the account and presentation for consent without accessing its secret.
     func requestRawKey(_ action: RawKeyAction, using appState: AppState) {
         guard !exportInFlight, let accountRef = appState.activeAccountRef else { return }
         exportError = nil
         rawKeyRequest = RawKeyRequest(action: action, accountRef: accountRef, presentationID: presentationID)
     }
 
+    /// Runs a confirmed action and discards results if its account or screen changed.
     func performRawKeyRequest(_ request: RawKeyRequest, using appState: AppState) async {
         guard !exportInFlight, appState.activeAccountRef == request.accountRef,
               presentationID == request.presentationID else { return }
@@ -104,6 +112,8 @@ final class IdentityViewModel {
         revealedNsec = nil
     }
 
+    /// Prepares an encrypted backup, retaining failures in the sheet and staging
+    /// successful sharing until the password sheet finishes dismissing.
     func exportEncryptedNsec(passphrase: String, using appState: AppState) async {
         guard !exportInFlight, let accountRef = appState.activeAccountRef else { return }
         let requestID = presentationID
@@ -135,7 +145,6 @@ final class IdentityViewModel {
     func encryptedSheetDismissed() {
         exportShareText = pendingEncryptedShareText
         pendingEncryptedShareText = nil
-        exportError = nil
     }
 
     func clearPresentation() {

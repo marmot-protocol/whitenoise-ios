@@ -84,6 +84,7 @@ private struct NativeGrayButton: UIViewRepresentable {
         return button
     }
 
+    /// Updates changed content or enabled state without replaying label animations.
     func updateUIView(_ button: UIButton, context: Context) {
         context.coordinator.action = action
         let content = ConfigurationContent(
@@ -113,6 +114,7 @@ private struct NativeGrayButton: UIViewRepresentable {
         }
     }
 
+    /// Keeps native button styling and label geometry when a spinner replaces content.
     private func makeConfiguration() -> UIButton.Configuration {
         var configuration: UIButton.Configuration = backgroundColor == nil ? .gray() : .filled()
         if let backgroundColor {

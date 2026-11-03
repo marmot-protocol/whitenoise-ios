@@ -76,6 +76,7 @@ struct IdentityView: View {
         .onDisappear { model.clearPresentation() }
     }
 
+    /// Offers the shareable npub when available, without falling back to account hex.
     private func publicKeySection(accountIdHex: String) -> some View {
         Section {
             if let npub = appState.npub(forAccountIdHex: accountIdHex) {
@@ -89,11 +90,14 @@ struct IdentityView: View {
                         .accessibilityValue(IdentityFormatter.short(npub))
                     WNCopyButton(value: npub, accessibilityTitle: L10n.formatted("Copy %@", L10n.string("Public Key"))) { copied in
                         WNCopyIcon(copied: copied)
+                            .frame(width: WNInputMetrics.accessoryTarget, height: WNInputMetrics.accessoryTarget)
                             .contentShape(.rect)
                     }
                     .buttonStyle(.borderless)
                     .tint(.primary)
                 }
+                .frame(minHeight: WNInputMetrics.height)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: WNInputMetrics.trailingInset))
                 .wnGroupedCardRow(.only)
             } else {
                 Text("Unavailable")
