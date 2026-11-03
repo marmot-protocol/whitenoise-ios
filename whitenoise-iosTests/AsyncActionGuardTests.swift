@@ -8,9 +8,11 @@ struct AsyncActionGuardTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let model = IdentityViewModel()
+        model.requestRawKey(.export, using: appState)
+        let request = try #require(model.rawKeyRequest)
 
         model.exportInFlight = true
-        await model.exportRawNsec(using: appState)
+        await model.performRawKeyRequest(request, using: appState)
 
         #expect(model.exportInFlight)
         #expect(model.exportError == nil)
