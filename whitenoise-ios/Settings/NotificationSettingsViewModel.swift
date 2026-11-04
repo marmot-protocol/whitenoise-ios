@@ -16,7 +16,6 @@ protocol NotificationSettingsViewModelDataSource: AnyObject {
     func setLocalNotificationsEnabled(_ enabled: Bool) async throws -> NotificationSettingsFfi
     func setNativePushEnabled(_ enabled: Bool) async throws -> NotificationSettingsFfi
     func syncNativePushRegistration(accountRef: String) async throws -> PushRegistrationFfi
-    func present(_ toast: Toast)
 }
 
 extension AppState: NotificationSettingsViewModelDataSource {
@@ -31,10 +30,6 @@ extension AppState: NotificationSettingsViewModelDataSource {
     func refreshNotificationApnsToken() async throws -> String {
         try await notifications.refreshApnsToken()
     }
-}
-
-extension NotificationSettingsViewModelDataSource {
-    func present(_ toast: Toast) {}
 }
 
 /// Keeps action results account-scoped after awaits: a result produced for one
@@ -68,8 +63,19 @@ final class NotificationSettingsViewModel {
     var settings: NotificationSettingsFfi?
     var registration: PushRegistrationFfi?
     var authorizationStatus: UNAuthorizationStatus = .notDetermined
-    var errorMessage: String?
-    var savedAt: Date?
+    enum Action: Hashable {
+        case localNotifications, nativePush, setup
+    }
+
+    private(set) var activeAction: Action?
+    private(set) var actionErrors: [Action: String] = [:]
+    private(set) var hasLoadedAuthorization = false
+    private var hasFinishedLoading = false
+    private var reloadsInFlight = 0
+    private var feedbackAccountRef: String?
+
+    // Keep loaded rows and setup feedback stable during a refresh.
+    var isLoading: Bool { !hasFinishedLoading || (settings == nil && reloadsInFlight > 0) }
 
     /// Per-device, so it is read from shared defaults rather than from the
     /// account-scoped `settings` this screen otherwise renders.
@@ -120,8 +126,8 @@ final class NotificationSettingsViewModel {
     /// so the view can disable controls and show progress.
     var isSaving: Bool { actionGate.isRunning }
 
-    var nativePushToggleDisabled: Bool {
-        guard !isSaving, let settings else { return true }
+    var nativePushToggleUnavailable: Bool {
+        guard let settings else { return true }
         if settings.nativePushEnabled {
             return false
         }
@@ -145,14 +151,29 @@ final class NotificationSettingsViewModel {
     /// Returns early without side effects when an action is already running, so
     /// rapid taps or re-entrant calls cannot start overlapping mutations.
     private func runSaving(
+        _ action: Action,
         using appState: any NotificationSettingsViewModelDataSource,
         _ body: () async -> Void
     ) async {
         guard actionGate.tryBegin() else { return }
-        errorMessage = nil
+        prepareFeedback(for: appState.activeAccountRef)
+        activeAction = action
+        actionErrors[action] = nil
         await body()
+        activeAction = nil
         actionGate.end()
         await drainDeferredReload(using: appState)
+    }
+
+    private func prepareFeedback(for accountRef: String?) {
+        guard feedbackAccountRef != accountRef else { return }
+        feedbackAccountRef = accountRef
+        actionErrors.removeAll()
+    }
+
+    /// The screen also observes APNS token/server availability, including recovery outside a settings action.
+    func clearResolvedSetupError() {
+        actionErrors[.setup] = nil
     }
 
     private func requestReloadAfterAction() {
@@ -188,9 +209,14 @@ final class NotificationSettingsViewModel {
     }
 
     func reload(using appState: any NotificationSettingsViewModelDataSource) async {
+        prepareFeedback(for: appState.activeAccountRef)
         guard let reloadTicket = actionGate.reloadTicket() else {
             requestReloadAfterAction()
             return
+        }
+        reloadsInFlight += 1
+        defer {
+            reloadsInFlight -= 1
         }
         if let previewDefaults {
             previewMode = NotificationPreviewStore.mode(defaults: previewDefaults)
@@ -207,9 +233,11 @@ final class NotificationSettingsViewModel {
             return
         }
         authorizationStatus = reloadedAuthorizationStatus
+        hasLoadedAuthorization = true
         guard let accountRef else {
             settings = nil
             registration = nil
+            hasFinishedLoading = true
             return
         }
         let reloadedSettings = await appState.notificationSettings(for: accountRef)
@@ -224,10 +252,11 @@ final class NotificationSettingsViewModel {
             return
         }
         registration = reloadedRegistration
+        hasFinishedLoading = true
     }
 
     func setLocalNotifications(_ enabled: Bool, using appState: any NotificationSettingsViewModelDataSource) async {
-        await runSaving(using: appState) {
+        await runSaving(.localNotifications, using: appState) {
             let accountRef = appState.activeAccountRef
             do {
                 let updatedSettings = try await appState.setLocalNotificationsEnabled(enabled)
@@ -235,24 +264,19 @@ final class NotificationSettingsViewModel {
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 settings = updatedSettings
                 authorizationStatus = updatedAuthorizationStatus
-                savedAt = Date()
                 Haptics.success()
-                appState.present(.success(L10n.string("Done")))
             } catch {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
-                appState.present(UserFacingError.toast(
-                    title: L10n.string("Notification failed"),
-                    error: error
-                ))
+                actionErrors[.localNotifications] = UserFacingError.message(for: error)
             }
         }
     }
 
     func setNativePush(_ enabled: Bool, using appState: any NotificationSettingsViewModelDataSource) async {
-        await runSaving(using: appState) {
+        await runSaving(.nativePush, using: appState) {
             let accountRef = appState.activeAccountRef
             do {
                 let updatedSettings = try await appState.setNativePushEnabled(enabled)
@@ -275,24 +299,21 @@ final class NotificationSettingsViewModel {
                 } else {
                     registration = nil
                 }
-                savedAt = Date()
+                // Enabling completes registration; disabling makes setup unnecessary.
+                actionErrors[.setup] = nil
                 Haptics.success()
-                appState.present(.success(L10n.string("Done")))
             } catch {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
-                appState.present(UserFacingError.toast(
-                    title: L10n.string("Notification failed"),
-                    error: error
-                ))
+                actionErrors[.nativePush] = UserFacingError.message(for: error)
             }
         }
     }
 
     func requestApnsToken(using appState: any NotificationSettingsViewModelDataSource) async {
-        await runSaving(using: appState) {
+        await runSaving(.setup, using: appState) {
             let accountRef = appState.activeAccountRef
             do {
                 let granted = try await appState.requestNotificationAuthorizationAndRegister()
@@ -300,65 +321,50 @@ final class NotificationSettingsViewModel {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
-                savedAt = Date()
                 requestReloadAfterAction()
                 Haptics.success()
-                appState.present(.success(L10n.string("Done")))
             } catch {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
-                appState.present(UserFacingError.toast(
-                    title: L10n.string("Notification failed"),
-                    error: error
-                ))
+                actionErrors[.setup] = UserFacingError.message(for: error)
             }
         }
     }
 
     func refreshApnsToken(using appState: any NotificationSettingsViewModelDataSource) async {
-        await runSaving(using: appState) {
+        await runSaving(.setup, using: appState) {
             let accountRef = appState.activeAccountRef
             do {
                 _ = try await appState.refreshNotificationApnsToken()
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
-                savedAt = Date()
                 requestReloadAfterAction()
                 Haptics.success()
-                appState.present(.success(L10n.string("Done")))
             } catch {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
-                appState.present(UserFacingError.toast(
-                    title: L10n.string("Notification failed"),
-                    error: error
-                ))
+                actionErrors[.setup] = UserFacingError.message(for: error)
             }
         }
     }
 
     func syncNativeRegistration(using appState: any NotificationSettingsViewModelDataSource) async {
-        await runSaving(using: appState) {
+        await runSaving(.setup, using: appState) {
             guard let accountRef = appState.activeAccountRef else { return }
             do {
                 let updatedRegistration = try await appState.syncNativePushRegistration(accountRef: accountRef)
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 registration = updatedRegistration
-                savedAt = Date()
                 Haptics.success()
-                appState.present(.success(L10n.string("Done")))
             } catch {
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 Haptics.error()
-                appState.present(UserFacingError.toast(
-                    title: L10n.string("Notification failed"),
-                    error: error
-                ))
+                actionErrors[.setup] = UserFacingError.message(for: error)
             }
         }
     }
