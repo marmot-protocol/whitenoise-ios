@@ -469,12 +469,14 @@ struct AvatarRemoteImage: View {
     }
 
     private func opaqueAvatarImage(_ image: UIImage) -> some View {
-        ZStack {
-            Color(uiColor: .systemBackground)
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        }
+        // The Color keeps the proposed size. A ZStack would grow to the image's
+        // fill size, and the GeometryReader above would pin it to its top leading corner.
+        Color(uiColor: .systemBackground)
+            .overlay {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            }
     }
 
     private func load(_ request: AvatarRemoteImageRequest) async {
