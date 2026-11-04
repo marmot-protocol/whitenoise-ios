@@ -257,6 +257,8 @@ extension KeyPackagesViewModelTests {
         #expect(model.relayHistory.isEmpty)
         if step == .local {
             #expect(model.packages.isEmpty)
+        } else {
+            expectShowing(model, runtime.packageId(for: "account", version: 1))
         }
         #expect(!model.isLoading)
     }
