@@ -409,6 +409,18 @@ func maintenanceStatus(currentKeyPackage record: AccountKeyPackageFfi) -> KeyPac
         pendingLastFailureCode: nil)
 }
 
+/// Profile metadata with only a display name.
+func profileMetadata(displayName: String) -> UserProfileMetadataFfi {
+    UserProfileMetadataFfi(
+        name: nil,
+        displayName: displayName,
+        about: nil,
+        picture: nil,
+        nip05: nil,
+        lud16: nil
+    )
+}
+
 func accountSummary(_ label: String, byte: String, signedOut: Bool = false) -> AccountSummaryFfi {
     AccountSummaryFfi(label: label, accountIdHex: hex(byte), localSigning: true, signedOut: signedOut,
                       running: !signedOut)
