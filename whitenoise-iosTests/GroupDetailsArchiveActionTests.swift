@@ -617,7 +617,8 @@ struct GroupDetailsArchiveActionTests {
             var disbandCount = 0
 
             model.conversation = conversation
-            marmot.enableGroupDisbanding = { _, _ in
+            marmot.enableGroupDisbanding = { accountRef, enabledGroupIdHex in
+                #expect(accountRef == "account-1" && enabledGroupIdHex == groupIdHex)
                 enableCount += 1
                 return GroupMutationResultFfi(
                     summary: SendSummaryFfi(published: 1, messageIds: ["enable"]),
