@@ -117,7 +117,7 @@ struct PresentedChatListTests {
         #expect(model.items.first?.avatarAsset == nil)
     }
 
-    @Test func boundedReplacementEvictsRowsWithoutDroppingTheOpenDestinationOrChangingBadges() throws {
+    @Test func boundedReplacementEvictsRowsWithoutDroppingTheOpenDestinationOrChangingBadges() async throws {
         let appState = AppState.test()
         let account = AccountSummaryFfi(label: "account", accountIdHex: "owner", localSigning: true, signedOut: false, running: true)
         appState.accountStore.accounts = [account]
@@ -128,7 +128,6 @@ struct PresentedChatListTests {
                 )))
             ]
         ))
-        let model = ChatsListViewModel(appState: appState)
         func snapshot(_ range: Range<Int>, sequence: UInt64, generation: String = "window") -> ChatListWindowSnapshotFfi {
             ChatListWindowSnapshotFfi(
                 subscriptionGeneration: generation, sequence: sequence, view: .chats,
@@ -137,19 +136,32 @@ struct PresentedChatListTests {
                 anchor: .retained(groupIdHex: String(range.lowerBound), index: 0)
             )
         }
-        model.attachWindowForTesting(snapshot(0..<200, sequence: 0))
+        let feed = ChatListWindowFeedDouble(initial: snapshot(0..<200, sequence: 0))
+        let projection = ChatListProjectionDouble()
+        projection.openWindow = { _, _ in feed }
+        let model = ChatsListViewModel(appState: appState, projectionClient: { _ in projection })
+        appState.setAppSceneActive(true)
+        await model.bind(accountRef: "owner", mode: .window(.chats))
+        try await eventually { model.items.count == 200 }
         model.retainDestination(groupIdHex: "0")
-        model.receiveWindowForTesting(snapshot(50..<250, sequence: 1))
+        feed.send(snapshot(50..<250, sequence: 1))
+        try await eventually { model.item(groupIdHex: "249") != nil }
         #expect(model.items.count == 200)
         #expect(!model.items.contains { $0.id == "0" })
         #expect(model.item(groupIdHex: "0")?.title == "Chat 0")
         #expect(model.item(groupIdHex: "1") == nil)
-        model.receiveWindowForTesting(snapshot(0..<50, sequence: 0))
-        model.receiveWindowForTesting(snapshot(0..<50, sequence: 99, generation: "old-handle"))
+        // A stale sequence and an old handle's generation are both ignored.
+        feed.enqueueCommandResult(snapshot(0..<50, sequence: 0))
+        await model.returnWindowToTop()
+        feed.enqueueCommandResult(snapshot(0..<50, sequence: 99, generation: "old-handle"))
+        await model.returnWindowToTop()
+        #expect(feed.unusedCommandResults == 0)
         #expect(model.items.count == 200)
+        #expect(model.item(groupIdHex: "249") != nil)
         #expect(appState.accountUnreadBadgeCount(forAccountIdHex: "owner") == 501)
         model.removeChatListRow(groupIdHex: "0")
         #expect(model.item(groupIdHex: "0") == nil)
+        await model.bind(accountRef: nil)
     }
 
     @Test func snapshotTimingWaitsForDeferredPresentationAndRequiresConsent() async throws {
@@ -174,19 +186,22 @@ struct PresentedChatListTests {
             let appState = AppState.test(client: client)
             appState.setPhase(.ready)
             appState.setAppSceneActive(true)
-            let model = ChatsListViewModel(appState: appState)
+            let projection = ChatListProjectionDouble()
+            let model = ChatsListViewModel(appState: appState, projectionClient: { _ in projection })
             await model.bind(accountRef: "account")
             let row = chatListRow(groupIdHex: "created", title: "Created chat")
             appState.noteCreatedChatListRow(accountRef: "account", row: row)
-            model.presentedRowForTesting = { account, group in
+            var reads = 0
+            projection.presentedRow = { [weak model] account, group in
+                reads += 1
                 #expect(account == "account" && group == "created")
-                #expect(model.item(groupIdHex: group)?.title == "Created chat")
+                #expect(model?.item(groupIdHex: group)?.title == "Created chat")
                 return nil
             }
             appState.presentChat(groupIdHex: row.groupIdHex)
             await model.refreshRow(groupIdHex: row.groupIdHex)
+            #expect(reads > 0)
             #expect(model.item(groupIdHex: row.groupIdHex)?.title == "Created chat")
-            model.presentedRowForTesting = nil
             await model.bind(accountRef: nil)
         }
     }
@@ -197,22 +212,22 @@ struct PresentedChatListTests {
             let appState = AppState.test(client: client)
             appState.setPhase(.ready)
             appState.setAppSceneActive(true)
-            let model = ChatsListViewModel(appState: appState)
+            let projection = ChatListProjectionDouble()
+            let model = ChatsListViewModel(appState: appState, projectionClient: { _ in projection })
             await model.bind(accountRef: "account")
             let selected = ConversationPresentationFfi(
                 title: .literal(text: "Selected title"), avatar: .placeholder(stableSeed: "stable", source: .groupFallback),
                 titleSource: .group, avatarSource: .groupFallback, peerId: nil, resolution: .lastKnown
             )
             let row = chatListRow(groupIdHex: "target", title: "Old title")
-            model.presentedRowForTesting = { _, _ in
-                model.applyChatListRow(chatListRow(groupIdHex: "unrelated", title: "Other chat"))
-                if targetChanges { model.applyChatListRow(chatListRow(groupIdHex: "target", title: "Newer title")) }
+            projection.presentedRow = { [weak model] _, _ in
+                model?.applyChatListRow(chatListRow(groupIdHex: "unrelated", title: "Other chat"))
+                if targetChanges { model?.applyChatListRow(chatListRow(groupIdHex: "target", title: "Newer title")) }
                 return PresentedChatRowFfi(row: row, presentation: selected, avatarAsset: nil)
             }
             await model.refreshRow(groupIdHex: row.groupIdHex)
             #expect(model.item(groupIdHex: row.groupIdHex)?.title == (targetChanges ? "Newer title" : "Selected title"))
             #expect(model.item(groupIdHex: "unrelated") != nil)
-            model.presentedRowForTesting = nil
             await model.bind(accountRef: nil)
         }
     }
