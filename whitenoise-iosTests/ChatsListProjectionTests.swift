@@ -236,15 +236,21 @@ struct ChatsListProjectionTests {
         #expect(viewModel.item(groupIdHex: removed.groupIdHex) == nil)
     }
 
-    @Test func successfulSnapshotClearsPreviousLoadError() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test())
+    @Test func successfulSnapshotClearsPreviousLoadError() async throws {
+        let appState = AppState.test()
+        appState.setAppSceneActive(true)
+        let projection = ChatListProjectionDouble()
+        projection.openWindow = { _, _ in throw URLError(.notConnectedToInternet) }
+        let viewModel = ChatsListViewModel(appState: appState, projectionClient: { _ in projection })
         let row = chatListRow(groupIdHex: hex("a1"), title: "Recovered", updatedAt: 10)
 
-        viewModel.setLoadErrorForTesting("Couldn't load chats")
+        await viewModel.bind(accountRef: "account", mode: .window(.chats))
+        try await eventually { viewModel.loadError != nil }
         viewModel.applyChatListSnapshot([row])
 
         #expect(viewModel.loadError == nil)
         #expect(viewModel.items.map(\.id) == [row.groupIdHex])
+        await viewModel.bind(accountRef: nil)
     }
 
     @Test func presentedSnapshotReplacesQueuedRowEvenWithOlderTimestamp() throws {
