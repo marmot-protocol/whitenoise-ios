@@ -47,19 +47,15 @@ struct MessageMediaCachePurgeTests {
         )
         #expect(!FileManager.default.fileExists(atPath: url.path))
 
-        // A producer whose epoch postdates the purge stores normally. The
-        // epoch is process-global, so tolerate another suite's purge landing
-        // in the capture-to-store window instead of flaking.
-        var storedFresh = false
-        for _ in 0..<3 where !storedFresh {
-            let freshEpoch = MessageMediaCache.currentProducerEpoch()
+        // A producer whose epoch postdates the purge stores normally.
+        let storedFresh = writeWithFreshEpoch { freshEpoch in
             MessageMediaCache.store(
                 Data([0x1]),
                 for: reference,
                 cachesDirectory: root,
                 producerGeneration: freshEpoch
             )
-            storedFresh = FileManager.default.fileExists(atPath: url.path)
+            return FileManager.default.fileExists(atPath: url.path)
         }
         #expect(storedFresh)
 
@@ -94,19 +90,34 @@ struct MessageMediaCachePurgeTests {
         )
         #expect(rejected == nil)
 
-        var freshURL: URL?
-        for _ in 0..<3 where freshURL == nil {
-            freshURL = MediaPlaybackFileStore.fileURL(
+        let storedFresh = writeWithFreshEpoch { freshEpoch in
+            MediaPlaybackFileStore.fileURL(
                 for: item,
                 data: Data([0x2]),
                 cachesDirectory: root,
                 mediaPolicy: .media,
                 playbackPolicy: .playback,
-                producerEpoch: MessageMediaCache.currentProducerEpoch()
-            )
+                producerEpoch: freshEpoch
+            ) != nil
         }
-        #expect(freshURL != nil)
+        #expect(storedFresh)
     }
+}
+
+/// Runs a write with a freshly read producer epoch and reports whether it was
+/// accepted. The epoch is process-global and only grows, and other suites
+/// bump it (purges, deletions, sign-out wipes), so one can land between the
+/// read and the write's check. A rejection is retried only when the epoch
+/// provably moved; a rejection while it held still is a real failure. The
+/// cap is far above the bumps a whole suite run makes, so it only stops a
+/// broken write from looping.
+private func writeWithFreshEpoch(_ write: (Int) -> Bool) -> Bool {
+    for _ in 0..<1_000 {
+        let epoch = MessageMediaCache.currentProducerEpoch()
+        if write(epoch) { return true }
+        if MessageMediaCache.currentProducerEpoch() == epoch { return false }
+    }
+    return false
 }
 
 private func purgeTestReference() -> MediaAttachmentReferenceFfi {
