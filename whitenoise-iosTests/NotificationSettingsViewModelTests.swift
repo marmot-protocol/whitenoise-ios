@@ -135,7 +135,7 @@ struct NotificationSettingsViewModelTests {
     func successfulNativePushChangeClearsResolvedSetupError(enabled: Bool) async throws {
         let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
         let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
-        dataSource.registrationError = NotificationSettingsActionError.permissionDenied
+        dataSource.registrationError = NotificationSettingsActionError.apnsTokenRefreshTimedOut
         await model.syncNativeRegistration(using: dataSource)
         #expect(model.actionErrors[.setup] != nil)
 
@@ -150,7 +150,7 @@ struct NotificationSettingsViewModelTests {
     @Test func failedNativePushChangePreservesUnresolvedSetupError() async throws {
         let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
         let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
-        dataSource.registrationError = NotificationSettingsActionError.permissionDenied
+        dataSource.registrationError = NotificationSettingsActionError.apnsTokenRefreshTimedOut
         await model.syncNativeRegistration(using: dataSource)
         let setupError = try #require(model.actionErrors[.setup])
 
@@ -164,7 +164,7 @@ struct NotificationSettingsViewModelTests {
     @Test func developerFailureUsesItsOwnFeedbackAndClearsOnRetry() async throws {
         let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
         let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
-        dataSource.registrationError = NotificationSettingsActionError.permissionDenied
+        dataSource.registrationError = NotificationSettingsActionError.apnsTokenRefreshTimedOut
 
         await model.syncNativeRegistration(using: dataSource, feedbackAction: .developerSetup)
         #expect(model.actionErrors[.developerSetup] != nil)
@@ -194,6 +194,21 @@ struct NotificationSettingsViewModelTests {
         #expect(model.actionErrors[.localNotifications] == nil)
         #expect(model.actionErrors[.nativePush] == nil)
         #expect(model.settings?.localNotificationsEnabled == true)
+    }
+
+    @Test func grantedPermissionFromAnotherActionClearsPermissionErrors() async {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.authorizationStatus = .denied
+        dataSource.localNotificationsError = NotificationSettingsActionError.permissionDenied
+        await model.setLocalNotifications(true, using: dataSource)
+        #expect(model.actionErrors[.localNotifications] != nil)
+
+        dataSource.authorizationStatus = .authorized
+        await model.setNativePush(true, using: dataSource)
+
+        #expect(model.actionErrors[.localNotifications] == nil)
+        #expect(model.settings?.nativePushEnabled == true)
     }
 
     @Test func actionErrorsDoNotFollowAnAccountSwitch() async {

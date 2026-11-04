@@ -182,6 +182,17 @@ final class NotificationSettingsViewModel {
         await drainDeferredReload(using: appState)
     }
 
+    private func applyAuthorizationStatus(_ status: UNAuthorizationStatus) {
+        authorizationStatus = status
+        switch status {
+        case .authorized, .provisional, .ephemeral:
+            // Either a reload or an action can observe recovery in iOS Settings.
+            actionErrors = actionErrors.filter { !$0.value.isPermissionDenied }
+        default:
+            break
+        }
+    }
+
     private func prepareFeedback(for accountRef: String?) {
         guard feedbackAccountRef != accountRef else { return }
         feedbackAccountRef = accountRef
@@ -249,15 +260,8 @@ final class NotificationSettingsViewModel {
             await deferOrReload(using: appState)
             return
         }
-        authorizationStatus = reloadedAuthorizationStatus
+        applyAuthorizationStatus(reloadedAuthorizationStatus)
         hasLoadedAuthorization = true
-        switch reloadedAuthorizationStatus {
-        case .authorized, .provisional, .ephemeral:
-            // A Settings permission change resolves only permission failures.
-            actionErrors = actionErrors.filter { !$0.value.isPermissionDenied }
-        default:
-            break
-        }
         guard let accountRef else {
             settings = nil
             registration = nil
@@ -287,12 +291,12 @@ final class NotificationSettingsViewModel {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 settings = updatedSettings
-                authorizationStatus = updatedAuthorizationStatus
+                applyAuthorizationStatus(updatedAuthorizationStatus)
                 Haptics.success()
             } catch {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
-                authorizationStatus = updatedAuthorizationStatus
+                applyAuthorizationStatus(updatedAuthorizationStatus)
                 Haptics.error()
                 actionErrors[.localNotifications] = ActionFailure(error)
             }
@@ -313,7 +317,7 @@ final class NotificationSettingsViewModel {
                 }
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 settings = updatedSettings
-                authorizationStatus = updatedAuthorizationStatus
+                applyAuthorizationStatus(updatedAuthorizationStatus)
                 if enabled {
                     if let updatedRegistration {
                         registration = updatedRegistration
@@ -329,7 +333,7 @@ final class NotificationSettingsViewModel {
             } catch {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
-                authorizationStatus = updatedAuthorizationStatus
+                applyAuthorizationStatus(updatedAuthorizationStatus)
                 Haptics.error()
                 actionErrors[.nativePush] = ActionFailure(error)
             }
@@ -347,13 +351,13 @@ final class NotificationSettingsViewModel {
                 guard granted else { throw NotificationSettingsActionError.permissionDenied }
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
-                authorizationStatus = updatedAuthorizationStatus
+                applyAuthorizationStatus(updatedAuthorizationStatus)
                 requestReloadAfterAction()
                 Haptics.success()
             } catch {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
-                authorizationStatus = updatedAuthorizationStatus
+                applyAuthorizationStatus(updatedAuthorizationStatus)
                 Haptics.error()
                 actionErrors[feedbackAction] = ActionFailure(error)
             }
@@ -370,13 +374,13 @@ final class NotificationSettingsViewModel {
                 _ = try await appState.refreshNotificationApnsToken()
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
-                authorizationStatus = updatedAuthorizationStatus
+                applyAuthorizationStatus(updatedAuthorizationStatus)
                 requestReloadAfterAction()
                 Haptics.success()
             } catch {
                 let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
-                authorizationStatus = updatedAuthorizationStatus
+                applyAuthorizationStatus(updatedAuthorizationStatus)
                 Haptics.error()
                 actionErrors[feedbackAction] = ActionFailure(error)
             }
