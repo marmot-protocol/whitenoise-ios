@@ -134,6 +134,18 @@ struct MessagePreviewBodyTests {
         }
     }
 
+    @Test func copyPreservesGiphyShapedCompletedAgentResponse() {
+        let source = "https://media1.giphy.com/media/abc/giphy.mp4?cid=client&rid=giphy.mp4\nvia GIPHY · Creator"
+        let record = message(id: hex("aa"), plaintext: source, tags: [
+            MessageTagFfi(values: [MessageSemantics.streamTag, hex("ab")]),
+            MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("bc")]),
+            MessageTagFfi(values: [MessageSemantics.streamHashTag, hex("cd")]),
+            MessageTagFfi(values: [MessageSemantics.streamChunksTag, "3"]),
+        ])
+
+        #expect(MessagePreview.copyBody(record) == source)
+    }
+
     @Test func tokenlessEditedBodyRendersCanonicalMentionAsDisplayName() throws {
         // MDK emits empty markdown tokens for kind-1009 edits. Once projected
         // onto the original chat row, the body must still render the mention.

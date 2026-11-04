@@ -88,17 +88,23 @@ enum MessagePreview {
         systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
     ) -> String {
         switch MessageSemantics.classify(record) {
-        case .chat, .reply, .streamFinal, .media:
+        case .streamFinal:
+            return copyText(record.plaintext, mentionDisplayName: mentionDisplayName)
+        case .chat, .reply, .media:
             if !record.plaintext.isEmpty {
                 if let label = RemoteGiphyMedia.envelopePreviewText(for: record.plaintext) { return label }
-                return CanonicalMentionDisplayProjection.project(record.plaintext) { npub in
-                    mentionDisplayName?(MarkdownNostrEntityFfi(hrp: .npub, bech32: npub))
-                }.text
+                return copyText(record.plaintext, mentionDisplayName: mentionDisplayName)
             }
         default:
             break
         }
         return body(record, mentionDisplayName: mentionDisplayName, systemEventNaming: systemEventNaming)
+    }
+
+    private static func copyText(_ text: String, mentionDisplayName: MarkdownMentionResolver?) -> String {
+        CanonicalMentionDisplayProjection.project(text) { npub in
+            mentionDisplayName?(MarkdownNostrEntityFfi(hrp: .npub, bech32: npub))
+        }.text
     }
 
     static func body(
