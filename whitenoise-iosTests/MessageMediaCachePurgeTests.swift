@@ -48,7 +48,7 @@ struct MessageMediaCachePurgeTests {
         #expect(!FileManager.default.fileExists(atPath: url.path))
 
         // A producer whose epoch postdates the purge stores normally.
-        let storedFresh = writeWithFreshEpoch { freshEpoch in
+        let freshFailure = freshWriteFailure { freshEpoch in
             MessageMediaCache.store(
                 Data([0x1]),
                 for: reference,
@@ -57,7 +57,7 @@ struct MessageMediaCachePurgeTests {
             )
             return FileManager.default.fileExists(atPath: url.path)
         }
-        #expect(storedFresh)
+        #expect(freshFailure == nil)
 
         // The purge removes what exists and reports it.
         #expect(MessageMediaCache.purgeAllDecryptedMedia(cachesDirectory: root))
@@ -90,7 +90,7 @@ struct MessageMediaCachePurgeTests {
         )
         #expect(rejected == nil)
 
-        let storedFresh = writeWithFreshEpoch { freshEpoch in
+        let freshFailure = freshWriteFailure { freshEpoch in
             MediaPlaybackFileStore.fileURL(
                 for: item,
                 data: Data([0x2]),
@@ -100,24 +100,26 @@ struct MessageMediaCachePurgeTests {
                 producerEpoch: freshEpoch
             ) != nil
         }
-        #expect(storedFresh)
+        #expect(freshFailure == nil)
     }
 }
 
-/// Runs a write with a freshly read producer epoch and reports whether it was
-/// accepted. The epoch is process-global and only grows, and other suites
-/// bump it (purges, deletions, sign-out wipes), so one can land between the
-/// read and the write's check. A rejection is retried only when the epoch
-/// provably moved; a rejection while it held still is a real failure. The
-/// cap is far above the bumps a whole suite run makes, so it only stops a
-/// broken write from looping.
-private func writeWithFreshEpoch(_ write: (Int) -> Bool) -> Bool {
+/// Runs a write with a freshly read producer epoch; nil means it was accepted.
+/// The epoch is process-global and only grows, and other tests, this suite's
+/// parallel siblings included, bump it with purges, cache evictions and
+/// sign-out wipes. A bump can land between the read and the write's check, so
+/// a rejection is retried only when the epoch provably moved; a rejection
+/// while it held still is a real failure. The attempt cap is a defensive
+/// bound against a write path that keeps bumping the epoch itself.
+private func freshWriteFailure(_ write: (Int) -> Bool) -> String? {
     for _ in 0..<1_000 {
         let epoch = MessageMediaCache.currentProducerEpoch()
-        if write(epoch) { return true }
-        if MessageMediaCache.currentProducerEpoch() == epoch { return false }
+        if write(epoch) { return nil }
+        if MessageMediaCache.currentProducerEpoch() == epoch {
+            return "rejected while the epoch held at \(epoch)"
+        }
     }
-    return false
+    return "rejected on every attempt while the epoch kept moving"
 }
 
 private func purgeTestReference() -> MediaAttachmentReferenceFfi {
