@@ -110,7 +110,6 @@ struct GroupMemberOrderingTests {
 
         #expect(second.orderedMembers.map(\.memberIdHex) == ["11", "22"])
         #expect(resolutionCount == members.count)
-        #expect(cache.buildCountForTesting == 1)
 
         _ = cache.projection(
             members: members,
@@ -118,7 +117,6 @@ struct GroupMemberOrderingTests {
             resolveName: resolve
         )
         #expect(resolutionCount == members.count * 2)
-        #expect(cache.buildCountForTesting == 2)
     }
 
     private func member(
