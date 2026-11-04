@@ -47,21 +47,17 @@ struct MessageMediaCachePurgeTests {
         )
         #expect(!FileManager.default.fileExists(atPath: url.path))
 
-        // A producer whose epoch postdates the purge stores normally. The
-        // epoch is process-global, so tolerate another suite's purge landing
-        // in the capture-to-store window instead of flaking.
-        var storedFresh = false
-        for _ in 0..<3 where !storedFresh {
-            let freshEpoch = MessageMediaCache.currentProducerEpoch()
+        // A producer whose epoch postdates the purge stores normally.
+        let freshFailure = freshWriteFailure { freshEpoch in
             MessageMediaCache.store(
                 Data([0x1]),
                 for: reference,
                 cachesDirectory: root,
                 producerGeneration: freshEpoch
             )
-            storedFresh = FileManager.default.fileExists(atPath: url.path)
+            return FileManager.default.fileExists(atPath: url.path)
         }
-        #expect(storedFresh)
+        #expect(freshFailure == nil)
 
         // The purge removes what exists and reports it.
         #expect(MessageMediaCache.purgeAllDecryptedMedia(cachesDirectory: root))
@@ -94,19 +90,36 @@ struct MessageMediaCachePurgeTests {
         )
         #expect(rejected == nil)
 
-        var freshURL: URL?
-        for _ in 0..<3 where freshURL == nil {
-            freshURL = MediaPlaybackFileStore.fileURL(
+        let freshFailure = freshWriteFailure { freshEpoch in
+            MediaPlaybackFileStore.fileURL(
                 for: item,
                 data: Data([0x2]),
                 cachesDirectory: root,
                 mediaPolicy: .media,
                 playbackPolicy: .playback,
-                producerEpoch: MessageMediaCache.currentProducerEpoch()
-            )
+                producerEpoch: freshEpoch
+            ) != nil
         }
-        #expect(freshURL != nil)
+        #expect(freshFailure == nil)
     }
+}
+
+/// Runs a write with a freshly read producer epoch; nil means it was accepted.
+/// The epoch is process-global and only grows, and other tests, this suite's
+/// parallel siblings included, bump it with purges, targeted cache removals
+/// and sign-out wipes. A bump can land between the read and the write's check,
+/// so a failed write is retried only when the epoch moved meanwhile; a failure
+/// while it held still cannot be an epoch race and is real. The attempt cap is
+/// a defensive bound against a write path that keeps bumping the epoch itself.
+private func freshWriteFailure(_ write: (Int) -> Bool) -> String? {
+    for _ in 0..<1_000 {
+        let epoch = MessageMediaCache.currentProducerEpoch()
+        if write(epoch) { return nil }
+        if MessageMediaCache.currentProducerEpoch() == epoch {
+            return "write failed while the epoch held at \(epoch), so not an epoch race"
+        }
+    }
+    return "write failed on every attempt while the epoch kept moving"
 }
 
 private func purgeTestReference() -> MediaAttachmentReferenceFfi {
