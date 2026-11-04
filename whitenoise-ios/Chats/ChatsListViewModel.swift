@@ -293,7 +293,7 @@ final class ChatsListViewModel {
     private(set) var windowSnapshot: ChatListWindowSnapshotFfi?
     private(set) var isPaging = false
     private(set) var pageError: String?
-    @ObservationIgnored private var windowSubscription: ChatListWindowSubscription?
+    @ObservationIgnored private var windowSubscription: (any ChatListWindowFeed)?
     @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
     @ObservationIgnored private var windowCursor: ProjectionSequenceCursor?
     @ObservationIgnored private var destinationItems: [String: Item] = [:]
@@ -317,8 +317,7 @@ final class ChatsListViewModel {
     @ObservationIgnored private var titleFallbackGrace = ChatTitleFallbackGrace()
     @ObservationIgnored private var titleFallbackGraceTask: Task<Void, Never>?
     private var chatListTaskID: UUID?
-    private var avatarURLTask: Task<Void, Never>?
-    private var avatarEnrichmentTaskID: UUID?
+    private var avatarEnrichmentTask = OwnedTask()
     private var pendingChatListUpdateTask: Task<Void, Never>?
     private var currentAccount: String?
     private var rowByGroupId: [String: ChatListRowFfi] = [:]
@@ -348,15 +347,21 @@ final class ChatsListViewModel {
     private static let inviterEnrichmentBatchLimit = 8
     private nonisolated static let inviterLookupFailureLimit = 3
 
-    #if DEBUG
-    @ObservationIgnored var mentionDisplayNameForTesting: MarkdownMentionResolver?
-    @ObservationIgnored var presentedRowForTesting: ((String, String) async throws -> PresentedChatRowFfi?)?
-    @ObservationIgnored private(set) var publishedItemsMutationCountForTesting = 0
-    #endif
+    typealias ProjectionClientResolver = @MainActor (AppState) throws -> any ChatListProjectionClient
 
-    init(appState: AppState) {
+    @ObservationIgnored private let projectionClient: ProjectionClientResolver
+
+    init(
+        appState: AppState,
+        projectionClient: @escaping ProjectionClientResolver = ChatsListViewModel.runtimeProjectionClient
+    ) {
         self.appState = appState
         self.draftStore = appState.conversationDraftStore
+        self.projectionClient = projectionClient
+    }
+
+    private static func runtimeProjectionClient(_ appState: AppState) throws -> any ChatListProjectionClient {
+        try appState.currentMarmotClient()
     }
 
     isolated deinit {
@@ -365,7 +370,7 @@ final class ChatsListViewModel {
         titleFallbackGraceTask?.cancel()
         chatListTask?.cancel()
         windowCommandTask?.cancel()
-        avatarURLTask?.cancel()
+        avatarEnrichmentTask.cancel()
         pendingChatListUpdateTask?.cancel()
     }
 
@@ -406,9 +411,7 @@ final class ChatsListViewModel {
         deferredPresentedSnapshot = nil
         muteExpiryTask?.cancel()
         muteExpiryTask = nil
-        avatarURLTask?.cancel()
-        avatarURLTask = nil
-        avatarEnrichmentTaskID = nil
+        avatarEnrichmentTask.cancel()
         pendingChatListUpdateTask?.cancel()
         pendingChatListUpdateTask = nil
         defersPinOrderSnapshots = false
@@ -460,6 +463,7 @@ final class ChatsListViewModel {
 
     private func startLiveUpdates(accountRef: String) {
         guard let appState else { return }
+        let resolveProjectionClient = projectionClient
         let taskID = UUID()
         chatListTaskID = taskID
         chatListTask = Task { @MainActor [weak self, weak appState] in
@@ -478,13 +482,13 @@ final class ChatsListViewModel {
             while !Task.isCancelled {
                 do {
                     guard let appState, appState.canUseRuntimeForForegroundWork else { return }
-                    let client = try appState.currentMarmotClient()
-                    loadStage = (
-                        self?.listMode == .window(.archived) ? .archivedChatListLoad : .chatListLoad,
-                        appState.productAnalytics.beginTiming()
-                    )
                     if case .window(let view) = self?.listMode {
-                        let subscription = try await client.openChatListWindow(accountRef: accountRef, view: view)
+                        let projection = try resolveProjectionClient(appState)
+                        loadStage = (
+                            view == .archived ? .archivedChatListLoad : .chatListLoad,
+                            appState.productAnalytics.beginTiming()
+                        )
+                        let subscription = try await projection.openChatListWindowFeed(accountRef: accountRef, view: view)
                         guard let initial = await Task.detached(priority: .utility, operation: {
                             subscription.snapshot()
                         }).value, !Task.isCancelled,
@@ -514,6 +518,8 @@ final class ChatsListViewModel {
                         try await Task.sleep(nanoseconds: retryDelay)
                         continue
                     }
+                    let client = try appState.currentMarmotClient()
+                    loadStage = (.chatListLoad, appState.productAnalytics.beginTiming())
                     let chatListSub = try await client.openPresentedChatList(
                         accountRef: accountRef,
                         includeArchived: true
@@ -613,7 +619,7 @@ final class ChatsListViewModel {
     }
 
     private func enqueueWindowCommand(
-        _ operation: @escaping (ChatListWindowSubscription, UInt64) async throws -> ChatListWindowSnapshotFfi
+        _ operation: @escaping (any ChatListWindowFeed, UInt64) async throws -> ChatListWindowSnapshotFfi
     ) {
         guard let subscription = windowSubscription else { return }
         let previous = windowCommandTask
@@ -721,11 +727,8 @@ final class ChatsListViewModel {
     }
 
     private func readPresentedRow(accountRef: String, groupIdHex: String) async throws -> PresentedChatRowFfi? {
-        #if DEBUG
-        if let presentedRowForTesting { return try await presentedRowForTesting(accountRef, groupIdHex) }
-        #endif
         guard let appState else { return nil }
-        return try await appState.currentMarmotClient().presentedChatListRow(accountRef: accountRef, groupIdHex: groupIdHex)
+        return try await projectionClient(appState).presentedChatListRow(accountRef: accountRef, groupIdHex: groupIdHex)
     }
 
     /// O(1) lookup for a chat-list item by its group id, backed by the
@@ -1144,12 +1147,7 @@ final class ChatsListViewModel {
                 draftStore.pendingSendHandoff(accountRef: $0, groupIdHex: row.groupIdHex)
             },
             mentionDisplayName: { [weak appState] entity in
-                #if DEBUG
-                if let name = self.mentionDisplayNameForTesting?(entity) {
-                    return name
-                }
-                #endif
-                return appState?.mentionDisplayName(for: entity)
+                appState?.mentionDisplayName(for: entity)
             },
             systemEventNaming: GroupSystemEventNaming(
                 currentAccountIdHex: muteLookup.accountIdHex,
@@ -1432,9 +1430,6 @@ final class ChatsListViewModel {
         items = nextItems
         archivedItems = nextArchivedItems
         visibleRowsRevision &+= 1
-        #if DEBUG
-        publishedItemsMutationCountForTesting += 1
-        #endif
         return true
     }
 
@@ -1505,10 +1500,9 @@ final class ChatsListViewModel {
         guard !groupIds.isEmpty else { return }
 
         pendingDirectPeerRefreshGroupIds.formUnion(groupIds)
-        guard avatarURLTask == nil else { return }
+        guard !avatarEnrichmentTask.isActive else { return }
         let taskID = UUID()
-        avatarEnrichmentTaskID = taskID
-        avatarURLTask = Task { @MainActor [weak self, weak appState] in
+        avatarEnrichmentTask.install(taskID, Task { @MainActor [weak self, weak appState] in
             defer { self?.finishAvatarEnrichmentTask(taskID: taskID) }
             guard let self, let appState else { return }
             while !Task.isCancelled,
@@ -1667,7 +1661,7 @@ final class ChatsListViewModel {
                     }
                 }
             }
-        }
+        })
     }
 
     private func ownsChatListTask(taskID: UUID, accountRef: String) -> Bool {
@@ -1681,13 +1675,11 @@ final class ChatsListViewModel {
     }
 
     private func ownsAvatarEnrichmentTask(taskID: UUID, accountRef: String) -> Bool {
-        currentAccount == accountRef && avatarEnrichmentTaskID == taskID
+        currentAccount == accountRef && avatarEnrichmentTask.owns(taskID)
     }
 
     private func finishAvatarEnrichmentTask(taskID: UUID) {
-        guard avatarEnrichmentTaskID == taskID else { return }
-        avatarURLTask = nil
-        avatarEnrichmentTaskID = nil
+        avatarEnrichmentTask.finish(taskID)
     }
 
     /// Resolve the rows a user is most likely to see first. The previous set
@@ -1736,32 +1728,6 @@ final class ChatsListViewModel {
                 publishItems()
             }
         }
-    }
-
-    func attachWindowForTesting(_ snapshot: ChatListWindowSnapshotFfi) {
-        listMode = .window(snapshot.view)
-        windowCursor = ProjectionSequenceCursor(generation: snapshot.subscriptionGeneration, sequence: snapshot.sequence)
-        installWindowSnapshot(snapshot)
-    }
-
-    func receiveWindowForTesting(_ snapshot: ChatListWindowSnapshotFfi) {
-        acceptWindowSnapshot(snapshot)
-    }
-
-    func setLoadErrorForTesting(_ error: String?) {
-        loadError = error
-    }
-
-    var avatarEnrichmentTaskIDForTesting: UUID? { avatarEnrichmentTaskID }
-
-    func installAvatarEnrichmentTaskForTesting(taskID: UUID) {
-        avatarURLTask?.cancel()
-        avatarURLTask = Task {}
-        avatarEnrichmentTaskID = taskID
-    }
-
-    func finishAvatarEnrichmentTaskForTesting(taskID: UUID) {
-        finishAvatarEnrichmentTask(taskID: taskID)
     }
     #endif
 

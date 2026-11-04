@@ -4,13 +4,29 @@ import Testing
 
 @MainActor
 struct AsyncActionGuardTests {
+    @Test func dismissingEncryptedExportClearsItsErrorBeforeDismissalCompletes() {
+        let model = IdentityViewModel()
+        model.showEncryptedExportSheet = true
+        model.exportError = "Encrypted export failed."
+
+        // Both Cancel and swipe dismissal update this binding before onDismiss.
+        model.showEncryptedExportSheet = false
+
+        #expect(model.exportError == nil)
+        #expect(model.exportShareText == nil)
+        model.encryptedSheetDismissed()
+        #expect(model.exportShareText == nil)
+    }
+
     @Test func identityExportsReturnWhileExportIsAlreadyInFlight() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account-1"
         let model = IdentityViewModel()
+        model.requestRawKey(.export, using: appState)
+        let request = try #require(model.rawKeyRequest)
 
         model.exportInFlight = true
-        await model.exportRawNsec(using: appState)
+        await model.performRawKeyRequest(request, using: appState)
 
         #expect(model.exportInFlight)
         #expect(model.exportError == nil)

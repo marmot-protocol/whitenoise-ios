@@ -236,15 +236,21 @@ struct ChatsListProjectionTests {
         #expect(viewModel.item(groupIdHex: removed.groupIdHex) == nil)
     }
 
-    @Test func successfulSnapshotClearsPreviousLoadError() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test())
+    @Test func successfulSnapshotClearsPreviousLoadError() async throws {
+        let appState = AppState.test()
+        appState.setAppSceneActive(true)
+        let projection = ChatListProjectionDouble()
+        projection.openWindow = { _, _ in throw URLError(.notConnectedToInternet) }
+        let viewModel = ChatsListViewModel(appState: appState, projectionClient: { _ in projection })
         let row = chatListRow(groupIdHex: hex("a1"), title: "Recovered", updatedAt: 10)
 
-        viewModel.setLoadErrorForTesting("Couldn't load chats")
+        await viewModel.bind(accountRef: "account", mode: .window(.chats))
+        try await eventually { viewModel.loadError != nil }
         viewModel.applyChatListSnapshot([row])
 
         #expect(viewModel.loadError == nil)
         #expect(viewModel.items.map(\.id) == [row.groupIdHex])
+        await viewModel.bind(accountRef: nil)
     }
 
     @Test func presentedSnapshotReplacesQueuedRowEvenWithOlderTimestamp() throws {
@@ -272,13 +278,40 @@ struct ChatsListProjectionTests {
 
     @Test func visibleRowsRevisionAdvancesOnlyForPublishedCollectionChanges() throws {
         let viewModel = ChatsListViewModel(appState: AppState.test())
-        let row = chatListRow(groupIdHex: hex("a9"), title: "Stable", updatedAt: 10)
+        let row = chatListRow(
+            groupIdHex: hex("a9"),
+            title: "Stable",
+            lastMessage: chatListPreview(messageIdHex: hex("f1"), plaintext: "stable", timelineAt: 10),
+            updatedAt: 10
+        )
+        let initial = viewModel.visibleRowsRevision
 
-        #expect(viewModel.visibleRowsRevision == 0)
         viewModel.applyChatListSnapshot([row])
-        #expect(viewModel.visibleRowsRevision == 1)
+        let published = viewModel.visibleRowsRevision
+        #expect(published != initial)
+
+        // A changed row republishes, live or in a snapshot.
+        let changed = chatListRow(
+            groupIdHex: hex("a9"),
+            title: "Stable",
+            lastMessage: chatListPreview(messageIdHex: hex("f2"), plaintext: "changed", timelineAt: 11),
+            updatedAt: 11
+        )
+        viewModel.applyChatListRow(changed)
+        let afterLiveChange = viewModel.visibleRowsRevision
+        #expect(afterLiveChange != published)
+
         viewModel.applyChatListSnapshot([row])
-        #expect(viewModel.visibleRowsRevision == 1)
+        let afterSnapshotChange = viewModel.visibleRowsRevision
+        #expect(afterSnapshotChange != afterLiveChange)
+
+        // An identical row, live or in a snapshot, must not republish the lists,
+        // and neither must a preview refresh that changes nothing.
+        viewModel.applyChatListRow(row)
+        viewModel.applyChatListSnapshot([row])
+        viewModel.refreshExpiredPreviews()
+        #expect(viewModel.visibleRowsRevision == afterSnapshotChange)
+        #expect(viewModel.items.map(\.id) == [row.groupIdHex])
     }
 
     @Test func itemByGroupIdAccessorResolvesActiveAndArchivedRowsAndMissesUnknownId() throws {
@@ -700,15 +733,16 @@ struct ChatsListProjectionTests {
     }
 
     @Test func profileRefreshRebuildsNamedGroupMentionPreviews() throws {
-        let bech32 = "npub1" + String(repeating: "q", count: 58)
+        let mentioned = hex("ab")
+        let bech32 = try #require(NostrProfileReference.npub(fromAccountIdHex: mentioned))
         let tokens = MarkdownDocumentFfi(blocks: [
             .paragraph(inlines: [
                 .text(content: "ping "),
                 .nostrMention(entity: MarkdownNostrEntityFfi(hrp: .npub, bech32: bech32)),
             ]),
         ], truncated: false)
-        let viewModel = ChatsListViewModel(appState: AppState.test())
-        viewModel.mentionDisplayNameForTesting = { _ in nil }
+        let appState = AppState.test()
+        let viewModel = ChatsListViewModel(appState: appState)
         let row = chatListRow(
             groupIdHex: hex("da"),
             title: "Named room",
@@ -721,9 +755,10 @@ struct ChatsListProjectionTests {
         )
         viewModel.applyChatListSnapshot([row])
 
-        #expect(viewModel.items.first?.previewText == "ping @npub1qqq…qqqq")
+        let unnamedPreview = try #require(viewModel.items.first?.previewText)
+        #expect(unnamedPreview.hasPrefix("ping @npub1"))
 
-        viewModel.mentionDisplayNameForTesting = { _ in "Alice" }
+        appState.seedDiscoveredProfile(profileMetadata(displayName: "Alice"), forAccountIdHex: mentioned)
         viewModel.refreshDisplayProjections()
 
         #expect(viewModel.items.first?.previewText == "ping @Alice")
@@ -867,22 +902,6 @@ struct ChatsListProjectionTests {
         #expect(ChatsListViewModel.nextLiveSubscriptionRetryDelay(after: 8_000_000_000) == 8_000_000_000)
     }
 
-    @Test func staleAvatarEnrichmentTaskCannotClearNewerTaskHandle() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test())
-        let stale = UUID()
-        let current = UUID()
-
-        viewModel.installAvatarEnrichmentTaskForTesting(taskID: stale)
-        viewModel.installAvatarEnrichmentTaskForTesting(taskID: current)
-        viewModel.finishAvatarEnrichmentTaskForTesting(taskID: stale)
-
-        #expect(viewModel.avatarEnrichmentTaskIDForTesting == current)
-
-        viewModel.finishAvatarEnrichmentTaskForTesting(taskID: current)
-
-        #expect(viewModel.avatarEnrichmentTaskIDForTesting == nil)
-    }
-
     @Test func chatListRowUpdatesAreCoalescedBeforePublishing() async throws {
         let viewModel = ChatsListViewModel(appState: AppState.test())
         let older = chatListRow(
@@ -919,24 +938,6 @@ struct ChatsListProjectionTests {
 
         #expect(viewModel.items.isEmpty)
         try await eventually { viewModel.items.map(\.id) == [row.groupIdHex] }
-    }
-
-    @Test func identicalProjectedRowDoesNotRepublishObservedLists() throws {
-        let viewModel = ChatsListViewModel(appState: AppState.test())
-        let row = chatListRow(
-            groupIdHex: hex("e1"),
-            title: "Stable",
-            lastMessage: chatListPreview(messageIdHex: hex("f1"), plaintext: "stable", timelineAt: 10),
-            updatedAt: 10
-        )
-        viewModel.applyChatListSnapshot([row])
-        let mutationCount = viewModel.publishedItemsMutationCountForTesting
-
-        viewModel.applyChatListRow(row)
-        viewModel.applyChatListSnapshot([row])
-
-        #expect(viewModel.publishedItemsMutationCountForTesting == mutationCount)
-        #expect(viewModel.items.map(\.id) == [row.groupIdHex])
     }
 
 }

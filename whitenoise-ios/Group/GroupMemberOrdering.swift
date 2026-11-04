@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 
@@ -71,10 +70,6 @@ final class GroupMemberListProjectionCache {
     private var cachedProfileGeneration: Int?
     private var cachedProjection: Projection?
 
-    #if DEBUG
-    private(set) var buildCountForTesting = 0
-    #endif
-
     func projection(
         members: [GroupMemberDetailsFfi],
         profileGeneration: Int,
@@ -102,9 +97,6 @@ final class GroupMemberListProjectionCache {
         cachedMembers = members
         cachedProfileGeneration = profileGeneration
         cachedProjection = projection
-        #if DEBUG
-        buildCountForTesting += 1
-        #endif
         return projection
     }
 }
