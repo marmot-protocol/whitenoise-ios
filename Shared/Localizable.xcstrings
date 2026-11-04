@@ -140211,7 +140211,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Haz una copia de tu clave privada"
+            "value" : "Haz una copia de tu llave privada"
           }
         },
         "fr" : {
@@ -140341,7 +140341,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Copiar clave"
+            "value" : "Copiar llave"
           }
         },
         "fr" : {
@@ -140406,7 +140406,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Copiar clave privada"
+            "value" : "Copiar llave privada"
           }
         },
         "fr" : {
@@ -140471,7 +140471,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Copiar clave privada?"
+            "value" : "¿Copiar llave privada?"
           }
         },
         "fr" : {
@@ -140536,7 +140536,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clave privada cifrada"
+            "value" : "Llave privada cifrada"
           }
         },
         "fr" : {
@@ -140601,7 +140601,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exportar clave"
+            "value" : "Exportar llave"
           }
         },
         "fr" : {
@@ -140731,7 +140731,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantén esta clave en privado. Cualquiera que la tenga puede usar tu perfil y White Noise no puede recuperarla."
+            "value" : "Mantén esta llave en privado. Cualquiera que la tenga puede usar tu perfil y White Noise no puede recuperarla."
           }
         },
         "fr" : {
@@ -140796,7 +140796,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guarda esta clave en un lugar seguro y no la compartas con nadie. Cualquiera que la tenga puede usar tu perfil."
+            "value" : "Guarda esta llave en un lugar seguro y no la compartas con nadie. Cualquiera que la tenga puede usar tu perfil."
           }
         },
         "fr" : {
@@ -140861,7 +140861,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guarda tu clave privada en un lugar seguro. Si la pierdes, White Noise no podrá recuperarla. Te recomendamos proteger la copia de seguridad con una contraseña."
+            "value" : "Guarda tu llave privada en un lugar seguro. Si la pierdes, White Noise no podrá recuperarla. Te recomendamos proteger la copia de seguridad con una contraseña."
           }
         },
         "fr" : {
@@ -141056,7 +141056,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostrar clave"
+            "value" : "Mostrar llave"
           }
         },
         "fr" : {
@@ -141121,7 +141121,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Mostrar clave privada?"
+            "value" : "¿Mostrar llave privada?"
           }
         },
         "fr" : {
@@ -141251,7 +141251,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recomendamos exportar con una contraseña para proteger tu clave privada. Sin ella, cualquiera que tenga la clave exportada puede usar tu perfil. Guárdala en un lugar seguro y no la compartas."
+            "value" : "Recomendamos exportar con una contraseña para proteger tu llave privada. Sin ella, cualquiera que tenga la llave exportada puede usar tu perfil. Guárdala en un lugar seguro y no la compartas."
           }
         },
         "fr" : {
