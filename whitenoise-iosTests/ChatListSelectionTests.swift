@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-import MarmotKit
 @testable import whitenoise_ios
 
 struct ChatListSelectionTests {
@@ -57,16 +56,7 @@ struct MessageBulkCopyTests {
     @Test func combinedCopyPreservesLongMessagesAndTheirWhitespace() {
         let first = "  **Heading**\n\n" + String(repeating: "First message\n", count: 150) + "\n"
         let second = "\t```swift\nlet value = 1\n```\n\n[link](https://example.com)  "
-        let records = [first, second].map { source in
-            var record = message(id: hex("aa"), plaintext: source)
-            record.contentTokens = MarkdownDocumentFfi(
-                blocks: [.paragraph(inlines: [.text(content: source)])], truncated: false
-            )
-            return record
-        }
-        let bodies = records.map { MessagePreview.copyBody($0) }
-
-        #expect(MessageSelectionPolicy.combinedCopyText([""] + bodies + [" \n\t"]) == first + "\n\n" + second)
+        #expect(MessageSelectionPolicy.combinedCopyText(["", first, second, " \n\t"]) == first + "\n\n" + second)
     }
 
     @Test func combinedCopyJoinsNonEmptyBodiesInOrder() {

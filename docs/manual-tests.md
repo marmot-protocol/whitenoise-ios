@@ -1650,9 +1650,12 @@ Marmot root. Automated simulator checks do not replace these device checks.
       the accessibility Copy action, then paste into a plain-text editor. The
       complete original text, link destination, indentation and line breaks
       survive. Select it with another message and Copy: both full messages stay
-      in chronological order with a blank-line separator. Repeat with a reply,
-      a media caption and a completed agent response. Chat-list and reply
-      previews still use their usual compact formatting.
+      in chronological order with two added line breaks between them, preserving
+      any original leading or trailing whitespace. Repeat with a reply, a media
+      caption and a completed agent response. Known mentions copy as the readable
+      names shown in the conversation, including mentions beyond the first 1,000
+      characters. Chat-list and reply previews still use their usual compact
+      formatting.
 - [ ] Block/unblock from a profile or direct-chat info, then inspect Privacy &
       Security → Blocked Users. Confirmed changes update both screens. An uncertain
       publication offers the same operation again and never claims success.

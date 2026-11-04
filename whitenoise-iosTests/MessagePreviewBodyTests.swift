@@ -150,7 +150,29 @@ struct MessagePreviewBodyTests {
             entity.bech32 == npub ? "Alex" : nil
         }
         #expect(body == "updated @Alex")
-        #expect(MessagePreview.copyBody(record) { _ in "Alex" } == record.plaintext)
+        #expect(MessagePreview.copyBody(record) { _ in "Alex" } == "updated @Alex")
+    }
+
+    @Test(arguments: [false, true])
+    func copyResolvesMentionsBeyondPreviewBudgetAndPreservesOtherText(hasTokens: Bool) throws {
+        let npub = try #require(NostrProfileReference.npub(fromAccountIdHex: hex("11")))
+        let unknownNpub = try #require(NostrProfileReference.npub(fromAccountIdHex: hex("22")))
+        let prefix = "  # Heading\n\n" + String(repeating: "Long paragraph 👩🏽‍💻.\n", count: 150)
+        let suffix = "\n\n\t[Full link](https://example.com) @\(unknownNpub)\n  "
+        let source = prefix + "@\(npub)" + suffix
+        let expected = prefix + "@Alex" + suffix
+        for tags in [[], [encryptedMediaTag()]] {
+            var record = message(id: hex("aa"), plaintext: source, tags: tags)
+            if hasTokens {
+                record.contentTokens = MarkdownDocumentFfi(
+                    blocks: [.paragraph(inlines: [.text(content: source)])], truncated: true
+                )
+            }
+            let copied = MessagePreview.copyBody(record) { entity in
+                entity.bech32 == npub ? "Alex" : nil
+            }
+            #expect(copied == expected)
+        }
     }
 
     @Test func tokenlessEditedMediaCaptionRendersCanonicalMentionAsDisplayName() throws {
