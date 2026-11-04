@@ -17,13 +17,14 @@ struct GroupDetailsArchiveActionTests {
             appState: appState,
             group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
         )
-        let model = GroupDetailsViewModel()
+        let marmot = GroupDetailsMarmotDouble()
+        let model = groupDetailsModel(marmot: marmot)
         let publisher = GroupArchivePublishProbe()
         var changedRecords: [AppGroupRecordFfi] = []
 
         model.conversation = conversation
         model.onGroupChanged = { changedRecords.append($0) }
-        model.setGroupArchivedForTesting = { accountRef, groupIdHex, archived in
+        marmot.setGroupArchived = { accountRef, groupIdHex, archived in
             try await publisher.publish(accountRef: accountRef, groupIdHex: groupIdHex, archived: archived)
         }
 
@@ -530,7 +531,8 @@ struct GroupDetailsArchiveActionTests {
                 appState: appState,
                 group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             var changedRecords: [AppGroupRecordFfi] = []
             var leftGroupIds: [String] = []
             var dismissed = false
@@ -539,7 +541,7 @@ struct GroupDetailsArchiveActionTests {
             model.conversation = conversation
             model.onGroupChanged = { changedRecords.append($0) }
             model.onGroupLeft = { leftGroupIds.append($0) }
-            model.leaveGroupForTesting = { accountRef, groupIdHex in
+            marmot.leaveGroup = { accountRef, groupIdHex in
                 leaveRequests.append((accountRef, groupIdHex))
                 return SendSummaryFfi(published: 1, messageIds: ["leave-message"])
             }
@@ -571,13 +573,14 @@ struct GroupDetailsArchiveActionTests {
                 disbandingEnabled: true,
                 canDisband: true
             ))
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             var disbandRequests: [(String, String)] = []
             var changedRecords: [AppGroupRecordFfi] = []
 
             model.conversation = conversation
             model.onGroupChanged = { changedRecords.append($0) }
-            model.disbandGroupForTesting = { accountRef, groupIdHex in
+            marmot.disbandGroup = { accountRef, groupIdHex in
                 disbandRequests.append((accountRef, groupIdHex))
                 return .pending(requestedAtMs: 1_000)
             }
@@ -608,12 +611,13 @@ struct GroupDetailsArchiveActionTests {
             conversation.setManagementStateForTesting(disbandManagementState(
                 canEnableDisbanding: true
             ))
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             var enableCount = 0
             var disbandCount = 0
 
             model.conversation = conversation
-            model.enableGroupDisbandingForTesting = { _, _ in
+            marmot.enableGroupDisbanding = { _, _ in
                 enableCount += 1
                 return GroupMutationResultFfi(
                     summary: SendSummaryFfi(published: 1, messageIds: ["enable"]),
@@ -624,7 +628,7 @@ struct GroupDetailsArchiveActionTests {
                     )
                 )
             }
-            model.disbandGroupForTesting = { _, _ in
+            marmot.disbandGroup = { _, _ in
                 disbandCount += 1
                 return .pending(requestedAtMs: 2_000)
             }
@@ -647,7 +651,8 @@ struct GroupDetailsArchiveActionTests {
                 appState: appState,
                 group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             var changedRecords: [AppGroupRecordFfi] = []
             var leftGroupIds: [String] = []
             var dismissed = false
@@ -655,7 +660,7 @@ struct GroupDetailsArchiveActionTests {
             model.conversation = conversation
             model.onGroupChanged = { changedRecords.append($0) }
             model.onGroupLeft = { leftGroupIds.append($0) }
-            model.leaveGroupForTesting = { _, _ in
+            marmot.leaveGroup = { _, _ in
                 throw MarmotKitError.LeaveAlreadyRequested(groupIdHex: groupIdHex)
             }
 
@@ -679,21 +684,28 @@ struct GroupDetailsArchiveActionTests {
             appState.developerMode = true
             defer { appState.developerMode = previousMode }
             let conversation = ConversationViewModel(appState: appState, group: archiveTestGroup(groupIdHex: "group", archived: false))
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             model.conversation = conversation
             var deleted: [String] = []
             var calls = 0
+            var operations: [String] = []
             model.onGroupDeleted = { deleted.append($0) }
-            model.clearResetMediaForTesting = { true }
-            model.forgetGroupLocalForTesting = { account, group in
+            marmot.clearResetMedia = {
+                operations.append("clear media")
+                return true
+            }
+            marmot.forgetGroupLocal = { account, group in
                 #expect(account == "account-1" && group == "group")
                 #expect(conversation.isLocallyReset)
+                operations.append("forget")
                 calls += 1
                 return false // Already awaiting a fresh invitation is also a successful local reset.
             }
             await model.resetLocal(using: appState, dismiss: {})
             #expect(calls == 1)
             #expect(deleted == ["group"])
+            #expect(operations == ["forget", "clear media"])
             #expect(conversation.isLocallyReset)
             #expect(!model.membershipActionInFlight)
             await model.resetLocal(using: appState, dismiss: {})
@@ -710,11 +722,12 @@ struct GroupDetailsArchiveActionTests {
             let previousMode = appState.developerMode
             defer { appState.developerMode = previousMode }
             let conversation = ConversationViewModel(appState: appState, group: archiveTestGroup(groupIdHex: "group", archived: false))
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             model.conversation = conversation
             var calls = 0
             model.onGroupDeleted = { _ in Issue.record("Failed reset must not remove the group") }
-            model.forgetGroupLocalForTesting = { _, _ in
+            marmot.forgetGroupLocal = { _, _ in
                 calls += 1
                 throw MarmotKitError.Runtime(details: "reset failed")
             }
@@ -740,11 +753,12 @@ struct GroupDetailsArchiveActionTests {
             appState: appState,
             group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
         )
-        let model = GroupDetailsViewModel()
+        let marmot = GroupDetailsMarmotDouble()
+        let model = groupDetailsModel(marmot: marmot)
         var deleteRequests: [(String, String)] = []
 
         model.conversation = conversation
-        model.deleteGroupLocalForTesting = { accountRef, groupIdHex in
+        marmot.deleteGroupLocal = { accountRef, groupIdHex in
             deleteRequests.append((accountRef, groupIdHex))
             return true
         }
@@ -763,14 +777,15 @@ struct GroupDetailsArchiveActionTests {
             appState: appState,
             group: archiveTestGroup(groupIdHex: groupIdHex, archived: false, selfMembership: .left)
         )
-        let model = GroupDetailsViewModel()
+        let marmot = GroupDetailsMarmotDouble()
+        let model = groupDetailsModel(marmot: marmot)
         var deleteRequests: [(String, String)] = []
         var deletedGroupIds: [String] = []
         var dismissed = false
 
         model.conversation = conversation
         model.onGroupDeleted = { deletedGroupIds.append($0) }
-        model.deleteGroupLocalForTesting = { accountRef, groupIdHex in
+        marmot.deleteGroupLocal = { accountRef, groupIdHex in
             deleteRequests.append((accountRef, groupIdHex))
             return true
         }
@@ -797,11 +812,12 @@ struct GroupDetailsArchiveActionTests {
                 leaveRequestPending: true
             )
         )
-        let model = GroupDetailsViewModel()
+        let marmot = GroupDetailsMarmotDouble()
+        let model = groupDetailsModel(marmot: marmot)
         var deleteRequested = false
 
         model.conversation = conversation
-        model.deleteGroupLocalForTesting = { _, _ in
+        marmot.deleteGroupLocal = { _, _ in
             deleteRequested = true
             return true
         }
@@ -828,12 +844,13 @@ struct GroupDetailsArchiveActionTests {
                 leaveRequestPending: true
             )
         )
-        let model = GroupDetailsViewModel()
+        let marmot = GroupDetailsMarmotDouble()
+        let model = groupDetailsModel(marmot: marmot)
         var deleteRequested = false
         var dismissed = false
 
         model.conversation = conversation
-        model.deleteGroupLocalForTesting = { _, _ in
+        marmot.deleteGroupLocal = { _, _ in
             deleteRequested = true
             return true
         }
