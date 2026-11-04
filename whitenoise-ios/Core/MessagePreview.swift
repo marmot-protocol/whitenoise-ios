@@ -77,6 +77,25 @@ enum MessagePreview {
         }
     }
 
+    /// Copy authored text verbatim, independent of preview and rendering budgets.
+    /// Parsed tokens can be incomplete and preview flattening loses line breaks,
+    /// Markdown syntax and link destinations. Structured events keep their normal
+    /// presentation rather than exposing their internal payloads.
+    static func copyBody(
+        _ record: AppMessageRecordFfi,
+        mentionDisplayName: MarkdownMentionResolver? = nil,
+        systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
+    ) -> String {
+        switch MessageSemantics.classify(record) {
+        case .chat, .reply, .streamFinal:
+            return RemoteGiphyMedia.envelopePreviewText(for: record.plaintext) ?? record.plaintext
+        case .media where !record.plaintext.isEmpty:
+            return record.plaintext
+        default:
+            return body(record, mentionDisplayName: mentionDisplayName, systemEventNaming: systemEventNaming)
+        }
+    }
+
     static func body(
         _ preview: TimelineReplyPreviewFfi,
         mentionDisplayName: MarkdownMentionResolver? = nil,

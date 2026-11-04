@@ -18,6 +18,7 @@ struct MessagePreviewBodyTests {
         #expect(MessageSemantics.classify(record) == .reaction(targetMessageId: hex("cc")))
         #expect(MessagePreview.isPreviewable(record) == false)
         #expect(MessagePreview.body(record) == "")
+        #expect(MessagePreview.copyBody(record) == "")
     }
 
     @Test func deleteRecordHasNoBodyAndIsNotPreviewable() {
@@ -30,6 +31,7 @@ struct MessagePreviewBodyTests {
         #expect(MessageSemantics.classify(record) == .delete(targetMessageId: hex("cc")))
         #expect(MessagePreview.isPreviewable(record) == false)
         #expect(MessagePreview.body(record) == "")
+        #expect(MessagePreview.copyBody(record) == "")
     }
 
     @Test func agentStreamStartRecordHasNoBodyAndIsNotPreviewable() {
@@ -53,6 +55,7 @@ struct MessagePreviewBodyTests {
         }
         #expect(MessagePreview.isPreviewable(record) == false)
         #expect(MessagePreview.body(record) == "")
+        #expect(MessagePreview.copyBody(record) == "")
     }
 
     @Test func unknownRecordHasNoBodyAndIsNotPreviewable() {
@@ -65,6 +68,7 @@ struct MessagePreviewBodyTests {
         #expect(MessageSemantics.classify(record) == .unknown)
         #expect(MessagePreview.isPreviewable(record) == false)
         #expect(MessagePreview.body(record) == "")
+        #expect(MessagePreview.copyBody(record) == "")
     }
 
     @Test func plainChatRecordStillReturnsItsPlaintextBody() {
@@ -89,6 +93,45 @@ struct MessagePreviewBodyTests {
 
         #expect(MessagePreview.isPreviewable(record))
         #expect(MessagePreview.body(record) == "GIF via GIPHY")
+        #expect(MessagePreview.copyBody(record) == "GIF via GIPHY")
+    }
+
+    @Test(arguments: [false, true])
+    func copyPreservesFullSourceWhenParsedTokensArePresentOrTruncated(truncated: Bool) {
+        let source = "  # Heading\n\n" + String(repeating: "A long paragraph 👩🏽‍💻 :marmot:.\n", count: 500) +
+            "\n[Full link](https://example.com/destination)\n\n```swift\n\tlet value = 1\n```\n  "
+        var record = message(id: hex("aa"), plaintext: source)
+        record.contentTokens = MarkdownDocumentFfi(
+            blocks: [.paragraph(inlines: [.text(content: source)])],
+            truncated: truncated
+        )
+
+        #expect(MessagePreview.body(record) != source)
+        #expect(MessagePreview.copyBody(record) == source)
+    }
+
+    @Test func copyPreservesReplyStreamAndMediaCaptionSources() {
+        let source = "First paragraph\n\n" + String(repeating: "more text\n", count: 150) + "\tLast line\n"
+        let variants: [[MessageTagFfi]] = [
+            [
+                MessageTagFfi(values: [MessageSemantics.eventRefTag, hex("cc")]),
+                MessageTagFfi(values: [MessageSemantics.quoteRefTag, hex("cc")]),
+            ],
+            [
+                MessageTagFfi(values: [MessageSemantics.streamTag, hex("ab")]),
+                MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("bc")]),
+                MessageTagFfi(values: [MessageSemantics.streamHashTag, hex("cd")]),
+                MessageTagFfi(values: [MessageSemantics.streamChunksTag, "3"]),
+            ],
+            [encryptedMediaTag()],
+        ]
+        for tags in variants {
+            var record = message(id: hex("aa"), plaintext: source, tags: tags)
+            record.contentTokens = MarkdownDocumentFfi(
+                blocks: [.paragraph(inlines: [.text(content: source)])], truncated: false
+            )
+            #expect(MessagePreview.copyBody(record) == source)
+        }
     }
 
     @Test func tokenlessEditedBodyRendersCanonicalMentionAsDisplayName() throws {
@@ -107,6 +150,7 @@ struct MessagePreviewBodyTests {
             entity.bech32 == npub ? "Alex" : nil
         }
         #expect(body == "updated @Alex")
+        #expect(MessagePreview.copyBody(record) { _ in "Alex" } == record.plaintext)
     }
 
     @Test func tokenlessEditedMediaCaptionRendersCanonicalMentionAsDisplayName() throws {

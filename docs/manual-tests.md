@@ -1645,6 +1645,14 @@ Marmot root. Automated simulator checks do not replace these device checks.
       Repeat with media, failed sends, backgrounding, and two editing sessions.
       A conflict preserves local text; both “Keep my draft” and “Use saved draft”
       resolve explicitly. Missing attachment bytes show a load error.
+- [ ] Receive a message longer than 1,000 characters with paragraphs, indented
+      code, a Markdown link and emoji. Copy it from the message menu and from
+      the accessibility Copy action, then paste into a plain-text editor. The
+      complete original text, link destination, indentation and line breaks
+      survive. Select it with another message and Copy: both full messages stay
+      in chronological order with a blank-line separator. Repeat with a reply,
+      a media caption and a completed agent response. Chat-list and reply
+      previews still use their usual compact formatting.
 - [ ] Block/unblock from a profile or direct-chat info, then inspect Privacy &
       Security → Blocked Users. Confirmed changes update both screens. An uncertain
       publication offers the same operation again and never claims success.
