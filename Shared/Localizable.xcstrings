@@ -139894,7 +139894,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yerel anlık bildirim kurulumu tamamlanmadı."
+            "value" : "Native Push kurulumu tamamlanmadı."
           }
         },
         "zh-Hans" : {

@@ -120,26 +120,27 @@ struct NotificationSettingsView: View {
 
                     if appState.notifications.apnsTokenHex == nil {
                         Button {
-                            Task { await model.requestApnsToken(using: appState) }
+                            Task { await model.requestApnsToken(using: appState, feedbackAction: .developerSetup) }
                         } label: {
                             Label("Request APNS Token", systemImage: "antenna.radiowaves.left.and.right")
                         }
                         .disabled(model.isSaving)
                     } else {
                         Button {
-                            Task { await model.refreshApnsToken(using: appState) }
+                            Task { await model.refreshApnsToken(using: appState, feedbackAction: .developerSetup) }
                         } label: {
                             Label("Refresh APNS Token", systemImage: "arrow.clockwise.circle")
                         }
                         .disabled(!model.canRefreshApnsToken)
 
                         Button {
-                            Task { await model.syncNativeRegistration(using: appState) }
+                            Task { await model.syncNativeRegistration(using: appState, feedbackAction: .developerSetup) }
                         } label: {
                             Label("Sync Native Registration", systemImage: "arrow.triangle.2.circlepath")
                         }
                         .disabled(!canSyncNativeRegistration)
                     }
+                    actionFeedback(.developerSetup)
                 }
             }
         }
@@ -217,7 +218,7 @@ struct NotificationSettingsView: View {
     private func actionFeedback(_ action: NotificationSettingsViewModel.Action) -> some View {
         if let error = model.actionErrors[action] {
             Label {
-                Text(error)
+                Text(error.message)
             } icon: {
                 Image(systemName: "exclamationmark.triangle")
             }

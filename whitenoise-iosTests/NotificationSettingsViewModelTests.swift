@@ -117,7 +117,7 @@ struct NotificationSettingsViewModelTests {
     @Test func actionErrorSurvivesReloadAndOtherActionsUntilRetried() async throws {
         let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
         let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
-        dataSource.nativePushError = NotificationSettingsActionError.permissionDenied
+        dataSource.nativePushError = NotificationSettingsActionError.apnsTokenRefreshTimedOut
         await model.setNativePush(true, using: dataSource)
         let failure = try #require(model.actionErrors[.nativePush])
 
@@ -161,10 +161,45 @@ struct NotificationSettingsViewModelTests {
         #expect(model.actionErrors[.nativePush] != nil)
     }
 
+    @Test func developerFailureUsesItsOwnFeedbackAndClearsOnRetry() async throws {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.registrationError = NotificationSettingsActionError.permissionDenied
+
+        await model.syncNativeRegistration(using: dataSource, feedbackAction: .developerSetup)
+        #expect(model.actionErrors[.developerSetup] != nil)
+        #expect(model.actionErrors[.setup] == nil)
+
+        dataSource.registrationError = nil
+        await model.syncNativeRegistration(using: dataSource, feedbackAction: .developerSetup)
+        #expect(model.actionErrors[.developerSetup] == nil)
+        #expect(model.registration?.accountRef == "account-a")
+    }
+
+    @Test func grantedPermissionClearsPermissionErrorsAfterReload() async {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.authorizationStatus = .denied
+        dataSource.localNotificationsError = NotificationSettingsActionError.permissionDenied
+        dataSource.nativePushError = NotificationSettingsActionError.permissionDenied
+        await model.setLocalNotifications(true, using: dataSource)
+        await model.setNativePush(true, using: dataSource)
+        #expect(model.actionErrors[.localNotifications] != nil)
+        #expect(model.actionErrors[.nativePush] != nil)
+
+        dataSource.authorizationStatus = .authorized
+        dataSource.settingsByAccount["account-a"] = notificationSettings(accountRef: "account-a")
+        await model.reload(using: dataSource)
+
+        #expect(model.actionErrors[.localNotifications] == nil)
+        #expect(model.actionErrors[.nativePush] == nil)
+        #expect(model.settings?.localNotificationsEnabled == true)
+    }
+
     @Test func actionErrorsDoNotFollowAnAccountSwitch() async {
         let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
         let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
-        dataSource.nativePushError = NotificationSettingsActionError.permissionDenied
+        dataSource.nativePushError = NotificationSettingsActionError.nativePushNotConfigured
         await model.setNativePush(true, using: dataSource)
         #expect(model.actionErrors[.nativePush] != nil)
 
@@ -210,6 +245,7 @@ private final class NotificationSettingsViewModelDataSourceStub: NotificationSet
     var authorizationRelease: TestLatch?
     let settingsStarted = TestLatch()
     var settingsRelease: TestLatch?
+    var localNotificationsError: Error?
     var nativePushError: Error?
     var registrationError: Error?
     var settingsByAccount: [String: NotificationSettingsFfi] = [:]
@@ -247,6 +283,7 @@ private final class NotificationSettingsViewModelDataSourceStub: NotificationSet
     }
 
     func setLocalNotificationsEnabled(_ _: Bool) async throws -> NotificationSettingsFfi {
+        if let localNotificationsError { throw localNotificationsError }
         setLocalNotificationsStarted.signal()
         return try await withCheckedThrowingContinuation { continuation in
             setLocalNotificationsContinuation = continuation

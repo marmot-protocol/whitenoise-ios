@@ -64,11 +64,28 @@ final class NotificationSettingsViewModel {
     var registration: PushRegistrationFfi?
     var authorizationStatus: UNAuthorizationStatus = .notDetermined
     enum Action: Hashable {
-        case localNotifications, nativePush, setup
+        case localNotifications, nativePush, setup, developerSetup
+    }
+
+    struct ActionFailure: Equatable {
+        let message: String
+        let isPermissionDenied: Bool
+
+        init(_ error: Error) {
+            message = UserFacingError.message(for: error)
+            if let notificationError = error as? NotificationSettingsActionError {
+                switch notificationError {
+                case .permissionDenied: isPermissionDenied = true
+                default: isPermissionDenied = false
+                }
+            } else {
+                isPermissionDenied = false
+            }
+        }
     }
 
     private(set) var activeAction: Action?
-    private(set) var actionErrors: [Action: String] = [:]
+    private(set) var actionErrors: [Action: ActionFailure] = [:]
     private(set) var hasLoadedAuthorization = false
     private var hasFinishedLoading = false
     private var reloadsInFlight = 0
@@ -234,6 +251,13 @@ final class NotificationSettingsViewModel {
         }
         authorizationStatus = reloadedAuthorizationStatus
         hasLoadedAuthorization = true
+        switch reloadedAuthorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            // A Settings permission change resolves only permission failures.
+            actionErrors = actionErrors.filter { !$0.value.isPermissionDenied }
+        default:
+            break
+        }
         guard let accountRef else {
             settings = nil
             registration = nil
@@ -270,7 +294,7 @@ final class NotificationSettingsViewModel {
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
-                actionErrors[.localNotifications] = UserFacingError.message(for: error)
+                actionErrors[.localNotifications] = ActionFailure(error)
             }
         }
     }
@@ -307,13 +331,16 @@ final class NotificationSettingsViewModel {
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
-                actionErrors[.nativePush] = UserFacingError.message(for: error)
+                actionErrors[.nativePush] = ActionFailure(error)
             }
         }
     }
 
-    func requestApnsToken(using appState: any NotificationSettingsViewModelDataSource) async {
-        await runSaving(.setup, using: appState) {
+    func requestApnsToken(
+        using appState: any NotificationSettingsViewModelDataSource,
+        feedbackAction: Action = .setup
+    ) async {
+        await runSaving(feedbackAction, using: appState) {
             let accountRef = appState.activeAccountRef
             do {
                 let granted = try await appState.requestNotificationAuthorizationAndRegister()
@@ -328,13 +355,16 @@ final class NotificationSettingsViewModel {
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
-                actionErrors[.setup] = UserFacingError.message(for: error)
+                actionErrors[feedbackAction] = ActionFailure(error)
             }
         }
     }
 
-    func refreshApnsToken(using appState: any NotificationSettingsViewModelDataSource) async {
-        await runSaving(.setup, using: appState) {
+    func refreshApnsToken(
+        using appState: any NotificationSettingsViewModelDataSource,
+        feedbackAction: Action = .setup
+    ) async {
+        await runSaving(feedbackAction, using: appState) {
             let accountRef = appState.activeAccountRef
             do {
                 _ = try await appState.refreshNotificationApnsToken()
@@ -348,13 +378,16 @@ final class NotificationSettingsViewModel {
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
-                actionErrors[.setup] = UserFacingError.message(for: error)
+                actionErrors[feedbackAction] = ActionFailure(error)
             }
         }
     }
 
-    func syncNativeRegistration(using appState: any NotificationSettingsViewModelDataSource) async {
-        await runSaving(.setup, using: appState) {
+    func syncNativeRegistration(
+        using appState: any NotificationSettingsViewModelDataSource,
+        feedbackAction: Action = .setup
+    ) async {
+        await runSaving(feedbackAction, using: appState) {
             guard let accountRef = appState.activeAccountRef else { return }
             do {
                 let updatedRegistration = try await appState.syncNativePushRegistration(accountRef: accountRef)
@@ -364,7 +397,7 @@ final class NotificationSettingsViewModel {
             } catch {
                 guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 Haptics.error()
-                actionErrors[.setup] = UserFacingError.message(for: error)
+                actionErrors[feedbackAction] = ActionFailure(error)
             }
         }
     }
