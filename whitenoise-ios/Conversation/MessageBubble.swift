@@ -95,6 +95,11 @@ enum MessageBubbleReplyLayout {
     static let cardCornerRadius = ChatBubbleMetrics.cornerRadius - cardOuterInset
     static let sentCardOpacity = 0.16
     static let receivedCardOpacity = 0.09
+
+    nonisolated static func measurementWidth(proposedWidth: CGFloat?, isReplyHeader: Bool) -> CGFloat? {
+        guard isReplyHeader else { return proposedWidth }
+        return min(proposedWidth ?? richBubbleWidth, richBubbleWidth)
+    }
 }
 
 private struct MessageReplyHeaderLayoutKey: LayoutValueKey {
@@ -106,9 +111,9 @@ private struct MessageReplyHeaderLayoutKey: LayoutValueKey {
 private struct MessageReplyBubbleLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let preferredWidth = subviews.map { subview in
-            let width = subview[MessageReplyHeaderLayoutKey.self]
-                ? min(proposal.width ?? MessageBubbleReplyLayout.richBubbleWidth, MessageBubbleReplyLayout.richBubbleWidth)
-                : proposal.width
+            let width = MessageBubbleReplyLayout.measurementWidth(
+                proposedWidth: proposal.width, isReplyHeader: subview[MessageReplyHeaderLayoutKey.self]
+            )
             return subview.sizeThatFits(ProposedViewSize(width: width, height: nil)).width
         }.max() ?? 0
         let width = MessageBubbleChromeSizing.width(
@@ -659,7 +664,7 @@ struct MessageBubble: View {
             mediaAttachments
 
             if let replyPreview {
-                VStack(alignment: .leading, spacing: 0) {
+                MessageReplyBubbleLayout {
                     replyHeader(replyPreview)
                     if hasVisibleBodyText {
                         messageBodyText(hasReply: true)

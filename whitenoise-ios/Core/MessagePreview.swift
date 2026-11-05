@@ -88,9 +88,11 @@ enum MessagePreview {
         systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
     ) -> String {
         switch MessageSemantics.classify(record) {
-        case .streamFinal:
-            return copyText(record.plaintext, mentionDisplayName: mentionDisplayName)
-        case .chat, .reply, .media:
+        case .streamFinal, .media:
+            if !record.plaintext.isEmpty {
+                return copyText(record.plaintext, mentionDisplayName: mentionDisplayName)
+            }
+        case .chat, .reply:
             if !record.plaintext.isEmpty {
                 if let label = RemoteGiphyMedia.envelopePreviewText(for: record.plaintext) { return label }
                 return copyText(record.plaintext, mentionDisplayName: mentionDisplayName)

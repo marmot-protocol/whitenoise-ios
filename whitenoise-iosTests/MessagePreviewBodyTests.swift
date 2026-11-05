@@ -146,6 +146,17 @@ struct MessagePreviewBodyTests {
         #expect(MessagePreview.copyBody(record) == source)
     }
 
+    @Test func copyPreservesGiphyShapedMediaCaption() {
+        let source = "https://media1.giphy.com/media/abc/giphy.mp4?cid=client&rid=giphy.mp4\nvia GIPHY · Creator"
+        let record = message(id: hex("aa"), plaintext: source, tags: [encryptedMediaTag()])
+        guard case .media = MessageSemantics.classify(record) else {
+            Issue.record("Expected a media caption")
+            return
+        }
+
+        #expect(MessagePreview.copyBody(record) == source)
+    }
+
     @Test func tokenlessEditedBodyRendersCanonicalMentionAsDisplayName() throws {
         // MDK emits empty markdown tokens for kind-1009 edits. Once projected
         // onto the original chat row, the body must still render the mention.

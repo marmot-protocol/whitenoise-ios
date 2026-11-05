@@ -3,6 +3,26 @@ import UIKit
 @testable import whitenoise_ios
 
 struct MessageBubbleMetadataLayoutTests {
+    @Test func onlyReplyHeadersPreferACompactMeasurementWidth() throws {
+        let available = MessageBubbleReplyLayout.richBubbleWidth * 2
+        let header = try #require(MessageBubbleReplyLayout.measurementWidth(proposedWidth: available, isReplyHeader: true))
+        let body = try #require(MessageBubbleReplyLayout.measurementWidth(proposedWidth: available, isReplyHeader: false))
+
+        #expect(header < body)
+        #expect(body == available)
+    }
+
+    @Test func aReplyHeaderDoesNotOutgrowANarrowProposal() {
+        let available = MessageBubbleReplyLayout.richBubbleWidth / 2
+        #expect(MessageBubbleReplyLayout.measurementWidth(proposedWidth: available, isReplyHeader: true) == available)
+    }
+
+    @Test func unspecifiedBodyWidthStaysFlexibleWhileTheHeaderStaysFinite() throws {
+        #expect(MessageBubbleReplyLayout.measurementWidth(proposedWidth: nil, isReplyHeader: false) == nil)
+        let header = try #require(MessageBubbleReplyLayout.measurementWidth(proposedWidth: nil, isReplyHeader: true))
+        #expect(header.isFinite && header > 0)
+    }
+
     @Test func timestampsAlwaysUseTheOuterConversationEdge() {
         #expect(!MessageMetadataRowArrangement.timestampOnLeadingEdge(isFromMe: true))
         #expect(MessageMetadataRowArrangement.timestampOnLeadingEdge(isFromMe: false))
