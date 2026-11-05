@@ -954,6 +954,12 @@ only from custom emoji already shown in that chat.
 - [ ] Send a message long enough to wrap and expand it with **Read more**:
       body text uses the bubble's available width, metadata remains trailing
       below it, and the visible timeline position does not jump.
+- [ ] Reply to a very short message with a long response. The response can use
+      the same width as an ordinary long message, including after **Read more**.
+      Check sent and received replies on iPhone and iPad, narrow windows, larger
+      text, dark mode and right-to-left layout. Short responses stay compact;
+      quoted previews fill the bubble width within their normal inset, and media
+      captions remain inside their bubbles.
 - [ ] Reopen a long conversation containing multiple wrapped messages and
       media rows: the latest messages are visible immediately at the bottom;
       the timeline never opens blank or requires a scroll gesture to recover.
