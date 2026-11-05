@@ -597,6 +597,14 @@ final class TimelineStore {
         )
     }
 
+    func copyBody(of record: AppMessageRecordFfi) -> String {
+        MessagePreview.copyBody(
+            record,
+            mentionDisplayName: mentionDisplayNameResolver,
+            systemEventNaming: systemEventNaming
+        )
+    }
+
     func isDeleted(_ messageIdHex: String) -> Bool {
         _ = timelineProjectionGeneration
         return deletedProjections.contains(messageIdHex)

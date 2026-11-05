@@ -474,7 +474,10 @@ extension KeyPackagesViewModelTests {
         await publish.value
 
         #expect(!model.isPublishing)
-        #expect(appState.activeToast?.style == .success)
+        // The transient success toast can expire during a slow refresh. Check
+        // completion through the refreshed screen state instead.
+        expectShowing(model, runtime.packageId(for: "account", version: 1, refreshed: true))
+        #expect(model.loadError == nil)
         #expect(runtime.refreshRelays.count == 1)
     }
 
@@ -514,7 +517,8 @@ extension KeyPackagesViewModelTests {
         #expect(model.deletingEventIds.isEmpty)
         #expect(runtime.deletes.map(\.eventId) == [package.eventIdHex])
         #expect(runtime.deletes.map(\.relays) == [runtime.lists(for: "account", version: 1).bootstrapRelays])
-        #expect(appState.activeToast?.style == .success)
+        expectShowing(model, runtime.packageId(for: "account", version: 1, refreshed: true))
+        #expect(model.loadError == nil)
         #expect(runtime.refreshRelays.count == 1)
     }
 
