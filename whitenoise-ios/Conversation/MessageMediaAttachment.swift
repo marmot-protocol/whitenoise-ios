@@ -66,18 +66,33 @@ nonisolated enum MediaAttachmentPolicy {
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/x-yaml",
+        "application/x-zip-compressed",
+        "application/xml",
+        "application/yaml",
+        "application/zip",
         "text/csv",
+        "text/html",
         "text/json",
+        "text/markdown",
         "text/plain",
         "text/rtf",
         "text/vcard",
+        "text/x-markdown",
+        "text/x-yaml",
+        "text/xml",
+        "text/yaml",
     ]
 
     static let supportedDocumentExtensions: Set<String> = [
         "csv",
         "doc",
         "docx",
+        "htm",
+        "html",
         "json",
+        "markdown",
+        "md",
         "pdf",
         "ppt",
         "pptx",
@@ -86,6 +101,10 @@ nonisolated enum MediaAttachmentPolicy {
         "vcf",
         "xls",
         "xlsx",
+        "xml",
+        "yaml",
+        "yml",
+        "zip",
     ]
 
     static var fileImporterAllowedTypes: [UTType] {
@@ -136,18 +155,28 @@ nonisolated enum MediaAttachmentPolicy {
            let type = UTType(typeIdentifier),
            let mediaType = type.preferredMIMEType
         {
-            return canonicalMediaType(mediaType)
+            return outgoingMediaType(canonicalMediaType(mediaType))
         }
         if let fileExtension = safeFileExtension(from: fileName),
            let mediaType = mediaType(forFileExtension: fileExtension)
         {
-            return canonicalMediaType(mediaType)
+            return outgoingMediaType(canonicalMediaType(mediaType))
         }
         switch fallbackKind {
         case .video: return "video/mp4"
         case .audio: return "audio/mp4"
         case .image: return "image/jpeg"
         case .document, .unsupported, .none: return nil
+        }
+    }
+
+    private static func outgoingMediaType(_ canonical: String) -> String {
+        switch canonical {
+        case "application/x-yaml", "text/yaml", "text/x-yaml": return "application/yaml"
+        case "text/x-markdown": return "text/markdown"
+        case "application/x-zip-compressed": return "application/zip"
+        case "text/xml": return "application/xml"
+        default: return canonical
         }
     }
 
@@ -172,6 +201,11 @@ nonisolated enum MediaAttachmentPolicy {
         case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         case "ppt": return "application/vnd.ms-powerpoint"
         case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        case "md", "markdown": return "text/markdown"
+        case "yaml", "yml": return "application/yaml"
+        case "xml": return "application/xml"
+        case "zip": return "application/zip"
+        case "html", "htm": return "text/html"
         default:
             return UTType(filenameExtension: lower)?.preferredMIMEType
         }
@@ -204,20 +238,20 @@ nonisolated enum MediaAttachmentPolicy {
         case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": return "xlsx"
         case "application/vnd.ms-powerpoint": return "ppt"
         case "application/vnd.openxmlformats-officedocument.presentationml.presentation": return "pptx"
+        case "text/markdown", "text/x-markdown": return "md"
+        case "application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml": return "yaml"
+        case "application/xml", "text/xml": return "xml"
+        case "application/zip", "application/x-zip-compressed": return "zip"
+        case "text/html": return "html"
         default: return "bin"
         }
     }
 
     static func safeFileExtension(from fileName: String?) -> String? {
-        guard let ext = fileName?
-            .split(separator: ".", omittingEmptySubsequences: false)
-            .last
-            .map(String.init)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased(),
-            isSafeFileExtension(ext)
-        else { return nil }
-        return ext
+        guard let fileName else { return nil }
+        let trimmedName = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ext = (trimmedName as NSString).pathExtension.lowercased()
+        return isSafeFileExtension(ext) ? ext : nil
     }
 
     private static func isSafeFileExtension(_ ext: String) -> Bool {
@@ -739,8 +773,7 @@ nonisolated enum MediaDraftProcessor {
                 )
             }
         }
-        if let fileName,
-           let fileExtension = fileName.split(separator: ".").last.map(String.init),
+        if let fileExtension = MediaAttachmentPolicy.safeFileExtension(from: fileName),
            let mediaType = MediaAttachmentPolicy.mediaType(forFileExtension: fileExtension)
         {
             return MediaAttachmentKind.classify(mediaType: mediaType, fileName: fileName)
