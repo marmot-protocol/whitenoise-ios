@@ -246,7 +246,6 @@ struct ComposerBar: View {
     let onVoicePressEnded: () -> Void
     let onMentionSelect: (ComposerMentionCandidate) -> Void
     let onSend: () -> Void
-    @AppStorage(ComposerReturnKeyBehavior.storageKey) private var sendsOnReturn = false
     @State private var isTextInputFocused = false
     @State private var showAttachmentUnavailableTooltip = false
     @State private var showExpandedEditor = false
@@ -463,9 +462,7 @@ struct ComposerBar: View {
                     isFocused: $isTextInputFocused,
                     fontSize: fieldFontSize,
                     focusRequest: focusRequest &* 1_000 &+ localFocusRequest,
-                    onPasteImage: onPasteImage,
-                    sendsOnReturn: sendsOnReturn,
-                    onReturnSend: triggerSend
+                    onPasteImage: onPasteImage
                 )
             }
             .padding(.leading, BottomInputChromeLayout.fieldLeadingPadding)

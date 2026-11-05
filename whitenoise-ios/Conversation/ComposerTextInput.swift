@@ -8,8 +8,6 @@ struct ComposerTextInput: UIViewRepresentable {
     let focusRequest: Int
     let onPasteImage: (UIImage) -> Void
     var onBeginEditing: () -> Void = {}
-    var sendsOnReturn = false
-    var onReturnSend: () -> Void = {}
 
     private let minimumHeight: CGFloat = BottomInputChromeLayout.controlSize
     private let maximumHeight: CGFloat = 112
@@ -38,7 +36,7 @@ struct ComposerTextInput: UIViewRepresentable {
         textView.autocorrectionType = .default
         textView.autocapitalizationType = .sentences
         textView.keyboardDismissMode = .interactive
-        textView.returnKeyType = ComposerReturnKeyBehavior.returnKeyType(sendsOnReturn: sendsOnReturn)
+        textView.returnKeyType = .default
         textView.accessibilityLabel = L10n.string("Message")
         textView.isScrollEnabled = false
         return textView
@@ -47,11 +45,6 @@ struct ComposerTextInput: UIViewRepresentable {
     func updateUIView(_ uiView: ImagePasteTextView, context: Context) {
         context.coordinator.parent = self
         uiView.onPasteImage = onPasteImage
-        let returnKeyType = ComposerReturnKeyBehavior.returnKeyType(sendsOnReturn: sendsOnReturn)
-        if uiView.returnKeyType != returnKeyType {
-            uiView.returnKeyType = returnKeyType
-            if uiView.isFirstResponder { uiView.reloadInputViews() }
-        }
         if uiView.text != text {
             uiView.text = text
             uiView.invalidateIntrinsicContentSize()
@@ -145,22 +138,6 @@ struct ComposerTextInput: UIViewRepresentable {
             )
         }
 
-        func textView(
-            _ textView: UITextView,
-            shouldChangeTextIn range: NSRange,
-            replacementText text: String
-        ) -> Bool {
-            let action = ComposerReturnKeyBehavior.action(
-                sendsOnReturn: parent.sendsOnReturn,
-                replacementText: text,
-                hasMarkedText: textView.markedTextRange != nil,
-                isPaste: (textView as? ImagePasteTextView)?.isPasting ?? false
-            )
-            guard action == .send else { return true }
-            parent.onReturnSend()
-            return false
-        }
-
         func textViewDidChangeSelection(_ textView: UITextView) {
             (textView as? ImagePasteTextView)?.revealSelectionAfterLayout()
         }
@@ -179,7 +156,6 @@ struct ComposerTextInput: UIViewRepresentable {
 final class ImagePasteTextView: UITextView {
     var onPasteImage: ((UIImage) -> Void)?
     var maximumComposerHeight: CGFloat = 112
-    private(set) var isPasting = false
     private var needsSelectionReveal = false
 
     func naturalContentHeight(fittingWidth: CGFloat) -> CGFloat {
@@ -232,8 +208,6 @@ final class ImagePasteTextView: UITextView {
             onPasteImage?(image)
             return
         }
-        isPasting = true
-        defer { isPasting = false }
         super.paste(sender)
     }
 }
