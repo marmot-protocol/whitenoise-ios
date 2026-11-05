@@ -69,13 +69,9 @@ final class GroupDetailsViewModel {
     @ObservationIgnored var onGroupChanged: (AppGroupRecordFfi) -> Void = { _ in }
     @ObservationIgnored var onGroupLeft: (String) -> Void = { _ in }
     @ObservationIgnored var onGroupDeleted: (String) -> Void = { _ in }
+    @ObservationIgnored private let marmotCalls: GroupDetailsMarmotCalls
 #if DEBUG
     @ObservationIgnored var setGroupArchivedForTesting: (@MainActor (String, String, Bool) async throws -> AppGroupRecordFfi)?
-    @ObservationIgnored var updateGroupProfileForTesting: (@MainActor (String, String, String, String) async throws -> SendSummaryFfi)?
-    @ObservationIgnored var updateGroupAvatarUrlForTesting: (@MainActor (String, String, String?) async throws -> SendSummaryFfi)?
-    @ObservationIgnored var updateGroupImageForTesting: (@MainActor (String, String, Data, String) async throws -> SendSummaryFfi)?
-    @ObservationIgnored var clearGroupImageForTesting: (@MainActor (String, String) async throws -> SendSummaryFfi)?
-    @ObservationIgnored var listMediaForTesting: (@MainActor (String, String) async throws -> [MediaRecordFfi])?
     @ObservationIgnored var leaveGroupForTesting: (@MainActor (String, String) async throws -> SendSummaryFfi)?
     @ObservationIgnored var forgetGroupLocalForTesting: (@MainActor (String, String) async throws -> Bool)?
     @ObservationIgnored var clearResetMediaForTesting: (@MainActor () async -> Bool)?
@@ -84,6 +80,10 @@ final class GroupDetailsViewModel {
     @ObservationIgnored var disbandGroupForTesting: (@MainActor (String, String) async throws -> DisbandRequestFfi)?
     @ObservationIgnored var acknowledgeDisbandFailureForTesting: (@MainActor (String, String) async throws -> Bool)?
 #endif
+
+    init(marmotCalls: GroupDetailsMarmotCalls = .marmot) {
+        self.marmotCalls = marmotCalls
+    }
 
     isolated deinit {
         cleanupTranscriptExportFile()
@@ -275,21 +275,8 @@ final class GroupDetailsViewModel {
         do {
             appState.present(.warning(L10n.string("Updating group info…"), message: L10n.string("Publishing group update.")))
             let summary = try await performGroupChange(accountRef: accountRef, using: appState) { client in
-#if DEBUG
-                if let updateGroupProfileForTesting {
-                    return try await updateGroupProfileForTesting(
-                        accountRef,
-                        conversation.group.groupIdHex,
-                        name,
-                        description
-                    )
-                }
-#endif
-                return try await client.updateGroupProfile(
-                    accountRef: accountRef,
-                    groupIdHex: conversation.group.groupIdHex,
-                    name: name,
-                    description: description
+                try await self.marmotCalls.updateGroupProfile(
+                    client, accountRef, conversation.group.groupIdHex, name, description
                 )
             }
             await refreshGroupManagementAndNotify()
@@ -332,21 +319,7 @@ final class GroupDetailsViewModel {
 
         do {
             let client = try appState.currentMarmotClient()
-            let items: [GroupSharedMediaItem]
-            var pageVersion: AttachmentHistoryVersion?
-#if DEBUG
-            if let listMediaForTesting {
-                items = GroupSharedMediaPresentation.items(from: try await listMediaForTesting(accountRef, conversation.group.groupIdHex))
-            } else {
-                let page = try await client.attachmentPreview(accountRef: accountRef, groupID: conversation.group.groupIdHex)
-                items = GroupSharedMediaPresentation.items(entries: page.entries)
-                pageVersion = page.version
-            }
-#else
-            let page = try await client.attachmentPreview(accountRef: accountRef, groupID: conversation.group.groupIdHex)
-            items = GroupSharedMediaPresentation.items(entries: page.entries)
-            pageVersion = page.version
-#endif
+            let (items, pageVersion) = try await marmotCalls.sharedMedia(client, accountRef, conversation.group.groupIdHex)
             try Task.checkCancellation()
             guard appState.activeAccountRef == accountRef, appState.client === client,
                   !localResetCompleted, !conversation.isLocallyReset else { return }
@@ -378,21 +351,8 @@ final class GroupDetailsViewModel {
             if let draft {
                 if !pendingLegacyAvatarClearAfterImageMutation {
                     summary = try await performGroupChange(accountRef: accountRef, using: appState) { client in
-#if DEBUG
-                        if let updateGroupImageForTesting {
-                            return try await updateGroupImageForTesting(
-                                accountRef,
-                                conversation.group.groupIdHex,
-                                draft.data,
-                                draft.mediaType
-                            )
-                        }
-#endif
-                        return try await client.updateGroupImage(
-                            accountRef: accountRef,
-                            groupIdHex: conversation.group.groupIdHex,
-                            plaintext: draft.data,
-                            mediaType: draft.mediaType
+                        try await self.marmotCalls.updateGroupImage(
+                            client, accountRef, conversation.group.groupIdHex, draft.data, draft.mediaType
                         )
                     }
                     publishedEncryptedImage = true
@@ -400,18 +360,7 @@ final class GroupDetailsViewModel {
             } else if conversation.group.imageHashHex != nil,
                       !pendingLegacyAvatarClearAfterImageMutation {
                 summary = try await performGroupChange(accountRef: accountRef, using: appState) { client in
-#if DEBUG
-                    if let clearGroupImageForTesting {
-                        return try await clearGroupImageForTesting(
-                            accountRef,
-                            conversation.group.groupIdHex
-                        )
-                    }
-#endif
-                    return try await client.clearGroupImage(
-                        accountRef: accountRef,
-                        groupIdHex: conversation.group.groupIdHex
-                    )
+                    try await self.marmotCalls.clearGroupImage(client, accountRef, conversation.group.groupIdHex)
                 }
             }
 
@@ -423,22 +372,7 @@ final class GroupDetailsViewModel {
             if conversation.group.avatarUrl != nil {
                 pendingLegacyAvatarClearAfterImageMutation = true
                 summary = try await performGroupChange(accountRef: accountRef, using: appState) { client in
-#if DEBUG
-                    if let updateGroupAvatarUrlForTesting {
-                        return try await updateGroupAvatarUrlForTesting(
-                            accountRef,
-                            conversation.group.groupIdHex,
-                            nil
-                        )
-                    }
-#endif
-                    return try await client.updateGroupAvatarUrl(
-                        accountRef: accountRef,
-                        groupIdHex: conversation.group.groupIdHex,
-                        url: nil,
-                        dim: nil,
-                        thumbhash: nil
-                    )
+                    try await self.marmotCalls.updateGroupAvatarUrl(client, accountRef, conversation.group.groupIdHex, nil)
                 }
                 pendingLegacyAvatarClearAfterImageMutation = false
             } else if pendingLegacyAvatarClearAfterImageMutation {
