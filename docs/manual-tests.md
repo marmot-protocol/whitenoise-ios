@@ -963,6 +963,8 @@ only from custom emoji already shown in that chat.
 - [ ] Reply with a voice note, with and without a caption, on iPhone and iPad.
       A short quoted preview stays compact below the audio player; a long caption
       can widen the response, and the preview fills that response's width.
+- [ ] Enable link previews and reply with a link in a narrow iPhone window.
+      Once loaded, the link card fits inside the reply bubble without clipped edges.
 - [ ] Reopen a long conversation containing multiple wrapped messages and
       media rows: the latest messages are visible immediately at the bottom;
       the timeline never opens blank or requires a scroll gesture to recover.
