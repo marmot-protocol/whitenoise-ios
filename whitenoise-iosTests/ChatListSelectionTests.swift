@@ -53,6 +53,12 @@ struct ChatListSelectionTests {
 }
 
 struct MessageBulkCopyTests {
+    @Test func combinedCopyPreservesLongMessagesAndTheirWhitespace() {
+        let first = "  **Heading**\n\n" + String(repeating: "First message\n", count: 150) + "\n"
+        let second = "\t```swift\nlet value = 1\n```\n\n[link](https://example.com)  "
+        #expect(MessageSelectionPolicy.combinedCopyText(["", first, second, " \n\t"]) == first + "\n\n" + second)
+    }
+
     @Test func combinedCopyJoinsNonEmptyBodiesInOrder() {
         let text = MessageSelectionPolicy.combinedCopyText(["first", "  ", "second", ""])
         #expect(text == "first\n\nsecond")

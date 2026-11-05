@@ -1,4 +1,5 @@
 import SwiftUI
+import Testing
 import XCTest
 import UIKit
 @testable import whitenoise_ios
@@ -209,6 +210,11 @@ private struct Harness {
 
     func focusFromSwiftUI() async throws {
         model.isFocused = true
+        // Quiet drain rounds can finish before SwiftUI applies the focus request.
+        try await eventually {
+            controller.view.layoutIfNeeded()
+            return field.isFirstResponder && model.isFocused
+        }
         try await settle()
         XCTAssertTrue(field.isFirstResponder)
     }

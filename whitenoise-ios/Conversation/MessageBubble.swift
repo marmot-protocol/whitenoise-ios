@@ -95,6 +95,43 @@ enum MessageBubbleReplyLayout {
     static let cardCornerRadius = ChatBubbleMetrics.cornerRadius - cardOuterInset
     static let sentCardOpacity = 0.16
     static let receivedCardOpacity = 0.09
+
+    nonisolated static func measurementWidth(proposedWidth: CGFloat?, isReplyHeader: Bool) -> CGFloat? {
+        guard isReplyHeader else { return proposedWidth }
+        return min(proposedWidth ?? richBubbleWidth, richBubbleWidth)
+    }
+}
+
+private struct MessageReplyHeaderLayoutKey: LayoutValueKey {
+    static let defaultValue = false
+}
+
+/// The preview prefers its compact width when measuring, then fills the width
+/// selected by the response. A flexible preview must not widen every short reply.
+private struct MessageReplyBubbleLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let preferredWidth = subviews.map { subview in
+            let width = MessageBubbleReplyLayout.measurementWidth(
+                proposedWidth: proposal.width, isReplyHeader: subview[MessageReplyHeaderLayoutKey.self]
+            )
+            return subview.sizeThatFits(ProposedViewSize(width: width, height: nil)).width
+        }.max() ?? 0
+        let width = MessageBubbleChromeSizing.width(
+            proposedWidth: proposal.width, bubbleWidth: preferredWidth, metadataWidth: 0
+        )
+        let resolved = ProposedViewSize(width: width, height: nil)
+        return CGSize(width: width, height: subviews.reduce(0) { $0 + $1.sizeThatFits(resolved).height })
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let resolved = ProposedViewSize(width: bounds.width, height: nil)
+        var y = bounds.minY
+        for subview in subviews {
+            let height = subview.sizeThatFits(resolved).height
+            subview.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading, proposal: resolved)
+            y += height
+        }
+    }
 }
 
 nonisolated enum MessageRichMediaBubblePresentation {
@@ -451,6 +488,7 @@ struct MessageBubble: View {
         replyCard(preview)
             .padding(.horizontal, MessageBubbleReplyLayout.cardOuterInset)
             .padding(.vertical, MessageBubbleReplyLayout.cardOuterInset)
+            .layoutValue(key: MessageReplyHeaderLayoutKey.self, value: true)
     }
 
     private func replyCard(_ preview: ConversationReplyPreview) -> some View {
@@ -458,7 +496,7 @@ struct MessageBubble: View {
             .padding(.horizontal, MessageBubbleReplyLayout.cardHorizontalInset)
             .padding(.vertical, MessageBubbleReplyLayout.cardVerticalInset)
             .frame(
-                width: MessageBubbleReplyLayout.richContentWidth,
+                maxWidth: .infinity,
                 alignment: .leading
             )
             .background(
@@ -482,7 +520,10 @@ struct MessageBubble: View {
     }
 
     private var textBubble: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let layout = replyPreview != nil && showsStandardBody
+            ? AnyLayout(MessageReplyBubbleLayout())
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+        return layout {
             if let debugStyle {
                 debugHeader(debugStyle)
             }
@@ -623,7 +664,7 @@ struct MessageBubble: View {
             mediaAttachments
 
             if let replyPreview {
-                VStack(alignment: .leading, spacing: 0) {
+                MessageReplyBubbleLayout {
                     replyHeader(replyPreview)
                     if hasVisibleBodyText {
                         messageBodyText(hasReply: true)
@@ -810,9 +851,7 @@ struct MessageBubble: View {
             richContent ? 2 : MessageBubbleReplyLayout.bodyBottomInset
         )
         .frame(
-            width: richContent
-                ? MessageBubbleReplyLayout.richContentWidth
-                : (hasReply ? MessageBubbleReplyLayout.richBubbleWidth : nil),
+            width: richContent ? MessageBubbleReplyLayout.richContentWidth : nil,
             alignment: .leading
         )
     }

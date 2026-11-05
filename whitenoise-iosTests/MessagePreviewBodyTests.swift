@@ -18,6 +18,7 @@ struct MessagePreviewBodyTests {
         #expect(MessageSemantics.classify(record) == .reaction(targetMessageId: hex("cc")))
         #expect(MessagePreview.isPreviewable(record) == false)
         #expect(MessagePreview.body(record) == "")
+        #expect(MessagePreview.copyBody(record) == "")
     }
 
     @Test func deleteRecordHasNoBodyAndIsNotPreviewable() {
@@ -30,6 +31,7 @@ struct MessagePreviewBodyTests {
         #expect(MessageSemantics.classify(record) == .delete(targetMessageId: hex("cc")))
         #expect(MessagePreview.isPreviewable(record) == false)
         #expect(MessagePreview.body(record) == "")
+        #expect(MessagePreview.copyBody(record) == "")
     }
 
     @Test func agentStreamStartRecordHasNoBodyAndIsNotPreviewable() {
@@ -53,6 +55,7 @@ struct MessagePreviewBodyTests {
         }
         #expect(MessagePreview.isPreviewable(record) == false)
         #expect(MessagePreview.body(record) == "")
+        #expect(MessagePreview.copyBody(record) == "")
     }
 
     @Test func unknownRecordHasNoBodyAndIsNotPreviewable() {
@@ -65,6 +68,7 @@ struct MessagePreviewBodyTests {
         #expect(MessageSemantics.classify(record) == .unknown)
         #expect(MessagePreview.isPreviewable(record) == false)
         #expect(MessagePreview.body(record) == "")
+        #expect(MessagePreview.copyBody(record) == "")
     }
 
     @Test func plainChatRecordStillReturnsItsPlaintextBody() {
@@ -89,6 +93,68 @@ struct MessagePreviewBodyTests {
 
         #expect(MessagePreview.isPreviewable(record))
         #expect(MessagePreview.body(record) == "GIF via GIPHY")
+        #expect(MessagePreview.copyBody(record) == "GIF via GIPHY")
+    }
+
+    @Test(arguments: [false, true])
+    func copyPreservesFullSourceWhenParsedTokensArePresentOrTruncated(truncated: Bool) {
+        let source = "  # Heading\n\n" + String(repeating: "A long paragraph 👩🏽‍💻 :marmot:.\n", count: 500) +
+            "\n[Full link](https://example.com/destination)\n\n```swift\n\tlet value = 1\n```\n  "
+        var record = message(id: hex("aa"), plaintext: source)
+        record.contentTokens = MarkdownDocumentFfi(
+            blocks: [.paragraph(inlines: [.text(content: source)])],
+            truncated: truncated
+        )
+
+        #expect(MessagePreview.body(record) != source)
+        #expect(MessagePreview.copyBody(record) == source)
+    }
+
+    @Test func copyPreservesReplyStreamAndMediaCaptionSources() {
+        let source = "First paragraph\n\n" + String(repeating: "more text\n", count: 150) + "\tLast line\n"
+        let variants: [[MessageTagFfi]] = [
+            [
+                MessageTagFfi(values: [MessageSemantics.eventRefTag, hex("cc")]),
+                MessageTagFfi(values: [MessageSemantics.quoteRefTag, hex("cc")]),
+            ],
+            [
+                MessageTagFfi(values: [MessageSemantics.streamTag, hex("ab")]),
+                MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("bc")]),
+                MessageTagFfi(values: [MessageSemantics.streamHashTag, hex("cd")]),
+                MessageTagFfi(values: [MessageSemantics.streamChunksTag, "3"]),
+            ],
+            [encryptedMediaTag()],
+        ]
+        for tags in variants {
+            var record = message(id: hex("aa"), plaintext: source, tags: tags)
+            record.contentTokens = MarkdownDocumentFfi(
+                blocks: [.paragraph(inlines: [.text(content: source)])], truncated: false
+            )
+            #expect(MessagePreview.copyBody(record) == source)
+        }
+    }
+
+    @Test func copyPreservesGiphyShapedCompletedAgentResponse() {
+        let source = "https://media1.giphy.com/media/abc/giphy.mp4?cid=client&rid=giphy.mp4\nvia GIPHY · Creator"
+        let record = message(id: hex("aa"), plaintext: source, tags: [
+            MessageTagFfi(values: [MessageSemantics.streamTag, hex("ab")]),
+            MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("bc")]),
+            MessageTagFfi(values: [MessageSemantics.streamHashTag, hex("cd")]),
+            MessageTagFfi(values: [MessageSemantics.streamChunksTag, "3"]),
+        ])
+
+        #expect(MessagePreview.copyBody(record) == source)
+    }
+
+    @Test func copyPreservesGiphyShapedMediaCaption() {
+        let source = "https://media1.giphy.com/media/abc/giphy.mp4?cid=client&rid=giphy.mp4\nvia GIPHY · Creator"
+        let record = message(id: hex("aa"), plaintext: source, tags: [encryptedMediaTag()])
+        guard case .media = MessageSemantics.classify(record) else {
+            Issue.record("Expected a media caption")
+            return
+        }
+
+        #expect(MessagePreview.copyBody(record) == source)
     }
 
     @Test func tokenlessEditedBodyRendersCanonicalMentionAsDisplayName() throws {
@@ -107,6 +173,29 @@ struct MessagePreviewBodyTests {
             entity.bech32 == npub ? "Alex" : nil
         }
         #expect(body == "updated @Alex")
+        #expect(MessagePreview.copyBody(record) { _ in "Alex" } == "updated @Alex")
+    }
+
+    @Test(arguments: [false, true])
+    func copyResolvesMentionsBeyondPreviewBudgetAndPreservesOtherText(hasTokens: Bool) throws {
+        let npub = try #require(NostrProfileReference.npub(fromAccountIdHex: hex("11")))
+        let unknownNpub = try #require(NostrProfileReference.npub(fromAccountIdHex: hex("22")))
+        let prefix = "  # Heading\n\n" + String(repeating: "Long paragraph 👩🏽‍💻.\n", count: 150)
+        let suffix = "\n\n\t[Full link](https://example.com) @\(unknownNpub)\n  "
+        let source = prefix + "@\(npub)" + suffix
+        let expected = prefix + "@Alex" + suffix
+        for tags in [[], [encryptedMediaTag()]] {
+            var record = message(id: hex("aa"), plaintext: source, tags: tags)
+            if hasTokens {
+                record.contentTokens = MarkdownDocumentFfi(
+                    blocks: [.paragraph(inlines: [.text(content: source)])], truncated: true
+                )
+            }
+            let copied = MessagePreview.copyBody(record) { entity in
+                entity.bech32 == npub ? "Alex" : nil
+            }
+            #expect(copied == expected)
+        }
     }
 
     @Test func tokenlessEditedMediaCaptionRendersCanonicalMentionAsDisplayName() throws {

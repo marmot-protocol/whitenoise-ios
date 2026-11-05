@@ -954,6 +954,17 @@ only from custom emoji already shown in that chat.
 - [ ] Send a message long enough to wrap and expand it with **Read more**:
       body text uses the bubble's available width, metadata remains trailing
       below it, and the visible timeline position does not jump.
+- [ ] Reply to a very short message with a long response. The response can use
+      the same width as an ordinary long message, including after **Read more**.
+      Check sent and received replies on iPhone and iPad, narrow windows, larger
+      text, dark mode and right-to-left layout. Short responses stay compact;
+      quoted previews fill the bubble width within their normal inset, and media
+      captions remain inside their bubbles.
+- [ ] Reply with a voice note, with and without a caption, on iPhone and iPad.
+      A short quoted preview stays compact below the audio player; a long caption
+      can widen the response, and the preview fills that response's width.
+- [ ] Enable link previews and reply with a link in a narrow iPhone window.
+      Once loaded, the link card fits inside the reply bubble without clipped edges.
 - [ ] Reopen a long conversation containing multiple wrapped messages and
       media rows: the latest messages are visible immediately at the bottom;
       the timeline never opens blank or requires a scroll gesture to recover.
@@ -1645,6 +1656,17 @@ Marmot root. Automated simulator checks do not replace these device checks.
       Repeat with media, failed sends, backgrounding, and two editing sessions.
       A conflict preserves local text; both “Keep my draft” and “Use saved draft”
       resolve explicitly. Missing attachment bytes show a load error.
+- [ ] Receive a message longer than 1,000 characters with paragraphs, indented
+      code, a Markdown link and emoji. Copy it from the message menu and from
+      the accessibility Copy action, then paste into a plain-text editor. The
+      complete original text, link destination, indentation and line breaks
+      survive. Select it with another message and Copy: both full messages stay
+      in chronological order with two added line breaks between them, preserving
+      any original leading or trailing whitespace. Repeat with a reply, a media
+      caption and a completed agent response. Known mentions copy as the readable
+      names shown in the conversation, including mentions beyond the first 1,000
+      characters. Chat-list and reply previews still use their usual compact
+      formatting.
 - [ ] Block/unblock from a profile or direct-chat info, then inspect Privacy &
       Security → Blocked Users. Confirmed changes update both screens. An uncertain
       publication offers the same operation again and never claims success.

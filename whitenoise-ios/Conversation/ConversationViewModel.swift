@@ -855,6 +855,10 @@ final class ConversationViewModel {
         timelineStore.displayBody(of: record)
     }
 
+    func copyBody(of record: AppMessageRecordFfi) -> String {
+        timelineStore.copyBody(of: record)
+    }
+
     func composerMentionDraftState(for draft: String) -> ComposerMentionDraftState {
         mentionController.captureDraftState(for: draft)
     }
