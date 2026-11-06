@@ -2,7 +2,6 @@ import SwiftUI
 
 struct AppearanceSettingsView: View {
     @Environment(AppAppearanceStore.self) private var appearance
-    @AppStorage(ComposerReturnKeyBehavior.storageKey) private var sendsOnReturn = false
     @State private var languageRawValue = AppLanguage.currentRawValue
     @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
@@ -20,7 +19,7 @@ struct AppearanceSettingsView: View {
             } header: {
                 Text("Theme")
             } footer: {
-                Text("Choose whether White Noise follows your device appearance or always uses a light or dark theme.")
+                Text("Match your device’s appearance or choose light or dark.")
             }
 
             Section {
@@ -37,13 +36,7 @@ struct AppearanceSettingsView: View {
                 }
                 .pickerStyle(.navigationLink)
             } footer: {
-                Text("System follows your device language. Other choices update White Noise immediately.")
-            }
-
-            Section {
-                WNToggle("Return Key Sends", isOn: $sendsOnReturn)
-            } footer: {
-                Text("When on, the Return key sends your message instead of starting a new line.")
+                Text("Match your device’s language or choose another.")
             }
 
             Section {
@@ -55,7 +48,7 @@ struct AppearanceSettingsView: View {
                     )
                 )
             } footer: {
-                Text("Shows the title and image of links in chats. Loading a preview tells the linked website, and the site hosting its image, your IP address.")
+                Text("Show link titles and images in chats. Loading previews shares your IP address with the linked website and image host.")
             }
         }
         .localizedNavigationTitle("Appearance")
@@ -63,8 +56,9 @@ struct AppearanceSettingsView: View {
         .onAppear {
             languageRawValue = AppLanguage.currentRawValue
         }
-        .onReceive(NotificationCenter.default.publisher(for: AppLanguage.didChangeNotification)) { _ in
-            languageRawValue = AppLanguage.currentRawValue
+        .onReceive(NotificationCenter.default.publisher(for: AppLanguage.didChangeNotification)) { notification in
+            languageRawValue = notification.userInfo?[AppLanguage.didChangeLanguageUserInfoKey] as? String
+                ?? AppLanguage.currentRawValue
         }
     }
 

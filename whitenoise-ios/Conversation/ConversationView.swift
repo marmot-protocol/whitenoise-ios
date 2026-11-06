@@ -1498,7 +1498,7 @@ struct ConversationView: View {
             }
         )
 
-        let bodies = records.map { viewModel.displayBody(of: $0) }
+        let bodies = records.map { viewModel.copyBody(of: $0) }
         let canCopy = MessageSelectionPolicy.canCopy(
             selectedCount: records.count,
             anyHasText: bodies.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -2240,7 +2240,7 @@ struct ConversationView: View {
                 }
                 if !record.plaintext.isEmpty {
                     Button("Copy") {
-                        SensitiveClipboard.copyLocalOnly(viewModel.displayBody(of: record))
+                        SensitiveClipboard.copyLocalOnly(viewModel.copyBody(of: record))
                         Haptics.tap()
                     }
                 }
@@ -4098,7 +4098,7 @@ struct ConversationView: View {
                 beginReply(to: record, viewModel: viewModel)
             },
             onCopy: {
-                SensitiveClipboard.copyLocalOnly(viewModel.displayBody(of: record))
+                SensitiveClipboard.copyLocalOnly(viewModel.copyBody(of: record))
                 Haptics.tap()
                 dismissActions(resumingComposerFocus: true)
             },

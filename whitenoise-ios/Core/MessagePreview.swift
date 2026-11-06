@@ -77,6 +77,38 @@ enum MessagePreview {
         }
     }
 
+    /// Copy full authored text, independent of preview and rendering budgets,
+    /// resolving canonical mentions to the names shown in the conversation.
+    /// Parsed tokens can be incomplete and preview flattening loses line breaks,
+    /// Markdown syntax and link destinations. Structured events keep their normal
+    /// presentation rather than exposing their internal payloads.
+    static func copyBody(
+        _ record: AppMessageRecordFfi,
+        mentionDisplayName: MarkdownMentionResolver? = nil,
+        systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
+    ) -> String {
+        switch MessageSemantics.classify(record) {
+        case .streamFinal, .media:
+            if !record.plaintext.isEmpty {
+                return copyText(record.plaintext, mentionDisplayName: mentionDisplayName)
+            }
+        case .chat, .reply:
+            if !record.plaintext.isEmpty {
+                if let label = RemoteGiphyMedia.envelopePreviewText(for: record.plaintext) { return label }
+                return copyText(record.plaintext, mentionDisplayName: mentionDisplayName)
+            }
+        default:
+            break
+        }
+        return body(record, mentionDisplayName: mentionDisplayName, systemEventNaming: systemEventNaming)
+    }
+
+    private static func copyText(_ text: String, mentionDisplayName: MarkdownMentionResolver?) -> String {
+        CanonicalMentionDisplayProjection.project(text) { npub in
+            mentionDisplayName?(MarkdownNostrEntityFfi(hrp: .npub, bech32: npub))
+        }.text
+    }
+
     static func body(
         _ preview: TimelineReplyPreviewFfi,
         mentionDisplayName: MarkdownMentionResolver? = nil,

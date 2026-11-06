@@ -5,6 +5,7 @@ import UIKit
 import AVFoundation
 import Combine
 import Synchronization
+import UniformTypeIdentifiers
 @testable import whitenoise_ios
 @testable import MarmotKit
 
@@ -39,6 +40,21 @@ struct MediaAttachmentPolicyTests {
         #expect(MediaAttachmentPolicy.mediaType(forFileExtension: "x/y") == nil)
     }
 
+    @Test(arguments: ["zip", ".md", "README"])
+    func extensionlessPeerFilenamesFallBackToTheMediaType(fileName: String) {
+        #expect(
+            MediaAttachmentPolicy.fileExtension(for: "application/pdf", fileName: fileName)
+                == MediaAttachmentPolicy.fileExtension(for: "application/pdf")
+        )
+    }
+
+    @Test func trailingSlashPeerFilenameKeepsItsExtension() {
+        #expect(
+            MediaAttachmentPolicy.fileExtension(for: "application/pdf", fileName: "a.md/")
+                == MediaAttachmentPolicy.fileExtension(for: "text/markdown")
+        )
+    }
+
     @Test func genericDraftPreservesNonImageBytesForUpload() throws {
         let data = Data("hello".utf8)
         let attachment = try MediaDraftProcessor.attachment(
@@ -52,6 +68,88 @@ struct MediaAttachmentPolicyTests {
         #expect(attachment.data == data)
         #expect(attachment.kind == .document)
         #expect(attachment.thumbhash == nil)
+    }
+
+    static let textAndArchiveDocuments: [(fileName: String, typeIdentifier: String?)] = [
+        ("README.md", "net.daringfireball.markdown"),
+        ("notes.markdown", nil),
+        ("config.yaml", "public.yaml"),
+        ("compose.yml", nil),
+        ("feed.xml", "public.xml"),
+        ("bundle.zip", "public.zip-archive"),
+        ("page.html", "public.html"),
+        ("index.htm", nil),
+    ]
+
+    @Test(arguments: textAndArchiveDocuments)
+    func markdownYAMLXMLZIPAndHTMLDraftAsDocuments(fileName: String, typeIdentifier: String?) throws {
+        let data = Data("<p>hi</p>\n- a: 1\n".utf8)
+        let attachment = try MediaDraftProcessor.attachment(
+            from: data,
+            fileName: fileName,
+            typeIdentifier: typeIdentifier
+        )
+
+        #expect(attachment.kind == .document)
+        #expect(attachment.data == data)
+        #expect(MediaAttachmentPolicy.isSupported(mediaType: attachment.mediaType))
+        #expect(MediaAttachmentKind.classify(mediaType: attachment.mediaType) == .document)
+    }
+
+    @Test(arguments: textAndArchiveDocuments.compactMap { document in
+        document.typeIdentifier.map { (document.fileName, $0) }
+    })
+    func pickedAndFileNameOnlyDraftsSendTheSameMediaType(fileName: String, typeIdentifier: String) throws {
+        let data = Data("a: 1\n".utf8)
+        let picked = try MediaDraftProcessor.attachment(from: data, fileName: fileName, typeIdentifier: typeIdentifier)
+        let fileNameOnly = try MediaDraftProcessor.attachment(from: data, fileName: fileName, typeIdentifier: nil)
+
+        #expect(picked.mediaType == fileNameOnly.mediaType)
+    }
+
+    @Test(arguments: textAndArchiveDocuments.map(\.fileName))
+    func fileImporterOffersMarkdownYAMLXMLZIPAndHTML(fileName: String) throws {
+        let type = try #require(UTType(filenameExtension: (fileName as NSString).pathExtension))
+        #expect(MediaAttachmentPolicy.fileImporterAllowedTypes.contains { type.conforms(to: $0) })
+    }
+
+    static let documentAliases: [(alias: String, canonical: String)] = [
+        ("text/x-markdown", "text/markdown"),
+        ("text/yaml", "application/yaml"),
+        ("text/x-yaml", "application/yaml"),
+        ("application/x-yaml", "application/yaml"),
+        ("text/xml", "application/xml"),
+        ("application/x-zip-compressed", "application/zip"),
+    ]
+
+    @Test(arguments: documentAliases)
+    func receivedAliasMediaTypesClassifyAsDocuments(alias: String, canonical: String) {
+        #expect(MediaAttachmentKind.classify(mediaType: alias) == .document)
+        #expect(MediaAttachmentPolicy.fileExtension(for: alias) == MediaAttachmentPolicy.fileExtension(for: canonical))
+    }
+
+    @Test(arguments: ["notes.md", "archive.ZIP"])
+    func receivedOctetStreamClassifiesAsDocumentByFileName(fileName: String) {
+        #expect(MediaAttachmentKind.classify(mediaType: "application/octet-stream", fileName: fileName) == .document)
+    }
+
+    @Test(arguments: ["zip", "html"])
+    func extensionlessNamesStayUnsupported(fileName: String) {
+        #expect(MediaAttachmentKind.classify(mediaType: "", fileName: fileName) == .unsupported)
+    }
+
+    @Test func zipSubtypeDraftIsRejected() {
+        let error = #expect(throws: MediaDraftProcessor.Failure.self) {
+            try MediaDraftProcessor.attachment(
+                from: Data("PK".utf8),
+                fileName: "app.jar",
+                typeIdentifier: "com.sun.java-archive"
+            )
+        }
+        guard case .unsupportedAttachment = error else {
+            Issue.record("Expected unsupportedAttachment, got \(String(describing: error))")
+            return
+        }
     }
 
     @Test func imageDraftGeneratesDimAndThumbhashForUpload() throws {

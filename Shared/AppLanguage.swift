@@ -24,24 +24,20 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
         return UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier) ?? .standard
     }
 
-    static var supportedAppLanguages: [AppLanguage] {
-        [
-            .english,
-            .german,
-            .spanish,
-            .french,
-            .italian,
-            .portuguese,
-            .russian,
-            .turkish,
-            .chineseSimplified,
-            .chineseTraditional
-        ]
-    }
+    static let supportedAppLanguages: [AppLanguage] = [
+        .english,
+        .german,
+        .spanish,
+        .french,
+        .italian,
+        .portuguese,
+        .russian,
+        .turkish,
+        .chineseSimplified,
+        .chineseTraditional
+    ]
 
-    static var pickerChoices: [AppLanguage] {
-        [.system] + supportedAppLanguages
-    }
+    static let pickerChoices: [AppLanguage] = [.system] + supportedAppLanguages
 
     static var current: AppLanguage {
         #if DEBUG

@@ -35,7 +35,7 @@ struct LinkPreviewCard: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { cardWidth = $0 }
                 .padding(.horizontal, MessageBubbleReplyLayout.cardOuterInset)
                 .padding(.top, MessageBubbleReplyLayout.cardOuterInset)
-                .frame(minWidth: MessageBubbleReplyLayout.richBubbleWidth, maxWidth: .infinity, alignment: .leading)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             } else {
                 Color.clear.frame(width: 0, height: 0)
             }

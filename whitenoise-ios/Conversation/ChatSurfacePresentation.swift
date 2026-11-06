@@ -50,12 +50,11 @@ nonisolated enum MessageSelectionPolicy {
     }
 
     /// Joins the copyable bodies of the selected messages with blank lines,
-    /// in the order given (callers pass them chronologically). Empty bodies
-    /// (media-only rows) are dropped so the clipboard holds only real text.
+    /// in the order given (callers pass them chronologically). Whitespace-only
+    /// bodies are dropped; each remaining message keeps its original whitespace.
     static func combinedCopyText(_ bodies: [String]) -> String {
         bodies
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .joined(separator: "\n\n")
     }
 }

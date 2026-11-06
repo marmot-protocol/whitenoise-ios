@@ -65,13 +65,14 @@ struct GroupDetailsArchiveActionTests {
                 appState: appState,
                 group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             let publisher = GroupProfilePublishProbe()
 
             model.conversation = conversation
             model.renameDraft = "Renamed group"
             model.descriptionDraft = "A shared description"
-            model.updateGroupProfileForTesting = { accountRef, groupIdHex, name, description in
+            marmot.updateGroupProfile = { accountRef, groupIdHex, name, description in
                 try await publisher.publish(
                     accountRef: accountRef,
                     groupIdHex: groupIdHex,
@@ -117,7 +118,8 @@ struct GroupDetailsArchiveActionTests {
                 appState: appState,
                 group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             let publisher = GroupAvatarPublishProbe()
             var progressPhases: [GroupImageProgressPhase?] = []
             let draft = GroupImageUploadDraft(
@@ -129,7 +131,7 @@ struct GroupDetailsArchiveActionTests {
             )
 
             model.conversation = conversation
-            model.updateGroupImageForTesting = { accountRef, groupIdHex, data, mediaType in
+            marmot.updateGroupImage = { accountRef, groupIdHex, data, mediaType in
                 try await publisher.publish(
                     accountRef: accountRef,
                     groupIdHex: groupIdHex,
@@ -188,7 +190,8 @@ struct GroupDetailsArchiveActionTests {
                     avatarUrl: "https://legacy.example/group.jpg"
                 )
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             let draft = GroupImageUploadDraft(
                 data: Data([7, 8, 9]),
                 mediaType: "image/jpeg",
@@ -198,11 +201,11 @@ struct GroupDetailsArchiveActionTests {
             )
             var operations: [String] = []
             model.conversation = conversation
-            model.updateGroupImageForTesting = { _, _, _, _ in
+            marmot.updateGroupImage = { _, _, _, _ in
                 operations.append("upload")
                 return SendSummaryFfi(published: 1, messageIds: ["upload"])
             }
-            model.updateGroupAvatarUrlForTesting = { _, _, url in
+            marmot.updateGroupAvatarUrl = { _, _, url in
                 #expect(url == nil)
                 operations.append("clear-url")
                 return SendSummaryFfi(published: 1, messageIds: ["clear"])
@@ -227,7 +230,8 @@ struct GroupDetailsArchiveActionTests {
                     avatarUrl: "https://legacy.example/group.jpg"
                 )
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             let draft = GroupImageUploadDraft(
                 data: Data([1]),
                 mediaType: "image/jpeg",
@@ -238,11 +242,11 @@ struct GroupDetailsArchiveActionTests {
             var uploadCount = 0
             var clearCount = 0
             model.conversation = conversation
-            model.updateGroupImageForTesting = { _, _, _, _ in
+            marmot.updateGroupImage = { _, _, _, _ in
                 uploadCount += 1
                 return SendSummaryFfi(published: 1, messageIds: ["upload"])
             }
-            model.updateGroupAvatarUrlForTesting = { _, _, _ in
+            marmot.updateGroupAvatarUrl = { _, _, _ in
                 clearCount += 1
                 if clearCount == 1 {
                     throw GroupImageTestError.clearFailed
@@ -273,13 +277,14 @@ struct GroupDetailsArchiveActionTests {
                     description: "Existing description"
                 )
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             var requests: [(accountRef: String, groupIdHex: String, description: String)] = []
 
             model.conversation = conversation
             model.renameDraft = conversation.group.name
             model.descriptionDraft = " \n\t "
-            model.updateGroupProfileForTesting = { accountRef, groupIdHex, _, description in
+            marmot.updateGroupProfile = { accountRef, groupIdHex, _, description in
                 requests.append((accountRef, groupIdHex, description))
                 return SendSummaryFfi(published: 1, messageIds: ["description-update"])
             }
@@ -304,7 +309,8 @@ struct GroupDetailsArchiveActionTests {
                 appState: appState,
                 group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             let draft = GroupImageUploadDraft(
                 data: Data([4, 5, 6]),
                 mediaType: "image/jpeg",
@@ -318,11 +324,11 @@ struct GroupDetailsArchiveActionTests {
             model.prepareProfileDrafts()
             model.renameDraft = "Renamed group"
             model.imageEdit = .replaced(draft)
-            model.updateGroupProfileForTesting = { _, _, name, _ in
+            marmot.updateGroupProfile = { _, _, name, _ in
                 operations.append("profile:\(name)")
                 return SendSummaryFfi(published: 1, messageIds: ["profile"])
             }
-            model.updateGroupImageForTesting = { _, _, data, _ in
+            marmot.updateGroupImage = { _, _, data, _ in
                 operations.append("image:\(data.count)")
                 return SendSummaryFfi(published: 1, messageIds: ["image"])
             }
@@ -344,19 +350,25 @@ struct GroupDetailsArchiveActionTests {
             let groupIdHex = String(repeating: "ab", count: 32)
             let conversation = ConversationViewModel(
                 appState: appState,
-                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false, description: "Existing description")
+                group: archiveTestGroup(
+                    groupIdHex: groupIdHex,
+                    archived: false,
+                    description: "Existing description",
+                    imageHashHex: String(repeating: "ef", count: 32)
+                )
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             var imageRequests = 0
 
             model.conversation = conversation
             model.prepareProfileDrafts()
             model.descriptionDraft = "Changed"
             model.imageEdit = .removed
-            model.updateGroupProfileForTesting = { _, _, _, _ in
+            marmot.updateGroupProfile = { _, _, _, _ in
                 throw GroupDetailsActionError.noActiveAccount
             }
-            model.clearGroupImageForTesting = { _, _ in
+            marmot.clearGroupImage = { _, _ in
                 imageRequests += 1
                 return SendSummaryFfi(published: 1, messageIds: ["clear"])
             }
@@ -382,17 +394,18 @@ struct GroupDetailsArchiveActionTests {
                     avatarUrl: "https://example.com/group.jpg"
                 )
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             var avatarUrlRequests = 0
 
             model.conversation = conversation
             model.prepareProfileDrafts()
             model.renameDraft = "Renamed group"
             model.imageEdit = .removed
-            model.updateGroupProfileForTesting = { _, _, _, _ in
+            marmot.updateGroupProfile = { _, _, _, _ in
                 SendSummaryFfi(published: 1, messageIds: ["profile"])
             }
-            model.updateGroupAvatarUrlForTesting = { _, _, _ in
+            marmot.updateGroupAvatarUrl = { _, _, _ in
                 avatarUrlRequests += 1
                 throw GroupDetailsActionError.noActiveAccount
             }
@@ -414,7 +427,8 @@ struct GroupDetailsArchiveActionTests {
                 appState: appState,
                 group: archiveTestGroup(groupIdHex: String(repeating: "ab", count: 32), archived: false, name: "")
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             var operations: [String] = []
 
             model.conversation = conversation
@@ -426,11 +440,11 @@ struct GroupDetailsArchiveActionTests {
                 dim: nil,
                 thumbhash: nil
             ))
-            model.updateGroupProfileForTesting = { _, _, name, _ in
+            marmot.updateGroupProfile = { _, _, name, _ in
                 operations.append("profile:\(name)")
                 return SendSummaryFfi(published: 1, messageIds: ["profile"])
             }
-            model.updateGroupImageForTesting = { _, _, data, _ in
+            marmot.updateGroupImage = { _, _, data, _ in
                 operations.append("image:\(data.count)")
                 return SendSummaryFfi(published: 1, messageIds: ["image"])
             }
@@ -488,11 +502,12 @@ struct GroupDetailsArchiveActionTests {
                 appState: appState,
                 group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
             )
-            let model = GroupDetailsViewModel()
+            let marmot = GroupDetailsMarmotDouble()
+            let model = groupDetailsModel(marmot: marmot)
             var requestCount = 0
 
             model.conversation = conversation
-            model.listMediaForTesting = { _, _ in
+            marmot.sharedMedia = { _, _ in
                 requestCount += 1
                 return []
             }
@@ -978,7 +993,8 @@ private func archiveTestGroup(
     selfMembership: SelfMembershipFfi = .member,
     leaveRequestPending: Bool = false,
     description: String = "",
-    avatarUrl: String? = nil
+    avatarUrl: String? = nil,
+    imageHashHex: String? = nil
 ) -> AppGroupRecordFfi {
     AppGroupRecordFfi(
         groupIdHex: groupIdHex,
@@ -991,6 +1007,7 @@ private func archiveTestGroup(
         avatarUrl: avatarUrl,
         avatarDim: nil,
         avatarThumbhash: nil,
+        imageHashHex: imageHashHex,
         encryptedMedia: AppGroupEncryptedMediaComponentFfi(
             componentId: 0x8008,
             component: "marmot.group.encrypted-media.v1",
