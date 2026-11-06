@@ -8,51 +8,89 @@ struct NotificationSettingsView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
     @State private var model = NotificationSettingsViewModel()
+    @State private var progressAction: NotificationSettingsViewModel.Action?
 
     var body: some View {
         Form {
+            loadingSection
+
             permissionSection
 
             Section {
-                WNToggle("Local Notifications", isOn: Binding(
-                    get: { model.settings?.localNotificationsEnabled ?? false },
-                    set: { enabled in Task { await model.setLocalNotifications(enabled, using: appState) } }
-                ))
-                .disabled(model.isSaving || model.settings == nil)
-            } footer: {
-                Text("Creates message notifications on this iPhone. Without Native Push, delivery may wait until White Noise is active.")
-            }
-
-            Section {
-                WNToggle("Native Push", isOn: Binding(
-                    get: { model.settings?.nativePushEnabled ?? false },
-                    set: { enabled in Task { await model.setNativePush(enabled, using: appState) } }
-                ))
-                .disabled(model.nativePushToggleDisabled)
-            } footer: {
-                Text("Uses a generic wake-up signal to check for new messages in the background. Message details stay on this iPhone.")
-            }
-
-            NotificationPreviewSection(
-                mode: model.previewMode,
-                isEnabled: previewControlsEnabled,
-                setMode: {
-                    model.setPreviewMode($0)
-                    appState.notifications.cancelForegroundBatches()
+                VStack(alignment: .leading, spacing: 6) {
+                    notificationToggle(
+                        "Local Notifications",
+                        action: .localNotifications,
+                        unavailable: model.settings == nil,
+                        isOn: Binding(
+                            get: { model.settings?.localNotificationsEnabled ?? false },
+                            set: { enabled in Task { await model.setLocalNotifications(enabled, using: appState) } }
+                        )
+                    )
+                    Text("Shows message notifications on this iPhone.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    actionFeedback(.localNotifications)
                 }
-            )
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    notificationToggle(
+                        "Native Push",
+                        action: .nativePush,
+                        unavailable: model.nativePushToggleUnavailable,
+                        isOn: Binding(
+                            get: { model.settings?.nativePushEnabled ?? false },
+                            set: { enabled in Task { await model.setNativePush(enabled, using: appState) } }
+                        )
+                    )
+                    Text("Helps notifications arrive when White Noise is closed.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    actionFeedback(.nativePush)
+
+                    if !model.isLoading && nativePushNeedsAttention {
+                        Label("Native Push setup is incomplete.", systemImage: "exclamationmark.triangle")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        WNGrayButton(title: L10n.string("Try Again"), isLoading: showsProgress(for: .setup)) {
+                            Task { await checkNotificationSetup() }
+                        }
+                        .disabled(model.isSaving)
+                    }
+                    actionFeedback(.setup)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Current Profile").wnSectionHeader()
+            }
 
             Section {
-                WNToggle("Mentions in Muted Chats", isOn: Binding(
-                    get: { model.mentionsBreakThroughMute },
-                    set: { model.setMentionsBreakThroughMute($0) }
-                ))
-            } footer: {
-                Text("When this is on, mentions of you still notify in muted chats, including chats set to \"Nothing\". Applies to all profiles on this device.")
+                NotificationPreviewRows(
+                    mode: model.previewMode,
+                    isEnabled: previewControlsEnabled,
+                    setMode: {
+                        model.setPreviewMode($0)
+                        appState.notifications.cancelForegroundBatches()
+                    }
+                )
+            } header: {
+                Text("All Profiles on This Device").wnSectionHeader()
             }
-            .disabled(!previewControlsEnabled)
 
-            statusSection
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    WNToggle("Mentions in Muted Chats", isOn: Binding(
+                        get: { model.mentionsBreakThroughMute },
+                        set: { model.setMentionsBreakThroughMute($0) }
+                    ))
+                    Text("Notify me when I’m mentioned in a muted chat.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+                .disabled(!previewControlsEnabled)
+            }
 
             if appState.developerMode {
                 Section("Developer") {
@@ -82,26 +120,27 @@ struct NotificationSettingsView: View {
 
                     if appState.notifications.apnsTokenHex == nil {
                         Button {
-                            Task { await model.requestApnsToken(using: appState) }
+                            Task { await model.requestApnsToken(using: appState, feedbackAction: .developerSetup) }
                         } label: {
                             Label("Request APNS Token", systemImage: "antenna.radiowaves.left.and.right")
                         }
                         .disabled(model.isSaving)
                     } else {
                         Button {
-                            Task { await model.refreshApnsToken(using: appState) }
+                            Task { await model.refreshApnsToken(using: appState, feedbackAction: .developerSetup) }
                         } label: {
                             Label("Refresh APNS Token", systemImage: "arrow.clockwise.circle")
                         }
                         .disabled(!model.canRefreshApnsToken)
 
                         Button {
-                            Task { await model.syncNativeRegistration(using: appState) }
+                            Task { await model.syncNativeRegistration(using: appState, feedbackAction: .developerSetup) }
                         } label: {
                             Label("Sync Native Registration", systemImage: "arrow.triangle.2.circlepath")
                         }
                         .disabled(!canSyncNativeRegistration)
                     }
+                    actionFeedback(.developerSetup)
                 }
             }
         }
@@ -109,58 +148,99 @@ struct NotificationSettingsView: View {
         .localizedNavigationTitle("Notifications")
         .productScreen(.settings, section: .notifications)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if model.isSaving {
-                ProgressView().controlSize(.small)
-            }
-        }
         .task(id: appState.activeAccountRef) { await model.reload(using: appState) }
         .refreshable { await model.reload(using: appState) }
+        .onChange(of: nativePushSetupComplete) { _, isComplete in
+            if isComplete { model.clearResolvedSetupError() }
+        }
+        .task(id: model.activeAction) {
+            progressAction = nil
+            guard let action = model.activeAction else { return }
+            // Delay presentation only: the existing action and duplicate-submission gate run immediately.
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, model.activeAction == action else { return }
+            progressAction = action
+        }
     }
 
     @ViewBuilder
-    private var statusSection: some View {
-        if model.settings != nil && notificationSetupNeedsAttention {
-            Section("Status") {
-                statusRows
-
-                Button {
-                    Task { await checkNotificationSetup() }
-                } label: {
-                    Label("Try Again", systemImage: "checkmark.shield")
+    private var loadingSection: some View {
+        if model.isLoading {
+            Section {
+                ProgressView("Loading…")
+            }
+        } else if model.settings == nil {
+            Section {
+                Text("Couldn't load notification settings")
+                    .font(.callout)
+                WNGrayButton(title: L10n.string("Retry")) {
+                    Task { await model.reload(using: appState) }
                 }
                 .disabled(model.isSaving)
             }
-        } else {
-            Section("Status") {
-                statusRows
-            }
         }
     }
 
-    @ViewBuilder
-    private var statusRows: some View {
-        LabeledContent("Permission") {
-            Text(model.authorizationStatus.displayName)
-                .foregroundStyle(.secondary)
-        }
+    private func showsProgress(for action: NotificationSettingsViewModel.Action) -> Bool {
+        model.activeAction == action && progressAction == action
+    }
 
-        LabeledContent("Notifications") {
-            Label(
-                notificationStatusText,
-                systemImage: notificationStatusIcon
-            )
-            .foregroundStyle(notificationStatusColor)
+    private func notificationToggle(
+        _ title: LocalizedStringKey,
+        action: NotificationSettingsViewModel.Action,
+        unavailable: Bool,
+        isOn: Binding<Bool>
+    ) -> some View {
+        WNToggle(isOn: isOn) {
+            HStack {
+                Text(title)
+                Spacer(minLength: 8)
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 20, height: 20)
+                    .opacity(showsProgress(for: action) ? 1 : 0)
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityLabel(Text(title))
+        .accessibilityHint(showsProgress(for: action) ? Text("Saving…") : Text(""))
+        // Block taps immediately, but avoid a disabled-color flash for a fast save.
+        // The model's existing action gate also rejects overlapping actions.
+        .allowsHitTesting(!model.isSaving)
+        .disabled(unavailable || (model.activeAction != nil && progressAction == model.activeAction))
+    }
+
+    @ViewBuilder
+    private func actionFeedback(_ action: NotificationSettingsViewModel.Action) -> some View {
+        if let error = model.actionErrors[action] {
+            Label {
+                Text(error.message)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
+            }
+            .font(.callout)
+            .foregroundStyle(.red)
         }
     }
 
     @ViewBuilder
     private var permissionSection: some View {
+        if model.hasLoadedAuthorization {
+            permissionContent
+        }
+    }
+
+    @ViewBuilder
+    private var permissionContent: some View {
         switch model.authorizationStatus {
         case .notDetermined:
             Section {
                 Label("Allow notifications to use these options.", systemImage: "bell.badge")
-                Button("Allow Notifications") {
+                WNGrayButton(title: L10n.string("Allow Notifications")) {
                     Task { await model.setLocalNotifications(true, using: appState) }
                 }
                 .disabled(model.isSaving)
@@ -179,7 +259,7 @@ struct NotificationSettingsView: View {
                     Image(systemName: "bell.slash")
                         .foregroundStyle(.secondary)
                 }
-                Button("Open Settings") {
+                WNGrayButton(title: L10n.string("Open Settings")) {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
                         openURL(url)
                     }
@@ -190,27 +270,15 @@ struct NotificationSettingsView: View {
         }
     }
 
-    private var notificationSetupNeedsAttention: Bool {
-        guard let settings = model.settings else { return true }
-        let authorizationGranted: Bool
-        switch model.authorizationStatus {
-        case .authorized, .provisional, .ephemeral:
-            authorizationGranted = true
-        case .denied, .notDetermined:
-            authorizationGranted = false
-        @unknown default:
-            authorizationGranted = false
-        }
+    private var nativePushNeedsAttention: Bool {
+        guard let settings = model.settings, settings.nativePushEnabled else { return false }
+        return NativePushServerConfig.current() == nil
+            || appState.notifications.apnsTokenHex == nil
+            || model.registration == nil
+    }
 
-        if settings.localNotificationsEnabled && !authorizationGranted {
-            return true
-        }
-        if settings.nativePushEnabled {
-            return NativePushServerConfig.current() == nil
-                || appState.notifications.apnsTokenHex == nil
-                || model.registration == nil
-        }
-        return false
+    private var nativePushSetupComplete: Bool {
+        !model.isLoading && model.settings?.nativePushEnabled == true && !nativePushNeedsAttention
     }
 
     /// The preview and muted-mention choices only govern notifications this
@@ -226,45 +294,6 @@ struct NotificationSettingsView: View {
         @unknown default:
             return false
         }
-    }
-
-    private var notificationsEnabled: Bool {
-        guard let settings = model.settings else { return false }
-        return settings.localNotificationsEnabled || settings.nativePushEnabled
-    }
-
-    private var notificationStatusText: String {
-        guard model.settings != nil else {
-            return L10n.string("Loading push notification state…")
-        }
-        if !notificationsEnabled {
-            return L10n.string("Off")
-        }
-        return notificationSetupNeedsAttention
-            ? L10n.string("Notifications unavailable")
-            : L10n.string("Configured")
-    }
-
-    private var notificationStatusIcon: String {
-        guard model.settings != nil else {
-            return "clock"
-        }
-        if !notificationsEnabled {
-            return "bell.slash.fill"
-        }
-        return notificationSetupNeedsAttention
-            ? "exclamationmark.triangle.fill"
-            : "checkmark"
-    }
-
-    private var notificationStatusColor: Color {
-        guard model.settings != nil else {
-            return .secondary
-        }
-        if !notificationsEnabled {
-            return .secondary
-        }
-        return notificationSetupNeedsAttention ? .orange : .primary
     }
 
     private func checkNotificationSetup() async {
@@ -295,23 +324,4 @@ struct NotificationSettingsView: View {
         return true
     }
 
-}
-
-private extension UNAuthorizationStatus {
-    var displayName: String {
-        switch self {
-        case .notDetermined:
-            return L10n.string("Not requested")
-        case .denied:
-            return L10n.string("Denied")
-        case .authorized:
-            return L10n.string("Authorized")
-        case .provisional:
-            return L10n.string("Provisional")
-        case .ephemeral:
-            return L10n.string("Ephemeral")
-        @unknown default:
-            return L10n.string("Unknown")
-        }
-    }
 }

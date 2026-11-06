@@ -180,7 +180,7 @@ SHARED_WORDS = {
     "Malware": "it", "Manual": "es pt", "Media": "it", "Mentions": "fr", "Message": "fr", "Minutes": "fr",
     "Mode": "fr", "Moderation": "de", "Name": "de", "Notifications": "fr", "Obligations": "fr", "OK": "de fr it pt",
     "Online": "de", "Option %lld": "de fr", "Options": "fr", "Original": "de es pt", "Passphrase": "de it", "Photo": "fr",
-    "Password": "it", "Photos": "fr", "Provisional": "es", "Question": "fr", "Relay": "de es it pt", "Scan": "de",
+    "Password": "it", "Photos": "fr", "Question": "fr", "Relay": "de es it pt", "Scan": "de",
     "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "stream %@": "es it pt",
     "Streaming…": "de fr it", "System": "de", "Tokens": "es pt", "USD": "de es fr it pt ru tr", "Version": "de fr",
     "Version %lld": "de fr", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt", "Video": "de es it tr",

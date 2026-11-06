@@ -13,10 +13,10 @@ struct NotificationSettingsViewModelTests {
         #expect(model.isSaving == false)
     }
 
-    @Test func nativePushToggleDisabledWhenSettingsMissing() {
+    @Test func nativePushToggleUnavailableWhenSettingsMissing() {
         let model = NotificationSettingsViewModel()
         // No settings loaded yet -> the native push toggle stays disabled.
-        #expect(model.nativePushToggleDisabled == true)
+        #expect(model.nativePushToggleUnavailable == true)
     }
 
     @Test func canRefreshApnsTokenFalseWhenNotDetermined() {
@@ -37,7 +37,193 @@ struct NotificationSettingsViewModelTests {
         #expect(model.registration == nil)
     }
 
-    @Test func accountSwitchDuringActionReplaysReloadInsteadOfPublishingOldAccountResult() async {
+    @Test func loadingEndsWhenSettingsAreUnavailableAndRetryCanLoadThem() async throws {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        let releaseAuthorization = TestLatch()
+        dataSource.authorizationRelease = releaseAuthorization
+        defer { releaseAuthorization.signal() }
+        let reload = Task { await model.reload(using: dataSource) }
+        try await dataSource.authorizationStarted.wait()
+
+        #expect(model.isLoading)
+        #expect(!model.hasLoadedAuthorization)
+        releaseAuthorization.signal()
+        await reload.value
+
+        #expect(!model.isLoading)
+        #expect(model.hasLoadedAuthorization)
+        #expect(model.settings == nil)
+
+        dataSource.settingsByAccount["account-a"] = notificationSettings(accountRef: "account-a")
+        await model.reload(using: dataSource)
+        #expect(!model.isLoading)
+        #expect(model.settings == dataSource.settingsByAccount["account-a"])
+    }
+
+    @Test func initialLoadDeferredByAnActionStaysLoadingUntilReplayFinishes() async throws {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        let expectedSettings = notificationSettings(accountRef: "account-a")
+        dataSource.settingsByAccount["account-a"] = expectedSettings
+        let releaseSettings = TestLatch()
+        dataSource.settingsRelease = releaseSettings
+        defer {
+            releaseSettings.signal()
+            dataSource.completeSetLocalNotifications(with: expectedSettings)
+        }
+        let reload = Task { await model.reload(using: dataSource) }
+        try await dataSource.settingsStarted.wait()
+        #expect(model.hasLoadedAuthorization)
+
+        let action = Task { await model.setLocalNotifications(true, using: dataSource) }
+        try await dataSource.waitUntilSetLocalNotificationsStarted()
+        releaseSettings.signal()
+        await reload.value
+
+        #expect(model.isSaving)
+        #expect(model.settings == nil)
+        #expect(model.isLoading)
+
+        dataSource.completeSetLocalNotifications(with: expectedSettings)
+        await action.value
+        #expect(!model.isSaving)
+        #expect(!model.isLoading)
+        #expect(model.settings == expectedSettings)
+    }
+
+    @Test func refreshKeepsLoadedSettingsVisible() async throws {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let initialSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        let loadedSettings = notificationSettings(accountRef: "account-a")
+        initialSource.settingsByAccount["account-a"] = loadedSettings
+        await model.reload(using: initialSource)
+
+        let refreshSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        refreshSource.settingsByAccount["account-a"] = loadedSettings
+        let releaseAuthorization = TestLatch()
+        refreshSource.authorizationRelease = releaseAuthorization
+        defer { releaseAuthorization.signal() }
+        let refresh = Task { await model.reload(using: refreshSource) }
+        try await refreshSource.authorizationStarted.wait()
+
+        #expect(!model.isLoading)
+        #expect(model.settings == loadedSettings)
+        releaseAuthorization.signal()
+        await refresh.value
+        #expect(!model.isLoading)
+    }
+
+    @Test func actionErrorSurvivesReloadAndOtherActionsUntilRetried() async throws {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.nativePushError = NotificationSettingsActionError.apnsTokenRefreshTimedOut
+        await model.setNativePush(true, using: dataSource)
+        let failure = try #require(model.actionErrors[.nativePush])
+
+        await model.reload(using: dataSource)
+        await model.syncNativeRegistration(using: dataSource)
+        #expect(model.actionErrors[.nativePush] == failure)
+
+        dataSource.nativePushError = nil
+        await model.setNativePush(true, using: dataSource)
+        #expect(model.actionErrors[.nativePush] == nil)
+        #expect(model.settings?.nativePushEnabled == true)
+    }
+
+    @Test(arguments: [false, true])
+    func successfulNativePushChangeClearsResolvedSetupError(enabled: Bool) async throws {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.registrationError = NotificationSettingsActionError.apnsTokenRefreshTimedOut
+        await model.syncNativeRegistration(using: dataSource)
+        #expect(model.actionErrors[.setup] != nil)
+
+        dataSource.registrationError = nil
+        dataSource.registrationsByAccount["account-a"] = pushRegistration(accountRef: "account-a")
+        await model.setNativePush(enabled, using: dataSource)
+
+        #expect(model.settings?.nativePushEnabled == enabled)
+        #expect(model.actionErrors[.setup] == nil)
+    }
+
+    @Test func failedNativePushChangePreservesUnresolvedSetupError() async throws {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.registrationError = NotificationSettingsActionError.apnsTokenRefreshTimedOut
+        await model.syncNativeRegistration(using: dataSource)
+        let setupError = try #require(model.actionErrors[.setup])
+
+        dataSource.nativePushError = NotificationSettingsActionError.permissionDenied
+        await model.setNativePush(true, using: dataSource)
+
+        #expect(model.actionErrors[.setup] == setupError)
+        #expect(model.actionErrors[.nativePush] != nil)
+    }
+
+    @Test func developerFailureUsesItsOwnFeedbackAndClearsOnRetry() async throws {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.registrationError = NotificationSettingsActionError.apnsTokenRefreshTimedOut
+
+        await model.syncNativeRegistration(using: dataSource, feedbackAction: .developerSetup)
+        #expect(model.actionErrors[.developerSetup] != nil)
+        #expect(model.actionErrors[.setup] == nil)
+
+        dataSource.registrationError = nil
+        await model.syncNativeRegistration(using: dataSource, feedbackAction: .developerSetup)
+        #expect(model.actionErrors[.developerSetup] == nil)
+        #expect(model.registration?.accountRef == "account-a")
+    }
+
+    @Test func grantedPermissionClearsPermissionErrorsAfterReload() async {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.authorizationStatus = .denied
+        dataSource.localNotificationsError = NotificationSettingsActionError.permissionDenied
+        dataSource.nativePushError = NotificationSettingsActionError.permissionDenied
+        await model.setLocalNotifications(true, using: dataSource)
+        await model.setNativePush(true, using: dataSource)
+        #expect(model.actionErrors[.localNotifications] != nil)
+        #expect(model.actionErrors[.nativePush] != nil)
+
+        dataSource.authorizationStatus = .authorized
+        dataSource.settingsByAccount["account-a"] = notificationSettings(accountRef: "account-a")
+        await model.reload(using: dataSource)
+
+        #expect(model.actionErrors[.localNotifications] == nil)
+        #expect(model.actionErrors[.nativePush] == nil)
+        #expect(model.settings?.localNotificationsEnabled == true)
+    }
+
+    @Test func grantedPermissionFromAnotherActionClearsPermissionErrors() async {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.authorizationStatus = .denied
+        dataSource.localNotificationsError = NotificationSettingsActionError.permissionDenied
+        await model.setLocalNotifications(true, using: dataSource)
+        #expect(model.actionErrors[.localNotifications] != nil)
+
+        dataSource.authorizationStatus = .authorized
+        await model.setNativePush(true, using: dataSource)
+
+        #expect(model.actionErrors[.localNotifications] == nil)
+        #expect(model.settings?.nativePushEnabled == true)
+    }
+
+    @Test func actionErrorsDoNotFollowAnAccountSwitch() async {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
+        dataSource.nativePushError = NotificationSettingsActionError.nativePushNotConfigured
+        await model.setNativePush(true, using: dataSource)
+        #expect(model.actionErrors[.nativePush] != nil)
+
+        dataSource.activeAccountRef = "account-b"
+        await model.reload(using: dataSource)
+        #expect(model.actionErrors.isEmpty)
+    }
+
+    @Test func accountSwitchDuringActionReplaysReloadInsteadOfPublishingOldAccountResult() async throws {
         let model = NotificationSettingsViewModel()
         let dataSource = NotificationSettingsViewModelDataSourceStub(activeAccountRef: "account-a")
         let currentAccountSettings = notificationSettings(
@@ -52,7 +238,7 @@ struct NotificationSettingsViewModelTests {
         let actionTask = Task { @MainActor in
             await model.setLocalNotifications(true, using: dataSource)
         }
-        await dataSource.waitUntilSetLocalNotificationsStarted()
+        try await dataSource.waitUntilSetLocalNotificationsStarted()
 
         dataSource.activeAccountRef = "account-b"
         await model.reload(using: dataSource)
@@ -63,7 +249,6 @@ struct NotificationSettingsViewModelTests {
 
         #expect(model.settings == currentAccountSettings)
         #expect(model.registration == currentAccountRegistration)
-        #expect(model.savedAt == nil)
     }
 }
 
@@ -71,11 +256,17 @@ struct NotificationSettingsViewModelTests {
 private final class NotificationSettingsViewModelDataSourceStub: NotificationSettingsViewModelDataSource {
     var activeAccountRef: String?
     var authorizationStatus: UNAuthorizationStatus = .authorized
+    let authorizationStarted = TestLatch()
+    var authorizationRelease: TestLatch?
+    let settingsStarted = TestLatch()
+    var settingsRelease: TestLatch?
+    var localNotificationsError: Error?
+    var nativePushError: Error?
+    var registrationError: Error?
     var settingsByAccount: [String: NotificationSettingsFfi] = [:]
     var registrationsByAccount: [String: PushRegistrationFfi] = [:]
 
-    private var setLocalNotificationsStarted = false
-    private var setLocalNotificationsStartWaiters: [CheckedContinuation<Void, Never>] = []
+    private let setLocalNotificationsStarted = TestLatch()
     private var setLocalNotificationsContinuation: CheckedContinuation<NotificationSettingsFfi, Error>?
 
     init(activeAccountRef: String?) {
@@ -83,7 +274,9 @@ private final class NotificationSettingsViewModelDataSourceStub: NotificationSet
     }
 
     func notificationAuthorizationStatus() async -> UNAuthorizationStatus {
-        authorizationStatus
+        authorizationStarted.signal()
+        if let authorizationRelease { await authorizationRelease.hold() }
+        return authorizationStatus
     }
 
     func requestNotificationAuthorizationAndRegister() async throws -> Bool {
@@ -95,7 +288,9 @@ private final class NotificationSettingsViewModelDataSourceStub: NotificationSet
     }
 
     func notificationSettings(for accountRef: String) async -> NotificationSettingsFfi? {
-        settingsByAccount[accountRef]
+        settingsStarted.signal()
+        if let settingsRelease { await settingsRelease.hold() }
+        return settingsByAccount[accountRef]
     }
 
     func pushRegistration(for accountRef: String) async -> PushRegistrationFfi? {
@@ -103,28 +298,26 @@ private final class NotificationSettingsViewModelDataSourceStub: NotificationSet
     }
 
     func setLocalNotificationsEnabled(_ _: Bool) async throws -> NotificationSettingsFfi {
-        setLocalNotificationsStarted = true
-        setLocalNotificationsStartWaiters.forEach { $0.resume() }
-        setLocalNotificationsStartWaiters.removeAll()
+        if let localNotificationsError { throw localNotificationsError }
+        setLocalNotificationsStarted.signal()
         return try await withCheckedThrowingContinuation { continuation in
             setLocalNotificationsContinuation = continuation
         }
     }
 
     func setNativePushEnabled(_ enabled: Bool) async throws -> NotificationSettingsFfi {
+        if let nativePushError { throw nativePushError }
         guard let activeAccountRef else { throw NotificationSettingsActionError.noActiveAccount }
         return whitenoise_iosTests.notificationSettings(accountRef: activeAccountRef, nativePushEnabled: enabled)
     }
 
     func syncNativePushRegistration(accountRef: String) async throws -> PushRegistrationFfi {
-        whitenoise_iosTests.pushRegistration(accountRef: accountRef)
+        if let registrationError { throw registrationError }
+        return whitenoise_iosTests.pushRegistration(accountRef: accountRef)
     }
 
-    func waitUntilSetLocalNotificationsStarted() async {
-        guard !setLocalNotificationsStarted else { return }
-        await withCheckedContinuation { continuation in
-            setLocalNotificationsStartWaiters.append(continuation)
-        }
+    func waitUntilSetLocalNotificationsStarted() async throws {
+        try await setLocalNotificationsStarted.wait()
     }
 
     func completeSetLocalNotifications(with settings: NotificationSettingsFfi) {
