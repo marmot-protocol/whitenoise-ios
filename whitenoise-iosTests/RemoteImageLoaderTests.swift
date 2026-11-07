@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Synchronization
 import Testing
 import UIKit
@@ -152,6 +153,46 @@ struct RemoteImageLoaderTests {
 
         #expect(await probe.callCount() == 1)
         #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 56) != nil)
+    }
+
+    @Test func avatarRemoteImageShowsTheCenterOfNonSquareImages() async throws {
+        RemoteAvatarImageLoader.resetCachesForTesting()
+        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.preferredRange = .standard
+
+        for sourceSize in [CGSize(width: 300, height: 100), CGSize(width: 100, height: 300)] {
+            // Red everywhere except a green middle third along the long side.
+            let isLandscape = sourceSize.width > sourceSize.height
+            let middle = isLandscape
+                ? CGRect(x: 100, y: 0, width: 100, height: 100)
+                : CGRect(x: 0, y: 100, width: 100, height: 100)
+            let data = try #require(UIGraphicsImageRenderer(size: sourceSize, format: format).image { context in
+                UIColor.red.setFill()
+                context.fill(CGRect(origin: .zero, size: sourceSize))
+                UIColor.green.setFill()
+                context.fill(middle)
+            }.pngData())
+            let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
+            // Warm the cache the view reads synchronously; ImageRenderer never runs `.task`.
+            _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 44, scale: 1, fetch: { _ in data })
+
+            let renderer = ImageRenderer(content: AvatarRemoteImage(url: url)
+                .frame(width: 44, height: 44)
+                .environment(\.displayScale, 1))
+            let rendered = try #require(renderer.cgImage)
+            let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+            let context = try #require(CGContext(
+                data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            context.draw(rendered, in: CGRect(x: -22, y: -22, width: 44, height: 44))
+            let centerPixel = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+            #expect(centerPixel[0] < 64, "\(sourceSize) center pixel should not be from the leading band")
+            #expect(centerPixel[1] > 192, "\(sourceSize) center pixel should be from the middle band")
+        }
     }
 
     @Test func erasureDrainsFetchesWithoutRepopulatingAvatarCaches() async throws {
