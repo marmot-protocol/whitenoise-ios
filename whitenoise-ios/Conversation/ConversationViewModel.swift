@@ -3196,7 +3196,7 @@ final class ConversationViewModel {
                 isDeleted: isDeleted(message.messageIdHex),
                 canSendMessages: canSendMessages
               ),
-              let outgoing = preparedComposerText(content),
+              let outgoing = preparedComposerText(content).flatMap(MessageEditingPolicy.normalizedContent),
               let appState,
               let accountRef = appState.activeAccountRef
         else { return false }
@@ -3322,15 +3322,6 @@ final class ConversationViewModel {
     static func agentStreamId(from message: ReceivedMessageFfi) -> String? {
         guard case .agentStreamStart(let start) = MessageSemantics.classify(message) else { return nil }
         return MessageSemantics.normalizedStreamId(start.streamId)
-    }
-
-    /// Clamp outbound message text to the protocol's max length (#54).
-    nonisolated static func cappedOutgoingText(_ text: String) -> String {
-        ComposerMentionCanonicalizer.canonicalize(
-            text,
-            candidates: [],
-            maxLength: ContentSanitizer.maxMessageLength
-        )
     }
 
     // MARK: - Custom emoji sending

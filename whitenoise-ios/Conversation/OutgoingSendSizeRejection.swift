@@ -19,6 +19,12 @@ nonisolated enum OutgoingSendSizePolicy {
             : MediaDraftProcessor.maxAttachmentBytes
     }
 
+    /// Outbound text over the protocol's max length is rejected, never
+    /// shortened (#1276). Check the canonical text, after mention expansion.
+    static func admitsText(_ text: String) -> Bool {
+        text.count <= ContentSanitizer.maxMessageLength
+    }
+
     static func oversizedAttachmentIDs(in attachments: [MediaDraftAttachment]) -> Set<UUID> {
         Set(attachments.filter { $0.data.count > sendLimit(for: $0) }.map(\.id))
     }

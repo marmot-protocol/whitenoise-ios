@@ -34,6 +34,14 @@ struct MessageMutationPolicyTests {
         #expect(MessageEditingPolicy.normalizedContent(" \n ") == nil)
     }
 
+    /// #1276: `editMessage` saves only what this admits, so an oversized edit
+    /// leaves the original message unchanged instead of saving a shortened copy.
+    @Test func editOverMaxMessageLengthIsRejectedInsteadOfShortened() {
+        let exact = String(repeating: "x", count: ContentSanitizer.maxMessageLength)
+        #expect(MessageEditingPolicy.normalizedContent(exact) == exact)
+        #expect(MessageEditingPolicy.normalizedContent(exact + "y") == nil)
+    }
+
     @Test func forwardingDestinationsIncludeAllExistingChatsExceptCurrentAndPending() {
         let current = hex("01")
         let alpha = hex("02")

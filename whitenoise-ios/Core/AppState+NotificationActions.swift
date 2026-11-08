@@ -83,6 +83,12 @@ extension AppState {
                 notifications.removeDeliveredNotification(identifier: route.notificationKey)
                 await self.refreshAccountUnreadSummaries(using: client)
             }
+        case .rejectedReply(let route):
+            await notifications.presentNotificationActionFailure(
+                title: L10n.string("Reply not sent"),
+                body: L10n.string("Open the chat to try again."),
+                route: route
+            )
         case .markRead(let route, let messageIdHex):
             await runNotificationAction(
                 route: route,

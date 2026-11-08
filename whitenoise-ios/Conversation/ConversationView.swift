@@ -284,6 +284,13 @@ enum ConversationSendPreparation {
         return ConversationSendPayload(viewModel: viewModel, text: text, attachments: attachments)
     }
 
+    /// Rejects canonical outbound text (after mention expansion) over the
+    /// protocol's max length before anything leaves the composer (#1276).
+    static func textRejection(forOutgoing outgoing: String?) -> OutgoingSendSizeRejection? {
+        guard let outgoing, !OutgoingSendSizePolicy.admitsText(outgoing) else { return nil }
+        return .text
+    }
+
     static func removeOversizedAttachments(from mediaDrafts: inout [MediaDraftAttachment]) -> OutgoingSendSizeRejection? {
         let oversized = OutgoingSendSizePolicy.oversizedAttachmentIDs(in: mediaDrafts)
         guard !oversized.isEmpty else { return nil }
@@ -2866,6 +2873,15 @@ struct ConversationView: View {
 
     private func send() {
         guard viewModel?.canSendMessages == true else { return }
+        // Reject over-limit text before any snapshot, staging, edit or send so
+        // the draft, reply target and attachments stay exactly as they are.
+        if let viewModel,
+           let rejection = ConversationSendPreparation.textRejection(
+               forOutgoing: viewModel.preparedComposerText(draft)
+           ) {
+            presentComposerSizeRejection(rejection)
+            return
+        }
         if let editSession, editSubmissionEnabled, let viewModel {
             let editedContent = draft
             editSaveInFlight = true
@@ -2884,20 +2900,16 @@ struct ConversationView: View {
         guard let viewModel, let accountRef = draftAccountRef, viewModel.canSendMessages else { return }
         if let rejection = ConversationSendPreparation.removeOversizedAttachments(from: &mediaDrafts) {
             persistCurrentDraft()
-            Haptics.error()
-            let notice = ConversationSendRecovery.notice(for: rejection, restored: true)
-            appState.present(.error(notice.title, message: notice.message))
+            presentComposerSizeRejection(rejection)
             return
         }
         let originalAttachments = mediaDrafts
         let originalReply = viewModel.replyTargetMessageIdHex
         let mentionState = viewModel.composerMentionDraftState(for: draft)
-        let saved = ConversationDraftSnapshot(canonicalText: ConversationViewModel.cappedOutgoingText(mentionState.canonicalText.trimmingCharacters(in: .whitespacesAndNewlines)),
+        let saved = ConversationDraftSnapshot(canonicalText: mentionState.canonicalText.trimmingCharacters(in: .whitespacesAndNewlines),
             replyToMessageIdHex: originalReply, mediaAttachments: originalAttachments)
         guard !saved.canonicalText.isEmpty || !originalAttachments.isEmpty else { return }
-        if let outgoing = viewModel.preparedComposerText(draft).map({
-            ConversationViewModel.cappedOutgoingText($0.trimmingCharacters(in: .whitespacesAndNewlines))
-        }) {
+        if let outgoing = viewModel.preparedComposerText(draft) {
             let customEmoji = viewModel.customEmojiUsed(in: outgoing)
             if !customEmoji.isEmpty {
                 let submitted = ConversationDraftSnapshot(canonicalText: mentionState.canonicalText,
@@ -3035,6 +3047,13 @@ struct ConversationView: View {
         let emoji = viewModel.customEmojiSendables
         guard !emoji.isEmpty else { return }
         composerCustomEmojiPicker = ComposerCustomEmojiPicker(emoji: emoji)
+    }
+
+    /// Reports a size rejection whose message is still in the composer.
+    private func presentComposerSizeRejection(_ rejection: OutgoingSendSizeRejection) {
+        Haptics.error()
+        let notice = ConversationSendRecovery.notice(for: rejection, restored: true)
+        appState.present(.error(notice.title, message: notice.message))
     }
 
     private func recoverSizeRejectedSend(
@@ -3254,7 +3273,7 @@ struct ConversationView: View {
     private func sendSharedLocation(latitude: Double, longitude: Double) {
         guard let viewModel, viewModel.canSendMessages else { return }
         let text = SharedLocationText.value(latitude: latitude, longitude: longitude)
-        Task { await viewModel.sendPreparedComposerText(ConversationViewModel.cappedOutgoingText(text)) }
+        Task { await viewModel.sendPreparedComposerText(text) }
     }
 
     private func addContactCard(_ contact: CNContact) {

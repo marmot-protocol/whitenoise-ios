@@ -196,22 +196,19 @@ struct ComposerMentionQueryTests {
         #expect(projection.selectedMentions.isEmpty)
     }
 
-    @Test func boundedCanonicalizationNeverSplitsExpandedMention() {
+    @Test func mentionExpansionThatCrossesTheLimitIsRejectedWhole() {
         let candidate = mentionCandidate(name: "Alex", npub: aliceNpub, hex: "111")
         let prefix = String(repeating: "x", count: ContentSanitizer.maxMessageLength - 6)
         let text = "\(prefix) @Alex"
+        #expect(text.count <= ContentSanitizer.maxMessageLength)
 
-        let outgoing = ComposerMentionCanonicalizer.canonicalize(
-            text,
-            candidates: [candidate],
-            maxLength: ContentSanitizer.maxMessageLength
-        )
+        let outgoing = ComposerMentionCanonicalizer.canonicalize(text, candidates: [candidate])
 
-        #expect(outgoing == "\(prefix) ")
-        #expect(!outgoing.contains("@npub"))
+        #expect(outgoing == "\(prefix) @\(aliceNpub)")
+        #expect(ConversationSendPreparation.textRejection(forOutgoing: outgoing) == .text)
     }
 
-    @Test func boundedCanonicalizationKeepsMentionWholeWhenItFitsExactly() {
+    @Test func mentionExpansionThatFitsExactlyIsAdmittedWhole() {
         let candidate = mentionCandidate(name: "Alex", npub: aliceNpub, hex: "111")
         let canonicalMention = "@\(aliceNpub)"
         let prefix = String(
@@ -221,12 +218,34 @@ struct ComposerMentionQueryTests {
 
         let outgoing = ComposerMentionCanonicalizer.canonicalize(
             "\(prefix) @Alex",
-            candidates: [candidate],
-            maxLength: ContentSanitizer.maxMessageLength
+            candidates: [candidate]
         )
 
-        #expect(outgoing.count == ContentSanitizer.maxMessageLength)
-        #expect(outgoing.hasSuffix(canonicalMention))
+        #expect(outgoing == "\(prefix) \(canonicalMention)")
+        #expect(ConversationSendPreparation.textRejection(forOutgoing: outgoing) == nil)
+    }
+
+    @Test func pickedMentionExpandingPastTheLimitIsRejectedWhole() throws {
+        // A picked mention survives an unresolved roster only with a valid npub.
+        let npub = try #require(NostrProfileReference.npub(fromAccountIdHex: hex("11")))
+        let controller = ComposerMentionController()
+        let candidate = mentionCandidate(name: "Alex", npub: npub, hex: "111")
+        let prefix = String(repeating: "x", count: ContentSanitizer.maxMessageLength - 10)
+        var draft = "\(prefix) @Al"
+        controller.applySelection(candidate, to: &draft)
+        #expect(draft.count <= ContentSanitizer.maxMessageLength)
+
+        let outgoing = controller.outgoingText(
+            for: draft,
+            appState: nil,
+            members: [],
+            groupMemberDetails: [],
+            rosterGeneration: 0,
+            rosterResolution: .unresolved
+        )
+
+        #expect(outgoing == "\(prefix) @\(npub)")
+        #expect(ConversationSendPreparation.textRejection(forOutgoing: outgoing) == .text)
     }
 
     @Test func ambiguousSelectionsStayBoundToTheirOwnOccurrences() {

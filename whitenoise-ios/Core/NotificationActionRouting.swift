@@ -6,6 +6,9 @@ import UserNotifications
 enum NotificationActionOperation: Equatable {
     case openChat(LocalNotificationRoute)
     case reply(LocalNotificationRoute, text: String)
+    /// A reply over the protocol's max length: nothing is sent and the user
+    /// is told it failed, like any other unsent reply (#1276).
+    case rejectedReply(LocalNotificationRoute)
     case markRead(LocalNotificationRoute, messageIdHex: String)
 }
 
@@ -23,6 +26,7 @@ nonisolated enum NotificationActionRouting {
             return .openChat(route)
         case NotificationActionCategory.replyActionIdentifier:
             guard let text = outgoingReplyText(userText) else { return nil }
+            guard OutgoingSendSizePolicy.admitsText(text) else { return .rejectedReply(route) }
             return .reply(route, text: text)
         case NotificationActionCategory.markReadActionIdentifier:
             guard let messageIdHex = route.messageIdHex, !messageIdHex.isEmpty else { return nil }
@@ -33,12 +37,12 @@ nonisolated enum NotificationActionRouting {
         }
     }
 
-    /// Mirrors the composer's outgoing-text rules: trimmed, non-empty, and
-    /// clamped to the protocol's max message length.
+    /// Mirrors the composer's outgoing-text rules: trimmed and non-empty.
+    /// Length is checked separately so oversized text is never shortened.
     static func outgoingReplyText(_ userText: String?) -> String? {
         guard let trimmed = userText?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty
         else { return nil }
-        return ConversationViewModel.cappedOutgoingText(trimmed)
+        return trimmed
     }
 }

@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import UserNotifications
 import MarmotKit
+import Synchronization
 @testable import whitenoise_ios
 
 @MainActor
@@ -56,18 +57,46 @@ struct NotificationActionRoutingTests {
         #expect(operation == nil)
     }
 
-    @Test func replyTextIsCappedToProtocolMaxLength() {
-        let oversized = String(repeating: "x", count: ContentSanitizer.maxMessageLength + 100)
+    @Test func replyOverProtocolMaxLengthIsRejectedInsteadOfShortened() {
+        let oversized = String(repeating: "x", count: ContentSanitizer.maxMessageLength + 1)
         let operation = NotificationActionRouting.operation(
             actionIdentifier: NotificationActionCategory.replyActionIdentifier,
             userText: oversized,
             route: route
         )
-        guard case .reply(_, let text) = operation else {
-            Issue.record("expected reply operation")
-            return
-        }
-        #expect(text.count == ContentSanitizer.maxMessageLength)
+        #expect(operation == .rejectedReply(route))
+    }
+
+    @Test func replyAtProtocolMaxLengthIsSentWhole() {
+        let exact = String(repeating: "x", count: ContentSanitizer.maxMessageLength)
+        let operation = NotificationActionRouting.operation(
+            actionIdentifier: NotificationActionCategory.replyActionIdentifier,
+            userText: exact,
+            route: route
+        )
+        #expect(operation == .reply(route, text: exact))
+    }
+
+    /// #1276: an over-limit reply sends nothing and starts no runtime, and is
+    /// reported with the same notice as any reply that failed to send.
+    @Test func rejectedReplyIsReportedAsUnsentWithoutStartingARuntime() async throws {
+        var scheduled: [UNNotificationRequest] = []
+        let runtimeRequests = Mutex(0)
+        let appState = AppState.test(
+            notifications: AppNotifications(notificationRequestScheduler: { scheduled.append($0) }),
+            runtimeClientFactory: { _, _, _, _ in
+                runtimeRequests.withLock { $0 += 1 }
+                throw NotificationActionError.runtimeUnavailable
+            }
+        )
+
+        await appState.performNotificationAction(.rejectedReply(route))
+
+        let request = try #require(scheduled.first)
+        #expect(scheduled.count == 1)
+        #expect(request.content.title == L10n.string("Reply not sent"))
+        #expect(request.content.body == L10n.string("Open the chat to try again."))
+        #expect(runtimeRequests.withLock { $0 } == 0)
     }
 
     @Test func markReadActionTargetsTheNotifiedMessage() {
