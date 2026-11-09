@@ -44,13 +44,13 @@ struct CustomEmojiSendingFixtureTests {
 
         let party = try #require(CustomEmojiShortcode("party"))
         let celebrate = try #require(CustomEmojiShortcode("celebrate"))
-        // :celebrate: is an alias of the same image. The hyphenated
-        // shortcode renders but is not NIP-30, so it is never offered. The
+        let partyTime = try #require(CustomEmojiShortcode("party-time"))
+        // :celebrate: and :party-time: are aliases of the same image. The
         // built-ins are offered in every chat.
         #expect(Set(model.customEmojiSendables.map(\.shortcode))
-                == Set([party, celebrate]).union(CustomEmojiBuiltins.shortcodes))
+                == Set([party, celebrate, partyTime]).union(CustomEmojiBuiltins.shortcodes))
         let emoji = model.customEmojiUsed(in: "yay :party: :celebrate: :party-time:")
-        #expect(emoji.map(\.shortcode) == [party, celebrate])
+        #expect(emoji.map(\.shortcode) == [party, celebrate, partyTime])
 
         var submissions: [(scope: CustomEmojiScope, caption: String, attachments: [MediaAttachmentReferenceFfi], tags: [[String]])] = []
         var uploadCount = 0
@@ -90,7 +90,7 @@ struct CustomEmojiSendingFixtureTests {
         #expect(first.caption == "yay :party: :celebrate: :party-time:")
         #expect(first.tags.contains(["emoji", "party", uploadedURL]))
         #expect(first.tags.contains(["emoji", "celebrate", uploadedURL]))
-        #expect(!first.tags.contains { $0.first == "emoji" && $0.dropFirst().first == "party-time" })
+        #expect(first.tags.contains(["emoji", "party-time", uploadedURL]))
         #expect(first.attachments.count == 1)
         #expect(first.attachments.first?.locators.first?.value == uploadedURL)
 
@@ -106,7 +106,7 @@ struct CustomEmojiSendingFixtureTests {
         let attachments = MessageMediaAttachment.displayItems(fromOutcomes: sent.media, ownerId: "msg:\(sent.messageIdHex)",
             messageId: sent.messageIdHex, sourceMessageId: sent.sourceMessageIdHex)
         let resolution = CustomEmojiResolver.resolve(text: sent.plaintext, tags: sent.tags, attachments: attachments)
-        #expect(resolution.shortcodes == [party, celebrate])
+        #expect(resolution.shortcodes == [party, celebrate, partyTime])
         #expect(resolution.inline[party]?.reference?.locators.first?.value == uploadedURL)
         #expect(resolution.gridItems.isEmpty)
 
@@ -126,7 +126,7 @@ struct CustomEmojiSendingFixtureTests {
             if case .message(let record, _) = item.kind { return record.messageIdHex == sent.messageIdHex }
             return false
         })
-        #expect(model.customEmoji(for: item).shortcodes == [party, celebrate])
+        #expect(model.customEmoji(for: item).shortcodes == [party, celebrate, partyTime])
         #expect(model.mediaItems(for: item).isEmpty)
     }
 }
