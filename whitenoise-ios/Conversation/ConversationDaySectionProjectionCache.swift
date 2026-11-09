@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 
 struct TimelineDaySection: Identifiable, Equatable {
@@ -20,10 +19,6 @@ final class ConversationDaySectionProjectionCache {
 
     private var cached: (key: CacheKey, sections: [TimelineDaySection])?
 
-#if DEBUG
-    private(set) var buildCountForTesting = 0
-#endif
-
     func sections(
         for items: [TimelineItem],
         generation: Int,
@@ -40,9 +35,6 @@ final class ConversationDaySectionProjectionCache {
             return cached.sections
         }
 
-#if DEBUG
-        buildCountForTesting += 1
-#endif
         var sections: [TimelineDaySection] = []
         for item in items {
             let day = ConversationDateHeader.dayStart(timestamp: item.timestamp, calendar: calendar)

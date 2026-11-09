@@ -144,21 +144,24 @@ struct ChatSurfacePresentationTests {
         ]
 
         let first = cache.sections(for: items, generation: 1, calendar: calendar, locale: locale)
-        let cached = cache.sections(for: items, generation: 1, calendar: calendar, locale: locale)
-        #expect(first == cached)
         #expect(first.map(\.items.count) == [2, 1])
-        #expect(cache.buildCountForTesting == 1)
+
+        // The generation stands in for the items: the same key returns the cached
+        // sections, and any change to the key rebuilds from the items passed.
+        #expect(cache.sections(for: [], generation: 1, calendar: calendar, locale: locale) == first)
 
         calendar.timeZone = TimeZone(secondsFromGMT: 3_600)!
-        _ = cache.sections(for: items, generation: 1, calendar: calendar, locale: locale)
-        _ = cache.sections(
-            for: items,
-            generation: 1,
-            calendar: calendar,
-            locale: Locale(identifier: "fr_FR")
-        )
-        _ = cache.sections(for: items, generation: 2, calendar: calendar, locale: locale)
-        #expect(cache.buildCountForTesting == 4)
+        #expect(cache.sections(for: [], generation: 1, calendar: calendar, locale: locale).isEmpty)
+
+        let french = Locale(identifier: "fr_FR")
+        let rebuilt = cache.sections(for: items, generation: 1, calendar: calendar, locale: french)
+        #expect(rebuilt.flatMap(\.items) == items)
+
+        #expect(cache.sections(for: [], generation: 2, calendar: calendar, locale: french).isEmpty)
+
+        var iso = Calendar(identifier: .iso8601)
+        iso.timeZone = calendar.timeZone
+        #expect(cache.sections(for: items, generation: 2, calendar: iso, locale: french).flatMap(\.items) == items)
     }
 
     @Test func compactBubblesReserveReadableOppositeMargin() {
