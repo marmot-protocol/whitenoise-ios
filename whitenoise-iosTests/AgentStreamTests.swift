@@ -243,6 +243,20 @@ struct AgentStreamTests {
     }
 
     @MainActor
+    @Test func recordFinalizedStreamsFinalizesTheDecodedStream() {
+        let (store, watcher, counter) = countedStreamWatcher()
+        let streamId = hex("ab")
+
+        // The scan alone, without the timeline store's own handling of the
+        // anchor, finalizes the stream it decodes.
+        watcher.recordFinalizedStreams(in: [finalizedAnchor(streamId: streamId)])
+
+        #expect(counter.decodedMessageIds == [hex("ef")])
+        #expect(!paintsPreview(store, watcher, streamId: streamId))
+        #expect(paintsPreview(store, watcher, streamId: hex("ac")))
+    }
+
+    @MainActor
     @Test func recordFinalizedStreamsSkipsAlreadyScannedRecordsAcrossPages() throws {
         let (store, watcher, counter) = countedStreamWatcher()
         let streamId = hex("ab")
