@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 
@@ -6,7 +5,7 @@ import MarmotKit
 /// `rowId -> MessageMarkdownDisplayProjection` map and its incremental
 /// maintenance (build on insert/update, drop on removal or when a row stops
 /// being a markdown bubble, prune rows no longer in the timeline). The build
-/// itself lives in `MessageMarkdownDisplayProjection.build`; the mention resolver
+/// itself comes from `ConversationProjectionBuilders.markdown`; the mention resolver
 /// is passed per call so this owns no conversation state. First peel of the
 /// TimelineStore split — the row-display projections come out ahead of the core
 /// message mirror.
@@ -18,9 +17,11 @@ final class ConversationMarkdownProjectionCache {
     /// `MarkdownTimestampRenderClock.generation` the cache renders under.
     private(set) var timestampGeneration = 0
 
-#if DEBUG
-    private(set) var buildCountForTesting = 0
-#endif
+    private let builders: ConversationProjectionBuilders
+
+    init(builders: ConversationProjectionBuilders = .live) {
+        self.builders = builders
+    }
 
     private struct ProjectionKey: Equatable {
         let messageIdHex: String
@@ -75,13 +76,7 @@ final class ConversationMarkdownProjectionCache {
            ) {
             return false
         }
-#if DEBUG
-        buildCountForTesting += 1
-#endif
-        let next = MessageMarkdownDisplayProjection.build(
-            for: record,
-            mentionDisplayName: resolver
-        )
+        let next = builders.markdown(record, resolver)
         if next.blocks == nil, next.mentionedAccountIds.isEmpty {
             return remove(rowId: item.id)
         }

@@ -233,9 +233,9 @@ final class TimelineStore {
     /// `maxSystemTimelineItems` because debug events are far higher volume.
     nonisolated static let maxStreamDebugTimelineItems = 256
 
-    @ObservationIgnored let markdownProjections = ConversationMarkdownProjectionCache()
+    @ObservationIgnored let markdownProjections: ConversationMarkdownProjectionCache
     @ObservationIgnored let relativeTimestampRefresh = RelativeTimestampRefreshScheduler()
-    @ObservationIgnored let agentEventProjections = ConversationAgentEventProjectionCache()
+    @ObservationIgnored let agentEventProjections: ConversationAgentEventProjectionCache
     @ObservationIgnored let mediaProjections = ConversationMediaProjectionCache()
     private struct CustomEmojiCacheEntry {
         let candidates: [CustomEmojiShortcode: MessageMediaAttachment]
@@ -260,10 +260,13 @@ final class TimelineStore {
     init(
         appState: AppState?,
         groupIdHex: String,
-        hiddenMessageIds: Set<String> = []
+        hiddenMessageIds: Set<String> = [],
+        projectionBuilders: ConversationProjectionBuilders = .live
     ) {
         self.appState = appState
         self.groupIdHex = groupIdHex
+        markdownProjections = ConversationMarkdownProjectionCache(builders: projectionBuilders)
+        agentEventProjections = ConversationAgentEventProjectionCache(builders: projectionBuilders)
         self.hiddenMessageIds = Set(hiddenMessageIds.compactMap { Hex.normalized32Bytes($0) })
         relativeTimestampRefresh.relativeUnixSeconds = { [markdownProjections] rowId in
             markdownProjections.relativeTimestampSeconds(forRowId: rowId)
@@ -299,8 +302,6 @@ final class TimelineStore {
     }
 
 #if DEBUG
-    var markdownProjectionBuildCountForTesting: Int { markdownProjections.buildCountForTesting }
-    var agentEventProjectionBuildCountForTesting: Int { agentEventProjections.buildCountForTesting }
     var groupSystemProjectionBuildCountForTesting: Int { groupSystemProjectionBuildCount }
     var mediaItemProjectionBuildCountForTesting: Int { mediaProjections.buildCountForTesting }
     var mediaReferenceCountForTesting: Int { mediaProjections.referenceCountForTesting }

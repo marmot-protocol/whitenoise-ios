@@ -1008,7 +1008,8 @@ final class ConversationViewModel {
                 targetMessageId: messageIdHex
             )
         },
-        durableRetryOperations: DurableRetryOperations = .live
+        durableRetryOperations: DurableRetryOperations = .live,
+        projectionBuilders: ConversationProjectionBuilders = .live
     ) {
         self.appState = appState
         self.moderationAccountRef = appState.activeAccountRef
@@ -1026,7 +1027,8 @@ final class ConversationViewModel {
         self.timelineStore = TimelineStore(
             appState: appState,
             groupIdHex: group.groupIdHex,
-            hiddenMessageIds: hiddenMessageIds
+            hiddenMessageIds: hiddenMessageIds,
+            projectionBuilders: projectionBuilders
         )
         self.streamWatcher = StreamWatcher(appState: appState, groupIdHex: group.groupIdHex)
         self.composer = ComposerModel(appState: appState, groupIdHex: group.groupIdHex, timelineStore: timelineStore)
@@ -2313,16 +2315,8 @@ final class ConversationViewModel {
     }
 
 #if DEBUG
-    var markdownProjectionBuildCountForTesting: Int {
-        timelineStore.markdownProjectionBuildCountForTesting
-    }
-
     var groupSystemProjectionBuildCountForTesting: Int {
         timelineStore.groupSystemProjectionBuildCountForTesting
-    }
-
-    var agentEventProjectionBuildCountForTesting: Int {
-        timelineStore.agentEventProjectionBuildCountForTesting
     }
 
     var reactionTargetCollectionCountForTesting: Int {

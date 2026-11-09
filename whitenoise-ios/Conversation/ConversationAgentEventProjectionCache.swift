@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 
@@ -27,9 +26,11 @@ final class ConversationAgentEventProjectionCache {
 
     private var entriesByRowId: [String: Entry] = [:]
 
-#if DEBUG
-    private(set) var buildCountForTesting = 0
-#endif
+    private let builders: ConversationProjectionBuilders
+
+    init(builders: ConversationProjectionBuilders = .live) {
+        self.builders = builders
+    }
 
     func display(for item: TimelineItem) -> AgentEventPresentation.Display? {
         guard case .message(let record, _) = item.kind else { return nil }
@@ -38,16 +39,7 @@ final class ConversationAgentEventProjectionCache {
             return cached.display
         }
 
-        let display: AgentEventPresentation.Display?
-        switch MessageSemantics.classify(record) {
-        case .agentActivity, .agentOperation:
-            display = AgentEventPresentation.display(for: record)
-        default:
-            display = nil
-        }
-#if DEBUG
-        buildCountForTesting += 1
-#endif
+        let display = builders.agentEvent(record)
         entriesByRowId[item.id] = Entry(key: key, display: display)
         return display
     }

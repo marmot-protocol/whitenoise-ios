@@ -10,7 +10,8 @@ struct PreparedConversationLiveUpdateTests {
         let groupRecord = group(name: "Prepared window")
         var snapshot = conversationWindowSnapshot(groupIdHex: groupRecord.groupIdHex, title: "Prepared window")
         let state = AppState.test()
-        let model = ConversationViewModel(appState: state, group: groupRecord)
+        let counter = ProjectionBuildCounter()
+        let model = ConversationViewModel(appState: state, group: groupRecord, projectionBuilders: counter.builders)
         func record(_ id: String, _ time: UInt64, text: String = "OK") -> TimelineMessageRecordFfi {
             TimelineMessageRecordFfi(messageIdHex: id, sourceMessageIdHex: id, direction: "sent",
                 groupIdHex: groupRecord.groupIdHex, sender: accountIdHex, plaintext: text,
@@ -98,17 +99,17 @@ struct PreparedConversationLiveUpdateTests {
             avatar: snapshot.header.selected.avatar, hasCachedProfile: true, avatarAsset: nil)]
         install([old, new, second])
         #expect(model.windowDisplayName(for: accountIdHex) == "New name")
-        let beforeAvatar = model.timelineStore.markdownProjections.buildCountForTesting
+        let beforeAvatar = counter.markdownBuilds
         snapshot.identities[0].avatarAsset = AvatarAssetFfi(target: "native-target", reference: "native-reference",
             availability: .ready, acquisition: nil, contentRevision: 1, byteCount: 40)
         install([old, new, second])
         #expect(model.windowIdentities[accountIdHex]?.avatarAsset?.contentRevision == 1)
-        #expect(model.timelineStore.markdownProjections.buildCountForTesting == beforeAvatar)
-        let markdownBuilds = model.timelineStore.markdownProjections.buildCountForTesting
+        #expect(counter.markdownBuilds == beforeAvatar)
+        let markdownBuilds = counter.markdownBuilds
         snapshot.identities.append(.init(accountIdHex: "unreferenced", displayName: "Unused",
             avatar: snapshot.header.selected.avatar, hasCachedProfile: true, avatarAsset: nil))
         install([old, new, second])
-        #expect(model.timelineStore.markdownProjections.buildCountForTesting == markdownBuilds)
+        #expect(counter.markdownBuilds == markdownBuilds)
         // Once observed, a durable row follows bounded-window membership.
         install([old, second])
         #expect(model.timeline.map(\.id) == ["msg:old", "msg:two"])
