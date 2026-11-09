@@ -231,10 +231,10 @@ final class ComposerModel {
         reportsSizeRejection: Bool = false
     ) -> StagedOutgoingSend? {
         guard let appState, let accountRef = appState.activeAccountRef else { return nil }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Defense-in-depth: clamp to the protocol's max length so an oversized
-        // paste can't bypass the composer's cap (#54).
-        let outgoing = trimmed.isEmpty ? "" : ConversationViewModel.cappedOutgoingText(trimmed)
+        let outgoing = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Defense-in-depth: callers reject oversized text before staging; never
+        // publish a shortened copy of it (#54, #1276).
+        guard OutgoingSendSizePolicy.admitsText(outgoing) else { return nil }
         if attachments.isEmpty {
             guard !outgoing.isEmpty, canSendMessages() else { return nil }
         } else {

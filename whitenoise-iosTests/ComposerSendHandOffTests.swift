@@ -125,6 +125,34 @@ struct ComposerSendHandOffTests {
         #expect(stagedRowsDuringPublish == [2])
     }
 
+    @Test func overLimitTextIsNeverStagedOrSentShortened() async {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let composer = ComposerModel(
+            appState: appState,
+            groupIdHex: hex("aa"),
+            timelineStore: timelineStore
+        )
+        composer.canSendMessages = { true }
+        composer.localSendStatusForTesting = { _ in nil }
+        var sentTexts: [String] = []
+        composer.sendTextForTesting = { _, _, _, text, token in
+            sentTexts.append(text)
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("bb"))
+        }
+        let oversized = String(repeating: "x", count: ContentSanitizer.maxMessageLength + 1)
+        let exact = String(repeating: "y", count: ContentSanitizer.maxMessageLength)
+
+        #expect(composer.stage(text: oversized) == nil)
+        await composer.send(oversized)
+        #expect(timelineStore.timeline.isEmpty)
+        #expect(sentTexts.isEmpty)
+
+        await composer.send(exact)
+        #expect(sentTexts == [exact])
+    }
+
     @Test func durablyAcceptedComposerOutcomesKeepClockWithoutFailureUI() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"

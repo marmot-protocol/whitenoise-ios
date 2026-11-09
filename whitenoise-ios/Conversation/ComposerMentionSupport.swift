@@ -305,12 +305,9 @@ nonisolated enum ComposerMentionCanonicalizer {
         _ text: String,
         candidates: [ComposerMentionCandidate],
         selectedMentions: [ComposerMentionSelection] = [],
-        rosterResolution: ComposerMentionRosterResolution = .resolved,
-        maxLength: Int? = nil
+        rosterResolution: ComposerMentionRosterResolution = .resolved
     ) -> String {
-        guard text.contains("@") else {
-            return maxLength.map { String(text.prefix($0)) } ?? text
-        }
+        guard text.contains("@") else { return text }
         let replacements = candidates
             .filter { candidate in
                 !candidate.npub.isEmpty
@@ -321,7 +318,6 @@ nonisolated enum ComposerMentionCanonicalizer {
             }
 
         var canonical = ""
-        var canonicalLength = 0
         var index = text.startIndex
         while index < text.endIndex {
             if text[index] == "@", leftBoundaryAllowsMention(at: index, in: text) {
@@ -344,16 +340,12 @@ nonisolated enum ComposerMentionCanonicalizer {
                     endIndex = index
                 }
                 if !token.isEmpty {
-                    guard maxLength.map({ canonicalLength + token.count <= $0 }) ?? true else { break }
                     canonical += token
-                    canonicalLength += token.count
                     index = endIndex
                     continue
                 }
             }
-            guard maxLength.map({ canonicalLength < $0 }) ?? true else { break }
             canonical.append(text[index])
-            canonicalLength += 1
             index = text.index(after: index)
         }
         return canonical
@@ -614,8 +606,7 @@ final class ComposerMentionController {
             trimmed,
             candidates: candidates,
             selectedMentions: normalizedSelections,
-            rosterResolution: rosterResolution,
-            maxLength: ContentSanitizer.maxMessageLength
+            rosterResolution: rosterResolution
         )
     }
 

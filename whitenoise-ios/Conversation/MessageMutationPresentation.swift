@@ -38,10 +38,12 @@ nonisolated enum MessageEditingPolicy {
         }
     }
 
+    /// The trimmed text an edit saves, or nil when it is blank or over the
+    /// protocol's max length. An oversized edit is rejected, never shortened (#1276).
     static func normalizedContent(_ content: String) -> String? {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return String(trimmed.prefix(ContentSanitizer.maxMessageLength))
+        guard !trimmed.isEmpty, OutgoingSendSizePolicy.admitsText(trimmed) else { return nil }
+        return trimmed
     }
 }
 

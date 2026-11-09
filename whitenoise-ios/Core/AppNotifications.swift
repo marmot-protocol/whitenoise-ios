@@ -389,7 +389,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         case .openChat(let route):
             appState?.productActivation(.foregroundNotification)
             handle(route: route)
-        case .reply, .markRead:
+        case .reply, .rejectedReply, .markRead:
             // Await completion: returning from the async delegate method ends
             // the system's response-handling grace period.
             await performOrBufferAction(operation)
