@@ -136,7 +136,7 @@ Install a formal release or a dated nightly using its version:
 ./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-The app pins the formal MarmotKit 0.14.0 release. Nightlies are for testing only
+The app pins the formal MarmotKit 0.15.0 release. Nightlies are for testing only
 and are deleted after 30 days; pin a formal release before shipping. For local
 reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds

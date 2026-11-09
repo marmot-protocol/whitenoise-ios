@@ -797,6 +797,10 @@ final class AppReviewDemoCoordinator {
             query: TimelineMessageQueryFfi(
                 groupIdHex: groupIdHex,
                 search: nil,
+                sender: nil,
+                since: nil,
+                until: nil,
+                cursorGroupId: nil,
                 before: nil,
                 beforeMessageId: nil,
                 after: nil,

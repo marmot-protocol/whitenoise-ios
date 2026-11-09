@@ -2168,6 +2168,10 @@ final class ConversationViewModel {
             query: TimelineMessageQueryFfi(
                 groupIdHex: request.groupIdHex,
                 search: nil,
+                sender: nil,
+                since: nil,
+                until: nil,
+                cursorGroupId: nil,
                 before: nil,
                 beforeMessageId: nil,
                 after: nil,

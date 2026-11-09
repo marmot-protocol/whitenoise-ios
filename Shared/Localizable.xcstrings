@@ -126013,6 +126013,66 @@
         }
       }
     },
+    "You rejoined this chat. Messages from before you rejoined may be missing." : {
+      "comment" : "History notice: this device rejoined the chat with a new copy, so messages from before the rejoin that it had not received are unavailable.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du bist diesem Chat erneut beigetreten. Nachrichten von vor deinem erneuten Beitritt fehlen möglicherweise."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volviste a unirte a este chat. Es posible que falten mensajes de antes de que volvieras a unirte."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez rejoint ce chat à nouveau. Des messages antérieurs à votre retour sont peut-être manquants."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sei rientrato in questa chat. I messaggi precedenti al tuo rientro potrebbero mancare."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você entrou novamente neste chat. Mensagens de antes do seu retorno podem estar faltando."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы снова присоединились к этому чату. Сообщения до повторного вступления могут отсутствовать."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu sohbete yeniden katıldınız. Yeniden katılmanızdan önceki mesajlar eksik olabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已重新加入此聊天。重新加入之前的消息可能缺失。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已重新加入此聊天。重新加入之前的訊息可能缺漏。"
+          }
+        }
+      }
+    },
     "You removed %@" : {
       "extractionState" : "manual",
       "localizations" : {
