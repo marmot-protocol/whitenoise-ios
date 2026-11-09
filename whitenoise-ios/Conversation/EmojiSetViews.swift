@@ -446,7 +446,8 @@ struct EmojiSetDetailView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
-                .accessibilityElement(children: .ignore)
+                // `.combine` keeps a failed preview's retry button actionable.
+                .accessibilityElement(children: .combine)
                 .accessibilityLabel(Text(verbatim: entry.shortcode))
             }
         }

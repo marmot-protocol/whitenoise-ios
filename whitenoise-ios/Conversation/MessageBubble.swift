@@ -399,8 +399,7 @@ struct MessageBubble: View {
         if isDeleted {
             deletedBubble
         } else if let sticker = record.sticker, showsStandardBody {
-            StickerMessageContent(sticker: StickerKey(sticker), isFromMe: isFromMe)
-                .opacity(status == .sending ? 0.7 : 1)
+            stickerMessageContent(StickerKey(sticker))
         } else if record.kind == MessageSemantics.kindPoll, showsStandardBody {
             Group {
                 if let poll {
@@ -443,6 +442,23 @@ struct MessageBubble: View {
                     .opacity(status == .sending ? 0.7 : 1)
             }
         }
+    }
+
+    @ViewBuilder
+    private func stickerMessageContent(_ sticker: StickerKey) -> some View {
+        let standsAlone = StickerBubbleLayout.standsAlone(plaintext: record.plaintext, hasReply: replyPreview != nil,
+                                                          hasMedia: !mediaItems.isEmpty)
+        VStack(alignment: isFromMe ? .trailing : .leading, spacing: 4) {
+            if !standsAlone {
+                if mediaItems.isEmpty {
+                    textBubble
+                } else {
+                    mediaMessageContent
+                }
+            }
+            StickerMessageContent(sticker: sticker, isFromMe: isFromMe)
+        }
+        .opacity(status == .sending ? 0.7 : 1)
     }
 
     private func standaloneEmojiContent(_ emoji: String) -> some View {

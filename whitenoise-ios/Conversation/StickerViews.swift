@@ -42,7 +42,8 @@ struct StickerImage: View {
                 placeholder
             }
         }
-        .accessibilityElement(children: .ignore)
+        // `.combine` keeps the Load/Retry button's action; `.ignore` would drop it.
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(StickerLoadPolicy.accessibilityLabel(alt: loaded?.sticker.alt, emoji: loaded?.sticker.emoji))
         .task(id: TaskID(sticker: sticker, automatic: loadsAutomatically, explicitRequests: explicitRequests)) {
             await load()

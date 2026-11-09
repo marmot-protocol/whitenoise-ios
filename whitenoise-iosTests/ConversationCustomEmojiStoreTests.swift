@@ -17,6 +17,7 @@ struct ConversationCustomEmojiStoreTests {
         var beforeLoadReturns: (() -> Void)?
         var reactionArtwork: [String: CustomEmojiReactionArtwork] = [:]
         var reactionLookups: [String] = []
+        var reactionLookupError: Error?
 
         lazy var store = ConversationCustomEmojiStore(
             scopeProvider: { [weak self] in self?.scope },
@@ -31,8 +32,10 @@ struct ConversationCustomEmojiStoreTests {
                 UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }
             },
             resolveReaction: { [weak self] _, id in
-                self?.reactionLookups.append(id)
-                return self?.reactionArtwork[id]
+                guard let self else { throw CancellationError() }
+                self.reactionLookups.append(id)
+                if let error = self.reactionLookupError { throw error }
+                return self.reactionArtwork[id]
             }
         )
     }
@@ -79,21 +82,63 @@ struct ConversationCustomEmojiStoreTests {
         #expect(harness.reactionLookups.isEmpty)
         let image = await harness.store.reactionImage(emoji: ":party:", reactionMessageIdHex: reactionID,
                                                       pixelSize: 60, scale: 3, policyRevision: "p1")
-        #expect(image != nil)
+        #expect(Self.imageKey(image) != nil)
         #expect(harness.loadRequests.first?.demand == .automatic)
+    }
 
-        // A row without its own reaction id (a reactor list) reuses the
-        // reaction already resolved for that shortcode.
-        let reused = await harness.store.reactionImage(emoji: ":party:", reactionMessageIdHex: nil,
+    @Test func eachReactionShowsOnlyItsOwnArtwork() async throws {
+        let harness = Harness()
+        let first = String(repeating: "ef", count: 32)
+        let second = String(repeating: "cd", count: 32)
+        let firstItem = F.attachments([.accepted(attachmentIndex: 0,
+            reference: F.reference(url: "https://blossom.example.com/a", sha: Self.sha256(harness.payload)))],
+            messageID: first)[0]
+        let secondItem = F.attachments([.accepted(attachmentIndex: 0,
+            reference: F.reference(url: "https://blossom.example.com/b", sha: Self.sha256(harness.payload)))],
+            messageID: second)[0]
+        let party = try #require(CustomEmojiShortcode("party"))
+        harness.reactionArtwork[first] = CustomEmojiReactionArtwork(reactionMessageIdHex: first, shortcode: party,
+                                                                    attachment: firstItem)
+        harness.reactionArtwork[second] = CustomEmojiReactionArtwork(reactionMessageIdHex: second, shortcode: party,
+                                                                     attachment: secondItem)
+
+        let a = await harness.store.reactionImage(emoji: ":party:", reactionMessageIdHex: first,
+                                                  pixelSize: 60, scale: 3, policyRevision: "p1")
+        let b = await harness.store.reactionImage(emoji: ":party:", reactionMessageIdHex: second,
+                                                  pixelSize: 60, scale: 3, policyRevision: "p1")
+        #expect(Self.imageKey(a) != nil)
+        #expect(Self.imageKey(b) != nil)
+        #expect(Self.imageKey(a) != Self.imageKey(b))
+
+        // A reaction with no event of its own never borrows another's image.
+        let unnamed = await harness.store.reactionImage(emoji: ":party:", reactionMessageIdHex: nil,
+                                                        pixelSize: 60, scale: 3, policyRevision: "p1")
+        #expect(Self.isNoArtwork(unnamed))
+    }
+
+    @Test func aBuiltInMayStandInOnlyWhenTheReactionHasNoImage() async {
+        let harness = Harness()
+        let reactionID = String(repeating: "ef", count: 32)
+        // MDK reports no image on the reaction: a built-in may stand in.
+        let none = await harness.store.reactionImage(emoji: ":marmot:", reactionMessageIdHex: reactionID,
+                                                     pixelSize: 60, scale: 3, policyRevision: "p1")
+        #expect(Self.isNoArtwork(none))
+
+        // A read that fails can't say, so the label keeps its text.
+        harness.reactionLookupError = AttachmentReadError.unavailable
+        let failed = await harness.store.reactionImage(emoji: ":marmot:", reactionMessageIdHex: reactionID,
                                                        pixelSize: 60, scale: 3, policyRevision: "p1")
-        #expect(reused?.key == image?.key)
-        #expect(harness.reactionLookups == [reactionID, reactionID])
-        #expect(harness.loadRequests.count == 1)
+        #expect(failed == nil)
+    }
 
-        // Another chat forgets which reaction carried it.
-        harness.scope = CustomEmojiScope(accountRef: "alice", runtimeGeneration: 1, groupIdHex: "g2")
-        #expect(await harness.store.reactionImage(emoji: ":party:", reactionMessageIdHex: nil,
-                                                  pixelSize: 60, scale: 3, policyRevision: "p1") == nil)
+    static func imageKey(_ result: ConversationCustomEmojiStore.ReactionImage?) -> CustomEmojiImageKey? {
+        if case .image(let key, _) = result { return key }
+        return nil
+    }
+
+    static func isNoArtwork(_ result: ConversationCustomEmojiStore.ReactionImage?) -> Bool {
+        if case .noArtwork = result { return true }
+        return false
     }
 
     @Test func policyBlockedLoadIsRetriedOnlyAfterThePolicyChanges() async {

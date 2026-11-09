@@ -237,13 +237,17 @@ final class EmojiSetLibrary {
     }
 
     /// Read-only, so a view body can ask without changing observed state.
+    /// Reads observed state before the unobserved scope check, so a view
+    /// body that asks before the first load still updates after it.
     func isInstalled(_ coordinate: String) -> Bool {
-        scopeProvider() == scope && installedSets.contains { $0.coordinate == coordinate }
+        let contains = installedSets.contains { $0.coordinate == coordinate }
+        return contains && scopeProvider() == scope
     }
 
     /// Installed emoji for the current scope; empty until loaded.
     var currentInstalledEmoji: [InstalledCustomEmojiFfi] {
-        scopeProvider() == scope ? installedEmoji : []
+        let emoji = installedEmoji
+        return scopeProvider() == scope ? emoji : []
     }
 
     func loadInstalledIfNeeded() async {

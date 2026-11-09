@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import UIKit
 import MarmotKit
@@ -10,6 +11,14 @@ struct StickerPresentationTests {
         #expect(StickerLoadPolicy.loadsAutomatically(isFromMe: false, packInstalled: true, autoDownloadImages: true))
         #expect(!StickerLoadPolicy.loadsAutomatically(isFromMe: false, packInstalled: true, autoDownloadImages: false))
         #expect(!StickerLoadPolicy.loadsAutomatically(isFromMe: false, packInstalled: false, autoDownloadImages: true))
+    }
+
+    @Test func aStickerStandsAloneOnlyWhenItsMessageCarriesNothingElse() {
+        #expect(StickerBubbleLayout.standsAlone(plaintext: "", hasReply: false, hasMedia: false))
+        #expect(StickerBubbleLayout.standsAlone(plaintext: " \n", hasReply: false, hasMedia: false))
+        #expect(!StickerBubbleLayout.standsAlone(plaintext: "hello", hasReply: false, hasMedia: false))
+        #expect(!StickerBubbleLayout.standsAlone(plaintext: "", hasReply: true, hasMedia: false))
+        #expect(!StickerBubbleLayout.standsAlone(plaintext: "", hasReply: false, hasMedia: true))
     }
 
     @Test func labelsUseOnlyAShortEmojiAndSanitizeDescriptions() {
@@ -211,6 +220,21 @@ struct StickerLibraryTests {
         #expect(!harness.library.isInstalled(mine))
         await harness.library.loadInstalledIfNeeded()
         #expect(harness.reads == 2)
+    }
+
+    @Test func aViewThatAsksBeforeTheFirstLoadIsToldWhenItLands() async {
+        let harness = Harness()
+        let mine = harness.installed[0].coordinate
+        let changed = Mutex(false)
+        // A timeline sticker asks before anything has set the library's scope.
+        withObservationTracking {
+            _ = harness.library.isInstalled(mine)
+        } onChange: {
+            changed.withLock { $0 = true }
+        }
+        await harness.library.loadInstalledIfNeeded()
+        #expect(changed.withLock { $0 })
+        #expect(harness.library.isInstalled(mine))
     }
 
     @Test func syncRunsOncePerAccountUnlessForced() async throws {

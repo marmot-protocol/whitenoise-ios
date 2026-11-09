@@ -15,8 +15,17 @@ import MarmotKit
 final class ConversationCustomEmojiStore {
     typealias LoadData = @MainActor (MessageMediaAttachment) async throws -> Data
     typealias Decode = @MainActor (Data, Int, CGFloat) async -> UIImage?
-    /// The image slot of a `:shortcode:` reaction event, or nil when it has none.
-    typealias ResolveReaction = @MainActor (_ emoji: String, _ reactionMessageIdHex: String) async -> CustomEmojiReactionArtwork?
+    /// The image slot of a `:shortcode:` reaction event, or nil when MDK
+    /// reports it has none. Throws when that can't be read right now.
+    typealias ResolveReaction = @MainActor (_ emoji: String, _ reactionMessageIdHex: String) async throws -> CustomEmojiReactionArtwork?
+
+    /// What a `:shortcode:` reaction label may draw.
+    enum ReactionImage {
+        /// The reaction event's own image.
+        case image(key: CustomEmojiImageKey, image: UIImage)
+        /// The reaction carries no image, so a built-in may stand in.
+        case noArtwork
+    }
 
     static let imageLimit = 128
 
@@ -30,8 +39,6 @@ final class ConversationCustomEmojiStore {
     private var imageOrder: [CustomEmojiImageKey] = []
     /// Policy revision at which a load failed; retried after the policy changes.
     private var failures: [CustomEmojiImageKey: String] = [:]
-    /// `:shortcode:` → the first reaction event resolved for it in this scope.
-    private var resolvedReactionIDs: [String: String] = [:]
 
     init(
         scopeProvider: @escaping @MainActor () -> CustomEmojiScope?,
@@ -85,21 +92,26 @@ final class ConversationCustomEmojiStore {
         }
     }
 
-    /// The image for a `:shortcode:` reaction, read from the reaction event's
-    /// own attachment exactly as an inline emoji is. Nil keeps the literal
+    /// The image for a `:shortcode:` reaction, read from that reaction
+    /// event's own attachment exactly as an inline emoji is. NIP-30
+    /// definitions belong to one event, so artwork is never borrowed from
+    /// another reaction. Nil (not yet known, or failed) keeps the literal
     /// shortcode text.
-    /// A nil `reactionMessageIdHex` reuses the reaction event this chat
-    /// already resolved for the same `:shortcode:`.
     func reactionImage(emoji: String, reactionMessageIdHex: String?, pixelSize: Int, scale: CGFloat,
-                       policyRevision: String) async -> (key: CustomEmojiImageKey, image: UIImage)? {
-        guard CustomEmojiShortcode(reactionContent: emoji) != nil, let scope = syncedScope(),
-              let reactionID = reactionMessageIdHex ?? resolvedReactionIDs[emoji], !reactionID.isEmpty,
-              let artwork = await resolveReaction(emoji, reactionID),
-              !Task.isCancelled, scopeProvider() == scope
-        else { return nil }
-        if resolvedReactionIDs[emoji] == nil { resolvedReactionIDs[emoji] = reactionID }
-        return await inlineImage(for: artwork.attachment, pixelSize: pixelSize, scale: scale,
-                                 policyRevision: policyRevision)
+                       policyRevision: String) async -> ReactionImage? {
+        guard CustomEmojiShortcode(reactionContent: emoji) != nil, let scope = syncedScope() else { return nil }
+        guard let reactionID = reactionMessageIdHex, !reactionID.isEmpty else { return .noArtwork }
+        let artwork: CustomEmojiReactionArtwork?
+        do {
+            artwork = try await resolveReaction(emoji, reactionID)
+        } catch {
+            return nil
+        }
+        guard !Task.isCancelled, scopeProvider() == scope else { return nil }
+        guard let artwork else { return .noArtwork }
+        guard let loaded = await inlineImage(for: artwork.attachment, pixelSize: pixelSize, scale: scale,
+                                             policyRevision: policyRevision) else { return nil }
+        return .image(key: loaded.key, image: loaded.image)
     }
 
     /// Sets the image scale so its longest side spans the requested point
@@ -122,7 +134,6 @@ final class ConversationCustomEmojiStore {
             images.removeAll()
             imageOrder.removeAll()
             failures.removeAll()
-            resolvedReactionIDs.removeAll()
             scope = current
         }
         return current

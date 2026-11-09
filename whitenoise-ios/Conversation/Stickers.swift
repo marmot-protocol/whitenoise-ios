@@ -37,6 +37,15 @@ nonisolated struct StickerKey: Hashable, Sendable {
     }
 }
 
+nonisolated enum StickerBubbleLayout {
+    /// A sticker replaces the bubble only when its kind-9 carries nothing
+    /// else. MDK reads the sticker tag independently of the content, so a
+    /// caption, reply quote or attachment beside it must still show.
+    static func standsAlone(plaintext: String, hasReply: Bool, hasMedia: Bool) -> Bool {
+        !hasReply && !hasMedia && plaintext.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
 nonisolated enum StickerLoadPolicy {
     /// Whether a sticker in the timeline loads without a tap. Loading contacts
     /// the pack author's server, so a received sticker loads by itself only
@@ -266,8 +275,11 @@ final class StickerLibrary {
     }
 
     /// Read-only, so a view body can ask without changing observed state.
+    /// Reads the observed set first: `scope` is not observed, so a body that
+    /// stopped at the scope check would miss the first load.
     func isInstalled(_ coordinate: String) -> Bool {
-        scopeProvider() == scope && installedCoordinates.contains(coordinate)
+        let contains = installedCoordinates.contains(coordinate)
+        return contains && scopeProvider() == scope
     }
 
     /// Reads the installed packs once per account and runtime.

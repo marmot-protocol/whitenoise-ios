@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import UIKit
 import MarmotKit
@@ -185,6 +186,21 @@ struct EmojiSetLibraryTests {
         #expect(harness.reads == 2)
     }
 
+    @Test func aViewThatAsksBeforeTheFirstLoadIsToldWhenItLands() async {
+        let harness = Harness()
+        let mine = harness.installedSets[0].coordinate
+        let changed = Mutex(0)
+        withObservationTracking {
+            _ = harness.library.isInstalled(mine)
+            _ = harness.library.currentInstalledEmoji
+        } onChange: {
+            changed.withLock { $0 += 1 }
+        }
+        await harness.library.loadInstalledIfNeeded()
+        #expect(changed.withLock { $0 } == 1)
+        #expect(harness.library.isInstalled(mine))
+    }
+
     @Test func browsingSyncsOncePerAccountButAuthorSearchesAlwaysFetch() async throws {
         let harness = Harness()
         try await harness.library.sync()
@@ -210,7 +226,7 @@ struct EmojiSetLibraryTests {
         await #expect(throws: CancellationError.self) { try await library.install(fresh) }
 
         harness.installGate?.resume()
-        try await install.value
+        _ = try await install.value
         #expect(harness.installs.map(\.eventIdHex) == [fresh.eventIdHex])
         #expect(library.installProgress.isEmpty)
         #expect(library.isInstalled(fresh.coordinate))

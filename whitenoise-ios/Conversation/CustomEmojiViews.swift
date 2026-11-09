@@ -156,11 +156,14 @@ struct CustomEmojiReactionLabel: View {
     static let defaultPointSize: CGFloat = 18
 
     let emoji: String
-    /// The reaction event whose image to show. Nil reuses one this
-    /// conversation already resolved for the same `:shortcode:`.
+    /// The reaction event whose image to show. Nil (an optimistic reaction
+    /// with no event yet) has no image of its own.
     var reactionMessageIdHex: String?
 
     @State private var loaded: (key: CustomEmojiImageKey, image: UIImage)?
+    /// The load that found no image of the reaction's own; only then may a
+    /// built-in stand in, so it never paints over an image still loading.
+    @State private var noArtwork: LoadID?
 
     private struct LoadID: Equatable {
         let scope: CustomEmojiScope?
@@ -178,13 +181,16 @@ struct CustomEmojiReactionLabel: View {
     var body: some View {
         let scope = store?.currentScope
         let size = CustomEmojiInlineMetrics.pixelSize(pointSize: pointSize, scale: displayScale)
+        let loadID = LoadID(scope: scope, emoji: emoji, reactionMessageIdHex: reactionMessageIdHex, pixelSize: size,
+                            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)
         Group {
             if let loaded, let scope, loaded.key.scope == scope, loaded.key.pixelSize == size {
                 Image(uiImage: loaded.image)
                     .resizable()
                     .scaledToFit()
                     .frame(width: pointSize, height: pointSize)
-            } else if let shortcode = CustomEmojiShortcode(reactionContent: emoji),
+            } else if scope == nil || noArtwork == loadID,
+                      let shortcode = CustomEmojiShortcode(reactionContent: emoji),
                       let builtin = CustomEmojiBuiltinImages.image(for: shortcode, pixelSize: size, scale: displayScale) {
                 Image(uiImage: builtin)
                     .resizable()
@@ -196,17 +202,24 @@ struct CustomEmojiReactionLabel: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: CustomEmojiShortcode.spokenReaction(emoji)))
-        .task(id: LoadID(scope: scope, emoji: emoji, reactionMessageIdHex: reactionMessageIdHex, pixelSize: size,
-                         policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
+        .task(id: loadID) {
             guard let store, scope != nil, CustomEmojiShortcode(reactionContent: emoji) != nil else { return }
-            guard let result = await store.reactionImage(
+            let result = await store.reactionImage(
                 emoji: emoji,
                 reactionMessageIdHex: reactionMessageIdHex,
                 pixelSize: size,
                 scale: displayScale,
-                policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision
-            ), !Task.isCancelled, result.key.scope == store.currentScope else { return }
-            loaded = result
+                policyRevision: loadID.policyRevision
+            )
+            guard !Task.isCancelled else { return }
+            switch result {
+            case .image(let key, let image) where key.scope == store.currentScope:
+                loaded = (key, image)
+            case .noArtwork:
+                noArtwork = loadID
+            case .image, nil:
+                break
+            }
         }
     }
 }

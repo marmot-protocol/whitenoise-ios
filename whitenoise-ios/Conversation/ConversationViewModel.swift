@@ -309,7 +309,8 @@ final class ConversationViewModel {
             return try await self.data(for: item)
         },
         resolveReaction: { [weak self] emoji, reactionMessageIdHex in
-            await self?.reactionEmojiArtwork(emoji: emoji, reactionMessageIdHex: reactionMessageIdHex)
+            guard let self else { throw CancellationError() }
+            return try await self.reactionEmojiArtwork(emoji: emoji, reactionMessageIdHex: reactionMessageIdHex)
         }
     )
     /// Resolved `:shortcode:` reaction artwork, by reaction event id, for
@@ -318,7 +319,7 @@ final class ConversationViewModel {
     @ObservationIgnored private var reactionArtworkScope: CustomEmojiScope?
     /// Reaction events MDK reported no usable artwork for, in this scope.
     @ObservationIgnored private var reactionArtworkMisses: Set<String> = []
-    @ObservationIgnored private var reactionArtworkLookups: [String: Task<CustomEmojiReactionArtwork?, Never>] = [:]
+    @ObservationIgnored private var reactionArtworkLookups: [String: Task<CustomEmojiReactionArtwork?, Error>] = [:]
     @ObservationIgnored private let daySectionProjections = ConversationDaySectionProjectionCache()
     @ObservationIgnored private let deleteMessageOperation: DeleteMessageOperation
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
@@ -2443,35 +2444,32 @@ final class ConversationViewModel {
     /// The artwork of one `:shortcode:` reaction event, read once per scope
     /// through MDK's bounded local `reactionAttachment` lookup. Concurrent
     /// requests share one read; a result for an old scope is dropped.
-    func reactionEmojiArtwork(emoji: String, reactionMessageIdHex: String) async -> CustomEmojiReactionArtwork? {
-        guard let scope = syncedReactionArtworkScope(),
-              CustomEmojiShortcode(reactionContent: emoji) != nil, !reactionMessageIdHex.isEmpty else { return nil }
+    /// Nil means MDK reported no image for that reaction. A failed or
+    /// abandoned read throws and is not remembered as a miss.
+    func reactionEmojiArtwork(emoji: String, reactionMessageIdHex: String) async throws -> CustomEmojiReactionArtwork? {
+        guard let scope = syncedReactionArtworkScope() else { throw CancellationError() }
+        guard CustomEmojiShortcode(reactionContent: emoji) != nil, !reactionMessageIdHex.isEmpty else { return nil }
         if let known = reactionArtwork[reactionMessageIdHex] { return known }
         guard !reactionArtworkMisses.contains(reactionMessageIdHex) else { return nil }
-        if let pending = reactionArtworkLookups[reactionMessageIdHex] { return await pending.value }
-        let task = Task { @MainActor [weak self] () -> CustomEmojiReactionArtwork? in
-            guard let self, let appState = self.appState,
-                  let client = try? appState.currentMarmotClient() else { return nil }
-            do {
-                let entry = try await client.reactionAttachment(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
-                                                                reactionMessageIdHex: reactionMessageIdHex)
-                guard self.reactionArtworkScope == scope, self.customEmojiScope == scope else { return nil }
-                let artwork = CustomEmojiReactionResolution.artwork(emoji: emoji,
-                    reactionMessageIdHex: reactionMessageIdHex, entry: entry)
-                if let artwork {
-                    self.reactionArtwork[reactionMessageIdHex] = artwork
-                } else {
-                    self.reactionArtworkMisses.insert(reactionMessageIdHex)
-                }
-                return artwork
-            } catch {
-                return nil
+        if let pending = reactionArtworkLookups[reactionMessageIdHex] { return try await pending.value }
+        let task = Task { @MainActor [weak self] () throws -> CustomEmojiReactionArtwork? in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            let client = try appState.currentMarmotClient()
+            let entry = try await client.reactionAttachment(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
+                                                            reactionMessageIdHex: reactionMessageIdHex)
+            guard self.reactionArtworkScope == scope, self.customEmojiScope == scope else { throw CancellationError() }
+            let artwork = CustomEmojiReactionResolution.artwork(emoji: emoji,
+                reactionMessageIdHex: reactionMessageIdHex, entry: entry)
+            if let artwork {
+                self.reactionArtwork[reactionMessageIdHex] = artwork
+            } else {
+                self.reactionArtworkMisses.insert(reactionMessageIdHex)
             }
+            return artwork
         }
         reactionArtworkLookups[reactionMessageIdHex] = task
-        let result = await task.value
-        if reactionArtworkScope == scope { reactionArtworkLookups[reactionMessageIdHex] = nil }
-        return result
+        defer { if reactionArtworkScope == scope { reactionArtworkLookups[reactionMessageIdHex] = nil } }
+        return try await task.value
     }
 
     /// Resolves the artwork of `:shortcode:` reactions on loaded messages so
@@ -2486,7 +2484,7 @@ final class ConversationViewModel {
         let pending = CustomEmojiReactionResolution.pendingLookups(
             tallies: tallies, resolved: Set(reactionArtwork.keys), misses: reactionArtworkMisses)
         for lookup in pending {
-            _ = await reactionEmojiArtwork(emoji: lookup.emoji, reactionMessageIdHex: lookup.reactionMessageIdHex)
+            _ = try? await reactionEmojiArtwork(emoji: lookup.emoji, reactionMessageIdHex: lookup.reactionMessageIdHex)
             guard !Task.isCancelled else { return }
         }
     }
