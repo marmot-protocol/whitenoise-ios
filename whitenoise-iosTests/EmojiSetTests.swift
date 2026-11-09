@@ -61,8 +61,11 @@ struct EmojiSetPresentationTests {
         #expect(EmojiSetPresentation.skippedNote(set) != nil)
     }
 
-    @Test func onlyAuthorSearchesFetchFromRelays() {
-        #expect(EmojiSetPresentation.searchNamesAuthor("npub1abc"))
+    @Test func onlyAuthorSearchesFetchFromRelays() throws {
+        let npub = try #require(NostrProfileReference.npub(fromAccountIdHex: hex("ab")))
+        #expect(EmojiSetPresentation.searchNamesAuthor(" \(npub) "))
+        // A partial npub, still being typed, filters locally.
+        #expect(!EmojiSetPresentation.searchNamesAuthor(String(npub.prefix(12))))
         #expect(EmojiSetPresentation.searchNamesAuthor(" \(hex("ab").uppercased()) "))
         #expect(!EmojiSetPresentation.searchNamesAuthor("blob cats"))
         #expect(!EmojiSetPresentation.searchNamesAuthor(String(repeating: "g", count: 64)))
@@ -206,9 +209,11 @@ struct EmojiSetLibraryTests {
         try await harness.library.sync()
         try await harness.library.sync(search: "blobs")
         #expect(harness.syncs == [nil])
-        try await harness.library.sync(search: " npub1abc ")
+        let npub = try #require(NostrProfileReference.npub(fromAccountIdHex: hex("ab")))
+        try await harness.library.sync(search: " \(npub) ")
+        try await harness.library.sync(search: npub)
         try await harness.library.sync(search: "npub1abc")
-        #expect(harness.syncs == [nil, "npub1abc", "npub1abc"])
+        #expect(harness.syncs == [nil, npub, npub])
         try await harness.library.sync(force: true)
         #expect(harness.syncs.count == 4)
     }

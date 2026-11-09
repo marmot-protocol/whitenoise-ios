@@ -68,10 +68,13 @@ nonisolated enum EmojiSetPresentation {
     }
 
     /// Whether a search names an author, which MDK can fetch from relays
-    /// rather than only filter what is already stored.
+    /// rather than only filter what is already stored. Only a complete,
+    /// checksummed npub counts, so typing one doesn't fetch at each keystroke.
     static func searchNamesAuthor(_ search: String) -> Bool {
         let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if trimmed.hasPrefix("npub1") { return trimmed.utf8.count <= 100 }
+        if trimmed.hasPrefix("npub1") {
+            return trimmed.utf8.count <= 100 && NostrProfileReference.pubkeyHex(fromBech32: trimmed) != nil
+        }
         return trimmed.utf8.count == 64 && trimmed.utf8.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
     }
 

@@ -995,6 +995,7 @@ final class ChatsListViewModel {
         row.selfMembership = record.selfMembership
         row.leaveRequestPending = record.leaveRequestPending
         row.leaveRequestedAtMs = record.leaveRequestedAtMs
+        row.leaveBlocked = record.leaveBlocked
         row.groupName = record.name
         row.avatarUrl = record.avatarUrl
         if let name = ContentSanitizer.groupName(record.name) {
