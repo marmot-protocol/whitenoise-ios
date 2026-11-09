@@ -67,7 +67,7 @@ struct DiagnosticsAndImprovementsView: View {
 
     private var sharingSummary: AttributedString {
         var summary = AttributedString(isPrompt
-            ? L10n.string("These choices apply to all accounts on this device. You can change them anytime in Settings → Privacy & Security.")
+            ? L10n.string("These choices apply to all accounts on this device. You can change them anytime in Settings → Privacy & Security → Diagnostics & Improvements.")
             : L10n.string("These choices apply to all accounts on this device."))
         var details = AttributedString(L10n.string("What’s shared"))
         details.link = URL(string: "whitenoise:diagnostics-sharing")

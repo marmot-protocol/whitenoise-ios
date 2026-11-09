@@ -326,67 +326,67 @@
         }
       }
     },
-    "These choices apply to all accounts on this device. You can change them anytime in Settings → Privacy & Security." : {
+    "These choices apply to all accounts on this device. You can change them anytime in Settings → Privacy & Security → Diagnostics & Improvements." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diese Einstellungen gelten für alle Konten auf diesem Gerät. Du kannst sie jederzeit unter Einstellungen → Datenschutz & Sicherheit ändern."
+            "value" : "Diese Einstellungen gelten für alle Konten auf diesem Gerät. Du kannst sie jederzeit unter Einstellungen → Datenschutz & Sicherheit → Diagnose & Verbesserungen ändern."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "These choices apply to all accounts on this device. You can change them anytime in Settings → Privacy & Security."
+            "value" : "These choices apply to all accounts on this device. You can change them anytime in Settings → Privacy & Security → Diagnostics & Improvements."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Estas opciones se aplican a todas las cuentas de este dispositivo. Puedes cambiarlas cuando quieras en Configuración → Privacidad y seguridad."
+            "value" : "Estas opciones se aplican a todas las cuentas de este dispositivo. Puedes cambiarlas cuando quieras en Configuración → Privacidad y seguridad → Diagnóstico y mejoras."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ces choix s’appliquent à tous les comptes sur cet appareil. Vous pouvez les modifier à tout moment dans Paramètres → Confidentialité et sécurité."
+            "value" : "Ces choix s’appliquent à tous les comptes sur cet appareil. Vous pouvez les modifier à tout moment dans Paramètres → Confidentialité et sécurité → Diagnostic et améliorations."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Queste scelte si applicano a tutti gli account su questo dispositivo. Puoi modificarle in qualsiasi momento in Impostazioni → Privacy e sicurezza."
+            "value" : "Queste scelte si applicano a tutti gli account su questo dispositivo. Puoi modificarle in qualsiasi momento in Impostazioni → Privacy e sicurezza → Diagnostica e miglioramenti."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Estas escolhas se aplicam a todas as contas neste dispositivo. Você pode alterá-las a qualquer momento em Configurações → Privacidade e segurança."
+            "value" : "Estas escolhas se aplicam a todas as contas neste dispositivo. Você pode alterá-las a qualquer momento em Configurações → Privacidade e segurança → Diagnóstico e melhorias."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Эти настройки действуют для всех аккаунтов на этом устройстве. Вы можете изменить их в любое время: Настройки → Конфиденциальность и безопасность."
+            "value" : "Эти настройки действуют для всех аккаунтов на этом устройстве. Вы можете изменить их в любое время: Настройки → Конфиденциальность и безопасность → Диагностика и улучшения."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu seçimler bu cihazdaki tüm hesaplar için geçerlidir. Bunları istediğiniz zaman Ayarlar → Gizlilik ve güvenlik bölümünden değiştirebilirsiniz."
+            "value" : "Bu seçimler bu cihazdaki tüm hesaplar için geçerlidir. Bunları istediğiniz zaman Ayarlar → Gizlilik ve güvenlik → Tanılama ve İyileştirmeler bölümünden değiştirebilirsiniz."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这些选项适用于此设备上的所有账户。你可以随时在“设置 → 隐私与安全”中更改。"
+            "value" : "这些选项适用于此设备上的所有账户。你可以随时在“设置 → 隐私与安全 → 诊断与改进”中更改。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這些選項適用於此裝置上的所有帳號。你可以隨時在「設定 → 隱私與安全」中更改。"
+            "value" : "這些選項適用於此裝置上的所有帳號。你可以隨時在「設定 → 隱私與安全 → 診斷與改進」中更改。"
           }
         }
       }
