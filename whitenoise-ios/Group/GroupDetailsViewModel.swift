@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import SwiftUI
 import MarmotKit
 
@@ -70,16 +69,6 @@ final class GroupDetailsViewModel {
     @ObservationIgnored var onGroupLeft: (String) -> Void = { _ in }
     @ObservationIgnored var onGroupDeleted: (String) -> Void = { _ in }
     @ObservationIgnored private let marmotCalls: GroupDetailsMarmotCalls
-#if DEBUG
-    @ObservationIgnored var setGroupArchivedForTesting: (@MainActor (String, String, Bool) async throws -> AppGroupRecordFfi)?
-    @ObservationIgnored var leaveGroupForTesting: (@MainActor (String, String) async throws -> SendSummaryFfi)?
-    @ObservationIgnored var forgetGroupLocalForTesting: (@MainActor (String, String) async throws -> Bool)?
-    @ObservationIgnored var clearResetMediaForTesting: (@MainActor () async -> Bool)?
-    @ObservationIgnored var deleteGroupLocalForTesting: (@MainActor (String, String) async throws -> Bool)?
-    @ObservationIgnored var enableGroupDisbandingForTesting: (@MainActor (String, String) async throws -> GroupMutationResultFfi)?
-    @ObservationIgnored var disbandGroupForTesting: (@MainActor (String, String) async throws -> DisbandRequestFfi)?
-    @ObservationIgnored var acknowledgeDisbandFailureForTesting: (@MainActor (String, String) async throws -> Bool)?
-#endif
 
     init(marmotCalls: GroupDetailsMarmotCalls = .marmot) {
         self.marmotCalls = marmotCalls
@@ -551,30 +540,7 @@ final class GroupDetailsViewModel {
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }
         do {
-            let record: AppGroupRecordFfi
-#if DEBUG
-            if let setGroupArchivedForTesting {
-                record = try await setGroupArchivedForTesting(
-                    accountRef,
-                    conversation.group.groupIdHex,
-                    archived
-                )
-            } else {
-                let client = try appState.currentMarmotClient()
-                record = try await client.setGroupArchived(
-                    accountRef: accountRef,
-                    groupIdHex: conversation.group.groupIdHex,
-                    archived: archived
-                )
-            }
-#else
-            let client = try appState.currentMarmotClient()
-            record = try await client.setGroupArchived(
-                accountRef: accountRef,
-                groupIdHex: conversation.group.groupIdHex,
-                archived: archived
-            )
-#endif
+            let record = try await marmotCalls.setGroupArchived(appState, accountRef, conversation.group.groupIdHex, archived)
             conversation.applyGroupRecord(record)
             onGroupChanged(record)
             await refreshVisibleDebugState(using: appState)
@@ -622,21 +588,7 @@ final class GroupDetailsViewModel {
             guard appState.activeAccountRef == accountRef else { return }
             let client = try appState.currentMarmotClient()
             appState.present(.warning(L10n.string("Leaving group…"), message: L10n.string("Publishing group update.")))
-#if DEBUG
-            if let leaveGroupForTesting {
-                _ = try await leaveGroupForTesting(accountRef, groupIdHex)
-            } else {
-                _ = try await client.leaveGroup(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex
-                )
-            }
-#else
-            _ = try await client.leaveGroup(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex
-            )
-#endif
+            _ = try await marmotCalls.leaveGroup(client, accountRef, groupIdHex)
             conversation.markSelfLeft()
             onGroupChanged(conversation.group)
             Haptics.warning()
@@ -680,15 +632,7 @@ final class GroupDetailsViewModel {
                     message: L10n.string("Publishing group update.")
                 ))
                 let result = try await performGroupChange(accountRef: accountRef, using: appState) { client in
-#if DEBUG
-                    if let enableGroupDisbandingForTesting {
-                        return try await enableGroupDisbandingForTesting(accountRef, groupIdHex)
-                    }
-#endif
-                    return try await client.enableGroupDisbanding(
-                        accountRef: accountRef,
-                        groupIdHex: groupIdHex
-                    )
+                    try await self.marmotCalls.enableGroupDisbanding(client, accountRef, groupIdHex)
                 }
                 conversation.applyGroupMutation(result)
                 state = result.managementState
@@ -706,15 +650,7 @@ final class GroupDetailsViewModel {
                 message: L10n.string("Removing everyone and publishing the final group update.")
             ))
             let request = try await performGroupChange(accountRef: accountRef, using: appState) { client in
-#if DEBUG
-                if let disbandGroupForTesting {
-                    return try await disbandGroupForTesting(accountRef, groupIdHex)
-                }
-#endif
-                return try await client.disbandGroup(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex
-                )
+                try await self.marmotCalls.disbandGroup(client, accountRef, groupIdHex)
             }
             conversation.markDisbandRequested(request)
             onGroupChanged(conversation.group)
@@ -740,27 +676,9 @@ final class GroupDetailsViewModel {
         defer { membershipActionInFlight = false }
 
         do {
-            let acknowledged: Bool
-#if DEBUG
-            if let acknowledgeDisbandFailureForTesting {
-                acknowledged = try await acknowledgeDisbandFailureForTesting(
-                    accountRef,
-                    conversation.group.groupIdHex
-                )
-            } else {
-                let client = try appState.currentMarmotClient()
-                acknowledged = try await client.acknowledgeDisbandFailure(
-                    accountRef: accountRef,
-                    groupIdHex: conversation.group.groupIdHex
-                )
-            }
-#else
-            let client = try appState.currentMarmotClient()
-            acknowledged = try await client.acknowledgeDisbandFailure(
-                accountRef: accountRef,
-                groupIdHex: conversation.group.groupIdHex
+            let acknowledged = try await marmotCalls.acknowledgeDisbandFailure(
+                appState, accountRef, conversation.group.groupIdHex
             )
-#endif
             if acknowledged {
                 conversation.clearDisbandFailure()
                 onGroupChanged(conversation.group)
@@ -788,26 +706,12 @@ final class GroupDetailsViewModel {
             defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
             await conversation.prepareForLocalGroupReset()
             await appState.conversationDraftStore.pauseForGroupReset(accountRef: accountRef, groupIdHex: groupId)
-#if DEBUG
-            if let forgetGroupLocalForTesting {
-                _ = try await forgetGroupLocalForTesting(accountRef, groupId)
-            } else {
-                _ = try await lease.client.forgetGroupLocal(accountRef: accountRef, groupIdHex: groupId)
-            }
-#else
-            _ = try await lease.client.forgetGroupLocal(accountRef: accountRef, groupIdHex: groupId)
-#endif
+            _ = try await marmotCalls.forgetGroupLocal(lease.client, accountRef, groupId)
             localResetCompleted = true
             appState.conversationDraftStore.finishGroupReset(accountRef: accountRef, groupIdHex: groupId, succeeded: true)
             sharedMediaItems = []
             cleanupTranscriptExportFile()
-            let cacheCleared: Bool
-#if DEBUG
-            if let clearResetMediaForTesting { cacheCleared = await clearResetMediaForTesting() }
-            else { cacheCleared = await MessageMediaCache.purgeAllDecryptedMedia() }
-#else
-            cacheCleared = await MessageMediaCache.purgeAllDecryptedMedia()
-#endif
+            let cacheCleared = await marmotCalls.clearResetMedia()
             guard appState.activeAccountRef == accountRef, appState.runtimeGeneration == runtimeGeneration else { return }
             Haptics.warning()
             dismiss()
@@ -844,23 +748,7 @@ final class GroupDetailsViewModel {
         do {
             await conversation.prepareForLocalGroupRemoval()
             preparedForRemoval = true
-#if DEBUG
-            if let deleteGroupLocalForTesting {
-                _ = try await deleteGroupLocalForTesting(accountRef, groupIdHex)
-            } else {
-                let client = try appState.currentMarmotClient()
-                _ = try await client.deleteGroupLocal(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex
-                )
-            }
-#else
-            let client = try appState.currentMarmotClient()
-            _ = try await client.deleteGroupLocal(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex
-            )
-#endif
+            _ = try await marmotCalls.deleteGroupLocal(appState, accountRef, groupIdHex)
             Haptics.warning()
             dismiss()
             onGroupDeleted(groupIdHex)
