@@ -57,9 +57,8 @@ struct AppLockShieldView: View {
 
     var body: some View {
         ZStack {
-            Color(.systemBackground)
+            LaunchBrandView()
                 .ignoresSafeArea()
-            Image("WnLogo")
                 .accessibilityHidden(true)
             if appLock.shield == .locked {
                 VStack {

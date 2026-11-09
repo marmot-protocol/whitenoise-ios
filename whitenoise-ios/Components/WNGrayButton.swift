@@ -1,13 +1,14 @@
 import SwiftUI
 import UIKit
 
-/// UIKit's neutral gray surface for secondary actions inside content cards.
+/// UIKit's neutral gray surface for secondary actions, with an optional destructive tint.
 struct WNGrayButton: View {
     @Environment(\.isEnabled) private var isEnabled
 
     let title: String
     var systemImage: String? = nil
     var isDestructive = false
+    var tintsDestructiveBackground = false
     var isLoading = false
     let action: () -> Void
 
@@ -19,7 +20,8 @@ struct WNGrayButton: View {
                 isDestructive: isDestructive,
                 isLoading: isLoading,
                 isEnabled: isEnabled && !isLoading,
-                action: action
+                action: action,
+                tintsDestructiveBackground: tintsDestructiveBackground
             )
             if isLoading {
                 ProgressView()
@@ -75,6 +77,7 @@ private struct NativeGrayButton: UIViewRepresentable {
     let action: () -> Void
     var showsTitle = true
     var backgroundColor: UIColor? = nil
+    var tintsDestructiveBackground = false
 
     func makeUIView(context: Context) -> UIButton {
         let button = UIButton(configuration: .gray())
@@ -94,6 +97,7 @@ private struct NativeGrayButton: UIViewRepresentable {
             isLoading: isLoading,
             showsTitle: showsTitle,
             backgroundColor: backgroundColor,
+            tintsDestructiveBackground: tintsDestructiveBackground,
             contentSizeCategory: button.traitCollection.preferredContentSizeCategory
         )
         let contentChanged = context.coordinator.content != content
@@ -119,6 +123,9 @@ private struct NativeGrayButton: UIViewRepresentable {
         var configuration: UIButton.Configuration = backgroundColor == nil ? .gray() : .filled()
         if let backgroundColor {
             configuration.baseBackgroundColor = backgroundColor
+        } else if isDestructive && tintsDestructiveBackground {
+            configuration = .tinted()
+            configuration.baseBackgroundColor = .systemRed
         }
         configuration.title = showsTitle ? title : nil
         if let systemImage {
@@ -165,6 +172,7 @@ private struct NativeGrayButton: UIViewRepresentable {
         let isLoading: Bool
         let showsTitle: Bool
         let backgroundColor: UIColor?
+        let tintsDestructiveBackground: Bool
         let contentSizeCategory: UIContentSizeCategory
     }
 

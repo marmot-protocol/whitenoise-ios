@@ -30,19 +30,8 @@ final class WindowCaptureProtection {
         if shouldCover, shieldWindow == nil {
             let shield = UIWindow(windowScene: scene)
             shield.windowLevel = .alert + 2
-            let host = UIViewController()
-            host.view.backgroundColor = .systemBackground
+            let host = LaunchBrandView.makeViewController()
             host.view.accessibilityViewIsModal = true
-            let logo = UIImageView(image: UIImage(named: "WnLogo"))
-            logo.translatesAutoresizingMaskIntoConstraints = false
-            logo.contentMode = .scaleAspectFit
-            host.view.addSubview(logo)
-            NSLayoutConstraint.activate([
-                logo.centerXAnchor.constraint(equalTo: host.view.centerXAnchor),
-                logo.centerYAnchor.constraint(equalTo: host.view.centerYAnchor),
-                logo.widthAnchor.constraint(lessThanOrEqualTo: host.view.widthAnchor, multiplier: 0.5),
-                logo.heightAnchor.constraint(lessThanOrEqualTo: host.view.heightAnchor, multiplier: 0.5)
-            ])
             shield.rootViewController = host
             shieldWindow = shield
         }
