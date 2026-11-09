@@ -26,6 +26,8 @@ struct DiagnosticsConsentSheet: View {
         }
     }
 
+    /// Completes consent once, dismissing only after the existing save succeeds.
+    /// Failed saves leave the sheet open so its retry controls remain available.
     private func finish() {
         guard !isFinishing, appState.diagnosticsConsent.available,
               appState.diagnosticsConsent.errorMessage == nil else { return }
@@ -82,6 +84,8 @@ private struct DiagnosticsDismissalObserver: UIViewControllerRepresentable {
             attach()
         }
 
+        /// Intercepts dismissal on the outer sheet while retaining its current delegate.
+        /// Repeated layout updates also reattach if SwiftUI replaces that delegate.
         func attach() {
             // A child's presentingViewController can resolve through its parent.
             // Attach to the sheet's outer controller, never a navigation child.
@@ -97,6 +101,7 @@ private struct DiagnosticsDismissalObserver: UIViewControllerRepresentable {
             }
         }
 
+        /// Restores the previous delegate only while this observer still owns the slot.
         func detach() {
             if observedPresentation?.delegate === self {
                 observedPresentation?.delegate = previousDelegate
@@ -111,6 +116,7 @@ private struct DiagnosticsDismissalObserver: UIViewControllerRepresentable {
             onAttempt()
         }
 
+        /// Advertises optional callbacks handled by the original presentation delegate.
         nonisolated override func responds(to selector: Selector?) -> Bool {
             if super.responds(to: selector) { return true }
             // UIKit queries presentation delegates on the main thread.
@@ -119,6 +125,7 @@ private struct DiagnosticsDismissalObserver: UIViewControllerRepresentable {
             }
         }
 
+        /// Forwards unhandled callbacks so SwiftUI retains its presentation behavior.
         nonisolated override func forwardingTarget(for selector: Selector?) -> Any? {
             let delegate = MainActor.assumeIsolated { () -> (any UIAdaptivePresentationControllerDelegate)? in
                 previousDelegate?.responds(to: selector) == true ? previousDelegate : nil

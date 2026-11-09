@@ -24,6 +24,7 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
             auditEnabled: audit
         )
     }
+    /// Allows tests to pause a save before it fails or records a confirmed choice.
     func saveUsageDiagnosticsConsent(_ enabled: Bool) async throws -> DeviceDiagnosticsSnapshot {
         usageSaveStarted?.signal()
         if let usageSaveRelease { try await usageSaveRelease.wait() }
