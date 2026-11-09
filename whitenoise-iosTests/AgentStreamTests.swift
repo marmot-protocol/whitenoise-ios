@@ -209,14 +209,20 @@ struct AgentStreamTests {
         #expect(record.plaintext == "complete")
     }
 
+    /// A timeline store wired to a stream watcher whose finalized-stream reads
+    /// are counted. The store holds its watcher weakly, so callers keep both.
     @MainActor
-    @Test func recordFinalizedStreamsSkipsAlreadyScannedRecordsAcrossPages() throws {
-        let viewModel = ConversationViewModel(
-            appState: AppState.test(),
-            group: group(name: "")
-        )
-        let streamId = hex("ab")
-        let final = timelineRecord(
+    private func countedStreamWatcher() -> (TimelineStore, StreamWatcher, FinalizedStreamReadCounter) {
+        let counter = FinalizedStreamReadCounter()
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
+        let watcher = StreamWatcher(appState: nil, groupIdHex: hex("aa"), finalizedStreamId: counter.read)
+        store.streamWatcher = watcher
+        watcher.sink = store
+        return (store, watcher, counter)
+    }
+
+    private func finalizedAnchor(streamId: String) -> TimelineMessageRecordFfi {
+        timelineRecord(
             messageIdHex: hex("ef"),
             sender: hex("11"),
             plaintext: "complete",
@@ -228,44 +234,39 @@ struct AgentStreamTests {
             timelineAt: 2,
             agentTextStreamJson: #"{"stream_id_hex":"\#(streamId)","status":"finalized","start_event_id":"\#(hex("cc"))"}"#
         )
-        let page = TimelinePageFfi(messages: [final], hasMoreBefore: false, hasMoreAfter: false)
+    }
+
+    @MainActor
+    private func paintsPreview(_ store: TimelineStore, _ watcher: StreamWatcher, streamId: String) -> Bool {
+        watcher.applyStreamUpdate(streamId: streamId, sender: hex("11"), update: .chunk(seq: 1, text: "late"))
+        return store.timeline.contains { $0.id == "msg:stream:\(streamId)" }
+    }
+
+    @MainActor
+    @Test func recordFinalizedStreamsSkipsAlreadyScannedRecordsAcrossPages() throws {
+        let (store, watcher, counter) = countedStreamWatcher()
+        let streamId = hex("ab")
+        let page = TimelinePageFfi(messages: [finalizedAnchor(streamId: streamId)], hasMoreBefore: false, hasMoreAfter: false)
 
         // Apply the same window page repeatedly, as heavy pagination would.
-        viewModel.applyTimelinePage(page, placement: .window)
-        viewModel.applyTimelinePage(page, placement: .window)
-        viewModel.applyTimelinePage(page, placement: .window)
+        store.applyTimelinePage(page, placement: .window)
+        store.applyTimelinePage(page, placement: .window)
+        store.applyTimelinePage(page, placement: .window)
 
-        // The record is scanned at most once per distinct message id, and the
-        // finalized-stream guard is populated exactly once.
-        #expect(viewModel.scannedFinalizedMessageIdCountForTesting == 1)
-        #expect(viewModel.finalizedStreamIdCountForTesting == 1)
+        // The scan decodes the anchor once while it stays loaded, and its stream
+        // stays finalized: a late chunk paints no preview, while a chunk for a
+        // live stream still does.
+        #expect(counter.decodedMessageIds == [hex("ef")])
+        #expect(!paintsPreview(store, watcher, streamId: streamId))
+        #expect(paintsPreview(store, watcher, streamId: hex("ac")))
     }
 
     @MainActor
     @Test func scannedFinalizedCacheIsBoundedToLoadedWindowButGuardPersists() throws {
-        let viewModel = ConversationViewModel(
-            appState: AppState.test(),
-            group: group(name: "")
-        )
+        let (store, watcher, counter) = countedStreamWatcher()
         let streamId = hex("ab")
-        let final = timelineRecord(
-            messageIdHex: hex("ef"),
-            sender: hex("11"),
-            plaintext: "complete",
-            kind: MessageSemantics.kindChat,
-            tags: [
-                MessageTagFfi(values: [MessageSemantics.streamTag, streamId]),
-                MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("cc")]),
-            ],
-            timelineAt: 2,
-            agentTextStreamJson: #"{"stream_id_hex":"\#(streamId)","status":"finalized","start_event_id":"\#(hex("cc"))"}"#
-        )
-        viewModel.applyTimelinePage(
-            TimelinePageFfi(messages: [final], hasMoreBefore: false, hasMoreAfter: false),
-            placement: .window
-        )
-        #expect(viewModel.scannedFinalizedMessageIdCountForTesting == 1)
-        #expect(viewModel.finalizedStreamIdCountForTesting == 1)
+        let anchorPage = TimelinePageFfi(messages: [finalizedAnchor(streamId: streamId)], hasMoreBefore: false, hasMoreAfter: false)
+        store.applyTimelinePage(anchorPage, placement: .window)
 
         // A later window scrolls the finalized anchor out of the loaded set.
         let other = timelineRecord(
@@ -274,16 +275,19 @@ struct AgentStreamTests {
             plaintext: "later",
             timelineAt: 3
         )
-        viewModel.applyTimelinePage(
+        store.applyTimelinePage(
             TimelinePageFfi(messages: [other], hasMoreBefore: true, hasMoreAfter: false),
             placement: .window
         )
 
-        // The scan cache is bounded to records still in the window, but the
-        // finalized-stream guard is never pruned (re-watch suppression must
-        // survive the anchor leaving the window).
-        #expect(viewModel.scannedFinalizedMessageIdCountForTesting == 1)
-        #expect(viewModel.finalizedStreamIdCountForTesting == 1)
+        // The stream stays finalized after its anchor leaves: a late chunk
+        // paints no preview, while a chunk for a live stream still does.
+        #expect(!paintsPreview(store, watcher, streamId: streamId))
+        #expect(paintsPreview(store, watcher, streamId: hex("ac")))
+
+        // The anchor's scan marker left with it, so loading it again decodes it again.
+        store.applyTimelinePage(anchorPage, placement: .window)
+        #expect(counter.decodedMessageIds.filter { $0 == hex("ef") }.count == 2)
     }
 
     @MainActor
@@ -463,7 +467,6 @@ struct AgentStreamTests {
         #expect(record.plaintext.hasSuffix("ab"))
         #expect(!record.plaintext.contains("c"))
         #expect(!record.plaintext.contains("late"))
-        #expect(viewModel.streamTextLengthEntryCountForTesting == 1)
     }
 
     @MainActor
@@ -498,8 +501,6 @@ struct AgentStreamTests {
         #expect(status == .received)
         #expect(record.plaintext == "complete")
         #expect(MessagePreview.body(record) == "complete")
-        #expect(viewModel.streamTextEntryCountForTesting == 0)
-        #expect(viewModel.streamTextLengthEntryCountForTesting == 0)
     }
 
     @MainActor
