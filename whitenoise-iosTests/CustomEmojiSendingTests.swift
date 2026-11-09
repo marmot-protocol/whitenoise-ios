@@ -134,17 +134,55 @@ struct CustomEmojiSendingTests {
                 ? F.attachments([.accepted(attachmentIndex: 0, reference: reference)])[0] : nil
         }
         #expect(sendables.map(\.id) == ["party"])
-        #expect(sendables.first?.reference == party)
+        #expect(sendables.first?.chatReference == party)
     }
 
-    // MARK: Reactions
+    @Test func installedSetEmojiFollowBuiltinsAndBeatChatImages() throws {
+        let builtin = try #require(CustomEmojiBuiltins.all.first)
+        let chatBlob = F.reference(url: "https://b.example/blob", sha: String(repeating: "5", count: 64))
+        let chatCat = F.reference(url: "https://b.example/cat", sha: String(repeating: "6", count: 64))
+        let entries = [
+            CustomEmojiCatalogEntry(shortcode: code("blob_wave"), reference: chatBlob, source: .message(messageIdHex: "m1", attachmentIndex: 0)),
+            CustomEmojiCatalogEntry(shortcode: code("cat"), reference: chatCat, source: .message(messageIdHex: "m1", attachmentIndex: 1)),
+        ]
+        let installed = [
+            installedEmoji(builtin.shortcode.name),
+            installedEmoji("blob_wave"),
+            installedEmoji("blob-nap"),
+            installedEmoji("blob_wave", set: "other"),
+        ]
+        let sendables = CustomEmojiSendCatalog.sendables(catalog: entries, builtins: [builtin], installed: installed) {
+            F.attachments([.accepted(attachmentIndex: 0, reference: $0)])[0]
+        }
+        #expect(sendables.map(\.id) == [builtin.shortcode.name, "blob_wave", "cat"])
+        // A built-in always sends the bundled image, and the first installed
+        // set wins a shortcode another set or the chat also uses.
+        guard case .builtin = sendables[0].artwork else { Issue.record("built-in replaced"); return }
+        guard case .installed(let blob) = sendables[1].artwork else { Issue.record("chat image won"); return }
+        #expect(blob.setCoordinate == installed[1].setCoordinate)
+        #expect(sendables[1].plaintextSha256 == installed[1].sha256)
+    }
 
-    @Test func customShortcodeChipsNeverAddAReaction() {
-        // Deferred until MDK epoch-pins media reactions (#1137): no media
-        // reaction, and no plain-text `:party:` copy either.
-        #expect(!CustomEmojiReactionPolicy.allowsAdding(":party:"))
-        #expect(CustomEmojiReactionPolicy.allowsAdding("👍"))
-        #expect(CustomEmojiReactionPolicy.allowsAdding("party"))
+    @Test func anOpenPickerFollowsInstallsAndRemovals() throws {
+        let builtin = try #require(CustomEmojiBuiltins.all.first)
+        let before = CustomEmojiSendCatalog.sendables(catalog: [], builtins: [builtin], installed: [installedEmoji("old")]) { _ in nil }
+            + [sendable("party")]
+        let after = CustomEmojiSendCatalog.merging(before, installed: [installedEmoji("party"), installedEmoji("new")])
+        #expect(after.map(\.id) == [builtin.shortcode.name, "party", "new"])
+        guard case .installed = after[1].artwork else { Issue.record("chat image beat an installed one"); return }
+        #expect(CustomEmojiSendCatalog.merging(before, installed: []).map(\.id) == [builtin.shortcode.name, "party"])
+    }
+
+    @Test func installedUploadsCarryMdksTypeAndSize() {
+        let gif = CustomEmojiUploadRequest.installed(installedEmoji("blob_wave", mime: "image/gif"), plaintext: Data("gif".utf8))
+        #expect(gif.fileName == "blob_wave.gif")
+        #expect(gif.mediaType == "image/gif")
+        #expect(gif.dim == "128x96")
+        #expect(gif.plaintext == Data("gif".utf8))
+        var unsized = installedEmoji("blob_wave", mime: "image/webp")
+        unsized.width = 0
+        #expect(CustomEmojiUploadRequest.installed(unsized, plaintext: Data()).dim == nil)
+        #expect(CustomEmojiUploadRequest.installed(unsized, plaintext: Data()).fileName.hasSuffix(".webp"))
     }
 
     // MARK: Composer and picker
@@ -158,12 +196,15 @@ struct CustomEmojiSendingTests {
     }
 
 
-    @Test func pickerSearchMatchesShortcodes() {
+    @Test func pickerSearchMatchesShortcodesAndSetTitles() throws {
         let all = [sendable("party_parrot"), sendable("cat")]
         #expect(CustomEmojiPickerSearch.results(in: all, query: "parrot").map(\.id) == ["party_parrot"])
         #expect(CustomEmojiPickerSearch.results(in: all, query: ":CAT:").map(\.id) == ["cat"])
         #expect(CustomEmojiPickerSearch.results(in: all, query: "dog").isEmpty)
         #expect(CustomEmojiPickerSearch.results(in: all, query: "  ").map(\.id) == ["party_parrot", "cat"])
+
+        let blob = try #require(CustomEmojiSendable(installed: installedEmoji("wave", title: "Blob Cats")))
+        #expect(CustomEmojiPickerSearch.results(in: all + [blob], query: "blob").map(\.id) == ["wave"])
     }
 
     @Test func composerOffersCustomEmojiOnlyWhenTheChatHoldsSome() {

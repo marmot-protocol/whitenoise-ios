@@ -4,7 +4,7 @@ import MarmotKit
 import Testing
 
 /// Stands in for the Marmot calls a `GroupDetailsViewModel` makes to publish the
-/// group's info and image and to read its shared media. Tests replace any call
+/// group's info and image, to read its shared media and to cancel a blocked leave. Tests replace any call
 /// at any point; a call the test didn't set records an issue.
 @MainActor
 final class GroupDetailsMarmotDouble {
@@ -39,6 +39,10 @@ final class GroupDetailsMarmotDouble {
         Issue.record("unexpected shared media read")
         return []
     }
+
+    var cancelLeave: @MainActor (_ accountRef: String, _ groupIdHex: String) async throws -> Void = { _, _ in
+        Issue.record("unexpected leave cancellation")
+    }
 }
 
 /// A group-details model whose info, image and shared-media calls go to `marmot`.
@@ -59,6 +63,9 @@ func groupDetailsModel(marmot: GroupDetailsMarmotDouble) -> GroupDetailsViewMode
         },
         sharedMedia: { _, accountRef, groupIdHex in
             (GroupSharedMediaPresentation.items(from: try await marmot.sharedMedia(accountRef, groupIdHex)), nil)
+        },
+        cancelLeave: { _, accountRef, groupIdHex in
+            try await marmot.cancelLeave(accountRef, groupIdHex)
         }
     ))
 }

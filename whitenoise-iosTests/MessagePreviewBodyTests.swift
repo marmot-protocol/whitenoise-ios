@@ -21,6 +21,26 @@ struct MessagePreviewBodyTests {
         #expect(MessagePreview.copyBody(record) == "")
     }
 
+    @Test func stickerMessagePreviewsAsASticker() {
+        let sticker = StickerRefFfi(packCoordinate: "30031:\(hex("ab")):cats", shortcode: "wave",
+                                    plaintextSha256: hex("11"))
+        var record = previewRecord(kind: MessageSemantics.kindChat, plaintext: "",
+                                   tags: [MessageTagFfi(values: ["sticker", sticker.packCoordinate, "wave", hex("11")])])
+        record.sticker = sticker
+        #expect(MessagePreview.isPreviewable(record))
+        #expect(MessagePreview.body(record) == MessagePreview.stickerLabel)
+        #expect(!MessagePreview.stickerLabel.isEmpty)
+
+        var listPreview = chatListPreview(messageIdHex: hex("aa"), plaintext: "")
+        listPreview.sticker = sticker
+        #expect(MessagePreview.body(listPreview) == MessagePreview.stickerLabel)
+
+        // Text alongside a sticker tag still previews as text.
+        var captioned = record
+        captioned.plaintext = "hello"
+        #expect(MessagePreview.body(captioned) == "hello")
+    }
+
     @Test func deleteRecordHasNoBodyAndIsNotPreviewable() {
         let record = previewRecord(
             kind: MessageSemantics.kindDelete,

@@ -43,7 +43,7 @@ jobs:
       - name: Install SwiftLint
         env:
           # Keep in lockstep with REQUIRED_SWIFTLINT_VERSION in scripts/lint.sh.
-          SWIFTLINT_VERSION: "0.63.2"
+          SWIFTLINT_VERSION: "0.65.1"
         run: |
           curl -fsSL -o /tmp/swiftlint.zip \
             "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip"

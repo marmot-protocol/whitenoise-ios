@@ -35,6 +35,18 @@ struct NotificationPresentationTests {
         #expect(presentation?.userInfo[LocalNotificationProjection.accountIdHexKey] == hex("11"))
     }
 
+    @Test func stickerMessageNamesTheStickerInsteadOfItsEmptyContent() {
+        withAppLanguage(.english) {
+            var update = notificationUpdate(isDm: true, senderName: "Alice", previewText: "")
+            update.sticker = StickerRefFfi(packCoordinate: "30031:\(hex("ab")):cats", shortcode: "wave",
+                                           plaintextSha256: hex("11"))
+            #expect(LocalNotificationProjection.makePresentation(for: update)?.body == "Sticker")
+
+            let generic = LocalNotificationProjection.makePresentation(for: update, previewMode: .senderOnly)
+            #expect(generic?.body.contains("Sticker") == false)
+        }
+    }
+
     @Test func notificationDeliveryDispositionMarkersAreExplicit() {
         #expect(LocalNotificationProjection.isQuietOrFallback(from: [
             LocalNotificationProjection.deliveryDispositionKey:

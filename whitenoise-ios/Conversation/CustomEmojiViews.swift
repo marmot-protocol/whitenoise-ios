@@ -51,7 +51,7 @@ enum CustomEmojiTextComposer {
                 if let image = context.images[shortcode], let cgImage = image.cgImage {
                     interpolation.appendInterpolation(
                         Text(Image(cgImage, scale: image.scale, orientation: .up,
-                                   label: Text(verbatim: shortcode.name)))
+                                   label: Text(verbatim: CustomEmojiBuiltins.spokenName(shortcode))))
                             .baselineOffset(context.baselineOffset)
                     )
                 } else {
@@ -117,7 +117,7 @@ struct CustomEmojiInlineLoader: ViewModifier {
                 policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision
             )) {
                 images = images.filter { $0.key.scope == scope }
-                guard isVisible, let store, scope != nil, !resolution.isEmpty else { return }
+                guard isVisible, let store, scope != nil, !resolution.inline.isEmpty else { return }
                 let revision = MediaAutoDownloadStore.shared.attachmentPolicyRevision
                 let unique = Dictionary(resolution.inline.values.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
                 for (_, item) in unique.sorted(by: { $0.key < $1.key }) {
@@ -137,21 +137,77 @@ struct CustomEmojiInlineLoader: ViewModifier {
         guard !resolution.isEmpty else { return .none }
         return CustomEmojiInlineContext(
             resolvable: resolution.shortcodes,
-            images: CustomEmojiInlinePresentation.images(for: resolution, loaded: images, scope: scope, pixelSize: pixelSize),
+            images: CustomEmojiInlinePresentation.images(for: resolution, loaded: images, scope: scope, pixelSize: pixelSize) {
+                CustomEmojiBuiltinImages.image(for: $0, pixelSize: pixelSize, scale: displayScale)
+            },
             baselineOffset: baselineOffset
         )
     }
 }
 
-/// A reaction's label. MDK 0.12.0 exposes no host-managed slot for kind-7
-/// reaction images, so a `:shortcode:` reaction shows its sanitized text and
-/// VoiceOver reads the shortcode name.
+/// A reaction's label. A `:shortcode:` reaction shows its image once the
+/// reaction event's own attachment loads, and its sanitized text until then
+/// or if it can't. VoiceOver reads the shortcode name either way.
 struct CustomEmojiReactionLabel: View {
+    @Environment(\.customEmojiStore) private var store
+    @Environment(\.displayScale) private var displayScale
+    @ScaledMetric(relativeTo: .body) private var pointSize = CustomEmojiReactionLabel.defaultPointSize
+
+    static let defaultPointSize: CGFloat = 18
+
     let emoji: String
+    /// The reaction event whose image to show. Nil reuses one this
+    /// conversation already resolved for the same `:shortcode:`.
+    var reactionMessageIdHex: String?
+
+    @State private var loaded: (key: CustomEmojiImageKey, image: UIImage)?
+
+    private struct LoadID: Equatable {
+        let scope: CustomEmojiScope?
+        let emoji: String
+        let reactionMessageIdHex: String?
+        let pixelSize: Int
+        let policyRevision: String
+    }
+
+    init(emoji: String, reactionMessageIdHex: String? = nil) {
+        self.emoji = emoji
+        self.reactionMessageIdHex = reactionMessageIdHex
+    }
 
     var body: some View {
-        Text(ContentSanitizer.reactionEmoji(emoji))
-            .accessibilityLabel(Text(verbatim: CustomEmojiShortcode.spokenReaction(emoji)))
+        let scope = store?.currentScope
+        let size = CustomEmojiInlineMetrics.pixelSize(pointSize: pointSize, scale: displayScale)
+        Group {
+            if let loaded, let scope, loaded.key.scope == scope, loaded.key.pixelSize == size {
+                Image(uiImage: loaded.image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: pointSize, height: pointSize)
+            } else if let shortcode = CustomEmojiShortcode(reactionContent: emoji),
+                      let builtin = CustomEmojiBuiltinImages.image(for: shortcode, pixelSize: size, scale: displayScale) {
+                Image(uiImage: builtin)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: pointSize, height: pointSize)
+            } else {
+                Text(ContentSanitizer.reactionEmoji(emoji))
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: CustomEmojiShortcode.spokenReaction(emoji)))
+        .task(id: LoadID(scope: scope, emoji: emoji, reactionMessageIdHex: reactionMessageIdHex, pixelSize: size,
+                         policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
+            guard let store, scope != nil, CustomEmojiShortcode(reactionContent: emoji) != nil else { return }
+            guard let result = await store.reactionImage(
+                emoji: emoji,
+                reactionMessageIdHex: reactionMessageIdHex,
+                pixelSize: size,
+                scale: displayScale,
+                policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision
+            ), !Task.isCancelled, result.key.scope == store.currentScope else { return }
+            loaded = result
+        }
     }
 }
 

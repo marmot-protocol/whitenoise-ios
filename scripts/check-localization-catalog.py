@@ -172,7 +172,7 @@ SHARED_NAMES = (
 )
 SHARED_WORDS = {
     "%@ (IDN/punycode)": "es fr it pt ru tr", "%@ (IDN/punycode: %@)": "es it pt ru tr", "%lld images": "fr",
-    "%lld notifications": "fr", "%lld videos": "es", "%lld votes": "fr", "Admin": "de", "Audio": "de es fr it",
+    "%lld notifications": "fr", "%lld stickers": "es", "%lld videos": "es", "%lld votes": "fr", "Admin": "de", "Audio": "de es fr it",
     "Cache": "de fr it pt", "Chats": "de es", "Contact": "fr", "Conversation": "fr", "Debugging": "de",
     "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Fanouts": "de es fr pt", "Filter": "de",
     "GIF via GIPHY": "fr pt", "GIFs": "de es pt", "Hex": "de es fr it pt ru tr", "id: %@": "es it pt ru tr",
@@ -181,7 +181,8 @@ SHARED_WORDS = {
     "Mode": "fr", "Moderation": "de", "Name": "de", "Notifications": "fr", "Obligations": "fr", "OK": "de fr it pt",
     "Online": "de", "Option %lld": "de fr", "Options": "fr", "Original": "de es pt", "Passphrase": "de it", "Photo": "fr",
     "Password": "it", "Photos": "fr", "Question": "fr", "Relay": "de es it pt", "Scan": "de",
-    "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "stream %@": "es it pt",
+    "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "Sticker": "de es it", "%@ Sticker": "de", "Sticker: %@": "de es it",
+    "Stickers": "es", "stream %@": "es it pt",
     "Streaming…": "de fr it", "System": "de", "Tokens": "es pt", "USD": "de es fr it pt ru tr", "Version": "de fr",
     "Version %lld": "de fr", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt", "Video": "de es it tr",
     "Videos": "de es", "Votes": "fr", "White Noise Support": "de", "Wi-Fi": "es fr it pt ru tr zh-Hans zh-Hant",
@@ -194,6 +195,8 @@ SHARED_SPELLINGS = frozenset(
 )
 # Invariable plurals: the one form a locale shares with English, so the rest stays checked.
 SHARED_FORMS = {
+    **{("%lld emoji", locale): frozenset({"%lld emoji"}) for locale in ("es", "fr", "it", "pt", "tr")},
+    ("%lld stickers", "it"): frozenset({"%lld sticker"}),
     ("%lld videos", "it"): frozenset({"%lld video"}),
     ("%lld videos", "tr"): frozenset({"%lld video"}),
 }

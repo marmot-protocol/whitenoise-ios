@@ -32,6 +32,19 @@ enum CustomEmojiFixtures {
     }
 
     static func tag(_ values: String...) -> MessageTagFfi { MessageTagFfi(values: values) }
+
+    static func builtin(_ name: String, spokenName: String = "Built-in", bytes: String? = nil) -> CustomEmojiBuiltin {
+        CustomEmojiBuiltin(shortcode: CustomEmojiShortcode(name)!, spokenName: spokenName,
+                           data: Data((bytes ?? "\(name)-png").utf8), dim: "72x72")
+    }
+}
+
+extension CustomEmojiSendable {
+    /// The received reference a chat sendable re-encrypts, nil for a built-in.
+    var chatReference: MediaAttachmentReferenceFfi? {
+        if case .chat(let reference, _) = artwork { return reference }
+        return nil
+    }
 }
 
 struct CustomEmojiResolverTests {

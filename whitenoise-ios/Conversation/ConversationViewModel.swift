@@ -149,7 +149,7 @@ final class ConversationViewModel {
         let count: Int
         let mine: Bool
         /// Earliest active kind-7 carrying this emoji; names a `:shortcode:`
-        /// reaction's image for `listMedia`.
+        /// reaction's image for `reactionAttachment`.
         var reactionMessageIdHex: String? = nil
         var id: String { emoji }
     }
@@ -307,8 +307,18 @@ final class ConversationViewModel {
         loadData: { [weak self] item in
             guard let self else { throw CancellationError() }
             return try await self.data(for: item)
+        },
+        resolveReaction: { [weak self] emoji, reactionMessageIdHex in
+            await self?.reactionEmojiArtwork(emoji: emoji, reactionMessageIdHex: reactionMessageIdHex)
         }
     )
+    /// Resolved `:shortcode:` reaction artwork, by reaction event id, for
+    /// `reactionArtworkScope`. Feeds the custom emoji catalog.
+    private(set) var reactionArtwork: [String: CustomEmojiReactionArtwork] = [:]
+    @ObservationIgnored private var reactionArtworkScope: CustomEmojiScope?
+    /// Reaction events MDK reported no usable artwork for, in this scope.
+    @ObservationIgnored private var reactionArtworkMisses: Set<String> = []
+    @ObservationIgnored private var reactionArtworkLookups: [String: Task<CustomEmojiReactionArtwork?, Never>] = [:]
     @ObservationIgnored private let daySectionProjections = ConversationDaySectionProjectionCache()
     @ObservationIgnored private let deleteMessageOperation: DeleteMessageOperation
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
@@ -321,6 +331,11 @@ final class ConversationViewModel {
             guard let self else { throw CancellationError() }
             return try await self.data(for: item)
         },
+        readInstalled: { [weak self] accountRef, emoji in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            return try await appState.currentMarmotClient().readInstalledCustomEmoji(
+                accountRef: accountRef, coordinate: emoji.setCoordinate, shortcode: emoji.shortcode).bytes
+        },
         upload: { [weak self] scope, request in
             guard let self else { throw CancellationError() }
             return try await self.uploadCustomEmoji(request, scope: scope)
@@ -330,6 +345,47 @@ final class ConversationViewModel {
             let client = try appState.currentMarmotClient()
             _ = try await client.sendTaggedMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
                                                  attachments: attachments, caption: caption, tags: tags)
+        },
+        sendReaction: { [weak self] scope, target, emoji, attachments, tags in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            let client = try appState.currentMarmotClient()
+            _ = try await client.reactWithMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
+                                                targetMessageId: target, emoji: emoji, tags: tags,
+                                                attachments: attachments)
+        }
+    )
+    /// Decoded sticker images for this conversation's rows and sticker picker.
+    @ObservationIgnored lazy var stickerAssets = StickerAssetStore(
+        scopeProvider: { [weak self] in self?.stickerScope },
+        fetch: { [weak self] accountRef, ref in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            return try await appState.currentMarmotClient().fetchStickerAsset(accountRef: accountRef, stickerRef: ref)
+        }
+    )
+    /// The account's sticker packs, for the picker and for deciding which
+    /// received stickers load without a tap.
+    @ObservationIgnored lazy var stickerLibrary = StickerLibrary(
+        scopeProvider: { [weak self] in self?.stickerScope },
+        packs: { [weak self] accountRef, installedOnly, search in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            return try await appState.currentMarmotClient().stickerPacks(
+                accountRef: accountRef, installedOnly: installedOnly, search: search, limit: 100)
+        },
+        sync: { [weak self] accountRef in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            _ = try await appState.currentMarmotClient().syncStickerPacks(accountRef: accountRef)
+        },
+        fetchPack: { [weak self] accountRef, input in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            return try await appState.currentMarmotClient().fetchStickerPack(accountRef: accountRef, input: input)
+        },
+        install: { [weak self] accountRef, input in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            return try await appState.currentMarmotClient().installStickerPack(accountRef: accountRef, input: input)
+        },
+        uninstall: { [weak self] accountRef, input in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            try await appState.currentMarmotClient().uninstallStickerPack(accountRef: accountRef, input: input)
         }
     )
     /// Composer progress, saved-draft cleanup and the inline error for a
@@ -354,7 +410,8 @@ final class ConversationViewModel {
         },
         cacheGeneration: { MessageMediaCache.currentProducerEpoch() }
     )
-    @ObservationIgnored private var customEmojiAvailability: (generation: Int, scope: CustomEmojiScope, available: Bool)?
+    @ObservationIgnored private var customEmojiAvailability: (generation: Int, reactionArtwork: Int, scope: CustomEmojiScope,
+                                                              available: Bool)?
     // Lazy so its timeline-index closure can capture a fully initialized
     // store; first touched on the post-start apply/mark paths.
     @ObservationIgnored private lazy var readMarker = ConversationReadMarker(
@@ -670,7 +727,9 @@ final class ConversationViewModel {
             return GroupManagementPresentation.disbandingComposerMessage
         }
         if departureStatus == .leaving {
-            return GroupManagementPresentation.leavingGroupComposerMessage
+            return isLeaveBlocked
+                ? BlockedLeavePresentation.title
+                : GroupManagementPresentation.leavingGroupComposerMessage
         }
         if isGroupUnrecoverable {
             return L10n.string("This conversation needs to be rejoined before you can send messages.")
@@ -680,6 +739,49 @@ final class ConversationViewModel {
         }
         if isAwaitingLiveConversationState || isActiveParticipant { return nil }
         return GroupManagementPresentation.inactiveGroupComposerMessage
+    }
+
+    /// MDK cannot finish this leave because the account is the last admin.
+    var isLeaveBlocked: Bool {
+        departureStatus == .leaving && BlockedLeavePresentation.isBlocked(
+            leaveRequestPending: leaveRequestPending,
+            leaveBlocked: managementState?.leaveBlocked ?? group.leaveBlocked
+        )
+    }
+
+    var canCancelBlockedLeave: Bool {
+        isLeaveBlocked && (
+            conversationWindow?.header.capabilities.canCancelLeave
+                ?? managementState?.canCancelLeave
+                ?? false
+        )
+    }
+
+    private(set) var blockedLeaveCancelInFlight = false
+
+    /// Cancels a leave MDK blocked because this account is the last admin.
+    /// Local to this device: nothing is published, so no advisory retry.
+    func cancelBlockedLeave() async {
+        guard let appState, let accountRef = appState.activeAccountRef,
+              canCancelBlockedLeave, !blockedLeaveCancelInFlight else { return }
+        blockedLeaveCancelInFlight = true
+        defer { blockedLeaveCancelInFlight = false }
+        let groupIdHex = group.groupIdHex
+        let outcome = await BlockedLeaveCancellation.perform(
+            cancelLeave: {
+                try await appState.currentMarmotClient().cancelLeave(accountRef: accountRef, groupIdHex: groupIdHex)
+            },
+            refresh: { _ = await refreshGroupManagement() }
+        )
+        guard appState.activeAccountRef == accountRef else { return }
+        switch outcome {
+        case .rejoined: Haptics.success()
+        case .noLongerBlocked, .failed: Haptics.error()
+        case .cancelled: break
+        }
+        if let toast = BlockedLeaveCancellation.toast(for: outcome) {
+            appState.present(toast)
+        }
     }
 
     var sendBlockedMessage: String? {
@@ -1141,6 +1243,7 @@ final class ConversationViewModel {
                 requiresSelfDemoteBeforeLeave: false,
                 leaveRequestPending: true,
                 leaveRequestedAtMs: group.leaveRequestedAtMs,
+                leaveBlocked: false,
                 memberActions: state.memberActions.filter { !$0.isSelf }
             )
         }
@@ -2122,6 +2225,7 @@ final class ConversationViewModel {
             contentTokens: record.contentTokens,
             kind: record.kind,
             tags: record.tags,
+            sticker: record.sticker,
             sourceEpoch: record.sourceEpoch,
             retentionSeconds: record.retentionSeconds,
             retentionExpiresAt: record.retentionExpiresAt,
@@ -2300,16 +2404,104 @@ final class ConversationViewModel {
                                 groupIdHex: group.groupIdHex)
     }
 
+    var stickerScope: StickerScope? {
+        guard let scope = customEmojiScope else { return nil }
+        return StickerScope(accountRef: scope.accountRef, runtimeGeneration: scope.runtimeGeneration)
+    }
+
+    var canSendStickers: Bool { canSendMessages && !isLocallyReset }
+
+    /// Sends a sticker from an installed or previewed pack. MDK refuses one
+    /// that its local storage cannot authorize.
+    func sendSticker(_ sticker: StickerFfi) async {
+        guard canSendStickers, let appState, let scope = customEmojiSendScope else { return }
+        do {
+            let client = try appState.currentMarmotClient()
+            _ = try await client.sendSticker(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
+                                             stickerRef: StickerKey(sticker).ref)
+        } catch is CancellationError {
+            return
+        } catch {
+            appState.present(UserFacingError.toast(title: L10n.string("Couldn’t send sticker"), error: error))
+        }
+    }
+
     func customEmoji(for item: TimelineItem) -> CustomEmojiRowResolution {
         timelineStore.customEmoji(for: item)
     }
 
-    /// Custom emoji this conversation already holds inline in its loaded
-    /// kind-9 messages, with the reference a sender can reuse. Reaction images
-    /// are not included: MDK 0.12.0 exposes no host-managed slot for them.
+    /// Custom emoji this conversation already holds, inline in its loaded
+    /// kind-9 messages or as resolved reaction artwork, with the reference a
+    /// sender can reuse.
     var customEmojiCatalog: [CustomEmojiCatalogEntry] {
         _ = timelineStore.timelineProjectionGeneration
-        return CustomEmojiCatalog.merge(messages: timelineStore.customEmojiCatalogEntries, reactions: [])
+        let reactions = reactionArtworkScope == customEmojiScope
+            ? CustomEmojiReactionResolution.catalogEntries(reactionArtwork) : []
+        return CustomEmojiCatalog.merge(messages: timelineStore.customEmojiCatalogEntries, reactions: reactions)
+    }
+
+    /// The artwork of one `:shortcode:` reaction event, read once per scope
+    /// through MDK's bounded local `reactionAttachment` lookup. Concurrent
+    /// requests share one read; a result for an old scope is dropped.
+    func reactionEmojiArtwork(emoji: String, reactionMessageIdHex: String) async -> CustomEmojiReactionArtwork? {
+        guard let scope = syncedReactionArtworkScope(),
+              CustomEmojiShortcode(reactionContent: emoji) != nil, !reactionMessageIdHex.isEmpty else { return nil }
+        if let known = reactionArtwork[reactionMessageIdHex] { return known }
+        guard !reactionArtworkMisses.contains(reactionMessageIdHex) else { return nil }
+        if let pending = reactionArtworkLookups[reactionMessageIdHex] { return await pending.value }
+        let task = Task { @MainActor [weak self] () -> CustomEmojiReactionArtwork? in
+            guard let self, let appState = self.appState,
+                  let client = try? appState.currentMarmotClient() else { return nil }
+            do {
+                let entry = try await client.reactionAttachment(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
+                                                                reactionMessageIdHex: reactionMessageIdHex)
+                guard self.reactionArtworkScope == scope, self.customEmojiScope == scope else { return nil }
+                let artwork = CustomEmojiReactionResolution.artwork(emoji: emoji,
+                    reactionMessageIdHex: reactionMessageIdHex, entry: entry)
+                if let artwork {
+                    self.reactionArtwork[reactionMessageIdHex] = artwork
+                } else {
+                    self.reactionArtworkMisses.insert(reactionMessageIdHex)
+                }
+                return artwork
+            } catch {
+                return nil
+            }
+        }
+        reactionArtworkLookups[reactionMessageIdHex] = task
+        let result = await task.value
+        if reactionArtworkScope == scope { reactionArtworkLookups[reactionMessageIdHex] = nil }
+        return result
+    }
+
+    /// Resolves the artwork of `:shortcode:` reactions on loaded messages so
+    /// the pickers can offer them. Call before presenting a picker.
+    func prepareReactionEmojiCatalog() async {
+        guard syncedReactionArtworkScope() != nil else { return }
+        var tallies: [(emoji: String, reactionMessageIdHex: String?)] = []
+        for item in timeline {
+            guard case .message(let record, _) = item.kind else { continue }
+            tallies += reactions(for: record.messageIdHex).map { ($0.emoji, $0.reactionMessageIdHex) }
+        }
+        let pending = CustomEmojiReactionResolution.pendingLookups(
+            tallies: tallies, resolved: Set(reactionArtwork.keys), misses: reactionArtworkMisses)
+        for lookup in pending {
+            _ = await reactionEmojiArtwork(emoji: lookup.emoji, reactionMessageIdHex: lookup.reactionMessageIdHex)
+            guard !Task.isCancelled else { return }
+        }
+    }
+
+    /// Drops resolved reaction artwork when the account, runtime or chat changes.
+    private func syncedReactionArtworkScope() -> CustomEmojiScope? {
+        let current = customEmojiScope
+        if current != reactionArtworkScope {
+            reactionArtwork = [:]
+            reactionArtworkMisses = []
+            reactionArtworkLookups.values.forEach { $0.cancel() }
+            reactionArtworkLookups = [:]
+            reactionArtworkScope = current
+        }
+        return current
     }
 
 #if DEBUG
@@ -2441,6 +2633,7 @@ final class ConversationViewModel {
             contentTokens: r.message.contentTokens,
             kind: r.message.kind,
             tags: r.message.tags,
+            sticker: r.message.sticker,
             sourceEpoch: r.message.sourceEpoch,
             retentionSeconds: r.message.retentionSeconds,
             retentionExpiresAt: r.message.retentionExpiresAt,
@@ -3340,12 +3533,13 @@ final class ConversationViewModel {
         isLocallyReset ? nil : customEmojiScope
     }
 
-    /// Custom emoji the person can send here: catalog entries with a NIP-30
-    /// shortcode whose image a loaded chat row holds. Read when a picker opens
-    /// or a send starts, not from `body`.
+    /// Custom emoji the person can send here: the built-ins, then emoji from
+    /// installed sets, then catalog entries with a NIP-30 shortcode whose
+    /// image a loaded chat row holds.
+    /// Read when a picker opens or a send starts, not from `body`.
     var customEmojiSendables: [CustomEmojiSendable] {
+        guard customEmojiSendScope != nil else { return [] }
         let catalog = customEmojiCatalog
-        guard !catalog.isEmpty, customEmojiSendScope != nil else { return [] }
         var sources: [String: MessageMediaAttachment] = [:]
         for item in timeline {
             for attachment in customEmoji(for: item).inline.values.sorted(by: { $0.id < $1.id }) {
@@ -3353,7 +3547,16 @@ final class ConversationViewModel {
                 sources[sha] = attachment
             }
         }
-        return CustomEmojiSendCatalog.sendables(catalog: catalog) { sources[$0.plaintextSha256.lowercased()] }
+        if reactionArtworkScope == customEmojiScope {
+            for artwork in reactionArtwork.values.sorted(by: { $0.reactionMessageIdHex < $1.reactionMessageIdHex }) {
+                guard let sha = artwork.reference?.plaintextSha256.lowercased(), sources[sha] == nil else { continue }
+                sources[sha] = artwork.attachment
+            }
+        }
+        let installed = appState?.emojiSetLibrary.currentInstalledEmoji ?? []
+        return CustomEmojiSendCatalog.sendables(catalog: catalog, builtins: CustomEmojiBuiltins.all, installed: installed) {
+            sources[$0.plaintextSha256.lowercased()]
+        }
     }
 
     /// Whether the composer offers custom emoji at all. Read from `body`, so
@@ -3361,11 +3564,14 @@ final class ConversationViewModel {
     var canSendCustomEmoji: Bool {
         guard canSendMessages, canSendMediaAttachments, let scope = customEmojiSendScope else { return false }
         let generation = timelineStore.timelineProjectionGeneration
-        if let cached = customEmojiAvailability, cached.generation == generation, cached.scope == scope {
+        let artworkCount = reactionArtwork.count
+        if let cached = customEmojiAvailability, cached.generation == generation,
+           cached.reactionArtwork == artworkCount, cached.scope == scope {
             return cached.available
         }
-        let available = customEmojiCatalog.contains { CustomEmojiSendPolicy.isSendable($0.shortcode) }
-        customEmojiAvailability = (generation, scope, available)
+        let available = !CustomEmojiBuiltins.all.isEmpty
+            || customEmojiCatalog.contains { CustomEmojiSendPolicy.isSendable($0.shortcode) }
+        customEmojiAvailability = (generation, artworkCount, scope, available)
         return available
     }
 
@@ -3455,7 +3661,14 @@ final class ConversationViewModel {
               !message.messageIdHex.isEmpty else { return }
         let me = appState.activeAccount?.accountIdHex ?? ""
         let alreadyMine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
-        guard alreadyMine || CustomEmojiReactionPolicy.allowsAdding(emoji) else { return }
+        // A `:shortcode:` reaction is sent with its image; one this chat
+        // holds no image for can only be removed.
+        var customEmoji: CustomEmojiSendable?
+        if !alreadyMine, let shortcode = CustomEmojiShortcode(reactionContent: emoji) {
+            guard canSendMediaAttachments, customEmojiSendScope != nil else { return }
+            customEmoji = customEmojiSendables.first { $0.shortcode == shortcode }
+            guard customEmoji != nil else { return }
+        }
 
         // Optimistic state we can roll back on failure.
         var addedKey: String?
@@ -3520,6 +3733,8 @@ final class ConversationViewModel {
                     groupIdHex: group.groupIdHex,
                     targetMessageId: message.messageIdHex
                 )
+            } else if let customEmoji {
+                try await customEmojiSender.sendReaction(customEmoji, to: message.messageIdHex)
             } else {
                 _ = try await client.reactToMessage(
                     accountRef: accountRef,
@@ -3539,8 +3754,10 @@ final class ConversationViewModel {
             if timelineStore.recomputeReactions(for: [message.messageIdHex]) {
                 timelineStore.noteProjectionChanged()
             }
+            if error is CancellationError { return }
             Haptics.error()
-            appState.present(UserFacingError.toast(title: L10n.string("Reaction failed"), error: error))
+            appState.present(UserFacingError.toast(title: L10n.string("Reaction failed"), error: error,
+                fallbackMessage: (error as? CustomEmojiSendError)?.message))
         }
     }
 }

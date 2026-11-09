@@ -241,6 +241,7 @@ final class ChatsListViewModel {
                 selfMembership: selfMembership,
                 leaveRequestPending: row.leaveRequestPending,
                 leaveRequestedAtMs: row.leaveRequestedAtMs,
+                leaveBlocked: row.leaveBlocked,
                 disbanding: row.disbanding,
                 disbandRequest: row.disbandRequest,
                 disbanded: row.lifecycleState == .disbanded,
@@ -1784,7 +1785,8 @@ final class ChatsListViewModel {
             muted: false,
             mutedUntilMs: nil,
             leaveRequestPending: group.leaveRequestPending,
-            leaveRequestedAtMs: group.leaveRequestedAtMs
+            leaveRequestedAtMs: group.leaveRequestedAtMs,
+            leaveBlocked: group.leaveBlocked
         )
     }
 }

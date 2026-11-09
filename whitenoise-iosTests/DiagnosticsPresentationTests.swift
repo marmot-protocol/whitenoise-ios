@@ -165,7 +165,8 @@ struct DiagnosticsPresentationTests {
             accountLabel: "alice",
             groupIdHex: groupId,
             messageIdHex: messageId,
-            recipientHex: recipient
+            recipientHex: recipient,
+            sizeClass: nil
         )
 
         let text = DiagnosticsView.diagnosticText(for: event)

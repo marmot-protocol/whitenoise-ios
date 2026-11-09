@@ -718,12 +718,16 @@ on the current network unless a step says otherwise.
 ### Sending custom emoji
 
 Same two devices. Before each step, the 0.12.0 client has sent a message with a
-custom `:party:` image that renders inline on iOS. The emoji iOS can send come
-only from custom emoji already shown in that chat.
+custom `:party:` image that renders inline on iOS. Besides the built-ins
+(`:marmot:` and `:wn:`), the emoji iOS can send come only from custom emoji
+already shown in that chat.
 
-- [ ] In a chat with no custom emoji, the composer `+` menu has no Custom
-      Emoji row. After `:party:` arrives it appears; another chat still has
-      none.
+- [ ] Built-ins: in a chat with no custom emoji, `+` → Custom Emoji shows
+      Marmot and White Noise first; `:party:` joins them only in the chat
+      where it arrived. Send `:marmot: :wn:`: both devices show the images, and
+      White Noise for Android and Linux show the same artwork. A plain-text
+      `:marmot:` from Android (no image attached) also renders the Marmot on
+      iOS, and VoiceOver reads it as Marmot.
 - [ ] Composer `+` → Custom Emoji opens the emoji picker with a Custom
       section first. Tap `:party:`: `:party:` is added to the draft (with a
       space before it if needed) and the keyboard returns. Add text and send.
@@ -734,11 +738,16 @@ only from custom emoji already shown in that chat.
       (bubble appears at the tap).
 - [ ] Reply to a message with `:party:` in the text: both devices show it as a
       reply with the inline image.
-- [ ] Custom emoji reactions are deferred until MDK epoch-pins media
-      reactions (#1137, marmot-protocol/mdk#2151). Long-press → More emoji
-      shows no Custom section, and the quick-reaction editor offers no custom
-      emoji. When the 0.12.0 client reacts with `:party:`, tapping that chip on
-      iOS adds nothing (no image reaction and no `:party:` text reaction).
+- [ ] Custom emoji reactions (#1137): when the other client reacts with
+      `:party:`, the reaction pill on both devices shows the image, not the
+      text. Long-press → More emoji has a Custom section with `:party:`; pick
+      it on iOS and the other client shows the image reaction. Tapping the
+      `:party:` pill adds and removes your reaction. The quick-reaction editor
+      still offers no custom emoji, and a picked custom emoji is not added to
+      recent reactions.
+- [ ] Reactors list (tap and hold a `:party:` pill → reactions sheet): the
+      filter chip and every reactor row show the image. With Photos
+      auto-download off, the pill shows `:party:` as text until allowed.
 - [ ] Turn on Airplane Mode and send a message with `:party:`: an inline error
       appears above the composer, the draft stays, and Send retries once back
       online without uploading the image again.
@@ -768,6 +777,64 @@ only from custom emoji already shown in that chat.
       announced.
       Check the picker at an accessibility Dynamic Type size, in RTL (Arabic),
       and in light and dark mode.
+
+## Stickers (Sonar packs)
+
+Two devices in one chat; the second can be Sonar or another MDK client. Have a
+Sonar sticker pack link ready.
+
+- [ ] Composer `+` → Stickers with nothing installed shows No Stickers and a
+      Browse Sticker Packs button. The `+` menu has no Stickers row while
+      editing a message.
+- [ ] Sticker Packs: Discover lists the Sonar packs your relays carry, names
+      and counts only, no artwork, or says your relays have none yet. Search
+      narrows it. Offline, pull to refresh shows Couldn't check your relays
+      with Try Again, and keeps any packs already listed.
+- [ ] Open a pack (from Discover or Add by Link): its stickers load, with the
+      IP-address disclosure under them. Add installs it; back in the picker it
+      is the first tab.
+- [ ] Paste the pack link under Add by Link → Open Link: the pack opens. A
+      malformed link shows an error and opens nothing.
+- [ ] Tap a sticker in the picker: the sheet closes and the sticker appears
+      in the chat without a bubble on both devices. The chat list and a
+      notification on the other device say “Sticker”.
+- [ ] On the receiving device with the pack not installed, the sticker shows
+      Tap to load sticker and loads on tap. With the pack installed and Photos
+      auto-download allowed, it loads by itself; with Photos set to Never it
+      waits for a tap.
+- [ ] Airplane Mode: an unloaded sticker shows Tap to retry and loads once back
+      online. Sending a sticker offline shows a “Couldn’t send sticker” toast.
+- [ ] Swipe to delete an installed pack under Sticker Packs: it leaves the
+      picker. On a second signed-in device of the same account, Sync shows the
+      same installed list.
+- [ ] VoiceOver reads a sticker by its description (or “Sticker”), and the
+      tap-to-load hint names the pack's server.
+
+## Emoji sets (NIP-51)
+
+Two devices in one chat. Have an emoji set `naddr` ready (any kind-30030 set
+on the White Noise relays).
+
+- [ ] The reaction picker and the composer Custom Emoji picker show an Emoji
+      Sets button beside search. Emoji Sets lists sets by name and count only,
+      with no images, and the footer says images reveal your IP address.
+- [ ] Search narrows Discover; pasting an author's npub fetches that author's
+      sets. Offline, pull to refresh shows Couldn't check your relays with
+      Try Again and keeps listed sets.
+- [ ] If your account's public emoji list names sets, they appear under From
+      Your Emoji List. Installing one doesn't publish anything.
+- [ ] Open a set: previews load, and a failed one shows a retry arrow. Install
+      shows progress with Cancel. Cancel stops it and nothing is installed.
+- [ ] After Install, the picker shows a section titled with the set's name.
+      Picking one inserts `:shortcode:`, and sending shows the image on both
+      devices. Typing `:shortcode:` without the picker sends it too. Reacting
+      with one shows the image on both devices.
+- [ ] A set with hyphenated shortcodes says how many won't appear in the
+      picker, and those don't.
+- [ ] Swipe to delete an installed set, or Remove in the set: it leaves the
+      picker. Messages already sent still render it.
+- [ ] After the author publishes an update, the installed row shows Update
+      available, and Update installs the new version.
 
 ## Onboarding
 
@@ -1215,6 +1282,14 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
       controls.
 - [ ] Group Details: an admin must step down before leaving; the last
       admin cannot step down until another admin exists.
+- [ ] Blocked leave (needs experimental device groups, where MDK demotes a
+      nonlast admin itself and leaves directly): admins A and B leave at
+      nearly the same time with A offline, so A's pending leave becomes the
+      last active admin's. A reconnects: the Chats row still reads Leaving,
+      Group Details and the composer say "Can't leave: you're the only admin",
+      and Cancel Leaving rejoins the chat on that device (A can send again;
+      nothing is published). A Cancel tap after the leave stopped being
+      blocked warns "This leave is no longer blocked." and refreshes.
 - [ ] D launches the app and sees the group materialize without manual
       refresh.
 - [ ] A removes C; C loses access; A/B see the system row.

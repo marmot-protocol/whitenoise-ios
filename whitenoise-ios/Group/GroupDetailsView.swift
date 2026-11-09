@@ -946,7 +946,11 @@ struct GroupDetailsView: View {
                     Text(blocker)
                 }
                 if viewModel.departureStatus == .leaving {
-                    Text(GroupManagementPresentation.leavingGroupComposerMessage)
+                    Text(
+                        BlockedLeavePresentation.isBlocked(viewModel.managementState)
+                            ? BlockedLeavePresentation.detail
+                            : GroupManagementPresentation.leavingGroupComposerMessage
+                    )
                 } else if let leaveFooter = GroupManagementPresentation.leaveFooter(
                     state: viewModel.managementState,
                     fallbackIsLastAdmin: viewModel.isLastAdmin
@@ -990,7 +994,10 @@ struct GroupDetailsView: View {
         }
 
         if !viewModel.isGroupDisbanding {
-            if viewModel.departureStatus == .leaving {
+            if viewModel.departureStatus == .leaving,
+               BlockedLeavePresentation.isBlocked(viewModel.managementState) {
+                blockedLeaveRows
+            } else if viewModel.departureStatus == .leaving {
                 HStack(spacing: 10) {
                     ProgressView()
                         .controlSize(.small)
@@ -1025,6 +1032,24 @@ struct GroupDetailsView: View {
             }
         }
 
+    }
+
+    @ViewBuilder
+    private var blockedLeaveRows: some View {
+        Label(BlockedLeavePresentation.title, systemImage: "exclamationmark.triangle")
+            .foregroundStyle(.secondary)
+        if BlockedLeavePresentation.offersCancel(viewModel.managementState) {
+            Button {
+                Task { await model.cancelBlockedLeave(using: appState) }
+            } label: {
+                Label(BlockedLeavePresentation.cancelAction, systemImage: "arrow.uturn.backward")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+            .disabled(model.membershipActionInFlight)
+        }
     }
 
     /// The direct peer this screen can offer a block action for, or nil when

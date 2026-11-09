@@ -479,6 +479,19 @@ final class AppState {
     var groupMembershipUpdate: GroupRecoveryUpdate?
     var groupProjectionUpdate: GroupRecoveryUpdate?
     let historyNotices = HistoryNoticeStore()
+    @ObservationIgnored private var refusedIntentAnnouncements = RefusedIntentAnnouncements()
+    /// The active account's NIP-51 emoji sets, shared by every chat so typed
+    /// `:shortcode:` resolves without opening a picker.
+    @ObservationIgnored lazy var emojiSetLibrary = EmojiSetLibrary(
+        scopeProvider: { [weak self] in
+            guard let self, let account = self.activeAccountRef else { return nil }
+            return EmojiSetScope(accountRef: account, runtimeGeneration: self.runtimeGeneration)
+        },
+        calls: .live { [weak self] in
+            guard let self else { throw CancellationError() }
+            return try self.currentMarmotClient()
+        }
+    )
     let pollVotesInvalidation = PollVotesInvalidation()
     // Review is a separate destination; timeline visibility ends when it is pushed.
     @ObservationIgnored var moderationProjectionRoute: GroupRecoveryUpdate?
@@ -516,10 +529,19 @@ final class AppState {
         if case .historyNoticesChanged(let accountID, _) = event, activeAccount?.accountIdHex == accountID {
             Task { await historyNotices.refresh(using: self) }
         }
+        let noticeAccountID: String
+        switch event {
+        case .groupChangeSuperseded(let accountID, _, _, _, _, _, _):
+            noticeAccountID = accountID
+        case .groupEvent(let accountID, _, _, .queuedIntentRefused):
+            noticeAccountID = accountID
+        default:
+            return
+        }
         guard runtimeEventsGeneration == generation,
-              case .groupChangeSuperseded(let accountID, _, _, _, _, _, _) = event,
-              accounts.contains(where: { $0.accountIdHex == accountID && !$0.signedOut }),
-              let notice = GroupChangeNotice.toast(for: event) else { return }
+              accounts.contains(where: { $0.accountIdHex == noticeAccountID && !$0.signedOut }),
+              let notice = GroupChangeNotice.toast(for: event),
+              refusedIntentAnnouncements.admit(event) else { return }
         present(notice)
     }
 

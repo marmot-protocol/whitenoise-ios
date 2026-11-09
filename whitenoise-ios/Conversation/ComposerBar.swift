@@ -197,6 +197,12 @@ nonisolated enum ComposerAudioDraftPreviewPresentation {
 }
 
 /// Conversation composer with attachment, emoji, text, send, and voice controls.
+struct ComposerDisabledAction {
+    let title: String
+    let isEnabled: Bool
+    let perform: () -> Void
+}
+
 struct ComposerBar: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var draft: String
@@ -207,6 +213,8 @@ struct ComposerBar: View {
     let replyPreview: ComposerReplyPreview?
     let mediaEnabled: Bool
     let disabledMessage: String?
+    /// An action offered under `disabledMessage`, such as cancelling a blocked leave.
+    var disabledAction: ComposerDisabledAction?
     var sendBlockedMessage: String?
     let voiceRecordingActive: Bool
     let voiceRecordingLocked: Bool
@@ -228,6 +236,8 @@ struct ComposerBar: View {
     /// The conversation holds custom emoji this person can send.
     var customEmojiAvailable = false
     var onCustomEmoji: () -> Void = {}
+    var stickersAvailable = false
+    var onStickers: () -> Void = {}
     let onTakePhoto: () -> Void
     let onPhotoLibrary: () -> Void
     let onAttachFile: () -> Void
@@ -305,7 +315,15 @@ struct ComposerBar: View {
                         }
                     }
                 } else if let disabledMessage {
-                    inactiveComposerMessage(disabledMessage)
+                    VStack(spacing: 8) {
+                        inactiveComposerMessage(disabledMessage)
+                        if let disabledAction {
+                            Button(disabledAction.title, action: disabledAction.perform)
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .disabled(!disabledAction.isEnabled)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, ComposerInputChrome.horizontalInset)
@@ -368,7 +386,8 @@ struct ComposerBar: View {
                     cameraAvailable: cameraAvailable,
                     gifsAvailable: gifsAvailable,
                     pollsAvailable: pollsAvailable,
-                    customEmojiAvailable: customEmojiAvailable
+                    customEmojiAvailable: customEmojiAvailable,
+                    stickersAvailable: stickersAvailable
                 ),
                 onSelect: selectAttachmentOption
             ) {
@@ -658,6 +677,8 @@ struct ComposerBar: View {
             onAttachFile()
         case .gifs:
             onSearchGIFs()
+        case .stickers:
+            onStickers()
         case .customEmoji:
             onCustomEmoji()
         case .location:

@@ -1561,7 +1561,8 @@ public protocol AttachmentTransferSubscriptionProtocol: AnyObject, Sendable {
     func cancel()
 
     /**
-     * Initial snapshot, then coalesced replacements. None means closed. Errors
+     * Initial snapshot, then replacements: a transfer state change at once,
+     * progress-only changes at most four per second. None means closed. Errors
      * terminate this observation; close/drop never cancels acquisition.
      */
     func next() async throws  -> AttachmentTransferSnapshotFfi?
@@ -1626,7 +1627,8 @@ open func cancel()  {try! rustCall() {
 }
 
     /**
-     * Initial snapshot, then coalesced replacements. None means closed. Errors
+     * Initial snapshot, then replacements: a transfer state change at once,
+     * progress-only changes at most four per second. None means closed. Errors
      * terminate this observation; close/drop never cancels acquisition.
      */
 open func next()async throws  -> AttachmentTransferSnapshotFfi?  {
@@ -1697,6 +1699,160 @@ public func FfiConverterTypeAttachmentTransferSubscription_lift(_ pointer: Unsaf
 #endif
 public func FfiConverterTypeAttachmentTransferSubscription_lower(_ value: AttachmentTransferSubscription) -> UnsafeMutableRawPointer {
     return FfiConverterTypeAttachmentTransferSubscription.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Observer only: closing it never cancels a restore or owns its secrets.
+ */
+public protocol BackupRestoreSubscriptionProtocol: AnyObject, Sendable {
+
+    func next() async  -> BackupRestoreStatusFfi?
+
+    /**
+     * Initial snapshot exactly once. Query status after an uncertain RPC.
+     */
+    func snapshot()  -> BackupRestoreStatusFfi?
+
+}
+/**
+ * Observer only: closing it never cancels a restore or owns its secrets.
+ */
+open class BackupRestoreSubscription: BackupRestoreSubscriptionProtocol, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_marmot_uniffi_fn_clone_backuprestoresubscription(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_marmot_uniffi_fn_free_backuprestoresubscription(pointer, $0) }
+    }
+
+
+
+
+open func next()async  -> BackupRestoreStatusFfi?  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_backuprestoresubscription_next(
+                    self.uniffiClonePointer()
+
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeBackupRestoreStatusFfi.lift,
+            errorHandler: nil
+
+        )
+}
+
+    /**
+     * Initial snapshot exactly once. Query status after an uncertain RPC.
+     */
+open func snapshot() -> BackupRestoreStatusFfi?  {
+    return try!  FfiConverterOptionTypeBackupRestoreStatusFfi.lift(try! rustCall() {
+    uniffi_marmot_uniffi_fn_method_backuprestoresubscription_snapshot(self.uniffiClonePointer(),$0
+    )
+})
+}
+
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBackupRestoreSubscription: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = BackupRestoreSubscription
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> BackupRestoreSubscription {
+        return BackupRestoreSubscription(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: BackupRestoreSubscription) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BackupRestoreSubscription {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: BackupRestoreSubscription, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupRestoreSubscription_lift(_ pointer: UnsafeMutableRawPointer) throws -> BackupRestoreSubscription {
+    return try FfiConverterTypeBackupRestoreSubscription.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupRestoreSubscription_lower(_ value: BackupRestoreSubscription) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeBackupRestoreSubscription.lower(value)
 }
 
 
@@ -2938,6 +3094,172 @@ public func FfiConverterTypeConversationWindowSubscription_lower(_ value: Conver
 
 
 /**
+ * Cancellation and progress for one `install_emoji_set` call. Create one
+ * per install and poll `progress()` for a determinate bar. `cancel()`
+ * stops new downloads, drops those in flight, stores nothing and makes the
+ * install fail with `EmojiSetInstallCancelled`; a cancelled reinstall
+ * leaves the previous snapshot untouched. Shutting down or closing the
+ * runtime cancels it the same way. The final atomic write is not
+ * interruptible: a cancellation that arrives once it has started is too
+ * late and the install succeeds.
+ */
+public protocol EmojiSetInstallControlFfiProtocol: AnyObject, Sendable {
+
+    func cancel()
+
+    func isCancelled()  -> Bool
+
+    func progress()  -> EmojiSetInstallProgressFfi
+
+}
+/**
+ * Cancellation and progress for one `install_emoji_set` call. Create one
+ * per install and poll `progress()` for a determinate bar. `cancel()`
+ * stops new downloads, drops those in flight, stores nothing and makes the
+ * install fail with `EmojiSetInstallCancelled`; a cancelled reinstall
+ * leaves the previous snapshot untouched. Shutting down or closing the
+ * runtime cancels it the same way. The final atomic write is not
+ * interruptible: a cancellation that arrives once it has started is too
+ * late and the install succeeds.
+ */
+open class EmojiSetInstallControlFfi: EmojiSetInstallControlFfiProtocol, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_marmot_uniffi_fn_clone_emojisetinstallcontrolffi(self.pointer, $0) }
+    }
+public convenience init() {
+    let pointer =
+        try! rustCall() {
+    uniffi_marmot_uniffi_fn_constructor_emojisetinstallcontrolffi_new($0
+    )
+}
+    self.init(unsafeFromRawPointer: pointer)
+}
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_marmot_uniffi_fn_free_emojisetinstallcontrolffi(pointer, $0) }
+    }
+
+
+
+
+open func cancel()  {try! rustCall() {
+    uniffi_marmot_uniffi_fn_method_emojisetinstallcontrolffi_cancel(self.uniffiClonePointer(),$0
+    )
+}
+}
+
+open func isCancelled() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_marmot_uniffi_fn_method_emojisetinstallcontrolffi_is_cancelled(self.uniffiClonePointer(),$0
+    )
+})
+}
+
+open func progress() -> EmojiSetInstallProgressFfi  {
+    return try!  FfiConverterTypeEmojiSetInstallProgressFfi_lift(try! rustCall() {
+    uniffi_marmot_uniffi_fn_method_emojisetinstallcontrolffi_progress(self.uniffiClonePointer(),$0
+    )
+})
+}
+
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSetInstallControlFfi: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = EmojiSetInstallControlFfi
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> EmojiSetInstallControlFfi {
+        return EmojiSetInstallControlFfi(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: EmojiSetInstallControlFfi) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSetInstallControlFfi {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: EmojiSetInstallControlFfi, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetInstallControlFfi_lift(_ pointer: UnsafeMutableRawPointer) throws -> EmojiSetInstallControlFfi {
+    return try FfiConverterTypeEmojiSetInstallControlFfi.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetInstallControlFfi_lower(_ value: EmojiSetInstallControlFfi) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeEmojiSetInstallControlFfi.lower(value)
+}
+
+
+
+
+
+
+/**
  * Top-level firehose of all events the runtime emits across every account.
  * Lags are silently skipped (broadcast channels have a bounded backlog and
  * `RecvError::Lagged` is non-fatal — the iOS side will catch back up via
@@ -3635,6 +3957,15 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func accountAttachmentHistoryVersion(accountRef: String) async throws  -> AccountAttachmentVersion
 
     /**
+     * Whether this account can turn on account-devices in the group now, so
+     * its own devices can later add and remove each other there without an
+     * admin. Ask before offering `enable_account_devices`. The answer is
+     * about the whole group and never names the members or devices that
+     * hold it back.
+     */
+    func accountDevicesActivation(accountRef: String, groupIdHex: String) async throws  -> AccountDevicesActivationFfi
+
+    /**
      * Return the complete locally cached kind-3 follow list for `account_ref`
      * as canonical lowercase public-key hex strings.
      *
@@ -3674,6 +4005,14 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func accountKeyPackages(accountRef: String, bootstrapRelays: [String]) async throws  -> [AccountKeyPackageFfi]
 
     func accountNip65Relays(accountRef: String) throws  -> [String]
+
+    /**
+     * The account's recovery status: the groups whose history is still
+     * being fetched, whether the inbox's is, and every notice as
+     * `history_notices` lists them. Refresh on `RecoveryStatusChanged`.
+     * The recovery runner supplies the catching-up groups and inbox.
+     */
+    func accountRecoveryStatus(accountRef: String) async throws  -> AccountRecoveryStatusFfi
 
     /**
      * Per-account relay lists: the NIP-65 and inbox lists the account has
@@ -3730,6 +4069,13 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Acknowledge with the epoch and revision from the displayed device notice.
      */
     func acknowledgeOnboardingSingleDeviceInEpoch(accountRef: String, revision: UInt64, recoveryEpoch: String) async throws  -> OnboardingSnapshotFfi
+
+    /**
+     * Answer the unrecognized sign-in in `slot_id_hex`. `Reject` records it
+     * in the device group's roster, now or once that is possible. `Dismiss`
+     * only ends a prompt another device already answered.
+     */
+    func answerSignIn(accountRef: String, slotIdHex: String, response: SignInResponseFfi) async throws
 
     /**
      * Read the process-wide app-performance snapshot for debug/diagnostics
@@ -3806,9 +4152,31 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func auditLogSettings() throws  -> AuditLogSettingsFfi
 
     /**
+     * Private words-again hints for this CURRENT chat; metadata never creates membership.
+     */
+    func backupHistoryAvailability(accountRef: String, groupIdHex: String) async throws  -> [BackupHistoryAvailabilityFfi]
+
+    /**
+     * Read aggregate progress; Complete is eligible work settled, not global completeness.
+     */
+    func backupRestoreStatus(accountRef: String) async throws  -> BackupRestoreStatusFfi
+
+    /**
+     * Current selected account settings, not confirmation or publication history.
+     */
+    func backupSettings(accountRef: String) async throws  -> BackupSettingsFfi
+
+    /**
      * Revoke automatic permission before evaluating new host network policy.
      */
     func beginAttachmentPermissionUpdate(accountRef: String) async throws  -> String
+
+    /**
+     * Start one manual history-only restore. Words move immediately into the
+     * redacted core guard; managed/generated input copies remain host-owned.
+     * This never changes the current recovery key or joins/re-adds a chat.
+     */
+    func beginBackupRestore(accountRef: String, words: String) async throws  -> BackupRestoreStatusFfi
 
     func beginExternalSignerOnboarding(publicKey: String, signer: ExternalAccountSignerFfi, options: OnboardingOptionsFfi) async throws  -> OnboardingSnapshotFfi
 
@@ -3816,6 +4184,12 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Persist the identity and return before any network preflight or publication.
      */
     func beginOnboarding(nsec: String, options: OnboardingOptionsFfi) async throws  -> OnboardingSnapshotFfi
+
+    /**
+     * Generate new backup recovery words for one confirmation flow. Show once;
+     * never persist/log them. This is separate from restoring with old words.
+     */
+    func beginRecoveryWords(accountRef: String) async throws  -> RecoveryWordsFfi
 
     func blockUser(accountRef: String, userAccountIdHex: String) async throws
 
@@ -3851,6 +4225,27 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func cachedPublicEventPreviews(accountRef: String, references: [String]) throws  -> [PublicEventPreviewFfi]
 
     /**
+     * Cancel only the named operation. A stale valid token returns false;
+     * malformed tokens are InvalidHex. Committed history remains.
+     */
+    func cancelBackupRestore(accountRef: String, operation: String) async throws  -> Bool
+
+    /**
+     * On the new device: cancel the link.
+     */
+    func cancelDeviceLink(accountRef: String) async throws  -> DeviceLinkSnapshotFfi
+
+    /**
+     * Cancel this account's blocked leave, on this device only. Offer it
+     * while `GroupManagementStateFfi::can_cancel_leave` holds: the leave is
+     * blocked because this account is the group's last active admin. The
+     * chat reads as joined again, and the account can send. Any other state
+     * returns `MarmotKitError::LeaveNotBlocked`. With experimental device
+     * groups on, the account's other devices keep their own blocked leaves.
+     */
+    func cancelLeave(accountRef: String, groupIdHex: String) async throws
+
+    /**
      * Cancel the current interactive onboarding attempt at any step, including
      * approved or ready checkpoints. The identity stays signed out. Already
      * journaled evidence is retained in the latest cancellation checkpoint;
@@ -3863,6 +4258,11 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func cancelOnboardingRepair(accountRef: String) async throws  -> OnboardingSnapshotFfi
 
     /**
+     * Forget the pending confirmation flow; never changes current backups.
+     */
+    func cancelRecoveryWords(accountRef: String) async throws
+
+    /**
      * Replace this account's selection; accepted open polls remain votable after reclassification.
      */
     func castPollVote(accountRef: String, groupIdHex: String, pollEventId: String, optionIds: [String]) async throws  -> SendSummaryFfi
@@ -3870,10 +4270,38 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func catchUpAccounts() async throws
 
     /**
+     * The held chats whose history from another of this account's devices
+     * is arriving or has arrived: `Receiving` while a delivery waits to be
+     * imported, with `retrying` once an attempt to get its bundle failed,
+     * then `Imported` with the device it came from and when. Facts only: an
+     * empty history sends nothing, and an expired delivery leaves nothing.
+     * Empty while device groups are off. Refresh on
+     * `ChatHistoryImportsChanged`, which also fires when a source device is
+     * renamed or removed.
+     */
+    func chatHistoryImports(accountRef: String) async throws  -> [ChatHistoryImportFfi]
+
+    /**
      * Durable chat-list rows for fast app launch. Rows include the group
      * title/avatar, last kind-9 preview, unread count, and read anchors.
      */
     func chatList(accountRef: String, includeArchived: Bool) throws  -> [ChatListRowFfi]
+
+    /**
+     * Select all: every chat ID in `view`. Same as `chat_list_query_ids` with
+     * an unfiltered query.
+     */
+    func chatListIds(accountRef: String, view: ChatListViewFfi) async throws  -> [String]
+
+    /**
+     * Select all: every chat ID `query` matches, in display order, including
+     * chats beyond any open window; the count is the list length. Fails with
+     * `ChatPresentationNotReady`, never a partial list, while base rows, the
+     * presentation a `Text` node reads, or the retained deletions and edits a
+     * `MessageText` node reads are still being prepared; retry later. Unlike
+     * a window, this accepts `MessageText`.
+     */
+    func chatListQueryIds(accountRef: String, query: ChatListViewQueryFfi) async throws  -> [String]
 
     /**
      * Read one hydrated chat-list row for a known group.
@@ -3891,6 +4319,29 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Read the current MDK timed/indefinite mute state for one chat.
      */
     func chatNotificationSettings(accountRef: String, groupIdHex: String) throws  -> ChatNotificationSettingsFfi
+
+    /**
+     * How many chats this device is in can't take any device of this
+     * account, linked or not: they don't require
+     * `marmot.group.account-devices.v1`, name no relays a sibling Welcome
+     * can carry, or already hold this account's limit of 20 leaves (mdk#2628
+     * item 3.5c). Once a link this device approved is made, the new device
+     * is added to this device's other chats when its "add to all my chats"
+     * setting is on, for a week after the link. A chat that can take
+     * this account's devices but whose requirements the new device's
+     * KeyPackages don't meet is passed over and not counted, so zero
+     * does not mean the new device reaches every chat. A chat admin can
+     * turn the component on; removing a device frees its leaves.
+     * Zero until this device trusts a device group, and always zero without explicit dev capability and runtime intent. Read it when
+     * showing the device list; it is not evented.
+     */
+    func chatsClosedToLinkedDevices(accountRef: String) async throws  -> UInt32
+
+    /**
+     * Check the account's KeyPackage slots for new sign-ins now and return
+     * the list after the check. A read that reached no relay fails.
+     */
+    func checkSignIns(accountRef: String) async throws  -> [UnrecognizedSignInFfi]
 
     /**
      * Classify relay URLs using the same policy enforced at the dial boundary.
@@ -3920,16 +4371,37 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func collectNotificationsAfterWake(maxWaitMs: UInt32, source: NotificationWakeSourceFfi) async throws  -> BackgroundNotificationCollectionFfi
 
     /**
+     * The account's open compromise warning on this device: each item the
+     * user has not seen here, the earliest gathered first. Empty when no
+     * warning is open. An item means someone holding the account's signing
+     * key, or a session with its remote signer, published where the
+     * account's devices did not. The app writes the wording, and never says
+     * the account's devices stopped them. Always empty without explicit dev capability and runtime intent. Refresh on `CompromiseWarningChanged`.
+     */
+    func compromiseWarning(accountRef: String) async throws  -> [CompromiseWarningItemFfi]
+
+    /**
      * Install (`Some`) or clear (`None`) the moderation-report destination at runtime.
      * An invalid config is rejected whole and leaves reporting unconfigured.
      */
     func configureModerationReporting(config: ModerationReportConfigFfi?) throws
 
     /**
+     * On the new device: the user says both screens show the same emoji.
+     */
+    func confirmDeviceLinkMatch(accountRef: String) async throws  -> DeviceLinkSnapshotFfi
+
+    /**
      * Call only after explicit user consent to replace the active copy. Show
      * the offer's authenticated inviter and pass its exact id and state token.
      */
     func confirmGroupRejoin(accountRef: String, welcomeIdHex: String, localStateToken: String) async throws  -> GroupRecoveryStatusFfi
+
+    /**
+     * Confirm the two words at MDK's positions, in order. A busy/error result
+     * keeps the core confirmation flow; hosts clear their managed input copies.
+     */
+    func confirmRecoveryWords(accountRef: String, answers: [String]) async throws
 
     func contentReports(accountRef: String, groupIdHex: String, messageId: String?, after: String?, limit: UInt32) throws  -> ContentReportPageFfi
 
@@ -4032,6 +4504,11 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      */
     func createPoll(accountRef: String, groupIdHex: String, question: String, options: [String], pollType: PollTypeFfi, endsAt: UInt64?) async throws  -> SendSummaryFfi
 
+    /**
+     * On a device already signed in: Not now.
+     */
+    func declineDeviceLink(accountRef: String, promptId: String) async throws  -> DeviceLinkSnapshotFfi
+
     func declineGroupInvite(accountRef: String, groupIdHex: String) async throws  -> GroupInviteDeclineResultFfi
 
     func declineGroupRejoin(accountRef: String, welcomeIdHex: String) async throws
@@ -4094,10 +4571,30 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func demoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef: String) async throws  -> GroupMutationResultFfi
 
     /**
+     * Linking as this device shows it now: its own new-device link, if
+     * any, and the prompts for sign-ins it can link. Re-read on
+     * `DeviceLinkChanged`.
+     */
+    func deviceLinkSnapshot(accountRef: String) async throws  -> DeviceLinkSnapshotFfi
+
+    /**
      * Durably accept an irreversible disband request. Completion is observed
      * through normal group state updates after bounded convergence.
      */
     func disbandGroup(accountRef: String, groupIdHex: String) async throws  -> DisbandRequestFfi
+
+    /**
+     * Dismiss the compromise warning on this device: everything it gathers
+     * now is seen here, and it stays closed until something new arrives.
+     * Other devices' warnings are unchanged.
+     */
+    func dismissCompromiseWarning(accountRef: String) async throws
+
+    /**
+     * Dismiss one old-sibling recognition hint from `snapshot.moves`.
+     * Local presentation only; never links or rejects that slot.
+     */
+    func dismissDeviceGroupMoveSibling(accountRef: String, moveId: String, slotIdHex: String) async throws  -> DeviceLinkSnapshotFfi
 
     /**
      * Dismiss one notice once the user accepts that this history may be
@@ -4172,6 +4669,27 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func editMessage(accountRef: String, groupIdHex: String, targetMessageId: String, content: String) async throws  -> SendSummaryFfi
 
     /**
+     * Read one stored set by coordinate or `naddr`. Local only; the read
+     * runs off the caller's thread.
+     */
+    func emojiSet(accountRef: String, coordinate: String) async throws  -> EmojiSetFfi?
+
+    /**
+     * Read stored emoji sets, or only installed ones in install order.
+     * `search` matches title, description, author (hex or `npub`) and
+     * shortcodes. Local only; the read runs off the caller's thread.
+     */
+    func emojiSets(accountRef: String, installedOnly: Bool, search: String?, limit: UInt32?) async throws  -> [EmojiSetFfi]
+
+    /**
+     * Turn on account-devices in one admin Commit. Call it only when the user
+     * asks; it can never be turned off. Refused with
+     * `AccountDevicesActivationRefused` unless `account_devices_activation`
+     * would answer `Eligible`.
+     */
+    func enableAccountDevices(accountRef: String, groupIdHex: String) async throws  -> GroupMutationResultFfi
+
+    /**
      * Install lifecycle-v1 and require it in one admin Commit.
      */
     func enableGroupDisbanding(accountRef: String, groupIdHex: String) async throws  -> GroupMutationResultFfi
@@ -4214,6 +4732,35 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * not returned to the host app.
      */
     func exportEncryptedSecretKey(accountRef: String, passphrase: String) throws  -> String
+
+    /**
+     * Fetch one set from a pasted coordinate or `naddr` (up to 8 of its
+     * relay hints are tried). Text only.
+     */
+    func fetchEmojiSet(accountRef: String, input: String) async throws  -> EmojiSetFfi
+
+    /**
+     * Download one emoji of a stored set for a preview. Reveals the user's
+     * IP address to the image host the set author chose: call only after
+     * the user opens the set. `expected_event_id_hex` is the version shown;
+     * another stored version fails with `EmojiSetChanged` before any
+     * download. Nothing is stored.
+     */
+    func fetchEmojiSetAsset(accountRef: String, coordinate: String, expectedEventIdHex: String, shortcode: String) async throws  -> EmojiSetAssetFfi
+
+    /**
+     * Download a stored set's cover image (`image_url`) under the emoji
+     * image limits. Reveals the user's IP address to the host the set
+     * author chose: call only after the user opens the set, with the shown
+     * version's `event_id_hex` (`EmojiSetChanged` otherwise, before any
+     * download). A set without a cover fails with `EmojiSetNotFound`.
+     * Nothing is stored.
+     */
+    func fetchEmojiSetCover(accountRef: String, coordinate: String, expectedEventIdHex: String) async throws  -> EmojiSetCoverFfi
+
+    func fetchStickerAsset(accountRef: String, stickerRef: StickerRefFfi) async throws  -> StickerAssetFfi
+
+    func fetchStickerPack(accountRef: String, input: String) async throws  -> StickerPackFfi
 
     func flushProductAnalytics() async throws
 
@@ -4273,7 +4820,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func groupConversationSnapshot(accountRef: String, groupIdHex: String) async throws  -> GroupConversationSnapshotFfi
 
     /**
-     * Group plus enriched member rows for detail screens.
+     * Group plus enriched member rows for detail screens, one per member
+     * account.
      */
     func groupDetails(accountRef: String, groupIdHex: String) async throws  -> GroupDetailsFfi
 
@@ -4289,14 +4837,15 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      *
      * This is the chat-projection companion read: it is one worker command,
      * performs no profile enrichment, and fails the whole page if any group
-     * is unknown or quarantined. Each row includes member and admin
-     * identifiers so recipient-selection screens do not need a per-group
-     * `group_roster` fanout.
+     * is unknown or quarantined. Each row includes member account and admin
+     * identifiers, each account once, so recipient-selection screens do not
+     * need a per-group `group_roster` fanout.
      */
     func groupMemberIdsPage(accountRef: String, groupIdsHex: [String]) async throws  -> [AppGroupMemberIdsFfi]
 
     /**
-     * Membership roster for `group_id_hex`.
+     * Membership roster for `group_id_hex`: one row per member account, with
+     * how many of its devices are in the group.
      */
     func groupMembers(accountRef: String, groupIdHex: String) async throws  -> [AppGroupMemberRecordFfi]
 
@@ -4316,7 +4865,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func groupRecoveryStatus(accountRef: String, groupIdHex: String) async throws  -> GroupRecoveryStatusFfi
 
     /**
-     * Lightweight membership roster projection for membership screens.
+     * Lightweight membership roster projection for membership screens: one
+     * entry per member account, and `member_count` counts accounts.
      */
     func groupRoster(accountRef: String, groupIdHex: String) async throws  -> GroupRosterFfi
 
@@ -4328,11 +4878,42 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func historyNotices(accountRef: String) async throws  -> [HistoryNoticeFfi]
 
     /**
+     * Validate a canonical Signal pack link, then refuse before any network
+     * call. The pinned importer cannot be address-pinned, so this command
+     * does not download, upload, or publish. External-signer rejection is
+     * unchanged for a future pinned fetch.
+     */
+    func importSignalStickerPack(accountRef: String, signalLink: String, blossomServer: String?) async throws  -> StickerImportResultFfi
+
+    /**
      * Establish the unread baseline the first time a user opens a group.
      * Existing kind-9 history remains read; later remote kind-9 messages count
      * until marked visible via `mark_timeline_message_read`.
      */
     func initializeChatReadState(accountRef: String, groupIdHex: String) throws  -> ChatListRowFfi?
+
+    /**
+     * Download every emoji of the stored set version once, validate it and
+     * store its bytes and SHA-256 under the account. Reveals the user's IP
+     * address to each image host in the set: call only after the user taps
+     * Install. `expected_event_id_hex` is the `event_id_hex` of the version
+     * the user was shown (also when reinstalling for `update_available`):
+     * if another version is stored the call fails with `EmojiSetChanged`
+     * before any download, and with nothing stored it fails with
+     * `EmojiSetNotFound` (fetch with `fetch_emoji_set` first). `control`
+     * reports progress and cancels; a cancelled install fails with
+     * `EmojiSetInstallCancelled` and stores nothing.
+     */
+    func installEmojiSet(accountRef: String, coordinate: String, expectedEventIdHex: String, control: EmojiSetInstallControlFfi) async throws  -> EmojiSetInstallResultFfi
+
+    func installStickerPack(accountRef: String, input: String) async throws  -> StickerPackFfi
+
+    /**
+     * Every installed emoji, in set install order then set order, for a
+     * picker. Shortcode collisions between sets are flagged, not resolved.
+     * Local only; the read runs off the caller's thread.
+     */
+    func installedCustomEmoji(accountRef: String) async throws  -> [InstalledCustomEmojiFfi]
 
     /**
      * Invite `member_refs` into an existing group.
@@ -4376,6 +4957,15 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func keyPackageMaintenanceStatus(accountRef: String) async throws  -> KeyPackageMaintenanceStatusFfi?
 
     /**
+     * Whether this device's KeyPackage refresh is overdue because its
+     * device group can't take the announcement that must come first. While
+     * it is, warn the user: after 30 days inviters stop treating this device
+     * as fresh. Always false until this device trusts a device group, and without explicit dev capability and runtime intent. Refresh on
+     * `KeyPackageRefreshOverdueChanged`.
+     */
+    func keyPackageRefreshOverdue(accountRef: String) async throws  -> Bool
+
+    /**
      * Retained attachments, largest first, `limit` (1..=256) per page,
      * optionally within one chat. Pass the page's `next_cursor` to
      * continue.
@@ -4383,6 +4973,21 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func largestRetainedAttachments(accountRef: String, groupIdHex: String?, limit: UInt32, cursor: RetainedAttachmentsCursor?) async throws  -> RetainedAttachmentsPageFfi
 
     func leaveGroup(accountRef: String, groupIdHex: String) async throws  -> SendSummaryFfi
+
+    /**
+     * On a device already signed in: Link device. `label` is the name the
+     * user gave the new device, at most 64 bytes. Offer both settings on by
+     * default: `add_to_all_chats` adds it to the chats this account's
+     * devices are in, and `bring_history` brings it those chats' history.
+     */
+    func linkDevice(accountRef: String, promptId: String, label: String, addToAllChats: Bool, bringHistory: Bool) async throws  -> DeviceLinkSnapshotFfi
+
+    /**
+     * This account's own devices, from the roster of the device group this
+     * device trusts: this device first, then by when each was linked. Empty
+     * until this device trusts a device group, and always empty without explicit dev capability and runtime intent. Refresh on `LinkedDevicesChanged`.
+     */
+    func linkedDevices(accountRef: String) async throws  -> [LinkedDeviceFfi]
 
     /**
      * All accounts known to the runtime, in stable order. `running` is
@@ -4570,7 +5175,19 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func openAttachmentHandoff(accountRef: String, groupIdHex: String, target: AttachmentLocalTargetFfi, control: MediaFileTransferControlFfi) async throws  -> AttachmentHandoffFfi?
 
     /**
+     * A live window over every chat `query` matches. The filter runs in SQL
+     * before paging, so chats beyond the window still count. A chat enters or
+     * leaves the window as soon as a fact its filter tests changes. None
+     * defaults to 50 rows; explicit sizes must be 1–100. An invalid query fails
+     * with `InvalidChatListQuery`, a malformed group ID with `InvalidHex`. A
+     * window does not accept a `MessageText` node (`MessageTextInWindow`);
+     * use `chat_list_query_ids`.
+     */
+    func openChatListQueryWindow(accountRef: String, query: ChatListViewQueryFfi, initialRows: UInt32?) async throws  -> ChatListWindowSubscription
+
+    /**
      * Bind to one account/view. None defaults to 50; explicit sizes must be 1–100.
+     * Same as `open_chat_list_query_window` with an unfiltered query.
      */
     func openChatListWindow(accountRef: String, view: ChatListViewFfi, initialRows: UInt32?) async throws  -> ChatListWindowSubscription
 
@@ -4595,6 +5212,15 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func parseMarkdown(text: String)  -> MarkdownDocumentFfi
 
     func pauseMaintenance(accountRef: String) async throws
+
+    /**
+     * Canonical creates or confirmed Adds whose Welcome is still owed, oldest first. The coarse
+     * size class is a best-effort diagnosis, never a terminal verdict. The
+     * pending notice is once per process/Welcome; re-read this query for later
+     * causes. Coarse legacy retries may replace a specific cause with None
+     * (Unknown) while the same repair handle and debt remain.
+     */
+    func pendingWelcomeDeliveries(accountRef: String) async throws  -> [PendingWelcomeDeliveryFfi]
 
     func periodicMaintenancePolicy(accountRef: String) async throws  -> PeriodicMaintenancePolicyFfi
 
@@ -4745,9 +5371,17 @@ public protocol MarmotProtocol: AnyObject, Sendable {
 
     /**
      * React with a custom emoji image: `attachments` become `imeta` tags on
-     * the kind-7 and `tags` name them (NIP-30 `emoji`).
+     * the kind-7 and `tags` name them (NIP-30 `emoji`). Preserve each upload's
+     * local `source_epoch_identity`; a changed branch requires a fresh upload.
      */
     func reactWithMedia(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String, tags: [[String]], attachments: [MediaAttachmentReferenceFfi]) async throws  -> SendSummaryFfi
+
+    /**
+     * Resolve one active custom-emoji reaction's matching encrypted artwork.
+     * This bounded local read starts no download. Use the returned original
+     * source slot with attachment acquisition and opaque local reads.
+     */
+    func reactionAttachment(accountRef: String, groupIdHex: String, reactionMessageIdHex: String) async throws  -> AttachmentEntryFfi?
 
     /**
      * Read 1..=1048576 bytes at an offset from an opaque local asset reference.
@@ -4762,6 +5396,13 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Results preserve input order; deferred entries can be retried in a later batch.
      */
     func readAvatarAssets(accountRef: String, references: [String], maxBytes: UInt64) async throws  -> [AvatarBytesFfi]
+
+    /**
+     * An installed emoji's stored bytes, checked against their SHA-256.
+     * Local only: never touches the network. The read and the hash run off
+     * the caller's thread.
+     */
+    func readInstalledCustomEmoji(accountRef: String, coordinate: String, shortcode: String) async throws  -> InstalledCustomEmojiAssetFfi
 
     /**
      * Record one approved host-app milestone.
@@ -4860,9 +5501,47 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      */
     func removeChatAttachments(accountRef: String, groupIdHex: String) async throws  -> UInt64
 
+    /**
+     * Remove another of this account's devices, by its `slot_id_hex` from
+     * `linked_devices`, from the device group and every chat, and delete
+     * its KeyPackage slot so inviters stop adding it. The decision is
+     * recorded at once and carried out as the device group allows;
+     * `linked_devices` shows the device with `removal_pending` until the
+     * device group takes it. Refused with `DeviceGroupRefused`:
+     * `roster_unsupported` (device groups unavailable for this client), `no_device_group`,
+     * `unknown_device`, `this_device` (sign out instead),
+     * `device_link_pending` while the device's link may still fail, or
+     * `roster_unavailable`. Refresh on `LinkedDevicesChanged`.
+     */
+    func removeLinkedDevice(accountRef: String, slotIdHex: String) async throws
+
     func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> SendSummaryFfi
 
     func removeMembersDetailed(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> GroupMutationResultFfi
+
+    /**
+     * How many chats this device is in still hold a device this account no
+     * longer has, because the chat doesn't take a same-account removal; a
+     * chat admin can remove it. The device is one this account removed, or
+     * one its device group stopped listing, as after a failed link. Zero
+     * until this device trusts a device group, and always zero without explicit dev capability and runtime intent. Read it when showing the
+     * device list; it is not evented.
+     */
+    func removedDeviceLeftoverChats(accountRef: String) async throws  -> UInt32
+
+    /**
+     * Rename one of this account's devices, this one included, by its
+     * `slot_id_hex` from `linked_devices`: one roster commit in the device
+     * group. Any device may rename any device. The label is at most 64
+     * bytes of UTF-8; empty clears it. Refused with `DeviceGroupRefused`:
+     * `roster_unsupported` (device groups unavailable for this client), `label_too_long`,
+     * `no_device_group`, `unknown_device`, `roster_unavailable`, or
+     * `device_group_busy` while the device group has an earlier change in
+     * flight (retry later). A rename whose commit loses a fork is made again
+     * on a later maintenance pass, unless another user edit of that device won;
+     * refresh on `LinkedDevicesChanged`.
+     */
+    func renameLinkedDevice(accountRef: String, slotIdHex: String, label: String) async throws
 
     /**
      * Replace the group's encrypted-media default blob endpoints as a full
@@ -4909,6 +5588,15 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * or terminal work. Use control Retry or Download again for that intent.
      */
     func requestExplicitAttachment(accountRef: String, groupIdHex: String, target: AttachmentLocalTargetFfi) async throws  -> String?
+
+    /**
+     * User-controlled local device-group reset before fresh code pairing.
+     * Keeps credentials, slot and ordinary data; abandons old link-bound
+     * preparation, not shared state/security sync. No membership repair/removal. Busy
+     * native work/pairing/Move can refuse indefinitely; cancellation after
+     * reset does not restore old trust. Requires explicit experimental gates.
+     */
+    func resetDeviceGroupForRepair(accountRef: String) async throws  -> DeviceLinkSnapshotFfi
 
     /**
      * Remove only the legacy ambiguous partial-account shape so a subsequent
@@ -4973,6 +5661,20 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func retryOnboardingStep(accountRef: String, step: OnboardingStepFfi) async throws  -> OnboardingSnapshotFfi
 
     /**
+     * The subset of `group_ids` still in `view`. Same as
+     * `revalidate_chat_list_query_ids` with an unfiltered query.
+     */
+    func revalidateChatListIds(accountRef: String, view: ChatListViewFfi, groupIds: [String]) async throws  -> [String]
+
+    /**
+     * The subset of `group_ids` still matching `query`, in the caller's order
+     * with duplicates dropped. Only removes; chats that matched since are never
+     * added. Call it right before a bulk action, then run the existing per-chat
+     * commands, which still check their own preconditions.
+     */
+    func revalidateChatListQueryIds(accountRef: String, query: ChatListViewQueryFfi, groupIds: [String]) async throws  -> [String]
+
+    /**
      * Export the active account's raw private key in canonical `nsec1...`
      * bech32 form for an in-app key-backup display (mdk#543).
      *
@@ -4995,6 +5697,14 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * operation under its legacy name.
      */
     func rotateKeyPackage(accountRef: String) async throws  -> UInt64
+
+    /**
+     * Join the current background pass or try due admission once. Finished
+     * means its serialized settlement attempt ended, not successful publication.
+     * Host cancellation detaches this wait; worker stop closes it. The host
+     * bounds its OS-task lifetime. This neither forces work nor waits for future due work.
+     */
+    func runDueBackupPass(accountRef: String) async throws  -> BackgroundBackupOutcomeFfi
 
     func runDueMaintenance(accountRef: String) async throws  -> MaintenanceRunSummaryFfi
 
@@ -5055,16 +5765,17 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     /**
      * Send an app-defined event with an arbitrary non-reserved kind. `tags`
      * and `content` pass through verbatim; kinds MDK owns (chat, reaction,
-     * edit, delete, agent, group system, push token) are rejected so an app
-     * cannot forge protocol events. Custom events appear in the timeline as
-     * standalone rows and can be fetched via [`Marmot::messages`] with a
-     * `kinds` filter.
+     * edit, delete, agent, group system, push token, device group: 457, 458, 459,
+     * 460, 461, 473, 475, 476) are rejected so an app cannot forge protocol
+     * events. Custom events appear in the timeline as standalone rows and can
+     * be fetched via [`Marmot::messages`] with a `kinds` filter.
      */
     func sendCustomEvent(accountRef: String, groupIdHex: String, kind: UInt64, tags: [[String]], content: String) async throws  -> SendSummaryFfi
 
     /**
      * Send already-uploaded encrypted media attachments as a kind-9 chat
-     * carrying ordered NIP-92 `imeta` tags.
+     * carrying ordered NIP-92 `imeta` tags. Preserve each upload's local
+     * `source_epoch_identity`; references without provenance need a fresh upload.
      */
     func sendMediaAttachments(accountRef: String, groupIdHex: String, attachments: [MediaAttachmentReferenceFfi], caption: String?) async throws  -> SendSummaryFfi
 
@@ -5093,8 +5804,16 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func sendPreparedMediaWithClientToken(accountRef: String, groupIdHex: String, attachments: [MediaAttachmentReferenceFfi], caption: String?, clientToken: String, consumingDraft: MessageDraftRevisionFfi?) async throws  -> LocalSendAcceptanceFfi
 
     /**
+     * Send a Sonar sticker as a kind-9 message carrying the immutable
+     * coordinate/shortcode/plaintext-hash reference. Native storage must
+     * currently authorize the exact reference before the send is accepted.
+     */
+    func sendSticker(accountRef: String, groupIdHex: String, stickerRef: StickerRefFfi) async throws  -> SendSummaryFfi
+
+    /**
      * `send_media_attachments` plus application tags on the same kind-9
      * event, e.g. NIP-30 `emoji` tags pointing at these attachments.
+     * Preserve each upload's local `source_epoch_identity`.
      */
     func sendTaggedMedia(accountRef: String, groupIdHex: String, attachments: [MediaAttachmentReferenceFfi], caption: String?, tags: [[String]]) async throws  -> SendSummaryFfi
 
@@ -5173,6 +5892,12 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func setAuditOtlpConfigV5(config: AuditOtlpConfigV5Ffi) throws  -> AuditOtlpConfigV5Ffi
 
     /**
+     * Compatibility wrapper for the runtime-wide report. Validates the
+     * existing active account first and never starts a worker.
+     */
+    func setBackupBackgroundConditions(accountRef: String, wifi: Bool, charging: Bool) async throws
+
+    /**
      * Set or clear a manual unread reminder without moving the durable
      * timeline read marker backwards.
      */
@@ -5228,6 +5953,13 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * This compatibility setter still updates the telemetry interval.
      */
     func setRelayTelemetrySettings(settings: RelayTelemetrySettingsFfi) async throws  -> RelayTelemetrySettingsFfi
+
+    /**
+     * Report platform facts once per runtime, before workers exist and on
+     * changes. Same-runtime worker restarts retain them; a new runtime is closed.
+     * This starts no account worker. Admitted passes settle after false.
+     */
+    func setRuntimeBackupBackgroundConditions(wifi: Bool, charging: Bool) async throws
 
     /**
      * Enable or revoke bounded process-local capture. No database, upload or consent setting is changed.
@@ -5290,9 +6022,9 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     /**
      * Non-destructive sign-out: deactivate the account on this device and,
      * when `delete_key_packages` is `true` (the default behavior in the UI),
-     * publish kind:5 deletions for its relay-published KeyPackages so
-     * strangers cannot gift-wrap a Welcome into a new group while it is signed
-     * out.
+     * publish one kind:5 deletion for this device's KeyPackage slot so
+     * nobody can add this device to a new group while it is signed out. The
+     * account's other devices keep their KeyPackages.
      *
      * Unlike [`sign_out_and_wipe`](Self::sign_out_and_wipe) /
      * [`remove_account`](Self::remove_account), this keeps ALL local state on
@@ -5309,12 +6041,17 @@ public protocol MarmotProtocol: AnyObject, Sendable {
 
     /**
      * Destructive sign-out: leave every active MLS group (best-effort), delete
-     * the account's relay-published KeyPackages, then wipe all local state for
+     * this device's relay-published KeyPackage slot, then wipe all local state for
      * this account (MLS state DB, cached media/secrets, SQL account row, and
      * the secret-store nsec). After this returns the account ref is no longer
      * valid for any further FFI call. The returned `WipeOutcomeFfi` reports
      * each stage independently so the app can show progress and a
-     * partial-failure sheet (mdk#478).
+     * partial-failure sheet (mdk#478). In a device group, it first asks the
+     * account's other devices to take it out, which can take about 30
+     * seconds, and leaves them the chats they can take it out of
+     * (mdk#2628). It keeps running when the call is cancelled. A sibling
+     * that sees its `leaving` entry takes it out later, on its own time,
+     * whatever the host does.
      */
     func signOutAndWipe(accountRef: String) async throws  -> WipeOutcomeFfi
 
@@ -5356,9 +6093,41 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func startAgentTextStream(accountRef: String, groupIdHex: String, streamIdHex: String?, quicCandidates: [String]) async throws  -> AgentStreamStartFfi
 
     /**
+     * On a new device: ask a device of this account already signed in to
+     * link this one. With existing trust, this moves only this device;
+     * `snapshot.moves` distinguishes Joining from Made. Show "waiting"
+     * until the snapshot's `new_device` shows
+     * the code. Refresh on `DeviceLinkChanged`.
+     */
+    func startDeviceLink(accountRef: String) async throws  -> DeviceLinkSnapshotFfi
+
+    /**
+     * Start this device without the devices its first check found ("No,
+     * start fresh"): each sign-in from before this device is answered Not
+     * now, now and when one is listed later. It rejects nothing and raises
+     * no warning, so one of those devices can still link this one. Fails
+     * before the first check and once this device trusts a device group.
+     */
+    func startFresh(accountRef: String) async throws
+
+    /**
+     * Whether this device started fresh and still has no device group, so
+     * the app can say that only chats it is invited to from now on are here.
+     * Always false without explicit dev capability and runtime intent.
+     */
+    func startedFresh(accountRef: String) async throws  -> Bool
+
+    /**
      * Snapshot fixed native phases and migration progress without account/keystore/storage queries.
      */
     func startupDiagnosticsSnapshot() throws  -> NativeStartupSnapshotFfi
+
+    func stickerPack(accountRef: String, input: String) throws  -> StickerPackFfi?
+
+    /**
+     * Read the encrypted native sticker projection. Call off the UI thread.
+     */
+    func stickerPacks(accountRef: String, installedOnly: Bool, search: String?, limit: UInt32?) throws  -> [StickerPackFfi]
 
     /**
      * True once [`Marmot::shutdown_and_close`] has closed the store. A host
@@ -5439,6 +6208,15 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func sweepExpiredRetention(accountRef: String, nowMs: UInt64) async throws  -> RetentionSweepReportFfi
 
     /**
+     * Fetch the 60 newest kind-30030 sets from the account's relays. Text
+     * only: never fetches an image. A `search` that is an `npub` or hex
+     * public key narrows the fetch to that author.
+     */
+    func syncEmojiSets(accountRef: String, search: String?) async throws  -> EmojiSetSyncResultFfi
+
+    func syncStickerPacks(accountRef: String) async throws  -> StickerSyncResultFfi
+
+    /**
      * Consent-bound random OTLP identifier, stable until revocation. Requires
      * a current combined grant; never use this value in product events.
      */
@@ -5462,6 +6240,11 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      */
     func timelineMessages(accountRef: String, query: TimelineMessageQueryFfi) throws  -> TimelinePageFfi
 
+    /**
+     * Disable future account backups. Previously written archives remain.
+     */
+    func turnOffBackups(accountRef: String) async throws
+
     func unblockUser(accountRef: String, userAccountIdHex: String) async throws
 
     /**
@@ -5475,9 +6258,26 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func unfollowUser(accountRef: String, userRef: String) async throws  -> [String]
 
     /**
+     * Remove an installed set and its stored bytes. Returns whether it was
+     * installed. Local only.
+     */
+    func uninstallEmojiSet(accountRef: String, coordinate: String) async throws  -> Bool
+
+    func uninstallStickerPack(accountRef: String, input: String) async throws
+
+    /**
      * Remove all of this account's active reactions from `target_message_id`.
      */
     func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws  -> SendSummaryFfi
+
+    /**
+     * Sign-ins of this account that this device does not recognize, the
+     * earliest to appear first. For one that is `before_this_device`, ask
+     * whether the user still has it; for any other, ask whether it was them.
+     * Always empty without explicit dev capability and runtime intent. Refresh
+     * on `UnrecognizedSignInsChanged`.
+     */
+    func unrecognizedSignIns(accountRef: String) async throws  -> [UnrecognizedSignInFfi]
 
     /**
      * Admin-only replacement of optional application-owned group state.
@@ -5504,6 +6304,18 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func updateGroupImage(accountRef: String, groupIdHex: String, plaintext: Data, mediaType: String) async throws  -> SendSummaryFfi
 
     func updateGroupProfile(accountRef: String, groupIdHex: String, name: String?, description: String?) async throws  -> SendSummaryFfi
+
+    /**
+     * Patch a linked device's settings, including this device. None keeps a
+     * value from the current roster. Add-to-all permits the linked-device Add flow;
+     * off does not leave chats. History affects future sibling Adds and
+     * transfers still owed, without backfill of chats already joined. Keep
+     * prevents automatic inactivity removal, not explicit removal or sign-out.
+     * Earlier lost edits recover first; `device_group_busy` asks for a retry
+     * while they settle. Other refusals match `rename_linked_device` without
+     * label validation. Refresh on `LinkedDevicesChanged`.
+     */
+    func updateLinkedDeviceSettings(accountRef: String, slotIdHex: String, addToAllChats: Bool?, bringHistory: Bool?, keepWhileInactive: Bool?) async throws
 
     /**
      * Set the per-group disappearing-message retention, wrapping the engine's
@@ -5574,6 +6386,12 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func usageDiagnosticsStatus() throws  -> UsageDiagnosticsStatusFfi
 
     /**
+     * Read the account's own kind-10030 emoji list and the sets it points
+     * to, as suggestions. Text only. MDK never publishes or edits this list.
+     */
+    func userEmojiList(accountRef: String) async throws  -> UserEmojiListFfi
+
+    /**
      * Full cached Nostr kind:0 profile for an account id (name, display
      * name, about, picture, nip05, lud16), if the runtime has one
      * projected. The local account's own profile is cached immediately
@@ -5620,6 +6438,12 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * `subscribe_messages`.
      */
     func watchAgentTextStream(accountRef: String, groupIdHex: String, streamIdHex: String?, serverCertDer: Data?, insecureLocal: Bool) async throws  -> AgentStreamSubscription
+
+    /**
+     * One initial snapshot and subsequent status/availability revision wakes.
+     * Closing this observer does not cancel the restore operation.
+     */
+    func watchBackupRestore(accountRef: String) async throws  -> BackupRestoreSubscription
 
 }
 open class Marmot: MarmotProtocol, @unchecked Sendable {
@@ -5696,7 +6520,8 @@ public convenience init(rootPath: String, relayUrls: [String], deployment: Marmo
 
     /**
      * Open with an optional public client label for new KeyPackage publications.
-     * Existing constructors remain untagged. Whitespace-only labels are omitted.
+     * Existing constructors remain untagged. Whitespace-only labels, and labels
+     * longer than 64 bytes once trimmed, are omitted rather than truncated.
      * Hosts must supply this on every foreground/background runtime construction.
      */
 public static func newWithClientName(rootPath: String, relayUrls: [String], clientName: String?, cursorPersistence: CursorPersistenceFfi, secretStore: SecretStore?, deployment: MarmotDeploymentFfi)throws  -> Marmot  {
@@ -5747,6 +6572,24 @@ public static func newWithCursorPersistence(rootPath: String, relayUrls: [String
         FfiConverterSequenceString.lower(relayUrls),
         FfiConverterTypeCursorPersistenceFfi_lower(cursorPersistence),
         FfiConverterTypeMarmotDeploymentFfi_lower(deployment),$0
+    )
+})
+}
+
+    /**
+     * Open an explicitly experimental device-group test build. The native
+     * library must enable `dev-device-groups`; otherwise this fails
+     * before opening the root or taking ownership of host secret storage.
+     * Ordinary constructors remain disabled even in a capable library.
+     * Use matching native and generated bindings, and this constructor for
+     * every foreground/background opener of the same experimental root.
+     */
+public static func newWithExperimentalDeviceGroups(rootPath: String, relayUrls: [String], options: MarmotOptions)throws  -> Marmot  {
+    return try  FfiConverterTypeMarmot_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_constructor_marmot_new_with_experimental_device_groups(
+        FfiConverterString.lower(rootPath),
+        FfiConverterSequenceString.lower(relayUrls),
+        FfiConverterTypeMarmotOptions_lower(options),$0
     )
 })
 }
@@ -5854,6 +6697,30 @@ open func accountAttachmentHistoryVersion(accountRef: String)async throws  -> Ac
 }
 
     /**
+     * Whether this account can turn on account-devices in the group now, so
+     * its own devices can later add and remove each other there without an
+     * admin. Ask before offering `enable_account_devices`. The answer is
+     * about the whole group and never names the members or devices that
+     * hold it back.
+     */
+open func accountDevicesActivation(accountRef: String, groupIdHex: String)async throws  -> AccountDevicesActivationFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_account_devices_activation(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAccountDevicesActivationFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Return the complete locally cached kind-3 follow list for `account_ref`
      * as canonical lowercase public-key hex strings.
      *
@@ -5946,6 +6813,29 @@ open func accountNip65Relays(accountRef: String)throws  -> [String]  {
         FfiConverterString.lower(accountRef),$0
     )
 })
+}
+
+    /**
+     * The account's recovery status: the groups whose history is still
+     * being fetched, whether the inbox's is, and every notice as
+     * `history_notices` lists them. Refresh on `RecoveryStatusChanged`.
+     * The recovery runner supplies the catching-up groups and inbox.
+     */
+open func accountRecoveryStatus(accountRef: String)async throws  -> AccountRecoveryStatusFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_account_recovery_status(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAccountRecoveryStatusFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
     /**
@@ -6092,6 +6982,28 @@ open func acknowledgeOnboardingSingleDeviceInEpoch(accountRef: String, revision:
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Answer the unrecognized sign-in in `slot_id_hex`. `Reject` records it
+     * in the device group's roster, now or once that is possible. `Dismiss`
+     * only ends a prompt another device already answered.
+     */
+open func answerSignIn(accountRef: String, slotIdHex: String, response: SignInResponseFfi)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_answer_sign_in(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(slotIdHex),FfiConverterTypeSignInResponseFfi_lower(response)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -6336,6 +7248,66 @@ open func auditLogSettings()throws  -> AuditLogSettingsFfi  {
 }
 
     /**
+     * Private words-again hints for this CURRENT chat; metadata never creates membership.
+     */
+open func backupHistoryAvailability(accountRef: String, groupIdHex: String)async throws  -> [BackupHistoryAvailabilityFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_backup_history_availability(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeBackupHistoryAvailabilityFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Read aggregate progress; Complete is eligible work settled, not global completeness.
+     */
+open func backupRestoreStatus(accountRef: String)async throws  -> BackupRestoreStatusFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_backup_restore_status(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeBackupRestoreStatusFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Current selected account settings, not confirmation or publication history.
+     */
+open func backupSettings(accountRef: String)async throws  -> BackupSettingsFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_backup_settings(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeBackupSettingsFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Revoke automatic permission before evaluating new host network policy.
      */
 open func beginAttachmentPermissionUpdate(accountRef: String)async throws  -> String  {
@@ -6351,6 +7323,28 @@ open func beginAttachmentPermissionUpdate(accountRef: String)async throws  -> St
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Start one manual history-only restore. Words move immediately into the
+     * redacted core guard; managed/generated input copies remain host-owned.
+     * This never changes the current recovery key or joins/re-adds a chat.
+     */
+open func beginBackupRestore(accountRef: String, words: String)async throws  -> BackupRestoreStatusFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_begin_backup_restore(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(words)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeBackupRestoreStatusFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -6388,6 +7382,27 @@ open func beginOnboarding(nsec: String, options: OnboardingOptionsFfi)async thro
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Generate new backup recovery words for one confirmation flow. Show once;
+     * never persist/log them. This is separate from restoring with old words.
+     */
+open func beginRecoveryWords(accountRef: String)async throws  -> RecoveryWordsFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_begin_recovery_words(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeRecoveryWordsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -6469,6 +7484,72 @@ open func cachedPublicEventPreviews(accountRef: String, references: [String])thr
 }
 
     /**
+     * Cancel only the named operation. A stale valid token returns false;
+     * malformed tokens are InvalidHex. Committed history remains.
+     */
+open func cancelBackupRestore(accountRef: String, operation: String)async throws  -> Bool  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_cancel_backup_restore(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(operation)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * On the new device: cancel the link.
+     */
+open func cancelDeviceLink(accountRef: String)async throws  -> DeviceLinkSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_cancel_device_link(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Cancel this account's blocked leave, on this device only. Offer it
+     * while `GroupManagementStateFfi::can_cancel_leave` holds: the leave is
+     * blocked because this account is the group's last active admin. The
+     * chat reads as joined again, and the account can send. Any other state
+     * returns `MarmotKitError::LeaveNotBlocked`. With experimental device
+     * groups on, the account's other devices keep their own blocked leaves.
+     */
+open func cancelLeave(accountRef: String, groupIdHex: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_cancel_leave(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Cancel the current interactive onboarding attempt at any step, including
      * approved or ready checkpoints. The identity stays signed out. Already
      * journaled evidence is retained in the latest cancellation checkpoint;
@@ -6511,6 +7592,26 @@ open func cancelOnboardingRepair(accountRef: String)async throws  -> OnboardingS
 }
 
     /**
+     * Forget the pending confirmation flow; never changes current backups.
+     */
+open func cancelRecoveryWords(accountRef: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_cancel_recovery_words(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Replace this account's selection; accepted open polls remain votable after reclassification.
      */
 open func castPollVote(accountRef: String, groupIdHex: String, pollEventId: String, optionIds: [String])async throws  -> SendSummaryFfi  {
@@ -6548,6 +7649,33 @@ open func catchUpAccounts()async throws   {
 }
 
     /**
+     * The held chats whose history from another of this account's devices
+     * is arriving or has arrived: `Receiving` while a delivery waits to be
+     * imported, with `retrying` once an attempt to get its bundle failed,
+     * then `Imported` with the device it came from and when. Facts only: an
+     * empty history sends nothing, and an expired delivery leaves nothing.
+     * Empty while device groups are off. Refresh on
+     * `ChatHistoryImportsChanged`, which also fires when a source device is
+     * renamed or removed.
+     */
+open func chatHistoryImports(accountRef: String)async throws  -> [ChatHistoryImportFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_chat_history_imports(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeChatHistoryImportFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Durable chat-list rows for fast app launch. Rows include the group
      * title/avatar, last kind-9 preview, unread count, and read anchors.
      */
@@ -6558,6 +7686,52 @@ open func chatList(accountRef: String, includeArchived: Bool)throws  -> [ChatLis
         FfiConverterBool.lower(includeArchived),$0
     )
 })
+}
+
+    /**
+     * Select all: every chat ID in `view`. Same as `chat_list_query_ids` with
+     * an unfiltered query.
+     */
+open func chatListIds(accountRef: String, view: ChatListViewFfi)async throws  -> [String]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_chat_list_ids(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeChatListViewFfi_lower(view)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceString.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Select all: every chat ID `query` matches, in display order, including
+     * chats beyond any open window; the count is the list length. Fails with
+     * `ChatPresentationNotReady`, never a partial list, while base rows, the
+     * presentation a `Text` node reads, or the retained deletions and edits a
+     * `MessageText` node reads are still being prepared; retry later. Unlike
+     * a window, this accepts `MessageText`.
+     */
+open func chatListQueryIds(accountRef: String, query: ChatListViewQueryFfi)async throws  -> [String]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_chat_list_query_ids(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeChatListViewQueryFfi_lower(query)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceString.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
     /**
@@ -6589,6 +7763,59 @@ open func chatNotificationSettings(accountRef: String, groupIdHex: String)throws
         FfiConverterString.lower(groupIdHex),$0
     )
 })
+}
+
+    /**
+     * How many chats this device is in can't take any device of this
+     * account, linked or not: they don't require
+     * `marmot.group.account-devices.v1`, name no relays a sibling Welcome
+     * can carry, or already hold this account's limit of 20 leaves (mdk#2628
+     * item 3.5c). Once a link this device approved is made, the new device
+     * is added to this device's other chats when its "add to all my chats"
+     * setting is on, for a week after the link. A chat that can take
+     * this account's devices but whose requirements the new device's
+     * KeyPackages don't meet is passed over and not counted, so zero
+     * does not mean the new device reaches every chat. A chat admin can
+     * turn the component on; removing a device frees its leaves.
+     * Zero until this device trusts a device group, and always zero without explicit dev capability and runtime intent. Read it when
+     * showing the device list; it is not evented.
+     */
+open func chatsClosedToLinkedDevices(accountRef: String)async throws  -> UInt32  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_chats_closed_to_linked_devices(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_u32,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_u32,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_u32,
+            liftFunc: FfiConverterUInt32.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Check the account's KeyPackage slots for new sign-ins now and return
+     * the list after the check. A read that reached no relay fails.
+     */
+open func checkSignIns(accountRef: String)async throws  -> [UnrecognizedSignInFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_check_sign_ins(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeUnrecognizedSignInFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
     /**
@@ -6699,6 +7926,31 @@ open func collectNotificationsAfterWake(maxWaitMs: UInt32, source: NotificationW
 }
 
     /**
+     * The account's open compromise warning on this device: each item the
+     * user has not seen here, the earliest gathered first. Empty when no
+     * warning is open. An item means someone holding the account's signing
+     * key, or a session with its remote signer, published where the
+     * account's devices did not. The app writes the wording, and never says
+     * the account's devices stopped them. Always empty without explicit dev capability and runtime intent. Refresh on `CompromiseWarningChanged`.
+     */
+open func compromiseWarning(accountRef: String)async throws  -> [CompromiseWarningItemFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_compromise_warning(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeCompromiseWarningItemFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Install (`Some`) or clear (`None`) the moderation-report destination at runtime.
      * An invalid config is rejected whole and leaves reporting unconfigured.
      */
@@ -6707,6 +7959,26 @@ open func configureModerationReporting(config: ModerationReportConfigFfi?)throws
         FfiConverterOptionTypeModerationReportConfigFfi.lower(config),$0
     )
 }
+}
+
+    /**
+     * On the new device: the user says both screens show the same emoji.
+     */
+open func confirmDeviceLinkMatch(accountRef: String)async throws  -> DeviceLinkSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_confirm_device_link_match(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
     /**
@@ -6726,6 +7998,27 @@ open func confirmGroupRejoin(accountRef: String, welcomeIdHex: String, localStat
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeGroupRecoveryStatusFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Confirm the two words at MDK's positions, in order. A busy/error result
+     * keeps the core confirmation flow; hosts clear their managed input copies.
+     */
+open func confirmRecoveryWords(accountRef: String, answers: [String])async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_confirm_recovery_words(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterSequenceString.lower(answers)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -7036,6 +8329,26 @@ open func createPoll(accountRef: String, groupIdHex: String, question: String, o
         )
 }
 
+    /**
+     * On a device already signed in: Not now.
+     */
+open func declineDeviceLink(accountRef: String, promptId: String)async throws  -> DeviceLinkSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_decline_device_link(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(promptId)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
 open func declineGroupInvite(accountRef: String, groupIdHex: String)async throws  -> GroupInviteDeclineResultFfi  {
     return
         try  await uniffiRustCallAsync(
@@ -7230,6 +8543,28 @@ open func demoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef:
 }
 
     /**
+     * Linking as this device shows it now: its own new-device link, if
+     * any, and the prompts for sign-ins it can link. Re-read on
+     * `DeviceLinkChanged`.
+     */
+open func deviceLinkSnapshot(accountRef: String)async throws  -> DeviceLinkSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_device_link_snapshot(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Durably accept an irreversible disband request. Completion is observed
      * through normal group state updates after bounded convergence.
      */
@@ -7246,6 +8581,49 @@ open func disbandGroup(accountRef: String, groupIdHex: String)async throws  -> D
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeDisbandRequestFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Dismiss the compromise warning on this device: everything it gathers
+     * now is seen here, and it stays closed until something new arrives.
+     * Other devices' warnings are unchanged.
+     */
+open func dismissCompromiseWarning(accountRef: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_dismiss_compromise_warning(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Dismiss one old-sibling recognition hint from `snapshot.moves`.
+     * Local presentation only; never links or rejects that slot.
+     */
+open func dismissDeviceGroupMoveSibling(accountRef: String, moveId: String, slotIdHex: String)async throws  -> DeviceLinkSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_dismiss_device_group_move_sibling(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(moveId),FfiConverterString.lower(slotIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -7449,6 +8827,72 @@ open func editMessage(accountRef: String, groupIdHex: String, targetMessageId: S
 }
 
     /**
+     * Read one stored set by coordinate or `naddr`. Local only; the read
+     * runs off the caller's thread.
+     */
+open func emojiSet(accountRef: String, coordinate: String)async throws  -> EmojiSetFfi?  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_emoji_set(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(coordinate)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeEmojiSetFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Read stored emoji sets, or only installed ones in install order.
+     * `search` matches title, description, author (hex or `npub`) and
+     * shortcodes. Local only; the read runs off the caller's thread.
+     */
+open func emojiSets(accountRef: String, installedOnly: Bool, search: String?, limit: UInt32?)async throws  -> [EmojiSetFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_emoji_sets(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterBool.lower(installedOnly),FfiConverterOptionString.lower(search),FfiConverterOptionUInt32.lower(limit)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeEmojiSetFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Turn on account-devices in one admin Commit. Call it only when the user
+     * asks; it can never be turned off. Refused with
+     * `AccountDevicesActivationRefused` unless `account_devices_activation`
+     * would answer `Eligible`.
+     */
+open func enableAccountDevices(accountRef: String, groupIdHex: String)async throws  -> GroupMutationResultFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_enable_account_devices(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeGroupMutationResultFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Install lifecycle-v1 and require it in one admin Commit.
      */
 open func enableGroupDisbanding(accountRef: String, groupIdHex: String)async throws  -> GroupMutationResultFfi  {
@@ -7527,6 +8971,110 @@ open func exportEncryptedSecretKey(accountRef: String, passphrase: String)throws
         FfiConverterString.lower(passphrase),$0
     )
 })
+}
+
+    /**
+     * Fetch one set from a pasted coordinate or `naddr` (up to 8 of its
+     * relay hints are tried). Text only.
+     */
+open func fetchEmojiSet(accountRef: String, input: String)async throws  -> EmojiSetFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_fetch_emoji_set(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(input)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeEmojiSetFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Download one emoji of a stored set for a preview. Reveals the user's
+     * IP address to the image host the set author chose: call only after
+     * the user opens the set. `expected_event_id_hex` is the version shown;
+     * another stored version fails with `EmojiSetChanged` before any
+     * download. Nothing is stored.
+     */
+open func fetchEmojiSetAsset(accountRef: String, coordinate: String, expectedEventIdHex: String, shortcode: String)async throws  -> EmojiSetAssetFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_fetch_emoji_set_asset(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(coordinate),FfiConverterString.lower(expectedEventIdHex),FfiConverterString.lower(shortcode)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeEmojiSetAssetFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Download a stored set's cover image (`image_url`) under the emoji
+     * image limits. Reveals the user's IP address to the host the set
+     * author chose: call only after the user opens the set, with the shown
+     * version's `event_id_hex` (`EmojiSetChanged` otherwise, before any
+     * download). A set without a cover fails with `EmojiSetNotFound`.
+     * Nothing is stored.
+     */
+open func fetchEmojiSetCover(accountRef: String, coordinate: String, expectedEventIdHex: String)async throws  -> EmojiSetCoverFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_fetch_emoji_set_cover(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(coordinate),FfiConverterString.lower(expectedEventIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeEmojiSetCoverFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func fetchStickerAsset(accountRef: String, stickerRef: StickerRefFfi)async throws  -> StickerAssetFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_fetch_sticker_asset(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeStickerRefFfi_lower(stickerRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeStickerAssetFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func fetchStickerPack(accountRef: String, input: String)async throws  -> StickerPackFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_fetch_sticker_pack(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(input)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeStickerPackFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
 open func flushProductAnalytics()async throws   {
@@ -7683,7 +9231,8 @@ open func groupConversationSnapshot(accountRef: String, groupIdHex: String)async
 }
 
     /**
-     * Group plus enriched member rows for detail screens.
+     * Group plus enriched member rows for detail screens, one per member
+     * account.
      */
 open func groupDetails(accountRef: String, groupIdHex: String)async throws  -> GroupDetailsFfi  {
     return
@@ -7744,9 +9293,9 @@ open func groupManagementState(accountRef: String, groupIdHex: String)async thro
      *
      * This is the chat-projection companion read: it is one worker command,
      * performs no profile enrichment, and fails the whole page if any group
-     * is unknown or quarantined. Each row includes member and admin
-     * identifiers so recipient-selection screens do not need a per-group
-     * `group_roster` fanout.
+     * is unknown or quarantined. Each row includes member account and admin
+     * identifiers, each account once, so recipient-selection screens do not
+     * need a per-group `group_roster` fanout.
      */
 open func groupMemberIdsPage(accountRef: String, groupIdsHex: [String])async throws  -> [AppGroupMemberIdsFfi]  {
     return
@@ -7766,7 +9315,8 @@ open func groupMemberIdsPage(accountRef: String, groupIdsHex: [String])async thr
 }
 
     /**
-     * Membership roster for `group_id_hex`.
+     * Membership roster for `group_id_hex`: one row per member account, with
+     * how many of its devices are in the group.
      */
 open func groupMembers(accountRef: String, groupIdHex: String)async throws  -> [AppGroupMemberRecordFfi]  {
     return
@@ -7846,7 +9396,8 @@ open func groupRecoveryStatus(accountRef: String, groupIdHex: String)async throw
 }
 
     /**
-     * Lightweight membership roster projection for membership screens.
+     * Lightweight membership roster projection for membership screens: one
+     * entry per member account, and `member_count` counts accounts.
      */
 open func groupRoster(accountRef: String, groupIdHex: String)async throws  -> GroupRosterFfi  {
     return
@@ -7888,6 +9439,29 @@ open func historyNotices(accountRef: String)async throws  -> [HistoryNoticeFfi] 
 }
 
     /**
+     * Validate a canonical Signal pack link, then refuse before any network
+     * call. The pinned importer cannot be address-pinned, so this command
+     * does not download, upload, or publish. External-signer rejection is
+     * unchanged for a future pinned fetch.
+     */
+open func importSignalStickerPack(accountRef: String, signalLink: String, blossomServer: String?)async throws  -> StickerImportResultFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_import_signal_sticker_pack(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(signalLink),FfiConverterOptionString.lower(blossomServer)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeStickerImportResultFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Establish the unread baseline the first time a user opens a group.
      * Existing kind-9 history remains read; later remote kind-9 messages count
      * until marked visible via `mark_timeline_message_read`.
@@ -7899,6 +9473,74 @@ open func initializeChatReadState(accountRef: String, groupIdHex: String)throws 
         FfiConverterString.lower(groupIdHex),$0
     )
 })
+}
+
+    /**
+     * Download every emoji of the stored set version once, validate it and
+     * store its bytes and SHA-256 under the account. Reveals the user's IP
+     * address to each image host in the set: call only after the user taps
+     * Install. `expected_event_id_hex` is the `event_id_hex` of the version
+     * the user was shown (also when reinstalling for `update_available`):
+     * if another version is stored the call fails with `EmojiSetChanged`
+     * before any download, and with nothing stored it fails with
+     * `EmojiSetNotFound` (fetch with `fetch_emoji_set` first). `control`
+     * reports progress and cancels; a cancelled install fails with
+     * `EmojiSetInstallCancelled` and stores nothing.
+     */
+open func installEmojiSet(accountRef: String, coordinate: String, expectedEventIdHex: String, control: EmojiSetInstallControlFfi)async throws  -> EmojiSetInstallResultFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_install_emoji_set(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(coordinate),FfiConverterString.lower(expectedEventIdHex),FfiConverterTypeEmojiSetInstallControlFfi_lower(control)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeEmojiSetInstallResultFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func installStickerPack(accountRef: String, input: String)async throws  -> StickerPackFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_install_sticker_pack(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(input)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeStickerPackFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Every installed emoji, in set install order then set order, for a
+     * picker. Shortcode collisions between sets are flagged, not resolved.
+     * Local only; the read runs off the caller's thread.
+     */
+open func installedCustomEmoji(accountRef: String)async throws  -> [InstalledCustomEmojiFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_installed_custom_emoji(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeInstalledCustomEmojiFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
     /**
@@ -8037,6 +9679,30 @@ open func keyPackageMaintenanceStatus(accountRef: String)async throws  -> KeyPac
 }
 
     /**
+     * Whether this device's KeyPackage refresh is overdue because its
+     * device group can't take the announcement that must come first. While
+     * it is, warn the user: after 30 days inviters stop treating this device
+     * as fresh. Always false until this device trusts a device group, and without explicit dev capability and runtime intent. Refresh on
+     * `KeyPackageRefreshOverdueChanged`.
+     */
+open func keyPackageRefreshOverdue(accountRef: String)async throws  -> Bool  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_key_package_refresh_overdue(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Retained attachments, largest first, `limit` (1..=256) per page,
      * optionally within one chat. Pass the page's `next_cursor` to
      * continue.
@@ -8071,6 +9737,51 @@ open func leaveGroup(accountRef: String, groupIdHex: String)async throws  -> Sen
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * On a device already signed in: Link device. `label` is the name the
+     * user gave the new device, at most 64 bytes. Offer both settings on by
+     * default: `add_to_all_chats` adds it to the chats this account's
+     * devices are in, and `bring_history` brings it those chats' history.
+     */
+open func linkDevice(accountRef: String, promptId: String, label: String, addToAllChats: Bool, bringHistory: Bool)async throws  -> DeviceLinkSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_link_device(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(promptId),FfiConverterString.lower(label),FfiConverterBool.lower(addToAllChats),FfiConverterBool.lower(bringHistory)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * This account's own devices, from the roster of the device group this
+     * device trusts: this device first, then by when each was linked. Empty
+     * until this device trusts a device group, and always empty without explicit dev capability and runtime intent. Refresh on `LinkedDevicesChanged`.
+     */
+open func linkedDevices(accountRef: String)async throws  -> [LinkedDeviceFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_linked_devices(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeLinkedDeviceFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -8470,7 +10181,34 @@ open func openAttachmentHandoff(accountRef: String, groupIdHex: String, target: 
 }
 
     /**
+     * A live window over every chat `query` matches. The filter runs in SQL
+     * before paging, so chats beyond the window still count. A chat enters or
+     * leaves the window as soon as a fact its filter tests changes. None
+     * defaults to 50 rows; explicit sizes must be 1–100. An invalid query fails
+     * with `InvalidChatListQuery`, a malformed group ID with `InvalidHex`. A
+     * window does not accept a `MessageText` node (`MessageTextInWindow`);
+     * use `chat_list_query_ids`.
+     */
+open func openChatListQueryWindow(accountRef: String, query: ChatListViewQueryFfi, initialRows: UInt32?)async throws  -> ChatListWindowSubscription  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_open_chat_list_query_window(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeChatListViewQueryFfi_lower(query),FfiConverterOptionUInt32.lower(initialRows)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            liftFunc: FfiConverterTypeChatListWindowSubscription_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Bind to one account/view. None defaults to 50; explicit sizes must be 1–100.
+     * Same as `open_chat_list_query_window` with an unfiltered query.
      */
 open func openChatListWindow(accountRef: String, view: ChatListViewFfi, initialRows: UInt32?)async throws  -> ChatListWindowSubscription  {
     return
@@ -8558,6 +10296,30 @@ open func pauseMaintenance(accountRef: String)async throws   {
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
             liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Canonical creates or confirmed Adds whose Welcome is still owed, oldest first. The coarse
+     * size class is a best-effort diagnosis, never a terminal verdict. The
+     * pending notice is once per process/Welcome; re-read this query for later
+     * causes. Coarse legacy retries may replace a specific cause with None
+     * (Unknown) while the same repair handle and debt remain.
+     */
+open func pendingWelcomeDeliveries(accountRef: String)async throws  -> [PendingWelcomeDeliveryFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_pending_welcome_deliveries(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypePendingWelcomeDeliveryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -9063,7 +10825,8 @@ open func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId
 
     /**
      * React with a custom emoji image: `attachments` become `imeta` tags on
-     * the kind-7 and `tags` name them (NIP-30 `emoji`).
+     * the kind-7 and `tags` name them (NIP-30 `emoji`). Preserve each upload's
+     * local `source_epoch_identity`; a changed branch requires a fresh upload.
      */
 open func reactWithMedia(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String, tags: [[String]], attachments: [MediaAttachmentReferenceFfi])async throws  -> SendSummaryFfi  {
     return
@@ -9078,6 +10841,28 @@ open func reactWithMedia(accountRef: String, groupIdHex: String, targetMessageId
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Resolve one active custom-emoji reaction's matching encrypted artwork.
+     * This bounded local read starts no download. Use the returned original
+     * source slot with attachment acquisition and opaque local reads.
+     */
+open func reactionAttachment(accountRef: String, groupIdHex: String, reactionMessageIdHex: String)async throws  -> AttachmentEntryFfi?  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_reaction_attachment(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(reactionMessageIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeAttachmentEntryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -9122,6 +10907,28 @@ open func readAvatarAssets(accountRef: String, references: [String], maxBytes: U
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAvatarBytesFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * An installed emoji's stored bytes, checked against their SHA-256.
+     * Local only: never touches the network. The read and the hash run off
+     * the caller's thread.
+     */
+open func readInstalledCustomEmoji(accountRef: String, coordinate: String, shortcode: String)async throws  -> InstalledCustomEmojiAssetFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_read_installed_custom_emoji(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(coordinate),FfiConverterString.lower(shortcode)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeInstalledCustomEmojiAssetFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -9400,6 +11207,35 @@ open func removeChatAttachments(accountRef: String, groupIdHex: String)async thr
         )
 }
 
+    /**
+     * Remove another of this account's devices, by its `slot_id_hex` from
+     * `linked_devices`, from the device group and every chat, and delete
+     * its KeyPackage slot so inviters stop adding it. The decision is
+     * recorded at once and carried out as the device group allows;
+     * `linked_devices` shows the device with `removal_pending` until the
+     * device group takes it. Refused with `DeviceGroupRefused`:
+     * `roster_unsupported` (device groups unavailable for this client), `no_device_group`,
+     * `unknown_device`, `this_device` (sign out instead),
+     * `device_link_pending` while the device's link may still fail, or
+     * `roster_unavailable`. Refresh on `LinkedDevicesChanged`.
+     */
+open func removeLinkedDevice(accountRef: String, slotIdHex: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_remove_linked_device(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(slotIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
 open func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [String])async throws  -> SendSummaryFfi  {
     return
         try  await uniffiRustCallAsync(
@@ -9430,6 +11266,60 @@ open func removeMembersDetailed(accountRef: String, groupIdHex: String, memberRe
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeGroupMutationResultFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * How many chats this device is in still hold a device this account no
+     * longer has, because the chat doesn't take a same-account removal; a
+     * chat admin can remove it. The device is one this account removed, or
+     * one its device group stopped listing, as after a failed link. Zero
+     * until this device trusts a device group, and always zero without explicit dev capability and runtime intent. Read it when showing the
+     * device list; it is not evented.
+     */
+open func removedDeviceLeftoverChats(accountRef: String)async throws  -> UInt32  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_removed_device_leftover_chats(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_u32,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_u32,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_u32,
+            liftFunc: FfiConverterUInt32.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Rename one of this account's devices, this one included, by its
+     * `slot_id_hex` from `linked_devices`: one roster commit in the device
+     * group. Any device may rename any device. The label is at most 64
+     * bytes of UTF-8; empty clears it. Refused with `DeviceGroupRefused`:
+     * `roster_unsupported` (device groups unavailable for this client), `label_too_long`,
+     * `no_device_group`, `unknown_device`, `roster_unavailable`, or
+     * `device_group_busy` while the device group has an earlier change in
+     * flight (retry later). A rename whose commit loses a fork is made again
+     * on a later maintenance pass, unless another user edit of that device won;
+     * refresh on `LinkedDevicesChanged`.
+     */
+open func renameLinkedDevice(accountRef: String, slotIdHex: String, label: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_rename_linked_device(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(slotIdHex),FfiConverterString.lower(label)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -9619,6 +11509,30 @@ open func requestExplicitAttachment(accountRef: String, groupIdHex: String, targ
 }
 
     /**
+     * User-controlled local device-group reset before fresh code pairing.
+     * Keeps credentials, slot and ordinary data; abandons old link-bound
+     * preparation, not shared state/security sync. No membership repair/removal. Busy
+     * native work/pairing/Move can refuse indefinitely; cancellation after
+     * reset does not restore old trust. Requires explicit experimental gates.
+     */
+open func resetDeviceGroupForRepair(accountRef: String)async throws  -> DeviceLinkSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_reset_device_group_for_repair(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Remove only the legacy ambiguous partial-account shape so a subsequent
      * `login` with the same nsec can recreate it. The acknowledgement is
      * required because old local state cannot prove that no KeyPackage was
@@ -9776,6 +11690,50 @@ open func retryOnboardingStep(accountRef: String, step: OnboardingStepFfi)async 
 }
 
     /**
+     * The subset of `group_ids` still in `view`. Same as
+     * `revalidate_chat_list_query_ids` with an unfiltered query.
+     */
+open func revalidateChatListIds(accountRef: String, view: ChatListViewFfi, groupIds: [String])async throws  -> [String]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_revalidate_chat_list_ids(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeChatListViewFfi_lower(view),FfiConverterSequenceString.lower(groupIds)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceString.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * The subset of `group_ids` still matching `query`, in the caller's order
+     * with duplicates dropped. Only removes; chats that matched since are never
+     * added. Call it right before a bulk action, then run the existing per-chat
+     * commands, which still check their own preconditions.
+     */
+open func revalidateChatListQueryIds(accountRef: String, query: ChatListViewQueryFfi, groupIds: [String])async throws  -> [String]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_revalidate_chat_list_query_ids(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeChatListViewQueryFfi_lower(query),FfiConverterSequenceString.lower(groupIds)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceString.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Export the active account's raw private key in canonical `nsec1...`
      * bech32 form for an in-app key-backup display (mdk#543).
      *
@@ -9816,6 +11774,29 @@ open func rotateKeyPackage(accountRef: String)async throws  -> UInt64  {
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
             liftFunc: FfiConverterUInt64.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Join the current background pass or try due admission once. Finished
+     * means its serialized settlement attempt ended, not successful publication.
+     * Host cancellation detaches this wait; worker stop closes it. The host
+     * bounds its OS-task lifetime. This neither forces work nor waits for future due work.
+     */
+open func runDueBackupPass(accountRef: String)async throws  -> BackgroundBackupOutcomeFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_run_due_backup_pass(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeBackgroundBackupOutcomeFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -10019,10 +12000,10 @@ open func selfDemoteAdminDetailed(accountRef: String, groupIdHex: String)async t
     /**
      * Send an app-defined event with an arbitrary non-reserved kind. `tags`
      * and `content` pass through verbatim; kinds MDK owns (chat, reaction,
-     * edit, delete, agent, group system, push token) are rejected so an app
-     * cannot forge protocol events. Custom events appear in the timeline as
-     * standalone rows and can be fetched via [`Marmot::messages`] with a
-     * `kinds` filter.
+     * edit, delete, agent, group system, push token, device group: 457, 458, 459,
+     * 460, 461, 473, 475, 476) are rejected so an app cannot forge protocol
+     * events. Custom events appear in the timeline as standalone rows and can
+     * be fetched via [`Marmot::messages`] with a `kinds` filter.
      */
 open func sendCustomEvent(accountRef: String, groupIdHex: String, kind: UInt64, tags: [[String]], content: String)async throws  -> SendSummaryFfi  {
     return
@@ -10043,7 +12024,8 @@ open func sendCustomEvent(accountRef: String, groupIdHex: String, kind: UInt64, 
 
     /**
      * Send already-uploaded encrypted media attachments as a kind-9 chat
-     * carrying ordered NIP-92 `imeta` tags.
+     * carrying ordered NIP-92 `imeta` tags. Preserve each upload's local
+     * `source_epoch_identity`; references without provenance need a fresh upload.
      */
 open func sendMediaAttachments(accountRef: String, groupIdHex: String, attachments: [MediaAttachmentReferenceFfi], caption: String?)async throws  -> SendSummaryFfi  {
     return
@@ -10147,8 +12129,31 @@ open func sendPreparedMediaWithClientToken(accountRef: String, groupIdHex: Strin
 }
 
     /**
+     * Send a Sonar sticker as a kind-9 message carrying the immutable
+     * coordinate/shortcode/plaintext-hash reference. Native storage must
+     * currently authorize the exact reference before the send is accepted.
+     */
+open func sendSticker(accountRef: String, groupIdHex: String, stickerRef: StickerRefFfi)async throws  -> SendSummaryFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_send_sticker(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterTypeStickerRefFfi_lower(stickerRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * `send_media_attachments` plus application tags on the same kind-9
      * event, e.g. NIP-30 `emoji` tags pointing at these attachments.
+     * Preserve each upload's local `source_epoch_identity`.
      */
 open func sendTaggedMedia(accountRef: String, groupIdHex: String, attachments: [MediaAttachmentReferenceFfi], caption: String?, tags: [[String]])async throws  -> SendSummaryFfi  {
     return
@@ -10389,6 +12394,27 @@ open func setAuditOtlpConfigV5(config: AuditOtlpConfigV5Ffi)throws  -> AuditOtlp
 }
 
     /**
+     * Compatibility wrapper for the runtime-wide report. Validates the
+     * existing active account first and never starts a worker.
+     */
+open func setBackupBackgroundConditions(accountRef: String, wifi: Bool, charging: Bool)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_set_backup_background_conditions(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterBool.lower(wifi),FfiConverterBool.lower(charging)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Set or clear a manual unread reminder without moving the durable
      * timeline read marker backwards.
      */
@@ -10594,6 +12620,28 @@ open func setRelayTelemetrySettings(settings: RelayTelemetrySettingsFfi)async th
 }
 
     /**
+     * Report platform facts once per runtime, before workers exist and on
+     * changes. Same-runtime worker restarts retain them; a new runtime is closed.
+     * This starts no account worker. Admitted passes settle after false.
+     */
+open func setRuntimeBackupBackgroundConditions(wifi: Bool, charging: Bool)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_set_runtime_backup_background_conditions(
+                    self.uniffiClonePointer(),
+                    FfiConverterBool.lower(wifi),FfiConverterBool.lower(charging)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Enable or revoke bounded process-local capture. No database, upload or consent setting is changed.
      */
 open func setStartupDiagnosticsEnabled(enabled: Bool)throws   {try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
@@ -10711,9 +12759,9 @@ open func signInAccount(accountRef: String)async throws  -> AccountSummaryFfi  {
     /**
      * Non-destructive sign-out: deactivate the account on this device and,
      * when `delete_key_packages` is `true` (the default behavior in the UI),
-     * publish kind:5 deletions for its relay-published KeyPackages so
-     * strangers cannot gift-wrap a Welcome into a new group while it is signed
-     * out.
+     * publish one kind:5 deletion for this device's KeyPackage slot so
+     * nobody can add this device to a new group while it is signed out. The
+     * account's other devices keep their KeyPackages.
      *
      * Unlike [`sign_out_and_wipe`](Self::sign_out_and_wipe) /
      * [`remove_account`](Self::remove_account), this keeps ALL local state on
@@ -10745,12 +12793,17 @@ open func signOut(accountRef: String, deleteKeyPackages: Bool)async throws  -> S
 
     /**
      * Destructive sign-out: leave every active MLS group (best-effort), delete
-     * the account's relay-published KeyPackages, then wipe all local state for
+     * this device's relay-published KeyPackage slot, then wipe all local state for
      * this account (MLS state DB, cached media/secrets, SQL account row, and
      * the secret-store nsec). After this returns the account ref is no longer
      * valid for any further FFI call. The returned `WipeOutcomeFfi` reports
      * each stage independently so the app can show progress and a
-     * partial-failure sheet (mdk#478).
+     * partial-failure sheet (mdk#478). In a device group, it first asks the
+     * account's other devices to take it out, which can take about 30
+     * seconds, and leaves them the chats they can take it out of
+     * (mdk#2628). It keeps running when the call is cancelled. A sibling
+     * that sees its `leaving` entry takes it out later, on its own time,
+     * whatever the host does.
      */
 open func signOutAndWipe(accountRef: String)async throws  -> WipeOutcomeFfi  {
     return
@@ -10852,11 +12905,104 @@ open func startAgentTextStream(accountRef: String, groupIdHex: String, streamIdH
 }
 
     /**
+     * On a new device: ask a device of this account already signed in to
+     * link this one. With existing trust, this moves only this device;
+     * `snapshot.moves` distinguishes Joining from Made. Show "waiting"
+     * until the snapshot's `new_device` shows
+     * the code. Refresh on `DeviceLinkChanged`.
+     */
+open func startDeviceLink(accountRef: String)async throws  -> DeviceLinkSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_start_device_link(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Start this device without the devices its first check found ("No,
+     * start fresh"): each sign-in from before this device is answered Not
+     * now, now and when one is listed later. It rejects nothing and raises
+     * no warning, so one of those devices can still link this one. Fails
+     * before the first check and once this device trusts a device group.
+     */
+open func startFresh(accountRef: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_start_fresh(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Whether this device started fresh and still has no device group, so
+     * the app can say that only chats it is invited to from now on are here.
+     * Always false without explicit dev capability and runtime intent.
+     */
+open func startedFresh(accountRef: String)async throws  -> Bool  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_started_fresh(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Snapshot fixed native phases and migration progress without account/keystore/storage queries.
      */
 open func startupDiagnosticsSnapshot()throws  -> NativeStartupSnapshotFfi  {
     return try  FfiConverterTypeNativeStartupSnapshotFfi_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
     uniffi_marmot_uniffi_fn_method_marmot_startup_diagnostics_snapshot(self.uniffiClonePointer(),$0
+    )
+})
+}
+
+open func stickerPack(accountRef: String, input: String)throws  -> StickerPackFfi?  {
+    return try  FfiConverterOptionTypeStickerPackFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_sticker_pack(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),
+        FfiConverterString.lower(input),$0
+    )
+})
+}
+
+    /**
+     * Read the encrypted native sticker projection. Call off the UI thread.
+     */
+open func stickerPacks(accountRef: String, installedOnly: Bool, search: String?, limit: UInt32?)throws  -> [StickerPackFfi]  {
+    return try  FfiConverterSequenceTypeStickerPackFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_sticker_packs(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),
+        FfiConverterBool.lower(installedOnly),
+        FfiConverterOptionString.lower(search),
+        FfiConverterOptionUInt32.lower(limit),$0
     )
 })
 }
@@ -11112,6 +13258,45 @@ open func sweepExpiredRetention(accountRef: String, nowMs: UInt64)async throws  
 }
 
     /**
+     * Fetch the 60 newest kind-30030 sets from the account's relays. Text
+     * only: never fetches an image. A `search` that is an `npub` or hex
+     * public key narrows the fetch to that author.
+     */
+open func syncEmojiSets(accountRef: String, search: String?)async throws  -> EmojiSetSyncResultFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_sync_emoji_sets(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterOptionString.lower(search)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeEmojiSetSyncResultFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func syncStickerPacks(accountRef: String)async throws  -> StickerSyncResultFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_sync_sticker_packs(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeStickerSyncResultFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Consent-bound random OTLP identifier, stable until revocation. Requires
      * a current combined grant; never use this value in product events.
      */
@@ -11145,6 +13330,26 @@ open func timelineMessages(accountRef: String, query: TimelineMessageQueryFfi)th
         FfiConverterTypeTimelineMessageQueryFfi_lower(query),$0
     )
 })
+}
+
+    /**
+     * Disable future account backups. Previously written archives remain.
+     */
+open func turnOffBackups(accountRef: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_turn_off_backups(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
 open func unblockUser(accountRef: String, userAccountIdHex: String)async throws   {
@@ -11190,6 +13395,44 @@ open func unfollowUser(accountRef: String, userRef: String)async throws  -> [Str
 }
 
     /**
+     * Remove an installed set and its stored bytes. Returns whether it was
+     * installed. Local only.
+     */
+open func uninstallEmojiSet(accountRef: String, coordinate: String)async throws  -> Bool  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_uninstall_emoji_set(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(coordinate)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func uninstallStickerPack(accountRef: String, input: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_uninstall_sticker_pack(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(input)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Remove all of this account's active reactions from `target_message_id`.
      */
 open func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessageId: String)async throws  -> SendSummaryFfi  {
@@ -11205,6 +13448,30 @@ open func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessa
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Sign-ins of this account that this device does not recognize, the
+     * earliest to appear first. For one that is `before_this_device`, ask
+     * whether the user still has it; for any other, ask whether it was them.
+     * Always empty without explicit dev capability and runtime intent. Refresh
+     * on `UnrecognizedSignInsChanged`.
+     */
+open func unrecognizedSignIns(accountRef: String)async throws  -> [UnrecognizedSignInFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_unrecognized_sign_ins(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeUnrecognizedSignInFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -11291,6 +13558,33 @@ open func updateGroupProfile(accountRef: String, groupIdHex: String, name: Strin
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Patch a linked device's settings, including this device. None keeps a
+     * value from the current roster. Add-to-all permits the linked-device Add flow;
+     * off does not leave chats. History affects future sibling Adds and
+     * transfers still owed, without backfill of chats already joined. Keep
+     * prevents automatic inactivity removal, not explicit removal or sign-out.
+     * Earlier lost edits recover first; `device_group_busy` asks for a retry
+     * while they settle. Other refusals match `rename_linked_device` without
+     * label validation. Refresh on `LinkedDevicesChanged`.
+     */
+open func updateLinkedDeviceSettings(accountRef: String, slotIdHex: String, addToAllChats: Bool?, bringHistory: Bool?, keepWhileInactive: Bool?)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_update_linked_device_settings(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(slotIdHex),FfiConverterOptionBool.lower(addToAllChats),FfiConverterOptionBool.lower(bringHistory),FfiConverterOptionBool.lower(keepWhileInactive)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -11494,6 +13788,27 @@ open func usageDiagnosticsStatus()throws  -> UsageDiagnosticsStatusFfi  {
 }
 
     /**
+     * Read the account's own kind-10030 emoji list and the sets it points
+     * to, as suggestions. Text only. MDK never publishes or edits this list.
+     */
+open func userEmojiList(accountRef: String)async throws  -> UserEmojiListFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_user_emoji_list(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeUserEmojiListFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Full cached Nostr kind:0 profile for an account id (name, display
      * name, about, picture, nip05, lud16), if the runtime has one
      * projected. The local account's own profile is cached immediately
@@ -11570,6 +13885,27 @@ open func watchAgentTextStream(accountRef: String, groupIdHex: String, streamIdH
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
             liftFunc: FfiConverterTypeAgentStreamSubscription_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * One initial snapshot and subsequent status/availability revision wakes.
+     * Closing this observer does not cancel the restore operation.
+     */
+open func watchBackupRestore(accountRef: String)async throws  -> BackupRestoreSubscription  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_watch_backup_restore(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            liftFunc: FfiConverterTypeBackupRestoreSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -14243,6 +16579,109 @@ public func FfiConverterTypeAccountKeyPackageRelayEventFfi_lower(_ value: Accoun
 }
 
 
+/**
+ * The account's recovery: what is still being fetched, and every "history
+ * may be incomplete" notice. Re-read on `RecoveryStatusChanged`; the recovery
+ * runner supplies the groups and inbox whose history it is still fetching.
+ */
+public struct AccountRecoveryStatusFfi {
+    /**
+     * Groups whose history is still being fetched, as lowercase hex group
+     * ids, sorted.
+     */
+    public var catchingUpGroupIdsHex: [String]
+    /**
+     * The account inbox's history (Welcomes) is still being fetched.
+     */
+    public var inboxCatchingUp: Bool
+    /**
+     * Every current notice, as `history_notices` lists them.
+     */
+    public var notices: [HistoryNoticeFfi]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Groups whose history is still being fetched, as lowercase hex group
+         * ids, sorted.
+         */catchingUpGroupIdsHex: [String],
+        /**
+         * The account inbox's history (Welcomes) is still being fetched.
+         */inboxCatchingUp: Bool,
+        /**
+         * Every current notice, as `history_notices` lists them.
+         */notices: [HistoryNoticeFfi]) {
+        self.catchingUpGroupIdsHex = catchingUpGroupIdsHex
+        self.inboxCatchingUp = inboxCatchingUp
+        self.notices = notices
+    }
+}
+
+#if compiler(>=6)
+extension AccountRecoveryStatusFfi: Sendable {}
+#endif
+
+
+extension AccountRecoveryStatusFfi: Equatable, Hashable {
+    public static func ==(lhs: AccountRecoveryStatusFfi, rhs: AccountRecoveryStatusFfi) -> Bool {
+        if lhs.catchingUpGroupIdsHex != rhs.catchingUpGroupIdsHex {
+            return false
+        }
+        if lhs.inboxCatchingUp != rhs.inboxCatchingUp {
+            return false
+        }
+        if lhs.notices != rhs.notices {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(catchingUpGroupIdsHex)
+        hasher.combine(inboxCatchingUp)
+        hasher.combine(notices)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAccountRecoveryStatusFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AccountRecoveryStatusFfi {
+        return
+            try AccountRecoveryStatusFfi(
+                catchingUpGroupIdsHex: FfiConverterSequenceString.read(from: &buf),
+                inboxCatchingUp: FfiConverterBool.read(from: &buf),
+                notices: FfiConverterSequenceTypeHistoryNoticeFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AccountRecoveryStatusFfi, into buf: inout [UInt8]) {
+        FfiConverterSequenceString.write(value.catchingUpGroupIdsHex, into: &buf)
+        FfiConverterBool.write(value.inboxCatchingUp, into: &buf)
+        FfiConverterSequenceTypeHistoryNoticeFfi.write(value.notices, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountRecoveryStatusFfi_lift(_ buf: RustBuffer) throws -> AccountRecoveryStatusFfi {
+    return try FfiConverterTypeAccountRecoveryStatusFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountRecoveryStatusFfi_lower(_ value: AccountRecoveryStatusFfi) -> RustBuffer {
+    return FfiConverterTypeAccountRecoveryStatusFfi.lower(value)
+}
+
+
 public struct AccountRelayListsFfi {
     public var complete: Bool
     public var missing: [MissingRelayListKindFfi]
@@ -14352,16 +16791,28 @@ public struct AccountSummaryFfi {
     public var externalSigning: Bool
     public var signedOut: Bool
     public var running: Bool
+    /**
+     * The account's device group removed this device after its link was
+     * made; the account stays signed out here. Show that this device was
+     * unlinked and offer `sign_out_and_wipe` (mdk#2628 D67).
+     */
+    public var unlinked: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(label: String, accountIdHex: String, localSigning: Bool, externalSigning: Bool, signedOut: Bool, running: Bool) {
+    public init(label: String, accountIdHex: String, localSigning: Bool, externalSigning: Bool, signedOut: Bool, running: Bool,
+        /**
+         * The account's device group removed this device after its link was
+         * made; the account stays signed out here. Show that this device was
+         * unlinked and offer `sign_out_and_wipe` (mdk#2628 D67).
+         */unlinked: Bool) {
         self.label = label
         self.accountIdHex = accountIdHex
         self.localSigning = localSigning
         self.externalSigning = externalSigning
         self.signedOut = signedOut
         self.running = running
+        self.unlinked = unlinked
     }
 }
 
@@ -14390,6 +16841,9 @@ extension AccountSummaryFfi: Equatable, Hashable {
         if lhs.running != rhs.running {
             return false
         }
+        if lhs.unlinked != rhs.unlinked {
+            return false
+        }
         return true
     }
 
@@ -14400,6 +16854,7 @@ extension AccountSummaryFfi: Equatable, Hashable {
         hasher.combine(externalSigning)
         hasher.combine(signedOut)
         hasher.combine(running)
+        hasher.combine(unlinked)
     }
 }
 
@@ -14417,7 +16872,8 @@ public struct FfiConverterTypeAccountSummaryFfi: FfiConverterRustBuffer {
                 localSigning: FfiConverterBool.read(from: &buf),
                 externalSigning: FfiConverterBool.read(from: &buf),
                 signedOut: FfiConverterBool.read(from: &buf),
-                running: FfiConverterBool.read(from: &buf)
+                running: FfiConverterBool.read(from: &buf),
+                unlinked: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -14428,6 +16884,7 @@ public struct FfiConverterTypeAccountSummaryFfi: FfiConverterRustBuffer {
         FfiConverterBool.write(value.externalSigning, into: &buf)
         FfiConverterBool.write(value.signedOut, into: &buf)
         FfiConverterBool.write(value.running, into: &buf)
+        FfiConverterBool.write(value.unlinked, into: &buf)
     }
 }
 
@@ -14915,17 +17372,29 @@ public func FfiConverterTypeAppGroupMemberIdsFfi_lower(_ value: AppGroupMemberId
 }
 
 
+/**
+ * One member account. An account with several devices in the group is one
+ * record.
+ */
 public struct AppGroupMemberRecordFfi {
     public var memberIdHex: String
     public var account: String?
     public var local: Bool
+    /**
+     * How many of this account's devices are in the group.
+     */
+    public var deviceCount: UInt32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(memberIdHex: String, account: String?, local: Bool) {
+    public init(memberIdHex: String, account: String?, local: Bool,
+        /**
+         * How many of this account's devices are in the group.
+         */deviceCount: UInt32 = UInt32(1)) {
         self.memberIdHex = memberIdHex
         self.account = account
         self.local = local
+        self.deviceCount = deviceCount
     }
 }
 
@@ -14945,6 +17414,9 @@ extension AppGroupMemberRecordFfi: Equatable, Hashable {
         if lhs.local != rhs.local {
             return false
         }
+        if lhs.deviceCount != rhs.deviceCount {
+            return false
+        }
         return true
     }
 
@@ -14952,6 +17424,7 @@ extension AppGroupMemberRecordFfi: Equatable, Hashable {
         hasher.combine(memberIdHex)
         hasher.combine(account)
         hasher.combine(local)
+        hasher.combine(deviceCount)
     }
 }
 
@@ -14966,7 +17439,8 @@ public struct FfiConverterTypeAppGroupMemberRecordFfi: FfiConverterRustBuffer {
             try AppGroupMemberRecordFfi(
                 memberIdHex: FfiConverterString.read(from: &buf),
                 account: FfiConverterOptionString.read(from: &buf),
-                local: FfiConverterBool.read(from: &buf)
+                local: FfiConverterBool.read(from: &buf),
+                deviceCount: FfiConverterUInt32.read(from: &buf)
         )
     }
 
@@ -14974,6 +17448,7 @@ public struct FfiConverterTypeAppGroupMemberRecordFfi: FfiConverterRustBuffer {
         FfiConverterString.write(value.memberIdHex, into: &buf)
         FfiConverterOptionString.write(value.account, into: &buf)
         FfiConverterBool.write(value.local, into: &buf)
+        FfiConverterUInt32.write(value.deviceCount, into: &buf)
     }
 }
 
@@ -15013,6 +17488,12 @@ public struct AppGroupMlsStateFfi {
     public var disbanding: Bool
     public var disbandingBlockers: [String]
     public var disbandRequest: DisbandRequestFfi?
+    /**
+     * Convergence stopped retrying a batch that kept failing. New input from
+     * another member or `retry_group_convergence` resumes it; sends stay
+     * queued meanwhile.
+     */
+    public var convergenceParked: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -15020,7 +17501,12 @@ public struct AppGroupMlsStateFfi {
         /**
          * True while application messages and all other ordinary outbound group
          * work are gated pending terminal convergence.
-         */disbanding: Bool, disbandingBlockers: [String], disbandRequest: DisbandRequestFfi?) {
+         */disbanding: Bool, disbandingBlockers: [String], disbandRequest: DisbandRequestFfi?,
+        /**
+         * Convergence stopped retrying a batch that kept failing. New input from
+         * another member or `retry_group_convergence` resumes it; sends stay
+         * queued meanwhile.
+         */convergenceParked: Bool = false) {
         self.groupIdHex = groupIdHex
         self.protocolProfile = protocolProfile
         self.lifecycleState = lifecycleState
@@ -15032,6 +17518,7 @@ public struct AppGroupMlsStateFfi {
         self.disbanding = disbanding
         self.disbandingBlockers = disbandingBlockers
         self.disbandRequest = disbandRequest
+        self.convergenceParked = convergenceParked
     }
 }
 
@@ -15075,6 +17562,9 @@ extension AppGroupMlsStateFfi: Equatable, Hashable {
         if lhs.disbandRequest != rhs.disbandRequest {
             return false
         }
+        if lhs.convergenceParked != rhs.convergenceParked {
+            return false
+        }
         return true
     }
 
@@ -15090,6 +17580,7 @@ extension AppGroupMlsStateFfi: Equatable, Hashable {
         hasher.combine(disbanding)
         hasher.combine(disbandingBlockers)
         hasher.combine(disbandRequest)
+        hasher.combine(convergenceParked)
     }
 }
 
@@ -15112,7 +17603,8 @@ public struct FfiConverterTypeAppGroupMlsStateFfi: FfiConverterRustBuffer {
                 disbandingEnabled: FfiConverterBool.read(from: &buf),
                 disbanding: FfiConverterBool.read(from: &buf),
                 disbandingBlockers: FfiConverterSequenceString.read(from: &buf),
-                disbandRequest: FfiConverterOptionTypeDisbandRequestFfi.read(from: &buf)
+                disbandRequest: FfiConverterOptionTypeDisbandRequestFfi.read(from: &buf),
+                convergenceParked: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -15128,6 +17620,7 @@ public struct FfiConverterTypeAppGroupMlsStateFfi: FfiConverterRustBuffer {
         FfiConverterBool.write(value.disbanding, into: &buf)
         FfiConverterSequenceString.write(value.disbandingBlockers, into: &buf)
         FfiConverterOptionTypeDisbandRequestFfi.write(value.disbandRequest, into: &buf)
+        FfiConverterBool.write(value.convergenceParked, into: &buf)
     }
 }
 
@@ -15207,6 +17700,12 @@ public struct AppGroupRecordFfi {
      */
     public var leaveRequestedAtMs: UInt64?
     /**
+     * The pending leave is blocked: this account is the group's last active
+     * admin, so the leave cannot finish. Keep rendering it as leaving, and
+     * offer `Marmot::cancel_leave`. Only true while `leave_request_pending`.
+     */
+    public var leaveBlocked: Bool
+    /**
      * Hide/disable the message composer while this is true. It includes both
      * this account's durable request and another admin's authenticated
      * terminal candidate awaiting convergence.
@@ -15265,6 +17764,11 @@ public struct AppGroupRecordFfi {
          * epoch; `null` when no leave is pending.
          */leaveRequestedAtMs: UInt64?,
         /**
+         * The pending leave is blocked: this account is the group's last active
+         * admin, so the leave cannot finish. Keep rendering it as leaving, and
+         * offer `Marmot::cancel_leave`. Only true while `leave_request_pending`.
+         */leaveBlocked: Bool,
+        /**
          * Hide/disable the message composer while this is true. It includes both
          * this account's durable request and another admin's authenticated
          * terminal candidate awaiting convergence.
@@ -15297,6 +17801,7 @@ public struct AppGroupRecordFfi {
         self.selfMembership = selfMembership
         self.leaveRequestPending = leaveRequestPending
         self.leaveRequestedAtMs = leaveRequestedAtMs
+        self.leaveBlocked = leaveBlocked
         self.disbanding = disbanding
         self.disbandRequest = disbandRequest
         self.disbanded = disbanded
@@ -15375,6 +17880,9 @@ extension AppGroupRecordFfi: Equatable, Hashable {
         if lhs.leaveRequestedAtMs != rhs.leaveRequestedAtMs {
             return false
         }
+        if lhs.leaveBlocked != rhs.leaveBlocked {
+            return false
+        }
         if lhs.disbanding != rhs.disbanding {
             return false
         }
@@ -15415,6 +17923,7 @@ extension AppGroupRecordFfi: Equatable, Hashable {
         hasher.combine(selfMembership)
         hasher.combine(leaveRequestPending)
         hasher.combine(leaveRequestedAtMs)
+        hasher.combine(leaveBlocked)
         hasher.combine(disbanding)
         hasher.combine(disbandRequest)
         hasher.combine(disbanded)
@@ -15453,6 +17962,7 @@ public struct FfiConverterTypeAppGroupRecordFfi: FfiConverterRustBuffer {
                 selfMembership: FfiConverterTypeSelfMembershipFfi.read(from: &buf),
                 leaveRequestPending: FfiConverterBool.read(from: &buf),
                 leaveRequestedAtMs: FfiConverterOptionUInt64.read(from: &buf),
+                leaveBlocked: FfiConverterBool.read(from: &buf),
                 disbanding: FfiConverterBool.read(from: &buf),
                 disbandRequest: FfiConverterOptionTypeDisbandRequestFfi.read(from: &buf),
                 disbanded: FfiConverterBool.read(from: &buf),
@@ -15483,6 +17993,7 @@ public struct FfiConverterTypeAppGroupRecordFfi: FfiConverterRustBuffer {
         FfiConverterTypeSelfMembershipFfi.write(value.selfMembership, into: &buf)
         FfiConverterBool.write(value.leaveRequestPending, into: &buf)
         FfiConverterOptionUInt64.write(value.leaveRequestedAtMs, into: &buf)
+        FfiConverterBool.write(value.leaveBlocked, into: &buf)
         FfiConverterBool.write(value.disbanding, into: &buf)
         FfiConverterOptionTypeDisbandRequestFfi.write(value.disbandRequest, into: &buf)
         FfiConverterBool.write(value.disbanded, into: &buf)
@@ -15522,6 +18033,7 @@ public struct AppMessageRecordFfi {
      * Nostr `tags` of the inner Marmot app event.
      */
     public var tags: [MessageTagFfi]
+    public var sticker: StickerRefFfi?
     public var sourceEpoch: UInt64?
     /**
      * `None` means no recoverable source-epoch decision (legacy/safe retain).
@@ -15546,7 +18058,7 @@ public struct AppMessageRecordFfi {
          */kind: UInt64,
         /**
          * Nostr `tags` of the inner Marmot app event.
-         */tags: [MessageTagFfi], sourceEpoch: UInt64?,
+         */tags: [MessageTagFfi], sticker: StickerRefFfi?, sourceEpoch: UInt64?,
         /**
          * `None` means no recoverable source-epoch decision (legacy/safe retain).
          * `Some(0)` means retention was explicitly disabled.
@@ -15565,6 +18077,7 @@ public struct AppMessageRecordFfi {
         self.contentTokens = contentTokens
         self.kind = kind
         self.tags = tags
+        self.sticker = sticker
         self.sourceEpoch = sourceEpoch
         self.retentionSeconds = retentionSeconds
         self.retentionExpiresAt = retentionExpiresAt
@@ -15604,6 +18117,9 @@ extension AppMessageRecordFfi: Equatable, Hashable {
         if lhs.tags != rhs.tags {
             return false
         }
+        if lhs.sticker != rhs.sticker {
+            return false
+        }
         if lhs.sourceEpoch != rhs.sourceEpoch {
             return false
         }
@@ -15631,6 +18147,7 @@ extension AppMessageRecordFfi: Equatable, Hashable {
         hasher.combine(contentTokens)
         hasher.combine(kind)
         hasher.combine(tags)
+        hasher.combine(sticker)
         hasher.combine(sourceEpoch)
         hasher.combine(retentionSeconds)
         hasher.combine(retentionExpiresAt)
@@ -15656,6 +18173,7 @@ public struct FfiConverterTypeAppMessageRecordFfi: FfiConverterRustBuffer {
                 contentTokens: FfiConverterTypeMarkdownDocumentFfi.read(from: &buf),
                 kind: FfiConverterUInt64.read(from: &buf),
                 tags: FfiConverterSequenceTypeMessageTagFfi.read(from: &buf),
+                sticker: FfiConverterOptionTypeStickerRefFfi.read(from: &buf),
                 sourceEpoch: FfiConverterOptionUInt64.read(from: &buf),
                 retentionSeconds: FfiConverterOptionUInt64.read(from: &buf),
                 retentionExpiresAt: FfiConverterOptionUInt64.read(from: &buf),
@@ -15673,6 +18191,7 @@ public struct FfiConverterTypeAppMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterTypeMarkdownDocumentFfi.write(value.contentTokens, into: &buf)
         FfiConverterUInt64.write(value.kind, into: &buf)
         FfiConverterSequenceTypeMessageTagFfi.write(value.tags, into: &buf)
+        FfiConverterOptionTypeStickerRefFfi.write(value.sticker, into: &buf)
         FfiConverterOptionUInt64.write(value.sourceEpoch, into: &buf)
         FfiConverterOptionUInt64.write(value.retentionSeconds, into: &buf)
         FfiConverterOptionUInt64.write(value.retentionExpiresAt, into: &buf)
@@ -18937,6 +21456,368 @@ public func FfiConverterTypeBackgroundNotificationCollectionFfi_lower(_ value: B
 }
 
 
+/**
+ * Private availability metadata for a current chat, not proof that any
+ * blob remains downloadable or that account history is complete.
+ */
+public struct BackupHistoryAvailabilityFfi {
+    public var recoveryPublicKeyHex: String
+    public var newestWrittenAt: UInt64
+    public var backups: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(recoveryPublicKeyHex: String, newestWrittenAt: UInt64, backups: UInt32) {
+        self.recoveryPublicKeyHex = recoveryPublicKeyHex
+        self.newestWrittenAt = newestWrittenAt
+        self.backups = backups
+    }
+}
+
+#if compiler(>=6)
+extension BackupHistoryAvailabilityFfi: Sendable {}
+#endif
+
+
+extension BackupHistoryAvailabilityFfi: Equatable, Hashable {
+    public static func ==(lhs: BackupHistoryAvailabilityFfi, rhs: BackupHistoryAvailabilityFfi) -> Bool {
+        if lhs.recoveryPublicKeyHex != rhs.recoveryPublicKeyHex {
+            return false
+        }
+        if lhs.newestWrittenAt != rhs.newestWrittenAt {
+            return false
+        }
+        if lhs.backups != rhs.backups {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(recoveryPublicKeyHex)
+        hasher.combine(newestWrittenAt)
+        hasher.combine(backups)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBackupHistoryAvailabilityFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BackupHistoryAvailabilityFfi {
+        return
+            try BackupHistoryAvailabilityFfi(
+                recoveryPublicKeyHex: FfiConverterString.read(from: &buf),
+                newestWrittenAt: FfiConverterUInt64.read(from: &buf),
+                backups: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BackupHistoryAvailabilityFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.recoveryPublicKeyHex, into: &buf)
+        FfiConverterUInt64.write(value.newestWrittenAt, into: &buf)
+        FfiConverterUInt32.write(value.backups, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupHistoryAvailabilityFfi_lift(_ buf: RustBuffer) throws -> BackupHistoryAvailabilityFfi {
+    return try FfiConverterTypeBackupHistoryAvailabilityFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupHistoryAvailabilityFfi_lower(_ value: BackupHistoryAvailabilityFfi) -> RustBuffer {
+    return FfiConverterTypeBackupHistoryAvailabilityFfi.lower(value)
+}
+
+
+/**
+ * Identity of an archive, not proof of original writer/authorship or past membership.
+ */
+public struct BackupHistorySourceFfi {
+    public var recoveryPublicKeyHex: String
+    public var backupIdHex: String
+    public var headSha256Hex: String
+    public var writtenAt: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(recoveryPublicKeyHex: String, backupIdHex: String, headSha256Hex: String, writtenAt: UInt64) {
+        self.recoveryPublicKeyHex = recoveryPublicKeyHex
+        self.backupIdHex = backupIdHex
+        self.headSha256Hex = headSha256Hex
+        self.writtenAt = writtenAt
+    }
+}
+
+#if compiler(>=6)
+extension BackupHistorySourceFfi: Sendable {}
+#endif
+
+
+extension BackupHistorySourceFfi: Equatable, Hashable {
+    public static func ==(lhs: BackupHistorySourceFfi, rhs: BackupHistorySourceFfi) -> Bool {
+        if lhs.recoveryPublicKeyHex != rhs.recoveryPublicKeyHex {
+            return false
+        }
+        if lhs.backupIdHex != rhs.backupIdHex {
+            return false
+        }
+        if lhs.headSha256Hex != rhs.headSha256Hex {
+            return false
+        }
+        if lhs.writtenAt != rhs.writtenAt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(recoveryPublicKeyHex)
+        hasher.combine(backupIdHex)
+        hasher.combine(headSha256Hex)
+        hasher.combine(writtenAt)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBackupHistorySourceFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BackupHistorySourceFfi {
+        return
+            try BackupHistorySourceFfi(
+                recoveryPublicKeyHex: FfiConverterString.read(from: &buf),
+                backupIdHex: FfiConverterString.read(from: &buf),
+                headSha256Hex: FfiConverterString.read(from: &buf),
+                writtenAt: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BackupHistorySourceFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.recoveryPublicKeyHex, into: &buf)
+        FfiConverterString.write(value.backupIdHex, into: &buf)
+        FfiConverterString.write(value.headSha256Hex, into: &buf)
+        FfiConverterUInt64.write(value.writtenAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupHistorySourceFfi_lift(_ buf: RustBuffer) throws -> BackupHistorySourceFfi {
+    return try FfiConverterTypeBackupHistorySourceFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupHistorySourceFfi_lower(_ value: BackupHistorySourceFfi) -> RustBuffer {
+    return FfiConverterTypeBackupHistorySourceFfi.lower(value)
+}
+
+
+/**
+ * Aggregate facts, never words, keys, content or a restore receipt.
+ */
+public struct BackupRestoreStatusFfi {
+    public var operation: String?
+    public var phase: BackupRestorePhaseFfi
+    public var importedBundles: UInt64
+    public var importedEvents: UInt64
+    public var failedArchives: UInt64
+    public var failedBundles: UInt64
+    public var skippedBundles: UInt64
+    public var revision: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(operation: String?, phase: BackupRestorePhaseFfi, importedBundles: UInt64, importedEvents: UInt64, failedArchives: UInt64, failedBundles: UInt64, skippedBundles: UInt64, revision: UInt64) {
+        self.operation = operation
+        self.phase = phase
+        self.importedBundles = importedBundles
+        self.importedEvents = importedEvents
+        self.failedArchives = failedArchives
+        self.failedBundles = failedBundles
+        self.skippedBundles = skippedBundles
+        self.revision = revision
+    }
+}
+
+#if compiler(>=6)
+extension BackupRestoreStatusFfi: Sendable {}
+#endif
+
+
+extension BackupRestoreStatusFfi: Equatable, Hashable {
+    public static func ==(lhs: BackupRestoreStatusFfi, rhs: BackupRestoreStatusFfi) -> Bool {
+        if lhs.operation != rhs.operation {
+            return false
+        }
+        if lhs.phase != rhs.phase {
+            return false
+        }
+        if lhs.importedBundles != rhs.importedBundles {
+            return false
+        }
+        if lhs.importedEvents != rhs.importedEvents {
+            return false
+        }
+        if lhs.failedArchives != rhs.failedArchives {
+            return false
+        }
+        if lhs.failedBundles != rhs.failedBundles {
+            return false
+        }
+        if lhs.skippedBundles != rhs.skippedBundles {
+            return false
+        }
+        if lhs.revision != rhs.revision {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(operation)
+        hasher.combine(phase)
+        hasher.combine(importedBundles)
+        hasher.combine(importedEvents)
+        hasher.combine(failedArchives)
+        hasher.combine(failedBundles)
+        hasher.combine(skippedBundles)
+        hasher.combine(revision)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBackupRestoreStatusFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BackupRestoreStatusFfi {
+        return
+            try BackupRestoreStatusFfi(
+                operation: FfiConverterOptionString.read(from: &buf),
+                phase: FfiConverterTypeBackupRestorePhaseFfi.read(from: &buf),
+                importedBundles: FfiConverterUInt64.read(from: &buf),
+                importedEvents: FfiConverterUInt64.read(from: &buf),
+                failedArchives: FfiConverterUInt64.read(from: &buf),
+                failedBundles: FfiConverterUInt64.read(from: &buf),
+                skippedBundles: FfiConverterUInt64.read(from: &buf),
+                revision: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BackupRestoreStatusFfi, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.operation, into: &buf)
+        FfiConverterTypeBackupRestorePhaseFfi.write(value.phase, into: &buf)
+        FfiConverterUInt64.write(value.importedBundles, into: &buf)
+        FfiConverterUInt64.write(value.importedEvents, into: &buf)
+        FfiConverterUInt64.write(value.failedArchives, into: &buf)
+        FfiConverterUInt64.write(value.failedBundles, into: &buf)
+        FfiConverterUInt64.write(value.skippedBundles, into: &buf)
+        FfiConverterUInt64.write(value.revision, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupRestoreStatusFfi_lift(_ buf: RustBuffer) throws -> BackupRestoreStatusFfi {
+    return try FfiConverterTypeBackupRestoreStatusFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupRestoreStatusFfi_lower(_ value: BackupRestoreStatusFfi) -> RustBuffer {
+    return FfiConverterTypeBackupRestoreStatusFfi.lower(value)
+}
+
+
+public struct BackupSettingsFfi {
+    public var enabled: Bool
+    public var thisDeviceWrites: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(enabled: Bool, thisDeviceWrites: Bool) {
+        self.enabled = enabled
+        self.thisDeviceWrites = thisDeviceWrites
+    }
+}
+
+#if compiler(>=6)
+extension BackupSettingsFfi: Sendable {}
+#endif
+
+
+extension BackupSettingsFfi: Equatable, Hashable {
+    public static func ==(lhs: BackupSettingsFfi, rhs: BackupSettingsFfi) -> Bool {
+        if lhs.enabled != rhs.enabled {
+            return false
+        }
+        if lhs.thisDeviceWrites != rhs.thisDeviceWrites {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(enabled)
+        hasher.combine(thisDeviceWrites)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBackupSettingsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BackupSettingsFfi {
+        return
+            try BackupSettingsFfi(
+                enabled: FfiConverterBool.read(from: &buf),
+                thisDeviceWrites: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BackupSettingsFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.enabled, into: &buf)
+        FfiConverterBool.write(value.thisDeviceWrites, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupSettingsFfi_lift(_ buf: RustBuffer) throws -> BackupSettingsFfi {
+    return try FfiConverterTypeBackupSettingsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupSettingsFfi_lower(_ value: BackupSettingsFfi) -> RustBuffer {
+    return FfiConverterTypeBackupSettingsFfi.lower(value)
+}
+
+
 public struct BlockListSnapshotFfi {
     public var revision: UInt64
     public var users: [BlockedUserFfi]
@@ -19270,6 +22151,80 @@ public func FfiConverterTypeChatAttachmentUsageFfi_lower(_ value: ChatAttachment
 
 
 /**
+ * A held chat whose history from another device is arriving or has
+ * arrived.
+ */
+public struct ChatHistoryImportFfi {
+    public var groupIdHex: String
+    public var state: ChatHistoryImportStateFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(groupIdHex: String, state: ChatHistoryImportStateFfi) {
+        self.groupIdHex = groupIdHex
+        self.state = state
+    }
+}
+
+#if compiler(>=6)
+extension ChatHistoryImportFfi: Sendable {}
+#endif
+
+
+extension ChatHistoryImportFfi: Equatable, Hashable {
+    public static func ==(lhs: ChatHistoryImportFfi, rhs: ChatHistoryImportFfi) -> Bool {
+        if lhs.groupIdHex != rhs.groupIdHex {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(groupIdHex)
+        hasher.combine(state)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatHistoryImportFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatHistoryImportFfi {
+        return
+            try ChatHistoryImportFfi(
+                groupIdHex: FfiConverterString.read(from: &buf),
+                state: FfiConverterTypeChatHistoryImportStateFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ChatHistoryImportFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.groupIdHex, into: &buf)
+        FfiConverterTypeChatHistoryImportStateFfi.write(value.state, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatHistoryImportFfi_lift(_ buf: RustBuffer) throws -> ChatHistoryImportFfi {
+    return try FfiConverterTypeChatHistoryImportFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatHistoryImportFfi_lower(_ value: ChatHistoryImportFfi) -> RustBuffer {
+    return FfiConverterTypeChatHistoryImportFfi.lower(value)
+}
+
+
+/**
  * Group avatar reference. `image_key_hex` is the symmetric key that decrypts
  * the avatar blob and `image_upload_key_hex` is the Blossom upload secret;
  * the hand-written `Debug` impl below redacts both so a Rust-side `{:?}`
@@ -19468,6 +22423,7 @@ public struct ChatListMessagePreviewFfi {
     public var plaintext: String
     public var contentTokens: MarkdownDocumentFfi
     public var kind: UInt64
+    public var sticker: StickerRefFfi?
     public var timelineAt: UInt64
     /**
      * This message's pinned source-epoch retention. `None` is unknown (safe
@@ -19488,7 +22444,7 @@ public struct ChatListMessagePreviewFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(groupSystem: GroupSystemEventFfi?, messageIdHex: String, sender: String, senderDisplayName: String?, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, timelineAt: UInt64,
+    public init(groupSystem: GroupSystemEventFfi?, messageIdHex: String, sender: String, senderDisplayName: String?, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, sticker: StickerRefFfi?, timelineAt: UInt64,
         /**
          * This message's pinned source-epoch retention. `None` is unknown (safe
          * retain); `Some(0)` means retention was explicitly disabled.
@@ -19505,6 +22461,7 @@ public struct ChatListMessagePreviewFfi {
         self.plaintext = plaintext
         self.contentTokens = contentTokens
         self.kind = kind
+        self.sticker = sticker
         self.timelineAt = timelineAt
         self.retentionSeconds = retentionSeconds
         self.retentionExpiresAt = retentionExpiresAt
@@ -19544,6 +22501,9 @@ extension ChatListMessagePreviewFfi: Equatable, Hashable {
         if lhs.kind != rhs.kind {
             return false
         }
+        if lhs.sticker != rhs.sticker {
+            return false
+        }
         if lhs.timelineAt != rhs.timelineAt {
             return false
         }
@@ -19579,6 +22539,7 @@ extension ChatListMessagePreviewFfi: Equatable, Hashable {
         hasher.combine(plaintext)
         hasher.combine(contentTokens)
         hasher.combine(kind)
+        hasher.combine(sticker)
         hasher.combine(timelineAt)
         hasher.combine(retentionSeconds)
         hasher.combine(retentionExpiresAt)
@@ -19606,6 +22567,7 @@ public struct FfiConverterTypeChatListMessagePreviewFfi: FfiConverterRustBuffer 
                 plaintext: FfiConverterString.read(from: &buf),
                 contentTokens: FfiConverterTypeMarkdownDocumentFfi.read(from: &buf),
                 kind: FfiConverterUInt64.read(from: &buf),
+                sticker: FfiConverterOptionTypeStickerRefFfi.read(from: &buf),
                 timelineAt: FfiConverterUInt64.read(from: &buf),
                 retentionSeconds: FfiConverterOptionUInt64.read(from: &buf),
                 retentionExpiresAt: FfiConverterOptionUInt64.read(from: &buf),
@@ -19625,6 +22587,7 @@ public struct FfiConverterTypeChatListMessagePreviewFfi: FfiConverterRustBuffer 
         FfiConverterString.write(value.plaintext, into: &buf)
         FfiConverterTypeMarkdownDocumentFfi.write(value.contentTokens, into: &buf)
         FfiConverterUInt64.write(value.kind, into: &buf)
+        FfiConverterOptionTypeStickerRefFfi.write(value.sticker, into: &buf)
         FfiConverterUInt64.write(value.timelineAt, into: &buf)
         FfiConverterOptionUInt64.write(value.retentionSeconds, into: &buf)
         FfiConverterOptionUInt64.write(value.retentionExpiresAt, into: &buf)
@@ -19873,6 +22836,12 @@ public struct ChatListRowFfi {
      * epoch; `null` when no leave is pending.
      */
     public var leaveRequestedAtMs: UInt64?
+    /**
+     * The pending leave is blocked: this account is the group's last active
+     * admin, so the leave cannot finish until the user cancels it
+     * (`Marmot::cancel_leave`). Only true while `leave_request_pending`.
+     */
+    public var leaveBlocked: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -19928,7 +22897,12 @@ public struct ChatListRowFfi {
         /**
          * When the local account asked to leave, in milliseconds since the Unix
          * epoch; `null` when no leave is pending.
-         */leaveRequestedAtMs: UInt64?) {
+         */leaveRequestedAtMs: UInt64?,
+        /**
+         * The pending leave is blocked: this account is the group's last active
+         * admin, so the leave cannot finish until the user cancels it
+         * (`Marmot::cancel_leave`). Only true while `leave_request_pending`.
+         */leaveBlocked: Bool) {
         self.groupIdHex = groupIdHex
         self.pinned = pinned
         self.pinnedPosition = pinnedPosition
@@ -19959,6 +22933,7 @@ public struct ChatListRowFfi {
         self.mutedUntilMs = mutedUntilMs
         self.leaveRequestPending = leaveRequestPending
         self.leaveRequestedAtMs = leaveRequestedAtMs
+        self.leaveBlocked = leaveBlocked
     }
 }
 
@@ -20059,6 +23034,9 @@ extension ChatListRowFfi: Equatable, Hashable {
         if lhs.leaveRequestedAtMs != rhs.leaveRequestedAtMs {
             return false
         }
+        if lhs.leaveBlocked != rhs.leaveBlocked {
+            return false
+        }
         return true
     }
 
@@ -20093,6 +23071,7 @@ extension ChatListRowFfi: Equatable, Hashable {
         hasher.combine(mutedUntilMs)
         hasher.combine(leaveRequestPending)
         hasher.combine(leaveRequestedAtMs)
+        hasher.combine(leaveBlocked)
     }
 }
 
@@ -20134,7 +23113,8 @@ public struct FfiConverterTypeChatListRowFfi: FfiConverterRustBuffer {
                 muted: FfiConverterBool.read(from: &buf),
                 mutedUntilMs: FfiConverterOptionInt64.read(from: &buf),
                 leaveRequestPending: FfiConverterBool.read(from: &buf),
-                leaveRequestedAtMs: FfiConverterOptionUInt64.read(from: &buf)
+                leaveRequestedAtMs: FfiConverterOptionUInt64.read(from: &buf),
+                leaveBlocked: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -20169,6 +23149,7 @@ public struct FfiConverterTypeChatListRowFfi: FfiConverterRustBuffer {
         FfiConverterOptionInt64.write(value.mutedUntilMs, into: &buf)
         FfiConverterBool.write(value.leaveRequestPending, into: &buf)
         FfiConverterOptionUInt64.write(value.leaveRequestedAtMs, into: &buf)
+        FfiConverterBool.write(value.leaveBlocked, into: &buf)
     }
 }
 
@@ -20185,6 +23166,93 @@ public func FfiConverterTypeChatListRowFfi_lift(_ buf: RustBuffer) throws -> Cha
 #endif
 public func FfiConverterTypeChatListRowFfi_lower(_ value: ChatListRowFfi) -> RustBuffer {
     return FfiConverterTypeChatListRowFfi.lower(value)
+}
+
+
+/**
+ * A chat-list query: a native view narrowed by an optional filter, matched in
+ * SQL over every chat in the view before paging. The live window, select-all
+ * IDs and revalidation all take it, so list, count and selection agree.
+ */
+public struct ChatListViewQueryFfi {
+    public var view: ChatListViewFfi
+    /**
+     * The filter as a flat node list. Empty means no filter (the whole view).
+     * Node 0 is the root; every other node is the child of exactly one node
+     * listed before it. At most 64 nodes, 8 levels, 500 group IDs and 1024
+     * bytes of search text in all.
+     */
+    public var filter: [ChatListFilterNodeFfi]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(view: ChatListViewFfi,
+        /**
+         * The filter as a flat node list. Empty means no filter (the whole view).
+         * Node 0 is the root; every other node is the child of exactly one node
+         * listed before it. At most 64 nodes, 8 levels, 500 group IDs and 1024
+         * bytes of search text in all.
+         */filter: [ChatListFilterNodeFfi]) {
+        self.view = view
+        self.filter = filter
+    }
+}
+
+#if compiler(>=6)
+extension ChatListViewQueryFfi: Sendable {}
+#endif
+
+
+extension ChatListViewQueryFfi: Equatable, Hashable {
+    public static func ==(lhs: ChatListViewQueryFfi, rhs: ChatListViewQueryFfi) -> Bool {
+        if lhs.view != rhs.view {
+            return false
+        }
+        if lhs.filter != rhs.filter {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(view)
+        hasher.combine(filter)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatListViewQueryFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatListViewQueryFfi {
+        return
+            try ChatListViewQueryFfi(
+                view: FfiConverterTypeChatListViewFfi.read(from: &buf),
+                filter: FfiConverterSequenceTypeChatListFilterNodeFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ChatListViewQueryFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeChatListViewFfi.write(value.view, into: &buf)
+        FfiConverterSequenceTypeChatListFilterNodeFfi.write(value.filter, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListViewQueryFfi_lift(_ buf: RustBuffer) throws -> ChatListViewQueryFfi {
+    return try FfiConverterTypeChatListViewQueryFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListViewQueryFfi_lower(_ value: ChatListViewQueryFfi) -> RustBuffer {
+    return FfiConverterTypeChatListViewQueryFfi.lower(value)
 }
 
 
@@ -20489,6 +23557,121 @@ public func FfiConverterTypeChatStoragePageFfi_lower(_ value: ChatStoragePageFfi
 }
 
 
+/**
+ * One thing the open compromise warning gathers.
+ */
+public struct CompromiseWarningItemFfi {
+    public var reason: CompromiseWarningReasonFfi
+    /**
+     * The KeyPackage slot the item names: the rejected sign-in's, or this
+     * device's own for a KeyPackage found there. 64 lowercase hex
+     * characters.
+     */
+    public var slotIdHex: String
+    /**
+     * The found KeyPackage's `KeyPackageRef` in lowercase hex, for
+     * `ForeignOwnSlotKeyPackage`; `None` otherwise.
+     */
+    public var keyPackageRefHex: String?
+    /**
+     * In Unix seconds: when the rejection was made, as the device that made
+     * it wrote it, or when this device found the KeyPackage.
+     */
+    public var occurredAt: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(reason: CompromiseWarningReasonFfi,
+        /**
+         * The KeyPackage slot the item names: the rejected sign-in's, or this
+         * device's own for a KeyPackage found there. 64 lowercase hex
+         * characters.
+         */slotIdHex: String,
+        /**
+         * The found KeyPackage's `KeyPackageRef` in lowercase hex, for
+         * `ForeignOwnSlotKeyPackage`; `None` otherwise.
+         */keyPackageRefHex: String?,
+        /**
+         * In Unix seconds: when the rejection was made, as the device that made
+         * it wrote it, or when this device found the KeyPackage.
+         */occurredAt: UInt64) {
+        self.reason = reason
+        self.slotIdHex = slotIdHex
+        self.keyPackageRefHex = keyPackageRefHex
+        self.occurredAt = occurredAt
+    }
+}
+
+#if compiler(>=6)
+extension CompromiseWarningItemFfi: Sendable {}
+#endif
+
+
+extension CompromiseWarningItemFfi: Equatable, Hashable {
+    public static func ==(lhs: CompromiseWarningItemFfi, rhs: CompromiseWarningItemFfi) -> Bool {
+        if lhs.reason != rhs.reason {
+            return false
+        }
+        if lhs.slotIdHex != rhs.slotIdHex {
+            return false
+        }
+        if lhs.keyPackageRefHex != rhs.keyPackageRefHex {
+            return false
+        }
+        if lhs.occurredAt != rhs.occurredAt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(reason)
+        hasher.combine(slotIdHex)
+        hasher.combine(keyPackageRefHex)
+        hasher.combine(occurredAt)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCompromiseWarningItemFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompromiseWarningItemFfi {
+        return
+            try CompromiseWarningItemFfi(
+                reason: FfiConverterTypeCompromiseWarningReasonFfi.read(from: &buf),
+                slotIdHex: FfiConverterString.read(from: &buf),
+                keyPackageRefHex: FfiConverterOptionString.read(from: &buf),
+                occurredAt: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CompromiseWarningItemFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeCompromiseWarningReasonFfi.write(value.reason, into: &buf)
+        FfiConverterString.write(value.slotIdHex, into: &buf)
+        FfiConverterOptionString.write(value.keyPackageRefHex, into: &buf)
+        FfiConverterUInt64.write(value.occurredAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompromiseWarningItemFfi_lift(_ buf: RustBuffer) throws -> CompromiseWarningItemFfi {
+    return try FfiConverterTypeCompromiseWarningItemFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompromiseWarningItemFfi_lower(_ value: CompromiseWarningItemFfi) -> RustBuffer {
+    return FfiConverterTypeCompromiseWarningItemFfi.lower(value)
+}
+
+
 public struct ContentReportFfi {
     public var reportIdHex: String
     public var messageIdHex: String
@@ -20756,12 +23939,19 @@ public struct ConversationCapabilitiesFfi {
     public var canEditGroup: Bool
     public var canLeave: Bool
     public var requiresSelfDemoteBeforeLeave: Bool
+    /**
+     * Offer Cancel on a blocked leave (`Marmot::cancel_leave`).
+     */
+    public var canCancelLeave: Bool
     public var canEnableDisbanding: Bool
     public var canDisband: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(participation: ConversationParticipationFfi, isSelfAdmin: Bool, isLastAdmin: Bool, canSend: Bool, canInvite: Bool, canEditGroup: Bool, canLeave: Bool, requiresSelfDemoteBeforeLeave: Bool, canEnableDisbanding: Bool, canDisband: Bool) {
+    public init(participation: ConversationParticipationFfi, isSelfAdmin: Bool, isLastAdmin: Bool, canSend: Bool, canInvite: Bool, canEditGroup: Bool, canLeave: Bool, requiresSelfDemoteBeforeLeave: Bool,
+        /**
+         * Offer Cancel on a blocked leave (`Marmot::cancel_leave`).
+         */canCancelLeave: Bool, canEnableDisbanding: Bool, canDisband: Bool) {
         self.participation = participation
         self.isSelfAdmin = isSelfAdmin
         self.isLastAdmin = isLastAdmin
@@ -20770,6 +23960,7 @@ public struct ConversationCapabilitiesFfi {
         self.canEditGroup = canEditGroup
         self.canLeave = canLeave
         self.requiresSelfDemoteBeforeLeave = requiresSelfDemoteBeforeLeave
+        self.canCancelLeave = canCancelLeave
         self.canEnableDisbanding = canEnableDisbanding
         self.canDisband = canDisband
     }
@@ -20806,6 +23997,9 @@ extension ConversationCapabilitiesFfi: Equatable, Hashable {
         if lhs.requiresSelfDemoteBeforeLeave != rhs.requiresSelfDemoteBeforeLeave {
             return false
         }
+        if lhs.canCancelLeave != rhs.canCancelLeave {
+            return false
+        }
         if lhs.canEnableDisbanding != rhs.canEnableDisbanding {
             return false
         }
@@ -20824,6 +24018,7 @@ extension ConversationCapabilitiesFfi: Equatable, Hashable {
         hasher.combine(canEditGroup)
         hasher.combine(canLeave)
         hasher.combine(requiresSelfDemoteBeforeLeave)
+        hasher.combine(canCancelLeave)
         hasher.combine(canEnableDisbanding)
         hasher.combine(canDisband)
     }
@@ -20846,6 +24041,7 @@ public struct FfiConverterTypeConversationCapabilitiesFfi: FfiConverterRustBuffe
                 canEditGroup: FfiConverterBool.read(from: &buf),
                 canLeave: FfiConverterBool.read(from: &buf),
                 requiresSelfDemoteBeforeLeave: FfiConverterBool.read(from: &buf),
+                canCancelLeave: FfiConverterBool.read(from: &buf),
                 canEnableDisbanding: FfiConverterBool.read(from: &buf),
                 canDisband: FfiConverterBool.read(from: &buf)
         )
@@ -20860,6 +24056,7 @@ public struct FfiConverterTypeConversationCapabilitiesFfi: FfiConverterRustBuffe
         FfiConverterBool.write(value.canEditGroup, into: &buf)
         FfiConverterBool.write(value.canLeave, into: &buf)
         FfiConverterBool.write(value.requiresSelfDemoteBeforeLeave, into: &buf)
+        FfiConverterBool.write(value.canCancelLeave, into: &buf)
         FfiConverterBool.write(value.canEnableDisbanding, into: &buf)
         FfiConverterBool.write(value.canDisband, into: &buf)
     }
@@ -22106,6 +25303,461 @@ public func FfiConverterTypeCreatedGroupFfi_lower(_ value: CreatedGroupFfi) -> R
 
 
 /**
+ * Previously linked sibling guidance, never authority to Add or trust it.
+ */
+public struct DeviceGroupMoveSiblingFfi {
+    public var slotIdHex: String
+    public var label: String
+    public var questionSuppressed: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(slotIdHex: String, label: String, questionSuppressed: Bool) {
+        self.slotIdHex = slotIdHex
+        self.label = label
+        self.questionSuppressed = questionSuppressed
+    }
+}
+
+#if compiler(>=6)
+extension DeviceGroupMoveSiblingFfi: Sendable {}
+#endif
+
+
+extension DeviceGroupMoveSiblingFfi: Equatable, Hashable {
+    public static func ==(lhs: DeviceGroupMoveSiblingFfi, rhs: DeviceGroupMoveSiblingFfi) -> Bool {
+        if lhs.slotIdHex != rhs.slotIdHex {
+            return false
+        }
+        if lhs.label != rhs.label {
+            return false
+        }
+        if lhs.questionSuppressed != rhs.questionSuppressed {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(slotIdHex)
+        hasher.combine(label)
+        hasher.combine(questionSuppressed)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceGroupMoveSiblingFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceGroupMoveSiblingFfi {
+        return
+            try DeviceGroupMoveSiblingFfi(
+                slotIdHex: FfiConverterString.read(from: &buf),
+                label: FfiConverterString.read(from: &buf),
+                questionSuppressed: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceGroupMoveSiblingFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.slotIdHex, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterBool.write(value.questionSuppressed, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceGroupMoveSiblingFfi_lift(_ buf: RustBuffer) throws -> DeviceGroupMoveSiblingFfi {
+    return try FfiConverterTypeDeviceGroupMoveSiblingFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceGroupMoveSiblingFfi_lower(_ value: DeviceGroupMoveSiblingFfi) -> RustBuffer {
+    return FfiConverterTypeDeviceGroupMoveSiblingFfi.lower(value)
+}
+
+
+public struct DeviceGroupMoveViewFfi {
+    public var moveId: String
+    public var state: DeviceGroupMoveStateFfi
+    public var oldSiblings: [DeviceGroupMoveSiblingFfi]
+    public var overriddenRejectionSlots: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(moveId: String, state: DeviceGroupMoveStateFfi, oldSiblings: [DeviceGroupMoveSiblingFfi], overriddenRejectionSlots: [String]) {
+        self.moveId = moveId
+        self.state = state
+        self.oldSiblings = oldSiblings
+        self.overriddenRejectionSlots = overriddenRejectionSlots
+    }
+}
+
+#if compiler(>=6)
+extension DeviceGroupMoveViewFfi: Sendable {}
+#endif
+
+
+extension DeviceGroupMoveViewFfi: Equatable, Hashable {
+    public static func ==(lhs: DeviceGroupMoveViewFfi, rhs: DeviceGroupMoveViewFfi) -> Bool {
+        if lhs.moveId != rhs.moveId {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        if lhs.oldSiblings != rhs.oldSiblings {
+            return false
+        }
+        if lhs.overriddenRejectionSlots != rhs.overriddenRejectionSlots {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(moveId)
+        hasher.combine(state)
+        hasher.combine(oldSiblings)
+        hasher.combine(overriddenRejectionSlots)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceGroupMoveViewFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceGroupMoveViewFfi {
+        return
+            try DeviceGroupMoveViewFfi(
+                moveId: FfiConverterString.read(from: &buf),
+                state: FfiConverterTypeDeviceGroupMoveStateFfi.read(from: &buf),
+                oldSiblings: FfiConverterSequenceTypeDeviceGroupMoveSiblingFfi.read(from: &buf),
+                overriddenRejectionSlots: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceGroupMoveViewFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.moveId, into: &buf)
+        FfiConverterTypeDeviceGroupMoveStateFfi.write(value.state, into: &buf)
+        FfiConverterSequenceTypeDeviceGroupMoveSiblingFfi.write(value.oldSiblings, into: &buf)
+        FfiConverterSequenceString.write(value.overriddenRejectionSlots, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceGroupMoveViewFfi_lift(_ buf: RustBuffer) throws -> DeviceGroupMoveViewFfi {
+    return try FfiConverterTypeDeviceGroupMoveViewFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceGroupMoveViewFfi_lower(_ value: DeviceGroupMoveViewFfi) -> RustBuffer {
+    return FfiConverterTypeDeviceGroupMoveViewFfi.lower(value)
+}
+
+
+/**
+ * One emoji of the code.
+ */
+public struct DeviceLinkEmojiFfi {
+    public var emoji: String
+    /**
+     * The emoji's English description, for screen readers. Users compare
+     * the pictures, not the descriptions.
+     */
+    public var description: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(emoji: String,
+        /**
+         * The emoji's English description, for screen readers. Users compare
+         * the pictures, not the descriptions.
+         */description: String) {
+        self.emoji = emoji
+        self.description = description
+    }
+}
+
+#if compiler(>=6)
+extension DeviceLinkEmojiFfi: Sendable {}
+#endif
+
+
+extension DeviceLinkEmojiFfi: Equatable, Hashable {
+    public static func ==(lhs: DeviceLinkEmojiFfi, rhs: DeviceLinkEmojiFfi) -> Bool {
+        if lhs.emoji != rhs.emoji {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(emoji)
+        hasher.combine(description)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceLinkEmojiFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceLinkEmojiFfi {
+        return
+            try DeviceLinkEmojiFfi(
+                emoji: FfiConverterString.read(from: &buf),
+                description: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceLinkEmojiFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.emoji, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkEmojiFfi_lift(_ buf: RustBuffer) throws -> DeviceLinkEmojiFfi {
+    return try FfiConverterTypeDeviceLinkEmojiFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkEmojiFfi_lower(_ value: DeviceLinkEmojiFfi) -> RustBuffer {
+    return FfiConverterTypeDeviceLinkEmojiFfi.lower(value)
+}
+
+
+/**
+ * A new sign-in this device can link, as its prompt shows it.
+ */
+public struct DeviceLinkPromptFfi {
+    /**
+     * Opaque local id that `link_device` and `decline_device_link` take.
+     */
+    public var promptId: String
+    /**
+     * The sign-in's KeyPackage slot, 64 lowercase hex characters, once its
+     * KeyPackage was found.
+     */
+    public var slotIdHex: String?
+    /**
+     * When the request arrived, in Unix seconds.
+     */
+    public var requestedAt: UInt64
+    public var state: DeviceLinkPromptStateFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Opaque local id that `link_device` and `decline_device_link` take.
+         */promptId: String,
+        /**
+         * The sign-in's KeyPackage slot, 64 lowercase hex characters, once its
+         * KeyPackage was found.
+         */slotIdHex: String?,
+        /**
+         * When the request arrived, in Unix seconds.
+         */requestedAt: UInt64, state: DeviceLinkPromptStateFfi) {
+        self.promptId = promptId
+        self.slotIdHex = slotIdHex
+        self.requestedAt = requestedAt
+        self.state = state
+    }
+}
+
+#if compiler(>=6)
+extension DeviceLinkPromptFfi: Sendable {}
+#endif
+
+
+extension DeviceLinkPromptFfi: Equatable, Hashable {
+    public static func ==(lhs: DeviceLinkPromptFfi, rhs: DeviceLinkPromptFfi) -> Bool {
+        if lhs.promptId != rhs.promptId {
+            return false
+        }
+        if lhs.slotIdHex != rhs.slotIdHex {
+            return false
+        }
+        if lhs.requestedAt != rhs.requestedAt {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(promptId)
+        hasher.combine(slotIdHex)
+        hasher.combine(requestedAt)
+        hasher.combine(state)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceLinkPromptFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceLinkPromptFfi {
+        return
+            try DeviceLinkPromptFfi(
+                promptId: FfiConverterString.read(from: &buf),
+                slotIdHex: FfiConverterOptionString.read(from: &buf),
+                requestedAt: FfiConverterUInt64.read(from: &buf),
+                state: FfiConverterTypeDeviceLinkPromptStateFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceLinkPromptFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.promptId, into: &buf)
+        FfiConverterOptionString.write(value.slotIdHex, into: &buf)
+        FfiConverterUInt64.write(value.requestedAt, into: &buf)
+        FfiConverterTypeDeviceLinkPromptStateFfi.write(value.state, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkPromptFfi_lift(_ buf: RustBuffer) throws -> DeviceLinkPromptFfi {
+    return try FfiConverterTypeDeviceLinkPromptFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkPromptFfi_lower(_ value: DeviceLinkPromptFfi) -> RustBuffer {
+    return FfiConverterTypeDeviceLinkPromptFfi.lower(value)
+}
+
+
+/**
+ * Linking as this device shows it: its own new-device link, if any, and
+ * the prompts for sign-ins it can link.
+ */
+public struct DeviceLinkSnapshotFfi {
+    public var newDevice: NewDeviceLinkStateFfi?
+    public var prompts: [DeviceLinkPromptFfi]
+    public var moves: [DeviceGroupMoveViewFfi]
+    /**
+     * This device can no longer catch up with its device group; offer
+     * `reset_device_group_for_repair` followed by fresh pairing.
+     */
+    public var deviceGroupStalled: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(newDevice: NewDeviceLinkStateFfi?, prompts: [DeviceLinkPromptFfi], moves: [DeviceGroupMoveViewFfi],
+        /**
+         * This device can no longer catch up with its device group; offer
+         * `reset_device_group_for_repair` followed by fresh pairing.
+         */deviceGroupStalled: Bool = false) {
+        self.newDevice = newDevice
+        self.prompts = prompts
+        self.moves = moves
+        self.deviceGroupStalled = deviceGroupStalled
+    }
+}
+
+#if compiler(>=6)
+extension DeviceLinkSnapshotFfi: Sendable {}
+#endif
+
+
+extension DeviceLinkSnapshotFfi: Equatable, Hashable {
+    public static func ==(lhs: DeviceLinkSnapshotFfi, rhs: DeviceLinkSnapshotFfi) -> Bool {
+        if lhs.newDevice != rhs.newDevice {
+            return false
+        }
+        if lhs.prompts != rhs.prompts {
+            return false
+        }
+        if lhs.moves != rhs.moves {
+            return false
+        }
+        if lhs.deviceGroupStalled != rhs.deviceGroupStalled {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(newDevice)
+        hasher.combine(prompts)
+        hasher.combine(moves)
+        hasher.combine(deviceGroupStalled)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceLinkSnapshotFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceLinkSnapshotFfi {
+        return
+            try DeviceLinkSnapshotFfi(
+                newDevice: FfiConverterOptionTypeNewDeviceLinkStateFfi.read(from: &buf),
+                prompts: FfiConverterSequenceTypeDeviceLinkPromptFfi.read(from: &buf),
+                moves: FfiConverterSequenceTypeDeviceGroupMoveViewFfi.read(from: &buf),
+                deviceGroupStalled: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceLinkSnapshotFfi, into buf: inout [UInt8]) {
+        FfiConverterOptionTypeNewDeviceLinkStateFfi.write(value.newDevice, into: &buf)
+        FfiConverterSequenceTypeDeviceLinkPromptFfi.write(value.prompts, into: &buf)
+        FfiConverterSequenceTypeDeviceGroupMoveViewFfi.write(value.moves, into: &buf)
+        FfiConverterBool.write(value.deviceGroupStalled, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkSnapshotFfi_lift(_ buf: RustBuffer) throws -> DeviceLinkSnapshotFfi {
+    return try FfiConverterTypeDeviceLinkSnapshotFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkSnapshotFfi_lower(_ value: DeviceLinkSnapshotFfi) -> RustBuffer {
+    return FfiConverterTypeDeviceLinkSnapshotFfi.lower(value)
+}
+
+
+/**
  * One fixed-bucket duration histogram bucket.
  */
 public struct DurationHistogramBucketFfi {
@@ -22287,6 +25939,825 @@ public func FfiConverterTypeDurationHistogramSnapshotFfi_lift(_ buf: RustBuffer)
 #endif
 public func FfiConverterTypeDurationHistogramSnapshotFfi_lower(_ value: DurationHistogramSnapshotFfi) -> RustBuffer {
     return FfiConverterTypeDurationHistogramSnapshotFfi.lower(value)
+}
+
+
+/**
+ * A validated preview image of one emoji. Not stored.
+ */
+public struct EmojiSetAssetFfi {
+    public var setCoordinate: String
+    public var shortcode: String
+    public var mime: String
+    public var width: UInt32
+    public var height: UInt32
+    public var frames: UInt32
+    public var sha256: String
+    public var bytes: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(setCoordinate: String, shortcode: String, mime: String, width: UInt32, height: UInt32, frames: UInt32, sha256: String, bytes: Data) {
+        self.setCoordinate = setCoordinate
+        self.shortcode = shortcode
+        self.mime = mime
+        self.width = width
+        self.height = height
+        self.frames = frames
+        self.sha256 = sha256
+        self.bytes = bytes
+    }
+}
+
+#if compiler(>=6)
+extension EmojiSetAssetFfi: Sendable {}
+#endif
+
+
+extension EmojiSetAssetFfi: Equatable, Hashable {
+    public static func ==(lhs: EmojiSetAssetFfi, rhs: EmojiSetAssetFfi) -> Bool {
+        if lhs.setCoordinate != rhs.setCoordinate {
+            return false
+        }
+        if lhs.shortcode != rhs.shortcode {
+            return false
+        }
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.width != rhs.width {
+            return false
+        }
+        if lhs.height != rhs.height {
+            return false
+        }
+        if lhs.frames != rhs.frames {
+            return false
+        }
+        if lhs.sha256 != rhs.sha256 {
+            return false
+        }
+        if lhs.bytes != rhs.bytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(setCoordinate)
+        hasher.combine(shortcode)
+        hasher.combine(mime)
+        hasher.combine(width)
+        hasher.combine(height)
+        hasher.combine(frames)
+        hasher.combine(sha256)
+        hasher.combine(bytes)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSetAssetFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSetAssetFfi {
+        return
+            try EmojiSetAssetFfi(
+                setCoordinate: FfiConverterString.read(from: &buf),
+                shortcode: FfiConverterString.read(from: &buf),
+                mime: FfiConverterString.read(from: &buf),
+                width: FfiConverterUInt32.read(from: &buf),
+                height: FfiConverterUInt32.read(from: &buf),
+                frames: FfiConverterUInt32.read(from: &buf),
+                sha256: FfiConverterString.read(from: &buf),
+                bytes: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EmojiSetAssetFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.setCoordinate, into: &buf)
+        FfiConverterString.write(value.shortcode, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterUInt32.write(value.width, into: &buf)
+        FfiConverterUInt32.write(value.height, into: &buf)
+        FfiConverterUInt32.write(value.frames, into: &buf)
+        FfiConverterString.write(value.sha256, into: &buf)
+        FfiConverterData.write(value.bytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetAssetFfi_lift(_ buf: RustBuffer) throws -> EmojiSetAssetFfi {
+    return try FfiConverterTypeEmojiSetAssetFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetAssetFfi_lower(_ value: EmojiSetAssetFfi) -> RustBuffer {
+    return FfiConverterTypeEmojiSetAssetFfi.lower(value)
+}
+
+
+/**
+ * A set's validated cover image (its `image` tag). Not stored.
+ */
+public struct EmojiSetCoverFfi {
+    public var setCoordinate: String
+    public var mime: String
+    public var width: UInt32
+    public var height: UInt32
+    public var frames: UInt32
+    public var sha256: String
+    public var bytes: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(setCoordinate: String, mime: String, width: UInt32, height: UInt32, frames: UInt32, sha256: String, bytes: Data) {
+        self.setCoordinate = setCoordinate
+        self.mime = mime
+        self.width = width
+        self.height = height
+        self.frames = frames
+        self.sha256 = sha256
+        self.bytes = bytes
+    }
+}
+
+#if compiler(>=6)
+extension EmojiSetCoverFfi: Sendable {}
+#endif
+
+
+extension EmojiSetCoverFfi: Equatable, Hashable {
+    public static func ==(lhs: EmojiSetCoverFfi, rhs: EmojiSetCoverFfi) -> Bool {
+        if lhs.setCoordinate != rhs.setCoordinate {
+            return false
+        }
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.width != rhs.width {
+            return false
+        }
+        if lhs.height != rhs.height {
+            return false
+        }
+        if lhs.frames != rhs.frames {
+            return false
+        }
+        if lhs.sha256 != rhs.sha256 {
+            return false
+        }
+        if lhs.bytes != rhs.bytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(setCoordinate)
+        hasher.combine(mime)
+        hasher.combine(width)
+        hasher.combine(height)
+        hasher.combine(frames)
+        hasher.combine(sha256)
+        hasher.combine(bytes)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSetCoverFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSetCoverFfi {
+        return
+            try EmojiSetCoverFfi(
+                setCoordinate: FfiConverterString.read(from: &buf),
+                mime: FfiConverterString.read(from: &buf),
+                width: FfiConverterUInt32.read(from: &buf),
+                height: FfiConverterUInt32.read(from: &buf),
+                frames: FfiConverterUInt32.read(from: &buf),
+                sha256: FfiConverterString.read(from: &buf),
+                bytes: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EmojiSetCoverFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.setCoordinate, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterUInt32.write(value.width, into: &buf)
+        FfiConverterUInt32.write(value.height, into: &buf)
+        FfiConverterUInt32.write(value.frames, into: &buf)
+        FfiConverterString.write(value.sha256, into: &buf)
+        FfiConverterData.write(value.bytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetCoverFfi_lift(_ buf: RustBuffer) throws -> EmojiSetCoverFfi {
+    return try FfiConverterTypeEmojiSetCoverFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetCoverFfi_lower(_ value: EmojiSetCoverFfi) -> RustBuffer {
+    return FfiConverterTypeEmojiSetCoverFfi.lower(value)
+}
+
+
+/**
+ * One valid entry of a discovered set. Show `url`'s host to disclose where
+ * images load from; load the image only through `fetch_emoji_set_asset`.
+ */
+public struct EmojiSetEmojiFfi {
+    public var shortcode: String
+    public var url: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(shortcode: String, url: String) {
+        self.shortcode = shortcode
+        self.url = url
+    }
+}
+
+#if compiler(>=6)
+extension EmojiSetEmojiFfi: Sendable {}
+#endif
+
+
+extension EmojiSetEmojiFfi: Equatable, Hashable {
+    public static func ==(lhs: EmojiSetEmojiFfi, rhs: EmojiSetEmojiFfi) -> Bool {
+        if lhs.shortcode != rhs.shortcode {
+            return false
+        }
+        if lhs.url != rhs.url {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(shortcode)
+        hasher.combine(url)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSetEmojiFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSetEmojiFfi {
+        return
+            try EmojiSetEmojiFfi(
+                shortcode: FfiConverterString.read(from: &buf),
+                url: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EmojiSetEmojiFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.shortcode, into: &buf)
+        FfiConverterString.write(value.url, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetEmojiFfi_lift(_ buf: RustBuffer) throws -> EmojiSetEmojiFfi {
+    return try FfiConverterTypeEmojiSetEmojiFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetEmojiFfi_lower(_ value: EmojiSetEmojiFfi) -> RustBuffer {
+    return FfiConverterTypeEmojiSetEmojiFfi.lower(value)
+}
+
+
+/**
+ * A NIP-51 emoji set (kind 30030), or the account's kind-10030 list read
+ * as the set of its loose emoji (`kind` 10030, empty `identifier`).
+ */
+public struct EmojiSetFfi {
+    public var coordinate: String
+    public var kind: UInt16
+    public var authorPubkeyHex: String
+    public var identifier: String
+    public var eventIdHex: String
+    public var createdAt: UInt64
+    public var title: String?
+    public var description: String?
+    /**
+     * The cover's URL, for disclosure; load it only through
+     * `fetch_emoji_set_cover`.
+     */
+    public var imageUrl: String?
+    public var emoji: [EmojiSetEmojiFfi]
+    /**
+     * At most 64 entries; `skipped_count` counts every skipped entry.
+     */
+    public var skipped: [EmojiSkipFfi]
+    public var skippedCount: UInt32
+    public var installed: InstalledEmojiSetStateFfi?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(coordinate: String, kind: UInt16, authorPubkeyHex: String, identifier: String, eventIdHex: String, createdAt: UInt64, title: String?, description: String?,
+        /**
+         * The cover's URL, for disclosure; load it only through
+         * `fetch_emoji_set_cover`.
+         */imageUrl: String?, emoji: [EmojiSetEmojiFfi],
+        /**
+         * At most 64 entries; `skipped_count` counts every skipped entry.
+         */skipped: [EmojiSkipFfi], skippedCount: UInt32, installed: InstalledEmojiSetStateFfi?) {
+        self.coordinate = coordinate
+        self.kind = kind
+        self.authorPubkeyHex = authorPubkeyHex
+        self.identifier = identifier
+        self.eventIdHex = eventIdHex
+        self.createdAt = createdAt
+        self.title = title
+        self.description = description
+        self.imageUrl = imageUrl
+        self.emoji = emoji
+        self.skipped = skipped
+        self.skippedCount = skippedCount
+        self.installed = installed
+    }
+}
+
+#if compiler(>=6)
+extension EmojiSetFfi: Sendable {}
+#endif
+
+
+extension EmojiSetFfi: Equatable, Hashable {
+    public static func ==(lhs: EmojiSetFfi, rhs: EmojiSetFfi) -> Bool {
+        if lhs.coordinate != rhs.coordinate {
+            return false
+        }
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.authorPubkeyHex != rhs.authorPubkeyHex {
+            return false
+        }
+        if lhs.identifier != rhs.identifier {
+            return false
+        }
+        if lhs.eventIdHex != rhs.eventIdHex {
+            return false
+        }
+        if lhs.createdAt != rhs.createdAt {
+            return false
+        }
+        if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.imageUrl != rhs.imageUrl {
+            return false
+        }
+        if lhs.emoji != rhs.emoji {
+            return false
+        }
+        if lhs.skipped != rhs.skipped {
+            return false
+        }
+        if lhs.skippedCount != rhs.skippedCount {
+            return false
+        }
+        if lhs.installed != rhs.installed {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(coordinate)
+        hasher.combine(kind)
+        hasher.combine(authorPubkeyHex)
+        hasher.combine(identifier)
+        hasher.combine(eventIdHex)
+        hasher.combine(createdAt)
+        hasher.combine(title)
+        hasher.combine(description)
+        hasher.combine(imageUrl)
+        hasher.combine(emoji)
+        hasher.combine(skipped)
+        hasher.combine(skippedCount)
+        hasher.combine(installed)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSetFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSetFfi {
+        return
+            try EmojiSetFfi(
+                coordinate: FfiConverterString.read(from: &buf),
+                kind: FfiConverterUInt16.read(from: &buf),
+                authorPubkeyHex: FfiConverterString.read(from: &buf),
+                identifier: FfiConverterString.read(from: &buf),
+                eventIdHex: FfiConverterString.read(from: &buf),
+                createdAt: FfiConverterUInt64.read(from: &buf),
+                title: FfiConverterOptionString.read(from: &buf),
+                description: FfiConverterOptionString.read(from: &buf),
+                imageUrl: FfiConverterOptionString.read(from: &buf),
+                emoji: FfiConverterSequenceTypeEmojiSetEmojiFfi.read(from: &buf),
+                skipped: FfiConverterSequenceTypeEmojiSkipFfi.read(from: &buf),
+                skippedCount: FfiConverterUInt32.read(from: &buf),
+                installed: FfiConverterOptionTypeInstalledEmojiSetStateFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EmojiSetFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.coordinate, into: &buf)
+        FfiConverterUInt16.write(value.kind, into: &buf)
+        FfiConverterString.write(value.authorPubkeyHex, into: &buf)
+        FfiConverterString.write(value.identifier, into: &buf)
+        FfiConverterString.write(value.eventIdHex, into: &buf)
+        FfiConverterUInt64.write(value.createdAt, into: &buf)
+        FfiConverterOptionString.write(value.title, into: &buf)
+        FfiConverterOptionString.write(value.description, into: &buf)
+        FfiConverterOptionString.write(value.imageUrl, into: &buf)
+        FfiConverterSequenceTypeEmojiSetEmojiFfi.write(value.emoji, into: &buf)
+        FfiConverterSequenceTypeEmojiSkipFfi.write(value.skipped, into: &buf)
+        FfiConverterUInt32.write(value.skippedCount, into: &buf)
+        FfiConverterOptionTypeInstalledEmojiSetStateFfi.write(value.installed, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetFfi_lift(_ buf: RustBuffer) throws -> EmojiSetFfi {
+    return try FfiConverterTypeEmojiSetFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetFfi_lower(_ value: EmojiSetFfi) -> RustBuffer {
+    return FfiConverterTypeEmojiSetFfi.lower(value)
+}
+
+
+/**
+ * Progress of one install. `completed_emoji` reaches `total_emoji` when
+ * every entry has been stored, skipped or given up on; `total_emoji` is 0
+ * until the install has read the stored version. `transferred_bytes`
+ * counts response bytes from image hosts as each download finishes.
+ */
+public struct EmojiSetInstallProgressFfi {
+    public var completedEmoji: UInt32
+    public var totalEmoji: UInt32
+    public var transferredBytes: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(completedEmoji: UInt32, totalEmoji: UInt32, transferredBytes: UInt64) {
+        self.completedEmoji = completedEmoji
+        self.totalEmoji = totalEmoji
+        self.transferredBytes = transferredBytes
+    }
+}
+
+#if compiler(>=6)
+extension EmojiSetInstallProgressFfi: Sendable {}
+#endif
+
+
+extension EmojiSetInstallProgressFfi: Equatable, Hashable {
+    public static func ==(lhs: EmojiSetInstallProgressFfi, rhs: EmojiSetInstallProgressFfi) -> Bool {
+        if lhs.completedEmoji != rhs.completedEmoji {
+            return false
+        }
+        if lhs.totalEmoji != rhs.totalEmoji {
+            return false
+        }
+        if lhs.transferredBytes != rhs.transferredBytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(completedEmoji)
+        hasher.combine(totalEmoji)
+        hasher.combine(transferredBytes)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSetInstallProgressFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSetInstallProgressFfi {
+        return
+            try EmojiSetInstallProgressFfi(
+                completedEmoji: FfiConverterUInt32.read(from: &buf),
+                totalEmoji: FfiConverterUInt32.read(from: &buf),
+                transferredBytes: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EmojiSetInstallProgressFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.completedEmoji, into: &buf)
+        FfiConverterUInt32.write(value.totalEmoji, into: &buf)
+        FfiConverterUInt64.write(value.transferredBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetInstallProgressFfi_lift(_ buf: RustBuffer) throws -> EmojiSetInstallProgressFfi {
+    return try FfiConverterTypeEmojiSetInstallProgressFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetInstallProgressFfi_lower(_ value: EmojiSetInstallProgressFfi) -> RustBuffer {
+    return FfiConverterTypeEmojiSetInstallProgressFfi.lower(value)
+}
+
+
+public struct EmojiSetInstallResultFfi {
+    public var set: EmojiSetFfi
+    public var installedCount: UInt32
+    /**
+     * Parse-time skips first, then install-time ones.
+     */
+    public var skipped: [EmojiSkipFfi]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(set: EmojiSetFfi, installedCount: UInt32,
+        /**
+         * Parse-time skips first, then install-time ones.
+         */skipped: [EmojiSkipFfi]) {
+        self.set = set
+        self.installedCount = installedCount
+        self.skipped = skipped
+    }
+}
+
+#if compiler(>=6)
+extension EmojiSetInstallResultFfi: Sendable {}
+#endif
+
+
+extension EmojiSetInstallResultFfi: Equatable, Hashable {
+    public static func ==(lhs: EmojiSetInstallResultFfi, rhs: EmojiSetInstallResultFfi) -> Bool {
+        if lhs.set != rhs.set {
+            return false
+        }
+        if lhs.installedCount != rhs.installedCount {
+            return false
+        }
+        if lhs.skipped != rhs.skipped {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(set)
+        hasher.combine(installedCount)
+        hasher.combine(skipped)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSetInstallResultFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSetInstallResultFfi {
+        return
+            try EmojiSetInstallResultFfi(
+                set: FfiConverterTypeEmojiSetFfi.read(from: &buf),
+                installedCount: FfiConverterUInt32.read(from: &buf),
+                skipped: FfiConverterSequenceTypeEmojiSkipFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EmojiSetInstallResultFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeEmojiSetFfi.write(value.set, into: &buf)
+        FfiConverterUInt32.write(value.installedCount, into: &buf)
+        FfiConverterSequenceTypeEmojiSkipFfi.write(value.skipped, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetInstallResultFfi_lift(_ buf: RustBuffer) throws -> EmojiSetInstallResultFfi {
+    return try FfiConverterTypeEmojiSetInstallResultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetInstallResultFfi_lower(_ value: EmojiSetInstallResultFfi) -> RustBuffer {
+    return FfiConverterTypeEmojiSetInstallResultFfi.lower(value)
+}
+
+
+public struct EmojiSetSyncResultFfi {
+    public var discovered: UInt32
+    public var updated: UInt32
+    /**
+     * Whether every relay answered in full.
+     */
+    public var complete: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(discovered: UInt32, updated: UInt32,
+        /**
+         * Whether every relay answered in full.
+         */complete: Bool) {
+        self.discovered = discovered
+        self.updated = updated
+        self.complete = complete
+    }
+}
+
+#if compiler(>=6)
+extension EmojiSetSyncResultFfi: Sendable {}
+#endif
+
+
+extension EmojiSetSyncResultFfi: Equatable, Hashable {
+    public static func ==(lhs: EmojiSetSyncResultFfi, rhs: EmojiSetSyncResultFfi) -> Bool {
+        if lhs.discovered != rhs.discovered {
+            return false
+        }
+        if lhs.updated != rhs.updated {
+            return false
+        }
+        if lhs.complete != rhs.complete {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(discovered)
+        hasher.combine(updated)
+        hasher.combine(complete)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSetSyncResultFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSetSyncResultFfi {
+        return
+            try EmojiSetSyncResultFfi(
+                discovered: FfiConverterUInt32.read(from: &buf),
+                updated: FfiConverterUInt32.read(from: &buf),
+                complete: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EmojiSetSyncResultFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.discovered, into: &buf)
+        FfiConverterUInt32.write(value.updated, into: &buf)
+        FfiConverterBool.write(value.complete, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetSyncResultFfi_lift(_ buf: RustBuffer) throws -> EmojiSetSyncResultFfi {
+    return try FfiConverterTypeEmojiSetSyncResultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSetSyncResultFfi_lower(_ value: EmojiSetSyncResultFfi) -> RustBuffer {
+    return FfiConverterTypeEmojiSetSyncResultFfi.lower(value)
+}
+
+
+/**
+ * One skipped entry. `position` (the entry's index among the event's
+ * `emoji` tags) is set for entries dropped when the set was read;
+ * `shortcode` is set whenever it is valid.
+ */
+public struct EmojiSkipFfi {
+    public var position: UInt32?
+    public var shortcode: String?
+    public var reason: EmojiSkipReasonFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(position: UInt32?, shortcode: String?, reason: EmojiSkipReasonFfi) {
+        self.position = position
+        self.shortcode = shortcode
+        self.reason = reason
+    }
+}
+
+#if compiler(>=6)
+extension EmojiSkipFfi: Sendable {}
+#endif
+
+
+extension EmojiSkipFfi: Equatable, Hashable {
+    public static func ==(lhs: EmojiSkipFfi, rhs: EmojiSkipFfi) -> Bool {
+        if lhs.position != rhs.position {
+            return false
+        }
+        if lhs.shortcode != rhs.shortcode {
+            return false
+        }
+        if lhs.reason != rhs.reason {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(position)
+        hasher.combine(shortcode)
+        hasher.combine(reason)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSkipFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSkipFfi {
+        return
+            try EmojiSkipFfi(
+                position: FfiConverterOptionUInt32.read(from: &buf),
+                shortcode: FfiConverterOptionString.read(from: &buf),
+                reason: FfiConverterTypeEmojiSkipReasonFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EmojiSkipFfi, into buf: inout [UInt8]) {
+        FfiConverterOptionUInt32.write(value.position, into: &buf)
+        FfiConverterOptionString.write(value.shortcode, into: &buf)
+        FfiConverterTypeEmojiSkipReasonFfi.write(value.reason, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSkipFfi_lift(_ buf: RustBuffer) throws -> EmojiSkipFfi {
+    return try FfiConverterTypeEmojiSkipFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSkipFfi_lower(_ value: EmojiSkipFfi) -> RustBuffer {
+    return FfiConverterTypeEmojiSkipFfi.lower(value)
 }
 
 
@@ -23128,19 +27599,21 @@ public struct GroupManagementStateFfi {
     public var isLastAdmin: Bool
     public var canInvite: Bool
     /**
-     * Whether a Leave action would do anything: the local account is a member,
-     * is not an admin, and has no leave already in flight.
-     *
-     * When this is `false`, the reason is one of
-     * `requires_self_demote_before_leave` (demote first) or
-     * `leave_request_pending` (already leaving), or `disbanding` / terminal
-     * `lifecycle_state` (ordinary group actions are unavailable) — or the
-     * account is not a member at all. Check those before reporting an error.
+     * Whether to offer Leave in the selected state. False for an admin
+     * (demote first, see `requires_self_demote_before_leave`), a pending
+     * Leave or invitation, inactive membership, or a
+     * disbanding/disbanded/unrecoverable group. With experimental device
+     * groups on, core demotes an eligible nonlast admin account itself, so
+     * such an admin may leave directly. The command rechecks current policy
+     * and membership before acting.
      */
     public var canLeave: Bool
     /**
-     * Whether an admin must self-demote before leaving. Disbanding and a
-     * terminal lifecycle take precedence and keep this false.
+     * Whether an admin must demote itself (`self_demote_admin`) before
+     * Leave or declining a pending invitation, which otherwise return
+     * `AdminCannotSelfRemove`. A last admin first makes another member an
+     * admin. False while experimental device groups are on (core demotes),
+     * and when disbanding or a terminal lifecycle hides ordinary actions.
      */
     public var requiresSelfDemoteBeforeLeave: Bool
     /**
@@ -23154,6 +27627,17 @@ public struct GroupManagementStateFfi {
      * epoch; `null` when no leave is pending.
      */
     public var leaveRequestedAtMs: UInt64?
+    /**
+     * The pending leave is blocked: this account is the group's last active
+     * admin, so the leave cannot finish. Show "Can't leave: you're the only
+     * admin" with a Cancel action while `can_cancel_leave` holds.
+     */
+    public var leaveBlocked: Bool
+    /**
+     * Whether to offer Cancel on the blocked leave (`Marmot::cancel_leave`),
+     * which makes the chat joined again. The command rechecks the state.
+     */
+    public var canCancelLeave: Bool
     public var lifecycleState: GroupLifecycleStateFfi
     public var disbandingEnabled: Bool
     /**
@@ -23171,18 +27655,20 @@ public struct GroupManagementStateFfi {
     // declare one manually.
     public init(myAccountIdHex: String, isSelfAdmin: Bool, isLastAdmin: Bool, canInvite: Bool,
         /**
-         * Whether a Leave action would do anything: the local account is a member,
-         * is not an admin, and has no leave already in flight.
-         *
-         * When this is `false`, the reason is one of
-         * `requires_self_demote_before_leave` (demote first) or
-         * `leave_request_pending` (already leaving), or `disbanding` / terminal
-         * `lifecycle_state` (ordinary group actions are unavailable) — or the
-         * account is not a member at all. Check those before reporting an error.
+         * Whether to offer Leave in the selected state. False for an admin
+         * (demote first, see `requires_self_demote_before_leave`), a pending
+         * Leave or invitation, inactive membership, or a
+         * disbanding/disbanded/unrecoverable group. With experimental device
+         * groups on, core demotes an eligible nonlast admin account itself, so
+         * such an admin may leave directly. The command rechecks current policy
+         * and membership before acting.
          */canLeave: Bool,
         /**
-         * Whether an admin must self-demote before leaving. Disbanding and a
-         * terminal lifecycle take precedence and keep this false.
+         * Whether an admin must demote itself (`self_demote_admin`) before
+         * Leave or declining a pending invitation, which otherwise return
+         * `AdminCannotSelfRemove`. A last admin first makes another member an
+         * admin. False while experimental device groups are on (core demotes),
+         * and when disbanding or a terminal lifecycle hides ordinary actions.
          */requiresSelfDemoteBeforeLeave: Bool,
         /**
          * A leave is already in flight for this group; `Marmot::leave_group` would
@@ -23192,7 +27678,16 @@ public struct GroupManagementStateFfi {
         /**
          * When the local account asked to leave, in milliseconds since the Unix
          * epoch; `null` when no leave is pending.
-         */leaveRequestedAtMs: UInt64?, lifecycleState: GroupLifecycleStateFfi, disbandingEnabled: Bool,
+         */leaveRequestedAtMs: UInt64?,
+        /**
+         * The pending leave is blocked: this account is the group's last active
+         * admin, so the leave cannot finish. Show "Can't leave: you're the only
+         * admin" with a Cancel action while `can_cancel_leave` holds.
+         */leaveBlocked: Bool,
+        /**
+         * Whether to offer Cancel on the blocked leave (`Marmot::cancel_leave`),
+         * which makes the chat joined again. The command rechecks the state.
+         */canCancelLeave: Bool, lifecycleState: GroupLifecycleStateFfi, disbandingEnabled: Bool,
         /**
          * Whether terminal convergence currently blocks all ordinary outbound
          * group work. Hosts should hide the message composer while true.
@@ -23205,6 +27700,8 @@ public struct GroupManagementStateFfi {
         self.requiresSelfDemoteBeforeLeave = requiresSelfDemoteBeforeLeave
         self.leaveRequestPending = leaveRequestPending
         self.leaveRequestedAtMs = leaveRequestedAtMs
+        self.leaveBlocked = leaveBlocked
+        self.canCancelLeave = canCancelLeave
         self.lifecycleState = lifecycleState
         self.disbandingEnabled = disbandingEnabled
         self.disbanding = disbanding
@@ -23247,6 +27744,12 @@ extension GroupManagementStateFfi: Equatable, Hashable {
         if lhs.leaveRequestedAtMs != rhs.leaveRequestedAtMs {
             return false
         }
+        if lhs.leaveBlocked != rhs.leaveBlocked {
+            return false
+        }
+        if lhs.canCancelLeave != rhs.canCancelLeave {
+            return false
+        }
         if lhs.lifecycleState != rhs.lifecycleState {
             return false
         }
@@ -23283,6 +27786,8 @@ extension GroupManagementStateFfi: Equatable, Hashable {
         hasher.combine(requiresSelfDemoteBeforeLeave)
         hasher.combine(leaveRequestPending)
         hasher.combine(leaveRequestedAtMs)
+        hasher.combine(leaveBlocked)
+        hasher.combine(canCancelLeave)
         hasher.combine(lifecycleState)
         hasher.combine(disbandingEnabled)
         hasher.combine(disbanding)
@@ -23311,6 +27816,8 @@ public struct FfiConverterTypeGroupManagementStateFfi: FfiConverterRustBuffer {
                 requiresSelfDemoteBeforeLeave: FfiConverterBool.read(from: &buf),
                 leaveRequestPending: FfiConverterBool.read(from: &buf),
                 leaveRequestedAtMs: FfiConverterOptionUInt64.read(from: &buf),
+                leaveBlocked: FfiConverterBool.read(from: &buf),
+                canCancelLeave: FfiConverterBool.read(from: &buf),
                 lifecycleState: FfiConverterTypeGroupLifecycleStateFfi.read(from: &buf),
                 disbandingEnabled: FfiConverterBool.read(from: &buf),
                 disbanding: FfiConverterBool.read(from: &buf),
@@ -23331,6 +27838,8 @@ public struct FfiConverterTypeGroupManagementStateFfi: FfiConverterRustBuffer {
         FfiConverterBool.write(value.requiresSelfDemoteBeforeLeave, into: &buf)
         FfiConverterBool.write(value.leaveRequestPending, into: &buf)
         FfiConverterOptionUInt64.write(value.leaveRequestedAtMs, into: &buf)
+        FfiConverterBool.write(value.leaveBlocked, into: &buf)
+        FfiConverterBool.write(value.canCancelLeave, into: &buf)
         FfiConverterTypeGroupLifecycleStateFfi.write(value.lifecycleState, into: &buf)
         FfiConverterBool.write(value.disbandingEnabled, into: &buf)
         FfiConverterBool.write(value.disbanding, into: &buf)
@@ -23460,6 +27969,10 @@ public func FfiConverterTypeGroupMemberActionStateFfi_lower(_ value: GroupMember
 }
 
 
+/**
+ * One member account. An account with several devices in the group is one
+ * entry.
+ */
 public struct GroupMemberDetailsFfi {
     public var memberIdHex: String
     public var account: String?
@@ -23468,10 +27981,17 @@ public struct GroupMemberDetailsFfi {
     public var isSelf: Bool
     public var npub: String
     public var displayName: String?
+    /**
+     * How many of this account's devices are in the group.
+     */
+    public var deviceCount: UInt32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(memberIdHex: String, account: String?, local: Bool, isAdmin: Bool, isSelf: Bool, npub: String, displayName: String?) {
+    public init(memberIdHex: String, account: String?, local: Bool, isAdmin: Bool, isSelf: Bool, npub: String, displayName: String?,
+        /**
+         * How many of this account's devices are in the group.
+         */deviceCount: UInt32 = UInt32(1)) {
         self.memberIdHex = memberIdHex
         self.account = account
         self.local = local
@@ -23479,6 +27999,7 @@ public struct GroupMemberDetailsFfi {
         self.isSelf = isSelf
         self.npub = npub
         self.displayName = displayName
+        self.deviceCount = deviceCount
     }
 }
 
@@ -23510,6 +28031,9 @@ extension GroupMemberDetailsFfi: Equatable, Hashable {
         if lhs.displayName != rhs.displayName {
             return false
         }
+        if lhs.deviceCount != rhs.deviceCount {
+            return false
+        }
         return true
     }
 
@@ -23521,6 +28045,7 @@ extension GroupMemberDetailsFfi: Equatable, Hashable {
         hasher.combine(isSelf)
         hasher.combine(npub)
         hasher.combine(displayName)
+        hasher.combine(deviceCount)
     }
 }
 
@@ -23539,7 +28064,8 @@ public struct FfiConverterTypeGroupMemberDetailsFfi: FfiConverterRustBuffer {
                 isAdmin: FfiConverterBool.read(from: &buf),
                 isSelf: FfiConverterBool.read(from: &buf),
                 npub: FfiConverterString.read(from: &buf),
-                displayName: FfiConverterOptionString.read(from: &buf)
+                displayName: FfiConverterOptionString.read(from: &buf),
+                deviceCount: FfiConverterUInt32.read(from: &buf)
         )
     }
 
@@ -23551,6 +28077,7 @@ public struct FfiConverterTypeGroupMemberDetailsFfi: FfiConverterRustBuffer {
         FfiConverterBool.write(value.isSelf, into: &buf)
         FfiConverterString.write(value.npub, into: &buf)
         FfiConverterOptionString.write(value.displayName, into: &buf)
+        FfiConverterUInt32.write(value.deviceCount, into: &buf)
     }
 }
 
@@ -24411,6 +28938,95 @@ public func FfiConverterTypeGroupSystemEventFfi_lower(_ value: GroupSystemEventF
 
 
 /**
+ * The device a row or a chat's history was imported from.
+ */
+public struct HistoryImportSourceFfi {
+    /**
+     * The device's roster slot, as `linked_devices` names it.
+     */
+    public var deviceSlotIdHex: String
+    /**
+     * The device's name now: empty when it has none, is no longer linked,
+     * or this device has not read the roster since it started. Show
+     * "another device" then. It follows `LinkedDevicesChanged`.
+     */
+    public var deviceLabel: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The device's roster slot, as `linked_devices` names it.
+         */deviceSlotIdHex: String,
+        /**
+         * The device's name now: empty when it has none, is no longer linked,
+         * or this device has not read the roster since it started. Show
+         * "another device" then. It follows `LinkedDevicesChanged`.
+         */deviceLabel: String) {
+        self.deviceSlotIdHex = deviceSlotIdHex
+        self.deviceLabel = deviceLabel
+    }
+}
+
+#if compiler(>=6)
+extension HistoryImportSourceFfi: Sendable {}
+#endif
+
+
+extension HistoryImportSourceFfi: Equatable, Hashable {
+    public static func ==(lhs: HistoryImportSourceFfi, rhs: HistoryImportSourceFfi) -> Bool {
+        if lhs.deviceSlotIdHex != rhs.deviceSlotIdHex {
+            return false
+        }
+        if lhs.deviceLabel != rhs.deviceLabel {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(deviceSlotIdHex)
+        hasher.combine(deviceLabel)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryImportSourceFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryImportSourceFfi {
+        return
+            try HistoryImportSourceFfi(
+                deviceSlotIdHex: FfiConverterString.read(from: &buf),
+                deviceLabel: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryImportSourceFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.deviceSlotIdHex, into: &buf)
+        FfiConverterString.write(value.deviceLabel, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryImportSourceFfi_lift(_ buf: RustBuffer) throws -> HistoryImportSourceFfi {
+    return try FfiConverterTypeHistoryImportSourceFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryImportSourceFfi_lower(_ value: HistoryImportSourceFfi) -> RustBuffer {
+    return FfiConverterTypeHistoryImportSourceFfi.lower(value)
+}
+
+
+/**
  * One occurrence of "history may be incomplete": automatic recovery could
  * not prove this history complete and stopped retrying. It disappears when
  * new evidence re-arms recovery (a later parking is a new notice), when an
@@ -24700,6 +29316,350 @@ public func FfiConverterTypeInitialGroupImageFfi_lower(_ value: InitialGroupImag
 }
 
 
+public struct InstalledCustomEmojiAssetFfi {
+    public var emoji: InstalledCustomEmojiFfi
+    public var bytes: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(emoji: InstalledCustomEmojiFfi, bytes: Data) {
+        self.emoji = emoji
+        self.bytes = bytes
+    }
+}
+
+#if compiler(>=6)
+extension InstalledCustomEmojiAssetFfi: Sendable {}
+#endif
+
+
+extension InstalledCustomEmojiAssetFfi: Equatable, Hashable {
+    public static func ==(lhs: InstalledCustomEmojiAssetFfi, rhs: InstalledCustomEmojiAssetFfi) -> Bool {
+        if lhs.emoji != rhs.emoji {
+            return false
+        }
+        if lhs.bytes != rhs.bytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(emoji)
+        hasher.combine(bytes)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInstalledCustomEmojiAssetFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InstalledCustomEmojiAssetFfi {
+        return
+            try InstalledCustomEmojiAssetFfi(
+                emoji: FfiConverterTypeInstalledCustomEmojiFfi.read(from: &buf),
+                bytes: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InstalledCustomEmojiAssetFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeInstalledCustomEmojiFfi.write(value.emoji, into: &buf)
+        FfiConverterData.write(value.bytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInstalledCustomEmojiAssetFfi_lift(_ buf: RustBuffer) throws -> InstalledCustomEmojiAssetFfi {
+    return try FfiConverterTypeInstalledCustomEmojiAssetFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInstalledCustomEmojiAssetFfi_lower(_ value: InstalledCustomEmojiAssetFfi) -> RustBuffer {
+    return FfiConverterTypeInstalledCustomEmojiAssetFfi.lower(value)
+}
+
+
+/**
+ * One installed emoji for a picker.
+ */
+public struct InstalledCustomEmojiFfi {
+    public var setCoordinate: String
+    public var setTitle: String?
+    public var authorPubkeyHex: String
+    public var shortcode: String
+    public var mime: String
+    public var width: UInt32
+    public var height: UInt32
+    public var frames: UInt32
+    /**
+     * SHA-256 of the stored bytes, fixed at install.
+     */
+    public var sha256: String
+    public var byteLen: UInt64
+    /**
+     * Another installed set has this exact shortcode; the host decides.
+     */
+    public var shortcodeCollision: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(setCoordinate: String, setTitle: String?, authorPubkeyHex: String, shortcode: String, mime: String, width: UInt32, height: UInt32, frames: UInt32,
+        /**
+         * SHA-256 of the stored bytes, fixed at install.
+         */sha256: String, byteLen: UInt64,
+        /**
+         * Another installed set has this exact shortcode; the host decides.
+         */shortcodeCollision: Bool) {
+        self.setCoordinate = setCoordinate
+        self.setTitle = setTitle
+        self.authorPubkeyHex = authorPubkeyHex
+        self.shortcode = shortcode
+        self.mime = mime
+        self.width = width
+        self.height = height
+        self.frames = frames
+        self.sha256 = sha256
+        self.byteLen = byteLen
+        self.shortcodeCollision = shortcodeCollision
+    }
+}
+
+#if compiler(>=6)
+extension InstalledCustomEmojiFfi: Sendable {}
+#endif
+
+
+extension InstalledCustomEmojiFfi: Equatable, Hashable {
+    public static func ==(lhs: InstalledCustomEmojiFfi, rhs: InstalledCustomEmojiFfi) -> Bool {
+        if lhs.setCoordinate != rhs.setCoordinate {
+            return false
+        }
+        if lhs.setTitle != rhs.setTitle {
+            return false
+        }
+        if lhs.authorPubkeyHex != rhs.authorPubkeyHex {
+            return false
+        }
+        if lhs.shortcode != rhs.shortcode {
+            return false
+        }
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.width != rhs.width {
+            return false
+        }
+        if lhs.height != rhs.height {
+            return false
+        }
+        if lhs.frames != rhs.frames {
+            return false
+        }
+        if lhs.sha256 != rhs.sha256 {
+            return false
+        }
+        if lhs.byteLen != rhs.byteLen {
+            return false
+        }
+        if lhs.shortcodeCollision != rhs.shortcodeCollision {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(setCoordinate)
+        hasher.combine(setTitle)
+        hasher.combine(authorPubkeyHex)
+        hasher.combine(shortcode)
+        hasher.combine(mime)
+        hasher.combine(width)
+        hasher.combine(height)
+        hasher.combine(frames)
+        hasher.combine(sha256)
+        hasher.combine(byteLen)
+        hasher.combine(shortcodeCollision)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInstalledCustomEmojiFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InstalledCustomEmojiFfi {
+        return
+            try InstalledCustomEmojiFfi(
+                setCoordinate: FfiConverterString.read(from: &buf),
+                setTitle: FfiConverterOptionString.read(from: &buf),
+                authorPubkeyHex: FfiConverterString.read(from: &buf),
+                shortcode: FfiConverterString.read(from: &buf),
+                mime: FfiConverterString.read(from: &buf),
+                width: FfiConverterUInt32.read(from: &buf),
+                height: FfiConverterUInt32.read(from: &buf),
+                frames: FfiConverterUInt32.read(from: &buf),
+                sha256: FfiConverterString.read(from: &buf),
+                byteLen: FfiConverterUInt64.read(from: &buf),
+                shortcodeCollision: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InstalledCustomEmojiFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.setCoordinate, into: &buf)
+        FfiConverterOptionString.write(value.setTitle, into: &buf)
+        FfiConverterString.write(value.authorPubkeyHex, into: &buf)
+        FfiConverterString.write(value.shortcode, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterUInt32.write(value.width, into: &buf)
+        FfiConverterUInt32.write(value.height, into: &buf)
+        FfiConverterUInt32.write(value.frames, into: &buf)
+        FfiConverterString.write(value.sha256, into: &buf)
+        FfiConverterUInt64.write(value.byteLen, into: &buf)
+        FfiConverterBool.write(value.shortcodeCollision, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInstalledCustomEmojiFfi_lift(_ buf: RustBuffer) throws -> InstalledCustomEmojiFfi {
+    return try FfiConverterTypeInstalledCustomEmojiFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInstalledCustomEmojiFfi_lower(_ value: InstalledCustomEmojiFfi) -> RustBuffer {
+    return FfiConverterTypeInstalledCustomEmojiFfi.lower(value)
+}
+
+
+/**
+ * The installed snapshot of a set.
+ */
+public struct InstalledEmojiSetStateFfi {
+    /**
+     * The set version the snapshot pinned.
+     */
+    public var eventIdHex: String
+    public var createdAt: UInt64
+    public var installedAt: UInt64
+    public var emojiCount: UInt32
+    public var byteLen: UInt64
+    /**
+     * A newer or different version is known; reinstall to take it.
+     */
+    public var updateAvailable: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The set version the snapshot pinned.
+         */eventIdHex: String, createdAt: UInt64, installedAt: UInt64, emojiCount: UInt32, byteLen: UInt64,
+        /**
+         * A newer or different version is known; reinstall to take it.
+         */updateAvailable: Bool) {
+        self.eventIdHex = eventIdHex
+        self.createdAt = createdAt
+        self.installedAt = installedAt
+        self.emojiCount = emojiCount
+        self.byteLen = byteLen
+        self.updateAvailable = updateAvailable
+    }
+}
+
+#if compiler(>=6)
+extension InstalledEmojiSetStateFfi: Sendable {}
+#endif
+
+
+extension InstalledEmojiSetStateFfi: Equatable, Hashable {
+    public static func ==(lhs: InstalledEmojiSetStateFfi, rhs: InstalledEmojiSetStateFfi) -> Bool {
+        if lhs.eventIdHex != rhs.eventIdHex {
+            return false
+        }
+        if lhs.createdAt != rhs.createdAt {
+            return false
+        }
+        if lhs.installedAt != rhs.installedAt {
+            return false
+        }
+        if lhs.emojiCount != rhs.emojiCount {
+            return false
+        }
+        if lhs.byteLen != rhs.byteLen {
+            return false
+        }
+        if lhs.updateAvailable != rhs.updateAvailable {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(eventIdHex)
+        hasher.combine(createdAt)
+        hasher.combine(installedAt)
+        hasher.combine(emojiCount)
+        hasher.combine(byteLen)
+        hasher.combine(updateAvailable)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInstalledEmojiSetStateFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InstalledEmojiSetStateFfi {
+        return
+            try InstalledEmojiSetStateFfi(
+                eventIdHex: FfiConverterString.read(from: &buf),
+                createdAt: FfiConverterUInt64.read(from: &buf),
+                installedAt: FfiConverterUInt64.read(from: &buf),
+                emojiCount: FfiConverterUInt32.read(from: &buf),
+                byteLen: FfiConverterUInt64.read(from: &buf),
+                updateAvailable: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InstalledEmojiSetStateFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.eventIdHex, into: &buf)
+        FfiConverterUInt64.write(value.createdAt, into: &buf)
+        FfiConverterUInt64.write(value.installedAt, into: &buf)
+        FfiConverterUInt32.write(value.emojiCount, into: &buf)
+        FfiConverterUInt64.write(value.byteLen, into: &buf)
+        FfiConverterBool.write(value.updateAvailable, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInstalledEmojiSetStateFfi_lift(_ buf: RustBuffer) throws -> InstalledEmojiSetStateFfi {
+    return try FfiConverterTypeInstalledEmojiSetStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInstalledEmojiSetStateFfi_lower(_ value: InstalledEmojiSetStateFfi) -> RustBuffer {
+    return FfiConverterTypeInstalledEmojiSetStateFfi.lower(value)
+}
+
+
 public struct KeyPackageMaintenanceStatusFfi {
     public var stableSlotId: String
     public var phase: MaintenancePhaseFfi
@@ -24887,6 +29847,270 @@ public func FfiConverterTypeKeyPackageMaintenanceStatusFfi_lift(_ buf: RustBuffe
 #endif
 public func FfiConverterTypeKeyPackageMaintenanceStatusFfi_lower(_ value: KeyPackageMaintenanceStatusFfi) -> RustBuffer {
     return FfiConverterTypeKeyPackageMaintenanceStatusFfi.lower(value)
+}
+
+
+/**
+ * One of this account's own devices, as the roster of the device group this
+ * device trusts lists it. Never another account's device.
+ */
+public struct LinkedDeviceFfi {
+    /**
+     * The device's KeyPackage slot, 64 lowercase hex characters. Actions on
+     * the device name it by this.
+     */
+    public var slotIdHex: String
+    /**
+     * Whether this is the calling device.
+     */
+    public var isThisDevice: Bool
+    /**
+     * The name the user gave the device; empty until set.
+     */
+    public var label: String
+    /**
+     * The device's client name; empty until set.
+     */
+    public var client: String
+    /**
+     * The device's platform; empty until set.
+     */
+    public var platform: String
+    /**
+     * When the device was linked, in Unix seconds, as its linker wrote it.
+     */
+    public var linkedAt: UInt64
+    /**
+     * The slot of the device that linked it; `None` for the founder.
+     */
+    public var linkedBySlotIdHex: String?
+    public var status: LinkedDeviceStatusFfi
+    /**
+     * Its siblings add it to the chats the account's devices were already
+     * in when it was linked.
+     */
+    public var addToAllChats: Bool
+    /**
+     * Its siblings bring it chat history when they add it to a chat.
+     */
+    public var bringHistory: Bool
+    /**
+     * Inactivity never removes it.
+     */
+    public var keepWhileInactive: Bool
+    /**
+     * When a heartbeat last showed it running, in Unix seconds. `None` for
+     * this device, and for a sibling none of whose heartbeats has counted
+     * yet.
+     */
+    public var lastActiveAt: UInt64?
+    /**
+     * This device judges it inactive: 30 days have passed since its last
+     * activity or since this device first found it in the roster, whichever
+     * is later. Never this device. Judged on this device only; `status`
+     * `Inactive` is the roster's mark.
+     */
+    public var inactive: Bool
+    /**
+     * The user removed it on this device, and the device group has not
+     * taken the removal yet.
+     */
+    public var removalPending: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The device's KeyPackage slot, 64 lowercase hex characters. Actions on
+         * the device name it by this.
+         */slotIdHex: String,
+        /**
+         * Whether this is the calling device.
+         */isThisDevice: Bool,
+        /**
+         * The name the user gave the device; empty until set.
+         */label: String,
+        /**
+         * The device's client name; empty until set.
+         */client: String,
+        /**
+         * The device's platform; empty until set.
+         */platform: String,
+        /**
+         * When the device was linked, in Unix seconds, as its linker wrote it.
+         */linkedAt: UInt64,
+        /**
+         * The slot of the device that linked it; `None` for the founder.
+         */linkedBySlotIdHex: String?, status: LinkedDeviceStatusFfi,
+        /**
+         * Its siblings add it to the chats the account's devices were already
+         * in when it was linked.
+         */addToAllChats: Bool,
+        /**
+         * Its siblings bring it chat history when they add it to a chat.
+         */bringHistory: Bool,
+        /**
+         * Inactivity never removes it.
+         */keepWhileInactive: Bool,
+        /**
+         * When a heartbeat last showed it running, in Unix seconds. `None` for
+         * this device, and for a sibling none of whose heartbeats has counted
+         * yet.
+         */lastActiveAt: UInt64?,
+        /**
+         * This device judges it inactive: 30 days have passed since its last
+         * activity or since this device first found it in the roster, whichever
+         * is later. Never this device. Judged on this device only; `status`
+         * `Inactive` is the roster's mark.
+         */inactive: Bool,
+        /**
+         * The user removed it on this device, and the device group has not
+         * taken the removal yet.
+         */removalPending: Bool) {
+        self.slotIdHex = slotIdHex
+        self.isThisDevice = isThisDevice
+        self.label = label
+        self.client = client
+        self.platform = platform
+        self.linkedAt = linkedAt
+        self.linkedBySlotIdHex = linkedBySlotIdHex
+        self.status = status
+        self.addToAllChats = addToAllChats
+        self.bringHistory = bringHistory
+        self.keepWhileInactive = keepWhileInactive
+        self.lastActiveAt = lastActiveAt
+        self.inactive = inactive
+        self.removalPending = removalPending
+    }
+}
+
+#if compiler(>=6)
+extension LinkedDeviceFfi: Sendable {}
+#endif
+
+
+extension LinkedDeviceFfi: Equatable, Hashable {
+    public static func ==(lhs: LinkedDeviceFfi, rhs: LinkedDeviceFfi) -> Bool {
+        if lhs.slotIdHex != rhs.slotIdHex {
+            return false
+        }
+        if lhs.isThisDevice != rhs.isThisDevice {
+            return false
+        }
+        if lhs.label != rhs.label {
+            return false
+        }
+        if lhs.client != rhs.client {
+            return false
+        }
+        if lhs.platform != rhs.platform {
+            return false
+        }
+        if lhs.linkedAt != rhs.linkedAt {
+            return false
+        }
+        if lhs.linkedBySlotIdHex != rhs.linkedBySlotIdHex {
+            return false
+        }
+        if lhs.status != rhs.status {
+            return false
+        }
+        if lhs.addToAllChats != rhs.addToAllChats {
+            return false
+        }
+        if lhs.bringHistory != rhs.bringHistory {
+            return false
+        }
+        if lhs.keepWhileInactive != rhs.keepWhileInactive {
+            return false
+        }
+        if lhs.lastActiveAt != rhs.lastActiveAt {
+            return false
+        }
+        if lhs.inactive != rhs.inactive {
+            return false
+        }
+        if lhs.removalPending != rhs.removalPending {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(slotIdHex)
+        hasher.combine(isThisDevice)
+        hasher.combine(label)
+        hasher.combine(client)
+        hasher.combine(platform)
+        hasher.combine(linkedAt)
+        hasher.combine(linkedBySlotIdHex)
+        hasher.combine(status)
+        hasher.combine(addToAllChats)
+        hasher.combine(bringHistory)
+        hasher.combine(keepWhileInactive)
+        hasher.combine(lastActiveAt)
+        hasher.combine(inactive)
+        hasher.combine(removalPending)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLinkedDeviceFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LinkedDeviceFfi {
+        return
+            try LinkedDeviceFfi(
+                slotIdHex: FfiConverterString.read(from: &buf),
+                isThisDevice: FfiConverterBool.read(from: &buf),
+                label: FfiConverterString.read(from: &buf),
+                client: FfiConverterString.read(from: &buf),
+                platform: FfiConverterString.read(from: &buf),
+                linkedAt: FfiConverterUInt64.read(from: &buf),
+                linkedBySlotIdHex: FfiConverterOptionString.read(from: &buf),
+                status: FfiConverterTypeLinkedDeviceStatusFfi.read(from: &buf),
+                addToAllChats: FfiConverterBool.read(from: &buf),
+                bringHistory: FfiConverterBool.read(from: &buf),
+                keepWhileInactive: FfiConverterBool.read(from: &buf),
+                lastActiveAt: FfiConverterOptionUInt64.read(from: &buf),
+                inactive: FfiConverterBool.read(from: &buf),
+                removalPending: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LinkedDeviceFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.slotIdHex, into: &buf)
+        FfiConverterBool.write(value.isThisDevice, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterString.write(value.client, into: &buf)
+        FfiConverterString.write(value.platform, into: &buf)
+        FfiConverterUInt64.write(value.linkedAt, into: &buf)
+        FfiConverterOptionString.write(value.linkedBySlotIdHex, into: &buf)
+        FfiConverterTypeLinkedDeviceStatusFfi.write(value.status, into: &buf)
+        FfiConverterBool.write(value.addToAllChats, into: &buf)
+        FfiConverterBool.write(value.bringHistory, into: &buf)
+        FfiConverterBool.write(value.keepWhileInactive, into: &buf)
+        FfiConverterOptionUInt64.write(value.lastActiveAt, into: &buf)
+        FfiConverterBool.write(value.inactive, into: &buf)
+        FfiConverterBool.write(value.removalPending, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLinkedDeviceFfi_lift(_ buf: RustBuffer) throws -> LinkedDeviceFfi {
+    return try FfiConverterTypeLinkedDeviceFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLinkedDeviceFfi_lower(_ value: LinkedDeviceFfi) -> RustBuffer {
+    return FfiConverterTypeLinkedDeviceFfi.lower(value)
 }
 
 
@@ -25747,14 +30971,6 @@ public struct MarmotDeploymentFfi {
      */
     public var openRanking: OpenRankingProviderFfi?
     /**
-     * KeyPackage `client` tags ranked first, case-insensitively.
-     */
-    public var keyPackagePreferredClients: [String]
-    /**
-     * KeyPackage `client` tags ranked last, case-insensitively.
-     */
-    public var keyPackageLastClients: [String]
-    /**
      * NIP-32 namespace on moderation report labels. The operator's report
      * parser matches it; reporting refuses a destination while it is unset.
      */
@@ -25794,12 +31010,6 @@ public struct MarmotDeploymentFfi {
          * Optional Open Ranking discovery tier for directory search.
          */openRanking: OpenRankingProviderFfi?,
         /**
-         * KeyPackage `client` tags ranked first, case-insensitively.
-         */keyPackagePreferredClients: [String],
-        /**
-         * KeyPackage `client` tags ranked last, case-insensitively.
-         */keyPackageLastClients: [String],
-        /**
          * NIP-32 namespace on moderation report labels. The operator's report
          * parser matches it; reporting refuses a destination while it is unset.
          */moderationLabelNamespace: String?,
@@ -25814,8 +31024,6 @@ public struct MarmotDeploymentFfi {
         self.groupImageEndpoint = groupImageEndpoint
         self.profileImageEndpoint = profileImageEndpoint
         self.openRanking = openRanking
-        self.keyPackagePreferredClients = keyPackagePreferredClients
-        self.keyPackageLastClients = keyPackageLastClients
         self.moderationLabelNamespace = moderationLabelNamespace
         self.keychainService = keychainService
     }
@@ -25846,12 +31054,6 @@ extension MarmotDeploymentFfi: Equatable, Hashable {
         if lhs.openRanking != rhs.openRanking {
             return false
         }
-        if lhs.keyPackagePreferredClients != rhs.keyPackagePreferredClients {
-            return false
-        }
-        if lhs.keyPackageLastClients != rhs.keyPackageLastClients {
-            return false
-        }
         if lhs.moderationLabelNamespace != rhs.moderationLabelNamespace {
             return false
         }
@@ -25868,8 +31070,6 @@ extension MarmotDeploymentFfi: Equatable, Hashable {
         hasher.combine(groupImageEndpoint)
         hasher.combine(profileImageEndpoint)
         hasher.combine(openRanking)
-        hasher.combine(keyPackagePreferredClients)
-        hasher.combine(keyPackageLastClients)
         hasher.combine(moderationLabelNamespace)
         hasher.combine(keychainService)
     }
@@ -25890,8 +31090,6 @@ public struct FfiConverterTypeMarmotDeploymentFfi: FfiConverterRustBuffer {
                 groupImageEndpoint: FfiConverterOptionString.read(from: &buf),
                 profileImageEndpoint: FfiConverterOptionString.read(from: &buf),
                 openRanking: FfiConverterOptionTypeOpenRankingProviderFfi.read(from: &buf),
-                keyPackagePreferredClients: FfiConverterSequenceString.read(from: &buf),
-                keyPackageLastClients: FfiConverterSequenceString.read(from: &buf),
                 moderationLabelNamespace: FfiConverterOptionString.read(from: &buf),
                 keychainService: FfiConverterString.read(from: &buf)
         )
@@ -25904,8 +31102,6 @@ public struct FfiConverterTypeMarmotDeploymentFfi: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.groupImageEndpoint, into: &buf)
         FfiConverterOptionString.write(value.profileImageEndpoint, into: &buf)
         FfiConverterOptionTypeOpenRankingProviderFfi.write(value.openRanking, into: &buf)
-        FfiConverterSequenceString.write(value.keyPackagePreferredClients, into: &buf)
-        FfiConverterSequenceString.write(value.keyPackageLastClients, into: &buf)
         FfiConverterOptionString.write(value.moderationLabelNamespace, into: &buf)
         FfiConverterString.write(value.keychainService, into: &buf)
     }
@@ -25937,6 +31133,12 @@ public struct MarmotOptions {
     public var relayPolicy: RelayPolicyFfi?
     public var cursorPersistence: CursorPersistenceFfi?
     public var clientName: String?
+    /**
+     * Short name of the platform this device runs on, such as `iOS`. With
+     * `client_name`, it fills this device's entry on the account's Devices
+     * screen (mdk#2628 3.6). Blank, or over 64 bytes once trimmed, is left out.
+     */
+    public var devicePlatform: String?
     public var secretStore: SecretStore?
     public var attachmentAcquisitionMode: AttachmentAcquisitionModeFfi?
     /**
@@ -25947,8 +31149,8 @@ public struct MarmotOptions {
     public var moderationReportConfig: ModerationReportConfigFfi?
     /**
      * Deployment services: recovery relays, discovery indexers, media and
-     * image servers, Open Ranking, KeyPackage client preference, moderation
-     * label namespace and keychain service. Required, with no default, so a
+     * image servers, Open Ranking, moderation label namespace and keychain
+     * service. Required, with no default, so a
      * host can't silently open a different keychain service: White Noise
      * apps pass `marmot_deployment_white_noise()`.
      */
@@ -25956,7 +31158,12 @@ public struct MarmotOptions {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(relayPolicy: RelayPolicyFfi? = nil, cursorPersistence: CursorPersistenceFfi? = nil, clientName: String? = nil, secretStore: SecretStore? = nil, attachmentAcquisitionMode: AttachmentAcquisitionModeFfi? = nil,
+    public init(relayPolicy: RelayPolicyFfi? = nil, cursorPersistence: CursorPersistenceFfi? = nil, clientName: String? = nil,
+        /**
+         * Short name of the platform this device runs on, such as `iOS`. With
+         * `client_name`, it fills this device's entry on the account's Devices
+         * screen (mdk#2628 3.6). Blank, or over 64 bytes once trimmed, is left out.
+         */devicePlatform: String? = nil, secretStore: SecretStore? = nil, attachmentAcquisitionMode: AttachmentAcquisitionModeFfi? = nil,
         /**
          * Destination for private moderation reports (`submit_moderation_report`). Set per
          * build flavor. Invalid values leave reporting unconfigured; `configure_moderation_reporting`
@@ -25964,14 +31171,15 @@ public struct MarmotOptions {
          */moderationReportConfig: ModerationReportConfigFfi? = nil,
         /**
          * Deployment services: recovery relays, discovery indexers, media and
-         * image servers, Open Ranking, KeyPackage client preference, moderation
-         * label namespace and keychain service. Required, with no default, so a
+         * image servers, Open Ranking, moderation label namespace and keychain
+         * service. Required, with no default, so a
          * host can't silently open a different keychain service: White Noise
          * apps pass `marmot_deployment_white_noise()`.
          */deployment: MarmotDeploymentFfi) {
         self.relayPolicy = relayPolicy
         self.cursorPersistence = cursorPersistence
         self.clientName = clientName
+        self.devicePlatform = devicePlatform
         self.secretStore = secretStore
         self.attachmentAcquisitionMode = attachmentAcquisitionMode
         self.moderationReportConfig = moderationReportConfig
@@ -25995,6 +31203,7 @@ public struct FfiConverterTypeMarmotOptions: FfiConverterRustBuffer {
                 relayPolicy: FfiConverterOptionTypeRelayPolicyFfi.read(from: &buf),
                 cursorPersistence: FfiConverterOptionTypeCursorPersistenceFfi.read(from: &buf),
                 clientName: FfiConverterOptionString.read(from: &buf),
+                devicePlatform: FfiConverterOptionString.read(from: &buf),
                 secretStore: FfiConverterOptionTypeSecretStore.read(from: &buf),
                 attachmentAcquisitionMode: FfiConverterOptionTypeAttachmentAcquisitionModeFfi.read(from: &buf),
                 moderationReportConfig: FfiConverterOptionTypeModerationReportConfigFfi.read(from: &buf),
@@ -26006,6 +31215,7 @@ public struct FfiConverterTypeMarmotOptions: FfiConverterRustBuffer {
         FfiConverterOptionTypeRelayPolicyFfi.write(value.relayPolicy, into: &buf)
         FfiConverterOptionTypeCursorPersistenceFfi.write(value.cursorPersistence, into: &buf)
         FfiConverterOptionString.write(value.clientName, into: &buf)
+        FfiConverterOptionString.write(value.devicePlatform, into: &buf)
         FfiConverterOptionTypeSecretStore.write(value.secretStore, into: &buf)
         FfiConverterOptionTypeAttachmentAcquisitionModeFfi.write(value.attachmentAcquisitionMode, into: &buf)
         FfiConverterOptionTypeModerationReportConfigFfi.write(value.moderationReportConfig, into: &buf)
@@ -26038,12 +31248,21 @@ public struct MediaAttachmentReferenceFfi {
     public var mediaType: String
     public var version: EncryptedMediaVersionFfi
     public var sourceEpoch: UInt64
+    /**
+     * Local upload branch identity; preserve unchanged when sending returned references.
+     * Absent for received attachments; never sent in an `imeta` tag.
+     */
+    public var sourceEpochIdentity: String?
     public var dim: String?
     public var thumbhash: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(locators: [MediaLocatorFfi], ciphertextSha256: String, plaintextSha256: String, nonceHex: String, fileName: String, mediaType: String, version: EncryptedMediaVersionFfi, sourceEpoch: UInt64, dim: String?, thumbhash: String?) {
+    public init(locators: [MediaLocatorFfi], ciphertextSha256: String, plaintextSha256: String, nonceHex: String, fileName: String, mediaType: String, version: EncryptedMediaVersionFfi, sourceEpoch: UInt64,
+        /**
+         * Local upload branch identity; preserve unchanged when sending returned references.
+         * Absent for received attachments; never sent in an `imeta` tag.
+         */sourceEpochIdentity: String? = nil, dim: String?, thumbhash: String?) {
         self.locators = locators
         self.ciphertextSha256 = ciphertextSha256
         self.plaintextSha256 = plaintextSha256
@@ -26052,6 +31271,7 @@ public struct MediaAttachmentReferenceFfi {
         self.mediaType = mediaType
         self.version = version
         self.sourceEpoch = sourceEpoch
+        self.sourceEpochIdentity = sourceEpochIdentity
         self.dim = dim
         self.thumbhash = thumbhash
     }
@@ -26088,6 +31308,9 @@ extension MediaAttachmentReferenceFfi: Equatable, Hashable {
         if lhs.sourceEpoch != rhs.sourceEpoch {
             return false
         }
+        if lhs.sourceEpochIdentity != rhs.sourceEpochIdentity {
+            return false
+        }
         if lhs.dim != rhs.dim {
             return false
         }
@@ -26106,6 +31329,7 @@ extension MediaAttachmentReferenceFfi: Equatable, Hashable {
         hasher.combine(mediaType)
         hasher.combine(version)
         hasher.combine(sourceEpoch)
+        hasher.combine(sourceEpochIdentity)
         hasher.combine(dim)
         hasher.combine(thumbhash)
     }
@@ -26128,6 +31352,7 @@ public struct FfiConverterTypeMediaAttachmentReferenceFfi: FfiConverterRustBuffe
                 mediaType: FfiConverterString.read(from: &buf),
                 version: FfiConverterTypeEncryptedMediaVersionFfi.read(from: &buf),
                 sourceEpoch: FfiConverterUInt64.read(from: &buf),
+                sourceEpochIdentity: FfiConverterOptionString.read(from: &buf),
                 dim: FfiConverterOptionString.read(from: &buf),
                 thumbhash: FfiConverterOptionString.read(from: &buf)
         )
@@ -26142,6 +31367,7 @@ public struct FfiConverterTypeMediaAttachmentReferenceFfi: FfiConverterRustBuffe
         FfiConverterString.write(value.mediaType, into: &buf)
         FfiConverterTypeEncryptedMediaVersionFfi.write(value.version, into: &buf)
         FfiConverterUInt64.write(value.sourceEpoch, into: &buf)
+        FfiConverterOptionString.write(value.sourceEpochIdentity, into: &buf)
         FfiConverterOptionString.write(value.dim, into: &buf)
         FfiConverterOptionString.write(value.thumbhash, into: &buf)
     }
@@ -28275,6 +33501,7 @@ public struct NotificationUpdateFfi {
     public var sender: NotificationUserFfi
     public var receiver: NotificationUserFfi
     public var previewText: String?
+    public var sticker: StickerRefFfi?
     public var reactionEmoji: String?
     public var reactedToPreview: String?
     public var timestampMs: Int64
@@ -28282,7 +33509,7 @@ public struct NotificationUpdateFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(notificationKey: String, conversationKey: String, trigger: NotificationTriggerFfi, trafficClass: NotificationTrafficClassFfi, accountRef: String, accountIdHex: String, groupIdHex: String, groupName: String?, isDm: Bool, isMention: Bool, messageIdHex: String?, sender: NotificationUserFfi, receiver: NotificationUserFfi, previewText: String?, reactionEmoji: String?, reactedToPreview: String?, timestampMs: Int64, isFromSelf: Bool) {
+    public init(notificationKey: String, conversationKey: String, trigger: NotificationTriggerFfi, trafficClass: NotificationTrafficClassFfi, accountRef: String, accountIdHex: String, groupIdHex: String, groupName: String?, isDm: Bool, isMention: Bool, messageIdHex: String?, sender: NotificationUserFfi, receiver: NotificationUserFfi, previewText: String?, sticker: StickerRefFfi?, reactionEmoji: String?, reactedToPreview: String?, timestampMs: Int64, isFromSelf: Bool) {
         self.notificationKey = notificationKey
         self.conversationKey = conversationKey
         self.trigger = trigger
@@ -28297,6 +33524,7 @@ public struct NotificationUpdateFfi {
         self.sender = sender
         self.receiver = receiver
         self.previewText = previewText
+        self.sticker = sticker
         self.reactionEmoji = reactionEmoji
         self.reactedToPreview = reactedToPreview
         self.timestampMs = timestampMs
@@ -28353,6 +33581,9 @@ extension NotificationUpdateFfi: Equatable, Hashable {
         if lhs.previewText != rhs.previewText {
             return false
         }
+        if lhs.sticker != rhs.sticker {
+            return false
+        }
         if lhs.reactionEmoji != rhs.reactionEmoji {
             return false
         }
@@ -28383,6 +33614,7 @@ extension NotificationUpdateFfi: Equatable, Hashable {
         hasher.combine(sender)
         hasher.combine(receiver)
         hasher.combine(previewText)
+        hasher.combine(sticker)
         hasher.combine(reactionEmoji)
         hasher.combine(reactedToPreview)
         hasher.combine(timestampMs)
@@ -28413,6 +33645,7 @@ public struct FfiConverterTypeNotificationUpdateFfi: FfiConverterRustBuffer {
                 sender: FfiConverterTypeNotificationUserFfi.read(from: &buf),
                 receiver: FfiConverterTypeNotificationUserFfi.read(from: &buf),
                 previewText: FfiConverterOptionString.read(from: &buf),
+                sticker: FfiConverterOptionTypeStickerRefFfi.read(from: &buf),
                 reactionEmoji: FfiConverterOptionString.read(from: &buf),
                 reactedToPreview: FfiConverterOptionString.read(from: &buf),
                 timestampMs: FfiConverterInt64.read(from: &buf),
@@ -28435,6 +33668,7 @@ public struct FfiConverterTypeNotificationUpdateFfi: FfiConverterRustBuffer {
         FfiConverterTypeNotificationUserFfi.write(value.sender, into: &buf)
         FfiConverterTypeNotificationUserFfi.write(value.receiver, into: &buf)
         FfiConverterOptionString.write(value.previewText, into: &buf)
+        FfiConverterOptionTypeStickerRefFfi.write(value.sticker, into: &buf)
         FfiConverterOptionString.write(value.reactionEmoji, into: &buf)
         FfiConverterOptionString.write(value.reactedToPreview, into: &buf)
         FfiConverterInt64.write(value.timestampMs, into: &buf)
@@ -29625,6 +34859,107 @@ public func FfiConverterTypeOpenRankingProviderFfi_lift(_ buf: RustBuffer) throw
 #endif
 public func FfiConverterTypeOpenRankingProviderFfi_lower(_ value: OpenRankingProviderFfi) -> RustBuffer {
     return FfiConverterTypeOpenRankingProviderFfi.lower(value)
+}
+
+
+/**
+ * A retained repair handle for a canonical create or confirmed Add. A missing size
+ * class means Unknown, including old rows or a later coarse legacy retry.
+ * A present class explains the observed refusal, not non-delivery: legacy
+ * bookkeeping may miss earlier exposure after a crash or record expiry.
+ * No annotation changes membership or ends the delivery obligation.
+ */
+public struct PendingWelcomeDeliveryFfi {
+    public var groupIdHex: String
+    public var messageIdHex: String
+    public var recipientHex: String
+    public var recordedAt: UInt64
+    public var sizeClass: EventSizeClassFfi?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(groupIdHex: String, messageIdHex: String, recipientHex: String, recordedAt: UInt64, sizeClass: EventSizeClassFfi?) {
+        self.groupIdHex = groupIdHex
+        self.messageIdHex = messageIdHex
+        self.recipientHex = recipientHex
+        self.recordedAt = recordedAt
+        self.sizeClass = sizeClass
+    }
+}
+
+#if compiler(>=6)
+extension PendingWelcomeDeliveryFfi: Sendable {}
+#endif
+
+
+extension PendingWelcomeDeliveryFfi: Equatable, Hashable {
+    public static func ==(lhs: PendingWelcomeDeliveryFfi, rhs: PendingWelcomeDeliveryFfi) -> Bool {
+        if lhs.groupIdHex != rhs.groupIdHex {
+            return false
+        }
+        if lhs.messageIdHex != rhs.messageIdHex {
+            return false
+        }
+        if lhs.recipientHex != rhs.recipientHex {
+            return false
+        }
+        if lhs.recordedAt != rhs.recordedAt {
+            return false
+        }
+        if lhs.sizeClass != rhs.sizeClass {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(groupIdHex)
+        hasher.combine(messageIdHex)
+        hasher.combine(recipientHex)
+        hasher.combine(recordedAt)
+        hasher.combine(sizeClass)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePendingWelcomeDeliveryFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PendingWelcomeDeliveryFfi {
+        return
+            try PendingWelcomeDeliveryFfi(
+                groupIdHex: FfiConverterString.read(from: &buf),
+                messageIdHex: FfiConverterString.read(from: &buf),
+                recipientHex: FfiConverterString.read(from: &buf),
+                recordedAt: FfiConverterUInt64.read(from: &buf),
+                sizeClass: FfiConverterOptionTypeEventSizeClassFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PendingWelcomeDeliveryFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.groupIdHex, into: &buf)
+        FfiConverterString.write(value.messageIdHex, into: &buf)
+        FfiConverterString.write(value.recipientHex, into: &buf)
+        FfiConverterUInt64.write(value.recordedAt, into: &buf)
+        FfiConverterOptionTypeEventSizeClassFfi.write(value.sizeClass, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePendingWelcomeDeliveryFfi_lift(_ buf: RustBuffer) throws -> PendingWelcomeDeliveryFfi {
+    return try FfiConverterTypePendingWelcomeDeliveryFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePendingWelcomeDeliveryFfi_lower(_ value: PendingWelcomeDeliveryFfi) -> RustBuffer {
+    return FfiConverterTypePendingWelcomeDeliveryFfi.lower(value)
 }
 
 
@@ -31478,6 +36813,7 @@ public struct ReceivedMessageFfi {
      * Nostr `tags` of the inner Marmot app event.
      */
     public var tags: [MessageTagFfi]
+    public var sticker: StickerRefFfi?
     public var sourceEpoch: UInt64
     /**
      * `None` means the engine could not recover the historical source policy.
@@ -31501,7 +36837,7 @@ public struct ReceivedMessageFfi {
          */kind: UInt64,
         /**
          * Nostr `tags` of the inner Marmot app event.
-         */tags: [MessageTagFfi], sourceEpoch: UInt64,
+         */tags: [MessageTagFfi], sticker: StickerRefFfi?, sourceEpoch: UInt64,
         /**
          * `None` means the engine could not recover the historical source policy.
          */retentionSeconds: UInt64?, retentionExpiresAt: UInt64?,
@@ -31519,6 +36855,7 @@ public struct ReceivedMessageFfi {
         self.contentTokens = contentTokens
         self.kind = kind
         self.tags = tags
+        self.sticker = sticker
         self.sourceEpoch = sourceEpoch
         self.retentionSeconds = retentionSeconds
         self.retentionExpiresAt = retentionExpiresAt
@@ -31558,6 +36895,9 @@ extension ReceivedMessageFfi: Equatable, Hashable {
         if lhs.tags != rhs.tags {
             return false
         }
+        if lhs.sticker != rhs.sticker {
+            return false
+        }
         if lhs.sourceEpoch != rhs.sourceEpoch {
             return false
         }
@@ -31585,6 +36925,7 @@ extension ReceivedMessageFfi: Equatable, Hashable {
         hasher.combine(contentTokens)
         hasher.combine(kind)
         hasher.combine(tags)
+        hasher.combine(sticker)
         hasher.combine(sourceEpoch)
         hasher.combine(retentionSeconds)
         hasher.combine(retentionExpiresAt)
@@ -31610,6 +36951,7 @@ public struct FfiConverterTypeReceivedMessageFfi: FfiConverterRustBuffer {
                 contentTokens: FfiConverterTypeMarkdownDocumentFfi.read(from: &buf),
                 kind: FfiConverterUInt64.read(from: &buf),
                 tags: FfiConverterSequenceTypeMessageTagFfi.read(from: &buf),
+                sticker: FfiConverterOptionTypeStickerRefFfi.read(from: &buf),
                 sourceEpoch: FfiConverterUInt64.read(from: &buf),
                 retentionSeconds: FfiConverterOptionUInt64.read(from: &buf),
                 retentionExpiresAt: FfiConverterOptionUInt64.read(from: &buf),
@@ -31627,6 +36969,7 @@ public struct FfiConverterTypeReceivedMessageFfi: FfiConverterRustBuffer {
         FfiConverterTypeMarkdownDocumentFfi.write(value.contentTokens, into: &buf)
         FfiConverterUInt64.write(value.kind, into: &buf)
         FfiConverterSequenceTypeMessageTagFfi.write(value.tags, into: &buf)
+        FfiConverterOptionTypeStickerRefFfi.write(value.sticker, into: &buf)
         FfiConverterUInt64.write(value.sourceEpoch, into: &buf)
         FfiConverterOptionUInt64.write(value.retentionSeconds, into: &buf)
         FfiConverterOptionUInt64.write(value.retentionExpiresAt, into: &buf)
@@ -31648,6 +36991,86 @@ public func FfiConverterTypeReceivedMessageFfi_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeReceivedMessageFfi_lower(_ value: ReceivedMessageFfi) -> RustBuffer {
     return FfiConverterTypeReceivedMessageFfi.lower(value)
+}
+
+
+/**
+ * Shown once. Hosts must clear their own managed copies after confirmation
+ * or cancellation; generated strings are not a secure-buffer API.
+ */
+public struct RecoveryWordsFfi {
+    public var words: [String]
+    /**
+     * The two 1-based positions to confirm, in ascending order.
+     */
+    public var confirmPositions: [UInt32]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(words: [String],
+        /**
+         * The two 1-based positions to confirm, in ascending order.
+         */confirmPositions: [UInt32]) {
+        self.words = words
+        self.confirmPositions = confirmPositions
+    }
+}
+
+#if compiler(>=6)
+extension RecoveryWordsFfi: Sendable {}
+#endif
+
+
+extension RecoveryWordsFfi: Equatable, Hashable {
+    public static func ==(lhs: RecoveryWordsFfi, rhs: RecoveryWordsFfi) -> Bool {
+        if lhs.words != rhs.words {
+            return false
+        }
+        if lhs.confirmPositions != rhs.confirmPositions {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(words)
+        hasher.combine(confirmPositions)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRecoveryWordsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RecoveryWordsFfi {
+        return
+            try RecoveryWordsFfi(
+                words: FfiConverterSequenceString.read(from: &buf),
+                confirmPositions: FfiConverterSequenceUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RecoveryWordsFfi, into buf: inout [UInt8]) {
+        FfiConverterSequenceString.write(value.words, into: &buf)
+        FfiConverterSequenceUInt32.write(value.confirmPositions, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoveryWordsFfi_lift(_ buf: RustBuffer) throws -> RecoveryWordsFfi {
+    return try FfiConverterTypeRecoveryWordsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoveryWordsFfi_lower(_ value: RecoveryWordsFfi) -> RustBuffer {
+    return FfiConverterTypeRecoveryWordsFfi.lower(value)
 }
 
 
@@ -33585,18 +39008,18 @@ public func FfiConverterTypeSendSummaryFfi_lower(_ value: SendSummaryFfi) -> Rus
 
 /**
  * Structured result of the non-destructive `signOut`. The account's local
- * state is kept on device; only the relay-published KeyPackages are cleaned
- * up (when requested), so the app can render the same per-relay
+ * state is kept on device; only this device's relay-published KeyPackage
+ * slot is deleted (when requested), so the app can render the same
  * partial-failure sheet as a wipe. Failures are not durably queued for retry.
  */
 public struct SignOutOutcomeFfi {
     /**
-     * Relay-published KeyPackage events successfully deleted. `0` when
-     * `deleteKeyPackages` was `false`.
+     * `1` when a relay accepted the deletion of this device's KeyPackage
+     * slot, otherwise `0` (always `0` when `deleteKeyPackages` was `false`).
      */
     public var keyPackagesDeleted: UInt32
     /**
-     * Per-relay KeyPackage deletion (or discovery) failures. Best-effort.
+     * KeyPackage slot deletion failures. Best-effort.
      */
     public var keyPackageFailures: [RelayFailureFfi]
     /**
@@ -33609,11 +39032,11 @@ public struct SignOutOutcomeFfi {
     // declare one manually.
     public init(
         /**
-         * Relay-published KeyPackage events successfully deleted. `0` when
-         * `deleteKeyPackages` was `false`.
+         * `1` when a relay accepted the deletion of this device's KeyPackage
+         * slot, otherwise `0` (always `0` when `deleteKeyPackages` was `false`).
          */keyPackagesDeleted: UInt32,
         /**
-         * Per-relay KeyPackage deletion (or discovery) failures. Best-effort.
+         * KeyPackage slot deletion failures. Best-effort.
          */keyPackageFailures: [RelayFailureFfi],
         /**
          * Local teardown (worker shutdown, subscription deactivation, in-memory
@@ -33686,6 +39109,586 @@ public func FfiConverterTypeSignOutOutcomeFfi_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeSignOutOutcomeFfi_lower(_ value: SignOutOutcomeFfi) -> RustBuffer {
     return FfiConverterTypeSignOutOutcomeFfi.lower(value)
+}
+
+
+public struct StickerAssetFfi {
+    public var sticker: StickerFfi
+    public var bytes: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(sticker: StickerFfi, bytes: Data) {
+        self.sticker = sticker
+        self.bytes = bytes
+    }
+}
+
+#if compiler(>=6)
+extension StickerAssetFfi: Sendable {}
+#endif
+
+
+extension StickerAssetFfi: Equatable, Hashable {
+    public static func ==(lhs: StickerAssetFfi, rhs: StickerAssetFfi) -> Bool {
+        if lhs.sticker != rhs.sticker {
+            return false
+        }
+        if lhs.bytes != rhs.bytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(sticker)
+        hasher.combine(bytes)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStickerAssetFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StickerAssetFfi {
+        return
+            try StickerAssetFfi(
+                sticker: FfiConverterTypeStickerFfi.read(from: &buf),
+                bytes: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StickerAssetFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeStickerFfi.write(value.sticker, into: &buf)
+        FfiConverterData.write(value.bytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerAssetFfi_lift(_ buf: RustBuffer) throws -> StickerAssetFfi {
+    return try FfiConverterTypeStickerAssetFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerAssetFfi_lower(_ value: StickerAssetFfi) -> RustBuffer {
+    return FfiConverterTypeStickerAssetFfi.lower(value)
+}
+
+
+public struct StickerFfi {
+    public var packCoordinate: String
+    public var shortcode: String
+    public var url: String
+    /**
+     * SHA-256 of the sticker's plaintext image bytes: the exact hash a
+     * `StickerRefFfi` carries and `fetch_sticker_asset` / `send_sticker` take.
+     */
+    public var plaintextSha256: String
+    public var mime: String
+    public var width: UInt32?
+    public var height: UInt32?
+    public var alt: String?
+    public var emoji: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(packCoordinate: String, shortcode: String, url: String,
+        /**
+         * SHA-256 of the sticker's plaintext image bytes: the exact hash a
+         * `StickerRefFfi` carries and `fetch_sticker_asset` / `send_sticker` take.
+         */plaintextSha256: String, mime: String, width: UInt32?, height: UInt32?, alt: String?, emoji: String?) {
+        self.packCoordinate = packCoordinate
+        self.shortcode = shortcode
+        self.url = url
+        self.plaintextSha256 = plaintextSha256
+        self.mime = mime
+        self.width = width
+        self.height = height
+        self.alt = alt
+        self.emoji = emoji
+    }
+}
+
+#if compiler(>=6)
+extension StickerFfi: Sendable {}
+#endif
+
+
+extension StickerFfi: Equatable, Hashable {
+    public static func ==(lhs: StickerFfi, rhs: StickerFfi) -> Bool {
+        if lhs.packCoordinate != rhs.packCoordinate {
+            return false
+        }
+        if lhs.shortcode != rhs.shortcode {
+            return false
+        }
+        if lhs.url != rhs.url {
+            return false
+        }
+        if lhs.plaintextSha256 != rhs.plaintextSha256 {
+            return false
+        }
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.width != rhs.width {
+            return false
+        }
+        if lhs.height != rhs.height {
+            return false
+        }
+        if lhs.alt != rhs.alt {
+            return false
+        }
+        if lhs.emoji != rhs.emoji {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(packCoordinate)
+        hasher.combine(shortcode)
+        hasher.combine(url)
+        hasher.combine(plaintextSha256)
+        hasher.combine(mime)
+        hasher.combine(width)
+        hasher.combine(height)
+        hasher.combine(alt)
+        hasher.combine(emoji)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStickerFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StickerFfi {
+        return
+            try StickerFfi(
+                packCoordinate: FfiConverterString.read(from: &buf),
+                shortcode: FfiConverterString.read(from: &buf),
+                url: FfiConverterString.read(from: &buf),
+                plaintextSha256: FfiConverterString.read(from: &buf),
+                mime: FfiConverterString.read(from: &buf),
+                width: FfiConverterOptionUInt32.read(from: &buf),
+                height: FfiConverterOptionUInt32.read(from: &buf),
+                alt: FfiConverterOptionString.read(from: &buf),
+                emoji: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StickerFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.packCoordinate, into: &buf)
+        FfiConverterString.write(value.shortcode, into: &buf)
+        FfiConverterString.write(value.url, into: &buf)
+        FfiConverterString.write(value.plaintextSha256, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterOptionUInt32.write(value.width, into: &buf)
+        FfiConverterOptionUInt32.write(value.height, into: &buf)
+        FfiConverterOptionString.write(value.alt, into: &buf)
+        FfiConverterOptionString.write(value.emoji, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerFfi_lift(_ buf: RustBuffer) throws -> StickerFfi {
+    return try FfiConverterTypeStickerFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerFfi_lower(_ value: StickerFfi) -> RustBuffer {
+    return FfiConverterTypeStickerFfi.lower(value)
+}
+
+
+public struct StickerImportResultFfi {
+    public var pack: StickerPackFfi
+    public var skippedSignalStickerIds: [UInt32]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(pack: StickerPackFfi, skippedSignalStickerIds: [UInt32]) {
+        self.pack = pack
+        self.skippedSignalStickerIds = skippedSignalStickerIds
+    }
+}
+
+#if compiler(>=6)
+extension StickerImportResultFfi: Sendable {}
+#endif
+
+
+extension StickerImportResultFfi: Equatable, Hashable {
+    public static func ==(lhs: StickerImportResultFfi, rhs: StickerImportResultFfi) -> Bool {
+        if lhs.pack != rhs.pack {
+            return false
+        }
+        if lhs.skippedSignalStickerIds != rhs.skippedSignalStickerIds {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(pack)
+        hasher.combine(skippedSignalStickerIds)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStickerImportResultFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StickerImportResultFfi {
+        return
+            try StickerImportResultFfi(
+                pack: FfiConverterTypeStickerPackFfi.read(from: &buf),
+                skippedSignalStickerIds: FfiConverterSequenceUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StickerImportResultFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeStickerPackFfi.write(value.pack, into: &buf)
+        FfiConverterSequenceUInt32.write(value.skippedSignalStickerIds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerImportResultFfi_lift(_ buf: RustBuffer) throws -> StickerImportResultFfi {
+    return try FfiConverterTypeStickerImportResultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerImportResultFfi_lower(_ value: StickerImportResultFfi) -> RustBuffer {
+    return FfiConverterTypeStickerImportResultFfi.lower(value)
+}
+
+
+public struct StickerPackFfi {
+    public var coordinate: String
+    public var authorPubkeyHex: String
+    public var identifier: String
+    public var eventIdHex: String
+    public var createdAt: UInt64
+    public var title: String
+    public var description: String?
+    public var cover: StickerFfi?
+    public var stickers: [StickerFfi]
+    public var license: String?
+    public var installed: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(coordinate: String, authorPubkeyHex: String, identifier: String, eventIdHex: String, createdAt: UInt64, title: String, description: String?, cover: StickerFfi?, stickers: [StickerFfi], license: String?, installed: Bool) {
+        self.coordinate = coordinate
+        self.authorPubkeyHex = authorPubkeyHex
+        self.identifier = identifier
+        self.eventIdHex = eventIdHex
+        self.createdAt = createdAt
+        self.title = title
+        self.description = description
+        self.cover = cover
+        self.stickers = stickers
+        self.license = license
+        self.installed = installed
+    }
+}
+
+#if compiler(>=6)
+extension StickerPackFfi: Sendable {}
+#endif
+
+
+extension StickerPackFfi: Equatable, Hashable {
+    public static func ==(lhs: StickerPackFfi, rhs: StickerPackFfi) -> Bool {
+        if lhs.coordinate != rhs.coordinate {
+            return false
+        }
+        if lhs.authorPubkeyHex != rhs.authorPubkeyHex {
+            return false
+        }
+        if lhs.identifier != rhs.identifier {
+            return false
+        }
+        if lhs.eventIdHex != rhs.eventIdHex {
+            return false
+        }
+        if lhs.createdAt != rhs.createdAt {
+            return false
+        }
+        if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.cover != rhs.cover {
+            return false
+        }
+        if lhs.stickers != rhs.stickers {
+            return false
+        }
+        if lhs.license != rhs.license {
+            return false
+        }
+        if lhs.installed != rhs.installed {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(coordinate)
+        hasher.combine(authorPubkeyHex)
+        hasher.combine(identifier)
+        hasher.combine(eventIdHex)
+        hasher.combine(createdAt)
+        hasher.combine(title)
+        hasher.combine(description)
+        hasher.combine(cover)
+        hasher.combine(stickers)
+        hasher.combine(license)
+        hasher.combine(installed)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStickerPackFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StickerPackFfi {
+        return
+            try StickerPackFfi(
+                coordinate: FfiConverterString.read(from: &buf),
+                authorPubkeyHex: FfiConverterString.read(from: &buf),
+                identifier: FfiConverterString.read(from: &buf),
+                eventIdHex: FfiConverterString.read(from: &buf),
+                createdAt: FfiConverterUInt64.read(from: &buf),
+                title: FfiConverterString.read(from: &buf),
+                description: FfiConverterOptionString.read(from: &buf),
+                cover: FfiConverterOptionTypeStickerFfi.read(from: &buf),
+                stickers: FfiConverterSequenceTypeStickerFfi.read(from: &buf),
+                license: FfiConverterOptionString.read(from: &buf),
+                installed: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StickerPackFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.coordinate, into: &buf)
+        FfiConverterString.write(value.authorPubkeyHex, into: &buf)
+        FfiConverterString.write(value.identifier, into: &buf)
+        FfiConverterString.write(value.eventIdHex, into: &buf)
+        FfiConverterUInt64.write(value.createdAt, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterOptionString.write(value.description, into: &buf)
+        FfiConverterOptionTypeStickerFfi.write(value.cover, into: &buf)
+        FfiConverterSequenceTypeStickerFfi.write(value.stickers, into: &buf)
+        FfiConverterOptionString.write(value.license, into: &buf)
+        FfiConverterBool.write(value.installed, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerPackFfi_lift(_ buf: RustBuffer) throws -> StickerPackFfi {
+    return try FfiConverterTypeStickerPackFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerPackFfi_lower(_ value: StickerPackFfi) -> RustBuffer {
+    return FfiConverterTypeStickerPackFfi.lower(value)
+}
+
+
+public struct StickerRefFfi {
+    public var packCoordinate: String
+    public var shortcode: String
+    public var plaintextSha256: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(packCoordinate: String, shortcode: String, plaintextSha256: String) {
+        self.packCoordinate = packCoordinate
+        self.shortcode = shortcode
+        self.plaintextSha256 = plaintextSha256
+    }
+}
+
+#if compiler(>=6)
+extension StickerRefFfi: Sendable {}
+#endif
+
+
+extension StickerRefFfi: Equatable, Hashable {
+    public static func ==(lhs: StickerRefFfi, rhs: StickerRefFfi) -> Bool {
+        if lhs.packCoordinate != rhs.packCoordinate {
+            return false
+        }
+        if lhs.shortcode != rhs.shortcode {
+            return false
+        }
+        if lhs.plaintextSha256 != rhs.plaintextSha256 {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(packCoordinate)
+        hasher.combine(shortcode)
+        hasher.combine(plaintextSha256)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStickerRefFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StickerRefFfi {
+        return
+            try StickerRefFfi(
+                packCoordinate: FfiConverterString.read(from: &buf),
+                shortcode: FfiConverterString.read(from: &buf),
+                plaintextSha256: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StickerRefFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.packCoordinate, into: &buf)
+        FfiConverterString.write(value.shortcode, into: &buf)
+        FfiConverterString.write(value.plaintextSha256, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerRefFfi_lift(_ buf: RustBuffer) throws -> StickerRefFfi {
+    return try FfiConverterTypeStickerRefFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerRefFfi_lower(_ value: StickerRefFfi) -> RustBuffer {
+    return FfiConverterTypeStickerRefFfi.lower(value)
+}
+
+
+public struct StickerSyncResultFfi {
+    public var discovered: UInt32
+    public var updated: UInt32
+    public var installed: UInt32
+    public var pendingOperations: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(discovered: UInt32, updated: UInt32, installed: UInt32, pendingOperations: UInt32) {
+        self.discovered = discovered
+        self.updated = updated
+        self.installed = installed
+        self.pendingOperations = pendingOperations
+    }
+}
+
+#if compiler(>=6)
+extension StickerSyncResultFfi: Sendable {}
+#endif
+
+
+extension StickerSyncResultFfi: Equatable, Hashable {
+    public static func ==(lhs: StickerSyncResultFfi, rhs: StickerSyncResultFfi) -> Bool {
+        if lhs.discovered != rhs.discovered {
+            return false
+        }
+        if lhs.updated != rhs.updated {
+            return false
+        }
+        if lhs.installed != rhs.installed {
+            return false
+        }
+        if lhs.pendingOperations != rhs.pendingOperations {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(discovered)
+        hasher.combine(updated)
+        hasher.combine(installed)
+        hasher.combine(pendingOperations)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStickerSyncResultFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StickerSyncResultFfi {
+        return
+            try StickerSyncResultFfi(
+                discovered: FfiConverterUInt32.read(from: &buf),
+                updated: FfiConverterUInt32.read(from: &buf),
+                installed: FfiConverterUInt32.read(from: &buf),
+                pendingOperations: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StickerSyncResultFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.discovered, into: &buf)
+        FfiConverterUInt32.write(value.updated, into: &buf)
+        FfiConverterUInt32.write(value.installed, into: &buf)
+        FfiConverterUInt32.write(value.pendingOperations, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerSyncResultFfi_lift(_ buf: RustBuffer) throws -> StickerSyncResultFfi {
+    return try FfiConverterTypeStickerSyncResultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStickerSyncResultFfi_lower(_ value: StickerSyncResultFfi) -> RustBuffer {
+    return FfiConverterTypeStickerSyncResultFfi.lower(value)
 }
 
 
@@ -34040,7 +40043,8 @@ public struct TimelineMessageRecordFfi {
      * Delivery marker for own (`direction == "sent"`) messages. An own send
      * commits and projects locally *before* it publishes, so a message that
      * was committed but not yet delivered (e.g. sent offline / relay
-     * unreachable) carries `None` here — render it as pending/failed. On
+     * unreachable) carries `None` here — render it as pending/failed unless
+     * `recipient_confirmed` is set. On
      * delivery/convergence the same row is upserted with `Some(..)` (the
      * published source event id), so flip the UI to delivered once this
      * becomes non-null. To re-drive delivery of a stuck pending message
@@ -34071,6 +40075,7 @@ public struct TimelineMessageRecordFfi {
     public var contentTokens: MarkdownDocumentFfi
     public var kind: UInt64
     public var tags: [MessageTagFfi]
+    public var sticker: StickerRefFfi?
     /**
      * Authenticated inner app-event time, or observation time for synthesized
      * rows without an inner timestamp.
@@ -34112,6 +40117,28 @@ public struct TimelineMessageRecordFfi {
      * (e.g. `LosingBranch`). `None` for delivered messages.
      */
     public var invalidationStatus: String?
+    /**
+     * True when a peer reacted to this own send after it failed with no relay
+     * acceptance on record: the reaction proves that peer received it
+     * (mdk#1291). It stays true if retention later prunes that reaction.
+     * Render it as delivered. `source_message_id_hex` stays `None` for such a
+     * row, because the reaction does not say which published event carried
+     * the message, and `invalidation_status` is `None`. A change arrives with
+     * the `DeliveryOrSendStateChanged` trigger. Always `false` for received
+     * and system rows.
+     */
+    public var recipientConfirmed: Bool
+    /**
+     * The device this row came from in a chat history it sent; `None` for
+     * a row that arrived live. Draw "Imported from <device>" where rows
+     * change from imported to live.
+     */
+    public var importedFrom: HistoryImportSourceFfi?
+    /**
+     * Complete typed source; None for live rows. The legacy imported_from
+     * field remains sibling-only, so None there alone does not mean live.
+     */
+    public var historyImportProvenance: HistoryImportProvenanceFfi?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -34126,7 +40153,8 @@ public struct TimelineMessageRecordFfi {
          * Delivery marker for own (`direction == "sent"`) messages. An own send
          * commits and projects locally *before* it publishes, so a message that
          * was committed but not yet delivered (e.g. sent offline / relay
-         * unreachable) carries `None` here — render it as pending/failed. On
+         * unreachable) carries `None` here — render it as pending/failed unless
+         * `recipient_confirmed` is set. On
          * delivery/convergence the same row is upserted with `Some(..)` (the
          * published source event id), so flip the UI to delivered once this
          * becomes non-null. To re-drive delivery of a stuck pending message
@@ -34145,7 +40173,7 @@ public struct TimelineMessageRecordFfi {
         /**
          * Exact pinned expiration timestamp. A positive retention duration can
          * still have no finite expiry when timestamp addition overflowed.
-         */retentionExpiresAt: UInt64?, direction: String, groupIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, tags: [MessageTagFfi],
+         */retentionExpiresAt: UInt64?, direction: String, groupIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, tags: [MessageTagFfi], sticker: StickerRefFfi?,
         /**
          * Authenticated inner app-event time, or observation time for synthesized
          * rows without an inner timestamp.
@@ -34172,7 +40200,26 @@ public struct TimelineMessageRecordFfi {
          * branch). The message is kept as a "did not reach the group" tombstone
          * instead of disappearing; the value is the engine invalidation reason
          * (e.g. `LosingBranch`). `None` for delivered messages.
-         */invalidationStatus: String?) {
+         */invalidationStatus: String?,
+        /**
+         * True when a peer reacted to this own send after it failed with no relay
+         * acceptance on record: the reaction proves that peer received it
+         * (mdk#1291). It stays true if retention later prunes that reaction.
+         * Render it as delivered. `source_message_id_hex` stays `None` for such a
+         * row, because the reaction does not say which published event carried
+         * the message, and `invalidation_status` is `None`. A change arrives with
+         * the `DeliveryOrSendStateChanged` trigger. Always `false` for received
+         * and system rows.
+         */recipientConfirmed: Bool,
+        /**
+         * The device this row came from in a chat history it sent; `None` for
+         * a row that arrived live. Draw "Imported from <device>" where rows
+         * change from imported to live.
+         */importedFrom: HistoryImportSourceFfi?,
+        /**
+         * Complete typed source; None for live rows. The legacy imported_from
+         * field remains sibling-only, so None there alone does not mean live.
+         */historyImportProvenance: HistoryImportProvenanceFfi?) {
         self.clientToken = clientToken
         self.hasReports = hasReports
         self.poll = poll
@@ -34188,6 +40235,7 @@ public struct TimelineMessageRecordFfi {
         self.contentTokens = contentTokens
         self.kind = kind
         self.tags = tags
+        self.sticker = sticker
         self.timelineAt = timelineAt
         self.receivedAt = receivedAt
         self.replyToMessageIdHex = replyToMessageIdHex
@@ -34202,6 +40250,9 @@ public struct TimelineMessageRecordFfi {
         self.deletionSource = deletionSource
         self.deletedByMessageIdHex = deletedByMessageIdHex
         self.invalidationStatus = invalidationStatus
+        self.recipientConfirmed = recipientConfirmed
+        self.importedFrom = importedFrom
+        self.historyImportProvenance = historyImportProvenance
     }
 }
 
@@ -34257,6 +40308,9 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         if lhs.tags != rhs.tags {
             return false
         }
+        if lhs.sticker != rhs.sticker {
+            return false
+        }
         if lhs.timelineAt != rhs.timelineAt {
             return false
         }
@@ -34299,6 +40353,15 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         if lhs.invalidationStatus != rhs.invalidationStatus {
             return false
         }
+        if lhs.recipientConfirmed != rhs.recipientConfirmed {
+            return false
+        }
+        if lhs.importedFrom != rhs.importedFrom {
+            return false
+        }
+        if lhs.historyImportProvenance != rhs.historyImportProvenance {
+            return false
+        }
         return true
     }
 
@@ -34318,6 +40381,7 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         hasher.combine(contentTokens)
         hasher.combine(kind)
         hasher.combine(tags)
+        hasher.combine(sticker)
         hasher.combine(timelineAt)
         hasher.combine(receivedAt)
         hasher.combine(replyToMessageIdHex)
@@ -34332,6 +40396,9 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         hasher.combine(deletionSource)
         hasher.combine(deletedByMessageIdHex)
         hasher.combine(invalidationStatus)
+        hasher.combine(recipientConfirmed)
+        hasher.combine(importedFrom)
+        hasher.combine(historyImportProvenance)
     }
 }
 
@@ -34359,6 +40426,7 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
                 contentTokens: FfiConverterTypeMarkdownDocumentFfi.read(from: &buf),
                 kind: FfiConverterUInt64.read(from: &buf),
                 tags: FfiConverterSequenceTypeMessageTagFfi.read(from: &buf),
+                sticker: FfiConverterOptionTypeStickerRefFfi.read(from: &buf),
                 timelineAt: FfiConverterUInt64.read(from: &buf),
                 receivedAt: FfiConverterUInt64.read(from: &buf),
                 replyToMessageIdHex: FfiConverterOptionString.read(from: &buf),
@@ -34372,7 +40440,10 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
                 deleted: FfiConverterBool.read(from: &buf),
                 deletionSource: FfiConverterTypeDeletionSourceFfi.read(from: &buf),
                 deletedByMessageIdHex: FfiConverterOptionString.read(from: &buf),
-                invalidationStatus: FfiConverterOptionString.read(from: &buf)
+                invalidationStatus: FfiConverterOptionString.read(from: &buf),
+                recipientConfirmed: FfiConverterBool.read(from: &buf),
+                importedFrom: FfiConverterOptionTypeHistoryImportSourceFfi.read(from: &buf),
+                historyImportProvenance: FfiConverterOptionTypeHistoryImportProvenanceFfi.read(from: &buf)
         )
     }
 
@@ -34392,6 +40463,7 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterTypeMarkdownDocumentFfi.write(value.contentTokens, into: &buf)
         FfiConverterUInt64.write(value.kind, into: &buf)
         FfiConverterSequenceTypeMessageTagFfi.write(value.tags, into: &buf)
+        FfiConverterOptionTypeStickerRefFfi.write(value.sticker, into: &buf)
         FfiConverterUInt64.write(value.timelineAt, into: &buf)
         FfiConverterUInt64.write(value.receivedAt, into: &buf)
         FfiConverterOptionString.write(value.replyToMessageIdHex, into: &buf)
@@ -34406,6 +40478,9 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterTypeDeletionSourceFfi.write(value.deletionSource, into: &buf)
         FfiConverterOptionString.write(value.deletedByMessageIdHex, into: &buf)
         FfiConverterOptionString.write(value.invalidationStatus, into: &buf)
+        FfiConverterBool.write(value.recipientConfirmed, into: &buf)
+        FfiConverterOptionTypeHistoryImportSourceFfi.write(value.importedFrom, into: &buf)
+        FfiConverterOptionTypeHistoryImportProvenanceFfi.write(value.historyImportProvenance, into: &buf)
     }
 }
 
@@ -34771,6 +40846,7 @@ public struct TimelineReplyPreviewFfi {
     public var plaintext: String
     public var contentTokens: MarkdownDocumentFfi
     public var kind: UInt64
+    public var sticker: StickerRefFfi?
     public var mediaJson: String?
     /**
      * Ordered per-attachment outcomes for the previewed message, built from
@@ -34792,7 +40868,7 @@ public struct TimelineReplyPreviewFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messageIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, mediaJson: String?,
+    public init(messageIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, sticker: StickerRefFfi?, mediaJson: String?,
         /**
          * Ordered per-attachment outcomes for the previewed message, built from
          * its `imeta` tags + its own `source_epoch` with the same parser and error
@@ -34810,6 +40886,7 @@ public struct TimelineReplyPreviewFfi {
         self.plaintext = plaintext
         self.contentTokens = contentTokens
         self.kind = kind
+        self.sticker = sticker
         self.mediaJson = mediaJson
         self.media = media
         self.agentTextStreamJson = agentTextStreamJson
@@ -34841,6 +40918,9 @@ extension TimelineReplyPreviewFfi: Equatable, Hashable {
         if lhs.kind != rhs.kind {
             return false
         }
+        if lhs.sticker != rhs.sticker {
+            return false
+        }
         if lhs.mediaJson != rhs.mediaJson {
             return false
         }
@@ -34868,6 +40948,7 @@ extension TimelineReplyPreviewFfi: Equatable, Hashable {
         hasher.combine(plaintext)
         hasher.combine(contentTokens)
         hasher.combine(kind)
+        hasher.combine(sticker)
         hasher.combine(mediaJson)
         hasher.combine(media)
         hasher.combine(agentTextStreamJson)
@@ -34891,6 +40972,7 @@ public struct FfiConverterTypeTimelineReplyPreviewFfi: FfiConverterRustBuffer {
                 plaintext: FfiConverterString.read(from: &buf),
                 contentTokens: FfiConverterTypeMarkdownDocumentFfi.read(from: &buf),
                 kind: FfiConverterUInt64.read(from: &buf),
+                sticker: FfiConverterOptionTypeStickerRefFfi.read(from: &buf),
                 mediaJson: FfiConverterOptionString.read(from: &buf),
                 media: FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.read(from: &buf),
                 agentTextStreamJson: FfiConverterOptionString.read(from: &buf),
@@ -34906,6 +40988,7 @@ public struct FfiConverterTypeTimelineReplyPreviewFfi: FfiConverterRustBuffer {
         FfiConverterString.write(value.plaintext, into: &buf)
         FfiConverterTypeMarkdownDocumentFfi.write(value.contentTokens, into: &buf)
         FfiConverterUInt64.write(value.kind, into: &buf)
+        FfiConverterOptionTypeStickerRefFfi.write(value.sticker, into: &buf)
         FfiConverterOptionString.write(value.mediaJson, into: &buf)
         FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.write(value.media, into: &buf)
         FfiConverterOptionString.write(value.agentTextStreamJson, into: &buf)
@@ -35140,6 +41223,201 @@ public func FfiConverterTypeTransportFanoutStatusFfi_lift(_ buf: RustBuffer) thr
 #endif
 public func FfiConverterTypeTransportFanoutStatusFfi_lower(_ value: TransportFanoutStatusFfi) -> RustBuffer {
     return FfiConverterTypeTransportFanoutStatusFfi.lower(value)
+}
+
+
+/**
+ * A sign-in of this account that this device does not recognize: a fresh,
+ * valid KeyPackage in a slot neither this device nor its device group's
+ * roster knows.
+ */
+public struct UnrecognizedSignInFfi {
+    /**
+     * The sign-in's KeyPackage slot as published: 64 lowercase hex
+     * characters for every well-formed slot. Answers name it by this.
+     */
+    public var slotIdHex: String
+    /**
+     * The client name the sign-in reports for itself; empty when it reports
+     * none. Display only.
+     */
+    public var client: String
+    /**
+     * When it appeared, in Unix seconds: its earliest publication this
+     * device saw, never later than when this device first saw it.
+     */
+    public var appearedAt: UInt64
+    /**
+     * When it last refreshed its KeyPackage, in Unix seconds.
+     */
+    public var lastSeenAt: UInt64
+    /**
+     * It was signed in before this device was: ask whether the user still
+     * has it, not whether it was them.
+     */
+    public var beforeThisDevice: Bool
+    /**
+     * Whether its slot still holds a fresh, valid KeyPackage. It stays
+     * listed after it signs out.
+     */
+    public var signedIn: Bool
+    public var state: UnrecognizedSignInStateFfi
+    /**
+     * The slot of the device that linked it, when `state` is
+     * `LinkedElsewhere` and the roster names one; `None` otherwise.
+     */
+    public var linkedBySlotIdHex: String?
+    /**
+     * A retained made approval for this slot is missing from this device's
+     * current settled roster. Does not authenticate its current publication
+     * or prove permanent loss. False means no affirmative local context.
+     */
+    public var previouslyLinkedHere: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The sign-in's KeyPackage slot as published: 64 lowercase hex
+         * characters for every well-formed slot. Answers name it by this.
+         */slotIdHex: String,
+        /**
+         * The client name the sign-in reports for itself; empty when it reports
+         * none. Display only.
+         */client: String,
+        /**
+         * When it appeared, in Unix seconds: its earliest publication this
+         * device saw, never later than when this device first saw it.
+         */appearedAt: UInt64,
+        /**
+         * When it last refreshed its KeyPackage, in Unix seconds.
+         */lastSeenAt: UInt64,
+        /**
+         * It was signed in before this device was: ask whether the user still
+         * has it, not whether it was them.
+         */beforeThisDevice: Bool,
+        /**
+         * Whether its slot still holds a fresh, valid KeyPackage. It stays
+         * listed after it signs out.
+         */signedIn: Bool, state: UnrecognizedSignInStateFfi,
+        /**
+         * The slot of the device that linked it, when `state` is
+         * `LinkedElsewhere` and the roster names one; `None` otherwise.
+         */linkedBySlotIdHex: String?,
+        /**
+         * A retained made approval for this slot is missing from this device's
+         * current settled roster. Does not authenticate its current publication
+         * or prove permanent loss. False means no affirmative local context.
+         */previouslyLinkedHere: Bool) {
+        self.slotIdHex = slotIdHex
+        self.client = client
+        self.appearedAt = appearedAt
+        self.lastSeenAt = lastSeenAt
+        self.beforeThisDevice = beforeThisDevice
+        self.signedIn = signedIn
+        self.state = state
+        self.linkedBySlotIdHex = linkedBySlotIdHex
+        self.previouslyLinkedHere = previouslyLinkedHere
+    }
+}
+
+#if compiler(>=6)
+extension UnrecognizedSignInFfi: Sendable {}
+#endif
+
+
+extension UnrecognizedSignInFfi: Equatable, Hashable {
+    public static func ==(lhs: UnrecognizedSignInFfi, rhs: UnrecognizedSignInFfi) -> Bool {
+        if lhs.slotIdHex != rhs.slotIdHex {
+            return false
+        }
+        if lhs.client != rhs.client {
+            return false
+        }
+        if lhs.appearedAt != rhs.appearedAt {
+            return false
+        }
+        if lhs.lastSeenAt != rhs.lastSeenAt {
+            return false
+        }
+        if lhs.beforeThisDevice != rhs.beforeThisDevice {
+            return false
+        }
+        if lhs.signedIn != rhs.signedIn {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        if lhs.linkedBySlotIdHex != rhs.linkedBySlotIdHex {
+            return false
+        }
+        if lhs.previouslyLinkedHere != rhs.previouslyLinkedHere {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(slotIdHex)
+        hasher.combine(client)
+        hasher.combine(appearedAt)
+        hasher.combine(lastSeenAt)
+        hasher.combine(beforeThisDevice)
+        hasher.combine(signedIn)
+        hasher.combine(state)
+        hasher.combine(linkedBySlotIdHex)
+        hasher.combine(previouslyLinkedHere)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUnrecognizedSignInFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UnrecognizedSignInFfi {
+        return
+            try UnrecognizedSignInFfi(
+                slotIdHex: FfiConverterString.read(from: &buf),
+                client: FfiConverterString.read(from: &buf),
+                appearedAt: FfiConverterUInt64.read(from: &buf),
+                lastSeenAt: FfiConverterUInt64.read(from: &buf),
+                beforeThisDevice: FfiConverterBool.read(from: &buf),
+                signedIn: FfiConverterBool.read(from: &buf),
+                state: FfiConverterTypeUnrecognizedSignInStateFfi.read(from: &buf),
+                linkedBySlotIdHex: FfiConverterOptionString.read(from: &buf),
+                previouslyLinkedHere: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: UnrecognizedSignInFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.slotIdHex, into: &buf)
+        FfiConverterString.write(value.client, into: &buf)
+        FfiConverterUInt64.write(value.appearedAt, into: &buf)
+        FfiConverterUInt64.write(value.lastSeenAt, into: &buf)
+        FfiConverterBool.write(value.beforeThisDevice, into: &buf)
+        FfiConverterBool.write(value.signedIn, into: &buf)
+        FfiConverterTypeUnrecognizedSignInStateFfi.write(value.state, into: &buf)
+        FfiConverterOptionString.write(value.linkedBySlotIdHex, into: &buf)
+        FfiConverterBool.write(value.previouslyLinkedHere, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUnrecognizedSignInFfi_lift(_ buf: RustBuffer) throws -> UnrecognizedSignInFfi {
+    return try FfiConverterTypeUnrecognizedSignInFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUnrecognizedSignInFfi_lower(_ value: UnrecognizedSignInFfi) -> RustBuffer {
+    return FfiConverterTypeUnrecognizedSignInFfi.lower(value)
 }
 
 
@@ -35486,6 +41764,123 @@ public func FfiConverterTypeUserDirectorySearchResultFfi_lower(_ value: UserDire
 }
 
 
+/**
+ * The account's own kind-10030 emoji list, read for suggestions.
+ */
+public struct UserEmojiListFfi {
+    /**
+     * Absent when no relay returned a list.
+     */
+    public var eventIdHex: String?
+    public var createdAt: UInt64?
+    /**
+     * The list's loose emoji as an installable set.
+     */
+    public var ownEmoji: EmojiSetFfi?
+    public var sets: [EmojiSetFfi]
+    public var missingSetCoordinates: [String]
+    public var complete: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Absent when no relay returned a list.
+         */eventIdHex: String?, createdAt: UInt64?,
+        /**
+         * The list's loose emoji as an installable set.
+         */ownEmoji: EmojiSetFfi?, sets: [EmojiSetFfi], missingSetCoordinates: [String], complete: Bool) {
+        self.eventIdHex = eventIdHex
+        self.createdAt = createdAt
+        self.ownEmoji = ownEmoji
+        self.sets = sets
+        self.missingSetCoordinates = missingSetCoordinates
+        self.complete = complete
+    }
+}
+
+#if compiler(>=6)
+extension UserEmojiListFfi: Sendable {}
+#endif
+
+
+extension UserEmojiListFfi: Equatable, Hashable {
+    public static func ==(lhs: UserEmojiListFfi, rhs: UserEmojiListFfi) -> Bool {
+        if lhs.eventIdHex != rhs.eventIdHex {
+            return false
+        }
+        if lhs.createdAt != rhs.createdAt {
+            return false
+        }
+        if lhs.ownEmoji != rhs.ownEmoji {
+            return false
+        }
+        if lhs.sets != rhs.sets {
+            return false
+        }
+        if lhs.missingSetCoordinates != rhs.missingSetCoordinates {
+            return false
+        }
+        if lhs.complete != rhs.complete {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(eventIdHex)
+        hasher.combine(createdAt)
+        hasher.combine(ownEmoji)
+        hasher.combine(sets)
+        hasher.combine(missingSetCoordinates)
+        hasher.combine(complete)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUserEmojiListFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UserEmojiListFfi {
+        return
+            try UserEmojiListFfi(
+                eventIdHex: FfiConverterOptionString.read(from: &buf),
+                createdAt: FfiConverterOptionUInt64.read(from: &buf),
+                ownEmoji: FfiConverterOptionTypeEmojiSetFfi.read(from: &buf),
+                sets: FfiConverterSequenceTypeEmojiSetFfi.read(from: &buf),
+                missingSetCoordinates: FfiConverterSequenceString.read(from: &buf),
+                complete: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: UserEmojiListFfi, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.eventIdHex, into: &buf)
+        FfiConverterOptionUInt64.write(value.createdAt, into: &buf)
+        FfiConverterOptionTypeEmojiSetFfi.write(value.ownEmoji, into: &buf)
+        FfiConverterSequenceTypeEmojiSetFfi.write(value.sets, into: &buf)
+        FfiConverterSequenceString.write(value.missingSetCoordinates, into: &buf)
+        FfiConverterBool.write(value.complete, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUserEmojiListFfi_lift(_ buf: RustBuffer) throws -> UserEmojiListFfi {
+    return try FfiConverterTypeUserEmojiListFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUserEmojiListFfi_lower(_ value: UserEmojiListFfi) -> RustBuffer {
+    return FfiConverterTypeUserEmojiListFfi.lower(value)
+}
+
+
 public struct UserProfileMetadataFfi {
     public var name: String?
     public var displayName: String?
@@ -35714,7 +42109,9 @@ public func FfiConverterTypeUserSearchUpdateFfi_lower(_ value: UserSearchUpdateF
  */
 public struct WipeOutcomeFfi {
     /**
-     * Active MLS groups this account successfully left.
+     * Active MLS groups whose local leave call succeeded, not confirmed removal.
+     * A chat this device is no longer in, its copy removed or disbanded, is
+     * neither counted nor reported as a failure.
      */
     public var groupsLeft: UInt32
     /**
@@ -35722,41 +42119,73 @@ public struct WipeOutcomeFfi {
      */
     public var groupLeaveFailures: [GroupLeaveFailureFfi]
     /**
-     * Relay-published KeyPackage events successfully deleted.
+     * `1` when a relay accepted the deletion of this device's KeyPackage
+     * slot, otherwise `0`.
      */
     public var keyPackagesDeleted: UInt32
     /**
-     * Per-relay KeyPackage deletion (or discovery) failures.
+     * KeyPackage slot deletion failures.
      */
     public var keyPackageFailures: [RelayFailureFfi]
     /**
      * Local cleanup (MLS DB, media cache, SQL row, secret-store nsec) result.
      */
     public var localCleanup: LocalCleanupReportFfi
+    /**
+     * Chats this device did not leave itself because another of the
+     * account's devices takes it out of them: it signed out through its
+     * siblings.
+     */
+    public var groupsLeftToSiblings: UInt32
+    /**
+     * This device could not ask its siblings to take it out within about 30
+     * seconds, so it tried to leave every chat itself; one it could not
+     * leave is in `group_leave_failures`. Tell the user its other devices
+     * could not be asked: they may still list it until the user removes it
+     * from one of them.
+     */
+    public var siblingsNotReached: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
     public init(
         /**
-         * Active MLS groups this account successfully left.
+         * Active MLS groups whose local leave call succeeded, not confirmed removal.
+         * A chat this device is no longer in, its copy removed or disbanded, is
+         * neither counted nor reported as a failure.
          */groupsLeft: UInt32,
         /**
          * Per-group leave failures. Best-effort: the wipe does not abort on these.
          */groupLeaveFailures: [GroupLeaveFailureFfi],
         /**
-         * Relay-published KeyPackage events successfully deleted.
+         * `1` when a relay accepted the deletion of this device's KeyPackage
+         * slot, otherwise `0`.
          */keyPackagesDeleted: UInt32,
         /**
-         * Per-relay KeyPackage deletion (or discovery) failures.
+         * KeyPackage slot deletion failures.
          */keyPackageFailures: [RelayFailureFfi],
         /**
          * Local cleanup (MLS DB, media cache, SQL row, secret-store nsec) result.
-         */localCleanup: LocalCleanupReportFfi) {
+         */localCleanup: LocalCleanupReportFfi,
+        /**
+         * Chats this device did not leave itself because another of the
+         * account's devices takes it out of them: it signed out through its
+         * siblings.
+         */groupsLeftToSiblings: UInt32,
+        /**
+         * This device could not ask its siblings to take it out within about 30
+         * seconds, so it tried to leave every chat itself; one it could not
+         * leave is in `group_leave_failures`. Tell the user its other devices
+         * could not be asked: they may still list it until the user removes it
+         * from one of them.
+         */siblingsNotReached: Bool) {
         self.groupsLeft = groupsLeft
         self.groupLeaveFailures = groupLeaveFailures
         self.keyPackagesDeleted = keyPackagesDeleted
         self.keyPackageFailures = keyPackageFailures
         self.localCleanup = localCleanup
+        self.groupsLeftToSiblings = groupsLeftToSiblings
+        self.siblingsNotReached = siblingsNotReached
     }
 }
 
@@ -35782,6 +42211,12 @@ extension WipeOutcomeFfi: Equatable, Hashable {
         if lhs.localCleanup != rhs.localCleanup {
             return false
         }
+        if lhs.groupsLeftToSiblings != rhs.groupsLeftToSiblings {
+            return false
+        }
+        if lhs.siblingsNotReached != rhs.siblingsNotReached {
+            return false
+        }
         return true
     }
 
@@ -35791,6 +42226,8 @@ extension WipeOutcomeFfi: Equatable, Hashable {
         hasher.combine(keyPackagesDeleted)
         hasher.combine(keyPackageFailures)
         hasher.combine(localCleanup)
+        hasher.combine(groupsLeftToSiblings)
+        hasher.combine(siblingsNotReached)
     }
 }
 
@@ -35807,7 +42244,9 @@ public struct FfiConverterTypeWipeOutcomeFfi: FfiConverterRustBuffer {
                 groupLeaveFailures: FfiConverterSequenceTypeGroupLeaveFailureFfi.read(from: &buf),
                 keyPackagesDeleted: FfiConverterUInt32.read(from: &buf),
                 keyPackageFailures: FfiConverterSequenceTypeRelayFailureFfi.read(from: &buf),
-                localCleanup: FfiConverterTypeLocalCleanupReportFfi.read(from: &buf)
+                localCleanup: FfiConverterTypeLocalCleanupReportFfi.read(from: &buf),
+                groupsLeftToSiblings: FfiConverterUInt32.read(from: &buf),
+                siblingsNotReached: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -35817,6 +42256,8 @@ public struct FfiConverterTypeWipeOutcomeFfi: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.keyPackagesDeleted, into: &buf)
         FfiConverterSequenceTypeRelayFailureFfi.write(value.keyPackageFailures, into: &buf)
         FfiConverterTypeLocalCleanupReportFfi.write(value.localCleanup, into: &buf)
+        FfiConverterUInt32.write(value.groupsLeftToSiblings, into: &buf)
+        FfiConverterBool.write(value.siblingsNotReached, into: &buf)
     }
 }
 
@@ -36073,6 +42514,139 @@ public func FfiConverterTypeAccountAttentionUnavailableFfi_lower(_ value: Accoun
 
 
 extension AccountAttentionUnavailableFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Whether this account can turn on account-devices in a group now, so its own
+ * devices can later add and remove each other there without an admin. A host
+ * asks before offering the action. Every answer is about the whole group: it
+ * never says which members or devices hold it back.
+ */
+
+public enum AccountDevicesActivationFfi {
+
+    /**
+     * The account is an admin and every device in the group is ready.
+     */
+    case eligible
+    /**
+     * Only an admin can turn it on.
+     */
+    case notAdmin
+    /**
+     * The group already has it, for good.
+     */
+    case alreadyEnabled
+    /**
+     * The group is on the legacy protocol profile and never gets it.
+     */
+    case legacyGroup
+    /**
+     * At least one device in the group runs a client without support yet.
+     */
+    case membersNeedUpdate
+    /**
+     * At least one device's leaf carries data under the component's id that
+     * another client wrote; that device has to replace its leaf or rejoin.
+     */
+    case devicesNeedReplacement
+    /**
+     * At least one account has more devices in the group than the limit.
+     */
+    case deviceLimitExceeded
+}
+
+
+#if compiler(>=6)
+extension AccountDevicesActivationFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAccountDevicesActivationFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AccountDevicesActivationFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AccountDevicesActivationFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .eligible
+
+        case 2: return .notAdmin
+
+        case 3: return .alreadyEnabled
+
+        case 4: return .legacyGroup
+
+        case 5: return .membersNeedUpdate
+
+        case 6: return .devicesNeedReplacement
+
+        case 7: return .deviceLimitExceeded
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AccountDevicesActivationFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .eligible:
+            writeInt(&buf, Int32(1))
+
+
+        case .notAdmin:
+            writeInt(&buf, Int32(2))
+
+
+        case .alreadyEnabled:
+            writeInt(&buf, Int32(3))
+
+
+        case .legacyGroup:
+            writeInt(&buf, Int32(4))
+
+
+        case .membersNeedUpdate:
+            writeInt(&buf, Int32(5))
+
+
+        case .devicesNeedReplacement:
+            writeInt(&buf, Int32(6))
+
+
+        case .deviceLimitExceeded:
+            writeInt(&buf, Int32(7))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountDevicesActivationFfi_lift(_ buf: RustBuffer) throws -> AccountDevicesActivationFfi {
+    return try FfiConverterTypeAccountDevicesActivationFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountDevicesActivationFfi_lower(_ value: AccountDevicesActivationFfi) -> RustBuffer {
+    return FfiConverterTypeAccountDevicesActivationFfi.lower(value)
+}
+
+
+extension AccountDevicesActivationFfi: Equatable, Hashable {}
 
 
 
@@ -37645,6 +44219,184 @@ extension AvatarAvailabilityFfi: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Completion of one existing or newly admitted due pass, not a publication receipt.
+ */
+
+public enum BackgroundBackupOutcomeFfi {
+
+    case notStarted
+    case finishedAttempt
+}
+
+
+#if compiler(>=6)
+extension BackgroundBackupOutcomeFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBackgroundBackupOutcomeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = BackgroundBackupOutcomeFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BackgroundBackupOutcomeFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .notStarted
+
+        case 2: return .finishedAttempt
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: BackgroundBackupOutcomeFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .notStarted:
+            writeInt(&buf, Int32(1))
+
+
+        case .finishedAttempt:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackgroundBackupOutcomeFfi_lift(_ buf: RustBuffer) throws -> BackgroundBackupOutcomeFfi {
+    return try FfiConverterTypeBackgroundBackupOutcomeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackgroundBackupOutcomeFfi_lower(_ value: BackgroundBackupOutcomeFfi) -> RustBuffer {
+    return FfiConverterTypeBackgroundBackupOutcomeFfi.lower(value)
+}
+
+
+extension BackgroundBackupOutcomeFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum BackupRestorePhaseFfi {
+
+    case idle
+    case discovering
+    case restoring
+    case complete
+    case partial
+    case unavailable
+    case cancelled
+}
+
+
+#if compiler(>=6)
+extension BackupRestorePhaseFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBackupRestorePhaseFfi: FfiConverterRustBuffer {
+    typealias SwiftType = BackupRestorePhaseFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BackupRestorePhaseFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .idle
+
+        case 2: return .discovering
+
+        case 3: return .restoring
+
+        case 4: return .complete
+
+        case 5: return .partial
+
+        case 6: return .unavailable
+
+        case 7: return .cancelled
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: BackupRestorePhaseFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .idle:
+            writeInt(&buf, Int32(1))
+
+
+        case .discovering:
+            writeInt(&buf, Int32(2))
+
+
+        case .restoring:
+            writeInt(&buf, Int32(3))
+
+
+        case .complete:
+            writeInt(&buf, Int32(4))
+
+
+        case .partial:
+            writeInt(&buf, Int32(5))
+
+
+        case .unavailable:
+            writeInt(&buf, Int32(6))
+
+
+        case .cancelled:
+            writeInt(&buf, Int32(7))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupRestorePhaseFfi_lift(_ buf: RustBuffer) throws -> BackupRestorePhaseFfi {
+    return try FfiConverterTypeBackupRestorePhaseFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackupRestorePhaseFfi_lower(_ value: BackupRestorePhaseFfi) -> RustBuffer {
+    return FfiConverterTypeBackupRestorePhaseFfi.lower(value)
+}
+
+
+extension BackupRestorePhaseFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum ChatConversationKindFfi {
 
@@ -37714,6 +44466,95 @@ public func FfiConverterTypeChatConversationKindFfi_lower(_ value: ChatConversat
 
 
 extension ChatConversationKindFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Where a chat's history from another device stands.
+ */
+
+public enum ChatHistoryImportStateFfi {
+
+    /**
+     * A delivery arrived and waits to be imported, as while its bundle is
+     * fetched. `retrying` once an attempt to get one of its bundles failed;
+     * it is tried again later.
+     */
+    case receiving(retrying: Bool
+    )
+    /**
+     * Its latest import: the device it came from, and when, in Unix
+     * seconds.
+     */
+    case imported(from: HistoryImportSourceFfi, at: UInt64
+    )
+}
+
+
+#if compiler(>=6)
+extension ChatHistoryImportStateFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatHistoryImportStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ChatHistoryImportStateFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatHistoryImportStateFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .receiving(retrying: try FfiConverterBool.read(from: &buf)
+        )
+
+        case 2: return .imported(from: try FfiConverterTypeHistoryImportSourceFfi.read(from: &buf), at: try FfiConverterUInt64.read(from: &buf)
+        )
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ChatHistoryImportStateFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case let .receiving(retrying):
+            writeInt(&buf, Int32(1))
+            FfiConverterBool.write(retrying, into: &buf)
+
+
+        case let .imported(from,at):
+            writeInt(&buf, Int32(2))
+            FfiConverterTypeHistoryImportSourceFfi.write(from, into: &buf)
+            FfiConverterUInt64.write(at, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatHistoryImportStateFfi_lift(_ buf: RustBuffer) throws -> ChatHistoryImportStateFfi {
+    return try FfiConverterTypeChatHistoryImportStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatHistoryImportStateFfi_lower(_ value: ChatHistoryImportStateFfi) -> RustBuffer {
+    return FfiConverterTypeChatHistoryImportStateFfi.lower(value)
+}
+
+
+extension ChatHistoryImportStateFfi: Equatable, Hashable {}
 
 
 
@@ -37905,6 +44746,379 @@ extension ChatListAttachmentKindFfi: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Chat facts a filter can test. Each matches what the presented row shows.
+ */
+
+public enum ChatListConditionFfi {
+
+    /**
+     * Neither archived nor departed, including invitations.
+     */
+    case active
+    /**
+     * Archived and not departed.
+     */
+    case archived
+    /**
+     * Departed, disbanded, or with a leave or disband outstanding.
+     */
+    case left
+    /**
+     * An invitation not yet accepted or declined.
+     */
+    case pendingInvite
+    /**
+     * Shows an unread badge: unread messages or a manual mark. Never an
+     * invitation or a Left chat.
+     */
+    case unread
+    /**
+     * Unread because the user marked it so.
+     */
+    case manualUnread
+    /**
+     * Unread with an unread mention of this account.
+     */
+    case mention
+    case pinned
+    /**
+     * A leave request is still outstanding.
+     */
+    case pendingLeave
+    /**
+     * A local or inbound disband awaits convergence.
+     */
+    case disbanding
+    /**
+     * A draft with non-blank text or an attachment.
+     */
+    case hasDraft
+    /**
+     * The row's last message shows a pending send (`ChatListMessageDeliveryStateFfi::Pending`).
+     */
+    case pendingSend
+    /**
+     * The row's last message shows a failed send (`ChatListMessageDeliveryStateFfi::Failed`).
+     */
+    case failedSend
+    /**
+     * A one-to-one chat (`conversation_kind` is `Direct`). A chat whose kind
+     * is still `Unknown` never matches.
+     */
+    case direct
+    /**
+     * A group chat (`conversation_kind` is `Group`). A chat whose kind is
+     * still `Unknown` never matches.
+     */
+    case group
+    /**
+     * Muted now, as the row's `muted` shows: until unmuted, or until a later
+     * time. A live window testing it updates when a mute expires.
+     */
+    case muted
+}
+
+
+#if compiler(>=6)
+extension ChatListConditionFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatListConditionFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ChatListConditionFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatListConditionFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .active
+
+        case 2: return .archived
+
+        case 3: return .left
+
+        case 4: return .pendingInvite
+
+        case 5: return .unread
+
+        case 6: return .manualUnread
+
+        case 7: return .mention
+
+        case 8: return .pinned
+
+        case 9: return .pendingLeave
+
+        case 10: return .disbanding
+
+        case 11: return .hasDraft
+
+        case 12: return .pendingSend
+
+        case 13: return .failedSend
+
+        case 14: return .direct
+
+        case 15: return .group
+
+        case 16: return .muted
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ChatListConditionFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .active:
+            writeInt(&buf, Int32(1))
+
+
+        case .archived:
+            writeInt(&buf, Int32(2))
+
+
+        case .left:
+            writeInt(&buf, Int32(3))
+
+
+        case .pendingInvite:
+            writeInt(&buf, Int32(4))
+
+
+        case .unread:
+            writeInt(&buf, Int32(5))
+
+
+        case .manualUnread:
+            writeInt(&buf, Int32(6))
+
+
+        case .mention:
+            writeInt(&buf, Int32(7))
+
+
+        case .pinned:
+            writeInt(&buf, Int32(8))
+
+
+        case .pendingLeave:
+            writeInt(&buf, Int32(9))
+
+
+        case .disbanding:
+            writeInt(&buf, Int32(10))
+
+
+        case .hasDraft:
+            writeInt(&buf, Int32(11))
+
+
+        case .pendingSend:
+            writeInt(&buf, Int32(12))
+
+
+        case .failedSend:
+            writeInt(&buf, Int32(13))
+
+
+        case .direct:
+            writeInt(&buf, Int32(14))
+
+
+        case .group:
+            writeInt(&buf, Int32(15))
+
+
+        case .muted:
+            writeInt(&buf, Int32(16))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListConditionFfi_lift(_ buf: RustBuffer) throws -> ChatListConditionFfi {
+    return try FfiConverterTypeChatListConditionFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListConditionFfi_lower(_ value: ChatListConditionFfi) -> RustBuffer {
+    return FfiConverterTypeChatListConditionFfi.lower(value)
+}
+
+
+extension ChatListConditionFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * One filter node. Child entries are indices into the query's node list.
+ * An empty `All` matches every chat in the view; an empty `Any` matches none.
+ */
+
+public enum ChatListFilterNodeFfi {
+
+    case all(children: [UInt32]
+    )
+    case any(children: [UInt32]
+    )
+    case not(child: UInt32
+    )
+    case condition(condition: ChatListConditionFfi
+    )
+    /**
+     * Chats whose group ID is listed (hex, any case). Inclusion never adds a
+     * chat outside the view; to exclude IDs, wrap this node in `Not`.
+     */
+    case groupIds(groupIds: [String]
+    )
+    /**
+     * Chats whose title, group name, description or direct-chat peer profile
+     * name contains `text`, as a literal substring after trimming and
+     * lowercasing both (the user directory's rule). Localized fallback titles
+     * are not searchable; text that is blank after trimming matches nothing.
+     * While any chat in the view still has presentation pending, a query with
+     * this node fails with `ChatPresentationNotReady` rather than returning
+     * part of the set.
+     */
+    case text(text: String
+    )
+    /**
+     * Chats with a visible message whose text contains `text`, by the same
+     * rule as `Text` and timeline search (trim, lowercase, literal
+     * substring): a chat message or poll question the timeline shows, in its
+     * latest edit, not deleted, expired or from a blocked account, and not
+     * invalidated unless it is an own send shown as failed. It scans message history, so only `chat_list_query_ids` and
+     * `revalidate_chat_list_query_ids` accept it; opening a window with it
+     * fails with `MessageTextInWindow`. While retained deletions and edits
+     * are still being backfilled, it fails with `ChatPresentationNotReady`.
+     */
+    case messageText(text: String
+    )
+}
+
+
+#if compiler(>=6)
+extension ChatListFilterNodeFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatListFilterNodeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ChatListFilterNodeFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatListFilterNodeFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .all(children: try FfiConverterSequenceUInt32.read(from: &buf)
+        )
+
+        case 2: return .any(children: try FfiConverterSequenceUInt32.read(from: &buf)
+        )
+
+        case 3: return .not(child: try FfiConverterUInt32.read(from: &buf)
+        )
+
+        case 4: return .condition(condition: try FfiConverterTypeChatListConditionFfi.read(from: &buf)
+        )
+
+        case 5: return .groupIds(groupIds: try FfiConverterSequenceString.read(from: &buf)
+        )
+
+        case 6: return .text(text: try FfiConverterString.read(from: &buf)
+        )
+
+        case 7: return .messageText(text: try FfiConverterString.read(from: &buf)
+        )
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ChatListFilterNodeFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case let .all(children):
+            writeInt(&buf, Int32(1))
+            FfiConverterSequenceUInt32.write(children, into: &buf)
+
+
+        case let .any(children):
+            writeInt(&buf, Int32(2))
+            FfiConverterSequenceUInt32.write(children, into: &buf)
+
+
+        case let .not(child):
+            writeInt(&buf, Int32(3))
+            FfiConverterUInt32.write(child, into: &buf)
+
+
+        case let .condition(condition):
+            writeInt(&buf, Int32(4))
+            FfiConverterTypeChatListConditionFfi.write(condition, into: &buf)
+
+
+        case let .groupIds(groupIds):
+            writeInt(&buf, Int32(5))
+            FfiConverterSequenceString.write(groupIds, into: &buf)
+
+
+        case let .text(text):
+            writeInt(&buf, Int32(6))
+            FfiConverterString.write(text, into: &buf)
+
+
+        case let .messageText(text):
+            writeInt(&buf, Int32(7))
+            FfiConverterString.write(text, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListFilterNodeFfi_lift(_ buf: RustBuffer) throws -> ChatListFilterNodeFfi {
+    return try FfiConverterTypeChatListFilterNodeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListFilterNodeFfi_lower(_ value: ChatListFilterNodeFfi) -> RustBuffer {
+    return FfiConverterTypeChatListFilterNodeFfi.lower(value)
+}
+
+
+extension ChatListFilterNodeFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum ChatListMessageDeliveryStateFfi {
 
@@ -38054,6 +45268,156 @@ public func FfiConverterTypeChatListPageDirectionFfi_lower(_ value: ChatListPage
 
 
 extension ChatListPageDirectionFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why a chat-list query was refused. Nothing was read.
+ */
+
+public enum ChatListQueryErrorFfi {
+
+    /**
+     * More than 8 nested levels.
+     */
+    case tooDeep
+    /**
+     * More than 64 nodes.
+     */
+    case tooManyNodes
+    /**
+     * More than 500 group IDs across all `GroupIds` nodes.
+     */
+    case tooManyGroupIds
+    /**
+     * A child index is past the end of the node list.
+     */
+    case childOutOfRange
+    /**
+     * A child index is at or before its parent's index.
+     */
+    case childNotAfterParent
+    /**
+     * A node is the child of more than one node.
+     */
+    case sharedChild
+    /**
+     * A node after the root is nobody's child.
+     */
+    case unreachableNode
+    /**
+     * More than 1024 bytes of text across all `Text` and `MessageText` nodes.
+     */
+    case textTooLong
+    /**
+     * A window was opened with a `MessageText` node; use
+     * `chat_list_query_ids` instead.
+     */
+    case messageTextInWindow
+}
+
+
+#if compiler(>=6)
+extension ChatListQueryErrorFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatListQueryErrorFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ChatListQueryErrorFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatListQueryErrorFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .tooDeep
+
+        case 2: return .tooManyNodes
+
+        case 3: return .tooManyGroupIds
+
+        case 4: return .childOutOfRange
+
+        case 5: return .childNotAfterParent
+
+        case 6: return .sharedChild
+
+        case 7: return .unreachableNode
+
+        case 8: return .textTooLong
+
+        case 9: return .messageTextInWindow
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ChatListQueryErrorFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .tooDeep:
+            writeInt(&buf, Int32(1))
+
+
+        case .tooManyNodes:
+            writeInt(&buf, Int32(2))
+
+
+        case .tooManyGroupIds:
+            writeInt(&buf, Int32(3))
+
+
+        case .childOutOfRange:
+            writeInt(&buf, Int32(4))
+
+
+        case .childNotAfterParent:
+            writeInt(&buf, Int32(5))
+
+
+        case .sharedChild:
+            writeInt(&buf, Int32(6))
+
+
+        case .unreachableNode:
+            writeInt(&buf, Int32(7))
+
+
+        case .textTooLong:
+            writeInt(&buf, Int32(8))
+
+
+        case .messageTextInWindow:
+            writeInt(&buf, Int32(9))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListQueryErrorFfi_lift(_ buf: RustBuffer) throws -> ChatListQueryErrorFfi {
+    return try FfiConverterTypeChatListQueryErrorFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListQueryErrorFfi_lower(_ value: ChatListQueryErrorFfi) -> RustBuffer {
+    return FfiConverterTypeChatListQueryErrorFfi.lower(value)
+}
+
+
+extension ChatListQueryErrorFfi: Equatable, Hashable {}
 
 
 
@@ -38402,6 +45766,87 @@ extension ChatListViewFfi: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why something is in the compromise warning. Later releases add reasons;
+ * show one the app does not know as a generic one.
+ */
+
+public enum CompromiseWarningReasonFfi {
+
+    /**
+     * A sign-in the user answered This wasn't me, on this device or another.
+     */
+    case rejectedSignIn
+    /**
+     * A KeyPackage this device found in its own slot that it did not make.
+     * This device has replaced it.
+     */
+    case foreignOwnSlotKeyPackage
+}
+
+
+#if compiler(>=6)
+extension CompromiseWarningReasonFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCompromiseWarningReasonFfi: FfiConverterRustBuffer {
+    typealias SwiftType = CompromiseWarningReasonFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompromiseWarningReasonFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .rejectedSignIn
+
+        case 2: return .foreignOwnSlotKeyPackage
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CompromiseWarningReasonFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .rejectedSignIn:
+            writeInt(&buf, Int32(1))
+
+
+        case .foreignOwnSlotKeyPackage:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompromiseWarningReasonFfi_lift(_ buf: RustBuffer) throws -> CompromiseWarningReasonFfi {
+    return try FfiConverterTypeCompromiseWarningReasonFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompromiseWarningReasonFfi_lower(_ value: CompromiseWarningReasonFfi) -> RustBuffer {
+    return FfiConverterTypeCompromiseWarningReasonFfi.lower(value)
+}
+
+
+extension CompromiseWarningReasonFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum ConversationAnchorKindFfi {
 
@@ -38664,6 +46109,12 @@ public enum ConversationParticipationFfi {
     case removed
     case disbanded
     case unavailable
+    /**
+     * This device's leaf was removed while the account keeps another device
+     * in the conversation. Not a removal from the conversation: show no
+     * "removed from group" notice for it.
+     */
+    case deviceRemoved
 }
 
 
@@ -38694,6 +46145,8 @@ public struct FfiConverterTypeConversationParticipationFfi: FfiConverterRustBuff
         case 6: return .disbanded
 
         case 7: return .unavailable
+
+        case 8: return .deviceRemoved
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -38729,6 +46182,10 @@ public struct FfiConverterTypeConversationParticipationFfi: FfiConverterRustBuff
 
         case .unavailable:
             writeInt(&buf, Int32(7))
+
+
+        case .deviceRemoved:
+            writeInt(&buf, Int32(8))
 
         }
     }
@@ -38915,6 +46372,423 @@ public func FfiConverterTypeDeletionSourceFfi_lower(_ value: DeletionSourceFfi) 
 
 
 extension DeletionSourceFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Local move progress. Welcome admission alone is Joining, not Made.
+ */
+
+public enum DeviceGroupMoveStateFfi {
+
+    case waitingForWelcome
+    case joining
+    case made
+    case failed
+}
+
+
+#if compiler(>=6)
+extension DeviceGroupMoveStateFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceGroupMoveStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceGroupMoveStateFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceGroupMoveStateFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .waitingForWelcome
+
+        case 2: return .joining
+
+        case 3: return .made
+
+        case 4: return .failed
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceGroupMoveStateFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .waitingForWelcome:
+            writeInt(&buf, Int32(1))
+
+
+        case .joining:
+            writeInt(&buf, Int32(2))
+
+
+        case .made:
+            writeInt(&buf, Int32(3))
+
+
+        case .failed:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceGroupMoveStateFfi_lift(_ buf: RustBuffer) throws -> DeviceGroupMoveStateFfi {
+    return try FfiConverterTypeDeviceGroupMoveStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceGroupMoveStateFfi_lower(_ value: DeviceGroupMoveStateFfi) -> RustBuffer {
+    return FfiConverterTypeDeviceGroupMoveStateFfi.lower(value)
+}
+
+
+extension DeviceGroupMoveStateFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why a device link attempt ended.
+ */
+
+public enum DeviceLinkEndReasonFfi {
+
+    /**
+     * This device's user cancelled.
+     */
+    case cancelled
+    /**
+     * The other device cancelled, or its user chose Not now.
+     */
+    case cancelledElsewhere
+    /**
+     * A user said the codes differ.
+     */
+    case codesDiffer
+    /**
+     * The exchange failed a check, so the code can't be trusted.
+     */
+    case verificationFailed
+    /**
+     * Time ran out.
+     */
+    case timedOut
+    /**
+     * Another device of this account is linking the sign-in.
+     */
+    case answeredElsewhere
+    /**
+     * The sign-in's client can't join the device group.
+     */
+    case cannotLink
+    /**
+     * The sign-in was rejected on one of this account's devices.
+     */
+    case rejected
+    /**
+     * Both users confirmed, but adding or joining failed, or the new device's
+     * first Commit was not observed on the selected branch in time. Cleanup may
+     * still be pending; this reason alone does not establish current membership.
+     */
+    case linkFailed
+}
+
+
+#if compiler(>=6)
+extension DeviceLinkEndReasonFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceLinkEndReasonFfi: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceLinkEndReasonFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceLinkEndReasonFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .cancelled
+
+        case 2: return .cancelledElsewhere
+
+        case 3: return .codesDiffer
+
+        case 4: return .verificationFailed
+
+        case 5: return .timedOut
+
+        case 6: return .answeredElsewhere
+
+        case 7: return .cannotLink
+
+        case 8: return .rejected
+
+        case 9: return .linkFailed
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceLinkEndReasonFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .cancelled:
+            writeInt(&buf, Int32(1))
+
+
+        case .cancelledElsewhere:
+            writeInt(&buf, Int32(2))
+
+
+        case .codesDiffer:
+            writeInt(&buf, Int32(3))
+
+
+        case .verificationFailed:
+            writeInt(&buf, Int32(4))
+
+
+        case .timedOut:
+            writeInt(&buf, Int32(5))
+
+
+        case .answeredElsewhere:
+            writeInt(&buf, Int32(6))
+
+
+        case .cannotLink:
+            writeInt(&buf, Int32(7))
+
+
+        case .rejected:
+            writeInt(&buf, Int32(8))
+
+
+        case .linkFailed:
+            writeInt(&buf, Int32(9))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkEndReasonFfi_lift(_ buf: RustBuffer) throws -> DeviceLinkEndReasonFfi {
+    return try FfiConverterTypeDeviceLinkEndReasonFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkEndReasonFfi_lower(_ value: DeviceLinkEndReasonFfi) -> RustBuffer {
+    return FfiConverterTypeDeviceLinkEndReasonFfi.lower(value)
+}
+
+
+extension DeviceLinkEndReasonFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Where a prompt on a device already signed in stands.
+ */
+
+public enum DeviceLinkPromptStateFfi {
+
+    /**
+     * Checking the sign-in's KeyPackage, or waiting for the code.
+     */
+    case preparing
+    /**
+     * Both screens show `code`. Offer Link device and Not now.
+     */
+    case comparing(code: [DeviceLinkEmojiFfi]
+    )
+    /**
+     * More than one sign-in asked to link at once, so Link is offered for
+     * none of them.
+     */
+    case competingRequests
+    /**
+     * This device answered too many link requests lately. It tries again at
+     * `retry_at`, in Unix seconds.
+     */
+    case rateLimited(retryAt: UInt64
+    )
+    /**
+     * The sign-in's client can't join the device group. `missing` names
+     * what it lacks.
+     */
+    case cannotLink(missing: [String]
+    )
+    /**
+     * The account has 20 linked devices. Remove one first.
+     */
+    case tooManyDevices
+    /**
+     * This user chose Link device. Waiting for the new device's
+     * confirmation, then, for up to an hour, for it to join and make its
+     * first change in the device group.
+     */
+    case linking
+    /**
+     * This device added it, and the new device's first change in the device
+     * group arrived.
+     */
+    case linked
+    /**
+     * Another device added it: "<device_label> was added by
+     * <added_by_label>". A label the roster lacks is empty.
+     */
+    case addedElsewhere(deviceLabel: String, addedByLabel: String
+    )
+    case ended(reason: DeviceLinkEndReasonFfi
+    )
+}
+
+
+#if compiler(>=6)
+extension DeviceLinkPromptStateFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceLinkPromptStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceLinkPromptStateFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceLinkPromptStateFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .preparing
+
+        case 2: return .comparing(code: try FfiConverterSequenceTypeDeviceLinkEmojiFfi.read(from: &buf)
+        )
+
+        case 3: return .competingRequests
+
+        case 4: return .rateLimited(retryAt: try FfiConverterUInt64.read(from: &buf)
+        )
+
+        case 5: return .cannotLink(missing: try FfiConverterSequenceString.read(from: &buf)
+        )
+
+        case 6: return .tooManyDevices
+
+        case 7: return .linking
+
+        case 8: return .linked
+
+        case 9: return .addedElsewhere(deviceLabel: try FfiConverterString.read(from: &buf), addedByLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 10: return .ended(reason: try FfiConverterTypeDeviceLinkEndReasonFfi.read(from: &buf)
+        )
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceLinkPromptStateFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .preparing:
+            writeInt(&buf, Int32(1))
+
+
+        case let .comparing(code):
+            writeInt(&buf, Int32(2))
+            FfiConverterSequenceTypeDeviceLinkEmojiFfi.write(code, into: &buf)
+
+
+        case .competingRequests:
+            writeInt(&buf, Int32(3))
+
+
+        case let .rateLimited(retryAt):
+            writeInt(&buf, Int32(4))
+            FfiConverterUInt64.write(retryAt, into: &buf)
+
+
+        case let .cannotLink(missing):
+            writeInt(&buf, Int32(5))
+            FfiConverterSequenceString.write(missing, into: &buf)
+
+
+        case .tooManyDevices:
+            writeInt(&buf, Int32(6))
+
+
+        case .linking:
+            writeInt(&buf, Int32(7))
+
+
+        case .linked:
+            writeInt(&buf, Int32(8))
+
+
+        case let .addedElsewhere(deviceLabel,addedByLabel):
+            writeInt(&buf, Int32(9))
+            FfiConverterString.write(deviceLabel, into: &buf)
+            FfiConverterString.write(addedByLabel, into: &buf)
+
+
+        case let .ended(reason):
+            writeInt(&buf, Int32(10))
+            FfiConverterTypeDeviceLinkEndReasonFfi.write(reason, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkPromptStateFfi_lift(_ buf: RustBuffer) throws -> DeviceLinkPromptStateFfi {
+    return try FfiConverterTypeDeviceLinkPromptStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkPromptStateFfi_lower(_ value: DeviceLinkPromptStateFfi) -> RustBuffer {
+    return FfiConverterTypeDeviceLinkPromptStateFfi.lower(value)
+}
+
+
+extension DeviceLinkPromptStateFfi: Equatable, Hashable {}
 
 
 
@@ -39168,6 +47042,146 @@ extension DisbandRequestFfi: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why an emoji entry was not offered or not installed.
+ */
+
+public enum EmojiSkipReasonFfi {
+
+    /**
+     * Not 1–64 bytes of ASCII letters, digits, `-` and `_`.
+     */
+    case invalidShortcode
+    /**
+     * Not a public HTTPS URL, or refused by the dial policy.
+     */
+    case invalidUrl
+    /**
+     * A later entry repeating a shortcode.
+     */
+    case duplicate
+    /**
+     * Past the per-set emoji cap or the stored-byte budget.
+     */
+    case overCap
+    /**
+     * The image host could not be reached or answered with an error.
+     */
+    case downloadFailed
+    /**
+     * Over 4 MiB, 4096 px per side, or 200 frames.
+     */
+    case tooLarge
+    /**
+     * Not PNG/APNG, GIF, WebP or JPEG, or malformed.
+     */
+    case unsupportedImage
+    /**
+     * Served as a non-image MIME type (such as `text/html`). For any image
+     * MIME type, the downloaded bytes determine the image format.
+     */
+    case mimeMismatch
+}
+
+
+#if compiler(>=6)
+extension EmojiSkipReasonFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmojiSkipReasonFfi: FfiConverterRustBuffer {
+    typealias SwiftType = EmojiSkipReasonFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmojiSkipReasonFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .invalidShortcode
+
+        case 2: return .invalidUrl
+
+        case 3: return .duplicate
+
+        case 4: return .overCap
+
+        case 5: return .downloadFailed
+
+        case 6: return .tooLarge
+
+        case 7: return .unsupportedImage
+
+        case 8: return .mimeMismatch
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: EmojiSkipReasonFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .invalidShortcode:
+            writeInt(&buf, Int32(1))
+
+
+        case .invalidUrl:
+            writeInt(&buf, Int32(2))
+
+
+        case .duplicate:
+            writeInt(&buf, Int32(3))
+
+
+        case .overCap:
+            writeInt(&buf, Int32(4))
+
+
+        case .downloadFailed:
+            writeInt(&buf, Int32(5))
+
+
+        case .tooLarge:
+            writeInt(&buf, Int32(6))
+
+
+        case .unsupportedImage:
+            writeInt(&buf, Int32(7))
+
+
+        case .mimeMismatch:
+            writeInt(&buf, Int32(8))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSkipReasonFfi_lift(_ buf: RustBuffer) throws -> EmojiSkipReasonFfi {
+    return try FfiConverterTypeEmojiSkipReasonFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmojiSkipReasonFfi_lower(_ value: EmojiSkipReasonFfi) -> RustBuffer {
+    return FfiConverterTypeEmojiSkipReasonFfi.lower(value)
+}
+
+
+extension EmojiSkipReasonFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum EncryptedMediaVersionFfi {
 
@@ -39230,6 +47244,122 @@ public func FfiConverterTypeEncryptedMediaVersionFfi_lower(_ value: EncryptedMed
 
 
 extension EncryptedMediaVersionFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * A coarse bucket for the size of an event a relay refused as too large.
+ * These diagnostic buckets do not assert a relay's configured limit.
+ */
+
+public enum EventSizeClassFfi {
+
+    case under64Kib
+    case from64To128Kib
+    case from128To256Kib
+    case from256To512Kib
+    case from512KibTo1Mib
+    case from1To2Mib
+    case from2To4Mib
+    case over4Mib
+}
+
+
+#if compiler(>=6)
+extension EventSizeClassFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEventSizeClassFfi: FfiConverterRustBuffer {
+    typealias SwiftType = EventSizeClassFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EventSizeClassFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .under64Kib
+
+        case 2: return .from64To128Kib
+
+        case 3: return .from128To256Kib
+
+        case 4: return .from256To512Kib
+
+        case 5: return .from512KibTo1Mib
+
+        case 6: return .from1To2Mib
+
+        case 7: return .from2To4Mib
+
+        case 8: return .over4Mib
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: EventSizeClassFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .under64Kib:
+            writeInt(&buf, Int32(1))
+
+
+        case .from64To128Kib:
+            writeInt(&buf, Int32(2))
+
+
+        case .from128To256Kib:
+            writeInt(&buf, Int32(3))
+
+
+        case .from256To512Kib:
+            writeInt(&buf, Int32(4))
+
+
+        case .from512KibTo1Mib:
+            writeInt(&buf, Int32(5))
+
+
+        case .from1To2Mib:
+            writeInt(&buf, Int32(6))
+
+
+        case .from2To4Mib:
+            writeInt(&buf, Int32(7))
+
+
+        case .over4Mib:
+            writeInt(&buf, Int32(8))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEventSizeClassFfi_lift(_ buf: RustBuffer) throws -> EventSizeClassFfi {
+    return try FfiConverterTypeEventSizeClassFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEventSizeClassFfi_lower(_ value: EventSizeClassFfi) -> RustBuffer {
+    return FfiConverterTypeEventSizeClassFfi.lower(value)
+}
+
+
+extension EventSizeClassFfi: Equatable, Hashable {}
 
 
 
@@ -39303,6 +47433,18 @@ public enum GroupEventKindFfi {
     case localGroupCopyRestored
     case groupMemberLeavesRemoved(epoch: UInt64
     )
+    /**
+     * A send that waited for the group to settle (its summary said
+     * `AcceptedPending`) was dropped unsent: the settled state refused it, as
+     * it would have refused the same action sent then (the sender is no
+     * longer an admin, the change is no longer valid). Nothing retries it;
+     * tell the user, who may try again. `intent_kind` names the action
+     * (`update_group_data`, `invite`, ...), `reason` is a stable
+     * low-cardinality tag (`not_group_admin`, ...) and `intent_id_hex`
+     * identifies the dropped send, so a repeated delivery can be ignored.
+     */
+    case queuedIntentRefused(intentIdHex: String, intentKind: String, reason: String
+    )
 }
 
 
@@ -39366,6 +47508,9 @@ public struct FfiConverterTypeGroupEventKindFfi: FfiConverterRustBuffer {
         case 16: return .localGroupCopyRestored
 
         case 17: return .groupMemberLeavesRemoved(epoch: try FfiConverterUInt64.read(from: &buf)
+        )
+
+        case 18: return .queuedIntentRefused(intentIdHex: try FfiConverterString.read(from: &buf), intentKind: try FfiConverterString.read(from: &buf), reason: try FfiConverterString.read(from: &buf)
         )
 
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -39469,6 +47614,13 @@ public struct FfiConverterTypeGroupEventKindFfi: FfiConverterRustBuffer {
         case let .groupMemberLeavesRemoved(epoch):
             writeInt(&buf, Int32(17))
             FfiConverterUInt64.write(epoch, into: &buf)
+
+
+        case let .queuedIntentRefused(intentIdHex,intentKind,reason):
+            writeInt(&buf, Int32(18))
+            FfiConverterString.write(intentIdHex, into: &buf)
+            FfiConverterString.write(intentKind, into: &buf)
+            FfiConverterString.write(reason, into: &buf)
 
         }
     }
@@ -39762,10 +47914,90 @@ extension GroupSystemEventProvenanceFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * Why recovery parked; choose the host's wording from it. Current policy
- * parks only the first five. `KnownEvent` and `MaintenanceBoundary` are
- * reserved so exhaustive switches stay source-compatible if a later policy
- * parks them.
+ * Complete import source. Backup imports never invent a device slot/label.
+ */
+
+public enum HistoryImportProvenanceFfi {
+
+    case device(deviceSlotIdHex: String
+    )
+    case backup(source: BackupHistorySourceFfi
+    )
+}
+
+
+#if compiler(>=6)
+extension HistoryImportProvenanceFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryImportProvenanceFfi: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryImportProvenanceFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryImportProvenanceFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .device(deviceSlotIdHex: try FfiConverterString.read(from: &buf)
+        )
+
+        case 2: return .backup(source: try FfiConverterTypeBackupHistorySourceFfi.read(from: &buf)
+        )
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryImportProvenanceFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case let .device(deviceSlotIdHex):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(deviceSlotIdHex, into: &buf)
+
+
+        case let .backup(source):
+            writeInt(&buf, Int32(2))
+            FfiConverterTypeBackupHistorySourceFfi.write(source, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryImportProvenanceFfi_lift(_ buf: RustBuffer) throws -> HistoryImportProvenanceFfi {
+    return try FfiConverterTypeHistoryImportProvenanceFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryImportProvenanceFfi_lower(_ value: HistoryImportProvenanceFfi) -> RustBuffer {
+    return FfiConverterTypeHistoryImportProvenanceFfi.lower(value)
+}
+
+
+extension HistoryImportProvenanceFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why recovery parked; choose the host's wording from it. Current epoch-gap
+ * exhaustion emits `EpochGap`; the coverage ledger emits `UnprovenHistory`
+ * without attributing the original reason its route's history was owed. Other
+ * labels preserve compatibility; `KnownEvent` and `MaintenanceBoundary` remain
+ * reserved for parking policy.
  */
 
 public enum HistoryNoticeCauseFfi {
@@ -39799,6 +48031,12 @@ public enum HistoryNoticeCauseFfi {
      * A post-join maintenance boundary was never observed.
      */
     case maintenanceBoundary
+    /**
+     * The recovery runner could not prove this history on a route's relays
+     * and stopped retrying them: a group's (`group_id_hex` names it) or the
+     * account inbox's.
+     */
+    case unprovenHistory
 }
 
 
@@ -39829,6 +48067,8 @@ public struct FfiConverterTypeHistoryNoticeCauseFfi: FfiConverterRustBuffer {
         case 6: return .knownEvent
 
         case 7: return .maintenanceBoundary
+
+        case 8: return .unprovenHistory
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -39864,6 +48104,10 @@ public struct FfiConverterTypeHistoryNoticeCauseFfi: FfiConverterRustBuffer {
 
         case .maintenanceBoundary:
             writeInt(&buf, Int32(7))
+
+
+        case .unprovenHistory:
+            writeInt(&buf, Int32(8))
 
         }
     }
@@ -40334,6 +48578,99 @@ public func FfiConverterTypeHostPerformanceOutcomeFfi_lower(_ value: HostPerform
 
 
 extension HostPerformanceOutcomeFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum LinkedDeviceStatusFfi {
+
+    case active
+    /**
+     * Its siblings marked it inactive.
+     */
+    case inactive
+    /**
+     * It recorded that it is signing out.
+     */
+    case leaving
+    /**
+     * It moved to another device group; old cleanup keeps its chats.
+     */
+    case moved
+}
+
+
+#if compiler(>=6)
+extension LinkedDeviceStatusFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLinkedDeviceStatusFfi: FfiConverterRustBuffer {
+    typealias SwiftType = LinkedDeviceStatusFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LinkedDeviceStatusFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .active
+
+        case 2: return .inactive
+
+        case 3: return .leaving
+
+        case 4: return .moved
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LinkedDeviceStatusFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .active:
+            writeInt(&buf, Int32(1))
+
+
+        case .inactive:
+            writeInt(&buf, Int32(2))
+
+
+        case .leaving:
+            writeInt(&buf, Int32(3))
+
+
+        case .moved:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLinkedDeviceStatusFfi_lift(_ buf: RustBuffer) throws -> LinkedDeviceStatusFfi {
+    return try FfiConverterTypeLinkedDeviceStatusFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLinkedDeviceStatusFfi_lower(_ value: LinkedDeviceStatusFfi) -> RustBuffer {
+    return FfiConverterTypeLinkedDeviceStatusFfi.lower(value)
+}
+
+
+extension LinkedDeviceStatusFfi: Equatable, Hashable {}
 
 
 
@@ -41725,11 +50062,15 @@ public enum MarmotEventFfi {
     case agentStreamActivity(accountIdHex: String, accountLabel: String
     )
     /**
-     * A confirmed create/invite could not deliver a welcome to `recipient_hex`;
-     * that member is in the group but unjoinable until the welcome is
-     * re-delivered via `redeliver_welcome(message_id_hex)` (mdk#352).
+     * A canonical create or confirmed Add still owes a Welcome to `recipient_hex`;
+     * pending does not prove whether the recipient received it (mdk#352).
      */
-    case welcomeDeliveryPending(accountIdHex: String, accountLabel: String, groupIdHex: String, messageIdHex: String, recipientHex: String
+    case welcomeDeliveryPending(accountIdHex: String, accountLabel: String, groupIdHex: String, messageIdHex: String, recipientHex: String,
+        /**
+         * Observed size refusal, not non-delivery evidence; earlier legacy
+         * exposure can be unknown. None means Unknown. Query for later causes;
+         * this notice remains once per process/Welcome.
+         */sizeClass: EventSizeClassFfi?
     )
     /**
      * This device armed `arms` epoch-gap history backfills for the group with
@@ -41759,6 +50100,72 @@ public enum MarmotEventFfi {
      * changed also gets `GroupStateUpdated`.
      */
     case historyNoticesChanged(accountIdHex: String, accountLabel: String
+    )
+    /**
+     * The account's linked devices may have changed: re-read
+     * `linked_devices`. Also fires once each time the account's worker opens
+     * or reconnects. Carries no device or group identities, and may fire
+     * with no visible change.
+     */
+    case linkedDevicesChanged(accountIdHex: String, accountLabel: String
+    )
+    /**
+     * Whether this device's KeyPackage refresh is overdue may have changed:
+     * re-read `key_package_refresh_overdue`. Also fires once each time the
+     * account's worker opens or reconnects, and may fire with no change.
+     */
+    case keyPackageRefreshOverdueChanged(accountIdHex: String, accountLabel: String
+    )
+    /**
+     * The account's unrecognized sign-ins may have changed: re-read
+     * `unrecognized_sign_ins`. Also fires once each time the account's
+     * worker opens or reconnects. Carries no slots, and may fire with no
+     * visible change.
+     */
+    case unrecognizedSignInsChanged(accountIdHex: String, accountLabel: String
+    )
+    /**
+     * The account's compromise warning may have changed: re-read
+     * `compromise_warning`. Also fires once each time the account's worker
+     * opens or reconnects. Carries no slots, and may fire with no visible
+     * change.
+     */
+    case compromiseWarningChanged(accountIdHex: String, accountLabel: String
+    )
+    /**
+     * Linking a new device may have changed as this device shows it:
+     * re-read `device_link_snapshot`. Also fires once each time the
+     * account's worker opens or reconnects. Live comparison sessions are
+     * lost then; admitted moves resume from durable progress. Carries no
+     * device, session or group identities, and may fire with no visible
+     * change.
+     */
+    case deviceLinkChanged(accountIdHex: String, accountLabel: String
+    )
+    /**
+     * `chat_history_imports` answers differently; re-read it. Fires when a
+     * held chat's delivery from another of this account's devices arrives,
+     * is imported, first fails to fetch, or goes; when imported rows go, as
+     * retention prunes them or the chat is deleted; when a source device is
+     * renamed or removed; and when a chat whose delivery arrived first is
+     * joined. Also fires once each time the account's worker opens or
+     * reconnects, whatever the answer. Carries no chat or device identities.
+     */
+    case chatHistoryImportsChanged(accountIdHex: String, accountLabel: String
+    )
+    /**
+     * The account's recovery status may have changed: re-read
+     * `account_recovery_status`. Carries no group identities.
+     */
+    case recoveryStatusChanged(accountIdHex: String, accountLabel: String
+    )
+    /**
+     * The account's device group removed this device after its link was
+     * made, so the account stopped here and is signed out for good: re-read
+     * `list_accounts` and show the device-level notice. Fires once;
+     * afterwards `AccountSummaryFfi.unlinked` says so.
+     */
+    case deviceUnlinked(accountIdHex: String, accountLabel: String
     )
 }
 
@@ -41798,7 +50205,7 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
         case 7: return .agentStreamActivity(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 8: return .welcomeDeliveryPending(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), messageIdHex: try FfiConverterString.read(from: &buf), recipientHex: try FfiConverterString.read(from: &buf)
+        case 8: return .welcomeDeliveryPending(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), messageIdHex: try FfiConverterString.read(from: &buf), recipientHex: try FfiConverterString.read(from: &buf), sizeClass: try FfiConverterOptionTypeEventSizeClassFfi.read(from: &buf)
         )
 
         case 9: return .epochStallEscalated(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), stalledEpoch: try FfiConverterUInt64.read(from: &buf), arms: try FfiConverterUInt32.read(from: &buf)
@@ -41808,6 +50215,30 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
         )
 
         case 11: return .historyNoticesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 12: return .linkedDevicesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 13: return .keyPackageRefreshOverdueChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 14: return .unrecognizedSignInsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 15: return .compromiseWarningChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 16: return .deviceLinkChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 17: return .chatHistoryImportsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 18: return .recoveryStatusChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 19: return .deviceUnlinked(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -41863,13 +50294,14 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
             FfiConverterString.write(accountLabel, into: &buf)
 
 
-        case let .welcomeDeliveryPending(accountIdHex,accountLabel,groupIdHex,messageIdHex,recipientHex):
+        case let .welcomeDeliveryPending(accountIdHex,accountLabel,groupIdHex,messageIdHex,recipientHex,sizeClass):
             writeInt(&buf, Int32(8))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(messageIdHex, into: &buf)
             FfiConverterString.write(recipientHex, into: &buf)
+            FfiConverterOptionTypeEventSizeClassFfi.write(sizeClass, into: &buf)
 
 
         case let .epochStallEscalated(accountIdHex,accountLabel,groupIdHex,stalledEpoch,arms):
@@ -41894,6 +50326,54 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
 
         case let .historyNoticesChanged(accountIdHex,accountLabel):
             writeInt(&buf, Int32(11))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .linkedDevicesChanged(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(12))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .keyPackageRefreshOverdueChanged(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(13))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .unrecognizedSignInsChanged(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(14))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .compromiseWarningChanged(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(15))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .deviceLinkChanged(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(16))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .chatHistoryImportsChanged(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(17))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .recoveryStatusChanged(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(18))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .deviceUnlinked(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
@@ -42010,6 +50490,23 @@ public enum MarmotKitError: Swift.Error {
     case InvalidMediaReference(details: String
     )
     /**
+     * An attachment was encrypted at `source_epoch`, but the group moved to
+     * `current_epoch`, or to another branch at the same epoch, before it could
+     * be sent (mdk#2158). Its media key is bound to the epoch it was encrypted
+     * under, so it cannot be sent; upload the file again. Nothing was
+     * published.
+     */
+    case MediaReferenceStaleEpoch(sourceEpoch: UInt64, currentEpoch: UInt64
+    )
+    /**
+     * The group's epoch is unsettled, so an attachment encrypted at
+     * `source_epoch` cannot be sent right now. Nothing was published. Sync
+     * and send again; if the epoch moved, that send fails with
+     * `MediaReferenceStaleEpoch` and the file must be uploaded again.
+     */
+    case MediaReferenceEpochUnsettled(sourceEpoch: UInt64
+    )
+    /**
      * An encrypted-media `imeta` reference failed MDK's shared strict parser
      * (mdk#1787): `parse_media_imeta_tag` on an inbound tag, or a host-built
      * reference passed to build/send/upload/download whose fields are
@@ -42071,6 +50568,14 @@ public enum MarmotKitError: Swift.Error {
     case DirectoryLookupIncomplete(account: String
     )
     case Publish(details: String
+    )
+    /**
+     * All current targets refused this artifact for size on the observed attempt.
+     * A legacy Welcome can have earlier exposure hidden by a crash or expired
+     * bookkeeping; this is not proof of non-delivery or a terminal outcome.
+     * Keep native retries and confirmed state. No relay limit is inferred.
+     */
+    case EventTooLarge(artifact: OversizedArtifactFfi, sizeClass: EventSizeClassFfi
     )
     /**
      * No current kind-3 event was found on the account's known outbox/default
@@ -42137,11 +50642,20 @@ public enum MarmotKitError: Swift.Error {
      */
     case LeaveAlreadyRequested(groupIdHex: String
     )
+    case LeaveNotBlocked(groupIdHex: String
+    )
     case WouldRemoveLastAdmin(groupIdHex: String
     )
     case DisbandingUnsupportedMembers(groupIdHex: String, memberIdsHex: [String]
     )
     case DisbandingNotEnabled(groupIdHex: String
+    )
+    /**
+     * The group cannot turn on account-devices now. `reason` is the same
+     * aggregate answer `Marmot::account_devices_activation` gives, never
+     * `Eligible`; it never names which members or devices hold it back.
+     */
+    case AccountDevicesActivationRefused(groupIdHex: String, reason: AccountDevicesActivationFfi
     )
     case GroupDisbanding(groupIdHex: String
     )
@@ -42286,6 +50800,62 @@ public enum MarmotKitError: Swift.Error {
      */
     case GroupUnrecoverableRepairRequired(groupIdHex: String
     )
+    case InvalidSticker(details: String
+    )
+    case StickerNotFound
+    case StickerNetwork(details: String
+    )
+    case StickerImport(details: String
+    )
+    case StickerImportUnsupported
+    /**
+     * An emoji set, its address or an entry is malformed, or no emoji in it
+     * could be installed.
+     */
+    case InvalidEmojiSet(details: String
+    )
+    case EmojiSetNotFound
+    /**
+     * Relays or an image host could not be reached.
+     */
+    case EmojiSetNetwork(details: String
+    )
+    /**
+     * Over 4 MiB, 4096 px per side, or 200 animation frames.
+     */
+    case EmojiImageTooLarge(details: String
+    )
+    /**
+     * Not PNG/APNG, GIF, WebP or JPEG, malformed, or its stated MIME type
+     * does not match its bytes.
+     */
+    case EmojiImageUnsupported(details: String
+    )
+    /**
+     * Installed-set or stored-byte cap reached.
+     */
+    case EmojiSetLimit(details: String
+    )
+    case EmojiSetChanged(currentEventIdHex: String
+    )
+    case EmojiSetInstallCancelled
+    /**
+     * This device was unlinked from the account by its other devices. The
+     * account stays signed out here: wipe it, then link the device again
+     * (mdk#2628 D67).
+     */
+    case AccountUnlinked(accountRef: String
+    )
+    /**
+     * Recovery waits for the coordinator's source group to settle.
+     */
+    case GroupRecoveryUnsettled(groupIdHex: String
+    )
+    /**
+     * Recovery must restart its authenticated challenge, not retry the grant.
+     */
+    case GroupRecoverySourceMismatch(groupIdHex: String
+    )
     case Runtime(details: String
     )
     /**
@@ -42304,6 +50874,13 @@ public enum MarmotKitError: Swift.Error {
     case ChatWindowAnchorOutside
     case ChatWindowClosed
     case ChatWindowQuery(details: String
+    )
+    /**
+     * A chat-list query broke a size bound, its node list was not one tree,
+     * or a window was opened with a `MessageText` node. Nothing was read; fix
+     * the query rather than retrying it.
+     */
+    case InvalidChatListQuery(reason: ChatListQueryErrorFfi
     )
     case ConversationWindowInvalidLimit
     case MessageDraftRevisionConflict
@@ -42390,160 +50967,221 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
         case 26: return .InvalidMediaReference(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 27: return .MediaAttachmentRejected(
+        case 27: return .MediaReferenceStaleEpoch(
+            sourceEpoch: try FfiConverterUInt64.read(from: &buf),
+            currentEpoch: try FfiConverterUInt64.read(from: &buf)
+            )
+        case 28: return .MediaReferenceEpochUnsettled(
+            sourceEpoch: try FfiConverterUInt64.read(from: &buf)
+            )
+        case 29: return .MediaAttachmentRejected(
             kind: try FfiConverterTypeMediaAttachmentRejectionKindFfi.read(from: &buf),
             details: try FfiConverterString.read(from: &buf)
             )
-        case 28: return .MediaUnfetchable(
+        case 30: return .MediaUnfetchable(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 29: return .MediaDownloadFailed(
+        case 31: return .MediaDownloadFailed(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 30: return .InvalidHex(
+        case 32: return .InvalidHex(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 31: return .InvalidIdentity(
+        case 33: return .InvalidIdentity(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 32: return .InvalidKeyPackageEvent(
+        case 34: return .InvalidKeyPackageEvent(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 33: return .MissingKeyPackage(
+        case 35: return .MissingKeyPackage(
             account: try FfiConverterString.read(from: &buf),
             reason: try FfiConverterTypeMissingKeyPackageReasonFfi.read(from: &buf)
             )
-        case 34: return .MissingMemberInboxRoute(
+        case 36: return .MissingMemberInboxRoute(
             account: try FfiConverterString.read(from: &buf)
             )
-        case 35: return .DirectoryLookupIncomplete(
+        case 37: return .DirectoryLookupIncomplete(
             account: try FfiConverterString.read(from: &buf)
             )
-        case 36: return .Publish(
+        case 38: return .Publish(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 37: return .FollowListUnavailable
-        case 38: return .FollowListTooLarge
-        case 39: return .TransportClosed
-        case 40: return .RuntimeBusy
-        case 41: return .AccountSessionBusy
-        case 42: return .AccountSetupRecoveryRequired
-        case 43: return .AccountSetupRetryRequired
-        case 44: return .OnboardingActionUnavailable
-        case 45: return .OnboardingRequired
-        case 46: return .AccountSetupResetNotApplicable
-        case 47: return .AccountSetupKeyPackageRecoveryAvailable
-        case 48: return .RuntimeStopping
-        case 49: return .AttachmentModeRequired
-        case 50: return .AttachmentAccountSignedOut
-        case 51: return .AccountCatchUp(
+        case 39: return .EventTooLarge(
+            artifact: try FfiConverterTypeOversizedArtifactFfi.read(from: &buf),
+            sizeClass: try FfiConverterTypeEventSizeClassFfi.read(from: &buf)
+            )
+        case 40: return .FollowListUnavailable
+        case 41: return .FollowListTooLarge
+        case 42: return .TransportClosed
+        case 43: return .RuntimeBusy
+        case 44: return .AccountSessionBusy
+        case 45: return .AccountSetupRecoveryRequired
+        case 46: return .AccountSetupRetryRequired
+        case 47: return .OnboardingActionUnavailable
+        case 48: return .OnboardingRequired
+        case 49: return .AccountSetupResetNotApplicable
+        case 50: return .AccountSetupKeyPackageRecoveryAvailable
+        case 51: return .RuntimeStopping
+        case 52: return .AttachmentModeRequired
+        case 53: return .AttachmentAccountSignedOut
+        case 54: return .AccountCatchUp(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 52: return .NotGroupAdmin(
+        case 55: return .NotGroupAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 53: return .AdminCannotSelfRemove(
+        case 56: return .AdminCannotSelfRemove(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 54: return .LeaveAlreadyRequested(
+        case 57: return .LeaveAlreadyRequested(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 55: return .WouldRemoveLastAdmin(
+        case 58: return .LeaveNotBlocked(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 56: return .DisbandingUnsupportedMembers(
+        case 59: return .WouldRemoveLastAdmin(
+            groupIdHex: try FfiConverterString.read(from: &buf)
+            )
+        case 60: return .DisbandingUnsupportedMembers(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdsHex: try FfiConverterSequenceString.read(from: &buf)
             )
-        case 57: return .DisbandingNotEnabled(
+        case 61: return .DisbandingNotEnabled(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 58: return .GroupDisbanding(
+        case 62: return .AccountDevicesActivationRefused(
+            groupIdHex: try FfiConverterString.read(from: &buf),
+            reason: try FfiConverterTypeAccountDevicesActivationFfi.read(from: &buf)
+            )
+        case 63: return .GroupDisbanding(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 59: return .GroupRemoved(
+        case 64: return .GroupRemoved(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 60: return .GroupCatchingUp(
+        case 65: return .GroupCatchingUp(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 61: return .GroupCommitUndelivered(
+        case 66: return .GroupCommitUndelivered(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 62: return .MemberNotInGroup(
+        case 67: return .MemberNotInGroup(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 63: return .AlreadyAdmin(
+        case 68: return .AlreadyAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 64: return .NotAdmin(
+        case 69: return .NotAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 65: return .StorageBusy(
+        case 70: return .StorageBusy(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 66: return .StorageClosed(
+        case 71: return .StorageClosed(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 67: return .StorageFull(
+        case 72: return .StorageFull(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 68: return .SecretNotFound(
+        case 73: return .SecretNotFound(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 69: return .KeystoreUnavailable(
+        case 74: return .KeystoreUnavailable(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 70: return .EmptyPassphrase
-        case 71: return .EncryptionFailed(
+        case 75: return .EmptyPassphrase
+        case 76: return .EncryptionFailed(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 72: return .Io(
+        case 77: return .Io(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 73: return .ExternalSignerUnavailable(
+        case 78: return .ExternalSignerUnavailable(
             account: try FfiConverterString.read(from: &buf)
             )
-        case 74: return .ExternalSignerMismatch
-        case 75: return .ExternalSignerRejected
-        case 76: return .GroupSendQueueFull(
+        case 79: return .ExternalSignerMismatch
+        case 80: return .ExternalSignerRejected
+        case 81: return .GroupSendQueueFull(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 77: return .GroupUnrecoverableRepairRequired(
+        case 82: return .GroupUnrecoverableRepairRequired(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 78: return .Runtime(
+        case 83: return .InvalidSticker(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 79: return .AccountWorkerBusy
-        case 80: return .AccountWorkerResponseTimedOut
-        case 81: return .ChatWindowInvalidLimit
-        case 82: return .ChatWindowStale
-        case 83: return .ChatWindowAnchorOutside
-        case 84: return .ChatWindowClosed
-        case 85: return .ChatWindowQuery(
+        case 84: return .StickerNotFound
+        case 85: return .StickerNetwork(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 86: return .ConversationWindowInvalidLimit
-        case 87: return .MessageDraftRevisionConflict
-        case 88: return .ConversationWindowStale
-        case 89: return .ConversationWindowWrongGeneration
-        case 90: return .ConversationWindowAnchorOutside
-        case 91: return .ConversationWindowClosed
-        case 92: return .ConversationWindowNotReady
-        case 93: return .ConversationWindowTimedOut
-        case 94: return .ConversationWindowInvalidTarget
-        case 95: return .ConversationWindowQuery(
+        case 86: return .StickerImport(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 96: return .ConversationWindowPresentation(
+        case 87: return .StickerImportUnsupported
+        case 88: return .InvalidEmojiSet(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 97: return .ConversationWindowMessageNotRetained
-        case 98: return .InvalidAppComponent(
+        case 89: return .EmojiSetNotFound
+        case 90: return .EmojiSetNetwork(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 91: return .EmojiImageTooLarge(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 92: return .EmojiImageUnsupported(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 93: return .EmojiSetLimit(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 94: return .EmojiSetChanged(
+            currentEventIdHex: try FfiConverterString.read(from: &buf)
+            )
+        case 95: return .EmojiSetInstallCancelled
+        case 96: return .AccountUnlinked(
+            accountRef: try FfiConverterString.read(from: &buf)
+            )
+        case 97: return .GroupRecoveryUnsettled(
+            groupIdHex: try FfiConverterString.read(from: &buf)
+            )
+        case 98: return .GroupRecoverySourceMismatch(
+            groupIdHex: try FfiConverterString.read(from: &buf)
+            )
+        case 99: return .Runtime(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 100: return .AccountWorkerBusy
+        case 101: return .AccountWorkerResponseTimedOut
+        case 102: return .ChatWindowInvalidLimit
+        case 103: return .ChatWindowStale
+        case 104: return .ChatWindowAnchorOutside
+        case 105: return .ChatWindowClosed
+        case 106: return .ChatWindowQuery(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 107: return .InvalidChatListQuery(
+            reason: try FfiConverterTypeChatListQueryErrorFfi.read(from: &buf)
+            )
+        case 108: return .ConversationWindowInvalidLimit
+        case 109: return .MessageDraftRevisionConflict
+        case 110: return .ConversationWindowStale
+        case 111: return .ConversationWindowWrongGeneration
+        case 112: return .ConversationWindowAnchorOutside
+        case 113: return .ConversationWindowClosed
+        case 114: return .ConversationWindowNotReady
+        case 115: return .ConversationWindowTimedOut
+        case 116: return .ConversationWindowInvalidTarget
+        case 117: return .ConversationWindowQuery(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 118: return .ConversationWindowPresentation(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 119: return .ConversationWindowMessageNotRetained
+        case 120: return .InvalidAppComponent(
             details: try FfiConverterString.read(from: &buf)
             )
 
@@ -42674,336 +51312,445 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .MediaAttachmentRejected(kind,details):
+        case let .MediaReferenceStaleEpoch(sourceEpoch,currentEpoch):
             writeInt(&buf, Int32(27))
+            FfiConverterUInt64.write(sourceEpoch, into: &buf)
+            FfiConverterUInt64.write(currentEpoch, into: &buf)
+
+
+        case let .MediaReferenceEpochUnsettled(sourceEpoch):
+            writeInt(&buf, Int32(28))
+            FfiConverterUInt64.write(sourceEpoch, into: &buf)
+
+
+        case let .MediaAttachmentRejected(kind,details):
+            writeInt(&buf, Int32(29))
             FfiConverterTypeMediaAttachmentRejectionKindFfi.write(kind, into: &buf)
             FfiConverterString.write(details, into: &buf)
 
 
         case let .MediaUnfetchable(details):
-            writeInt(&buf, Int32(28))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .MediaDownloadFailed(details):
-            writeInt(&buf, Int32(29))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .InvalidHex(details):
             writeInt(&buf, Int32(30))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .InvalidIdentity(details):
+        case let .MediaDownloadFailed(details):
             writeInt(&buf, Int32(31))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .InvalidKeyPackageEvent(details):
+        case let .InvalidHex(details):
             writeInt(&buf, Int32(32))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .MissingKeyPackage(account,reason):
+        case let .InvalidIdentity(details):
             writeInt(&buf, Int32(33))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .InvalidKeyPackageEvent(details):
+            writeInt(&buf, Int32(34))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .MissingKeyPackage(account,reason):
+            writeInt(&buf, Int32(35))
             FfiConverterString.write(account, into: &buf)
             FfiConverterTypeMissingKeyPackageReasonFfi.write(reason, into: &buf)
 
 
         case let .MissingMemberInboxRoute(account):
-            writeInt(&buf, Int32(34))
+            writeInt(&buf, Int32(36))
             FfiConverterString.write(account, into: &buf)
 
 
         case let .DirectoryLookupIncomplete(account):
-            writeInt(&buf, Int32(35))
+            writeInt(&buf, Int32(37))
             FfiConverterString.write(account, into: &buf)
 
 
         case let .Publish(details):
-            writeInt(&buf, Int32(36))
+            writeInt(&buf, Int32(38))
             FfiConverterString.write(details, into: &buf)
 
 
-        case .FollowListUnavailable:
-            writeInt(&buf, Int32(37))
-
-
-        case .FollowListTooLarge:
-            writeInt(&buf, Int32(38))
-
-
-        case .TransportClosed:
+        case let .EventTooLarge(artifact,sizeClass):
             writeInt(&buf, Int32(39))
+            FfiConverterTypeOversizedArtifactFfi.write(artifact, into: &buf)
+            FfiConverterTypeEventSizeClassFfi.write(sizeClass, into: &buf)
 
 
-        case .RuntimeBusy:
+        case .FollowListUnavailable:
             writeInt(&buf, Int32(40))
 
 
-        case .AccountSessionBusy:
+        case .FollowListTooLarge:
             writeInt(&buf, Int32(41))
 
 
-        case .AccountSetupRecoveryRequired:
+        case .TransportClosed:
             writeInt(&buf, Int32(42))
 
 
-        case .AccountSetupRetryRequired:
+        case .RuntimeBusy:
             writeInt(&buf, Int32(43))
 
 
-        case .OnboardingActionUnavailable:
+        case .AccountSessionBusy:
             writeInt(&buf, Int32(44))
 
 
-        case .OnboardingRequired:
+        case .AccountSetupRecoveryRequired:
             writeInt(&buf, Int32(45))
 
 
-        case .AccountSetupResetNotApplicable:
+        case .AccountSetupRetryRequired:
             writeInt(&buf, Int32(46))
 
 
-        case .AccountSetupKeyPackageRecoveryAvailable:
+        case .OnboardingActionUnavailable:
             writeInt(&buf, Int32(47))
 
 
-        case .RuntimeStopping:
+        case .OnboardingRequired:
             writeInt(&buf, Int32(48))
 
 
-        case .AttachmentModeRequired:
+        case .AccountSetupResetNotApplicable:
             writeInt(&buf, Int32(49))
 
 
-        case .AttachmentAccountSignedOut:
+        case .AccountSetupKeyPackageRecoveryAvailable:
             writeInt(&buf, Int32(50))
 
 
-        case let .AccountCatchUp(details):
+        case .RuntimeStopping:
             writeInt(&buf, Int32(51))
+
+
+        case .AttachmentModeRequired:
+            writeInt(&buf, Int32(52))
+
+
+        case .AttachmentAccountSignedOut:
+            writeInt(&buf, Int32(53))
+
+
+        case let .AccountCatchUp(details):
+            writeInt(&buf, Int32(54))
             FfiConverterString.write(details, into: &buf)
 
 
         case let .NotGroupAdmin(groupIdHex):
-            writeInt(&buf, Int32(52))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .AdminCannotSelfRemove(groupIdHex):
-            writeInt(&buf, Int32(53))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .LeaveAlreadyRequested(groupIdHex):
-            writeInt(&buf, Int32(54))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .WouldRemoveLastAdmin(groupIdHex):
             writeInt(&buf, Int32(55))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
-        case let .DisbandingUnsupportedMembers(groupIdHex,memberIdsHex):
+        case let .AdminCannotSelfRemove(groupIdHex):
             writeInt(&buf, Int32(56))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .LeaveAlreadyRequested(groupIdHex):
+            writeInt(&buf, Int32(57))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .LeaveNotBlocked(groupIdHex):
+            writeInt(&buf, Int32(58))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .WouldRemoveLastAdmin(groupIdHex):
+            writeInt(&buf, Int32(59))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .DisbandingUnsupportedMembers(groupIdHex,memberIdsHex):
+            writeInt(&buf, Int32(60))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterSequenceString.write(memberIdsHex, into: &buf)
 
 
         case let .DisbandingNotEnabled(groupIdHex):
-            writeInt(&buf, Int32(57))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .GroupDisbanding(groupIdHex):
-            writeInt(&buf, Int32(58))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .GroupRemoved(groupIdHex):
-            writeInt(&buf, Int32(59))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .GroupCatchingUp(groupIdHex):
-            writeInt(&buf, Int32(60))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .GroupCommitUndelivered(groupIdHex):
             writeInt(&buf, Int32(61))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
-        case let .MemberNotInGroup(groupIdHex,memberIdHex):
+        case let .AccountDevicesActivationRefused(groupIdHex,reason):
             writeInt(&buf, Int32(62))
+            FfiConverterString.write(groupIdHex, into: &buf)
+            FfiConverterTypeAccountDevicesActivationFfi.write(reason, into: &buf)
+
+
+        case let .GroupDisbanding(groupIdHex):
+            writeInt(&buf, Int32(63))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .GroupRemoved(groupIdHex):
+            writeInt(&buf, Int32(64))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .GroupCatchingUp(groupIdHex):
+            writeInt(&buf, Int32(65))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .GroupCommitUndelivered(groupIdHex):
+            writeInt(&buf, Int32(66))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .MemberNotInGroup(groupIdHex,memberIdHex):
+            writeInt(&buf, Int32(67))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
         case let .AlreadyAdmin(groupIdHex,memberIdHex):
-            writeInt(&buf, Int32(63))
+            writeInt(&buf, Int32(68))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
         case let .NotAdmin(groupIdHex,memberIdHex):
-            writeInt(&buf, Int32(64))
+            writeInt(&buf, Int32(69))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
         case let .StorageBusy(details):
-            writeInt(&buf, Int32(65))
+            writeInt(&buf, Int32(70))
             FfiConverterString.write(details, into: &buf)
 
 
         case let .StorageClosed(details):
-            writeInt(&buf, Int32(66))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .StorageFull(details):
-            writeInt(&buf, Int32(67))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .SecretNotFound(details):
-            writeInt(&buf, Int32(68))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .KeystoreUnavailable(details):
-            writeInt(&buf, Int32(69))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case .EmptyPassphrase:
-            writeInt(&buf, Int32(70))
-
-
-        case let .EncryptionFailed(details):
             writeInt(&buf, Int32(71))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .Io(details):
+        case let .StorageFull(details):
             writeInt(&buf, Int32(72))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .ExternalSignerUnavailable(account):
+        case let .SecretNotFound(details):
             writeInt(&buf, Int32(73))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .KeystoreUnavailable(details):
+            writeInt(&buf, Int32(74))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case .EmptyPassphrase:
+            writeInt(&buf, Int32(75))
+
+
+        case let .EncryptionFailed(details):
+            writeInt(&buf, Int32(76))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .Io(details):
+            writeInt(&buf, Int32(77))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .ExternalSignerUnavailable(account):
+            writeInt(&buf, Int32(78))
             FfiConverterString.write(account, into: &buf)
 
 
         case .ExternalSignerMismatch:
-            writeInt(&buf, Int32(74))
+            writeInt(&buf, Int32(79))
 
 
         case .ExternalSignerRejected:
-            writeInt(&buf, Int32(75))
+            writeInt(&buf, Int32(80))
 
 
         case let .GroupSendQueueFull(groupIdHex):
-            writeInt(&buf, Int32(76))
+            writeInt(&buf, Int32(81))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .GroupUnrecoverableRepairRequired(groupIdHex):
-            writeInt(&buf, Int32(77))
+            writeInt(&buf, Int32(82))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
-        case let .Runtime(details):
-            writeInt(&buf, Int32(78))
+        case let .InvalidSticker(details):
+            writeInt(&buf, Int32(83))
             FfiConverterString.write(details, into: &buf)
 
 
-        case .AccountWorkerBusy:
-            writeInt(&buf, Int32(79))
-
-
-        case .AccountWorkerResponseTimedOut:
-            writeInt(&buf, Int32(80))
-
-
-        case .ChatWindowInvalidLimit:
-            writeInt(&buf, Int32(81))
-
-
-        case .ChatWindowStale:
-            writeInt(&buf, Int32(82))
-
-
-        case .ChatWindowAnchorOutside:
-            writeInt(&buf, Int32(83))
-
-
-        case .ChatWindowClosed:
+        case .StickerNotFound:
             writeInt(&buf, Int32(84))
 
 
-        case let .ChatWindowQuery(details):
+        case let .StickerNetwork(details):
             writeInt(&buf, Int32(85))
             FfiConverterString.write(details, into: &buf)
 
 
-        case .ConversationWindowInvalidLimit:
+        case let .StickerImport(details):
             writeInt(&buf, Int32(86))
+            FfiConverterString.write(details, into: &buf)
 
 
-        case .MessageDraftRevisionConflict:
+        case .StickerImportUnsupported:
             writeInt(&buf, Int32(87))
 
 
-        case .ConversationWindowStale:
+        case let .InvalidEmojiSet(details):
             writeInt(&buf, Int32(88))
+            FfiConverterString.write(details, into: &buf)
 
 
-        case .ConversationWindowWrongGeneration:
+        case .EmojiSetNotFound:
             writeInt(&buf, Int32(89))
 
 
-        case .ConversationWindowAnchorOutside:
+        case let .EmojiSetNetwork(details):
             writeInt(&buf, Int32(90))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .EmojiImageTooLarge(details):
+            writeInt(&buf, Int32(91))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .EmojiImageUnsupported(details):
+            writeInt(&buf, Int32(92))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .EmojiSetLimit(details):
+            writeInt(&buf, Int32(93))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .EmojiSetChanged(currentEventIdHex):
+            writeInt(&buf, Int32(94))
+            FfiConverterString.write(currentEventIdHex, into: &buf)
+
+
+        case .EmojiSetInstallCancelled:
+            writeInt(&buf, Int32(95))
+
+
+        case let .AccountUnlinked(accountRef):
+            writeInt(&buf, Int32(96))
+            FfiConverterString.write(accountRef, into: &buf)
+
+
+        case let .GroupRecoveryUnsettled(groupIdHex):
+            writeInt(&buf, Int32(97))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .GroupRecoverySourceMismatch(groupIdHex):
+            writeInt(&buf, Int32(98))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .Runtime(details):
+            writeInt(&buf, Int32(99))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case .AccountWorkerBusy:
+            writeInt(&buf, Int32(100))
+
+
+        case .AccountWorkerResponseTimedOut:
+            writeInt(&buf, Int32(101))
+
+
+        case .ChatWindowInvalidLimit:
+            writeInt(&buf, Int32(102))
+
+
+        case .ChatWindowStale:
+            writeInt(&buf, Int32(103))
+
+
+        case .ChatWindowAnchorOutside:
+            writeInt(&buf, Int32(104))
+
+
+        case .ChatWindowClosed:
+            writeInt(&buf, Int32(105))
+
+
+        case let .ChatWindowQuery(details):
+            writeInt(&buf, Int32(106))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .InvalidChatListQuery(reason):
+            writeInt(&buf, Int32(107))
+            FfiConverterTypeChatListQueryErrorFfi.write(reason, into: &buf)
+
+
+        case .ConversationWindowInvalidLimit:
+            writeInt(&buf, Int32(108))
+
+
+        case .MessageDraftRevisionConflict:
+            writeInt(&buf, Int32(109))
+
+
+        case .ConversationWindowStale:
+            writeInt(&buf, Int32(110))
+
+
+        case .ConversationWindowWrongGeneration:
+            writeInt(&buf, Int32(111))
+
+
+        case .ConversationWindowAnchorOutside:
+            writeInt(&buf, Int32(112))
 
 
         case .ConversationWindowClosed:
-            writeInt(&buf, Int32(91))
+            writeInt(&buf, Int32(113))
 
 
         case .ConversationWindowNotReady:
-            writeInt(&buf, Int32(92))
+            writeInt(&buf, Int32(114))
 
 
         case .ConversationWindowTimedOut:
-            writeInt(&buf, Int32(93))
+            writeInt(&buf, Int32(115))
 
 
         case .ConversationWindowInvalidTarget:
-            writeInt(&buf, Int32(94))
+            writeInt(&buf, Int32(116))
 
 
         case let .ConversationWindowQuery(details):
-            writeInt(&buf, Int32(95))
+            writeInt(&buf, Int32(117))
             FfiConverterString.write(details, into: &buf)
 
 
         case let .ConversationWindowPresentation(details):
-            writeInt(&buf, Int32(96))
+            writeInt(&buf, Int32(118))
             FfiConverterString.write(details, into: &buf)
 
 
         case .ConversationWindowMessageNotRetained:
-            writeInt(&buf, Int32(97))
+            writeInt(&buf, Int32(119))
 
 
         case let .InvalidAppComponent(details):
-            writeInt(&buf, Int32(98))
+            writeInt(&buf, Int32(120))
             FfiConverterString.write(details, into: &buf)
 
         }
@@ -44029,6 +52776,131 @@ public func FfiConverterTypeNativeStartupStageFfi_lower(_ value: NativeStartupSt
 
 
 extension NativeStartupStageFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * The new device's side of a link, as its screen shows it.
+ */
+
+public enum NewDeviceLinkStateFfi {
+
+    /**
+     * Waiting for a device already signed in to answer. Ask the user to
+     * open the app there.
+     */
+    case waitingForAnswer
+    /**
+     * Both screens show `code`. Offer "They match" and cancel.
+     */
+    case comparing(code: [DeviceLinkEmojiFfi]
+    )
+    /**
+     * This user confirmed; the other device's user has not yet.
+     */
+    case waitingForOtherDevice
+    /**
+     * Both users confirmed. Waiting for the other device to add this one.
+     */
+    case joining
+    /**
+     * This device joined the account's device group. The device that added
+     * it shows the link made once this device's first change there reaches
+     * it.
+     */
+    case linked
+    case ended(reason: DeviceLinkEndReasonFfi
+    )
+}
+
+
+#if compiler(>=6)
+extension NewDeviceLinkStateFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNewDeviceLinkStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = NewDeviceLinkStateFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NewDeviceLinkStateFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .waitingForAnswer
+
+        case 2: return .comparing(code: try FfiConverterSequenceTypeDeviceLinkEmojiFfi.read(from: &buf)
+        )
+
+        case 3: return .waitingForOtherDevice
+
+        case 4: return .joining
+
+        case 5: return .linked
+
+        case 6: return .ended(reason: try FfiConverterTypeDeviceLinkEndReasonFfi.read(from: &buf)
+        )
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: NewDeviceLinkStateFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .waitingForAnswer:
+            writeInt(&buf, Int32(1))
+
+
+        case let .comparing(code):
+            writeInt(&buf, Int32(2))
+            FfiConverterSequenceTypeDeviceLinkEmojiFfi.write(code, into: &buf)
+
+
+        case .waitingForOtherDevice:
+            writeInt(&buf, Int32(3))
+
+
+        case .joining:
+            writeInt(&buf, Int32(4))
+
+
+        case .linked:
+            writeInt(&buf, Int32(5))
+
+
+        case let .ended(reason):
+            writeInt(&buf, Int32(6))
+            FfiConverterTypeDeviceLinkEndReasonFfi.write(reason, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNewDeviceLinkStateFfi_lift(_ buf: RustBuffer) throws -> NewDeviceLinkStateFfi {
+    return try FfiConverterTypeNewDeviceLinkStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNewDeviceLinkStateFfi_lower(_ value: NewDeviceLinkStateFfi) -> RustBuffer {
+    return FfiConverterTypeNewDeviceLinkStateFfi.lower(value)
+}
+
+
+extension NewDeviceLinkStateFfi: Equatable, Hashable {}
 
 
 
@@ -45597,6 +54469,105 @@ public func FfiConverterTypeOnboardingStepFfi_lower(_ value: OnboardingStepFfi) 
 
 
 extension OnboardingStepFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What MDK was publishing when a relay refused the event as too large.
+ */
+
+public enum OversizedArtifactFfi {
+
+    /**
+     * A group change such as an invite, a removal or an update.
+     */
+    case commit
+    /**
+     * The Welcome that lets an invitee join.
+     */
+    case welcome
+    /**
+     * A chat message or another application message.
+     */
+    case applicationMessage
+    /**
+     * Any other transport event.
+     */
+    case other
+}
+
+
+#if compiler(>=6)
+extension OversizedArtifactFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOversizedArtifactFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OversizedArtifactFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OversizedArtifactFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .commit
+
+        case 2: return .welcome
+
+        case 3: return .applicationMessage
+
+        case 4: return .other
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OversizedArtifactFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .commit:
+            writeInt(&buf, Int32(1))
+
+
+        case .welcome:
+            writeInt(&buf, Int32(2))
+
+
+        case .applicationMessage:
+            writeInt(&buf, Int32(3))
+
+
+        case .other:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOversizedArtifactFfi_lift(_ buf: RustBuffer) throws -> OversizedArtifactFfi {
+    return try FfiConverterTypeOversizedArtifactFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOversizedArtifactFfi_lower(_ value: OversizedArtifactFfi) -> RustBuffer {
+    return FfiConverterTypeOversizedArtifactFfi.lower(value)
+}
+
+
+extension OversizedArtifactFfi: Equatable, Hashable {}
 
 
 
@@ -47519,8 +56490,10 @@ extension SelectedChatPreviewFfi: Equatable, Hashable {}
 /**
  * The local account's own membership in a group: an active `Member`, or a
  * terminal state describing how it left — `Left` (a voluntary self-removal or
- * declined invite) or `Removed` (evicted by another member). Surfaced on both
- * the chat-list row and the group-detail record.
+ * declined invite), `Removed` (evicted by another member) or `DeviceRemoved`
+ * (this device's leaf was removed while the account keeps another device in
+ * the group; hosts show no "removed from group" notice for it). Surfaced on
+ * both the chat-list row and the group-detail record.
  */
 
 public enum SelfMembershipFfi {
@@ -47528,6 +56501,7 @@ public enum SelfMembershipFfi {
     case member
     case left
     case removed
+    case deviceRemoved
 }
 
 
@@ -47551,6 +56525,8 @@ public struct FfiConverterTypeSelfMembershipFfi: FfiConverterRustBuffer {
 
         case 3: return .removed
 
+        case 4: return .deviceRemoved
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -47569,6 +56545,10 @@ public struct FfiConverterTypeSelfMembershipFfi: FfiConverterRustBuffer {
 
         case .removed:
             writeInt(&buf, Int32(3))
+
+
+        case .deviceRemoved:
+            writeInt(&buf, Int32(4))
 
         }
     }
@@ -47746,6 +56726,96 @@ public func FfiConverterTypeSendMaintenanceDispositionFfi_lower(_ value: SendMai
 
 
 extension SendMaintenanceDispositionFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * An answer to an unrecognized sign-in. Linking one is device pairing's.
+ */
+
+public enum SignInResponseFfi {
+
+    /**
+     * Keep it listed, with no prompt.
+     */
+    case notNow
+    /**
+     * It was not the user: record it as rejected in the device group's
+     * roster.
+     */
+    case reject
+    /**
+     * End a prompt another device already answered.
+     */
+    case dismiss
+}
+
+
+#if compiler(>=6)
+extension SignInResponseFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSignInResponseFfi: FfiConverterRustBuffer {
+    typealias SwiftType = SignInResponseFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SignInResponseFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .notNow
+
+        case 2: return .reject
+
+        case 3: return .dismiss
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SignInResponseFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .notNow:
+            writeInt(&buf, Int32(1))
+
+
+        case .reject:
+            writeInt(&buf, Int32(2))
+
+
+        case .dismiss:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSignInResponseFfi_lift(_ buf: RustBuffer) throws -> SignInResponseFfi {
+    return try FfiConverterTypeSignInResponseFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSignInResponseFfi_lower(_ value: SignInResponseFfi) -> RustBuffer {
+    return FfiConverterTypeSignInResponseFfi.lower(value)
+}
+
+
+extension SignInResponseFfi: Equatable, Hashable {}
 
 
 
@@ -48145,6 +57215,104 @@ public func FfiConverterTypeTimelineUpdateTriggerFfi_lower(_ value: TimelineUpda
 
 
 extension TimelineUpdateTriggerFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum UnrecognizedSignInStateFfi {
+
+    /**
+     * Waiting for an answer.
+     */
+    case prompt
+    /**
+     * Answered Not now: listed with no prompt.
+     */
+    case notNow
+    /**
+     * Another device linked it while its prompt here waited. Dismiss ends
+     * the prompt.
+     */
+    case linkedElsewhere
+    /**
+     * Another device rejected it while its prompt here waited. Dismiss ends
+     * the prompt.
+     */
+    case rejectedElsewhere
+}
+
+
+#if compiler(>=6)
+extension UnrecognizedSignInStateFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUnrecognizedSignInStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = UnrecognizedSignInStateFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UnrecognizedSignInStateFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .prompt
+
+        case 2: return .notNow
+
+        case 3: return .linkedElsewhere
+
+        case 4: return .rejectedElsewhere
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: UnrecognizedSignInStateFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .prompt:
+            writeInt(&buf, Int32(1))
+
+
+        case .notNow:
+            writeInt(&buf, Int32(2))
+
+
+        case .linkedElsewhere:
+            writeInt(&buf, Int32(3))
+
+
+        case .rejectedElsewhere:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUnrecognizedSignInStateFfi_lift(_ buf: RustBuffer) throws -> UnrecognizedSignInStateFfi {
+    return try FfiConverterTypeUnrecognizedSignInStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUnrecognizedSignInStateFfi_lower(_ value: UnrecognizedSignInStateFfi) -> RustBuffer {
+    return FfiConverterTypeUnrecognizedSignInStateFfi.lower(value)
+}
+
+
+extension UnrecognizedSignInStateFfi: Equatable, Hashable {}
 
 
 
@@ -48615,6 +57783,30 @@ fileprivate struct FfiConverterOptionTypeAppGroupRecordFfi: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeAttachmentEntryFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AttachmentEntryFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeAttachmentEntryFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeAttachmentEntryFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeAttachmentHandoffFfi: FfiConverterRustBuffer {
     typealias SwiftType = AttachmentHandoffFfi?
 
@@ -48703,6 +57895,30 @@ fileprivate struct FfiConverterOptionTypeAvatarAssetFfi: FfiConverterRustBuffer 
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeAvatarAssetFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeBackupRestoreStatusFfi: FfiConverterRustBuffer {
+    typealias SwiftType = BackupRestoreStatusFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeBackupRestoreStatusFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeBackupRestoreStatusFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -48879,6 +58095,30 @@ fileprivate struct FfiConverterOptionTypeConversationWindowSnapshotFfi: FfiConve
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeEmojiSetFfi: FfiConverterRustBuffer {
+    typealias SwiftType = EmojiSetFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeEmojiSetFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeEmojiSetFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeExistingDirectConversationFfi: FfiConverterRustBuffer {
     typealias SwiftType = ExistingDirectConversationFfi?
 
@@ -48975,6 +58215,30 @@ fileprivate struct FfiConverterOptionTypeGroupSystemEventFfi: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeHistoryImportSourceFfi: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryImportSourceFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeHistoryImportSourceFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeHistoryImportSourceFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeInitialGroupImageFfi: FfiConverterRustBuffer {
     typealias SwiftType = InitialGroupImageFfi?
 
@@ -48991,6 +58255,30 @@ fileprivate struct FfiConverterOptionTypeInitialGroupImageFfi: FfiConverterRustB
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeInitialGroupImageFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeInstalledEmojiSetStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = InstalledEmojiSetStateFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeInstalledEmojiSetStateFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeInstalledEmojiSetStateFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -49407,6 +58695,78 @@ fileprivate struct FfiConverterOptionTypeSendSummaryFfi: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeStickerFfi: FfiConverterRustBuffer {
+    typealias SwiftType = StickerFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeStickerFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeStickerFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeStickerPackFfi: FfiConverterRustBuffer {
+    typealias SwiftType = StickerPackFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeStickerPackFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeStickerPackFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeStickerRefFfi: FfiConverterRustBuffer {
+    typealias SwiftType = StickerRefFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeStickerRefFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeStickerRefFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeTimelineEditSummaryFfi: FfiConverterRustBuffer {
     typealias SwiftType = TimelineEditSummaryFfi?
 
@@ -49743,6 +59103,54 @@ fileprivate struct FfiConverterOptionTypeEncryptedMediaVersionFfi: FfiConverterR
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeEventSizeClassFfi: FfiConverterRustBuffer {
+    typealias SwiftType = EventSizeClassFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeEventSizeClassFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeEventSizeClassFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeHistoryImportProvenanceFfi: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryImportProvenanceFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeHistoryImportProvenanceFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeHistoryImportProvenanceFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeLocalSendStatusFfi: FfiConverterRustBuffer {
     typealias SwiftType = LocalSendStatusFfi?
 
@@ -49807,6 +59215,30 @@ fileprivate struct FfiConverterOptionTypeMessageUpdateFfi: FfiConverterRustBuffe
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeMessageUpdateFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeNewDeviceLinkStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = NewDeviceLinkStateFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeNewDeviceLinkStateFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeNewDeviceLinkStateFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -49928,6 +59360,31 @@ fileprivate struct FfiConverterSequenceUInt16: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterUInt16.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = [UInt32]
+
+    public static func write(_ value: [UInt32], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterUInt32.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UInt32] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UInt32]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterUInt32.read(from: &buf))
         }
         return seq
     }
@@ -50536,6 +59993,31 @@ fileprivate struct FfiConverterSequenceTypeAvatarBytesFfi: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeBackupHistoryAvailabilityFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [BackupHistoryAvailabilityFfi]
+
+    public static func write(_ value: [BackupHistoryAvailabilityFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeBackupHistoryAvailabilityFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [BackupHistoryAvailabilityFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [BackupHistoryAvailabilityFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeBackupHistoryAvailabilityFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeBlockedUserFfi: FfiConverterRustBuffer {
     typealias SwiftType = [BlockedUserFfi]
 
@@ -50611,6 +60093,31 @@ fileprivate struct FfiConverterSequenceTypeChatAttachmentUsageFfi: FfiConverterR
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeChatHistoryImportFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [ChatHistoryImportFfi]
+
+    public static func write(_ value: [ChatHistoryImportFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeChatHistoryImportFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ChatHistoryImportFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ChatHistoryImportFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeChatHistoryImportFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeChatListRowFfi: FfiConverterRustBuffer {
     typealias SwiftType = [ChatListRowFfi]
 
@@ -50628,6 +60135,31 @@ fileprivate struct FfiConverterSequenceTypeChatListRowFfi: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeChatListRowFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeCompromiseWarningItemFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [CompromiseWarningItemFfi]
+
+    public static func write(_ value: [CompromiseWarningItemFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeCompromiseWarningItemFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [CompromiseWarningItemFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [CompromiseWarningItemFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeCompromiseWarningItemFfi.read(from: &buf))
         }
         return seq
     }
@@ -50736,6 +60268,106 @@ fileprivate struct FfiConverterSequenceTypeConversationReactionFfi: FfiConverter
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDeviceGroupMoveSiblingFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [DeviceGroupMoveSiblingFfi]
+
+    public static func write(_ value: [DeviceGroupMoveSiblingFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeviceGroupMoveSiblingFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeviceGroupMoveSiblingFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeviceGroupMoveSiblingFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeviceGroupMoveSiblingFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDeviceGroupMoveViewFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [DeviceGroupMoveViewFfi]
+
+    public static func write(_ value: [DeviceGroupMoveViewFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeviceGroupMoveViewFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeviceGroupMoveViewFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeviceGroupMoveViewFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeviceGroupMoveViewFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDeviceLinkEmojiFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [DeviceLinkEmojiFfi]
+
+    public static func write(_ value: [DeviceLinkEmojiFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeviceLinkEmojiFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeviceLinkEmojiFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeviceLinkEmojiFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeviceLinkEmojiFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDeviceLinkPromptFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [DeviceLinkPromptFfi]
+
+    public static func write(_ value: [DeviceLinkPromptFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeviceLinkPromptFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeviceLinkPromptFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeviceLinkPromptFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeviceLinkPromptFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeDurationHistogramBucketFfi: FfiConverterRustBuffer {
     typealias SwiftType = [DurationHistogramBucketFfi]
 
@@ -50753,6 +60385,81 @@ fileprivate struct FfiConverterSequenceTypeDurationHistogramBucketFfi: FfiConver
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeDurationHistogramBucketFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeEmojiSetEmojiFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [EmojiSetEmojiFfi]
+
+    public static func write(_ value: [EmojiSetEmojiFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeEmojiSetEmojiFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [EmojiSetEmojiFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [EmojiSetEmojiFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeEmojiSetEmojiFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeEmojiSetFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [EmojiSetFfi]
+
+    public static func write(_ value: [EmojiSetFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeEmojiSetFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [EmojiSetFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [EmojiSetFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeEmojiSetFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeEmojiSkipFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [EmojiSkipFfi]
+
+    public static func write(_ value: [EmojiSkipFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeEmojiSkipFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [EmojiSkipFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [EmojiSkipFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeEmojiSkipFfi.read(from: &buf))
         }
         return seq
     }
@@ -50928,6 +60635,56 @@ fileprivate struct FfiConverterSequenceTypeHistoryNoticeFfi: FfiConverterRustBuf
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeHistoryNoticeFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeInstalledCustomEmojiFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [InstalledCustomEmojiFfi]
+
+    public static func write(_ value: [InstalledCustomEmojiFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeInstalledCustomEmojiFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [InstalledCustomEmojiFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [InstalledCustomEmojiFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeInstalledCustomEmojiFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLinkedDeviceFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [LinkedDeviceFfi]
+
+    public static func write(_ value: [LinkedDeviceFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLinkedDeviceFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LinkedDeviceFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LinkedDeviceFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLinkedDeviceFfi.read(from: &buf))
         }
         return seq
     }
@@ -51436,6 +61193,31 @@ fileprivate struct FfiConverterSequenceTypeOnboardingStepStateFfi: FfiConverterR
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypePendingWelcomeDeliveryFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [PendingWelcomeDeliveryFfi]
+
+    public static func write(_ value: [PendingWelcomeDeliveryFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePendingWelcomeDeliveryFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PendingWelcomeDeliveryFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PendingWelcomeDeliveryFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePendingWelcomeDeliveryFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypePollOptionResultFfi: FfiConverterRustBuffer {
     typealias SwiftType = [PollOptionResultFfi]
 
@@ -51811,6 +61593,56 @@ fileprivate struct FfiConverterSequenceTypeSelectedMessageDraftAttachmentFfi: Ff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeStickerFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [StickerFfi]
+
+    public static func write(_ value: [StickerFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeStickerFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [StickerFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [StickerFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeStickerFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeStickerPackFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [StickerPackFfi]
+
+    public static func write(_ value: [StickerPackFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeStickerPackFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [StickerPackFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [StickerPackFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeStickerPackFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeTimelineEditVersionFfi: FfiConverterRustBuffer {
     typealias SwiftType = [TimelineEditVersionFfi]
 
@@ -51936,6 +61768,31 @@ fileprivate struct FfiConverterSequenceTypeTransportFanoutStatusFfi: FfiConverte
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeUnrecognizedSignInFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [UnrecognizedSignInFfi]
+
+    public static func write(_ value: [UnrecognizedSignInFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeUnrecognizedSignInFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UnrecognizedSignInFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UnrecognizedSignInFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeUnrecognizedSignInFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeUserDirectorySearchResultFfi: FfiConverterRustBuffer {
     typealias SwiftType = [UserDirectorySearchResultFfi]
 
@@ -51953,6 +61810,31 @@ fileprivate struct FfiConverterSequenceTypeUserDirectorySearchResultFfi: FfiConv
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeUserDirectorySearchResultFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeChatListFilterNodeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [ChatListFilterNodeFfi]
+
+    public static func write(_ value: [ChatListFilterNodeFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeChatListFilterNodeFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ChatListFilterNodeFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ChatListFilterNodeFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeChatListFilterNodeFfi.read(from: &buf))
         }
         return seq
     }
@@ -52242,8 +62124,8 @@ public func marmotDeploymentNeutral() -> MarmotDeploymentFfi  {
 }
 /**
  * White Noise's deployment: its recovery relays, discovery indexers, media
- * and image servers, Vertex Open Ranking, KeyPackage client preference,
- * moderation label namespace and keychain service `com.marmot.whitenoise`.
+ * and image servers, Vertex Open Ranking, moderation label namespace and
+ * keychain service `com.marmot.whitenoise`.
  * White Noise apps pass it to every constructor.
  */
 public func marmotDeploymentWhiteNoise() -> MarmotDeploymentFfi  {
@@ -52313,7 +62195,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_func_marmot_deployment_neutral() != 64004) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_func_marmot_deployment_white_noise() != 54153) {
+    if (uniffi_marmot_uniffi_checksum_func_marmot_deployment_white_noise() != 27342) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_func_max_file_media_ciphertext_bytes() != 26159) {
@@ -52358,7 +62240,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_attachmenttransfersubscription_cancel() != 34816) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_attachmenttransfersubscription_next() != 9355) {
+    if (uniffi_marmot_uniffi_checksum_method_attachmenttransfersubscription_next() != 15328) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_backuprestoresubscription_next() != 32636) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_backuprestoresubscription_snapshot() != 18443) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_blocklistsubscription_next() != 45425) {
@@ -52418,6 +62306,15 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_conversationwindowsubscription_snapshot() != 59466) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_emojisetinstallcontrolffi_cancel() != 32975) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_emojisetinstallcontrolffi_is_cancelled() != 30712) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_emojisetinstallcontrolffi_progress() != 15506) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_eventssubscription_next() != 16714) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -52454,6 +62351,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_attachment_history_version() != 6613) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_account_devices_activation() != 62756) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_follows() != 12625) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -52470,6 +62370,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_nip65_relays() != 27766) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_account_recovery_status() != 28753) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_lists() != 47794) {
@@ -52494,6 +62397,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_acknowledge_onboarding_single_device_in_epoch() != 47377) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_answer_sign_in() != 54602) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_app_performance_snapshot() != 52055) {
@@ -52535,13 +62441,28 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_audit_log_settings() != 34729) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_backup_history_availability() != 36103) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_backup_restore_status() != 60115) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_backup_settings() != 16609) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_begin_attachment_permission_update() != 37953) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_begin_backup_restore() != 30607) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_begin_external_signer_onboarding() != 43082) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_begin_onboarding() != 30241) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_begin_recovery_words() != 37806) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_block_user() != 60252) {
@@ -52556,10 +62477,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_cached_public_event_previews() != 11066) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_cancel_backup_restore() != 49517) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_cancel_device_link() != 12892) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_cancel_leave() != 62843) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_cancel_onboarding() != 2669) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_cancel_onboarding_repair() != 10396) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_cancel_recovery_words() != 40945) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_cast_poll_vote() != 29948) {
@@ -52568,13 +62501,28 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_catch_up_accounts() != 28824) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_chat_history_imports() != 48101) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_chat_list() != 43260) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_chat_list_ids() != 25798) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_chat_list_query_ids() != 6602) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_chat_list_row() != 33183) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_chat_notification_settings() != 6301) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_chats_closed_to_linked_devices() != 43305) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_check_sign_ins() != 11396) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_classify_relay_endpoints() != 44316) {
@@ -52598,10 +62546,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_collect_notifications_after_wake() != 273) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_compromise_warning() != 11) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_configure_moderation_reporting() != 22367) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_confirm_device_link_match() != 50402) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_confirm_group_rejoin() != 6199) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_confirm_recovery_words() != 10586) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_content_reports() != 24193) {
@@ -52646,6 +62603,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_create_poll() != 31740) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_decline_device_link() != 64986) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_decline_group_invite() != 24239) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -52676,7 +62636,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_demote_admin_detailed() != 49488) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_device_link_snapshot() != 33425) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_disband_group() != 1732) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_dismiss_compromise_warning() != 9962) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_dismiss_device_group_move_sibling() != 10135) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_dismiss_history_notice() != 11041) {
@@ -52706,6 +62675,15 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_edit_message() != 60575) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_emoji_set() != 8538) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_emoji_sets() != 1183) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_enable_account_devices() != 31241) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_enable_group_disbanding() != 25467) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -52713,6 +62691,21 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_export_encrypted_secret_key() != 6808) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_fetch_emoji_set() != 11803) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_fetch_emoji_set_asset() != 59791) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_fetch_emoji_set_cover() != 61599) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_fetch_sticker_asset() != 2773) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_fetch_sticker_pack() != 49097) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_flush_product_analytics() != 63031) {
@@ -52736,7 +62729,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_conversation_snapshot() != 51785) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_group_details() != 55062) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_group_details() != 18441) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_maintenance_status() != 60436) {
@@ -52745,10 +62738,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_management_state() != 47526) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_group_member_ids_page() != 53433) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_group_member_ids_page() != 44325) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_group_members() != 54987) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_group_members() != 19300) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_mls_state() != 57976) {
@@ -52760,13 +62753,25 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_recovery_status() != 25152) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_group_roster() != 8835) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_group_roster() != 6903) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_history_notices() != 5144) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_import_signal_sticker_pack() != 21694) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_initialize_chat_read_state() != 22879) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_install_emoji_set() != 15030) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_install_sticker_pack() != 38221) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_installed_custom_emoji() != 43458) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_invite_members() != 6019) {
@@ -52793,10 +62798,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_key_package_maintenance_status() != 367) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_key_package_refresh_overdue() != 587) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_largest_retained_attachments() != 59582) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_leave_group() != 31366) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_link_device() != 52255) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_linked_devices() != 59439) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_list_accounts() != 45372) {
@@ -52868,7 +62882,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_open_attachment_handoff() != 41576) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_open_chat_list_window() != 26719) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_open_chat_list_query_window() != 16207) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_open_chat_list_window() != 18511) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_open_conversation_window() != 53349) {
@@ -52881,6 +62898,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_pause_maintenance() != 32058) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_pending_welcome_deliveries() != 28618) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_periodic_maintenance_policy() != 2598) {
@@ -52958,13 +62978,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_react_to_message() != 39138) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_react_with_media() != 10392) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_react_with_media() != 32837) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_reaction_attachment() != 24560) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_read_attachment_asset() != 20920) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_read_avatar_assets() != 44239) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_read_installed_custom_emoji() != 42113) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_record_host_performance() != 50448) {
@@ -53009,10 +63035,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_chat_attachments() != 2085) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_remove_linked_device() != 50194) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_members() != 32012) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_members_detailed() != 52572) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_removed_device_leftover_chats() != 14494) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_rename_linked_device() != 1837) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_replace_encrypted_media_blob_endpoints() != 42018) {
@@ -53045,6 +63080,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_request_explicit_attachment() != 48149) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_reset_device_group_for_repair() != 20850) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_reset_incomplete_account_setup() != 58104) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -53066,10 +63104,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_retry_onboarding_step() != 1352) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_revalidate_chat_list_ids() != 40639) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_revalidate_chat_list_query_ids() != 64577) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_reveal_nsec() != 58041) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_rotate_key_package() != 47771) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_run_due_backup_pass() != 44309) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_run_due_maintenance() != 9284) {
@@ -53105,10 +63152,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin_detailed() != 31187) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_send_custom_event() != 15542) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_custom_event() != 39139) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_send_media_attachments() != 3385) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_media_attachments() != 49746) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_media_reference() != 40798) {
@@ -53123,7 +63170,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_prepared_media_with_client_token() != 565) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_send_tagged_media() != 11125) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_sticker() != 37879) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_tagged_media() != 59707) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_tagged_text() != 27615) {
@@ -53157,6 +63207,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_otlp_config_v5() != 5274) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_backup_background_conditions() != 12366) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_chat_manually_unread() != 46440) {
@@ -53198,6 +63251,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_relay_telemetry_settings() != 3204) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_runtime_backup_background_conditions() != 42859) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_startup_diagnostics_enabled() != 2865) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -53213,10 +63269,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_sign_in_account() != 63258) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out() != 9623) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out() != 55469) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out_and_wipe() != 44173) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out_and_wipe() != 12994) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_stage_prepared_group_image() != 47719) {
@@ -53228,7 +63284,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_start_agent_text_stream() != 35574) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_start_device_link() != 7888) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_start_fresh() != 59058) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_started_fresh() != 20570) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_startup_diagnostics_snapshot() != 61678) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sticker_pack() != 54721) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sticker_packs() != 4339) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_storage_is_closed() != 37723) {
@@ -53273,10 +63344,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_sweep_expired_retention() != 8624) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sync_emoji_sets() != 4698) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sync_sticker_packs() != 36641) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_telemetry_install_id() != 24501) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_timeline_messages() != 49184) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_turn_off_backups() != 48327) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_unblock_user() != 43899) {
@@ -53285,7 +63365,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_unfollow_user() != 44806) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_uninstall_emoji_set() != 28451) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_uninstall_sticker_pack() != 21379) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_unreact_from_message() != 52209) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_unrecognized_sign_ins() != 42290) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_update_app_component() != 33870) {
@@ -53298,6 +63387,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_update_group_profile() != 53035) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_update_linked_device_settings() != 27251) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_update_message_retention() != 47317) {
@@ -53330,6 +63422,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_usage_diagnostics_status() != 25454) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_user_emoji_list() != 29453) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_user_profile() != 378) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -53340,6 +63435,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_watch_agent_text_stream() != 15795) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_watch_backup_restore() != 57986) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_mediafiletransfercontrolffi_cancel() != 42436) {
@@ -53408,16 +63506,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_usersearchsubscription_next_update() != 9602) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_constructor_emojisetinstallcontrolffi_new() != 47634) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_constructor_marmot_new() != 55945) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_constructor_marmot_new_with_client_name() != 48100) {
+    if (uniffi_marmot_uniffi_checksum_constructor_marmot_new_with_client_name() != 18962) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_constructor_marmot_new_with_configuration() != 36944) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_constructor_marmot_new_with_cursor_persistence() != 15021) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_constructor_marmot_new_with_experimental_device_groups() != 38785) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_constructor_marmot_new_with_options() != 22591) {

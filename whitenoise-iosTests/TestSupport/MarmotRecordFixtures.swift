@@ -268,6 +268,8 @@ func managementState(
     canLeave: Bool? = nil,
     requiresSelfDemoteBeforeLeave: Bool? = nil,
     leaveRequestPending: Bool = false,
+    leaveBlocked: Bool = false,
+    canCancelLeave: Bool = false,
     lifecycleState: GroupLifecycleStateFfi = .stable,
     disbandingEnabled: Bool = false,
     disbanding: Bool = false,
@@ -285,6 +287,8 @@ func managementState(
         requiresSelfDemoteBeforeLeave: requiresSelfDemoteBeforeLeave ?? isSelfAdmin,
         leaveRequestPending: leaveRequestPending,
         leaveRequestedAtMs: leaveRequestPending ? 1_000 : nil,
+        leaveBlocked: leaveBlocked,
+        canCancelLeave: canCancelLeave,
         lifecycleState: lifecycleState,
         disbandingEnabled: disbandingEnabled,
         disbanding: disbanding,
@@ -319,7 +323,7 @@ func conversationWindowSnapshot(
             unrecoverable: false,
             capabilities: ConversationCapabilitiesFfi(
                 participation: .active, isSelfAdmin: true, isLastAdmin: true, canSend: true, canInvite: true,
-                canEditGroup: true, canLeave: false, requiresSelfDemoteBeforeLeave: true,
+                canEditGroup: true, canLeave: false, requiresSelfDemoteBeforeLeave: true, canCancelLeave: false,
                 canEnableDisbanding: false, canDisband: false
             ),
             avatarAsset: nil
@@ -429,4 +433,39 @@ func accountSummary(_ label: String, byte: String, signedOut: Bool = false) -> A
 func onboardingCheckpoint(accountID: String, ready: Bool) -> OnboardingSnapshotFfi {
     OnboardingSnapshotFfi(accountIdHex: accountID, recoveryEpoch: nil, revision: 1, ready: ready, steps: [],
                           proposal: nil, singleDeviceNotice: nil, cancellationPending: false)
+}
+
+func sticker(_ shortcode: String, pack: String = "30031:\(hex("ab")):cats", sha: String? = nil,
+             alt: String? = nil, emoji: String? = nil) -> StickerFfi {
+    StickerFfi(packCoordinate: pack, shortcode: shortcode, url: "https://cdn.example.com/\(shortcode).png",
+               plaintextSha256: sha ?? hex("1\(shortcode.count % 10)"), mime: "image/png", width: 512, height: 512,
+               alt: alt, emoji: emoji)
+}
+
+func stickerPack(_ identifier: String = "cats", title: String = "Cats", stickers names: [String] = ["wave", "nap"],
+                 installed: Bool = false) -> StickerPackFfi {
+    let coordinate = "30031:\(hex("ab")):\(identifier)"
+    return StickerPackFfi(coordinate: coordinate, authorPubkeyHex: hex("ab"), identifier: identifier,
+                          eventIdHex: hex("cd"), createdAt: 1, title: title, description: nil, cover: nil,
+                          stickers: names.map { sticker($0, pack: coordinate) }, license: nil, installed: installed)
+}
+
+func emojiSet(_ identifier: String = "blobs", title: String? = "Blobs", emoji names: [String] = ["blob_wave", "blob_nap"],
+              installed: InstalledEmojiSetStateFfi? = nil, eventByte: String = "cd") -> EmojiSetFfi {
+    EmojiSetFfi(coordinate: "30030:\(hex("ab")):\(identifier)", kind: 30030, authorPubkeyHex: hex("ab"),
+                identifier: identifier, eventIdHex: hex(eventByte), createdAt: 1, title: title, description: nil,
+                imageUrl: nil, emoji: names.map { EmojiSetEmojiFfi(shortcode: $0, url: "https://cdn.example.com/\($0).png") },
+                skipped: [], skippedCount: 0, installed: installed)
+}
+
+func installedEmojiSetState(eventByte: String = "cd", updateAvailable: Bool = false) -> InstalledEmojiSetStateFfi {
+    InstalledEmojiSetStateFfi(eventIdHex: hex(eventByte), createdAt: 1, installedAt: 2, emojiCount: 2, byteLen: 100,
+                              updateAvailable: updateAvailable)
+}
+
+func installedEmoji(_ shortcode: String, set identifier: String = "blobs", title: String? = "Blobs",
+                    sha: String? = nil, mime: String = "image/png") -> InstalledCustomEmojiFfi {
+    InstalledCustomEmojiFfi(setCoordinate: "30030:\(hex("ab")):\(identifier)", setTitle: title, authorPubkeyHex: hex("ab"),
+                            shortcode: shortcode, mime: mime, width: 128, height: 96, frames: 1,
+                            sha256: sha ?? hex("e\(shortcode.count % 10)"), byteLen: 10, shortcodeCollision: false)
 }

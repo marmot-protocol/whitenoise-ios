@@ -658,6 +658,37 @@ final class GroupDetailsViewModel {
         }
     }
 
+    /// Cancels a leave MDK blocked because this account is the last admin.
+    /// Local to this device: nothing is published, so no advisory retry.
+    func cancelBlockedLeave(using appState: AppState) async {
+        guard let conversation, let accountRef = appState.activeAccountRef,
+              BlockedLeavePresentation.offersCancel(conversation.managementState),
+              !membershipActionInFlight else { return }
+        membershipActionInFlight = true
+        defer { membershipActionInFlight = false }
+        let groupIdHex = conversation.group.groupIdHex
+        let outcome = await BlockedLeaveCancellation.perform(
+            cancelLeave: {
+                let client = try appState.currentMarmotClient()
+                try await marmotCalls.cancelLeave(client, accountRef, groupIdHex)
+            },
+            refresh: { await refreshGroupManagementAndNotify() }
+        )
+        guard appState.activeAccountRef == accountRef else { return }
+        switch outcome {
+        case .rejoined:
+            actionError = nil
+            Haptics.success()
+        case .noLongerBlocked, .failed:
+            Haptics.error()
+        case .cancelled:
+            break
+        }
+        if let toast = BlockedLeaveCancellation.toast(for: outcome) {
+            appState.present(toast)
+        }
+    }
+
     func endGroup(using appState: AppState) async {
         pendingConfirmation = nil
         guard let conversation, let accountRef = appState.activeAccountRef else { return }

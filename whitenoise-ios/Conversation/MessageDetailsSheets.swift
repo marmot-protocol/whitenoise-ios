@@ -321,7 +321,7 @@ struct ReactionDetailsSheet: View {
 
                 ForEach(details.groups) { group in
                     filterButton(emoji: group.emoji, count: group.count) {
-                        CustomEmojiReactionLabel(emoji: group.emoji)
+                        CustomEmojiReactionLabel(emoji: group.emoji, reactionMessageIdHex: group.reactionMessageIdHex)
                     }
                 }
             }

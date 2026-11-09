@@ -46,10 +46,10 @@ nonisolated struct CustomEmojiShortcode: Hashable, Comparable, Sendable {
         return isShortcodeByte(byte)
     }
 
-    /// VoiceOver text for a reaction: the shortcode name for custom emoji,
-    /// otherwise the sanitized reaction text.
+    /// VoiceOver text for a reaction: a built-in's product name or the
+    /// shortcode name for custom emoji, otherwise the sanitized reaction text.
     static func spokenReaction(_ content: String) -> String {
-        Self(reactionContent: content)?.name ?? ContentSanitizer.reactionEmoji(content)
+        Self(reactionContent: content).map(CustomEmojiBuiltins.spokenName) ?? ContentSanitizer.reactionEmoji(content)
     }
 }
 
@@ -188,11 +188,14 @@ nonisolated struct CustomEmojiRowResolution: Equatable {
     let inline: [CustomEmojiShortcode: MessageMediaAttachment]
     /// The row's attachments minus those drawn inline, for the media grid.
     let gridItems: [MessageMediaAttachment]
+    /// Built-in shortcodes the displayed text uses that the row does not
+    /// define itself, drawn from the app bundle.
+    var builtin: Set<CustomEmojiShortcode> = []
 
     static let empty = Self(inline: [:], gridItems: [])
 
-    var shortcodes: Set<CustomEmojiShortcode> { Set(inline.keys) }
-    var isEmpty: Bool { inline.isEmpty }
+    var shortcodes: Set<CustomEmojiShortcode> { Set(inline.keys).union(builtin) }
+    var isEmpty: Bool { inline.isEmpty && builtin.isEmpty }
 }
 
 nonisolated enum CustomEmojiResolver {
@@ -217,30 +220,35 @@ nonisolated enum CustomEmojiResolver {
     /// actually displays. Only those are drawn inline and leave the media grid;
     /// a shortcode that appears only in a link destination, hidden metadata or
     /// budget-truncated content leaves its attachment in the grid.
+    /// A row's own definition of a shortcode wins over a built-in one.
     static func claim(
         _ candidates: [CustomEmojiShortcode: MessageMediaAttachment],
         attachments: [MessageMediaAttachment],
-        displayedRuns: [String]
+        displayedRuns: [String],
+        builtins: Set<CustomEmojiShortcode> = []
     ) -> CustomEmojiRowResolution {
-        guard !candidates.isEmpty else { return CustomEmojiRowResolution(inline: [:], gridItems: attachments) }
-        let names = Set(candidates.keys)
+        let names = Set(candidates.keys).union(builtins)
+        guard !names.isEmpty else { return CustomEmojiRowResolution(inline: [:], gridItems: attachments) }
         var used = Set<CustomEmojiShortcode>()
-        for run in displayedRuns where used.count < names.count {
+        for run in displayedRuns where used.count < names.count && run.contains(":") {
             used.formUnion(CustomEmojiText.shortcodes(in: run, among: names))
         }
         let inline = candidates.filter { used.contains($0.key) }
-        guard !inline.isEmpty else { return CustomEmojiRowResolution(inline: [:], gridItems: attachments) }
+        let builtin = used.intersection(builtins).subtracting(candidates.keys)
         let inlineIDs = Set(inline.values.map(\.id))
-        return CustomEmojiRowResolution(inline: inline, gridItems: attachments.filter { !inlineIDs.contains($0.id) })
+        return CustomEmojiRowResolution(inline: inline, gridItems: attachments.filter { !inlineIDs.contains($0.id) },
+                                        builtin: builtin)
     }
 
     /// `candidates` then `claim` against one displayed string.
     static func resolve(
         text: String,
         tags: [MessageTagFfi],
-        attachments: [MessageMediaAttachment]
+        attachments: [MessageMediaAttachment],
+        builtins: Set<CustomEmojiShortcode> = []
     ) -> CustomEmojiRowResolution {
-        claim(candidates(tags: tags, attachments: attachments), attachments: attachments, displayedRuns: [text])
+        claim(candidates(tags: tags, attachments: attachments), attachments: attachments, displayedRuns: [text],
+              builtins: builtins)
     }
 
     /// The first accepted, decodable image attachment carrying `url` as a
@@ -283,8 +291,7 @@ enum CustomEmojiDisplayText {
 nonisolated struct CustomEmojiCatalogEntry: Hashable {
     enum Source: Hashable {
         case message(messageIdHex: String, attachmentIndex: UInt32?)
-        /// Reserved: MDK 0.12.0 exposes no host-managed slot for kind-7
-        /// reaction images, so the catalog does not produce this yet.
+        /// The image slot of a `:shortcode:` reaction, from `reactionAttachment`.
         case reaction(reactionMessageIdHex: String, attachmentIndex: UInt32)
     }
 
@@ -344,14 +351,20 @@ nonisolated enum CustomEmojiInlinePresentation {
     /// The loaded images a message body may show now: only those decoded under
     /// the current scope and size for the row's current inline attachments.
     /// Without a scope nothing shows and every shortcode stays literal text.
+    /// Built-in images are bundled, not chat data, so they show without a
+    /// scope too.
     static func images<Image>(
         for resolution: CustomEmojiRowResolution,
         loaded: [CustomEmojiImageKey: Image],
         scope: CustomEmojiScope?,
-        pixelSize: Int
+        pixelSize: Int,
+        builtin: (CustomEmojiShortcode) -> Image? = { _ in nil }
     ) -> [CustomEmojiShortcode: Image] {
-        guard let scope else { return [:] }
         var result: [CustomEmojiShortcode: Image] = [:]
+        for shortcode in resolution.builtin {
+            result[shortcode] = builtin(shortcode)
+        }
+        guard let scope else { return result }
         for (shortcode, item) in resolution.inline {
             if let image = loaded[CustomEmojiImageKey(scope: scope, itemID: item.id, pixelSize: pixelSize)] {
                 result[shortcode] = image

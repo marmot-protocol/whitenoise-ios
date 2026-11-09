@@ -39,6 +39,15 @@ struct ComposerAttachmentOptionTests {
         }
     }
 
+    @Test func offersStickersOnlyWhereTheChatCanSendThem() {
+        let without = ComposerAttachmentOption.available(cameraAvailable: true, gifsAvailable: true)
+        let with = ComposerAttachmentOption.available(cameraAvailable: true, gifsAvailable: true, stickersAvailable: true)
+        #expect(!without.contains(.stickers))
+        #expect(with.contains(.stickers))
+        #expect(with.filter { $0 != .stickers } == without)
+        #expect(with.firstIndex(of: .stickers) == with.firstIndex(of: .gifs).map { $0 + 1 })
+    }
+
     @Test func everyOptionCarriesADistinctSymbol() {
         let symbols = ComposerAttachmentOption.allCases.map(\.systemImage)
         #expect(symbols.allSatisfy { !$0.isEmpty })

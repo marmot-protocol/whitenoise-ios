@@ -41,6 +41,8 @@ struct UserFacingError: Equatable {
         if let reportMessage = moderationReportMessage(for: error) { return reportMessage }
         if let sendMessage = sendMessage(for: error) { return capitalizingFirstLetter(sendMessage) }
         if let mediaMessage = mediaMessage(for: error) { return mediaMessage }
+        if let stickerMessage = stickerMessage(for: error) { return stickerMessage }
+        if let emojiSetMessage = emojiSetMessage(for: error) { return emojiSetMessage }
         if let fetchError = error as? PinnedHTTPSFetcher.FetchError, case .httpStatus = fetchError {
             return URLError(.badServerResponse).localizedDescription
         }
@@ -87,6 +89,22 @@ struct UserFacingError: Equatable {
         // details. Retain that match for imported diagnostics and mixed-version
         // development builds.
         return diagnostic.localizedCaseInsensitiveContains("account id is already in use")
+    }
+
+    private nonisolated static func stickerMessage(for error: Error) -> String? {
+        guard let marmotError = error as? MarmotKitError else { return nil }
+        switch marmotError {
+        case .InvalidSticker:
+            return L10n.string("This sticker pack isn’t valid.")
+        case .StickerNotFound:
+            return L10n.string("Couldn’t find this sticker pack.")
+        case .StickerNetwork:
+            return L10n.string("Couldn’t reach the sticker pack’s relays. Check your connection and try again.")
+        case .StickerImport, .StickerImportUnsupported:
+            return L10n.string("This sticker pack can’t be imported.")
+        default:
+            return nil
+        }
     }
 
     private nonisolated static func accountSetupMessage(for error: Error) -> String? {
@@ -158,8 +176,31 @@ struct UserFacingError: Equatable {
             return L10n.string("This account is still catching up. Try again in a moment.")
         case .AccountWorkerResponseTimedOut:
             return L10n.string("The operation may have completed. Refreshing the conversation is required before retrying.")
+        case .EventTooLarge(let artifact, _):
+            return eventTooLargeMessage(artifact)
+        case .GroupRecoveryUnsettled:
+            return L10n.string("This chat is still settling. Try rejoining again in a moment.")
+        case .GroupRecoverySourceMismatch:
+            return L10n.string("This rejoin offer is no longer current. Review the latest offer and try again.")
+        case .AccountUnlinked:
+            return L10n.string("Your other devices removed this device from the account. Remove this profile here, then link this device again.")
         default:
             return nil
+        }
+    }
+
+    /// The relays refused it for size on this attempt. MDK keeps its own
+    /// retries and infers no relay limit, so this never claims a final outcome.
+    private nonisolated static func eventTooLargeMessage(_ artifact: OversizedArtifactFfi) -> String {
+        switch artifact {
+        case .applicationMessage:
+            return L10n.string("This chat's relays refused this message because it's too large. Shorten it or send fewer attachments.")
+        case .welcome:
+            return L10n.string("This chat's relays refused the invitation because it's too large. Try inviting fewer people at once.")
+        case .commit:
+            return L10n.string("This chat's relays refused this group change because it's too large.")
+        case .other:
+            return L10n.string("This chat's relays refused this update because it's too large.")
         }
     }
 
@@ -178,6 +219,34 @@ struct UserFacingError: Equatable {
             return L10n.string("No safe download location is available for this attachment.")
         case .MediaDownloadFailed:
             return L10n.string("Attachment download failed. Please try again.")
+        case .MediaReferenceStaleEpoch:
+            return L10n.string("The group changed before this attachment was sent. Attach the file again.")
+        case .MediaReferenceEpochUnsettled:
+            return L10n.string("This chat is still syncing. Wait a moment, then send the attachment again.")
+        default:
+            return nil
+        }
+    }
+
+    private nonisolated static func emojiSetMessage(for error: Error) -> String? {
+        guard let marmotError = error as? MarmotKitError else { return nil }
+        switch marmotError {
+        case .InvalidEmojiSet:
+            return L10n.string("This emoji set isn’t valid, or none of its emoji could be installed.")
+        case .EmojiSetNotFound:
+            return L10n.string("Couldn’t find this emoji set.")
+        case .EmojiSetNetwork:
+            return L10n.string("Couldn’t reach the emoji set’s relays or image hosts. Check your connection and try again.")
+        case .EmojiSetChanged:
+            return L10n.string("This emoji set was updated. Review the new version, then install it.")
+        case .EmojiSetLimit:
+            return L10n.string("You’ve reached the limit for installed emoji. Remove a set, then try again.")
+        case .EmojiImageTooLarge:
+            return L10n.string("An emoji in this set is too large to install.")
+        case .EmojiImageUnsupported:
+            return L10n.string("An emoji in this set uses an unsupported image format.")
+        case .EmojiSetInstallCancelled:
+            return L10n.string("Emoji set installation was cancelled.")
         default:
             return nil
         }

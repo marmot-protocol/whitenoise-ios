@@ -54,6 +54,41 @@ struct UserFacingErrorTests {
         }
     }
 
+    @Test func marmotKit015RefusalsExplainThemselvesWithoutRawDetails() {
+        let detail = "peer supplied detail"
+        let fallback = UserFacingError.message(for: MarmotKitError.Runtime(details: ""))
+        let errors: [MarmotKitError] = [
+            .EventTooLarge(artifact: .applicationMessage, sizeClass: .over4Mib),
+            .MediaReferenceStaleEpoch(sourceEpoch: 3, currentEpoch: 4),
+            .MediaReferenceEpochUnsettled(sourceEpoch: 3),
+            .GroupRecoveryUnsettled(groupIdHex: "group"),
+            .GroupRecoverySourceMismatch(groupIdHex: "group"),
+            .AccountUnlinked(accountRef: "account"),
+            .InvalidEmojiSet(details: detail),
+            .EmojiSetNotFound,
+            .EmojiSetNetwork(details: detail),
+            .EmojiSetChanged(currentEventIdHex: "event"),
+            .EmojiSetLimit(details: detail),
+            .EmojiImageTooLarge(details: detail),
+            .EmojiImageUnsupported(details: detail),
+            .EmojiSetInstallCancelled,
+        ]
+        let messages = errors.map { UserFacingError.message(for: $0) }
+        for message in messages {
+            #expect(message != fallback)
+            #expect(!message.contains(detail))
+        }
+        #expect(Set(messages).count == messages.count)
+    }
+
+    @Test func oversizedEventsNameWhatTheRelaysRefused() {
+        let artifacts: [OversizedArtifactFfi] = [.applicationMessage, .welcome, .commit, .other]
+        let messages = artifacts.map {
+            UserFacingError.message(for: MarmotKitError.EventTooLarge(artifact: $0, sizeClass: .from1To2Mib))
+        }
+        #expect(Set(messages).count == artifacts.count)
+    }
+
     @Test func fullStorageAsksForSpaceAndKeepsTheRuntimeDetailAsDiagnostic() {
         let error = MarmotKitError.StorageFull(details: "disk reserve exceeded")
         #expect(UserFacingError.message(for: error) == "This device is out of storage. Free up some space and try again.")

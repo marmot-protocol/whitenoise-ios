@@ -35,6 +35,8 @@ nonisolated enum AppContainerConfig {
     static let productDirectoryName = "White Noise"
     static let legacyMarmotDirectoryName = "Marmot"
     static let marmotDirectoryName = "Marmot"
+    /// Shown with the client name on the account's Devices screen.
+    static let marmotDevicePlatform = "iOS"
     static let seedRelays = [
         "wss://relay.eu.whitenoise.chat",
         "wss://relay.us.whitenoise.chat"

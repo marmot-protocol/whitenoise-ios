@@ -15,6 +15,8 @@ struct ConversationCustomEmojiStoreTests {
         var loadRequests: [MessageMediaAttachment] = []
         var payload = Data("emoji".utf8)
         var beforeLoadReturns: (() -> Void)?
+        var reactionArtwork: [String: CustomEmojiReactionArtwork] = [:]
+        var reactionLookups: [String] = []
 
         lazy var store = ConversationCustomEmojiStore(
             scopeProvider: { [weak self] in self?.scope },
@@ -27,6 +29,10 @@ struct ConversationCustomEmojiStoreTests {
             },
             decode: { _, _, _ in
                 UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }
+            },
+            resolveReaction: { [weak self] _, id in
+                self?.reactionLookups.append(id)
+                return self?.reactionArtwork[id]
             }
         )
     }
@@ -59,6 +65,35 @@ struct ConversationCustomEmojiStoreTests {
         #expect(other?.image !== first?.image)
         #expect(other?.key.scope.accountRef == "bob")
         #expect(harness.loadRequests.count == 2)
+    }
+
+    @Test func reactionImageLoadsThroughItsReactionSlot() async throws {
+        let harness = Harness()
+        let reactionID = String(repeating: "ef", count: 32)
+        let item = inlineItem(harness)
+        harness.reactionArtwork[reactionID] = CustomEmojiReactionArtwork(
+            reactionMessageIdHex: reactionID, shortcode: try #require(CustomEmojiShortcode("party")), attachment: item)
+
+        #expect(await harness.store.reactionImage(emoji: "👍", reactionMessageIdHex: reactionID,
+                                                  pixelSize: 60, scale: 3, policyRevision: "p1") == nil)
+        #expect(harness.reactionLookups.isEmpty)
+        let image = await harness.store.reactionImage(emoji: ":party:", reactionMessageIdHex: reactionID,
+                                                      pixelSize: 60, scale: 3, policyRevision: "p1")
+        #expect(image != nil)
+        #expect(harness.loadRequests.first?.demand == .automatic)
+
+        // A row without its own reaction id (a reactor list) reuses the
+        // reaction already resolved for that shortcode.
+        let reused = await harness.store.reactionImage(emoji: ":party:", reactionMessageIdHex: nil,
+                                                       pixelSize: 60, scale: 3, policyRevision: "p1")
+        #expect(reused?.key == image?.key)
+        #expect(harness.reactionLookups == [reactionID, reactionID])
+        #expect(harness.loadRequests.count == 1)
+
+        // Another chat forgets which reaction carried it.
+        harness.scope = CustomEmojiScope(accountRef: "alice", runtimeGeneration: 1, groupIdHex: "g2")
+        #expect(await harness.store.reactionImage(emoji: ":party:", reactionMessageIdHex: nil,
+                                                  pixelSize: 60, scale: 3, policyRevision: "p1") == nil)
     }
 
     @Test func policyBlockedLoadIsRetriedOnlyAfterThePolicyChanges() async {

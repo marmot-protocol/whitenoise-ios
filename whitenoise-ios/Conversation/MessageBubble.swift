@@ -398,6 +398,9 @@ struct MessageBubble: View {
     private var messageSurface: some View {
         if isDeleted {
             deletedBubble
+        } else if let sticker = record.sticker, showsStandardBody {
+            StickerMessageContent(sticker: StickerKey(sticker), isFromMe: isFromMe)
+                .opacity(status == .sending ? 0.7 : 1)
         } else if record.kind == MessageSemantics.kindPoll, showsStandardBody {
             Group {
                 if let poll {
@@ -984,7 +987,7 @@ struct MessageBubble: View {
 
     private func reactionPill(_ tally: ConversationViewModel.ReactionTally) -> some View {
         HStack(spacing: 3) {
-            CustomEmojiReactionLabel(emoji: tally.emoji)
+            CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex)
                 .font(.system(size: 14, weight: .bold))
             if tally.count > 1 {
                 Text(L10n.formatted("%lld", Int64(tally.count)))

@@ -94,6 +94,49 @@ struct GroupManagementPresentationTests {
         #expect(GroupManagementPresentation.leaveFooter(state: state, fallbackIsLastAdmin: false) == "You're the only admin. Make another member an admin before you leave.")
     }
 
+    @Test func blockedLeaveExplainsTheLastAdminAndOffersCancelOnlyWhenAllowed() {
+        let blocked = managementState(
+            isSelfAdmin: true,
+            isLastAdmin: true,
+            leaveRequestPending: true,
+            leaveBlocked: true,
+            canCancelLeave: true
+        )
+
+        #expect(BlockedLeavePresentation.isBlocked(blocked))
+        #expect(BlockedLeavePresentation.offersCancel(blocked))
+        #expect(!GroupManagementPresentation.canLeave(state: blocked, fallbackIsLastAdmin: false))
+        #expect(GroupManagementPresentation.leaveFooter(state: blocked, fallbackIsLastAdmin: false) == BlockedLeavePresentation.detail)
+        #expect(GroupManagementPresentation.leaveHelpMessage(state: blocked, fallbackIsLastAdmin: false) == BlockedLeavePresentation.title)
+
+        let notCancellable = managementState(
+            isSelfAdmin: true,
+            isLastAdmin: true,
+            leaveRequestPending: true,
+            leaveBlocked: true,
+            canCancelLeave: false
+        )
+        #expect(BlockedLeavePresentation.isBlocked(notCancellable))
+        #expect(!BlockedLeavePresentation.offersCancel(notCancellable))
+    }
+
+    @Test func onlyAPendingLeaveCanBeBlocked() {
+        let pending = managementState(isSelfAdmin: false, isLastAdmin: false, leaveRequestPending: true)
+        #expect(!BlockedLeavePresentation.isBlocked(pending))
+        #expect(!BlockedLeavePresentation.offersCancel(pending))
+        #expect(GroupManagementPresentation.leaveFooter(state: pending, fallbackIsLastAdmin: false) == GroupManagementPresentation.leavingGroupComposerMessage)
+
+        let noRequest = managementState(
+            isSelfAdmin: true,
+            isLastAdmin: true,
+            leaveBlocked: true,
+            canCancelLeave: true
+        )
+        #expect(!BlockedLeavePresentation.isBlocked(noRequest))
+        #expect(!BlockedLeavePresentation.offersCancel(noRequest))
+        #expect(!BlockedLeavePresentation.isBlocked(nil))
+    }
+
     @Test func terminalMembershipOverridesStaleActiveManagementState() {
         let state = managementState(
             isSelfAdmin: false,

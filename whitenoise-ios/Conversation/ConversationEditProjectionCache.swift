@@ -91,6 +91,7 @@ final class ConversationEditProjectionCache {
             contentTokens: replacement.contentTokens,
             kind: base.kind,
             tags: base.tags,
+            sticker: base.sticker,
             sourceEpoch: base.sourceEpoch,
             retentionSeconds: base.retentionSeconds,
             retentionExpiresAt: base.retentionExpiresAt,

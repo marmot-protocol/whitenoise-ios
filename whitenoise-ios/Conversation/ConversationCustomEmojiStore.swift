@@ -15,29 +15,36 @@ import MarmotKit
 final class ConversationCustomEmojiStore {
     typealias LoadData = @MainActor (MessageMediaAttachment) async throws -> Data
     typealias Decode = @MainActor (Data, Int, CGFloat) async -> UIImage?
+    /// The image slot of a `:shortcode:` reaction event, or nil when it has none.
+    typealias ResolveReaction = @MainActor (_ emoji: String, _ reactionMessageIdHex: String) async -> CustomEmojiReactionArtwork?
 
     static let imageLimit = 128
 
     private let scopeProvider: @MainActor () -> CustomEmojiScope?
     private let loadData: LoadData
     private let decode: Decode
+    private let resolveReaction: ResolveReaction
 
     private var scope: CustomEmojiScope?
     private var images: [CustomEmojiImageKey: UIImage] = [:]
     private var imageOrder: [CustomEmojiImageKey] = []
     /// Policy revision at which a load failed; retried after the policy changes.
     private var failures: [CustomEmojiImageKey: String] = [:]
+    /// `:shortcode:` → the first reaction event resolved for it in this scope.
+    private var resolvedReactionIDs: [String: String] = [:]
 
     init(
         scopeProvider: @escaping @MainActor () -> CustomEmojiScope?,
         loadData: @escaping LoadData,
         decode: @escaping Decode = { data, pixelSize, scale in
             await MessageMediaThumbnailDecoder.image(data: data, maxPixelSize: pixelSize, scale: scale)
-        }
+        },
+        resolveReaction: @escaping ResolveReaction = { _, _ in nil }
     ) {
         self.scopeProvider = scopeProvider
         self.loadData = loadData
         self.decode = decode
+        self.resolveReaction = resolveReaction
     }
 
     /// The scope images are currently shown under. Reading it from a view body
@@ -78,6 +85,23 @@ final class ConversationCustomEmojiStore {
         }
     }
 
+    /// The image for a `:shortcode:` reaction, read from the reaction event's
+    /// own attachment exactly as an inline emoji is. Nil keeps the literal
+    /// shortcode text.
+    /// A nil `reactionMessageIdHex` reuses the reaction event this chat
+    /// already resolved for the same `:shortcode:`.
+    func reactionImage(emoji: String, reactionMessageIdHex: String?, pixelSize: Int, scale: CGFloat,
+                       policyRevision: String) async -> (key: CustomEmojiImageKey, image: UIImage)? {
+        guard CustomEmojiShortcode(reactionContent: emoji) != nil, let scope = syncedScope(),
+              let reactionID = reactionMessageIdHex ?? resolvedReactionIDs[emoji], !reactionID.isEmpty,
+              let artwork = await resolveReaction(emoji, reactionID),
+              !Task.isCancelled, scopeProvider() == scope
+        else { return nil }
+        if resolvedReactionIDs[emoji] == nil { resolvedReactionIDs[emoji] = reactionID }
+        return await inlineImage(for: artwork.attachment, pixelSize: pixelSize, scale: scale,
+                                 policyRevision: policyRevision)
+    }
+
     /// Sets the image scale so its longest side spans the requested point
     /// size even when the source has fewer pixels than the target (ImageIO
     /// thumbnails never upscale).
@@ -98,6 +122,7 @@ final class ConversationCustomEmojiStore {
             images.removeAll()
             imageOrder.removeAll()
             failures.removeAll()
+            resolvedReactionIDs.removeAll()
             scope = current
         }
         return current

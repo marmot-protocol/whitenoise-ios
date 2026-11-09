@@ -2,8 +2,8 @@ import Foundation
 import MarmotKit
 
 /// The Marmot calls `GroupDetailsViewModel` makes to publish the group's name,
-/// description and image and to read its shared media. Each takes the runtime
-/// client its call site resolved.
+/// description and image, to read its shared media and to cancel a blocked
+/// leave. Each takes the runtime client its call site resolved.
 struct GroupDetailsMarmotCalls {
     var updateGroupProfile: @MainActor (
         MarmotClient, _ accountRef: String, _ groupIdHex: String, _ name: String, _ description: String
@@ -21,6 +21,9 @@ struct GroupDetailsMarmotCalls {
     var sharedMedia: @MainActor (
         MarmotClient, _ accountRef: String, _ groupIdHex: String
     ) async throws -> (items: [GroupSharedMediaItem], version: AttachmentHistoryVersion?)
+    var cancelLeave: @MainActor (
+        MarmotClient, _ accountRef: String, _ groupIdHex: String
+    ) async throws -> Void
 
     static let marmot = GroupDetailsMarmotCalls(
         updateGroupProfile: { client, accountRef, groupIdHex, name, description in
@@ -54,6 +57,9 @@ struct GroupDetailsMarmotCalls {
         sharedMedia: { client, accountRef, groupIdHex in
             let page = try await client.attachmentPreview(accountRef: accountRef, groupID: groupIdHex)
             return (GroupSharedMediaPresentation.items(entries: page.entries), page.version)
+        },
+        cancelLeave: { client, accountRef, groupIdHex in
+            try await client.cancelLeave(accountRef: accountRef, groupIdHex: groupIdHex)
         }
     )
 }

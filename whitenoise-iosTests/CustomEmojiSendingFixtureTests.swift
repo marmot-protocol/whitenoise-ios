@@ -45,8 +45,10 @@ struct CustomEmojiSendingFixtureTests {
         let party = try #require(CustomEmojiShortcode("party"))
         let celebrate = try #require(CustomEmojiShortcode("celebrate"))
         // :celebrate: is an alias of the same image. The hyphenated
-        // shortcode renders but is not NIP-30, so it is never offered.
-        #expect(Set(model.customEmojiSendables.map(\.shortcode)) == [party, celebrate])
+        // shortcode renders but is not NIP-30, so it is never offered. The
+        // built-ins are offered in every chat.
+        #expect(Set(model.customEmojiSendables.map(\.shortcode))
+                == Set([party, celebrate]).union(CustomEmojiBuiltins.shortcodes))
         let emoji = model.customEmojiUsed(in: "yay :party: :celebrate: :party-time:")
         #expect(emoji.map(\.shortcode) == [party, celebrate])
 
@@ -62,6 +64,7 @@ struct CustomEmojiSendingFixtureTests {
                 #expect(item.demand == .automatic)
                 return payload
             },
+            readInstalled: { _, _ in throw CancellationError() },
             upload: { _, request in
                 uploadCount += 1
                 let ciphertext = Self.sha256Hex(Data("cipher".utf8) + request.plaintext)

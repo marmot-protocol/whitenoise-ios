@@ -161,6 +161,9 @@ nonisolated enum GroupManagementPresentation {
         state: GroupManagementStateFfi?,
         fallbackIsLastAdmin: Bool
     ) -> String {
+        if BlockedLeavePresentation.isBlocked(state) {
+            return BlockedLeavePresentation.title
+        }
         if state?.leaveRequestPending == true {
             return leavingGroupComposerMessage
         }
@@ -171,6 +174,9 @@ nonisolated enum GroupManagementPresentation {
     }
 
     static func leaveFooter(state: GroupManagementStateFfi?, fallbackIsLastAdmin: Bool) -> String? {
+        if BlockedLeavePresentation.isBlocked(state) {
+            return BlockedLeavePresentation.detail
+        }
         if state?.leaveRequestPending == true {
             return leavingGroupComposerMessage
         }
