@@ -267,11 +267,12 @@ struct SignOutForm<ProfileSummary: View>: View {
     }
 
     /// Leaving chats can wait about 30 seconds for admin step-downs to land,
-    /// so explain the wait instead of leaving a bare spinner.
+    /// and backgrounding suspends the runtime mid-wipe, so explain the wait
+    /// and ask the user to stay in the app.
     @ViewBuilder
     private var wipeProgressHint: some View {
         if isBusy, isWiping {
-            Text("Leaving your chats. This can take up to a minute.")
+            Text("Leaving your chats. This can take up to a minute. Keep White Noise open until it finishes.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)

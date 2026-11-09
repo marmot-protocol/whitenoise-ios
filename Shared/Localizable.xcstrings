@@ -147466,62 +147466,62 @@
         }
       }
     },
-    "Leaving your chats. This can take up to a minute." : {
+    "Leaving your chats. This can take up to a minute. Keep White Noise open until it finishes." : {
       "comment" : "Shown under the busy Sign Out and Delete Data button while MDK leaves the profile's chats, which can wait for admin step-downs.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deine Chats werden verlassen. Das kann bis zu einer Minute dauern."
+            "value" : "Deine Chats werden verlassen. Das kann bis zu einer Minute dauern. Lass White Noise geöffnet, bis der Vorgang abgeschlossen ist."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saliendo de tus chats. Esto puede tardar hasta un minuto."
+            "value" : "Saliendo de tus chats. Esto puede tardar hasta un minuto. Mantén White Noise abierto hasta que termine."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Départ de vos chats. Cela peut prendre jusqu’à une minute."
+            "value" : "Départ de vos chats. Cela peut prendre jusqu’à une minute. Gardez White Noise ouvert jusqu’à la fin."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Uscita dalle tue chat in corso. Potrebbe volerci fino a un minuto."
+            "value" : "Uscita dalle tue chat in corso. Potrebbe volerci fino a un minuto. Tieni White Noise aperto finché non ha finito."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saindo dos seus chats. Isso pode levar até um minuto."
+            "value" : "Saindo dos seus chats. Isso pode levar até um minuto. Mantenha o White Noise aberto até terminar."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Выход из ваших чатов. Это может занять до минуты."
+            "value" : "Выход из ваших чатов. Это может занять до минуты. Не закрывайте White Noise, пока процесс не завершится."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sohbetlerinizden çıkılıyor. Bu işlem bir dakika kadar sürebilir."
+            "value" : "Sohbetlerinizden çıkılıyor. Bu işlem bir dakika kadar sürebilir. İşlem bitene kadar White Noise’u açık tutun."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在退出你的聊天。这可能需要最多一分钟。"
+            "value" : "正在退出你的聊天。这可能需要最多一分钟。完成前请保持 White Noise 打开。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在退出你的聊天。這可能需要最多一分鐘。"
+            "value" : "正在退出你的聊天。這可能需要最多一分鐘。完成前請保持 White Noise 開啟。"
           }
         }
       }
