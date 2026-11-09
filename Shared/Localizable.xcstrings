@@ -147466,6 +147466,66 @@
         }
       }
     },
+    "Leaving your chats. This can take up to a minute." : {
+      "comment" : "Shown under the busy Sign Out and Delete Data button while MDK leaves the profile's chats, which can wait for admin step-downs.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Chats werden verlassen. Das kann bis zu einer Minute dauern."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saliendo de tus chats. Esto puede tardar hasta un minuto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Départ de vos chats. Cela peut prendre jusqu’à une minute."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uscita dalle tue chat in corso. Potrebbe volerci fino a un minuto."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saindo dos seus chats. Isso pode levar até um minuto."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выход из ваших чатов. Это может занять до минуты."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sohbetlerinizden çıkılıyor. Bu işlem bir dakika kadar sürebilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在退出你的聊天。这可能需要最多一分钟。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在退出你的聊天。這可能需要最多一分鐘。"
+          }
+        }
+      }
+    },
     "Native Push setup is incomplete." : {
       "extractionState" : "manual",
       "localizations" : {

@@ -107,6 +107,7 @@ struct SignOutForm<ProfileSummary: View>: View {
                     confirmationInput
                     inlineError
                     signOutButton
+                    wipeProgressHint
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -140,6 +141,7 @@ struct SignOutForm<ProfileSummary: View>: View {
                         confirmationInput
                         inlineError
                         signOutButton
+                        wipeProgressHint
                     }
                     .padding(20)
                     .listRowInsets(EdgeInsets())
@@ -261,6 +263,20 @@ struct SignOutForm<ProfileSummary: View>: View {
     private var inlineError: some View {
         if let error {
             Text(error).foregroundStyle(.orange)
+        }
+    }
+
+    /// Leaving chats can wait about 30 seconds for admin step-downs to land,
+    /// so explain the wait instead of leaving a bare spinner.
+    @ViewBuilder
+    private var wipeProgressHint: some View {
+        if isBusy, isWiping {
+            Text("Leaving your chats. This can take up to a minute.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
