@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The destinations the composer's `+` button offers.
 ///
-/// `available(cameraAvailable:gifsAvailable:pollsAvailable:customEmojiAvailable:)` is the whole
+/// `available(cameraAvailable:gifsAvailable:pollsAvailable:customEmojiAvailable:stickersAvailable:)` is the whole
 /// decision the menu makes, so it stays assertable without a view. Declaration
 /// order is the presented order.
 nonisolated enum ComposerAttachmentOption: String, CaseIterable, Hashable {
@@ -10,19 +10,21 @@ nonisolated enum ComposerAttachmentOption: String, CaseIterable, Hashable {
     case photosAndVideos
     case files
     case gifs
+    case stickers
     case customEmoji
     case location
     case contact
     case poll
 
     static func available(cameraAvailable: Bool, gifsAvailable: Bool, pollsAvailable: Bool = false,
-                          customEmojiAvailable: Bool = false) -> [Self] {
+                          customEmojiAvailable: Bool = false, stickersAvailable: Bool = false) -> [Self] {
         allCases.filter { option in
             switch option {
             case .camera: cameraAvailable
             case .gifs: gifsAvailable
             case .poll: pollsAvailable
             case .customEmoji: customEmojiAvailable
+            case .stickers: stickersAvailable
             default: true
             }
         }
@@ -32,10 +34,11 @@ nonisolated enum ComposerAttachmentOption: String, CaseIterable, Hashable {
         cameraAvailable: Bool,
         gifsAvailable: Bool,
         pollsAvailable: Bool = false,
-        customEmojiAvailable: Bool = false
+        customEmojiAvailable: Bool = false,
+        stickersAvailable: Bool = false
     ) -> [WNDropdownItem<Self>] {
         available(cameraAvailable: cameraAvailable, gifsAvailable: gifsAvailable, pollsAvailable: pollsAvailable,
-                  customEmojiAvailable: customEmojiAvailable)
+                  customEmojiAvailable: customEmojiAvailable, stickersAvailable: stickersAvailable)
             .map(\.dropdownItem)
     }
 
@@ -49,6 +52,7 @@ nonisolated enum ComposerAttachmentOption: String, CaseIterable, Hashable {
         case .photosAndVideos: "Photos and Videos"
         case .files: "Files"
         case .gifs: "GIFs"
+        case .stickers: "Stickers"
         case .customEmoji: "Custom Emoji"
         case .location: "Location"
         case .contact: "Contact"
@@ -62,6 +66,7 @@ nonisolated enum ComposerAttachmentOption: String, CaseIterable, Hashable {
         case .photosAndVideos: "photo.on.rectangle.angled"
         case .files: "folder"
         case .gifs: "rectangle.stack.badge.play"
+        case .stickers: "face.dashed"
         case .customEmoji: "face.smiling"
         case .location: "location"
         case .contact: "person.crop.circle"

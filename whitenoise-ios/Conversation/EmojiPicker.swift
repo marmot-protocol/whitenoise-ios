@@ -80,12 +80,18 @@ nonisolated enum EmojiCatalogSearch {
 }
 
 nonisolated enum CustomEmojiPickerSearch {
-    /// Custom emoji whose shortcode contains every search term.
+    /// Custom emoji whose shortcode, a built-in's product name or an
+    /// installed emoji's set title contains every search term.
     static func results(in sendables: [CustomEmojiSendable], query: String) -> [CustomEmojiSendable] {
         let terms = query.lowercased().split(whereSeparator: \.isWhitespace).map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ":")) }
         guard !terms.isEmpty else { return sendables }
         return sendables.filter { sendable in
-            let name = sendable.shortcode.name.lowercased()
+            var name = sendable.shortcode.name.lowercased()
+            switch sendable.artwork {
+            case .builtin(let builtin): name += " " + builtin.spokenName.lowercased()
+            case .installed(let emoji): name += " " + EmojiSetPresentation.title(emoji).lowercased()
+            case .chat: break
+            }
             return terms.allSatisfy { $0.isEmpty || name.contains($0) }
         }
     }
@@ -151,23 +157,51 @@ struct EmojiPickerSheet: View {
     var onQuickReactionsSave: (([String]) -> Void)?
     /// Custom emoji this conversation holds; picking one passes `:shortcode:`.
     var customEmoji: [CustomEmojiSendable] = []
+    /// The account's emoji sets: installed emoji join `customEmoji`, and the
+    /// picker offers the set browser. Nil where custom emoji can't be sent.
+    var emojiSets: EmojiSetLibrary?
     let onPick: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var isConfiguringReactions = false
+    @State private var isBrowsingEmojiSets = false
+
+    /// Follows installs made from the browser while the picker is open.
+    private var allCustomEmoji: [CustomEmojiSendable] {
+        guard let emojiSets else { return customEmoji }
+        return CustomEmojiSendCatalog.merging(customEmoji, installed: emojiSets.currentInstalledEmoji)
+    }
 
     var body: some View {
         EmojiPickerContent(
             showsSearchField: true,
-            customEmoji: customEmoji,
+            customEmoji: allCustomEmoji,
             onConfigure: quickReactions != nil && onQuickReactionsSave != nil
                 ? { isConfiguringReactions = true }
-                : nil
+                : nil,
+            onBrowseEmojiSets: emojiSets == nil ? nil : { isBrowsingEmojiSets = true }
         ) { emoji in
             onPick(emoji)
             dismiss()
         }
+        .environment(\.emojiSetImages, emojiSets?.images)
+        .task { await emojiSets?.loadInstalledIfNeeded() }
         .accessibilityAction(.escape) { dismiss() }
+        .sheet(isPresented: $isBrowsingEmojiSets) {
+            if let emojiSets {
+                NavigationStack {
+                    EmojiSetBrowserView(library: emojiSets)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button(L10n.string("Done"), systemImage: "checkmark") { isBrowsingEmojiSets = false }
+                            }
+                        }
+                }
+                .environment(\.emojiSetImages, emojiSets.images)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+        }
         .sheet(isPresented: $isConfiguringReactions) {
             if let quickReactions, let onQuickReactionsSave {
                 NavigationStack {
@@ -284,6 +318,7 @@ private struct EmojiPickerContent: View {
     let showsSearchField: Bool
     var customEmoji: [CustomEmojiSendable] = []
     var onConfigure: (() -> Void)?
+    var onBrowseEmojiSets: (() -> Void)?
     var onDeleteBackward: (() -> Void)?
     let onPick: (String) -> Void
 
@@ -298,6 +333,15 @@ private struct EmojiPickerContent: View {
                 if showsSearchField {
                     HStack(spacing: 4) {
                         searchField
+                        if let onBrowseEmojiSets {
+                            Button(action: onBrowseEmojiSets) {
+                                Image(systemName: "square.grid.3x3.square")
+                                    .frame(width: 44, height: 44)
+                                    .compatibleInputCircleChrome()
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(L10n.string("Emoji Sets"))
+                        }
                         if let onConfigure {
                             Button(action: onConfigure) {
                                 Image(systemName: "gearshape")
@@ -347,13 +391,18 @@ private struct EmojiPickerContent: View {
                     if !query.isEmpty {
                         let customResults = CustomEmojiPickerSearch.results(in: customEmoji, query: query)
                         if !customResults.isEmpty {
-                            customEmojiSection(customResults)
+                            customEmojiSection(header: EmojiSectionHeader(title: "Custom"), entries: customResults)
                         }
                         emojiSection(title: "Search results", entries: searchResults)
                     } else {
-                        if !customEmoji.isEmpty {
-                            customEmojiSection(customEmoji)
+                        let groups = EmojiSetPresentation.pickerGroups(customEmoji)
+                        if !groups.other.isEmpty {
+                            customEmojiSection(header: EmojiSectionHeader(title: "Custom"), entries: groups.other)
                                 .id("custom")
+                        }
+                        ForEach(Array(groups.sets.enumerated()), id: \.element.id) { index, group in
+                            customEmojiSection(header: EmojiSectionHeader(verbatim: group.title), entries: group.emoji)
+                                .id(groups.other.isEmpty && index == 0 ? "custom" : "set-\(group.id)")
                         }
                         let recentEntries = EmojiRecents.values.compactMap { emoji in
                             model.entries.first { $0.emoji == emoji }
@@ -406,8 +455,9 @@ private struct EmojiPickerContent: View {
         }
     }
 
-    /// Images from this conversation; the shortcode is the spoken name.
-    private func customEmojiSection(_ entries: [CustomEmojiSendable]) -> some View {
+    /// Images from this conversation or an installed set; the shortcode is
+    /// the spoken name.
+    private func customEmojiSection(header: EmojiSectionHeader, entries: [CustomEmojiSendable]) -> some View {
         Section {
             LazyVGrid(columns: columns, spacing: 5) {
                 ForEach(entries) { entry in
@@ -424,7 +474,7 @@ private struct EmojiPickerContent: View {
                 }
             }
         } header: {
-            EmojiSectionHeader(title: "Custom")
+            header
         }
     }
 
@@ -489,10 +539,20 @@ private struct EmojiPickerContent: View {
 /// Pinned over scrolling emoji, so it keeps a background; the capsule and inset
 /// keep the title off the edges.
 private struct EmojiSectionHeader: View {
-    let title: LocalizedStringKey
+    private let text: Text
+
+    init(title: LocalizedStringKey) {
+        text = Text(title)
+    }
+
+    /// A set title is peer text, shown as written.
+    init(verbatim: String) {
+        text = Text(verbatim: verbatim)
+    }
 
     var body: some View {
-        Text(title)
+        text
+            .lineLimit(1)
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)

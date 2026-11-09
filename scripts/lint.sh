@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-REQUIRED_SWIFTLINT_VERSION="0.63.2"   # bump in lockstep with .github/workflows/lint.yml
+REQUIRED_SWIFTLINT_VERSION="0.65.1"   # bump in lockstep with .github/workflows/lint.yml
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"

@@ -503,7 +503,7 @@ struct CreateIdentityOnboardingTests {
         let store = SignUpDraftStore(directory: directory)
         let service = CreateIdentityServiceStub()
         let existing = AccountSummaryFfi(label: "existing", accountIdHex: "existing", localSigning: true,
-                                         externalSigning: false, signedOut: false, running: true)
+                                         externalSigning: false, signedOut: false, running: true, unlinked: false)
         service.storedAccounts = [existing]
         service.publishFailuresRemaining = 1
         let model = CreateIdentityViewModel()
@@ -547,7 +547,7 @@ struct CreateIdentityOnboardingTests {
         let saved = try #require(try await store.load())
         #expect(saved.stage == .resetting)
         let unrelated = AccountSummaryFfi(label: "unrelated", accountIdHex: "unrelated", localSigning: true,
-                                          externalSigning: false, signedOut: false, running: true)
+                                          externalSigning: false, signedOut: false, running: true, unlinked: false)
         service.storedAccounts = [unrelated]
         #expect(try saved.recoveredAccount(in: service.storedAccounts) == nil)
         let restored = CreateIdentityViewModel()
@@ -1051,7 +1051,8 @@ private final class CreateIdentityServiceStub: CreateIdentityServicing {
         localSigning: true,
         externalSigning: false,
         signedOut: false,
-        running: true
+        running: true,
+        unlinked: false
     )
 
     func createIdentityForProfileSetup(initialProfile: UserProfileMetadataFfi?) async throws -> IdentityCreationResultFfi {

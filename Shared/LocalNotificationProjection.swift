@@ -99,7 +99,7 @@ nonisolated enum LocalNotificationProjection {
         // ("Alice sent a message", "Alice mentioned you"), so sender-only
         // delivery needs no separate copy.
         let preview = previewMode.revealsMessageContent
-            ? notificationPreview(update.previewText)
+            ? notificationPreview(update.previewText, isSticker: update.sticker != nil)
             : nil
         let reaction = previewMode.revealsMessageContent ? reactionContent(for: update) : nil
         let content = previewMode.revealsSenderIdentity
@@ -300,7 +300,9 @@ nonisolated enum LocalNotificationProjection {
         ContentSanitizer.compactSingleLine(raw, maxLength: maxPreviewLength)
     }
 
-    private static func notificationPreview(_ raw: String?) -> String? {
+    private static func notificationPreview(_ raw: String?, isSticker: Bool = false) -> String? {
+        // A sticker message's content is empty; its `sticker` tag is the message.
+        if isSticker, raw?.isEmpty ?? true { return L10n.string("Sticker") }
         guard let raw else { return nil }
         if let label = RemoteGiphyMedia.envelopePreviewText(for: raw) {
             return label

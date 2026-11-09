@@ -109,6 +109,6 @@ struct SignUpDraftStoreTests {
     }
 
     private func account(_ id: String) -> AccountSummaryFfi {
-        .init(label: id, accountIdHex: id, localSigning: true, externalSigning: false, signedOut: false, running: true)
+        .init(label: id, accountIdHex: id, localSigning: true, externalSigning: false, signedOut: false, running: true, unlinked: false)
     }
 }

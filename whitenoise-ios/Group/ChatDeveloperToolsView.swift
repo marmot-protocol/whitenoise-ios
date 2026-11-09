@@ -16,6 +16,7 @@ nonisolated enum ChatDeveloperToolsPresentation {
         case .member: return L10n.string("Active")
         case .left: return L10n.string("Left")
         case .removed: return L10n.string("Removed")
+        case .deviceRemoved: return L10n.string("Device removed")
         }
     }
 }

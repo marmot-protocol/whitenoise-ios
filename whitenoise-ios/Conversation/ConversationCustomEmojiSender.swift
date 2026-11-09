@@ -2,10 +2,7 @@ import Foundation
 import MarmotKit
 import Observation
 
-/// Sends custom emoji messages for one conversation. Custom emoji reactions
-/// are deferred: MDK 0.12.0 pins only `Media` sends to the attachments'
-/// epoch, not `Reaction`, so a media reaction can be encrypted under a later
-/// epoch than its image (#1137, marmot-protocol/mdk#2151).
+/// Sends custom emoji messages and reactions for one conversation.
 ///
 /// Every send is bound to the account, runtime and chat it started in: after
 /// each await the scope is re-read, and a changed scope cancels the send
@@ -17,23 +14,30 @@ import Observation
 final class ConversationCustomEmojiSender {
     typealias SendMessage = @MainActor (_ scope: CustomEmojiScope, _ caption: String,
                                         _ attachments: [MediaAttachmentReferenceFfi], _ tags: [[String]]) async throws -> Void
+    typealias SendReaction = @MainActor (_ scope: CustomEmojiScope, _ targetMessageId: String, _ emoji: String,
+                                         _ attachments: [MediaAttachmentReferenceFfi], _ tags: [[String]]) async throws -> Void
 
     let uploads: CustomEmojiUploadCache
     private let scopeProvider: @MainActor () -> CustomEmojiScope?
     private let currentEpoch: @MainActor () -> UInt64?
     private let sendMessageOperation: SendMessage
+    private let sendReactionOperation: SendReaction
 
     init(
         scopeProvider: @escaping @MainActor () -> CustomEmojiScope?,
         currentEpoch: @escaping @MainActor () -> UInt64?,
         loadBytes: @escaping CustomEmojiUploadCache.LoadBytes,
+        readInstalled: @escaping CustomEmojiUploadCache.ReadInstalled,
         upload: @escaping CustomEmojiUploadCache.Upload,
-        sendMessage: @escaping SendMessage
+        sendMessage: @escaping SendMessage,
+        sendReaction: @escaping SendReaction = { _, _, _, _, _ in throw CancellationError() }
     ) {
         self.scopeProvider = scopeProvider
         self.currentEpoch = currentEpoch
         self.sendMessageOperation = sendMessage
-        self.uploads = CustomEmojiUploadCache(scopeProvider: scopeProvider, loadBytes: loadBytes, upload: upload)
+        self.sendReactionOperation = sendReaction
+        self.uploads = CustomEmojiUploadCache(scopeProvider: scopeProvider, loadBytes: loadBytes,
+                                              readInstalled: readInstalled, upload: upload)
     }
 
     /// Sends `text` as a kind-9 whose attachments are the `emoji` images, in
@@ -66,6 +70,25 @@ final class ConversationCustomEmojiSender {
         return uploaded
     }
 
+    /// Reacts to `targetMessageId` with one custom emoji: a kind-7 whose
+    /// content is `:shortcode:`, carrying the image re-encrypted for the
+    /// current epoch and named by one `emoji` tag. Reuses an upload the
+    /// emoji already has, so a retry never uploads it again.
+    func sendReaction(_ emoji: CustomEmojiSendable, to targetMessageId: String) async throws {
+        guard let scope = scopeProvider() else { throw CancellationError() }
+        guard !targetMessageId.isEmpty else { throw CustomEmojiSendError.emptyEventTarget }
+        let uploaded = try await upload([emoji], scope: scope)
+        guard let reference = uploaded.first?.reference else { throw CustomEmojiSendError.uploadFailed }
+        let tags = [try CustomEmojiTags.emojiTag(emoji.shortcode, reference: reference)]
+        try CustomEmojiTags.validate(tags)
+        try ensure(scope)
+        do {
+            try await sendReactionOperation(scope, targetMessageId, emoji.token, [reference], tags)
+        } catch {
+            throw classify(error, references: [reference])
+        }
+    }
+
     private func upload(_ emoji: [CustomEmojiSendable], scope: CustomEmojiScope) async throws -> [CustomEmojiUploadCache.Uploaded] {
         var uploaded: [CustomEmojiUploadCache.Uploaded] = []
         for item in emoji {
@@ -79,16 +102,21 @@ final class ConversationCustomEmojiSender {
         guard scopeProvider() == scope, !Task.isCancelled else { throw CancellationError() }
     }
 
-    /// MDK refuses a reference encrypted under an earlier epoch as an invalid
-    /// media reference; forget it so the retry re-encrypts once for the new
-    /// epoch. Any other failure keeps the uploaded reference for the retry.
+    /// A reference encrypted under an earlier epoch, or another branch at the
+    /// same epoch, can never be sent: forget it so the retry re-encrypts once
+    /// for the current one. While the epoch is unsettled the reference may
+    /// still be good, so it is kept. Any other failure keeps it too.
     private func classify(_ error: Error, references: [MediaAttachmentReferenceFfi]) -> Error {
         if error is CancellationError || error is CustomEmojiSendError { return error }
-        if case .InvalidMediaReference? = error as? MarmotKitError {
+        switch error as? MarmotKitError {
+        case .MediaReferenceStaleEpoch?, .InvalidMediaReference?:
             references.forEach(uploads.invalidate)
             return CustomEmojiSendError.staleEpoch
+        case .MediaReferenceEpochUnsettled?:
+            return CustomEmojiSendError.epochUnsettled
+        default:
+            return CustomEmojiSendError.sendFailed
         }
-        return CustomEmojiSendError.sendFailed
     }
 }
 

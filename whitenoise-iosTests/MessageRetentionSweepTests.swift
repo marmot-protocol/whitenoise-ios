@@ -131,7 +131,8 @@ private func sweepTestAccount(label: String, signedOut: Bool) -> AccountSummaryF
         localSigning: true,
         externalSigning: false,
         signedOut: signedOut,
-        running: !signedOut
+        running: !signedOut,
+        unlinked: false
     )
 }
 

@@ -1,3 +1,4 @@
+import MarmotKit
 import SwiftUI
 import UIKit
 
@@ -7,6 +8,7 @@ import UIKit
 /// an image decoded under another account, runtime or chat.
 struct CustomEmojiPickerImage: View {
     @Environment(\.customEmojiStore) private var store
+    @Environment(\.emojiSetImages) private var emojiSetImages
     @Environment(\.displayScale) private var displayScale
     @ScaledMetric(relativeTo: .title) private var pointSize: CGFloat = 29
 
@@ -22,28 +24,56 @@ struct CustomEmojiPickerImage: View {
     }
 
     var body: some View {
+        switch sendable.artwork {
+        case .builtin(let builtin):
+            if let image = CustomEmojiBuiltinImages.image(for: builtin.shortcode, pixelSize: pixelSize, scale: displayScale) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: pointSize, height: pointSize)
+                    .accessibilityLabel(Text(verbatim: builtin.spokenName))
+            } else {
+                literal
+            }
+        case .chat(_, let source):
+            chatImage(source)
+        case .installed(let emoji):
+            EmojiSetImage(
+                source: .installed(coordinate: emoji.setCoordinate, shortcode: emoji.shortcode, sha256: emoji.sha256),
+                store: emojiSetImages,
+                pointSize: pointSize
+            ) { literal }
+            .accessibilityLabel(Text(verbatim: emoji.shortcode))
+        }
+    }
+
+    private var literal: some View {
+        Text(verbatim: sendable.token)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .frame(minHeight: pointSize)
+    }
+
+    private func chatImage(_ source: MessageMediaAttachment) -> some View {
         let scope = store?.currentScope
         let size = pixelSize
-        Group {
-            if let loaded, let scope, loaded.key == CustomEmojiImageKey(scope: scope, itemID: sendable.source.id, pixelSize: size) {
+        return Group {
+            if let loaded, let scope, loaded.key == CustomEmojiImageKey(scope: scope, itemID: source.id, pixelSize: size) {
                 Image(uiImage: loaded.image)
                     .resizable()
                     .scaledToFit()
                     .frame(width: pointSize, height: pointSize)
             } else {
-                Text(verbatim: sendable.token)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .frame(minHeight: pointSize)
+                literal
             }
         }
-        .task(id: LoadID(scope: scope, itemID: sendable.source.id, pixelSize: size,
+        .task(id: LoadID(scope: scope, itemID: source.id, pixelSize: size,
                          policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard let store, scope != nil else { return }
             guard let result = await store.inlineImage(
-                for: sendable.source,
+                for: source,
                 pixelSize: size,
                 scale: displayScale,
                 policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision

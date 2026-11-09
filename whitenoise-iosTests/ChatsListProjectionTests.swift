@@ -660,6 +660,19 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.first?.avatarURL?.absoluteString == "https://cdn.example.com/group.png")
     }
 
+    @Test func localGroupChangeCarriesALeaveBlock() {
+        let viewModel = ChatsListViewModel(appState: AppState.test())
+        let row = chatListRow(groupIdHex: hex("d7"), title: "General")
+        viewModel.applyChatListSnapshot([row])
+        #expect(viewModel.items.first?.projectedGroup.leaveBlocked == false)
+
+        var blocked = group(name: "General", id: row.groupIdHex)
+        blocked.leaveBlocked = true
+        viewModel.applyLocalGroupChange(blocked)
+
+        #expect(viewModel.items.first?.projectedGroup.leaveBlocked == true)
+    }
+
     @Test func localGroupChangeRefreshesCachedGroupDetailsDisplay() throws {
         let groupId = hex("d8")
         let viewModel = ChatsListViewModel(appState: AppState.test())

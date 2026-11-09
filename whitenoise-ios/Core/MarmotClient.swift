@@ -91,6 +91,7 @@ nonisolated final class MarmotClient: Sendable {
             rootPath: rootPath,
             relayUrls: relayUrls,
             options: MarmotOptions(cursorPersistence: cursorPersistence, clientName: "whitenoise",
+                devicePlatform: AppContainerConfig.marmotDevicePlatform,
                 attachmentAcquisitionMode: .hostManaged,
                 moderationReportConfig: ModerationReportBuildConfig.current()?.ffi,
                 deployment: marmotDeploymentWhiteNoise())
@@ -842,6 +843,10 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.leaveGroup(accountRef: accountRef, groupIdHex: groupIdHex)
     }
 
+    func cancelLeave(accountRef: String, groupIdHex: String) async throws {
+        try await marmot.cancelLeave(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
     func deleteGroupLocal(accountRef: String, groupIdHex: String) async throws -> Bool {
         try await marmot.deleteGroupLocal(accountRef: accountRef, groupIdHex: groupIdHex)
     }
@@ -990,6 +995,22 @@ nonisolated final class MarmotClient: Sendable {
                          caption: String?, tags: [[String]]) async throws -> SendSummaryFfi {
         try await marmot.sendTaggedMedia(accountRef: accountRef, groupIdHex: groupIdHex, attachments: attachments,
                                          caption: caption, tags: tags)
+    }
+
+    /// NIP-30 custom emoji reaction: a kind-7 whose `tags` name the
+    /// already-uploaded `attachments`. Each reference keeps the
+    /// `sourceEpochIdentity` its upload returned.
+    func reactWithMedia(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String,
+                        tags: [[String]], attachments: [MediaAttachmentReferenceFfi]) async throws -> SendSummaryFfi {
+        try await marmot.reactWithMedia(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId,
+                                        emoji: emoji, tags: tags, attachments: attachments)
+    }
+
+    /// The artwork slot of one active custom-emoji reaction. A bounded local
+    /// read that starts no download.
+    func reactionAttachment(accountRef: String, groupIdHex: String, reactionMessageIdHex: String) async throws -> AttachmentEntryFfi? {
+        try await marmot.reactionAttachment(accountRef: accountRef, groupIdHex: groupIdHex,
+                                            reactionMessageIdHex: reactionMessageIdHex)
     }
 
     func createPoll(accountRef: String, groupIdHex: String, question: String, options: [String],

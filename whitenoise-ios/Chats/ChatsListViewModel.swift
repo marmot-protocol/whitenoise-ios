@@ -241,6 +241,7 @@ final class ChatsListViewModel {
                 selfMembership: selfMembership,
                 leaveRequestPending: row.leaveRequestPending,
                 leaveRequestedAtMs: row.leaveRequestedAtMs,
+                leaveBlocked: row.leaveBlocked,
                 disbanding: row.disbanding,
                 disbandRequest: row.disbandRequest,
                 disbanded: row.lifecycleState == .disbanded,
@@ -994,6 +995,7 @@ final class ChatsListViewModel {
         row.selfMembership = record.selfMembership
         row.leaveRequestPending = record.leaveRequestPending
         row.leaveRequestedAtMs = record.leaveRequestedAtMs
+        row.leaveBlocked = record.leaveBlocked
         row.groupName = record.name
         row.avatarUrl = record.avatarUrl
         if let name = ContentSanitizer.groupName(record.name) {
@@ -1784,7 +1786,8 @@ final class ChatsListViewModel {
             muted: false,
             mutedUntilMs: nil,
             leaveRequestPending: group.leaveRequestPending,
-            leaveRequestedAtMs: group.leaveRequestedAtMs
+            leaveRequestedAtMs: group.leaveRequestedAtMs,
+            leaveBlocked: group.leaveBlocked
         )
     }
 }

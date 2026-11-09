@@ -27,6 +27,7 @@ struct MarkdownTokenThreadingTests {
             contentTokens: tokens,
             kind: MessageSemantics.kindChat,
             tags: [],
+            sticker: nil,
             timelineAt: 1,
             receivedAt: 1,
             replyToMessageIdHex: nil,
@@ -40,7 +41,10 @@ struct MarkdownTokenThreadingTests {
             deleted: false,
             deletionSource: .unknown,
             deletedByMessageIdHex: nil,
-            invalidationStatus: nil
+            invalidationStatus: nil,
+            recipientConfirmed: false,
+            importedFrom: nil,
+            historyImportProvenance: nil
         )
 
         let converted = ConversationViewModel.appMessageRecord(from: record)
@@ -237,6 +241,7 @@ struct MarkdownTokenThreadingTests {
             contentTokens: .emptyDocument,
             kind: MessageSemantics.kindChat,
             tags: [],
+            sticker: nil,
             timelineAt: 300,
             receivedAt: 300,
             replyToMessageIdHex: nil,
@@ -250,7 +255,10 @@ struct MarkdownTokenThreadingTests {
             deleted: false,
             deletionSource: .unknown,
             deletedByMessageIdHex: nil,
-            invalidationStatus: nil
+            invalidationStatus: nil,
+            recipientConfirmed: false,
+            importedFrom: nil,
+            historyImportProvenance: nil
         )
     }
 }

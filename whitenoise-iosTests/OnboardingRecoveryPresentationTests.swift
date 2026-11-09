@@ -40,7 +40,8 @@ struct OnboardingRecoveryPresentationTests {
     private func profile(_ id: String, signedOut: Bool = true, localSigning: Bool = true) -> AccountSummaryFfi {
         AccountSummaryFfi(
             label: id, accountIdHex: id, localSigning: localSigning,
-            externalSigning: !localSigning, signedOut: signedOut, running: false
+            externalSigning: !localSigning, signedOut: signedOut, running: false,
+            unlinked: false
         )
     }
 }

@@ -34,6 +34,9 @@ struct GroupDetailsMarmotCalls {
     /// Clears every decrypted media file after a local group reset; false if some remain.
     var clearResetMedia: @MainActor () async -> Bool
     var deleteGroupLocal: @MainActor (AppState, _ accountRef: String, _ groupIdHex: String) async throws -> Bool
+    var cancelLeave: @MainActor (
+        MarmotClient, _ accountRef: String, _ groupIdHex: String
+    ) async throws -> Void
 
     static let marmot = GroupDetailsMarmotCalls(
         updateGroupProfile: { client, accountRef, groupIdHex, name, description in
@@ -98,6 +101,9 @@ struct GroupDetailsMarmotCalls {
         },
         deleteGroupLocal: { appState, accountRef, groupIdHex in
             try await appState.currentMarmotClient().deleteGroupLocal(accountRef: accountRef, groupIdHex: groupIdHex)
+        },
+        cancelLeave: { client, accountRef, groupIdHex in
+            try await client.cancelLeave(accountRef: accountRef, groupIdHex: groupIdHex)
         }
     )
 }

@@ -73,6 +73,21 @@ struct ConversationTimelineProjectionTests {
         )
     }
 
+    @Test func peerConfirmedSendWithoutASourceIsNotAwaitingDelivery() {
+        var unresolved = timelineRecord(
+            messageIdHex: hex("d2"), sourceMessageIdHex: .some(nil), direction: "sent", timelineAt: 1
+        )
+        #expect(TimelineStore.ownSendAwaitsDelivery(unresolved))
+
+        unresolved.recipientConfirmed = true
+        #expect(!TimelineStore.ownSendAwaitsDelivery(unresolved))
+
+        let sourced = timelineRecord(messageIdHex: hex("d3"), direction: "sent", timelineAt: 1)
+        let received = timelineRecord(messageIdHex: hex("d4"), sourceMessageIdHex: .some(nil), timelineAt: 1)
+        #expect(!TimelineStore.ownSendAwaitsDelivery(sourced))
+        #expect(!TimelineStore.ownSendAwaitsDelivery(received))
+    }
+
     @Test func pendingReadMarksRetryWhenRuntimeReturnsWithoutAnotherViewportUpdate() {
         #expect(
             ConversationReadMarker.pendingFlushDecision(

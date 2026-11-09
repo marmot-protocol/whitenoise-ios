@@ -102,6 +102,7 @@ final class NotificationService: UNNotificationServiceExtension {
                 rootPath: AppContainerConfig.productionMarmotRoot().path,
                 relayUrls: AppContainerConfig.seedRelays,
                 options: MarmotOptions(cursorPersistence: .frozen, clientName: "whitenoise",
+                    devicePlatform: AppContainerConfig.marmotDevicePlatform,
                     attachmentAcquisitionMode: .hostManaged, deployment: marmotDeploymentWhiteNoise())
             )
             activeMarmot = marmot

@@ -17,6 +17,8 @@ enum MessagePreview {
     static let timelineMediaPreviewMaxFieldsPerTag = 16
     static let timelineMediaPreviewMaxFileNames = MediaDraftProcessor.maxAttachmentCount
 
+    static var stickerLabel: String { L10n.string("Sticker") }
+
     /// Whether a record should drive the chat-list preview. Skips agent-stream
     /// start signals and non-textual events (reactions, deletes). A kind-9
     /// stream-final is a real message and previews like any other chat.
@@ -36,6 +38,8 @@ enum MessagePreview {
         mentionDisplayName: MarkdownMentionResolver? = nil,
         systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
     ) -> String {
+        // A sticker message's content is empty; its `sticker` tag is the message.
+        if record.sticker != nil, record.plaintext.isEmpty { return stickerLabel }
         switch MessageSemantics.classify(record) {
         case .media(let attachments):
             if !record.plaintext.isEmpty {
@@ -117,6 +121,7 @@ enum MessagePreview {
         if preview.deleted {
             return MessageDeletionPresentation.text(source: preview.deletionSource)
         }
+        if preview.sticker != nil, preview.plaintext.isEmpty { return stickerLabel }
         if !preview.plaintext.isEmpty {
             if preview.kind == MessageSemantics.kindGroupSystem {
                 return GroupSystemEventPresentation.displayText(
@@ -155,6 +160,7 @@ enum MessagePreview {
         if preview.deleted {
             return MessageDeletionPresentation.text(source: preview.deletionSource)
         }
+        if preview.sticker != nil, preview.plaintext.isEmpty { return stickerLabel }
         if !preview.plaintext.isEmpty {
             if preview.kind == MessageSemantics.kindGroupSystem {
                 guard let event = preview.groupSystem else { return "" }

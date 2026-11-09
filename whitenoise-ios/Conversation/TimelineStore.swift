@@ -695,14 +695,15 @@ final class TimelineStore {
         return mediaProjections.items(for: record, ownerId: record.messageIdHex)
     }
 
-    /// Inline custom emoji for a row: tag-matched candidates whose shortcode
-    /// occurs in the text the bubble displays (prepared markdown blocks, or the
-    /// plain-text fallback). Cached per projection generation.
+    /// Inline custom emoji for a row: tag-matched candidates, and built-ins
+    /// the row does not define, whose shortcode occurs in the text the bubble
+    /// displays (prepared markdown blocks, or the plain-text fallback). Cached
+    /// per projection generation.
     func customEmoji(for item: TimelineItem) -> CustomEmojiRowResolution {
         _ = timelineProjectionGeneration
         guard case .message(let record, _) = item.kind else { return .empty }
         let candidates = mediaProjections.customEmojiCandidates(for: item)
-        guard !candidates.isEmpty else { return .empty }
+        guard !candidates.isEmpty || displayBody(of: record).contains(":") else { return .empty }
         if customEmojiCacheGeneration != timelineProjectionGeneration {
             customEmojiCache.removeAll()
             customEmojiCacheGeneration = timelineProjectionGeneration
@@ -713,7 +714,7 @@ final class TimelineStore {
         let runs = markdownProjections.blocks(for: item).map(CustomEmojiDisplayText.runs(in:))
             ?? [ContentSanitizer.messageBody(displayBody(of: record))]
         let resolution = CustomEmojiResolver.claim(candidates, attachments: mediaProjections.items(for: item),
-                                                   displayedRuns: runs)
+                                                   displayedRuns: runs, builtins: CustomEmojiBuiltins.shortcodes)
         customEmojiCache[item.id] = CustomEmojiCacheEntry(candidates: candidates, resolution: resolution)
         return resolution
     }
@@ -1010,8 +1011,8 @@ final class TimelineStore {
         if record.kind == MessageSemantics.kindPoll {
             notePollRowReprojection(record, messageIdHex: appRecord.messageIdHex, live: trigger != nil)
         }
-        unsettledClientTokenByMessageId[appRecord.messageIdHex] =
-            appRecord.direction == "sent" && record.sourceMessageIdHex == nil ? record.clientToken : nil
+        let awaitsDelivery = Self.ownSendAwaitsDelivery(record)
+        unsettledClientTokenByMessageId[appRecord.messageIdHex] = awaitsDelivery ? record.clientToken : nil
         if let pending = pendingPollSelections[appRecord.messageIdHex],
            let poll = record.poll, Set(poll.localSelection) == Set(pending) {
             pendingPollSelections[appRecord.messageIdHex] = nil
@@ -1020,7 +1021,7 @@ final class TimelineStore {
         // `sourceMessageIdHex` is the durable delivery marker. A nil-source
         // projection means committed but unresolved, except while a successful
         // send result is waiting for its sourced upsert to catch up.
-        if appRecord.direction == "sent", record.sourceMessageIdHex == nil {
+        if awaitsDelivery {
             if publishedOutgoingMessageIdsAwaitingProjection.contains(appRecord.messageIdHex) {
                 undeliveredOwnMessageIds.remove(appRecord.messageIdHex)
             } else {
@@ -1641,6 +1642,7 @@ final class TimelineStore {
             contentTokens: record.contentTokens,
             kind: record.kind,
             tags: record.tags,
+            sticker: record.sticker,
             sourceEpoch: record.sourceEpoch,
             retentionSeconds: record.retentionSeconds,
             retentionExpiresAt: record.retentionExpiresAt,
@@ -1708,6 +1710,13 @@ final class TimelineStore {
             _ = rebuildTimeline()
             noteProjectionChanged()
         }
+    }
+
+    /// Whether an own send is committed but not yet known to have arrived.
+    /// A peer's reaction to a send with no relay acceptance on record proves
+    /// delivery (`recipientConfirmed`), though it names no source event.
+    nonisolated static func ownSendAwaitsDelivery(_ record: TimelineMessageRecordFfi) -> Bool {
+        record.direction == "sent" && record.sourceMessageIdHex == nil && !record.recipientConfirmed
     }
 
     /// Delivery-aware status for a durable row. A nil source is a durable,

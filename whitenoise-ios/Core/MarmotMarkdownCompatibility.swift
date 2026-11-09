@@ -89,6 +89,7 @@ extension AppGroupRecordFfi {
         selfMembership: SelfMembershipFfi = .member,
         leaveRequestPending: Bool = false,
         leaveRequestedAtMs: UInt64? = nil,
+        leaveBlocked: Bool = false,
         disbanding: Bool = false,
         disbandRequest: DisbandRequestFfi? = nil,
         disbanded: Bool = false,
@@ -117,6 +118,7 @@ extension AppGroupRecordFfi {
             selfMembership: selfMembership,
             leaveRequestPending: leaveRequestPending,
             leaveRequestedAtMs: leaveRequestedAtMs,
+            leaveBlocked: leaveBlocked,
             disbanding: disbanding,
             disbandRequest: disbandRequest,
             disbanded: disbanded,
@@ -161,6 +163,7 @@ extension NotificationUpdateFfi {
             sender: sender,
             receiver: receiver,
             previewText: previewText,
+            sticker: nil,
             reactionEmoji: reactionEmoji,
             reactedToPreview: reactedToPreview,
             timestampMs: timestampMs,
@@ -219,7 +222,8 @@ extension ChatListRowFfi {
         muted: Bool,
         mutedUntilMs: Int64?,
         leaveRequestPending: Bool,
-        leaveRequestedAtMs: UInt64?
+        leaveRequestedAtMs: UInt64?,
+        leaveBlocked: Bool = false
     ) {
         self.init(
             groupIdHex: groupIdHex,
@@ -251,7 +255,8 @@ extension ChatListRowFfi {
             muted: muted,
             mutedUntilMs: mutedUntilMs,
             leaveRequestPending: leaveRequestPending,
-            leaveRequestedAtMs: leaveRequestedAtMs
+            leaveRequestedAtMs: leaveRequestedAtMs,
+            leaveBlocked: leaveBlocked
         )
     }
 
@@ -279,7 +284,8 @@ extension ChatListRowFfi {
         disbanding: Bool = false,
         disbandRequest: DisbandRequestFfi? = nil,
         leaveRequestPending: Bool = false,
-        leaveRequestedAtMs: UInt64? = nil
+        leaveRequestedAtMs: UInt64? = nil,
+        leaveBlocked: Bool = false
     ) {
         self.init(
             groupIdHex: groupIdHex,
@@ -311,7 +317,8 @@ extension ChatListRowFfi {
             muted: false,
             mutedUntilMs: nil,
             leaveRequestPending: leaveRequestPending,
-            leaveRequestedAtMs: leaveRequestedAtMs
+            leaveRequestedAtMs: leaveRequestedAtMs,
+            leaveBlocked: leaveBlocked
         )
     }
 
@@ -336,7 +343,8 @@ extension ChatListRowFfi {
         disbanding: Bool = false,
         disbandRequest: DisbandRequestFfi? = nil,
         leaveRequestPending: Bool = false,
-        leaveRequestedAtMs: UInt64? = nil
+        leaveRequestedAtMs: UInt64? = nil,
+        leaveBlocked: Bool = false
     ) {
         self.init(
             groupIdHex: groupIdHex,
@@ -368,7 +376,8 @@ extension ChatListRowFfi {
             muted: false,
             mutedUntilMs: nil,
             leaveRequestPending: leaveRequestPending,
-            leaveRequestedAtMs: leaveRequestedAtMs
+            leaveRequestedAtMs: leaveRequestedAtMs,
+            leaveBlocked: leaveBlocked
         )
     }
 
@@ -394,7 +403,8 @@ extension ChatListRowFfi {
         disbanding: Bool = false,
         disbandRequest: DisbandRequestFfi? = nil,
         leaveRequestPending: Bool = false,
-        leaveRequestedAtMs: UInt64? = nil
+        leaveRequestedAtMs: UInt64? = nil,
+        leaveBlocked: Bool = false
     ) {
         self.init(
             groupIdHex: groupIdHex,
@@ -426,7 +436,8 @@ extension ChatListRowFfi {
             muted: false,
             mutedUntilMs: nil,
             leaveRequestPending: leaveRequestPending,
-            leaveRequestedAtMs: leaveRequestedAtMs
+            leaveRequestedAtMs: leaveRequestedAtMs,
+            leaveBlocked: leaveBlocked
         )
     }
 }
@@ -441,6 +452,8 @@ extension GroupManagementStateFfi {
         requiresSelfDemoteBeforeLeave: Bool,
         leaveRequestPending: Bool = false,
         leaveRequestedAtMs: UInt64? = nil,
+        leaveBlocked: Bool = false,
+        canCancelLeave: Bool = false,
         memberActions: [GroupMemberActionStateFfi]
     ) {
         self.init(
@@ -452,6 +465,8 @@ extension GroupManagementStateFfi {
             requiresSelfDemoteBeforeLeave: requiresSelfDemoteBeforeLeave,
             leaveRequestPending: leaveRequestPending,
             leaveRequestedAtMs: leaveRequestedAtMs,
+            leaveBlocked: leaveBlocked,
+            canCancelLeave: canCancelLeave,
             lifecycleState: .stable,
             disbandingEnabled: false,
             disbanding: false,
@@ -478,7 +493,8 @@ extension AccountSummaryFfi {
             localSigning: localSigning,
             externalSigning: false,
             signedOut: signedOut,
-            running: running
+            running: running,
+            unlinked: false
         )
     }
 }
@@ -516,6 +532,7 @@ extension AppMessageRecordFfi {
             contentTokens: contentTokens,
             kind: kind,
             tags: tags,
+            sticker: nil,
             sourceEpoch: nil,
             retentionSeconds: nil,
             retentionExpiresAt: nil,
@@ -544,6 +561,7 @@ extension AppMessageRecordFfi {
             contentTokens: .emptyDocument,
             kind: kind,
             tags: tags,
+            sticker: nil,
             sourceEpoch: nil,
             retentionSeconds: nil,
             retentionExpiresAt: nil,
@@ -574,6 +592,7 @@ extension ReceivedMessageFfi {
             contentTokens: contentTokens,
             kind: kind,
             tags: tags,
+            sticker: nil,
             sourceEpoch: 0,
             retentionSeconds: nil,
             retentionExpiresAt: nil,
@@ -601,6 +620,7 @@ extension ReceivedMessageFfi {
             contentTokens: .emptyDocument,
             kind: kind,
             tags: tags,
+            sticker: nil,
             sourceEpoch: 0,
             retentionSeconds: nil,
             retentionExpiresAt: nil,
@@ -631,6 +651,7 @@ extension ChatListMessagePreviewFfi {
             plaintext: plaintext,
             contentTokens: contentTokens,
             kind: kind,
+            sticker: nil,
             timelineAt: timelineAt,
             retentionSeconds: nil,
             retentionExpiresAt: nil,
@@ -661,6 +682,7 @@ extension ChatListMessagePreviewFfi {
             plaintext: plaintext,
             contentTokens: .emptyDocument,
             kind: kind,
+            sticker: nil,
             timelineAt: timelineAt,
             retentionSeconds: nil,
             retentionExpiresAt: nil,
@@ -717,6 +739,7 @@ extension TimelineMessageRecordFfi {
             contentTokens: contentTokens,
             kind: kind,
             tags: tags,
+            sticker: nil,
             timelineAt: timelineAt,
             receivedAt: receivedAt,
             replyToMessageIdHex: replyToMessageIdHex,
@@ -730,7 +753,10 @@ extension TimelineMessageRecordFfi {
             deleted: deleted,
             deletionSource: deletionSource,
             deletedByMessageIdHex: deletedByMessageIdHex,
-            invalidationStatus: invalidationStatus
+            invalidationStatus: invalidationStatus,
+            recipientConfirmed: false,
+            importedFrom: nil,
+            historyImportProvenance: nil
         )
     }
 
@@ -776,6 +802,7 @@ extension TimelineMessageRecordFfi {
             contentTokens: .emptyDocument,
             kind: kind,
             tags: tags,
+            sticker: nil,
             timelineAt: timelineAt,
             receivedAt: receivedAt,
             replyToMessageIdHex: replyToMessageIdHex,
@@ -789,7 +816,10 @@ extension TimelineMessageRecordFfi {
             deleted: deleted,
             deletionSource: deletionSource,
             deletedByMessageIdHex: deletedByMessageIdHex,
-            invalidationStatus: invalidationStatus
+            invalidationStatus: invalidationStatus,
+            recipientConfirmed: false,
+            importedFrom: nil,
+            historyImportProvenance: nil
         )
     }
 }
@@ -812,6 +842,7 @@ extension TimelineReplyPreviewFfi {
             plaintext: plaintext,
             contentTokens: .emptyDocument,
             kind: kind,
+            sticker: nil,
             mediaJson: mediaJson,
             media: media.enumerated().map { .accepted(attachmentIndex: UInt32(clamping: $0.offset), reference: $0.element) },
             agentTextStreamJson: agentTextStreamJson,

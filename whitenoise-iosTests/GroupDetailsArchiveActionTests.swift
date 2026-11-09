@@ -1060,6 +1060,8 @@ private func disbandManagementState(
         requiresSelfDemoteBeforeLeave: false,
         leaveRequestPending: false,
         leaveRequestedAtMs: nil,
+        leaveBlocked: false,
+        canCancelLeave: false,
         lifecycleState: .stable,
         disbandingEnabled: disbandingEnabled,
         disbanding: false,

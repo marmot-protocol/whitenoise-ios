@@ -13,8 +13,7 @@ nonisolated enum CustomEmojiSendPolicy {
     static let maxTags = 64
     static let maxTagValueBytes = 16 * 1024
     /// MDK caps reaction content at 64 characters; keeping `:shortcode:`
-    /// within it lets the same emoji become a reaction once MDK pins
-    /// attachment-bearing reactions to their epoch (#1137).
+    /// within it lets every sendable emoji also be a reaction.
     static let maxShortcodeLength = 62
 
     /// NIP-30: ASCII letters, digits and underscores only. Received shortcodes
@@ -44,6 +43,7 @@ nonisolated enum CustomEmojiSendError: Error, Equatable {
     case imageUnavailable
     case uploadFailed
     case staleEpoch
+    case epochUnsettled
     case sendFailed
 
     var message: String {
@@ -58,6 +58,8 @@ nonisolated enum CustomEmojiSendError: Error, Equatable {
             L10n.string("Couldn't upload the custom emoji. Check your connection and try again.")
         case .staleEpoch:
             L10n.string("The chat changed while sending. Try again.")
+        case .epochUnsettled:
+            L10n.string("The chat is still syncing. Try again in a moment.")
         case .emptyEventTarget:
             L10n.string("The message you're replying to is unavailable.")
         case .unsendableShortcode, .missingLocator, .forbiddenImetaTag, .malformedTag:
@@ -69,15 +71,46 @@ nonisolated enum CustomEmojiSendError: Error, Equatable {
 }
 
 /// One custom emoji the person can send from this conversation: a NIP-30
-/// shortcode, the image reference it was received with, and a chat
-/// attachment whose retained bytes hold the same plaintext.
+/// shortcode and where its image bytes come from.
 nonisolated struct CustomEmojiSendable: Identifiable, Equatable {
+    enum Artwork: Equatable {
+        /// The image reference it was received with, and a chat attachment
+        /// whose retained bytes hold the same plaintext.
+        case chat(reference: MediaAttachmentReferenceFfi, source: MessageMediaAttachment)
+        case builtin(CustomEmojiBuiltin)
+        /// An emoji from an installed NIP-51 set; MDK holds its bytes.
+        case installed(InstalledCustomEmojiFfi)
+    }
+
     let shortcode: CustomEmojiShortcode
-    let reference: MediaAttachmentReferenceFfi
-    let source: MessageMediaAttachment
+    let artwork: Artwork
+
+    init(shortcode: CustomEmojiShortcode, reference: MediaAttachmentReferenceFfi, source: MessageMediaAttachment) {
+        self.shortcode = shortcode
+        artwork = .chat(reference: reference, source: source)
+    }
+
+    init(builtin: CustomEmojiBuiltin) {
+        shortcode = builtin.shortcode
+        artwork = .builtin(builtin)
+    }
+
+    init?(installed: InstalledCustomEmojiFfi) {
+        guard let shortcode = CustomEmojiShortcode(installed.shortcode) else { return nil }
+        self.shortcode = shortcode
+        artwork = .installed(installed)
+    }
 
     var id: String { shortcode.name }
     var token: String { shortcode.token }
+
+    var plaintextSha256: String {
+        switch artwork {
+        case .chat(let reference, _): reference.plaintextSha256.lowercased()
+        case .builtin(let builtin): builtin.plaintextSha256
+        case .installed(let emoji): emoji.sha256.lowercased()
+        }
+    }
 }
 
 /// Composer state for a custom emoji message. The draft stays in the
@@ -98,31 +131,56 @@ nonisolated struct CustomEmojiSubmittedDraft: Equatable {
     let draft: ConversationDraftSnapshot
 }
 
-/// Custom emoji reactions are deferred until MDK pins attachment-bearing
-/// reactions to their epoch (#1137, marmot-protocol/mdk#2151). Until then a
-/// `:shortcode:` chip only removes the person's own reaction: tapping it
-/// never adds a media reaction, nor a plain-text copy that would read as
-/// literal `:shortcode:` text.
-nonisolated enum CustomEmojiReactionPolicy {
-    static func allowsAdding(_ emoji: String) -> Bool {
-        CustomEmojiShortcode(reactionContent: emoji) == nil
-    }
-}
-
 nonisolated enum CustomEmojiSendCatalog {
-    /// One image per sendable shortcode, in catalog order (first wins).
-    /// Entries without a readable chat slot are left out: their bytes cannot
-    /// be re-encrypted, and a tag URL is never fetched.
+    /// The built-ins first, then installed set emoji in MDK's install order,
+    /// then one image per sendable shortcode in catalog order (first wins).
+    /// A built-in shortcode always sends the built-in image, and an installed
+    /// one beats an image seen in the chat. Entries without a readable chat
+    /// slot are left out: their bytes cannot be re-encrypted, and a tag URL
+    /// is never fetched.
     static func sendables(
         catalog: [CustomEmojiCatalogEntry],
+        builtins: [CustomEmojiBuiltin] = [],
+        installed: [InstalledCustomEmojiFfi] = [],
         source: (MediaAttachmentReferenceFfi) -> MessageMediaAttachment?
     ) -> [CustomEmojiSendable] {
         var seen = Set<CustomEmojiShortcode>()
         var result: [CustomEmojiSendable] = []
+        for builtin in builtins where CustomEmojiSendPolicy.isSendable(builtin.shortcode) && seen.insert(builtin.shortcode).inserted {
+            result.append(CustomEmojiSendable(builtin: builtin))
+        }
+        for emoji in installed {
+            guard let sendable = CustomEmojiSendable(installed: emoji),
+                  CustomEmojiSendPolicy.isSendable(sendable.shortcode),
+                  seen.insert(sendable.shortcode).inserted else { continue }
+            result.append(sendable)
+        }
         for entry in catalog where CustomEmojiSendPolicy.isSendable(entry.shortcode) && !seen.contains(entry.shortcode) {
             guard let attachment = source(entry.reference) else { continue }
             seen.insert(entry.shortcode)
             result.append(CustomEmojiSendable(shortcode: entry.shortcode, reference: entry.reference, source: attachment))
+        }
+        return result
+    }
+
+    /// `base` (a conversation's sendables) with `installed` emoji placed
+    /// after its built-ins, keeping `sendables`' precedence. Lets an open
+    /// picker follow installs without rescanning the chat.
+    static func merging(_ base: [CustomEmojiSendable], installed: [InstalledCustomEmojiFfi]) -> [CustomEmojiSendable] {
+        let builtins = base.filter { if case .builtin = $0.artwork { true } else { false } }
+        let rest = base.filter { if case .builtin = $0.artwork { false } else { true } }
+        var seen = Set(builtins.map(\.shortcode))
+        var result = builtins
+        for emoji in installed {
+            guard let sendable = CustomEmojiSendable(installed: emoji),
+                  CustomEmojiSendPolicy.isSendable(sendable.shortcode),
+                  seen.insert(sendable.shortcode).inserted else { continue }
+            result.append(sendable)
+        }
+        for sendable in rest where !seen.contains(sendable.shortcode) {
+            if case .installed = sendable.artwork { continue }
+            seen.insert(sendable.shortcode)
+            result.append(sendable)
         }
         return result
     }
@@ -213,6 +271,7 @@ nonisolated enum CustomEmojiComposerText {
 @MainActor
 final class CustomEmojiUploadCache {
     typealias LoadBytes = @MainActor (MessageMediaAttachment) async throws -> Data
+    typealias ReadInstalled = @MainActor (_ accountRef: String, InstalledCustomEmojiFfi) async throws -> Data
     typealias Upload = @MainActor (CustomEmojiScope, MediaUploadAttachmentRequestFfi) async throws -> MediaAttachmentReferenceFfi
 
     struct Uploaded {
@@ -229,6 +288,7 @@ final class CustomEmojiUploadCache {
 
     private let scopeProvider: @MainActor () -> CustomEmojiScope?
     private let loadBytes: LoadBytes
+    private let readInstalled: ReadInstalled
     private let upload: Upload
     private var scope: CustomEmojiScope?
     private var uploaded: [Key: Uploaded] = [:]
@@ -237,9 +297,11 @@ final class CustomEmojiUploadCache {
     /// Upload calls made, for tests asserting a retry never re-uploads.
     private(set) var uploadCount = 0
 
-    init(scopeProvider: @escaping @MainActor () -> CustomEmojiScope?, loadBytes: @escaping LoadBytes, upload: @escaping Upload) {
+    init(scopeProvider: @escaping @MainActor () -> CustomEmojiScope?, loadBytes: @escaping LoadBytes,
+         readInstalled: @escaping ReadInstalled, upload: @escaping Upload) {
         self.scopeProvider = scopeProvider
         self.loadBytes = loadBytes
+        self.readInstalled = readInstalled
         self.upload = upload
     }
 
@@ -247,7 +309,7 @@ final class CustomEmojiUploadCache {
     /// `currentEpoch` nil (not yet known) reuses whatever was uploaded.
     func reference(for sendable: CustomEmojiSendable, scope: CustomEmojiScope, currentEpoch: UInt64?) async throws -> Uploaded {
         guard currentScope() == scope else { throw CancellationError() }
-        let key = Key(scope: scope, plaintextSha256: sendable.reference.plaintextSha256.lowercased())
+        let key = Key(scope: scope, plaintextSha256: sendable.plaintextSha256)
         if let cached = uploaded[key] {
             if currentEpoch == nil || cached.reference.sourceEpoch == currentEpoch { return cached }
             forget(key)
@@ -258,23 +320,39 @@ final class CustomEmojiUploadCache {
             return result
         }
         let id = UUID()
-        let task = Task { @MainActor [weak self, loadBytes, upload] () throws -> Uploaded in
-            var source = sendable.source
-            source.demand = .automatic
-            let data: Data
-            do {
-                data = try await loadBytes(source)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                throw CustomEmojiSendError.imageUnavailable
-            }
-            guard await MediaPlaintextHash.matches(data, expectedSha256: key.plaintextSha256) else {
-                throw CustomEmojiSendError.imageUnavailable
-            }
-            let original = sendable.reference
-            let request = MediaUploadAttachmentRequestFfi(fileName: original.fileName, mediaType: original.mediaType,
+        let task = Task { @MainActor [weak self, loadBytes, readInstalled, upload] () throws -> Uploaded in
+            let request: MediaUploadAttachmentRequestFfi
+            switch sendable.artwork {
+            case .chat(let original, var source):
+                source.demand = .automatic
+                let data: Data
+                do {
+                    data = try await loadBytes(source)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    throw CustomEmojiSendError.imageUnavailable
+                }
+                guard await MediaPlaintextHash.matches(data, expectedSha256: key.plaintextSha256) else {
+                    throw CustomEmojiSendError.imageUnavailable
+                }
+                request = MediaUploadAttachmentRequestFfi(fileName: original.fileName, mediaType: original.mediaType,
                                                           plaintext: data, dim: original.dim, thumbhash: original.thumbhash)
+            case .builtin(let builtin):
+                request = MediaUploadAttachmentRequestFfi(fileName: builtin.fileName, mediaType: builtin.mediaType,
+                                                          plaintext: builtin.data, dim: builtin.dim, thumbhash: nil)
+            case .installed(let emoji):
+                let data: Data
+                do {
+                    data = try await readInstalled(scope.accountRef, emoji)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    throw CustomEmojiSendError.imageUnavailable
+                }
+                request = CustomEmojiUploadRequest.installed(emoji, plaintext: data)
+            }
+            let data = request.plaintext
             let reference: MediaAttachmentReferenceFfi
             do {
                 self?.uploadCount += 1
@@ -330,5 +408,16 @@ final class CustomEmojiUploadCache {
     private func forget(_ key: Key) {
         uploaded[key] = nil
         order.removeAll { $0 == key }
+    }
+}
+
+nonisolated enum CustomEmojiUploadRequest {
+    /// The upload for an installed set emoji: MDK's validated MIME type and
+    /// size, named after its shortcode.
+    static func installed(_ emoji: InstalledCustomEmojiFfi, plaintext: Data) -> MediaUploadAttachmentRequestFfi {
+        let ext = EmojiSetPresentation.fileExtension(mime: emoji.mime)
+        let dim = emoji.width > 0 && emoji.height > 0 ? "\(emoji.width)x\(emoji.height)" : nil
+        return MediaUploadAttachmentRequestFfi(fileName: "\(emoji.shortcode).\(ext)", mediaType: emoji.mime,
+                                               plaintext: plaintext, dim: dim, thumbhash: nil)
     }
 }

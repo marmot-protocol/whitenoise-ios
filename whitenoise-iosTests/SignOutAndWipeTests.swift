@@ -27,7 +27,9 @@ struct SignOutAndWipeTests {
             groupLeaveFailures: groupLeaveFailures,
             keyPackagesDeleted: keyPackagesDeleted,
             keyPackageFailures: keyPackageFailures,
-            localCleanup: LocalCleanupReportFfi(completed: localCleanupCompleted, reason: localCleanupReason)
+            localCleanup: LocalCleanupReportFfi(completed: localCleanupCompleted, reason: localCleanupReason),
+            groupsLeftToSiblings: 0,
+            siblingsNotReached: false
         )
     }
 

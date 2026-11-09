@@ -91,7 +91,7 @@ struct DiagnosticsView: View {
             return "[\(label)] error: \(message)"
         case .agentStreamActivity(_, let label):
             return "[\(label)] agent stream activity"
-        case .welcomeDeliveryPending(_, let label, let groupIdHex, let messageIdHex, let recipientHex):
+        case .welcomeDeliveryPending(_, let label, let groupIdHex, let messageIdHex, let recipientHex, _):
             return "[\(label)] welcome pending group \(IdentityFormatter.short(groupIdHex)) message \(IdentityFormatter.short(messageIdHex)) recipient \(IdentityFormatter.short(recipientHex))"
         case .epochStallEscalated(_, let label, let groupIdHex, let stalledEpoch, let arms):
             return "[\(label)] group \(IdentityFormatter.short(groupIdHex)) cannot catch up at epoch \(stalledEpoch) after \(arms) recovery attempts; re-sync recommended"
@@ -99,6 +99,22 @@ struct DiagnosticsView: View {
             return "[\(label)] group \(IdentityFormatter.short(groupIdHex)) change \(kind) superseded commit \(IdentityFormatter.short(commitIdHex)): \(outcome) (\(reason))"
         case .historyNoticesChanged(_, let label):
             return "[\(label)] history notices changed"
+        case .linkedDevicesChanged(_, let label):
+            return "[\(label)] linked devices changed"
+        case .keyPackageRefreshOverdueChanged(_, let label):
+            return "[\(label)] key package refresh overdue changed"
+        case .unrecognizedSignInsChanged(_, let label):
+            return "[\(label)] unrecognized sign-ins changed"
+        case .compromiseWarningChanged(_, let label):
+            return "[\(label)] compromise warning changed"
+        case .deviceLinkChanged(_, let label):
+            return "[\(label)] device link changed"
+        case .chatHistoryImportsChanged(_, let label):
+            return "[\(label)] chat history imports changed"
+        case .recoveryStatusChanged(_, let label):
+            return "[\(label)] recovery status changed"
+        case .deviceUnlinked(_, let label):
+            return "[\(label)] device unlinked"
         }
     }
 
@@ -297,6 +313,8 @@ struct DiagnosticsView: View {
             return "local copy restored"
         case .groupMemberLeavesRemoved:
             return "member leaves removed"
+        case .queuedIntentRefused(_, let intentKind, let reason):
+            return "queued \(intentKind) refused (\(reason))"
         }
     }
 

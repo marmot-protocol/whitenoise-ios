@@ -303,6 +303,34 @@ If notifications are flaky, check token registration, group push-token gossip, r
 
 The group image web search is an explicit third-party egress surface. Keep DuckDuckGo requests and result thumbnail fetches on ephemeral, no-cookie/no-cache URL sessions, and keep the in-app disclosure aligned with the actual hosts contacted. Do not use `URLSession.shared` or SwiftUI `AsyncImage` for this search/preview path.
 
+## Built-in Emoji
+
+`:marmot:` and `:wn:` (`CustomEmojiBuiltins`) ship as asset data sets with the
+same PNG bytes as White Noise for Android and Linux; keep them byte-identical.
+Untagged text and reactions render them from the bundle, but a row's own NIP-30
+tag wins. Sending one uploads the bundled bytes like any custom emoji, so other
+clients get the image, and a built-in shortcode always sends the built-in image.
+
+## Stickers
+
+Sonar sticker packs are public events, and the installed list (kind 10031) is
+published on install and uninstall. MDK validates every sticker image but keeps
+no copy; `fetchStickerAsset` downloads from a URL the pack's author chose, which
+discloses the device's IP address. Keep `StickerLoadPolicy` as the one gate: a
+received sticker loads by itself only from an installed pack while Photos
+auto-download allows it, otherwise on tap. Discovery lists stay text-only until
+a pack is opened. Keep the egress disclosure on the picker and pack screens.
+
+## Emoji Sets
+
+NIP-51 emoji sets (kind 30030) live in MDK; `EmojiSetLibrary` on `AppState` is
+the host's per-account view. Browsing and sync are text only. Preview images
+(`fetchEmojiSetAsset`) and installs download from hosts the set's author chose,
+so request them only after the user opens a set or taps Install, and keep the
+egress disclosure on those screens. Installed emoji read MDK's stored bytes
+(`readInstalledCustomEmoji`) and send like any custom emoji. The kind-10030
+user list is read-only: suggest its sets, never publish it.
+
 ## Storage
 
 - `UserDefaults` stores app preferences such as active account, developer mode, recent reactions, and per-account diagnostics self-check group IDs.

@@ -15,12 +15,24 @@ import MarmotKit
 final class ConversationCustomEmojiStore {
     typealias LoadData = @MainActor (MessageMediaAttachment) async throws -> Data
     typealias Decode = @MainActor (Data, Int, CGFloat) async -> UIImage?
+    /// The image slot of a `:shortcode:` reaction event, or nil when MDK
+    /// reports it has none. Throws when that can't be read right now.
+    typealias ResolveReaction = @MainActor (_ emoji: String, _ reactionMessageIdHex: String) async throws -> CustomEmojiReactionArtwork?
+
+    /// What a `:shortcode:` reaction label may draw.
+    enum ReactionImage {
+        /// The reaction event's own image.
+        case image(key: CustomEmojiImageKey, image: UIImage)
+        /// The reaction carries no image, so a built-in may stand in.
+        case noArtwork
+    }
 
     static let imageLimit = 128
 
     private let scopeProvider: @MainActor () -> CustomEmojiScope?
     private let loadData: LoadData
     private let decode: Decode
+    private let resolveReaction: ResolveReaction
 
     private var scope: CustomEmojiScope?
     private var images: [CustomEmojiImageKey: UIImage] = [:]
@@ -33,11 +45,13 @@ final class ConversationCustomEmojiStore {
         loadData: @escaping LoadData,
         decode: @escaping Decode = { data, pixelSize, scale in
             await MessageMediaThumbnailDecoder.image(data: data, maxPixelSize: pixelSize, scale: scale)
-        }
+        },
+        resolveReaction: @escaping ResolveReaction = { _, _ in nil }
     ) {
         self.scopeProvider = scopeProvider
         self.loadData = loadData
         self.decode = decode
+        self.resolveReaction = resolveReaction
     }
 
     /// The scope images are currently shown under. Reading it from a view body
@@ -76,6 +90,28 @@ final class ConversationCustomEmojiStore {
             }
             return nil
         }
+    }
+
+    /// The image for a `:shortcode:` reaction, read from that reaction
+    /// event's own attachment exactly as an inline emoji is. NIP-30
+    /// definitions belong to one event, so artwork is never borrowed from
+    /// another reaction. Nil (not yet known, or failed) keeps the literal
+    /// shortcode text.
+    func reactionImage(emoji: String, reactionMessageIdHex: String?, pixelSize: Int, scale: CGFloat,
+                       policyRevision: String) async -> ReactionImage? {
+        guard CustomEmojiShortcode(reactionContent: emoji) != nil, let scope = syncedScope() else { return nil }
+        guard let reactionID = reactionMessageIdHex, !reactionID.isEmpty else { return .noArtwork }
+        let artwork: CustomEmojiReactionArtwork?
+        do {
+            artwork = try await resolveReaction(emoji, reactionID)
+        } catch {
+            return nil
+        }
+        guard !Task.isCancelled, scopeProvider() == scope else { return nil }
+        guard let artwork else { return .noArtwork }
+        guard let loaded = await inlineImage(for: artwork.attachment, pixelSize: pixelSize, scale: scale,
+                                             policyRevision: policyRevision) else { return nil }
+        return .image(key: loaded.key, image: loaded.image)
     }
 
     /// Sets the image scale so its longest side spans the requested point

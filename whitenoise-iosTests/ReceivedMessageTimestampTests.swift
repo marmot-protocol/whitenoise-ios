@@ -75,6 +75,7 @@ struct ReceivedMessageTimestampTests {
             contentTokens: .emptyDocument,
             kind: MessageSemantics.kindChat,
             tags: [],
+            sticker: nil,
             sourceEpoch: 12,
             retentionSeconds: 60,
             retentionExpiresAt: 1_700_000_060,

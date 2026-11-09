@@ -79,6 +79,10 @@ final class GroupDetailsMarmotDouble {
         return true
     }
 
+    var cancelLeave: @MainActor (_ accountRef: String, _ groupIdHex: String) async throws -> Void = { _, _ in
+        Issue.record("unexpected leave cancellation")
+    }
+
     var deleteGroupLocal: @MainActor (_ accountRef: String, _ groupIdHex: String) async throws -> Bool = { _, _ in
         Issue.record("unexpected local group delete")
         return false
@@ -117,6 +121,9 @@ func groupDetailsModel(marmot: GroupDetailsMarmotDouble) -> GroupDetailsViewMode
         },
         forgetGroupLocal: { _, accountRef, groupIdHex in try await marmot.forgetGroupLocal(accountRef, groupIdHex) },
         clearResetMedia: { await marmot.clearResetMedia() },
-        deleteGroupLocal: { _, accountRef, groupIdHex in try await marmot.deleteGroupLocal(accountRef, groupIdHex) }
+        deleteGroupLocal: { _, accountRef, groupIdHex in try await marmot.deleteGroupLocal(accountRef, groupIdHex) },
+        cancelLeave: { _, accountRef, groupIdHex in
+            try await marmot.cancelLeave(accountRef, groupIdHex)
+        }
     ))
 }

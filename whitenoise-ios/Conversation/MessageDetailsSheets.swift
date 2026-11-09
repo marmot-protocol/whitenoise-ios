@@ -321,7 +321,7 @@ struct ReactionDetailsSheet: View {
 
                 ForEach(details.groups) { group in
                     filterButton(emoji: group.emoji, count: group.count) {
-                        CustomEmojiReactionLabel(emoji: group.emoji)
+                        CustomEmojiReactionLabel(emoji: group.emoji, reactionMessageIdHex: group.reactionMessageIdHex)
                     }
                 }
             }
@@ -360,7 +360,7 @@ struct ReactionDetailsSheet: View {
         return ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(users) { user in
-                    reactionRow(user)
+                    reactionRow(user, details: details)
                     if user.id != users.last?.id {
                         Divider().padding(.leading, 72)
                     }
@@ -396,7 +396,8 @@ struct ReactionDetailsSheet: View {
         }
     }
 
-    private func reactionRow(_ user: ConversationViewModel.ReactionDetails.User) -> some View {
+    private func reactionRow(_ user: ConversationViewModel.ReactionDetails.User,
+                             details: ConversationViewModel.ReactionDetails) -> some View {
         let name = displayName(for: user.sender)
         let isMe = user.sender == viewModel.myAccountId
 
@@ -432,7 +433,7 @@ struct ReactionDetailsSheet: View {
                             onRemoveOwnReaction(emoji)
                         } label: {
                             HStack(spacing: 3) {
-                                CustomEmojiReactionLabel(emoji: emoji)
+                                CustomEmojiReactionLabel(emoji: emoji, reactionMessageIdHex: details.reactionMessageIdHex(for: emoji))
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -447,7 +448,7 @@ struct ReactionDetailsSheet: View {
                         .accessibilityLabel(L10n.string("Remove"))
                         .accessibilityValue(CustomEmojiShortcode.spokenReaction(emoji))
                     } else {
-                        CustomEmojiReactionLabel(emoji: emoji)
+                        CustomEmojiReactionLabel(emoji: emoji, reactionMessageIdHex: details.reactionMessageIdHex(for: emoji))
                             .font(.title3)
                     }
                 }

@@ -600,6 +600,7 @@ struct ConversationView: View {
     @State private var showPollComposer = false
     @State private var showContactPicker = false
     @State private var showGiphySearch = false
+    @State private var showStickerPicker = false
     @State private var showDetails = false
     @State private var openAddMembersOnDetails = false
     @State private var actionsTarget: ActionsTarget?
@@ -674,6 +675,11 @@ struct ConversationView: View {
     private static let actionFrameMeasurementClearDelayNanoseconds: UInt64 = 250_000_000
 
     /// The composer's custom emoji picker, with its options captured on open.
+    private struct ReactionEmojiCatalogTaskID: Equatable {
+        let scope: CustomEmojiScope?
+        let generation: Int
+    }
+
     private struct ComposerCustomEmojiPicker: Identifiable {
         let id = UUID()
         let emoji: [CustomEmojiSendable]
@@ -942,11 +948,17 @@ struct ConversationView: View {
                     EmojiPickerSheet(
                         quickReactions: appState.quickReactions,
                         onQuickReactionsSave: appState.setQuickReactions,
+                        customEmoji: viewModel.canSendMediaAttachments ? viewModel.customEmojiSendables : [],
+                        emojiSets: viewModel.canSendMediaAttachments ? appState.emojiSetLibrary : nil,
                         onPick: { emoji in
                             Task { await viewModel.toggleReaction(emoji, on: target.record) }
-                            appState.addRecentReaction(emoji)
+                            // Custom emoji belong to this chat, not the device-wide recents.
+                            if CustomEmojiShortcode(reactionContent: emoji) == nil {
+                                appState.addRecentReaction(emoji)
+                            }
                         }
                     )
+                    .environment(\.customEmojiStore, viewModel.customEmojiStore)
                     .appAppearance()
                 }
             }
@@ -1181,8 +1193,18 @@ struct ConversationView: View {
                     .appAppearance()
                 }
             }
+            .sheet(isPresented: $showStickerPicker) {
+                if let viewModel {
+                    StickerPickerSheet(library: viewModel.stickerLibrary) { sticker in
+                        guard admitSendOrWarn() else { return }
+                        Task { await viewModel.sendSticker(sticker) }
+                    }
+                    .environment(\.stickerAssets, viewModel.stickerAssets)
+                    .appAppearance()
+                }
+            }
             .sheet(item: $composerCustomEmojiPicker, onDismiss: requestComposerFocus) { picker in
-                EmojiPickerSheet(customEmoji: picker.emoji) { emoji in
+                EmojiPickerSheet(customEmoji: picker.emoji, emojiSets: appState.emojiSetLibrary) { emoji in
                     if CustomEmojiShortcode(reactionContent: emoji) != nil {
                         draft = CustomEmojiComposerText.inserting(emoji, into: draft)
                     } else {
@@ -1236,6 +1258,15 @@ struct ConversationView: View {
                 }
                 reconcileDraftMediaUploads()
                 await viewModel?.start()
+            }
+            .task(id: ConversationRuntimeStartToken(
+                accountRef: appState.activeAccountRef,
+                runtimeGeneration: appState.runtimeGeneration,
+                isRuntimeWarmingUp: appState.isRuntimeWarmingUp
+            )) {
+                // Local read, so typed `:shortcode:` from installed sets sends.
+                guard !appState.isRuntimeWarmingUp else { return }
+                await appState.emojiSetLibrary.loadInstalledIfNeeded()
             }
             .task(id: blockedPeerSubscriptionKey) {
                 // Groups subscribe too: a blocked member's messages are
@@ -1437,6 +1468,7 @@ struct ConversationView: View {
                         : nil,
                     mediaEnabled: editSession == nil && (viewModel?.canAddMediaAttachments ?? false),
                     disabledMessage: viewModel?.inactiveGroupMessage,
+                    disabledAction: viewModel.flatMap(blockedLeaveComposerAction(viewModel:)),
                     sendBlockedMessage: viewModel?.sendBlockedMessage,
                     voiceRecordingActive: voiceRecorder.isActive,
                     voiceRecordingLocked: voiceRecorder.isLocked,
@@ -1457,6 +1489,8 @@ struct ConversationView: View {
                     onCreatePoll: openPollComposer,
                     customEmojiAvailable: editSession == nil && (viewModel?.canSendCustomEmoji ?? false),
                     onCustomEmoji: openComposerCustomEmojiPicker,
+                    stickersAvailable: editSession == nil && (viewModel?.canSendStickers ?? false),
+                    onStickers: { showStickerPicker = true },
                     onTakePhoto: takePhoto,
                     onPhotoLibrary: openPhotoLibrary,
                     onAttachFile: openFileImporter,
@@ -1580,6 +1614,15 @@ struct ConversationView: View {
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 12)
+    }
+
+    private func blockedLeaveComposerAction(viewModel: ConversationViewModel) -> ComposerDisabledAction? {
+        guard viewModel.canCancelBlockedLeave else { return nil }
+        return ComposerDisabledAction(
+            title: BlockedLeavePresentation.cancelAction,
+            isEnabled: !viewModel.blockedLeaveCancelInFlight,
+            perform: { Task { await viewModel.cancelBlockedLeave() } }
+        )
     }
 
     private func composerReplyPreview(viewModel: ConversationViewModel) -> ComposerReplyPreview? {
@@ -2003,6 +2046,13 @@ struct ConversationView: View {
                                 targetID: viewModel.timeline.last?.id
                             )
                         }
+                        .task(id: ReactionEmojiCatalogTaskID(scope: viewModel.customEmojiScope,
+                                                             generation: viewModel.timelineProjectionGeneration)) {
+                            // Coalesce bursts of projection changes before reading reaction artwork.
+                            try? await Task.sleep(for: .milliseconds(300))
+                            guard !Task.isCancelled else { return }
+                            await viewModel.prepareReactionEmojiCatalog()
+                        }
                         .onChange(of: viewModel.timelineProjectionGeneration) { _, _ in
                             viewModel.search.refreshAfterTimelineChange()
                             pruneMessageSelection(viewModel: viewModel)
@@ -2332,6 +2382,8 @@ struct ConversationView: View {
                 : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) }
         )
         .environment(\.customEmojiStore, viewModel.customEmojiStore)
+        .environment(\.stickerAssets, viewModel.stickerAssets)
+        .environment(\.stickerLibrary, viewModel.stickerLibrary)
         .environment(\.mediaUploadProgress, viewModel.composer.uploadProgress)
         .id(AttachmentPresentationState.shared.revision)
     }

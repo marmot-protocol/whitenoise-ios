@@ -15,6 +15,14 @@ struct ConversationCustomEmojiSenderTests {
         let tags: [[String]]
     }
 
+    struct SentReaction: Equatable {
+        let scope: CustomEmojiScope
+        let target: String
+        let emoji: String
+        let attachments: [MediaAttachmentReferenceFfi]
+        let tags: [[String]]
+    }
+
     @MainActor final class Harness {
         var scope: CustomEmojiScope? = CustomEmojiScope(accountRef: "alice", runtimeGeneration: 1, groupIdHex: "g1")
         var epoch: UInt64? = 7
@@ -24,9 +32,12 @@ struct ConversationCustomEmojiSenderTests {
         var sendError: Error?
         var uploads: [MediaUploadAttachmentRequestFfi] = []
         var messages: [SentMessage] = []
+        var reactions: [SentReaction] = []
         var beforeUploadReturns: (() -> Void)?
         var uploadGate: CheckedContinuation<Void, Never>?
         var holdsUpload = false
+        var installedBytes: [String: Data] = [:]
+        var installedReads: [String] = []
 
         lazy var sender = ConversationCustomEmojiSender(
             scopeProvider: { [weak self] in self?.scope },
@@ -35,6 +46,12 @@ struct ConversationCustomEmojiSenderTests {
                 guard let self else { throw CancellationError() }
                 if let loadError { throw loadError }
                 return self.payloads[item.reference?.plaintextSha256 ?? ""] ?? Data()
+            },
+            readInstalled: { [weak self] accountRef, emoji in
+                guard let self else { throw CancellationError() }
+                self.installedReads.append("\(accountRef)|\(emoji.setCoordinate)|\(emoji.shortcode)")
+                guard let bytes = self.installedBytes[emoji.shortcode] else { throw MarmotKitError.EmojiSetNotFound }
+                return bytes
             },
             upload: { [weak self] _, request in
                 guard let self else { throw CancellationError() }
@@ -52,6 +69,12 @@ struct ConversationCustomEmojiSenderTests {
                 guard let self else { throw CancellationError() }
                 if let sendError { throw sendError }
                 self.messages.append(SentMessage(scope: scope, caption: caption, attachments: attachments, tags: tags))
+            },
+            sendReaction: { [weak self] scope, target, emoji, attachments, tags in
+                guard let self else { throw CancellationError() }
+                if let sendError { throw sendError }
+                self.reactions.append(SentReaction(scope: scope, target: target, emoji: emoji,
+                                                   attachments: attachments, tags: tags))
             }
         )
 
@@ -84,7 +107,7 @@ struct ConversationCustomEmojiSenderTests {
         try await harness.sender.sendMessage(text: ":cat: hi :party:", replyTargetId: "parent", emoji: [cat, party])
 
         #expect(harness.uploads.map(\.plaintext) == [Data("cat-png".utf8), Data("party-png".utf8)])
-        #expect(harness.uploads.first?.fileName == cat.reference.fileName)
+        #expect(harness.uploads.first?.fileName == cat.chatReference?.fileName)
         let sent = try #require(harness.messages.first)
         #expect(sent.caption == ":cat: hi :party:")
         #expect(sent.scope.groupIdHex == "g1")
@@ -97,6 +120,29 @@ struct ConversationCustomEmojiSenderTests {
             ["e", "parent"],
             ["q", "parent"],
         ])
+    }
+
+    @Test func installedEmojiUploadMdksStoredBytes() async throws {
+        let harness = Harness()
+        let bytes = Data("blob-png".utf8)
+        let blob = try #require(CustomEmojiSendable(installed: installedEmoji("blob_wave", sha: Self.sha256(bytes))))
+        harness.installedBytes["blob_wave"] = bytes
+        try await harness.sender.sendMessage(text: "hi :blob_wave:", replyTargetId: nil, emoji: [blob])
+
+        #expect(harness.installedReads == ["alice|\(installedEmoji("blob_wave").setCoordinate)|blob_wave"])
+        #expect(harness.uploads.map(\.plaintext) == [bytes])
+        #expect(harness.uploads.first?.fileName == "blob_wave.png")
+        #expect(harness.messages.first?.tags == [["emoji", "blob_wave", "https://mine.example/1"]])
+    }
+
+    @Test func aMissingInstalledEmojiFailsBeforeUploading() async throws {
+        let harness = Harness()
+        let blob = try #require(CustomEmojiSendable(installed: installedEmoji("blob_wave")))
+        await #expect(throws: CustomEmojiSendError.imageUnavailable) {
+            try await harness.sender.sendMessage(text: ":blob_wave:", replyTargetId: nil, emoji: [blob])
+        }
+        #expect(harness.uploads.isEmpty)
+        #expect(harness.messages.isEmpty)
     }
 
     @Test func retryAfterASendFailureNeverUploadsAgain() async throws {
@@ -200,10 +246,27 @@ struct ConversationCustomEmojiSenderTests {
         #expect(harness.uploads.count == 2)
     }
 
+    @Test func builtinUploadsItsBundledBytesWithoutReadingTheChat() async throws {
+        let harness = Harness()
+        harness.loadError = MarmotKitError.Runtime(details: "no chat read expected")
+        let marmot = CustomEmojiSendable(builtin: F.builtin("marmot", bytes: "marmot-png"))
+        try await harness.sender.sendMessage(text: "hi :marmot:", replyTargetId: nil, emoji: [marmot])
+        try await harness.sender.sendReaction(marmot, to: "target")
+
+        #expect(harness.uploads.count == 1)
+        let upload = try #require(harness.uploads.first)
+        #expect(upload.plaintext == Data("marmot-png".utf8))
+        #expect(upload.fileName == "marmot.png")
+        #expect(upload.mediaType == "image/png")
+        let sent = try #require(harness.messages.first)
+        #expect(sent.tags == [["emoji", "marmot", "https://mine.example/1"]])
+        #expect(harness.reactions.first?.emoji == ":marmot:")
+    }
+
     @Test func unreadableOrMismatchedBytesFailWithoutUploading() async throws {
         let harness = Harness()
         let party = harness.sendable("party", bytes: "party-png")
-        harness.payloads[party.reference.plaintextSha256] = Data("tampered".utf8)
+        harness.payloads[party.plaintextSha256] = Data("tampered".utf8)
         await #expect(throws: CustomEmojiSendError.imageUnavailable) {
             try await harness.sender.sendMessage(text: ":party:", replyTargetId: nil, emoji: [party])
         }
@@ -239,6 +302,86 @@ struct ConversationCustomEmojiSenderTests {
             ["emoji", "party", "https://mine.example/1"],
             ["emoji", "celebrate", "https://mine.example/1"],
         ])
+    }
+
+    // MARK: Reactions
+
+    @Test func reactionSendsTheShortcodeWithItsOwnUploadAndEmojiTag() async throws {
+        let harness = Harness()
+        let party = harness.sendable("party", bytes: "party-bytes")
+        try await harness.sender.sendReaction(party, to: F.messageID)
+
+        #expect(harness.uploads.count == 1)
+        let sent = try #require(harness.reactions.first)
+        #expect(sent.emoji == ":party:")
+        #expect(sent.target == F.messageID)
+        #expect(sent.attachments.count == 1)
+        let reference = try #require(sent.attachments.first)
+        #expect(reference.locators.first?.value.hasPrefix("https://mine.example/") == true)
+        #expect(reference != party.chatReference)
+        #expect(sent.tags.count == 1)
+        #expect(sent.tags.first?.first == "emoji")
+        #expect(sent.tags.first?.dropFirst().first == "party")
+        #expect(harness.messages.isEmpty)
+    }
+
+    @Test func reactionRetryReusesTheUploadAfterASendFailure() async throws {
+        let harness = Harness()
+        let party = harness.sendable("party", bytes: "party-bytes")
+        harness.sendError = MarmotKitError.Runtime(details: "relay down")
+        await #expect(throws: CustomEmojiSendError.sendFailed) {
+            try await harness.sender.sendReaction(party, to: F.messageID)
+        }
+        harness.sendError = nil
+        try await harness.sender.sendReaction(party, to: F.messageID)
+        #expect(harness.uploads.count == 1)
+        #expect(harness.reactions.count == 1)
+    }
+
+    @Test func staleEpochReactionRefusalForcesOneFreshUpload() async throws {
+        let harness = Harness()
+        let party = harness.sendable("party", bytes: "party-bytes")
+        harness.sendError = MarmotKitError.MediaReferenceStaleEpoch(sourceEpoch: 7, currentEpoch: 8)
+        await #expect(throws: CustomEmojiSendError.staleEpoch) {
+            try await harness.sender.sendReaction(party, to: F.messageID)
+        }
+        harness.sendError = nil
+        try await harness.sender.sendReaction(party, to: F.messageID)
+        #expect(harness.uploads.count == 2)
+    }
+
+    @Test func unsettledEpochKeepsTheUploadForTheRetry() async throws {
+        let harness = Harness()
+        let party = harness.sendable("party", bytes: "party-bytes")
+        harness.sendError = MarmotKitError.MediaReferenceEpochUnsettled(sourceEpoch: 7)
+        await #expect(throws: CustomEmojiSendError.epochUnsettled) {
+            try await harness.sender.sendReaction(party, to: F.messageID)
+        }
+        harness.sendError = nil
+        try await harness.sender.sendReaction(party, to: F.messageID)
+        #expect(harness.uploads.count == 1)
+        #expect(harness.reactions.count == 1)
+    }
+
+    @Test func reactionWithoutATargetNeverUploads() async {
+        let harness = Harness()
+        let party = harness.sendable("party", bytes: "party-bytes")
+        await #expect(throws: CustomEmojiSendError.emptyEventTarget) {
+            try await harness.sender.sendReaction(party, to: "")
+        }
+        #expect(harness.uploads.isEmpty)
+    }
+
+    @Test func scopeChangeDuringReactionUploadDropsTheReaction() async {
+        let harness = Harness()
+        let party = harness.sendable("party", bytes: "party-bytes")
+        harness.beforeUploadReturns = {
+            harness.scope = CustomEmojiScope(accountRef: "alice", runtimeGeneration: 1, groupIdHex: "g2")
+        }
+        await #expect(throws: CancellationError.self) {
+            try await harness.sender.sendReaction(party, to: F.messageID)
+        }
+        #expect(harness.reactions.isEmpty)
     }
 
     // MARK: Composer hand-off
