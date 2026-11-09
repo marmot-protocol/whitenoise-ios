@@ -86,15 +86,45 @@ struct SignOutAndWipeTests {
         #expect(local.failures.first?.reason == "disk full")
     }
 
-    @Test func onlyACompletedLocalRemovalFinishesTheExit() {
+    @Test func theExitFinishesOnlyOnceMDKNoLongerListsTheAccount() {
+        let incomplete = outcome(localCleanupCompleted: false, localCleanupReason: "account error")
+        let others = [accountSummary("other", byte: "bb")]
         // Leave and KeyPackage failures are reported after the exit finishes.
         let partial = outcome(
             groupsLeft: 1,
             groupLeaveFailures: [GroupLeaveFailureFfi(groupIdHex: hex("aa"), reason: "account is the chat's last admin")]
         )
-        #expect(WipeReportProjection.removedLocalAccount(partial))
-        // Suspension during the admin leave wait stops MDK before removal.
-        #expect(!WipeReportProjection.removedLocalAccount(outcome(localCleanupCompleted: false, localCleanupReason: "account error")))
+        #expect(WipeReportProjection.removedLocalAccount(partial, accountRef: "me", storedAccounts: nil))
+        // A secret left behind after the account was removed: finish, report the residue.
+        #expect(WipeReportProjection.removedLocalAccount(incomplete, accountRef: "me", storedAccounts: others))
+        // Suspension stopped MDK before removal: keep the profile for a retry.
+        #expect(!WipeReportProjection.removedLocalAccount(
+            incomplete, accountRef: "me", storedAccounts: others + [accountSummary("me", byte: "aa")]
+        ))
+        // A closed runtime cannot say; its wipe stopped before removal.
+        #expect(!WipeReportProjection.removedLocalAccount(incomplete, accountRef: "me", storedAccounts: nil))
+    }
+
+    // MARK: - Native push after an interrupted exit
+
+    @Test func pushIsRestoredOnlyForAProfileThatIsStillSignedIn() {
+        let signedIn = accountSummary("me", byte: "aa")
+        let signedOut = accountSummary("me", byte: "aa", signedOut: true)
+        #expect(NativePushRestoreIntents.action(for: "me", storedAccounts: [signedIn]) == .restore)
+        #expect(NativePushRestoreIntents.action(for: "me", storedAccounts: [signedOut]) == .discard)
+        #expect(NativePushRestoreIntents.action(for: "me", storedAccounts: [accountSummary("other", byte: "bb")]) == .discard)
+        #expect(NativePushRestoreIntents.action(for: "me", storedAccounts: nil) == .wait)
+    }
+
+    @MainActor @Test func aRestoreIntentSurvivesRelaunchUntilCleared() throws {
+        let suite = "SignOutAndWipeTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        NativePushRestoreIntents(defaults: defaults).mark("me")
+        let relaunched = NativePushRestoreIntents(defaults: defaults)
+        #expect(relaunched.accountRefs == ["me"])
+        relaunched.clear("me")
+        #expect(NativePushRestoreIntents(defaults: defaults).accountRefs.isEmpty)
     }
 
     @Test func incompleteLocalCleanupWithNoReasonStillReportsAFailure() {
