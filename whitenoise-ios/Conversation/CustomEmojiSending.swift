@@ -16,16 +16,10 @@ nonisolated enum CustomEmojiSendPolicy {
     /// within it lets every sendable emoji also be a reaction.
     static let maxShortcodeLength = 62
 
-    /// NIP-30: ASCII letters, digits and underscores only. Received shortcodes
-    /// with other characters still render, but are never re-sent.
+    /// Any valid shortcode (MDK's rule: ASCII letters, digits, `-` and `_`)
+    /// short enough to also be a reaction.
     static func isSendable(_ shortcode: CustomEmojiShortcode) -> Bool {
-        let bytes = shortcode.name.utf8
-        return (1...maxShortcodeLength).contains(bytes.count) && bytes.allSatisfy { byte in
-            switch byte {
-            case 0x30...0x39, 0x41...0x5A, 0x61...0x7A, 0x5F: true
-            default: false
-            }
-        }
+        shortcode.name.utf8.count <= maxShortcodeLength
     }
 }
 

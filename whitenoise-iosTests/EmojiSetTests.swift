@@ -56,7 +56,8 @@ struct EmojiSetPresentationTests {
     @Test func notesExplainSkippedAndUnsendableEmoji() {
         var set = emojiSet(emoji: ["ok", "has-hyphen", String(repeating: "x", count: 63)])
         #expect(EmojiSetPresentation.skippedNote(set) == nil)
-        #expect(EmojiSetPresentation.unsendableCount(set) == 2)
+        // Only the name too long to be a reaction stays out of the picker.
+        #expect(EmojiSetPresentation.unsendableCount(set) == 1)
         set.skippedCount = 2
         #expect(EmojiSetPresentation.skippedNote(set) != nil)
     }

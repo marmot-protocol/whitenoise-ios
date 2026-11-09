@@ -39,6 +39,19 @@ struct Marmot0920IntegrationTests {
         #expect(!GroupRecoveryModel.containsDisplayedOffer(changed, in: status))
     }
 
+    @Test func recoveryAreaShowsAParkedSyncEvenWithNothingElseToRecover() {
+        let quiet = GroupRecoveryStatusFfi(groupIdHex: "group", automaticRecoveryFailed: false, pendingReinvites: 0,
+                                           failedReinvites: 0, rejoinInvitations: [])
+        #expect(!GroupRecoveryModel.hasContent(status: nil, errorMessage: nil, syncParked: false))
+        #expect(!GroupRecoveryModel.hasContent(status: quiet, errorMessage: nil, syncParked: false))
+        #expect(GroupRecoveryModel.hasContent(status: nil, errorMessage: nil, syncParked: true))
+        #expect(GroupRecoveryModel.hasContent(status: quiet, errorMessage: nil, syncParked: true))
+        #expect(GroupRecoveryModel.hasContent(status: nil, errorMessage: "failed", syncParked: false))
+        var reinviting = quiet
+        reinviting.pendingReinvites = 1
+        #expect(GroupRecoveryModel.hasContent(status: reinviting, errorMessage: nil, syncParked: false))
+    }
+
     @Test func visibilityTimingNeedsConsentAndLayoutAndSurvivesLocalIDReplacement() async throws {
         var now: UInt64 = 1_000_000
         let tracker = MessageVisibilityPerformance(capacity: 2, now: { now })

@@ -19,8 +19,7 @@ struct CustomEmojiSendingTests {
 
     @Test func onlyNip30ShortcodesThatFitAReactionAreSendable() {
         #expect(CustomEmojiSendPolicy.isSendable(code("party_Parrot2")))
-        // Received hyphenated shortcodes still render but are never re-sent.
-        #expect(!CustomEmojiSendPolicy.isSendable(code("party-parrot")))
+        #expect(CustomEmojiSendPolicy.isSendable(code("party-parrot")))
         #expect(CustomEmojiSendPolicy.isSendable(code(String(repeating: "a", count: 62))))
         // `:shortcode:` stays within MDK's 64-character reaction content.
         #expect(!CustomEmojiSendPolicy.isSendable(code(String(repeating: "a", count: 63))))
@@ -33,9 +32,11 @@ struct CustomEmojiSendingTests {
         #expect(try CustomEmojiTags.emojiTag(code("party"), reference: reference) == ["emoji", "party", partyURL])
     }
 
-    @Test func emojiTagRejectsUnsendableShortcodesAndMissingLocators() {
-        #expect(throws: CustomEmojiSendError.unsendableShortcode("a-b")) {
-            try CustomEmojiTags.emojiTag(code("a-b"), reference: F.reference(url: partyURL))
+    @Test func emojiTagRejectsUnsendableShortcodesAndMissingLocators() throws {
+        #expect(try CustomEmojiTags.emojiTag(code("a-b"), reference: F.reference(url: partyURL)) == ["emoji", "a-b", partyURL])
+        let tooLong = String(repeating: "a", count: 63)
+        #expect(throws: CustomEmojiSendError.unsendableShortcode(tooLong)) {
+            try CustomEmojiTags.emojiTag(code(tooLong), reference: F.reference(url: partyURL))
         }
         var noLocator = F.reference(url: partyURL)
         noLocator.locators = []
@@ -133,8 +134,8 @@ struct CustomEmojiSendingTests {
             readable.contains(reference.plaintextSha256)
                 ? F.attachments([.accepted(attachmentIndex: 0, reference: reference)])[0] : nil
         }
-        #expect(sendables.map(\.id) == ["party"])
-        #expect(sendables.first?.chatReference == party)
+        #expect(sendables.map(\.id) == ["a-b", "party"])
+        #expect(sendables.last?.chatReference == party)
     }
 
     @Test func installedSetEmojiFollowBuiltinsAndBeatChatImages() throws {
@@ -154,7 +155,7 @@ struct CustomEmojiSendingTests {
         let sendables = CustomEmojiSendCatalog.sendables(catalog: entries, builtins: [builtin], installed: installed) {
             F.attachments([.accepted(attachmentIndex: 0, reference: $0)])[0]
         }
-        #expect(sendables.map(\.id) == [builtin.shortcode.name, "blob_wave", "cat"])
+        #expect(sendables.map(\.id) == [builtin.shortcode.name, "blob_wave", "blob-nap", "cat"])
         // A built-in always sends the bundled image, and the first installed
         // set wins a shortcode another set or the chat also uses.
         guard case .builtin = sendables[0].artwork else { Issue.record("built-in replaced"); return }

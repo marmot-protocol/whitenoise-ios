@@ -17,6 +17,11 @@ struct GroupRecoveryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if model.syncParked {
+                GroupSyncParkedBanner(isRetrying: model.isRetryingSync, error: model.syncRetryError) {
+                    Task { await model.retrySync(using: appState, groupID: groupID) }
+                }
+            }
             if let status = model.status {
                 if status.historyMayBeIncomplete, !status.historyNoticeIds.isEmpty {
                     HistoryNoticeBanner(
@@ -63,10 +68,9 @@ struct GroupRecoveryView: View {
         }
         .font(.callout)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(model.status?.rejoinInvitations.isEmpty == false || model.status?.automaticRecoveryFailed == true
-                 || model.status?.historyMayBeIncomplete == true
-                 || (model.status?.pendingReinvites ?? 0) > 0 || (model.status?.failedReinvites ?? 0) > 0
-                 || model.errorMessage != nil ? 12 : 0)
+        .padding(GroupRecoveryModel.hasContent(
+            status: model.status, errorMessage: model.errorMessage, syncParked: model.syncParked
+        ) ? 12 : 0)
         .onChange(of: appState.activeAccountRef) { selection = nil }
         .onChange(of: appState.runtimeGeneration) { selection = nil }
         .sheet(item: $selection) { selected in
@@ -110,4 +114,52 @@ struct GroupRecoveryView: View {
             .appAppearance()
         }
     }
+}
+
+/// A chat whose sync MDK stopped retrying. Sends stay queued until it resumes,
+/// either on new activity from another member or an explicit Retry.
+struct GroupSyncParkedBanner: View {
+    let isRetrying: Bool
+    let error: String?
+    let onRetry: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("This chat stopped syncing")
+                    .font(.subheadline.weight(.semibold))
+                Text(error ?? L10n.string("Messages you send will wait until it catches up."))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(action: onRetry) {
+                if isRetrying {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel(Text("Retrying"))
+                } else {
+                    Text("Retry")
+                }
+            }
+            .font(.footnote.weight(.semibold))
+            .disabled(isRetrying)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .contain)
+    }
+}
+
+#Preview("Stopped syncing") {
+    VStack(spacing: 12) {
+        GroupSyncParkedBanner(isRetrying: false, error: nil) {}
+        GroupSyncParkedBanner(isRetrying: true, error: nil) {}
+        GroupSyncParkedBanner(isRetrying: false, error: "Couldn’t retry syncing. Try again.") {}
+    }
+    .padding()
 }
