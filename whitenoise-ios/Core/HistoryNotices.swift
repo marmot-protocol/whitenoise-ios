@@ -20,6 +20,8 @@ nonisolated enum HistoryNoticePresentation {
             L10n.string("Messages from around when you joined may be incomplete.")
         case .unprovenHistory:
             L10n.string("Some messages couldn’t be confirmed and may be missing.")
+        case .beforeRejoin:
+            L10n.string("You rejoined this chat. Messages from before you rejoined may be missing.")
         }
     }
 

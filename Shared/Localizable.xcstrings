@@ -147466,6 +147466,66 @@
         }
       }
     },
+    "Leaving your chats. This can take up to a minute. Keep White Noise open until it finishes." : {
+      "comment" : "Shown under the busy Sign Out and Delete Data button while MDK leaves the profile's chats, which can wait for admin step-downs.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Chats werden verlassen. Das kann bis zu einer Minute dauern. Lass White Noise geöffnet, bis der Vorgang abgeschlossen ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saliendo de tus chats. Esto puede tardar hasta un minuto. Mantén White Noise abierto hasta que termine."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Départ de vos chats. Cela peut prendre jusqu’à une minute. Gardez White Noise ouvert jusqu’à la fin."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uscita dalle tue chat in corso. Potrebbe volerci fino a un minuto. Tieni White Noise aperto finché non ha finito."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saindo dos seus chats. Isso pode levar até um minuto. Mantenha o White Noise aberto até terminar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выход из ваших чатов. Это может занять до минуты. Не закрывайте White Noise, пока процесс не завершится."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sohbetlerinizden çıkılıyor. Bu işlem bir dakika kadar sürebilir. İşlem bitene kadar White Noise’u açık tutun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在退出你的聊天。这可能需要最多一分钟。完成前请保持 White Noise 打开。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在退出你的聊天。這可能需要最多一分鐘。完成前請保持 White Noise 開啟。"
+          }
+        }
+      }
+    },
     "Messages you send will wait until it catches up." : {
       "comment" : "Banner body under 'This chat stopped syncing': outgoing messages stay queued until sync resumes.",
       "extractionState" : "manual",
@@ -147712,6 +147772,126 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此聊天已停止同步"
+          }
+        }
+      }
+    },
+    "This profile’s data is still on this device. Keep White Noise open and try again." : {
+      "comment" : "Error after Sign Out and Delete Data was interrupted (for example by leaving the app) before the profile's local data was removed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Daten dieses Profils sind noch auf diesem Gerät. Lass White Noise geöffnet und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos de este perfil siguen en este dispositivo. Mantén White Noise abierto e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les données de ce profil sont toujours sur cet appareil. Gardez White Noise ouvert et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dati di questo profilo sono ancora su questo dispositivo. Tieni White Noise aperto e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os dados deste perfil ainda estão neste dispositivo. Mantenha o White Noise aberto e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные этого профиля всё ещё на устройстве. Не закрывайте White Noise и попробуйте снова."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu profilin verileri hâlâ bu cihazda. White Noise’u açık tutun ve tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此个人资料的数据仍在此设备上。请保持 White Noise 打开并重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此個人檔案的資料仍在此裝置上。請保持 White Noise 開啟並重試。"
+          }
+        }
+      }
+    },
+    "You rejoined this chat. Messages from before you rejoined may be missing." : {
+      "comment" : "History notice: this device rejoined the chat with a new copy, so messages from before the rejoin that it had not received are unavailable.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du bist diesem Chat erneut beigetreten. Nachrichten von vor deinem erneuten Beitritt fehlen möglicherweise."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volviste a unirte a este chat. Es posible que falten mensajes de antes de que volvieras a unirte."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez rejoint ce chat à nouveau. Des messages antérieurs à votre retour sont peut-être manquants."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sei rientrato in questa chat. I messaggi precedenti al tuo rientro potrebbero mancare."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você entrou novamente neste chat. Mensagens de antes do seu retorno podem estar faltando."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы снова присоединились к этому чату. Сообщения до повторного вступления могут отсутствовать."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu sohbete yeniden katıldınız. Yeniden katılmanızdan önceki mesajlar eksik olabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已重新加入此聊天。重新加入之前的消息可能缺失。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已重新加入此聊天。重新加入之前的訊息可能缺漏。"
           }
         }
       }

@@ -6049,7 +6049,10 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * partial-failure sheet (mdk#478). In a device group, it first asks the
      * account's other devices to take it out, which can take about 30
      * seconds, and leaves them the chats they can take it out of
-     * (mdk#2628). It keeps running when the call is cancelled. A sibling
+     * (mdk#2628). In a chat its account administers with another account
+     * and no other of its devices is in, it steps the account down first,
+     * then waits up to about 30 seconds for its removal (mdk#2818). It
+     * keeps running when the call is cancelled. A sibling
      * that sees its `leaving` entry takes it out later, on its own time,
      * whatever the host does.
      */
@@ -12801,7 +12804,10 @@ open func signOut(accountRef: String, deleteKeyPackages: Bool)async throws  -> S
      * partial-failure sheet (mdk#478). In a device group, it first asks the
      * account's other devices to take it out, which can take about 30
      * seconds, and leaves them the chats they can take it out of
-     * (mdk#2628). It keeps running when the call is cancelled. A sibling
+     * (mdk#2628). In a chat its account administers with another account
+     * and no other of its devices is in, it steps the account down first,
+     * then waits up to about 30 seconds for its removal (mdk#2818). It
+     * keeps running when the call is cancelled. A sibling
      * that sees its `leaving` entry takes it out later, on its own time,
      * whatever the host does.
      */
@@ -39921,6 +39927,15 @@ public func FfiConverterTypeTimelineEditVersionFfi_lower(_ value: TimelineEditVe
 public struct TimelineMessageQueryFfi {
     public var groupIdHex: String?
     public var search: String?
+    public var sender: String?
+    public var since: UInt64?
+    public var until: UInt64?
+    /**
+     * 0 Any, 1 Image, 2 Video, 3 Audio, 4 File, 5 Attachment.
+     */
+    public var attachmentType: UInt32
+    public var searchWallClock: Bool
+    public var cursorGroupId: String?
     public var before: UInt64?
     public var beforeMessageId: String?
     public var after: UInt64?
@@ -39929,9 +39944,18 @@ public struct TimelineMessageQueryFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(groupIdHex: String?, search: String?, before: UInt64?, beforeMessageId: String?, after: UInt64?, afterMessageId: String?, limit: UInt32?) {
+    public init(groupIdHex: String?, search: String?, sender: String?, since: UInt64?, until: UInt64?,
+        /**
+         * 0 Any, 1 Image, 2 Video, 3 Audio, 4 File, 5 Attachment.
+         */attachmentType: UInt32 = UInt32(0), searchWallClock: Bool = false, cursorGroupId: String?, before: UInt64?, beforeMessageId: String?, after: UInt64?, afterMessageId: String?, limit: UInt32?) {
         self.groupIdHex = groupIdHex
         self.search = search
+        self.sender = sender
+        self.since = since
+        self.until = until
+        self.attachmentType = attachmentType
+        self.searchWallClock = searchWallClock
+        self.cursorGroupId = cursorGroupId
         self.before = before
         self.beforeMessageId = beforeMessageId
         self.after = after
@@ -39951,6 +39975,24 @@ extension TimelineMessageQueryFfi: Equatable, Hashable {
             return false
         }
         if lhs.search != rhs.search {
+            return false
+        }
+        if lhs.sender != rhs.sender {
+            return false
+        }
+        if lhs.since != rhs.since {
+            return false
+        }
+        if lhs.until != rhs.until {
+            return false
+        }
+        if lhs.attachmentType != rhs.attachmentType {
+            return false
+        }
+        if lhs.searchWallClock != rhs.searchWallClock {
+            return false
+        }
+        if lhs.cursorGroupId != rhs.cursorGroupId {
             return false
         }
         if lhs.before != rhs.before {
@@ -39974,6 +40016,12 @@ extension TimelineMessageQueryFfi: Equatable, Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(groupIdHex)
         hasher.combine(search)
+        hasher.combine(sender)
+        hasher.combine(since)
+        hasher.combine(until)
+        hasher.combine(attachmentType)
+        hasher.combine(searchWallClock)
+        hasher.combine(cursorGroupId)
         hasher.combine(before)
         hasher.combine(beforeMessageId)
         hasher.combine(after)
@@ -39993,6 +40041,12 @@ public struct FfiConverterTypeTimelineMessageQueryFfi: FfiConverterRustBuffer {
             try TimelineMessageQueryFfi(
                 groupIdHex: FfiConverterOptionString.read(from: &buf),
                 search: FfiConverterOptionString.read(from: &buf),
+                sender: FfiConverterOptionString.read(from: &buf),
+                since: FfiConverterOptionUInt64.read(from: &buf),
+                until: FfiConverterOptionUInt64.read(from: &buf),
+                attachmentType: FfiConverterUInt32.read(from: &buf),
+                searchWallClock: FfiConverterBool.read(from: &buf),
+                cursorGroupId: FfiConverterOptionString.read(from: &buf),
                 before: FfiConverterOptionUInt64.read(from: &buf),
                 beforeMessageId: FfiConverterOptionString.read(from: &buf),
                 after: FfiConverterOptionUInt64.read(from: &buf),
@@ -40004,6 +40058,12 @@ public struct FfiConverterTypeTimelineMessageQueryFfi: FfiConverterRustBuffer {
     public static func write(_ value: TimelineMessageQueryFfi, into buf: inout [UInt8]) {
         FfiConverterOptionString.write(value.groupIdHex, into: &buf)
         FfiConverterOptionString.write(value.search, into: &buf)
+        FfiConverterOptionString.write(value.sender, into: &buf)
+        FfiConverterOptionUInt64.write(value.since, into: &buf)
+        FfiConverterOptionUInt64.write(value.until, into: &buf)
+        FfiConverterUInt32.write(value.attachmentType, into: &buf)
+        FfiConverterBool.write(value.searchWallClock, into: &buf)
+        FfiConverterOptionString.write(value.cursorGroupId, into: &buf)
         FfiConverterOptionUInt64.write(value.before, into: &buf)
         FfiConverterOptionString.write(value.beforeMessageId, into: &buf)
         FfiConverterOptionUInt64.write(value.after, into: &buf)
@@ -42109,7 +42169,10 @@ public func FfiConverterTypeUserSearchUpdateFfi_lower(_ value: UserSearchUpdateF
  */
 public struct WipeOutcomeFfi {
     /**
-     * Active MLS groups whose local leave call succeeded, not confirmed removal.
+     * Active MLS groups whose local leave call succeeded, not confirmed removal,
+     * except a chat whose leave the sign-out waits for (an admin chat the
+     * account steps down in, or one this device was already leaving), which
+     * counts only once this device sees its removal (mdk#2818).
      * A chat this device is no longer in, its copy removed or disbanded, is
      * neither counted nor reported as a failure.
      */
@@ -42150,7 +42213,10 @@ public struct WipeOutcomeFfi {
     // declare one manually.
     public init(
         /**
-         * Active MLS groups whose local leave call succeeded, not confirmed removal.
+         * Active MLS groups whose local leave call succeeded, not confirmed removal,
+         * except a chat whose leave the sign-out waits for (an admin chat the
+         * account steps down in, or one this device was already leaving), which
+         * counts only once this device sees its removal (mdk#2818).
          * A chat this device is no longer in, its copy removed or disbanded, is
          * neither counted nor reported as a failure.
          */groupsLeft: UInt32,
@@ -47995,9 +48061,9 @@ extension HistoryImportProvenanceFfi: Equatable, Hashable {}
 /**
  * Why recovery parked; choose the host's wording from it. Current epoch-gap
  * exhaustion emits `EpochGap`; the coverage ledger emits `UnprovenHistory`
- * without attributing the original reason its route's history was owed. Other
- * labels preserve compatibility; `KnownEvent` and `MaintenanceBoundary` remain
- * reserved for parking policy.
+ * without attributing the original reason its route's history was owed; a
+ * rejoin emits `BeforeRejoin`. Other labels preserve compatibility;
+ * `KnownEvent` and `MaintenanceBoundary` remain reserved for parking policy.
  */
 
 public enum HistoryNoticeCauseFfi {
@@ -48037,6 +48103,15 @@ public enum HistoryNoticeCauseFfi {
      * account inbox's.
      */
     case unprovenHistory
+    /**
+     * This device rejoined the group (`group_id_hex` names it): a Welcome
+     * installed a new copy in place of its old one. That is an automatic
+     * rejoin after the old copy could not be repaired, a reentry after a
+     * trusted removal, or a fork discarded with the user's consent, whose old
+     * copy may still have worked. Messages from before the rejoin that it had
+     * not received are unavailable. One notice per rejoin.
+     */
+    case beforeRejoin
 }
 
 
@@ -48069,6 +48144,8 @@ public struct FfiConverterTypeHistoryNoticeCauseFfi: FfiConverterRustBuffer {
         case 7: return .maintenanceBoundary
 
         case 8: return .unprovenHistory
+
+        case 9: return .beforeRejoin
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -48108,6 +48185,10 @@ public struct FfiConverterTypeHistoryNoticeCauseFfi: FfiConverterRustBuffer {
 
         case .unprovenHistory:
             writeInt(&buf, Int32(8))
+
+
+        case .beforeRejoin:
+            writeInt(&buf, Int32(9))
 
         }
     }
@@ -63272,7 +63353,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out() != 55469) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out_and_wipe() != 12994) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out_and_wipe() != 20394) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_stage_prepared_group_image() != 47719) {

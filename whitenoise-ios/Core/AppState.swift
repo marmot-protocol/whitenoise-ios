@@ -164,6 +164,7 @@ final class AppState {
     var openSettingsAfterProfileSelection = false
     let erasureState: AppDataErasureState
     let signInAttempts: SignInAttemptStore
+    let nativePushRestoreIntents: NativePushRestoreIntents
     var productContextRevision = UUID()
     var productConsentMutationInProgress = false
     var productOnboardingPath: ProductOnboardingPath?
@@ -616,6 +617,7 @@ final class AppState {
             defaults: erasureDefaults ?? AppDataErasureState.persistentDefaults,
             legacyDefaults: accountDefaults)
         self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
+        self.nativePushRestoreIntents = NativePushRestoreIntents(defaults: accountDefaults)
         self.diagnosticsConsent = DeviceDiagnosticsConsent()
         let preferenceDefaults = preferenceDefaults ?? .standard
         self.preferenceDefaults = preferenceDefaults
@@ -814,7 +816,11 @@ final class AppState {
 
     @discardableResult
     func setNativePushEnabled(_ enabled: Bool) async throws -> NotificationSettingsFfi {
-        try await notificationCoordinator.setNativePushEnabled(enabled, host: self)
+        let accountRef = activeAccountRef
+        let settings = try await notificationCoordinator.setNativePushEnabled(enabled, host: self)
+        // A newer explicit choice supersedes a rollback left by an interrupted exit.
+        if let accountRef { nativePushRestoreIntents.clear(accountRef) }
+        return settings
     }
 
     private func enableNotificationsByDefault(for accountRef: String) async {
@@ -924,6 +930,7 @@ final class AppState {
         }
 #endif
         await notificationCoordinator.cancelNativePushRegistrationTask()
+        if nativePushWasEnabled { nativePushRestoreIntents.mark(signingOut) }
         _ = try? await exitingClient.marmot.clearPushRegistration(accountRef: signingOut)
         _ = try? await exitingClient.marmot.setNativePushEnabled(accountRef: signingOut, enabled: false)
 
@@ -950,6 +957,7 @@ final class AppState {
             return false
         }
 
+        nativePushRestoreIntents.clear(signingOut)
         let failures = await completeSignOut(
             removedRef: signingOut,
             removedAccountIdHex: signingOutAccountIdHex,
@@ -1115,6 +1123,7 @@ final class AppState {
         // Sign-out push rule: cancel and await the in-flight native-push
         // registration sync before clearing the departing account's registration.
         await notificationCoordinator.cancelNativePushRegistrationTask()
+        if nativePushWasEnabled { nativePushRestoreIntents.mark(wipingRef) }
         _ = try? await exitingClient.marmot.clearPushRegistration(accountRef: wipingRef)
         _ = try? await exitingClient.marmot.setNativePushEnabled(accountRef: wipingRef, enabled: false)
 
@@ -1132,7 +1141,26 @@ final class AppState {
             return false
         }
 
-        // The wipe returned: the account ref is invalid now. Do the same local
+        // Incomplete cleanup can still follow a committed removal (a secret
+        // left behind). A runtime that suspension closed cannot answer, and
+        // its wipe stopped before removal, so the profile stays for a retry.
+        let presence: AccountPresence = outcome.localCleanup.completed
+            ? .removed : await accountPresence(wipingRef, using: exitingClient, storedAccounts: nil)
+        guard WipeReportProjection.removedLocalAccount(outcome, presence: presence) else {
+            await restoreNativePushAfterFailedSignOut(
+                using: exitingClient,
+                accountRef: wipingRef,
+                wasEnabled: nativePushWasEnabled
+            )
+            (onError ?? present)(.error(
+                L10n.string("Couldn't wipe profile"),
+                message: L10n.string("This profile’s data is still on this device. Keep White Noise open and try again.")
+            ))
+            return false
+        }
+
+        nativePushRestoreIntents.clear(wipingRef)
+        // MDK removed the account: the ref is invalid now. Do the same local
         // removal + routing the normal sign-out does — regardless of per-stage
         // best-effort failures — then surface a report only when something remains.
         let localCleanupFailures = await completeSignOut(
@@ -1237,6 +1265,7 @@ final class AppState {
                 .removePersistentDomain(forName: AppContainerConfig.appGroupIdentifier)
             try DonationKeychainAccessStore.eraseAllAppData()
             signInAttempts.reset()
+            nativePushRestoreIntents.reset()
             diagnosticsConsent.reset()
             erasureState.complete()
             appDataErasureGeneration += 1
@@ -1260,9 +1289,60 @@ final class AppState {
         wasEnabled: Bool
     ) async {
         guard wasEnabled else { return }
-        _ = try? await client.marmot.setNativePushEnabled(accountRef: accountRef, enabled: true)
+        // A runtime that suspension is closing refuses the write; the intent
+        // then stays for the next live runtime's push sync.
+        if (try? await client.marmot.setNativePushEnabled(accountRef: accountRef, enabled: true)) != nil {
+            nativePushRestoreIntents.clear(accountRef)
+        }
         finishAccountExit()
         scheduleNativePushRegistrationIfEnabled()
+    }
+
+    /// Turns native push back on for profiles an interrupted account exit
+    /// left with it off. Runs before each foreground push sync, on a live
+    /// runtime and never during an exit.
+    func restorePendingNativePush() async {
+        guard !nativePushRestoreIntents.accountRefs.isEmpty, !isSigningOut,
+              let restoringClient = client else { return }
+        let storedAccounts = try? await restoringClient.listAccounts()
+        for accountRef in nativePushRestoreIntents.accountRefs.sorted() {
+            guard !Task.isCancelled, !isSigningOut else { return }
+            let presence = await accountPresence(accountRef, using: restoringClient, storedAccounts: storedAccounts)
+            guard !Task.isCancelled, !isSigningOut else { return }
+            switch NativePushRestoreIntents.action(for: presence) {
+            case .restore:
+                if (try? await restoringClient.marmot.setNativePushEnabled(accountRef: accountRef, enabled: true)) != nil {
+                    nativePushRestoreIntents.clear(accountRef)
+                }
+            case .discard:
+                nativePushRestoreIntents.clear(accountRef)
+            case .wait:
+                continue
+            }
+        }
+    }
+
+    /// Lists first, then confirms an unlisted account with a strict lookup.
+    private func accountPresence(
+        _ accountRef: String,
+        using client: MarmotClient,
+        storedAccounts: [AccountSummaryFfi]?
+    ) async -> AccountPresence {
+        let listed: [AccountSummaryFfi]?
+        if let storedAccounts {
+            listed = storedAccounts
+        } else {
+            listed = try? await client.listAccounts()
+        }
+        if listed?.contains(where: { $0.label == accountRef }) == true {
+            return AccountPresence.resolve(accountRef: accountRef, storedAccounts: listed, lookupError: nil)
+        }
+        do {
+            _ = try await client.accountSetupReadiness(accountRef: accountRef)
+            return .unknown
+        } catch {
+            return AccountPresence.resolve(accountRef: accountRef, storedAccounts: listed, lookupError: error)
+        }
     }
 
     var isAccountExitInProgress: Bool { isSigningOut }

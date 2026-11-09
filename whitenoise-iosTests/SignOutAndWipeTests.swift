@@ -86,6 +86,57 @@ struct SignOutAndWipeTests {
         #expect(local.failures.first?.reason == "disk full")
     }
 
+    @Test func theExitFinishesOnlyOnceAStrictLookupConfirmsRemoval() {
+        let incomplete = outcome(localCleanupCompleted: false, localCleanupReason: "account error")
+        // Leave and KeyPackage failures are reported after the exit finishes.
+        let partial = outcome(
+            groupsLeft: 1,
+            groupLeaveFailures: [GroupLeaveFailureFfi(groupIdHex: hex("aa"), reason: "account is the chat's last admin")]
+        )
+        #expect(WipeReportProjection.removedLocalAccount(partial, presence: .unknown))
+        // A secret left behind after the account was removed: finish, report the residue.
+        #expect(WipeReportProjection.removedLocalAccount(incomplete, presence: .removed))
+        // Suspension stopped MDK before removal, or nothing can confirm it: keep the profile.
+        #expect(!WipeReportProjection.removedLocalAccount(incomplete, presence: .signedIn))
+        #expect(!WipeReportProjection.removedLocalAccount(incomplete, presence: .unknown))
+    }
+
+    @Test func onlyAStrictUnknownAccountAnswerProvesRemoval() {
+        let others = [accountSummary("other", byte: "bb")]
+        let me = accountSummary("me", byte: "aa")
+        let unknown = MarmotKitError.UnknownAccount(accountRef: "me")
+        let closed = MarmotKitError.StorageClosed(details: "runtime is shutting down")
+        #expect(AccountPresence.resolve(accountRef: "me", storedAccounts: others + [me], lookupError: nil) == .signedIn)
+        #expect(AccountPresence.resolve(
+            accountRef: "me", storedAccounts: [accountSummary("me", byte: "aa", signedOut: true)], lookupError: nil
+        ) == .signedOut)
+        #expect(AccountPresence.resolve(accountRef: "me", storedAccounts: others, lookupError: unknown) == .removed)
+        // The list skips unreadable records: absence alone, or a failed lookup, proves nothing.
+        #expect(AccountPresence.resolve(accountRef: "me", storedAccounts: others, lookupError: nil) == .unknown)
+        #expect(AccountPresence.resolve(accountRef: "me", storedAccounts: others, lookupError: closed) == .unknown)
+        #expect(AccountPresence.resolve(accountRef: "me", storedAccounts: nil, lookupError: closed) == .unknown)
+    }
+
+    // MARK: - Native push after an interrupted exit
+
+    @Test func pushIsRestoredOnlyForAProfileThatIsStillSignedIn() {
+        #expect(NativePushRestoreIntents.action(for: .signedIn) == .restore)
+        #expect(NativePushRestoreIntents.action(for: .signedOut) == .discard)
+        #expect(NativePushRestoreIntents.action(for: .removed) == .discard)
+        #expect(NativePushRestoreIntents.action(for: .unknown) == .wait)
+    }
+
+    @MainActor @Test func aRestoreIntentSurvivesRelaunchUntilCleared() throws {
+        let suite = "SignOutAndWipeTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        NativePushRestoreIntents(defaults: defaults).mark("me")
+        let relaunched = NativePushRestoreIntents(defaults: defaults)
+        #expect(relaunched.accountRefs == ["me"])
+        relaunched.clear("me")
+        #expect(NativePushRestoreIntents(defaults: defaults).accountRefs.isEmpty)
+    }
+
     @Test func incompleteLocalCleanupWithNoReasonStillReportsAFailure() {
         let report = WipeReportProjection.report(from: outcome(localCleanupCompleted: false, localCleanupReason: nil))
         #expect(report.stages[2].hasIssues)

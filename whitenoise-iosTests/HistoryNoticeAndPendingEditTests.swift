@@ -33,7 +33,7 @@ struct HistoryNoticeAndPendingEditTests {
     @Test func everyNoticeCauseHasItsOwnWording() {
         let causes: [HistoryNoticeCauseFfi] = [
             .deliveryLoss, .notificationLoss, .epochGap, .incrementalHistory,
-            .explicitRepair, .knownEvent, .maintenanceBoundary
+            .explicitRepair, .knownEvent, .maintenanceBoundary, .unprovenHistory, .beforeRejoin
         ]
         let messages = causes.map(HistoryNoticePresentation.message(for:))
         #expect(messages.allSatisfy { !$0.isEmpty })

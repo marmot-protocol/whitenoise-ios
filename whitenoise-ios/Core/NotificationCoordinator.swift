@@ -170,6 +170,7 @@ protocol NotificationCoordinatorHost: AnyObject {
     func currentMarmotClient() throws -> MarmotClient
     func configureNotifications()
     func present(_ toast: Toast)
+    func restorePendingNativePush() async
 }
 
 @MainActor
@@ -574,6 +575,9 @@ final class NotificationCoordinator {
               !Task.isCancelled
         else { return }
 
+        // An account exit interrupted by suspension leaves push off for a
+        // profile that stayed; turn it back on before choosing accounts.
+        await host.restorePendingNativePush()
         let accountRefs = await nativePushEnabledAccountRefs(host: host)
         guard !accountRefs.isEmpty,
               NativePushServerConfig.current() != nil
