@@ -2,27 +2,29 @@ import SwiftUI
 
 struct DiagnosticsAndImprovementsView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
     @State private var model = PrivacySecuritySettingsViewModel()
+    @State private var showSharingDetails = false
     var isPrompt = false
+    var isFinishing = false
+    var onFinish: (() -> Void)?
 
     var body: some View {
         Form {
             Section {
                 analyticsToggle
                 loggingToggle
-            } header: {
-                if isPrompt {
-                    Text("Help us understand how White Noise is used and make messaging more reliable.")
-                        .font(.body).foregroundStyle(Color.primary).textCase(nil)
-                        .padding(.bottom, 12)
-                }
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
-                    if let explanation = appState.diagnosticsConsent.explanation { Text(explanation) }
-                    sharingDisclosure
+                    if let explanation = appState.diagnosticsConsent.explanation {
+                        Text(explanation)
+                    }
+                    Text(sharingSummary)
+                        .tint(.primary)
+                        .environment(\.openURL, OpenURLAction { _ in
+                            showSharingDetails = true
+                            return .handled
+                        })
                 }
-                .padding(.top, 12)
             }
             if !isPrompt {
                 if let snapshot = appState.diagnosticsConsent.snapshot {
@@ -49,23 +51,10 @@ struct DiagnosticsAndImprovementsView: View {
         }
         .navigationTitle(isPrompt ? "Help Improve White Noise" : "Diagnostics & Improvements")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if isPrompt {
-                ToolbarItem(placement: .cancellationAction) {
-                    WNIconButton(
-                        title: "Close",
-                        systemImage: "xmark",
-                        chrome: .container
-                    ) {
-                        Task {
-                            if await appState.diagnosticsConsent.finishPrompt(using: appState) { dismiss() }
-                        }
-                    }
-                    .disabled(!appState.diagnosticsConsent.available || appState.diagnosticsConsent.errorMessage != nil)
-                }
-            }
+        .navigationDestination(isPresented: $showSharingDetails) {
+            DiagnosticsSharingDetailsView(isFinishing: isFinishing, onFinish: onFinish)
         }
-        .interactiveDismissDisabled(isPrompt)
+        .modifier(DiagnosticsPromptToolbar(isFinishing: isFinishing, onFinish: onFinish))
         .task(id: appState.runtimeGeneration) { await reload() }
         .productScreen(.diagnostics, section: .diagnostics)
         .alert("Clear diagnostic logs?", isPresented: $model.showDeleteAuditLogsConfirmation) {
@@ -76,18 +65,21 @@ struct DiagnosticsAndImprovementsView: View {
         }
     }
 
+    private var sharingSummary: AttributedString {
+        var summary = AttributedString(isPrompt
+            ? L10n.string("These choices apply to all accounts on this device. You can change them anytime in Settings → Privacy & Security.")
+            : L10n.string("These choices apply to all accounts on this device."))
+        var details = AttributedString(L10n.string("What’s shared"))
+        details.link = URL(string: "whitenoise:diagnostics-sharing")
+        details.underlineStyle = .single
+        summary += AttributedString(" ")
+        summary += details
+        return summary
+    }
+
     private func reload() async {
         await appState.diagnosticsConsent.reload(using: appState)
         if !isPrompt { await model.reload(using: appState) }
-    }
-
-    @ViewBuilder
-    private var sharingDisclosure: some View {
-        Text("Feature activity and telemetry data include feature usage counts and app performance metrics. Usage data uses temporary session identifiers, and telemetry uses a resettable installation identifier. Neither includes account or group identifiers.")
-        Text("Group diagnostic logs help investigate group reliability and consistency. They include technical identifiers, timestamps, and membership changes, using hashed references instead of member identities. They never contain message contents, profile names, group names, or private keys.")
-        Text("Enabling group diagnostic log sharing may upload logs already stored on this device.")
-        Text("Group diagnostic logs are deleted from our servers after 30 days, telemetry after 90 days, and product analytics after 180 days.")
-        Text("Turning these off stops new recording and prevents new automatic uploads. An automatic log upload batch already in progress may finish. Turning these off does not delete data already stored on this device or our servers.")
     }
 
     private var analyticsToggle: some View {
@@ -97,11 +89,11 @@ struct DiagnosticsAndImprovementsView: View {
         )) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Share usage and telemetry")
-                Text("Automatically gathers and uploads feature activity and telemetry metrics for every profile on this device.")
+                Text("Automatically shares feature-use counts and app performance with White Noise.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
-        .disabled(!appState.diagnosticsConsent.available)
+        .disabled(isFinishing || !appState.diagnosticsConsent.available)
     }
 
     private var loggingToggle: some View {
@@ -111,10 +103,10 @@ struct DiagnosticsAndImprovementsView: View {
         )) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Share group diagnostic logs")
-                Text("Automatically gathers and uploads technical logs about groups for every profile on this device.")
+                Text("Automatically shares technical group logs, including group and message identifiers. May include logs already on this device.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
-        .disabled(!appState.diagnosticsConsent.available)
+        .disabled(isFinishing || !appState.diagnosticsConsent.available)
     }
 }

@@ -13,6 +13,8 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
     var previouslyEnabled = false
     var policy = ""
     var runtimeAvailable = true
+    var usageSaveStarted: TestLatch?
+    var usageSaveRelease: TestLatch?
 
     func deviceDiagnosticsSnapshot() async throws -> DeviceDiagnosticsSnapshot? { runtimeAvailable ? snapshot : nil }
     var snapshot: DeviceDiagnosticsSnapshot {
@@ -23,6 +25,8 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
         )
     }
     func saveUsageDiagnosticsConsent(_ enabled: Bool) async throws -> DeviceDiagnosticsSnapshot {
+        usageSaveStarted?.signal()
+        if let usageSaveRelease { try await usageSaveRelease.wait() }
         if failSave { throw CancellationError() }
         writes.append(enabled)
         decision = enabled ? .granted : .declined
@@ -95,6 +99,50 @@ struct DeviceDiagnosticsConsentTests {
         source.failSave = false
         await model.reload(using: source)
         #expect(await model.finishPrompt(using: source))
+    }
+
+    @Test func failedDismissalDeclineKeepsPromptOpenAndPreservesAuditChoice() async {
+        let source = DiagnosticsTestSource()
+        let model = DeviceDiagnosticsConsent()
+        await model.reload(using: source)
+        #expect(await model.setAudit(true, using: source))
+        source.failSave = true
+
+        #expect(!(await model.finishPrompt(using: source)))
+        #expect(model.errorMessage != nil)
+        #expect(!model.available)
+        #expect(source.decision == .acceptanceRequired)
+        #expect(source.audit)
+        #expect(source.writes.isEmpty)
+
+        source.failSave = false
+        await model.reload(using: source)
+        #expect(await model.finishPrompt(using: source))
+        #expect(source.decision == .declined)
+        #expect(source.audit)
+        #expect(source.writes == [false])
+    }
+
+    @Test func overlappingDismissalRequestsWaitForOneConfirmedDecline() async throws {
+        let source = DiagnosticsTestSource()
+        let model = DeviceDiagnosticsConsent()
+        await model.reload(using: source)
+        let started = TestLatch()
+        let release = TestLatch()
+        source.usageSaveStarted = started
+        source.usageSaveRelease = release
+        defer { release.signal() }
+
+        let firstDismissal = Task { await model.finishPrompt(using: source) }
+        try await started.wait()
+        #expect(!(await model.finishPrompt(using: source)))
+        #expect(source.decision == .acceptanceRequired)
+        #expect(source.writes.isEmpty)
+
+        release.signal()
+        #expect(await firstDismissal.value)
+        #expect(source.writes == [false])
+        #expect(!model.pending)
     }
 
     @Test func migrationExplanationDistinguishesLegacyOptInFromScopeChanges() async {

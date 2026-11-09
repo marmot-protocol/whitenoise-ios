@@ -26,7 +26,6 @@ struct ChatsListView: View {
         )
     }
 
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .title3) private var selectionIndicatorWidth = 24.0
     @ScaledMetric(relativeTo: .body) private var selectionActionDiameter = 44.0
@@ -316,9 +315,7 @@ struct ChatsListView: View {
                 await appState.diagnosticsConsent.reload(using: appState)
             }
             .sheet(isPresented: $showDiagnosticsPrompt) {
-                NavigationStack { DiagnosticsAndImprovementsView(isPrompt: true) }
-                    .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
-                    .presentationDragIndicator(.visible)
+                DiagnosticsConsentSheet()
                     .appAppearance()
             }
             .sheet(isPresented: $showNewChat, onDismiss: { secondarySheetVisible = false }) {
