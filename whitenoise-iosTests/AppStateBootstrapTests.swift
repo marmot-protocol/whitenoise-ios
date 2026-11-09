@@ -1960,6 +1960,31 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func explicitPushDisableSupersedesAnInterruptedExitsRestore() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
+        let marmot = try #require(appState.client?.marmot)
+        // An exit marked the restore and turned push off, then was interrupted.
+        appState.nativePushRestoreIntents.mark(account.label)
+        _ = try await marmot.setNativePushEnabled(accountRef: account.label, enabled: false)
+
+        // A pending restore turns push back on for a profile still signed in.
+        await appState.restorePendingNativePush()
+        #expect(await appState.notificationSettings(for: account.label)?.nativePushEnabled == true)
+        #expect(appState.nativePushRestoreIntents.accountRefs.isEmpty)
+
+        // A newer explicit disable wins over a restore still pending.
+        appState.nativePushRestoreIntents.mark(account.label)
+        _ = try await appState.setNativePushEnabled(false)
+        await appState.restorePendingNativePush()
+        #expect(await appState.notificationSettings(for: account.label)?.nativePushEnabled == false)
+        #expect(appState.nativePushRestoreIntents.accountRefs.isEmpty)
+
+        await stopReadyRuntime(appState)
+    }
+
     /// Suspension closes storage before draining account exit. Sign-out and
     /// wipe must therefore keep one captured client across awaits; re-reading
     /// the former non-optional AppState handle here was a fatal-error race.

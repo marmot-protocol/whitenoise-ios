@@ -34,11 +34,31 @@ final class NativePushRestoreIntents {
     func reset() { accountRefs.removeAll(); defaults.removeObject(forKey: Self.key) }
     private func save() { defaults.set(accountRefs.sorted(), forKey: Self.key) }
 
-    nonisolated static func action(for accountRef: String, storedAccounts: [AccountSummaryFfi]?) -> Action {
-        guard let storedAccounts else { return .wait }
-        guard let account = storedAccounts.first(where: { $0.label == accountRef }), !account.signedOut else {
-            return .discard
+    nonisolated static func action(for presence: AccountPresence) -> Action {
+        switch presence {
+        case .signedIn: .restore
+        case .signedOut, .removed: .discard
+        case .unknown: .wait
         }
-        return .restore
+    }
+}
+
+/// Whether an account is still stored on this device. MDK's account list
+/// skips records it cannot read, so absence there is not proof of removal:
+/// only a strict lookup that answers `UnknownAccount` is.
+nonisolated enum AccountPresence: Equatable {
+    case signedIn
+    case signedOut
+    case removed
+    case unknown
+
+    /// `storedAccounts` is nil when the list could not be read; `lookupError`
+    /// is the strict lookup's failure, nil when it found the account.
+    static func resolve(accountRef: String, storedAccounts: [AccountSummaryFfi]?, lookupError: Error?) -> Self {
+        if let row = storedAccounts?.first(where: { $0.label == accountRef }) {
+            return row.signedOut ? .signedOut : .signedIn
+        }
+        if case .UnknownAccount? = lookupError as? MarmotKitError { return .removed }
+        return .unknown
     }
 }
