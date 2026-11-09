@@ -58,6 +58,10 @@ struct WelcomeView: View {
         verticalSizeClass == .compact ? AnyLayout(HStackLayout()) : AnyLayout(VStackLayout())
     }
 
+    private var showsTermsAgreement: Bool {
+        !isAddingProfile && !hasAcceptedTerms
+    }
+
     var body: some View {
         GeometryReader { geometry in
             // Match LaunchScreen's centered, half-width mark independently of the copy and actions.
@@ -75,7 +79,7 @@ struct WelcomeView: View {
                         .anchorPreference(key: WelcomeBrandBoundsKey.self, value: .bounds) { $0 }
                         .padding(.top, markTop)
 
-                    if !hasAcceptedTerms {
+                    if showsTermsAgreement {
                         VStack(spacing: 8) {
                             Text("Welcome to White Noise")
                                 .font(.title.bold())
@@ -163,7 +167,7 @@ struct WelcomeView: View {
 
     private var welcomeActions: some View {
         Group {
-            if hasAcceptedTerms {
+            if !showsTermsAgreement {
                 actionLayout {
                     WNButton(title: "Sign In", emphasis: .secondary) { open(.signIn) }
                         .accessibilityIdentifier("welcome.sign-in")

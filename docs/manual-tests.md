@@ -1684,11 +1684,14 @@ Marmot root. Automated simulator checks do not replace these device checks.
       deleted or hidden message shows “No reactions”; a failed read shows Retry.
       Switching profiles or backgrounding/resuming never shows another profile's list.
 - [ ] Developer Key Packages shows current and superseded relay events.
-- [ ] Without saved acceptance, Welcome shows the policy links and **Agree &
+- [ ] Without saved acceptance, first-account Welcome shows the policy links and **Agree &
       Continue** before Sign In/Sign Up. Opening either policy does not accept it.
       Agree & Continue reveals both account actions without starting either flow.
-      Relaunching and adding another profile skip the agreement once accepted;
-      Erase App Data restores it. The Terms of Service link opens
+      Cancelling account setup, relaunching, and removing all accounts keep saved
+      acceptance; Erase App Data restores the agreement. Add Profile goes directly
+      to Sign In/Sign Up, including on older installations without saved acceptance.
+      Opening Add Profile does not save acceptance on the user's behalf.
+      The Terms of Service link opens
       https://whitenoise.chat/terms and Acceptable Use Policy opens #section-7.
 
 - [ ] In a blocked direct chat, the composer explains “You blocked this user” and
