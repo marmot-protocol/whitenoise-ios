@@ -1132,7 +1132,20 @@ final class AppState {
             return false
         }
 
-        // The wipe returned: the account ref is invalid now. Do the same local
+        guard WipeReportProjection.removedLocalAccount(outcome) else {
+            await restoreNativePushAfterFailedSignOut(
+                using: exitingClient,
+                accountRef: wipingRef,
+                wasEnabled: nativePushWasEnabled
+            )
+            (onError ?? present)(.error(
+                L10n.string("Couldn't wipe profile"),
+                message: L10n.string("This profile’s data is still on this device. Keep White Noise open and try again.")
+            ))
+            return false
+        }
+
+        // MDK removed the account: the ref is invalid now. Do the same local
         // removal + routing the normal sign-out does — regardless of per-stage
         // best-effort failures — then surface a report only when something remains.
         let localCleanupFailures = await completeSignOut(

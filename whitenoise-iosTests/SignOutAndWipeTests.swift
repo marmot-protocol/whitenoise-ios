@@ -86,6 +86,17 @@ struct SignOutAndWipeTests {
         #expect(local.failures.first?.reason == "disk full")
     }
 
+    @Test func onlyACompletedLocalRemovalFinishesTheExit() {
+        // Leave and KeyPackage failures are reported after the exit finishes.
+        let partial = outcome(
+            groupsLeft: 1,
+            groupLeaveFailures: [GroupLeaveFailureFfi(groupIdHex: hex("aa"), reason: "account is the chat's last admin")]
+        )
+        #expect(WipeReportProjection.removedLocalAccount(partial))
+        // Suspension during the admin leave wait stops MDK before removal.
+        #expect(!WipeReportProjection.removedLocalAccount(outcome(localCleanupCompleted: false, localCleanupReason: "account error")))
+    }
+
     @Test func incompleteLocalCleanupWithNoReasonStillReportsAFailure() {
         let report = WipeReportProjection.report(from: outcome(localCleanupCompleted: false, localCleanupReason: nil))
         #expect(report.stages[2].hasIssues)

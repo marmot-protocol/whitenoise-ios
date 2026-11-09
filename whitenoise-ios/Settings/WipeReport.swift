@@ -89,6 +89,14 @@ nonisolated enum WipeReportProjection {
         ])
     }
 
+    /// Whether the app may finish the exit: MDK removed the account locally.
+    /// Background suspension during the leave wait stops MDK before that
+    /// removal, leaving the database and secret on the device, so the
+    /// profile must stay put for a retry instead of being reported as wiped.
+    static func removedLocalAccount(_ outcome: WipeOutcomeFfi) -> Bool {
+        outcome.localCleanup.completed
+    }
+
     /// Shortens a hex identifier (group id, relay event id) for a failure row.
     /// Full ids are 64 chars of noise; the first 12 are plenty to correlate
     /// against logs.

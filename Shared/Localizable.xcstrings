@@ -147655,6 +147655,66 @@
           }
         }
       }
+    },
+    "This profile’s data is still on this device. Keep White Noise open and try again." : {
+      "comment" : "Error after Sign Out and Delete Data was interrupted (for example by leaving the app) before the profile's local data was removed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Daten dieses Profils sind noch auf diesem Gerät. Lass White Noise geöffnet und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos de este perfil siguen en este dispositivo. Mantén White Noise abierto e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les données de ce profil sont toujours sur cet appareil. Gardez White Noise ouvert et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dati di questo profilo sono ancora su questo dispositivo. Tieni White Noise aperto e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os dados deste perfil ainda estão neste dispositivo. Mantenha o White Noise aberto e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные этого профиля всё ещё на устройстве. Не закрывайте White Noise и попробуйте снова."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu profilin verileri hâlâ bu cihazda. White Noise’u açık tutun ve tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此个人资料的数据仍在此设备上。请保持 White Noise 打开并重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此個人檔案的資料仍在此裝置上。請保持 White Noise 開啟並重試。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
