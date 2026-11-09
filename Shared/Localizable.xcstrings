@@ -147341,6 +147341,66 @@
         }
       }
     },
+    "Couldn’t retry syncing. Try again." : {
+      "comment" : "Shown in the stopped-syncing banner when an explicit Retry fails.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisierung konnte nicht erneut versucht werden. Versuche es noch einmal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo reintentar la sincronización. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de relancer la synchronisation. Réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile riprovare la sincronizzazione. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível tentar sincronizar novamente. Tente outra vez."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось повторить синхронизацию. Попробуйте ещё раз."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eşitleme yeniden denenemedi. Tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法重试同步。请再试一次。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法重試同步。請再試一次。"
+          }
+        }
+      }
+    },
     "Current Profile" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -147402,6 +147462,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "目前的個人檔案"
+          }
+        }
+      }
+    },
+    "Messages you send will wait until it catches up." : {
+      "comment" : "Banner body under 'This chat stopped syncing': outgoing messages stay queued until sync resumes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gesendete Nachrichten warten, bis er wieder auf dem neuesten Stand ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los mensajes que envíes esperarán hasta que se ponga al día."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les messages que vous envoyez attendront qu’il soit à jour."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I messaggi che invii resteranno in attesa finché non sarà aggiornata."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As mensagens que você enviar vão aguardar até ele se atualizar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправленные сообщения будут ждать, пока чат не синхронизируется."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gönderdiğiniz mesajlar sohbet güncellenene kadar bekleyecek."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你发送的消息将等待它同步完成后再发出。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你傳送的訊息會等待它同步完成後再送出。"
           }
         }
       }
@@ -147532,6 +147652,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在此 iPhone 上顯示訊息通知。"
+          }
+        }
+      }
+    },
+    "This chat stopped syncing" : {
+      "comment" : "Banner title: MDK stopped retrying this chat's sync after repeated failures.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Chat wird nicht mehr synchronisiert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este chat dejó de sincronizarse"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce chat ne se synchronise plus"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa chat non si sincronizza più"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este chat parou de sincronizar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот чат перестал синхронизироваться"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu sohbetin eşitlenmesi durdu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天已停止同步"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天已停止同步"
           }
         }
       }
