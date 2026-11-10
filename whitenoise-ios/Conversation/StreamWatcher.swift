@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 import os
@@ -79,19 +78,21 @@ final class StreamWatcher {
         static let finalNotice: UInt8 = 0x06
     }
 
-    init(appState: AppState?, groupIdHex: String) {
+    /// Reads the finalized stream id, if any, from a timeline record. Production
+    /// decodes the record; tests wrap it to see which records were decoded.
+    private let readFinalizedStreamId: @MainActor (TimelineMessageRecordFfi) -> String?
+
+    init(
+        appState: AppState?,
+        groupIdHex: String,
+        finalizedStreamId: @escaping @MainActor (TimelineMessageRecordFfi) -> String? = StreamWatcher.finalizedStreamId(in:)
+    ) {
         self.appState = appState
         self.groupIdHex = groupIdHex
+        self.readFinalizedStreamId = finalizedStreamId
     }
 
     private var streamingDebugEnabled: Bool { sink?.streamingDebugEnabled == true }
-
-#if DEBUG
-    var streamTextEntryCountForTesting: Int { streamText.count }
-    var streamTextLengthEntryCountForTesting: Int { streamTextLengthById.count }
-    var scannedFinalizedMessageIdCountForTesting: Int { scannedFinalizedMessageIds.count }
-    var finalizedStreamIdCountForTesting: Int { finalizedStreamIds.count }
-#endif
 
     func isFinalized(_ streamId: String) -> Bool {
         finalizedStreamIds.contains(streamId)
@@ -155,8 +156,7 @@ final class StreamWatcher {
             if !messageId.isEmpty {
                 guard scannedFinalizedMessageIds.insert(messageId).inserted else { continue }
             }
-            let appRecord = ConversationViewModel.appMessageRecord(from: record)
-            if let streamId = Self.finalizedStreamId(from: record, appRecord: appRecord) {
+            if let streamId = readFinalizedStreamId(record) {
                 finalizedStreamIds.insert(streamId)
             }
         }
@@ -169,6 +169,11 @@ final class StreamWatcher {
     func pruneScannedFinalizedMessageIds(keeping loadedMessageIds: Set<String>) {
         guard !scannedFinalizedMessageIds.isEmpty else { return }
         scannedFinalizedMessageIds.formIntersection(loadedMessageIds)
+    }
+
+    /// The stream a timeline record finalizes, if any.
+    static func finalizedStreamId(in record: TimelineMessageRecordFfi) -> String? {
+        finalizedStreamId(from: record, appRecord: ConversationViewModel.appMessageRecord(from: record))
     }
 
     static func finalizedStreamId(

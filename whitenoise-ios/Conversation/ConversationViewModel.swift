@@ -438,10 +438,6 @@ final class ConversationViewModel {
     /// `init` so `timelineStore.streamWatcher` is wired before the first page apply.
     @ObservationIgnored private let streamWatcher: StreamWatcher
 #if DEBUG
-    var streamTextEntryCountForTesting: Int { streamWatcher.streamTextEntryCountForTesting }
-    var streamTextLengthEntryCountForTesting: Int { streamWatcher.streamTextLengthEntryCountForTesting }
-    var scannedFinalizedMessageIdCountForTesting: Int { streamWatcher.scannedFinalizedMessageIdCountForTesting }
-    var finalizedStreamIdCountForTesting: Int { streamWatcher.finalizedStreamIdCountForTesting }
     var mediaItemProjectionBuildCountForTesting: Int { timelineStore.mediaProjections.buildCountForTesting }
     @ObservationIgnored var acceptGroupInviteForTesting: (@MainActor (String, String) async throws -> AppGroupRecordFfi)?
     @ObservationIgnored var refreshInviteStateForTesting: (@MainActor () async -> Bool)?
