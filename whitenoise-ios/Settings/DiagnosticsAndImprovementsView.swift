@@ -1,4 +1,3 @@
-import MarmotKit
 import SwiftUI
 
 struct DiagnosticsAndImprovementsView: View {
@@ -95,7 +94,6 @@ struct DiagnosticsAndImprovementsView: View {
                         }
                     }
             }
-            .presentationDetents([.large])
             .appAppearance()
         }
         .modifier(DiagnosticsPromptToolbar(
@@ -161,26 +159,7 @@ struct DiagnosticsAndImprovementsView: View {
     }
 
     private var sharingAvailabilityNotice: String? {
-        guard !isPrompt, appState.diagnosticsConsent.usageEnabled,
-              let snapshot = appState.diagnosticsConsent.snapshot else { return nil }
-        switch (sharingUnavailable(snapshot.status.productAnalytics), sharingUnavailable(snapshot.status.telemetry)) {
-        case (true, true):
-            return L10n.string("Usage and performance sharing isn’t available in this build. Your preference is saved.")
-        case (true, false):
-            return L10n.string("Usage sharing isn’t available in this build. Your preference is saved.")
-        case (false, true):
-            return L10n.string("Performance sharing isn’t available in this build. Your preference is saved.")
-        case (false, false):
-            return nil
-        }
-    }
-
-    private func sharingUnavailable(_ status: DiagnosticsExporterStatusFfi) -> Bool {
-        switch status {
-        case .unconfigured, .unsupportedBuild, .configurationRejected:
-            true
-        case .disabled, .consentRequired, .ready:
-            false
-        }
+        guard !isPrompt, appState.diagnosticsConsent.usageEnabled else { return nil }
+        return appState.diagnosticsConsent.snapshot?.unavailableSharingNotice
     }
 }

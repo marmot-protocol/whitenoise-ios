@@ -13,6 +13,8 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
     var previouslyEnabled = false
     var policy = ""
     var runtimeAvailable = true
+    var productAnalyticsStatus: DiagnosticsExporterStatusFfi = .unconfigured
+    var telemetryStatus: DiagnosticsExporterStatusFfi = .unconfigured
     var usageSaveStarted: TestLatch?
     var usageSaveRelease: TestLatch?
 
@@ -20,7 +22,7 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
     var snapshot: DeviceDiagnosticsSnapshot {
         DeviceDiagnosticsSnapshot(
             settings: UsageDiagnosticsSettingsFfi(decision: decision, policyRevision: policy, registryRevision: "registry", updatedAtMs: 0, previouslyEnabled: previouslyEnabled),
-            status: UsageDiagnosticsStatusFfi(consent: decision, telemetry: .unconfigured, productAnalytics: .unconfigured, queuedEvents: 0, droppedEvents: 0, acceptedBatches: 0, failedBatches: 0),
+            status: UsageDiagnosticsStatusFfi(consent: decision, telemetry: telemetryStatus, productAnalytics: productAnalyticsStatus, queuedEvents: 0, droppedEvents: 0, acceptedBatches: 0, failedBatches: 0),
             auditEnabled: audit
         )
     }
@@ -42,6 +44,32 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
 
 @MainActor
 struct DeviceDiagnosticsConsentTests {
+    @Test(arguments: [
+        DiagnosticsExporterStatusFfi.unconfigured, .unsupportedBuild, .configurationRejected,
+    ])
+    func unavailableNoticeNamesTheAffectedSharing(status: DiagnosticsExporterStatusFfi) {
+        let source = DiagnosticsTestSource()
+        source.decision = .granted
+        source.productAnalyticsStatus = status
+        source.telemetryStatus = .ready
+        #expect(source.snapshot.unavailableSharingNotice == L10n.string("Usage sharing isn’t available in this build. Your preference is saved."))
+
+        source.productAnalyticsStatus = .ready
+        source.telemetryStatus = status
+        #expect(source.snapshot.unavailableSharingNotice == L10n.string("Performance sharing isn’t available in this build. Your preference is saved."))
+
+        source.productAnalyticsStatus = status
+        #expect(source.snapshot.unavailableSharingNotice == L10n.string("Usage and performance sharing isn’t available in this build. Your preference is saved."))
+    }
+
+    @Test(arguments: [DiagnosticsExporterStatusFfi.ready, .disabled, .consentRequired])
+    func normalExporterStatesDoNotClaimSharingIsUnavailable(status: DiagnosticsExporterStatusFfi) {
+        let source = DiagnosticsTestSource()
+        source.productAnalyticsStatus = status
+        source.telemetryStatus = status
+        #expect(source.snapshot.unavailableSharingNotice == nil)
+    }
+
     @Test func unavailableRuntimeReadOffersRetryAndReloadsWhenReady() async {
         let source = DiagnosticsTestSource()
         let model = DeviceDiagnosticsConsent()

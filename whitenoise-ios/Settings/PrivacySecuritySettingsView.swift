@@ -11,26 +11,28 @@ struct PrivacySecuritySettingsView: View {
     var body: some View {
         Form {
             Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    WNToggle("Hide Sensitive Content", isOn: Binding(
-                        get: { appState.blockScreenshots },
-                        set: { appState.blockScreenshots = $0 }
-                    ))
-                    Text("Hides content in the app switcher and when iOS detects recording or screen sharing. Screenshots are still possible.")
-                        .font(.caption).foregroundStyle(.secondary)
+                WNToggle(isOn: Binding(
+                    get: { appState.blockScreenshots },
+                    set: { appState.blockScreenshots = $0 }
+                )) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Hide Sensitive Content")
+                        Text("Hides content in the app switcher and when iOS detects recording or screen sharing. Screenshots are still possible.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
-                .padding(.vertical, 4)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    WNToggle(appLockToggleTitle, isOn: Binding(
-                        get: { appState.appLock.isEnabled },
-                        set: { enabled in Task { await appState.appLock.setEnabled(enabled) } }
-                    ))
-                    .disabled(!appLockCapability.available)
-                    Text(appLockFooter)
-                        .font(.caption).foregroundStyle(.secondary)
+                WNToggle(isOn: Binding(
+                    get: { appState.appLock.isEnabled },
+                    set: { enabled in Task { await appState.appLock.setEnabled(enabled) } }
+                )) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(appLockToggleTitle)
+                        Text(appLockFooter)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
-                .padding(.vertical, 4)
+                .disabled(!appLockCapability.available)
 
                 if appState.appLock.isEnabled && appLockCapability.available {
                     Picker("Auto-Lock", selection: Binding(
@@ -53,6 +55,7 @@ struct PrivacySecuritySettingsView: View {
                             Image(systemName: "arrow.up.right")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
                         }
                     }
                     .foregroundStyle(.primary)
