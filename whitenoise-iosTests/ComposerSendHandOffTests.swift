@@ -176,17 +176,47 @@ struct ComposerSendHandOffTests {
         )
         composer.canSendMessages = { true }
         composer.restoreReplyTarget(messageIdHex: hex("cc"), record: nil)
-        var replies: [(target: String, text: String)] = []
-        marmot.reply = { _, _, target, text, token in
-            replies.append((target, text))
+        var replies: [(accountRef: String, groupIdHex: String, target: String, text: String)] = []
+        marmot.reply = { accountRef, groupIdHex, target, text, token in
+            replies.append((accountRef, groupIdHex, target, text))
             return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("dd"))
         }
 
         // The double records an issue if the reply goes out as a plain send.
         await composer.send("thanks")
 
+        #expect(replies.map(\.accountRef) == ["account-ref"])
+        #expect(replies.map(\.groupIdHex) == [hex("aa")])
         #expect(replies.map(\.target) == [hex("cc")])
         #expect(replies.map(\.text) == ["thanks"])
+    }
+
+    @Test func aDraftSendWinsOverAReplyTarget() async {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let marmot = ComposerMarmotDouble()
+        let composer = ComposerModel(
+            appState: appState,
+            groupIdHex: hex("aa"),
+            timelineStore: timelineStore,
+            marmotCalls: marmot.calls
+        )
+        composer.canSendMessages = { true }
+        composer.restoreReplyTarget(messageIdHex: hex("cc"), record: nil)
+        // Pointerless fake revision: it only reaches the double, never MDK.
+        let revision = MessageDraftRevisionFfi(noPointer: .init())
+        var draftSends = 0
+        marmot.sendDraft = { _, _, token in
+            draftSends += 1
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("dd"))
+        }
+
+        // A saved draft carries its own reply, so its revision is what MDK
+        // finalizes; the double records an issue for a reply or plain send.
+        await composer.send("from the draft", draftRevision: revision)
+
+        #expect(draftSends == 1)
     }
 
     @Test func durablyAcceptedComposerOutcomesKeepClockWithoutFailureUI() async throws {
