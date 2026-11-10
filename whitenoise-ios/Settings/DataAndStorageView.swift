@@ -67,6 +67,7 @@ struct DataAndStorageView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// Shares choice labels with the picker; Wi-Fi Only also excludes metered connections.
     static func levelTitle(_ level: MediaAutoDownloadLevel) -> String {
         switch level {
         case .never: return L10n.string("Never")
@@ -75,6 +76,7 @@ struct DataAndStorageView: View {
         }
     }
 
+    /// Keeps the summary and picker labels aligned after the store normalizes legacy values.
     fileprivate static func qualityTitle(_ level: MediaQuality) -> String {
         switch level {
         case .standard: return L10n.string("Standard")
@@ -110,6 +112,7 @@ private struct SentMediaQualityView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// Saves immediately and keeps the picker open so the selected choice confirms the change.
     private func qualityRow(_ level: MediaQuality, subtitle: String) -> some View {
         Button {
             quality = level
