@@ -35,10 +35,12 @@ struct VoiceMessageRecorderLifecycleTests {
 
         recorder?.beginPress { error in Issue.record(error, "recording failed to start") }
         try await eventually { recorder?.hasStartedRecording == true }
+        // Let the metering loop take a reading, so it is mid-loop when the
+        // recorder is released.
+        try await eventually { recorder?.waveformSamples.isEmpty == false }
 
-        // The metering loop runs while recording; it must not keep the
-        // recorder alive, so releasing it stops the microphone and hands the
-        // audio session back.
+        // The metering loop must not keep the recorder alive, so releasing it
+        // stops the microphone and hands the audio session back.
         recorder = nil
         await Task.yield()
 
