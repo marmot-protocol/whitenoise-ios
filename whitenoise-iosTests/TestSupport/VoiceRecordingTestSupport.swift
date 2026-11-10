@@ -24,12 +24,11 @@ final class AudioSessionSpy: VoiceAudioSessionConfiguring {
 /// the device, counting how often a recording is stopped.
 @MainActor
 final class VoiceRecordingMicrophoneDouble {
-    var permissionGranted = true
     private(set) var stops = 0
 
     var microphone: VoiceRecordingMicrophone {
         VoiceRecordingMicrophone(
-            requestPermission: { [self] in permissionGranted },
+            requestPermission: { true },
             startRecording: { [self] _ in
                 VoiceRecordingTake(
                     meter: { (0, -160) },
