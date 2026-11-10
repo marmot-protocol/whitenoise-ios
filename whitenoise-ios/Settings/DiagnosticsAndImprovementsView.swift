@@ -54,7 +54,10 @@ struct DiagnosticsAndImprovementsView: View {
         .navigationDestination(isPresented: $showSharingDetails) {
             DiagnosticsSharingDetailsView(isPrompt: isPrompt)
         }
-        .modifier(DiagnosticsPromptToolbar(isFinishing: isFinishing, onFinish: onFinish))
+        .modifier(DiagnosticsPromptToolbar(
+            isFinishing: isFinishing,
+            onFinish: showSharingDetails ? nil : onFinish
+        ))
         .task(id: appState.runtimeGeneration) { await reload() }
         .productScreen(.diagnostics, section: .diagnostics)
         .alert("Clear diagnostic logs?", isPresented: $model.showDeleteAuditLogsConfirmation) {
