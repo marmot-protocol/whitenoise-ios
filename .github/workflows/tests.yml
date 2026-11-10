@@ -121,10 +121,21 @@ jobs:
           path: build/CompilationCache
           key: cas-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-${{ github.sha }}
 
+      - name: Capture wn1302 probe log
+        if: always()
+        run: |
+          udid=$(echo "$WN_TEST_DESTINATION" | sed -E 's/.*id=([A-F0-9-]+).*/\1/')
+          xcrun simctl boot "$udid" 2>/dev/null || true
+          xcrun simctl spawn "$udid" log show --last 3h --style compact --predicate 'category == "wn1302"' > build/wn1302.log 2>&1 || true
+          wc -l build/wn1302.log
+          grep -n "test begin" build/wn1302.log | head
+
       - name: Upload test results
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: TestResults
-          path: build/TestResults.xcresult
+          path: |
+            build/TestResults.xcresult
+            build/wn1302.log
           if-no-files-found: warn
