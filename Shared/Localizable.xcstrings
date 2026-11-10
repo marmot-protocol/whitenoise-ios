@@ -72376,71 +72376,6 @@
         }
       }
     },
-    "No other installation was found on the sources we checked. This does not guarantee that the profile is unused elsewhere." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In den geprüften Quellen wurde keine weitere Installation gefunden. Das garantiert nicht, dass das Profil nicht anderswo verwendet wird."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No other installation was found on the sources we checked. This does not guarantee that the profile is unused elsewhere."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se encontró ninguna otra instalación en las fuentes consultadas. Esto no garantiza que el perfil no se use en otro lugar."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucune autre installation n’a été trouvée dans les sources vérifiées. Cela ne garantit pas que le profil n’est pas utilisé ailleurs."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Non sono state trovate altre installazioni nelle fonti controllate. Questo non garantisce che il profilo non sia usato altrove."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nenhuma outra instalação foi encontrada nas fontes verificadas. Isso não garante que o perfil não seja usado em outro lugar."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "В проверенных источниках другая установка не найдена. Это не гарантирует, что профиль не используется где-либо ещё."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kontrol ettiğimiz kaynaklarda başka bir kurulum bulunamadı. Bu, profilin başka bir yerde kullanılmadığını garanti etmez."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在已检查的来源中未发现其他安装。这不保证该个人资料未在其他地方使用。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在已檢查的來源中未發現其他安裝。這不保證該個人檔案未在其他地方使用。"
-          }
-        }
-      }
-    },
     "No people yet" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -119588,71 +119523,6 @@
         }
       }
     },
-    "Using one device" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ein Gerät verwenden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Using one device"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usar un solo dispositivo"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Utiliser un seul appareil"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usare un solo dispositivo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usar um único dispositivo"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Использование одного устройства"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tek cihaz kullanımı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用一台设备"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用一台裝置"
-          }
-        }
-      }
-    },
     "Verified" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -121520,71 +121390,6 @@
         }
       }
     },
-    "We couldn’t determine whether another installation exists. Invitations may reach only one installation, and chats will not appear on both." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wir konnten nicht feststellen, ob eine weitere Installation existiert. Einladungen erreichen möglicherweise nur eine Installation, und Chats erscheinen nicht auf beiden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "We couldn’t determine whether another installation exists. Invitations may reach only one installation, and chats will not appear on both."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No pudimos determinar si existe otra instalación. Las invitaciones podrían llegar solo a una instalación y los chats no aparecerán en ambas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nous n’avons pas pu déterminer si une autre installation existe. Les invitations peuvent n’atteindre qu’une installation, et les discussions n’apparaîtront pas sur les deux."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Non è stato possibile determinare se esiste un’altra installazione. Gli inviti potrebbero arrivare a una sola installazione e le chat non appariranno su entrambe."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível determinar se existe outra instalação. Os convites podem chegar a apenas uma instalação e as conversas não aparecerão nas duas."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось определить, существует ли другая установка. Приглашения могут приходить только в одну установку, а чаты не появятся в обеих."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Başka bir kurulum olup olmadığını belirleyemedik. Davetler yalnızca bir kuruluma ulaşabilir ve sohbetler her ikisinde görünmez."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法确定是否存在另一处安装。邀请可能仅到达一处安装，对话不会同时出现在两处。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法確定是否存在另一處安裝。邀請可能僅送達一處安裝，對話不會同時出現在兩處。"
-          }
-        }
-      }
-    },
     "We couldn’t find a usable list. Look on a relay you’ve used before, or publish our defaults." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -122483,71 +122288,6 @@
         }
       }
     },
-    "We found signs of another installation. This can also happen after reinstalling. Invitations may reach only one installation, and chats will not appear on both." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wir haben Hinweise auf eine weitere Installation gefunden. Das kann auch nach einer Neuinstallation vorkommen. Einladungen erreichen möglicherweise nur eine Installation, und Chats erscheinen nicht auf beiden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "We found signs of another installation. This can also happen after reinstalling. Invitations may reach only one installation, and chats will not appear on both."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Encontramos indicios de otra instalación. Esto también puede ocurrir tras reinstalar. Las invitaciones podrían llegar solo a una instalación y los chats no aparecerán en ambas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nous avons trouvé des signes d’une autre installation. Cela peut aussi arriver après une réinstallation. Les invitations peuvent n’atteindre qu’une installation, et les discussions n’apparaîtront pas sur les deux."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abbiamo trovato indizi di un’altra installazione. Può succedere anche dopo una reinstallazione. Gli inviti potrebbero arrivare a una sola installazione e le chat non appariranno su entrambe."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Encontramos indícios de outra instalação. Isso também pode acontecer após reinstalar. Os convites podem chegar a apenas uma instalação e as conversas não aparecerão nas duas."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Обнаружены признаки другой установки. Это возможно и после переустановки. Приглашения могут приходить только в одну установку, а чаты не появятся в обеих."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Başka bir kuruluma dair işaretler bulduk. Bu, yeniden kurulumdan sonra da olabilir. Davetler yalnızca bir kuruluma ulaşabilir ve sohbetler her ikisinde görünmez."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "我们发现了另一处安装的迹象。重新安装后也可能出现这种情况。邀请可能仅到达一处安装，对话不会同时出现在两处。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "我們發現了另一處安裝的跡象。重新安裝後也可能出現這種情況。邀請可能僅送達一處安裝，對話不會同時出現在兩處。"
-          }
-        }
-      }
-    },
     "We'll keep trying in the background." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -123096,71 +122836,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise 尚不能跨裝置同步對話。我們建議在一台裝置上使用此帳戶。"
-          }
-        }
-      }
-    },
-    "White Noise does not yet sync conversations across devices. We recommend using this profile on one device." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise synchronisiert Unterhaltungen noch nicht geräteübergreifend. Wir empfehlen, dieses Profil auf einem Gerät zu verwenden."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise does not yet sync conversations across devices. We recommend using this profile on one device."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise aún no sincroniza las conversaciones entre dispositivos. Recomendamos usar este perfil en un solo dispositivo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise ne synchronise pas encore les conversations entre appareils. Nous recommandons d’utiliser ce profil sur un seul appareil."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise non sincronizza ancora le conversazioni tra dispositivi. Ti consigliamo di usare questo profilo su un solo dispositivo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O White Noise ainda não sincroniza conversas entre dispositivos. Recomendamos usar este perfil em um único dispositivo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise пока не синхронизирует разговоры между устройствами. Рекомендуем использовать этот профиль на одном устройстве."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise henüz konuşmaları cihazlar arasında eşitlemiyor. Bu profili tek bir cihazda kullanmanızı öneririz."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise 暂不支持跨设备同步对话。建议仅在一台设备上使用此个人资料。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise 尚不支援跨裝置同步對話。建議僅在一台裝置上使用此個人檔案。"
           }
         }
       }
@@ -147892,6 +147567,266 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你已重新加入此聊天。重新加入之前的訊息可能缺漏。"
+          }
+        }
+      }
+    },
+    "Chats on this device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chats auf diesem Gerät"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chats on this device"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chats en este dispositivo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discussions sur cet appareil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat su questo dispositivo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversas neste dispositivo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чаты на этом устройстве"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazdaki sohbetler"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备上的聊天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此裝置上的聊天"
+          }
+        }
+      }
+    },
+    "Signing in alone does not restore your existing chats or messages. If you use another device, keep its app and data until you’ve checked your chats here." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Anmeldung allein stellt deine bestehenden Chats und Nachrichten nicht wieder her. Wenn du ein anderes Gerät verwendest, behalte dort die App und ihre Daten, bis du deine Chats hier überprüft hast."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signing in alone does not restore your existing chats or messages. If you use another device, keep its app and data until you’ve checked your chats here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciar sesión por sí solo no restaura tus chats ni mensajes existentes. Si usas otro dispositivo, conserva su app y sus datos hasta que hayas comprobado tus chats aquí."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se connecter ne suffit pas à restaurer vos discussions ni vos messages existants. Si vous utilisez un autre appareil, conservez son app et ses données jusqu’à ce que vous ayez vérifié vos discussions ici."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il solo accesso non ripristina le chat né i messaggi esistenti. Se usi un altro dispositivo, conserva la sua app e i suoi dati finché non hai controllato le chat qui."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrar, por si só, não restaura suas conversas nem mensagens existentes. Se você usa outro dispositivo, mantenha o app e os dados dele até verificar suas conversas aqui."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сам по себе вход не восстанавливает ваши существующие чаты и сообщения. Если вы пользуетесь другим устройством, сохраните на нём приложение и данные, пока не проверите свои чаты здесь."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yalnızca giriş yapmak mevcut sohbetlerinizi veya mesajlarınızı geri yüklemez. Başka bir cihaz kullanıyorsanız, sohbetlerinizi burada kontrol edene kadar oradaki uygulamayı ve verilerini saklayın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅登录不会恢复你现有的聊天或消息。如果你使用另一台设备，请保留该设备上的应用和数据，直到你在这里检查过聊天。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅登入不會還原你現有的聊天或訊息。如果你使用另一台裝置，請保留該裝置上的 App 和資料，直到你在這裡檢查過聊天。"
+          }
+        }
+      }
+    },
+    "Other sign-in records were found. They may belong to another installation or an earlier one." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es wurden weitere Anmeldeeinträge gefunden. Sie können zu einer anderen oder einer früheren Installation gehören."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other sign-in records were found. They may belong to another installation or an earlier one."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se encontraron otros registros de inicio de sesión. Pueden pertenecer a otra instalación o a una anterior."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "D’autres traces de connexion ont été trouvées. Elles peuvent provenir d’une autre installation ou d’une installation antérieure."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sono stati trovati altri record di accesso. Potrebbero appartenere a un’altra installazione o a una precedente."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foram encontrados outros registros de entrada. Eles podem pertencer a outra instalação ou a uma anterior."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Найдены другие записи о входе. Они могут относиться к другой установке или к более ранней."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Başka giriş kayıtları bulundu. Bunlar başka bir kuruluma veya daha önceki bir kuruluma ait olabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发现了其他登录记录。它们可能属于另一处安装或较早的安装。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "發現了其他登入記錄。它們可能屬於另一處安裝或較早的安裝。"
+          }
+        }
+      }
+    },
+    "Other sign-ins could not be checked." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weitere Anmeldungen konnten nicht geprüft werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other sign-ins could not be checked."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron comprobar otros inicios de sesión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les autres connexions n’ont pas pu être vérifiées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non è stato possibile controllare altri accessi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível verificar outras entradas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось проверить другие входы."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diğer girişler kontrol edilemedi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法检查其他登录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法檢查其他登入。"
           }
         }
       }

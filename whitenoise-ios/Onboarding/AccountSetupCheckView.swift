@@ -66,7 +66,7 @@ struct AccountSetupCheckView: View {
     private func calloutTitle(hasFailure: Bool) -> LocalizedStringKey {
         switch check {
         case .device:
-            guard hasFailure else { return "Using one device" }
+            guard hasFailure else { return "Chats on this device" }
             return recovery.step?.status == .retryableFailure
                 ? "Couldn’t check for other devices" : "Couldn’t continue signing in"
         case .secureMessaging:
@@ -75,14 +75,14 @@ struct AccountSetupCheckView: View {
     }
 
     @ViewBuilder private func deviceExplanation(failures: [String]) -> some View {
-        let notice = presentation.snapshot.singleDeviceNotice
-        let showsNotice = notice != nil && (failures.isEmpty || recovery.primaryAction == .acknowledge)
+        let canShowNotice = failures.isEmpty || recovery.primaryAction == .acknowledge
+        let notice = canShowNotice
+            ? presentation.snapshot.singleDeviceNotice.flatMap { AccountSetupPresentation.deviceNotice($0.discovery) }
+            : nil
         ForEach(failures, id: \.self) { Text(verbatim: $0) }
-        if showsNotice, let notice {
-            Text(AccountSetupPresentation.deviceNotice(notice.discovery))
-        }
-        if !failures.isEmpty || showsNotice { Divider() }
-        Text("White Noise does not yet sync conversations across devices. We recommend using this profile on one device.")
+        if let notice { Text(notice) }
+        if !failures.isEmpty || notice != nil { Divider() }
+        Text("Signing in alone does not restore your existing chats or messages. If you use another device, keep its app and data until you’ve checked your chats here.")
     }
 
     @ViewBuilder private func secureMessagingExplanation(failures: [String]) -> some View {

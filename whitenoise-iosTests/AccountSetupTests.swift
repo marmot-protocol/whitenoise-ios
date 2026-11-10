@@ -449,13 +449,13 @@ struct AccountSetupTests {
         #expect(AccountSetupPresentation.deviceAction(nil) == L10n.string("Continue anyway"))
     }
 
-    @Test func deviceDiscoveryCopyDistinguishesAllThreeOutcomes() {
-        let labels = Set([
-            AccountSetupPresentation.deviceNotice(.noneFound),
-            AccountSetupPresentation.deviceNotice(.unknown),
-            AccountSetupPresentation.deviceNotice(.otherInstallationPossible)
-        ])
-        #expect(labels.count == 3)
+    @Test func deviceDiscoveryAddsANoteOnlyForUncertainOutcomes() {
+        #expect(AccountSetupPresentation.deviceNotice(.noneFound) == nil)
+        let unknown = AccountSetupPresentation.deviceNotice(.unknown)
+        let possible = AccountSetupPresentation.deviceNotice(.otherInstallationPossible)
+        #expect(unknown != nil)
+        #expect(possible != nil)
+        #expect(unknown != possible)
     }
 
     @Test func validatesRelayListsBeforeSubmitting() {
