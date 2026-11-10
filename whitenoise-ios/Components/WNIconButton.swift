@@ -72,12 +72,30 @@ private struct WNStandaloneIconButtonStyle: ButtonStyle {
         configuration.label
             .font(.body.weight(.medium))
             .imageScale(.large)
-            .foregroundStyle(WNButton.Metrics.contentColor(
-                emphasis: emphasis, colorScheme: colorScheme, isEnabled: isEnabled))
+            .modifier(WNIconGlyphStyle(emphasis: emphasis, colorScheme: colorScheme, isEnabled: isEnabled))
             .frame(width: diameter, height: diameter)
             .contentShape(.circle)
             .modifier(WNIconSurface(emphasis: emphasis, colorScheme: colorScheme))
             .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+/// A secondary glyph on glass takes a hierarchical style so the glass resolves
+/// it against its own backdrop. A fixed black/white from `colorScheme` follows
+/// a scroll-edge bar's appearance flip instead, which leaves a white chevron
+/// on a light circle when dark content passes under the bar but not the button.
+private struct WNIconGlyphStyle: ViewModifier {
+    let emphasis: WNButton.Emphasis
+    let colorScheme: ColorScheme
+    let isEnabled: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *), emphasis == .secondary {
+            content.foregroundStyle(isEnabled ? HierarchicalShapeStyle.primary : .secondary)
+        } else {
+            content.foregroundStyle(WNButton.Metrics.contentColor(
+                emphasis: emphasis, colorScheme: colorScheme, isEnabled: isEnabled))
+        }
     }
 }
 
