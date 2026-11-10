@@ -51,6 +51,9 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     /// process-scoped `testDefaults`, so a test that wrote the preference
     /// there would leak its language into concurrently-running assertions on
     /// other suites; a task-local is visible only inside the test that set it.
+    /// A documented exception to the test-only-hooks policy (AGENTS.md): the
+    /// default `L10n` entry points read the language, so injecting it per
+    /// caller would mean threading a language through all presentation code.
     @TaskLocal static var testCurrentOverride: AppLanguage?
     #endif
 
@@ -80,6 +83,12 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
         )
     }
 
+    /// In a unit-test process (unit-test host or loaded `XCTestCase`), a
+    /// per-process preference suite that keeps tests' language preference
+    /// away from the real App Group one. A documented exception to the
+    /// test-only-hooks policy (AGENTS.md): when no test override is set, every
+    /// default `L10n` call reads the language from these defaults, so injecting
+    /// them would mean threading them through all presentation code.
     private static let testDefaults: UserDefaults? = {
         guard ProcessEnvironment.isUnitTestHost()
             || NSClassFromString("XCTestCase") != nil
