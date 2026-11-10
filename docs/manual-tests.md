@@ -259,7 +259,9 @@ before every release tag.
       photos and voice notes, with videos sent unchanged.
 - [ ] Upgrade installations with Low and Original previously selected: they
       now show Standard and High respectively, including after relaunch.
-      Existing Standard and High selections stay unchanged.
+      Reading the preference leaves the stored legacy value unchanged; choosing
+      Standard or High saves that choice. Existing Standard and High selections
+      stay unchanged.
 - [ ] Data Usage has no Download Storage entry. Previously saved MDK download
       limits remain in effect; removing the entry does not reset those limits.
 

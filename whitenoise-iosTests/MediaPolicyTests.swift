@@ -147,15 +147,20 @@ struct MediaQualityTests {
     }
 
     @Test(arguments: [("low", MediaQuality.standard), ("original", MediaQuality.high)])
-    func migratesSavedLegacyQuality(raw: String, expected: MediaQuality) {
+    func readsLegacyQualityWithoutWritingUntilAnExplicitChoice(raw: String, expected: MediaQuality) {
         let suiteName = "media-quality-tests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         defaults.set(raw, forKey: MediaQualityStore.storageKey)
 
         #expect(MediaQualityStore.quality(defaults: defaults) == expected)
-        #expect(defaults.string(forKey: MediaQualityStore.storageKey) == expected.rawValue)
+        #expect(defaults.string(forKey: MediaQualityStore.storageKey) == raw)
         #expect(MediaQualityStore.quality(defaults: defaults) == expected)
+
+        let selected: MediaQuality = expected == .standard ? .high : .standard
+        MediaQualityStore.setQuality(selected, defaults: defaults)
+        #expect(MediaQualityStore.quality(defaults: defaults) == selected)
+        #expect(defaults.string(forKey: MediaQualityStore.storageKey) == selected.rawValue)
     }
 }
 

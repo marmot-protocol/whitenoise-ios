@@ -57,13 +57,11 @@ nonisolated enum MediaQuality: String, CaseIterable {
 nonisolated enum MediaQualityStore {
     static let storageKey = "media.sendQuality"
 
-    /// Normalizes and persists legacy Low/Original choices before any media is prepared.
+    /// Interprets legacy Low/Original choices without changing the saved preference.
     static func quality(defaults: UserDefaults = .standard) -> MediaQuality {
         guard let raw = defaults.string(forKey: storageKey) else { return .defaultQuality }
         if raw == "original" || raw == "low" {
-            let quality: MediaQuality = raw == "original" ? .high : .standard
-            setQuality(quality, defaults: defaults)
-            return quality
+            return raw == "original" ? .high : .standard
         }
         return MediaQuality(rawValue: raw) ?? .defaultQuality
     }

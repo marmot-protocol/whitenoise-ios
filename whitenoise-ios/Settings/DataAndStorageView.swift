@@ -7,6 +7,12 @@ struct DataAndStorageView: View {
     @State private var quality = MediaQualityStore.quality()
     @State private var store = MediaAutoDownloadStore.shared
     @State private var remoteGIFStore = RemoteGIFLoadingStore.shared
+    @AccessibilityFocusState(for: .voiceOver) private var focusedAutoDownload: AutoDownloadFocus?
+
+    private enum AutoDownloadFocus: Hashable {
+        case media(MediaAutoDownloadType)
+        case reset
+    }
 
     var body: some View {
         Form {
@@ -22,13 +28,18 @@ struct DataAndStorageView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .accessibilityFocused($focusedAutoDownload, equals: .media(type))
                 }
                 if store.matrix != .defaultMatrix {
                     Button {
+                        if focusedAutoDownload == .reset {
+                            focusedAutoDownload = .media(.image)
+                        }
                         store.resetToDefaults()
                     } label: {
                         Text("Reset Auto-Download Settings")
                     }
+                    .accessibilityFocused($focusedAutoDownload, equals: .reset)
                 }
             } header: {
                 Text("Auto-Download")
