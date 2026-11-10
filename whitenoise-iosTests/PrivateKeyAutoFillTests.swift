@@ -209,14 +209,15 @@ private struct Harness {
     }
 
     func focusFromSwiftUI() async throws {
-        model.isFocused = true
-        // Quiet drain rounds can finish before SwiftUI applies the focus request.
+        // A Simulator keyboard reconnect can drop focus after acquisition.
+        // Retry only initial setup, within the existing bounded wait.
         try await eventually {
+            model.isFocused = true
             controller.view.layoutIfNeeded()
+            guard field.isFirstResponder && model.isFocused else { return false }
+            try await settle()
             return field.isFirstResponder && model.isFocused
         }
-        try await settle()
-        XCTAssertTrue(field.isFirstResponder)
     }
 
     func presentPicker() {
