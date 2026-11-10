@@ -25,6 +25,28 @@ nonisolated struct DeviceDiagnosticsSnapshot: Sendable {
         case .configurationRejected: L10n.string("Configuration rejected")
         }
     }
+
+    var unavailableSharingNotice: String? {
+        switch (Self.sharingUnavailable(status.productAnalytics), Self.sharingUnavailable(status.telemetry)) {
+        case (true, true):
+            L10n.string("Usage and performance sharing isn’t available in this build. Your preference is saved.")
+        case (true, false):
+            L10n.string("Usage sharing isn’t available in this build. Your preference is saved.")
+        case (false, true):
+            L10n.string("Performance sharing isn’t available in this build. Your preference is saved.")
+        case (false, false):
+            nil
+        }
+    }
+
+    private static func sharingUnavailable(_ status: DiagnosticsExporterStatusFfi) -> Bool {
+        switch status {
+        case .unconfigured, .unsupportedBuild, .configurationRejected:
+            true
+        case .disabled, .consentRequired, .ready:
+            false
+        }
+    }
 }
 
 @MainActor
