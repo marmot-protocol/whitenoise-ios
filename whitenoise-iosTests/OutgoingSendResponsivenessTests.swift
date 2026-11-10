@@ -92,7 +92,7 @@ struct OutgoingSendResponsivenessTests {
         let harness = SendHarness()
         harness.installWindow([])
         let gate = TestLatch()
-        harness.composer.sendTextForTesting = { _, _, _, _, token in
+        harness.marmot.sendText = { _, _, _, token in
             try await gate.wait()
             return accepted("a", token: token)
         }
@@ -112,7 +112,7 @@ struct OutgoingSendResponsivenessTests {
         let harness = SendHarness()
         harness.installWindow([])
         let gate = TestLatch()
-        harness.composer.sendTextForTesting = { _, _, _, _, token in
+        harness.marmot.sendText = { _, _, _, token in
             // MDK commits its pending row before this call returns.
             harness.installWindow([harness.ownRecord(id: hexId(1), text: "hi", timelineAt: 10, delivered: false, token: token)])
             try await gate.wait()
@@ -137,7 +137,7 @@ struct OutgoingSendResponsivenessTests {
     @Test func aProjectionArrivingAfterAcceptanceReusesTheSameRow() async throws {
         let harness = SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _, token in accepted(hexId(2), token: token) }
+        harness.marmot.sendText = { _, _, _, token in accepted(hexId(2), token: token) }
         let staged = try #require(harness.composer.stage(text: "hi"))
         await harness.composer.submit(staged)
         let rowID = try #require(harness.rowIDs.first)
@@ -152,7 +152,7 @@ struct OutgoingSendResponsivenessTests {
     @Test func identicalBackToBackSendsProduceOneRowEach() async throws {
         let harness = SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _, token in accepted("unused", token: token) }
+        harness.marmot.sendText = { _, _, _, token in accepted("unused", token: token) }
 
         let first = try #require(harness.composer.stage(text: "same"))
         let second = try #require(harness.composer.stage(text: "same"))
@@ -278,7 +278,7 @@ struct OutgoingSendResponsivenessTests {
     @Test func anAmbiguousCompletionKeepsTheBubbleClaimableRatherThanFailed() async throws {
         let harness = SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _, token in throw MarmotKitError.AccountWorkerResponseTimedOut }
+        harness.marmot.sendText = { _, _, _, token in throw MarmotKitError.AccountWorkerResponseTimedOut }
 
         await harness.composer.send("maybe landed")
         let rowID = try #require(harness.rowIDs.first)
@@ -293,7 +293,7 @@ struct OutgoingSendResponsivenessTests {
     @Test func aDefinitiveFailureCannotPaintOverAnAlreadyProjectedRow() async throws {
         let harness = SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _, token in
+        harness.marmot.sendText = { _, _, _, token in
             harness.installWindow([harness.ownRecord(id: hexId(12), text: "landed", timelineAt: 70, delivered: false, token: token)])
             throw MarmotKitError.Runtime(details: "relay disconnected")
         }
@@ -309,7 +309,7 @@ struct OutgoingSendResponsivenessTests {
     @Test func aConversationResetDuringPreparationRetiresTheStagedSend() async throws {
         let harness = SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _, token in
+        harness.marmot.sendText = { _, _, _, token in
             Issue.record("A retired conversation must not reach the SDK")
             return accepted("unused", token: token)
         }
@@ -325,7 +325,7 @@ struct OutgoingSendResponsivenessTests {
     @Test func anAccountSwitchDuringPreparationRetiresTheStagedSend() async throws {
         let harness = SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _, token in
+        harness.marmot.sendText = { _, _, _, token in
             Issue.record("A retired account must not reach the SDK")
             return accepted("unused", token: token)
         }
@@ -347,15 +347,17 @@ private final class SendHarness {
     let viewModel: ConversationViewModel
     let store: TimelineStore
     let composer: ComposerModel
+    let marmot: ComposerMarmotDouble
 
     init() {
+        marmot = ComposerMarmotDouble()
         appState = AppState.test()
         appState.activeAccountRef = "account-ref"
-        viewModel = ConversationViewModel(appState: appState, group: harnessGroup())
+        viewModel = ConversationViewModel(appState: appState, group: harnessGroup(), composerMarmotCalls: marmot.calls)
         store = viewModel.timelineStore
         composer = viewModel.composer
         composer.canSendMessages = { true }
-        composer.localSendStatusForTesting = { _ in nil }
+        marmot.localSendStatus = { _, _, _ in nil }
         composer.canSendMediaAttachments = { true }
     }
 

@@ -184,10 +184,12 @@ struct SendDispatchAndCancellationTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: appState, groupIdHex: groupId)
-        let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store)
+        let marmot = ComposerMarmotDouble()
+        let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store,
+                                     marmotCalls: marmot.calls)
         composer.canSendMessages = { true }
-        composer.localSendStatusForTesting = { _ in .rejected }
-        composer.sendTextForTesting = { _, _, _, _, _ in throw MarmotKitError.Publish(details: "event too large") }
+        marmot.localSendStatus = { _, _, _ in .rejected }
+        marmot.sendText = { _, _, _, _ in throw MarmotKitError.Publish(details: "event too large") }
 
         let staged = try #require(composer.stage(text: "hello", reportsSizeRejection: true))
         let rejection = await composer.submit(staged)
@@ -202,10 +204,12 @@ struct SendDispatchAndCancellationTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: appState, groupIdHex: groupId)
-        let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store)
+        let marmot = ComposerMarmotDouble()
+        let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store,
+                                     marmotCalls: marmot.calls)
         composer.canSendMessages = { true }
-        composer.localSendStatusForTesting = { _ in .rejected }
-        composer.sendTextForTesting = { _, _, _, _, _ in throw MarmotKitError.Publish(details: "event too large") }
+        marmot.localSendStatus = { _, _, _ in .rejected }
+        marmot.sendText = { _, _, _, _ in throw MarmotKitError.Publish(details: "event too large") }
 
         let staged = try #require(composer.stage(text: "hello"))
         let rejection = await composer.submit(staged)
@@ -219,12 +223,14 @@ struct SendDispatchAndCancellationTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: appState, groupIdHex: groupId)
-        let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store)
+        let marmot = ComposerMarmotDouble()
+        let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store,
+                                     marmotCalls: marmot.calls)
         composer.canSendMessages = { true }
         let statuses: [LocalSendStatusFfi?] = [nil, .queued]
         for status in statuses {
-            composer.localSendStatusForTesting = { _ in status }
-            composer.sendTextForTesting = { _, _, _, _, _ in
+            marmot.localSendStatus = { _, _, _ in status }
+            marmot.sendText = { _, _, _, _ in
                 if status == nil { throw MarmotKitError.AccountWorkerResponseTimedOut }
                 throw MarmotKitError.Publish(details: "event too large")
             }

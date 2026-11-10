@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import Observation
 import MarmotKit
@@ -100,21 +99,19 @@ final class ComposerModel {
     @ObservationIgnored let uploadProgress: MediaUploadProgressStore
     /// Surfaces a send failure to the view model (sets its observable `error`).
     @ObservationIgnored var onError: (String) -> Void = { _ in }
-#if DEBUG
-    @ObservationIgnored var localSendStatusForTesting: ((String) async throws -> LocalSendStatusFfi?)?
-    @ObservationIgnored var sendTextForTesting:
-        ((String, String, String?, String, String) async throws -> LocalSendAcceptanceFfi)?
-#endif
+    @ObservationIgnored private let marmotCalls: ComposerMarmotCalls
 
     init(
         appState: AppState?,
         groupIdHex: String,
         timelineStore: TimelineStore,
-        draftMediaUploader: DraftMediaPreuploads.Uploader? = nil
+        draftMediaUploader: DraftMediaPreuploads.Uploader? = nil,
+        marmotCalls: ComposerMarmotCalls = .live
     ) {
         self.appState = appState
         self.groupIdHex = groupIdHex
         self.timelineStore = timelineStore
+        self.marmotCalls = marmotCalls
         let uploadProgress = MediaUploadProgressStore()
         self.uploadProgress = uploadProgress
         self.draftMediaUploads = DraftMediaPreuploads(uploader: draftMediaUploader ?? { [weak appState] accountRef, attachment in
@@ -419,30 +416,13 @@ final class ComposerModel {
         draftRevision: MessageDraftRevisionFfi?,
         clientToken: String
     ) async throws -> LocalSendAcceptanceFfi {
-#if DEBUG
-        if let sendTextForTesting {
-            return try await sendTextForTesting(accountRef, groupIdHex, replyTargetId, text, clientToken)
-        }
-#endif
-        let client = try appState.currentMarmotClient()
         if let draftRevision {
-            return try await client.sendDraftWithClientToken(accountRef: accountRef, revision: draftRevision, attachments: [], clientToken: clientToken)
+            return try await marmotCalls.sendDraft(appState, accountRef, draftRevision, clientToken)
         }
         if let replyTargetId {
-            return try await client.replyWithClientToken(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                targetMessageId: replyTargetId,
-                text: text,
-                clientToken: clientToken
-            )
+            return try await marmotCalls.reply(appState, accountRef, groupIdHex, replyTargetId, text, clientToken)
         }
-        return try await client.sendTextWithClientToken(
-            accountRef: accountRef,
-            groupIdHex: groupIdHex,
-            text: text,
-            clientToken: clientToken
-        )
+        return try await marmotCalls.sendText(appState, accountRef, groupIdHex, text, clientToken)
     }
 
     func sendMedia(_ attachments: [MediaDraftAttachment], caption: String,
@@ -633,20 +613,8 @@ final class ComposerModel {
 
     private func recoverSubmission(_ staged: StagedOutgoingSend, appState: AppState, error: Error) async -> Bool {
         do {
-            let status: LocalSendStatusFfi?
-            #if DEBUG
-            if let localSendStatusForTesting {
-                status = try await localSendStatusForTesting(staged.clientToken)
-            } else {
-                let client = try appState.currentMarmotClient()
-                status = try await client.localSendStatus(accountRef: staged.accountRef,
-                    groupIdHex: groupIdHex, clientToken: staged.clientToken)
-            }
-            #else
-            let client = try appState.currentMarmotClient()
-            status = try await client.localSendStatus(accountRef: staged.accountRef,
-                groupIdHex: groupIdHex, clientToken: staged.clientToken)
-            #endif
+            let status = try await marmotCalls.localSendStatus(
+                appState, staged.accountRef, groupIdHex, staged.clientToken)
             guard timelineStore.outgoingLifetime == staged.lifetime,
                   appState.activeAccountRef == staged.accountRef else { return true }
             switch status {

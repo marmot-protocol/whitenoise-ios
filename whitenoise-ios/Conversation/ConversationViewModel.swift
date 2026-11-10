@@ -1108,7 +1108,8 @@ final class ConversationViewModel {
             )
         },
         durableRetryOperations: DurableRetryOperations = .live,
-        projectionBuilders: ConversationProjectionBuilders = .live
+        projectionBuilders: ConversationProjectionBuilders = .live,
+        composerMarmotCalls: ComposerMarmotCalls = .live
     ) {
         self.appState = appState
         self.moderationAccountRef = appState.activeAccountRef
@@ -1130,7 +1131,8 @@ final class ConversationViewModel {
             projectionBuilders: projectionBuilders
         )
         self.streamWatcher = StreamWatcher(appState: appState, groupIdHex: group.groupIdHex)
-        self.composer = ComposerModel(appState: appState, groupIdHex: group.groupIdHex, timelineStore: timelineStore)
+        self.composer = ComposerModel(appState: appState, groupIdHex: group.groupIdHex, timelineStore: timelineStore,
+                                      marmotCalls: composerMarmotCalls)
         self.search = ConversationSearchModel()
         self.search.analytics = appState.productAnalytics
         search.entriesProvider = { [weak self] in self?.searchableTimelineEntries() ?? [] }

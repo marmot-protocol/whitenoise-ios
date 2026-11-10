@@ -14,10 +14,12 @@ struct ComposerSendHandOffTests {
         let state = AppState.test()
         state.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
-        let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
+        let marmot = ComposerMarmotDouble()
+        let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store,
+                                     marmotCalls: marmot.calls)
         composer.canSendMessages = { true }
-        composer.localSendStatusForTesting = { _ in nil }
-        composer.sendTextForTesting = { _, _, _, _, token in throw MarmotKitError.AccountWorkerResponseTimedOut }
+        marmot.localSendStatus = { _, _, _ in nil }
+        marmot.sendText = { _, _, _, token in throw MarmotKitError.AccountWorkerResponseTimedOut }
         await composer.send("uncertain send")
         let row = try #require(store.timeline.first)
         #expect(store.localSendPhase(rowID: row.id) == .completionUnknown)
@@ -29,10 +31,12 @@ struct ComposerSendHandOffTests {
         let state = AppState.test()
         state.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
-        let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
+        let marmot = ComposerMarmotDouble()
+        let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store,
+                                     marmotCalls: marmot.calls)
         composer.canSendMessages = { true }
-        composer.localSendStatusForTesting = { _ in nil }
-        composer.sendTextForTesting = { _, _, _, _, token in
+        marmot.localSendStatus = { _, _, _ in nil }
+        marmot.sendText = { _, _, _, token in
             store.resetOptimisticState()
             return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: "late")
         }
@@ -44,12 +48,14 @@ struct ComposerSendHandOffTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
-        let composer = ComposerModel(appState: appState, groupIdHex: hex("aa"), timelineStore: timelineStore)
+        let marmot = ComposerMarmotDouble()
+        let composer = ComposerModel(appState: appState, groupIdHex: hex("aa"), timelineStore: timelineStore,
+                                     marmotCalls: marmot.calls)
         composer.canSendMessages = { true }
-        composer.localSendStatusForTesting = { _ in nil }
+        marmot.localSendStatus = { _, _, _ in nil }
         var inlineError: String?
         composer.onError = { inlineError = $0 }
-        composer.sendTextForTesting = { _, _, _, _, token in
+        marmot.sendText = { _, _, _, token in
             throw MarmotKitError.Runtime(details: "relay disconnected")
         }
 
@@ -102,15 +108,17 @@ struct ComposerSendHandOffTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let marmot = ComposerMarmotDouble()
         let composer = ComposerModel(
             appState: appState,
             groupIdHex: hex("aa"),
-            timelineStore: timelineStore
+            timelineStore: timelineStore,
+            marmotCalls: marmot.calls
         )
         composer.canSendMessages = { true }
-        composer.localSendStatusForTesting = { _ in nil }
+        marmot.localSendStatus = { _, _, _ in nil }
         var stagedRowsDuringPublish: [Int] = []
-        composer.sendTextForTesting = { _, _, _, text, token in
+        marmot.sendText = { _, _, text, token in
             if text == "first" {
                 // A second Send lands mid round-trip: it must park its own
                 // bubble rather than wait behind the first message's publish.
@@ -129,15 +137,17 @@ struct ComposerSendHandOffTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let marmot = ComposerMarmotDouble()
         let composer = ComposerModel(
             appState: appState,
             groupIdHex: hex("aa"),
-            timelineStore: timelineStore
+            timelineStore: timelineStore,
+            marmotCalls: marmot.calls
         )
         composer.canSendMessages = { true }
-        composer.localSendStatusForTesting = { _ in nil }
+        marmot.localSendStatus = { _, _, _ in nil }
         var sentTexts: [String] = []
-        composer.sendTextForTesting = { _, _, _, text, token in
+        marmot.sendText = { _, _, text, token in
             sentTexts.append(text)
             return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("bb"))
         }
@@ -153,19 +163,77 @@ struct ComposerSendHandOffTests {
         #expect(sentTexts == [exact])
     }
 
+    @Test func aReplyIsSentAsAReplyToItsTarget() async {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let marmot = ComposerMarmotDouble()
+        let composer = ComposerModel(
+            appState: appState,
+            groupIdHex: hex("aa"),
+            timelineStore: timelineStore,
+            marmotCalls: marmot.calls
+        )
+        composer.canSendMessages = { true }
+        composer.restoreReplyTarget(messageIdHex: hex("cc"), record: nil)
+        var replies: [(accountRef: String, groupIdHex: String, target: String, text: String)] = []
+        marmot.reply = { accountRef, groupIdHex, target, text, token in
+            replies.append((accountRef, groupIdHex, target, text))
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("dd"))
+        }
+
+        // The double records an issue if the reply goes out as a plain send.
+        await composer.send("thanks")
+
+        #expect(replies.map(\.accountRef) == ["account-ref"])
+        #expect(replies.map(\.groupIdHex) == [hex("aa")])
+        #expect(replies.map(\.target) == [hex("cc")])
+        #expect(replies.map(\.text) == ["thanks"])
+    }
+
+    @Test func aDraftSendWinsOverAReplyTarget() async {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let marmot = ComposerMarmotDouble()
+        let composer = ComposerModel(
+            appState: appState,
+            groupIdHex: hex("aa"),
+            timelineStore: timelineStore,
+            marmotCalls: marmot.calls
+        )
+        composer.canSendMessages = { true }
+        composer.restoreReplyTarget(messageIdHex: hex("cc"), record: nil)
+        // Pointerless fake revision: it only reaches the double, never MDK.
+        let revision = MessageDraftRevisionFfi(noPointer: .init())
+        var draftSends = 0
+        marmot.sendDraft = { _, _, token in
+            draftSends += 1
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("dd"))
+        }
+
+        // A saved draft carries its own reply, so its revision is what MDK
+        // finalizes; the double records an issue for a reply or plain send.
+        await composer.send("from the draft", draftRevision: revision)
+
+        #expect(draftSends == 1)
+    }
+
     @Test func durablyAcceptedComposerOutcomesKeepClockWithoutFailureUI() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let marmot = ComposerMarmotDouble()
         let composer = ComposerModel(
             appState: appState,
             groupIdHex: hex("aa"),
-            timelineStore: timelineStore
+            timelineStore: timelineStore,
+            marmotCalls: marmot.calls
         )
         composer.canSendMessages = { true }
         var surfacedErrors: [String] = []
         composer.onError = { surfacedErrors.append($0) }
-        composer.sendTextForTesting = { _, _, _, _, token in
+        marmot.sendText = { _, _, _, token in
             LocalSendAcceptanceFfi(clientToken: token, messageIdHex: "local")
         }
 
@@ -184,16 +252,18 @@ struct ComposerSendHandOffTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
+        let marmot = ComposerMarmotDouble()
         let composer = ComposerModel(
             appState: appState,
             groupIdHex: hex("aa"),
-            timelineStore: timelineStore
+            timelineStore: timelineStore,
+            marmotCalls: marmot.calls
         )
         composer.canSendMessages = { true }
         var surfacedErrors: [String] = []
         composer.onError = { surfacedErrors.append($0) }
-        composer.localSendStatusForTesting = { _ in nil }
-        composer.sendTextForTesting = { _, _, _, _, _ in
+        marmot.localSendStatus = { _, _, _ in nil }
+        marmot.sendText = { _, _, _, _ in
             throw NSError(domain: "ComposerSendTests", code: 1)
         }
 

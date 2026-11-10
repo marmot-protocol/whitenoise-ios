@@ -73,16 +73,18 @@ struct ConversationWindowBindingTests {
                     description: nil, initialImage: nil, disappearingMessageSecs: 0))
             state.activeAccountRef = account.label
             let timeline = TimelineStore(appState: state, groupIdHex: group.groupIdHex)
-            let composer = ComposerModel(appState: state, groupIdHex: group.groupIdHex, timelineStore: timeline)
-            composer.canSendMessages = { true }
-            let snapshot = ConversationDraftSnapshot(canonicalText: "send once", replyToMessageIdHex: nil, mediaAttachments: [])
-            let revision = try await drafts.prepareSend(snapshot, accountRef: account.label, groupIdHex: group.groupIdHex)
-            composer.sendTextForTesting = { _, _, _, _, token in
+            var calls = ComposerMarmotCalls.live
+            calls.sendDraft = { _, _, revision, token in
                 if accepted {
                     _ = try await client.sendDraftWithClientToken(accountRef: account.label, revision: revision, attachments: [], clientToken: token)
                 }
                 throw MarmotKitError.Runtime(details: "delivery failed")
             }
+            let composer = ComposerModel(appState: state, groupIdHex: group.groupIdHex, timelineStore: timeline,
+                                         marmotCalls: calls)
+            composer.canSendMessages = { true }
+            let snapshot = ConversationDraftSnapshot(canonicalText: "send once", replyToMessageIdHex: nil, mediaAttachments: [])
+            let revision = try await drafts.prepareSend(snapshot, accountRef: account.label, groupIdHex: group.groupIdHex)
             await composer.send("send once", draftRevision: revision) { refresh in
                 #expect(refresh == accepted)
                 await drafts.finishSend(accountRef: account.label, groupIdHex: group.groupIdHex, accepted: refresh)
