@@ -24,15 +24,29 @@ struct VoiceMessageRecorderLifecycleTests {
         #expect((persisted.last ?? 1) < 0.2)
     }
 
-    @Test func meteringTaskDoesNotRetainRecorderOwner() async {
-        var recorder: VoiceMessageRecorder? = VoiceMessageRecorder()
+    @Test func releasingARecordingRecorderStopsTheMicrophone() async throws {
+        let session = AudioSessionSpy()
+        let microphone = VoiceRecordingMicrophoneDouble()
+        var recorder: VoiceMessageRecorder? = VoiceMessageRecorder(
+            audioSession: session,
+            microphone: microphone.microphone
+        )
         weak let weakRecorder = recorder
 
-        recorder?.startMeteringForTesting()
+        recorder?.beginPress { error in Issue.record(error, "recording failed to start") }
+        try await eventually { recorder?.hasStartedRecording == true }
+        // Let the metering loop take a reading, so it is mid-loop when the
+        // recorder is released.
+        try await eventually { recorder?.waveformSamples.isEmpty == false }
+
+        // The metering loop must not keep the recorder alive, so releasing it
+        // stops the microphone and hands the audio session back.
         recorder = nil
         await Task.yield()
 
         #expect(weakRecorder == nil)
+        #expect(microphone.stops == 1)
+        #expect(session.activeCalls.last?.active == false)
     }
 
     @Test func pendingHoldTaskDoesNotRetainRecorderOwner() async {

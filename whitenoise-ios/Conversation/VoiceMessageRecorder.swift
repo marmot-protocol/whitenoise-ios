@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import AVFoundation
 import Combine
 import SwiftUI
@@ -92,7 +91,9 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
     @Published private(set) var waveformSamples: [CGFloat] = []
     @Published private(set) var durationSeconds: Double = 0
 
-    private var recorder: AVAudioRecorder?
+    private let audioSession: VoiceAudioSessionConfiguring
+    private let microphone: VoiceRecordingMicrophone
+    private var take: VoiceRecordingTake?
     private var recordingURL: URL?
     private var audioSessionLease: VoiceAudioSession.Lease?
     private var currentDragTranslation: CGSize = .zero
@@ -104,8 +105,17 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
     var isLocked: Bool { state.isLocked }
     var hasStartedRecording: Bool { state.hasStartedRecording }
 
+    init(
+        audioSession: VoiceAudioSessionConfiguring = AVAudioSession.sharedInstance(),
+        microphone: VoiceRecordingMicrophone = .live
+    ) {
+        self.audioSession = audioSession
+        self.microphone = microphone
+        super.init()
+    }
+
     isolated deinit {
-        if state.isActive || recorder != nil || recordingURL != nil || holdTask != nil || meterTask != nil {
+        if state.isActive || take != nil || recordingURL != nil || holdTask != nil || meterTask != nil {
             reset(deleteFile: true)
         }
     }
@@ -189,21 +199,15 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         cancel()
     }
 
-#if DEBUG
-    func startMeteringForTesting() {
-        startMetering()
-    }
-#endif
-
     private func startRecording() async throws {
-        let hasPermission = await requestRecordPermission()
+        let hasPermission = await microphone.requestPermission()
         try Task.checkCancellation()
         guard hasPermission else {
             throw Failure.permissionDenied
         }
 
         do {
-            audioSessionLease = try VoiceAudioSession.configureForRecording()
+            audioSessionLease = try VoiceAudioSession.configureForRecording(audioSession)
         } catch {
             throw Failure.startFailed
         }
@@ -222,27 +226,17 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
 
         let fileName = "voice-\(Int(Date().timeIntervalSince1970)).m4a"
         let url = directory.appendingPathComponent(fileName)
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44_100,
-            AVEncoderBitRateKey: MediaQualityStore.quality().audioBitrateBps,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
-        ]
-
         do {
-            let recorder = try AVAudioRecorder(url: url, settings: settings)
-            recorder.isMeteringEnabled = true
-            guard recorder.record() else { throw Failure.startFailed }
+            let take = try microphone.startRecording(url)
             // A release that ran between the pre-flight checkpoint and here
             // already cancelled this task; committing anyway leaves a live
             // microphone behind a banner the user believes they dismissed.
             if Task.isCancelled {
-                recorder.stop()
+                take.stop()
                 try? FileManager.default.removeItem(at: url)
                 throw CancellationError()
             }
-            self.recorder = recorder
+            self.take = take
             self.recordingURL = url
             state = .recording(locked: VoiceRecordingGesturePolicy.shouldLock(translation: currentDragTranslation))
             Haptics.tap()
@@ -251,20 +245,6 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
             throw CancellationError()
         } catch {
             throw Failure.startFailed
-        }
-    }
-
-    private func requestRecordPermission() async -> Bool {
-        await withCheckedContinuation { continuation in
-            if #available(iOS 17.0, *) {
-                AVAudioApplication.requestRecordPermission { granted in
-                    continuation.resume(returning: granted)
-                }
-            } else {
-                AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                    continuation.resume(returning: granted)
-                }
-            }
         }
     }
 
@@ -277,10 +257,10 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
                 } catch {
                     return
                 }
-                guard !Task.isCancelled, let self, let recorder = self.recorder else { return }
-                recorder.updateMeters()
-                self.durationSeconds = recorder.currentTime
-                let power = recorder.averagePower(forChannel: 0)
+                guard !Task.isCancelled, let self, let take = self.take else { return }
+                let level = take.meter()
+                self.durationSeconds = level.seconds
+                let power = level.averagePower
                 let normalized = max(0.05, min(1, CGFloat(pow(10, power / 36))))
                 self.waveformAccumulator.append(normalized)
                 self.waveformSamples.append(normalized)
@@ -292,12 +272,12 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
     }
 
     private func finishRecording() -> VoiceRecordingResult? {
-        guard let recorder, let url = recordingURL else {
+        guard let take, let url = recordingURL else {
             reset(deleteFile: true)
             return nil
         }
-        let duration = max(durationSeconds, recorder.currentTime)
-        recorder.stop()
+        let duration = max(durationSeconds, take.currentTime())
+        take.stop()
         try? FileManager.default.setAttributes(
             [.protectionKey: VoiceRecordingFileProtection.completedRecording],
             ofItemAtPath: url.path
@@ -317,8 +297,8 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         holdTask = nil
         meterTask?.cancel()
         meterTask = nil
-        recorder?.stop()
-        recorder = nil
+        take?.stop()
+        take = nil
         let url = recordingURL
         recordingURL = nil
         currentDragTranslation = .zero
