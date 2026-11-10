@@ -570,9 +570,9 @@ enum ConversationInvitePresentation {
 
     /// MDK treats a decline as leaving, so an admin invitee steps down first,
     /// and the only admin can't.
-    static func declinePlan(state: GroupManagementStateFfi?) -> InviteDeclinePlan {
-        guard let state, state.requiresSelfDemoteBeforeLeave else { return .decline }
-        guard GroupManagementPresentation.canSelfDemote(state: state) else {
+    static func declinePlan(requiresStepDown: Bool, isLastAdmin: Bool) -> InviteDeclinePlan {
+        guard requiresStepDown else { return .decline }
+        guard !isLastAdmin else {
             return .blocked(L10n.string("You're this group's only admin, so you can't decline. Accept the invitation, then make another member an admin before you leave."))
         }
         return .stepDownFirst
@@ -1644,13 +1644,14 @@ struct ConversationView: View {
             titleVisibility: .visible
         ) {
             Button(L10n.string("Step Down and Decline"), role: .destructive) {
-                declineInvite(viewModel: viewModel, steppingDown: true)
+                Task { await finishInviteDecline(viewModel: viewModel, steppingDown: true) }
             }
             Button(L10n.string("Cancel"), role: .cancel) {}
         } message: {
             Text("You were added as an admin. You'll step down as admin first, then decline. Group members will see that you stepped down.")
         }
         .groupChangeAdvisoryAlert(viewModel.advisoryPrompter)
+        .onDisappear { viewModel.advisoryPrompter.cancelPending() }
     }
 
     private func blockedLeaveComposerAction(viewModel: ConversationViewModel) -> ComposerDisabledAction? {
@@ -2948,7 +2949,8 @@ struct ConversationView: View {
     private func prepareInviteDecline(viewModel: ConversationViewModel) {
         Task {
             switch await viewModel.prepareInviteDecline() {
-            case .decline: declineInvite(viewModel: viewModel, steppingDown: false)
+            // Awaited in this task, so Accept can't start between the read and the decline.
+            case .decline: await finishInviteDecline(viewModel: viewModel, steppingDown: false)
             case .stepDownFirst: showStepDownDeclineConfirmation = true
             case .blocked(let reason):
                 Haptics.error()
@@ -2958,12 +2960,10 @@ struct ConversationView: View {
         }
     }
 
-    private func declineInvite(viewModel: ConversationViewModel, steppingDown: Bool) {
-        Task {
-            guard let updated = await viewModel.declineInvite(steppingDown: steppingDown) else { return }
-            onGroupChanged?(updated)
-            onGroupLeft?(updated.groupIdHex)
-        }
+    private func finishInviteDecline(viewModel: ConversationViewModel, steppingDown: Bool) async {
+        guard let updated = await viewModel.declineInvite(steppingDown: steppingDown) else { return }
+        onGroupChanged?(updated)
+        onGroupLeft?(updated.groupIdHex)
     }
 
     private func send() {

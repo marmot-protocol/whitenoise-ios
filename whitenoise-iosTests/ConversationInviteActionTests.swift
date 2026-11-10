@@ -48,7 +48,7 @@ struct ConversationInviteActionTests {
         let viewModel = ConversationViewModel(
             appState: appState,
             group: pending,
-            inviteDeclineCalls: inviteDeclineCalls(log: { calls.append($0) }, declined: declined)
+            inviteDeclineCalls: inviteDeclineCalls(log: { calls.append($0) }, pending: pending, declined: declined)
         )
 
         let updated = await viewModel.declineInvite()
@@ -70,7 +70,7 @@ struct ConversationInviteActionTests {
         let viewModel = ConversationViewModel(
             appState: appState,
             group: pending,
-            inviteDeclineCalls: inviteDeclineCalls(log: { calls.append($0) }, declined: declined)
+            inviteDeclineCalls: inviteDeclineCalls(log: { calls.append($0) }, pending: pending, declined: declined)
         )
 
         let updated = await viewModel.declineInvite(steppingDown: true)
@@ -94,6 +94,7 @@ struct ConversationInviteActionTests {
             group: pending,
             inviteDeclineCalls: inviteDeclineCalls(
                 log: { calls.append($0) },
+                pending: pending,
                 declined: pending,
                 selfDemoteError: MarmotKitError.AdminCannotSelfRemove(groupIdHex: pending.groupIdHex)
             )
@@ -107,10 +108,57 @@ struct ConversationInviteActionTests {
         #expect(viewModel.inviteActionInFlight == nil)
     }
 
+    @Test func declineAfterAStepDownThatOutlivedAFailedDeclineNeedsNoSecondStepDown() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let pending = group(name: "invited", pendingConfirmation: true)
+        var calls: [String] = []
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            inviteDeclineCalls: inviteDeclineCalls(
+                log: { calls.append($0) },
+                pending: pending,
+                declined: pending,
+                declineError: MarmotKitError.AccountWorkerBusy
+            )
+        )
+
+        let updated = await viewModel.declineInvite(steppingDown: true)
+
+        #expect(calls == [
+            "selfDemote account-ref \(pending.groupIdHex)",
+            "decline account-ref \(pending.groupIdHex)"
+        ])
+        #expect(updated == nil)
+        #expect(viewModel.hasPendingInvite)
+        #expect(await viewModel.prepareInviteDecline() == .decline)
+    }
+
+    @Test func declinePlanFallsBackToTheWindowWhenTheAdminStateCantBeRead() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let pending = group(name: "invited", pendingConfirmation: true)
+        var snapshot = conversationWindowSnapshot(groupIdHex: pending.groupIdHex)
+        snapshot.pendingConfirmation = true
+        snapshot.header.capabilities.isLastAdmin = false
+        snapshot.header.capabilities.requiresSelfDemoteBeforeLeave = true
+        let viewModel = ConversationViewModel(appState: appState, group: pending)
+        viewModel.installConversationWindow(snapshot)
+
+        // AppState.test() has no runtime, so the management read fails.
+        #expect(await viewModel.prepareInviteDecline() == .stepDownFirst)
+        #expect(viewModel.inviteActionInFlight == nil)
+    }
+
+    /// The step-down leaves the invitation pending with admin status removed;
+    /// only the decline ends it.
     private func inviteDeclineCalls(
         log: @escaping @MainActor (String) -> Void,
+        pending: AppGroupRecordFfi,
         declined: AppGroupRecordFfi,
-        selfDemoteError: Error? = nil
+        selfDemoteError: Error? = nil,
+        declineError: Error? = nil
     ) -> InviteDeclineCalls {
         InviteDeclineCalls(
             selfDemote: { _, _, accountRef, groupIdHex in
@@ -118,12 +166,13 @@ struct ConversationInviteActionTests {
                 if let selfDemoteError { throw selfDemoteError }
                 return GroupMutationResultFfi(
                     summary: SendSummaryFfi(published: 1, messageIds: []),
-                    details: GroupDetailsFfi(group: declined, members: []),
+                    details: GroupDetailsFfi(group: pending, members: []),
                     managementState: managementState(isSelfAdmin: false, isLastAdmin: false)
                 )
             },
             decline: { _, accountRef, groupIdHex in
                 log("decline \(accountRef) \(groupIdHex)")
+                if let declineError { throw declineError }
                 return GroupInviteDeclineResultFfi(group: declined, summary: SendSummaryFfi(published: 1, messageIds: []))
             }
         )

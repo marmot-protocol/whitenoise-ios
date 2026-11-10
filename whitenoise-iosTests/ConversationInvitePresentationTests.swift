@@ -83,14 +83,11 @@ struct ConversationInvitePresentationTests {
     }
 
     @Test func adminInviteeMustStepDownBeforeDeclining() {
-        let admin = managementState(isSelfAdmin: true, isLastAdmin: false, requiresSelfDemoteBeforeLeave: true)
-        let onlyAdmin = managementState(isSelfAdmin: true, isLastAdmin: true, requiresSelfDemoteBeforeLeave: true)
-        let member = managementState(isSelfAdmin: false, isLastAdmin: false)
-
-        #expect(ConversationInvitePresentation.declinePlan(state: admin) == .stepDownFirst)
-        #expect(ConversationInvitePresentation.declinePlan(state: member) == .decline)
-        #expect(ConversationInvitePresentation.declinePlan(state: nil) == .decline)
-        guard case .blocked(let reason) = ConversationInvitePresentation.declinePlan(state: onlyAdmin) else {
+        #expect(ConversationInvitePresentation.declinePlan(requiresStepDown: true, isLastAdmin: false) == .stepDownFirst)
+        #expect(ConversationInvitePresentation.declinePlan(requiresStepDown: false, isLastAdmin: false) == .decline)
+        guard case .blocked(let reason) = ConversationInvitePresentation.declinePlan(
+            requiresStepDown: true, isLastAdmin: true
+        ) else {
             Issue.record("The only admin can't step down, so it can't decline")
             return
         }

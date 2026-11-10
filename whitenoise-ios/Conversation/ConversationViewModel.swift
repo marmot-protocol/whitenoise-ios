@@ -3122,8 +3122,18 @@ final class ConversationViewModel {
         guard hasPendingInvite, inviteActionInFlight == nil else { return nil }
         inviteActionInFlight = .declining
         defer { inviteActionInFlight = nil }
-        _ = await refreshGroupManagement()
-        return ConversationInvitePresentation.declinePlan(state: managementState)
+        if await refreshGroupManagement(), let state = managementState {
+            return ConversationInvitePresentation.declinePlan(
+                requiresStepDown: state.requiresSelfDemoteBeforeLeave,
+                isLastAdmin: state.isLastAdmin
+            )
+        }
+        // The window carries the same capabilities when the read fails.
+        let capabilities = conversationWindow?.header.capabilities
+        return ConversationInvitePresentation.declinePlan(
+            requiresStepDown: capabilities?.requiresSelfDemoteBeforeLeave ?? managementState?.requiresSelfDemoteBeforeLeave ?? false,
+            isLastAdmin: capabilities?.isLastAdmin ?? managementState?.isLastAdmin ?? false
+        )
     }
 
     func declineInvite(steppingDown: Bool = false) async -> AppGroupRecordFfi? {
