@@ -99,30 +99,48 @@ struct RelativeTimeTests {
         #expect(counter.dateFormatterBuilds == 0)
     }
 
-    @Test func shortRefreshesFormatterCacheWhenLocaleIdentifierChanges() {
+    @Test func shortRefreshesFormatterCacheWhenLocaleIdentifierChanges() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let weekdayDate = now.addingTimeInterval(-3 * 24 * 3600)
+        let olderDate = now.addingTimeInterval(-30 * 24 * 3600)
+        let recentDate = now.addingTimeInterval(-4 * 60)
         let english = Locale(identifier: "en_US")
         let french = Locale(identifier: "fr_FR")
         let counter = RelativeTimeFormatterBuildCounter()
+        func short(_ date: Date, _ locale: Locale) -> String {
+            RelativeTime.short(date, now: now, calendar: calendar, locale: locale, formatters: counter.formatters)
+        }
 
-        _ = RelativeTime.short(weekdayDate, now: now, calendar: calendar, locale: english,
-                               formatters: counter.formatters)
-        _ = RelativeTime.short(weekdayDate, now: now, calendar: calendar, locale: english,
-                               formatters: counter.formatters)
-        #expect(counter.dateFormatterBuilds == 1)
-
-        _ = RelativeTime.short(weekdayDate, now: now, calendar: calendar, locale: french,
-                               formatters: counter.formatters)
+        // English fills both date shapes and a duration; repeats reuse them.
+        _ = short(weekdayDate, english)
+        _ = short(olderDate, english)
+        _ = short(recentDate, english)
+        _ = short(weekdayDate, english)
         #expect(counter.dateFormatterBuilds == 2)
+        #expect(counter.durationFormatterBuilds == 1)
+
+        // The first French lookup clears every cached formatter, not just the
+        // one it asked for: the other shapes rebuild in French too.
+        _ = short(weekdayDate, french)
+        #expect(counter.dateFormatterBuilds == 3)
         #expect(counter.builtDateFormatters.last?.locale.identifier == french.identifier)
 
-        // Switching back rebuilds: the French lookup dropped the English entry.
-        _ = RelativeTime.short(weekdayDate, now: now, calendar: calendar, locale: english,
-                               formatters: counter.formatters)
-        #expect(counter.dateFormatterBuilds == 3)
+        let frenchOlder = short(olderDate, french)
+        let expectedFormatter = DateFormatter()
+        expectedFormatter.locale = french
+        expectedFormatter.setLocalizedDateFormatFromTemplate("d MMM")
+        #expect(counter.dateFormatterBuilds == 4)
+        #expect(frenchOlder == expectedFormatter.string(from: olderDate))
+
+        let frenchRecent = short(recentDate, french)
+        #expect(counter.durationFormatterBuilds == 2)
+        #expect(frenchRecent == (try expectedAbbreviatedDuration(4, unit: .minute, locale: french)))
+
+        // Switching back rebuilds again.
+        _ = short(weekdayDate, english)
+        #expect(counter.dateFormatterBuilds == 5)
         #expect(counter.builtDateFormatters.last?.locale.identifier == english.identifier)
     }
 
