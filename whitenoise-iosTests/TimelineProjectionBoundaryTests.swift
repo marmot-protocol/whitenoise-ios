@@ -154,9 +154,11 @@ struct TimelineProjectionBoundaryTests {
     }
 
     @Test func markdownProjectionCacheSkipsUnchangedWindowRows() throws {
+        let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: testGroup()
+            group: testGroup(),
+            projectionBuilders: counter.builders
         )
         let tokens = doc([.paragraph(inlines: [.text(content: "hello **world**")])])
         let record = timelineRecord(
@@ -169,13 +171,13 @@ struct TimelineProjectionBoundaryTests {
             TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        #expect(viewModel.markdownProjectionBuildCountForTesting == 1)
+        #expect(counter.markdownBuilds == 1)
 
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        #expect(viewModel.markdownProjectionBuildCountForTesting == 1)
+        #expect(counter.markdownBuilds == 1)
 
         let updated = timelineRecord(
             messageIdHex: record.messageIdHex,
@@ -186,7 +188,7 @@ struct TimelineProjectionBoundaryTests {
             TimelinePageFfi(messages: [updated], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        #expect(viewModel.markdownProjectionBuildCountForTesting == 2)
+        #expect(counter.markdownBuilds == 2)
     }
 
     @Test func mediaProjectionCacheSkipsUnchangedWindowRows() throws {

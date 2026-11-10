@@ -134,9 +134,11 @@ struct AgentEventPresentationTests {
 
     @MainActor
     @Test func agentOperationTimelineRowIsVisibleWithoutStreamingDebug() throws {
+        let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: testAgentGroup()
+            group: testAgentGroup(),
+            projectionBuilders: counter.builders
         )
         let operation = timelineRecord(
             messageIdHex: hex("aa"),
@@ -160,10 +162,10 @@ struct AgentEventPresentationTests {
             return
         }
         #expect(record.kind == MessageSemantics.kindAgentOperation)
-        #expect(viewModel.agentEventProjectionBuildCountForTesting == 1)
+        #expect(counter.agentEventBuilds == 1)
         let item = try #require(viewModel.timeline.first)
         #expect(viewModel.agentEventDisplay(for: item)?.iconName == "wrench.and.screwdriver")
-        #expect(viewModel.agentEventProjectionBuildCountForTesting == 1)
+        #expect(counter.agentEventBuilds == 1)
 
         let updated = timelineRecord(
             messageIdHex: operation.messageIdHex,
@@ -181,12 +183,13 @@ struct AgentEventPresentationTests {
         )
         let updatedItem = try #require(viewModel.timeline.first)
         #expect(viewModel.agentEventDisplay(for: updatedItem)?.iconName == "hand.raised")
-        #expect(viewModel.agentEventProjectionBuildCountForTesting == 2)
+        #expect(counter.agentEventBuilds == 2)
     }
 
     @MainActor
     @Test func agentEventProjectionCacheReusesAndInvalidatesParsedDisplay() throws {
-        let cache = ConversationAgentEventProjectionCache()
+        let counter = ProjectionBuildCounter()
+        let cache = ConversationAgentEventProjectionCache(builders: counter.builders)
         let firstRecord = agentRecord(
             kind: MessageSemantics.kindAgentOperation,
             plaintext: #"{"v":1,"event_type":"tool_call","text":"Searching"}"#,
@@ -196,7 +199,7 @@ struct AgentEventPresentationTests {
 
         #expect(cache.display(for: firstItem)?.primaryText == "Searching")
         #expect(cache.display(for: firstItem)?.primaryText == "Searching")
-        #expect(cache.buildCountForTesting == 1)
+        #expect(counter.agentEventBuilds == 1)
 
         let changedRecord = agentRecord(
             kind: MessageSemantics.kindAgentOperation,
@@ -204,12 +207,13 @@ struct AgentEventPresentationTests {
             tags: [MessageTagFfi(values: ["operation", "tool_call"])]
         )
         #expect(cache.display(for: TimelineItem.message(changedRecord))?.primaryText == "Finished")
-        #expect(cache.buildCountForTesting == 2)
+        #expect(counter.agentEventBuilds == 2)
     }
 
     @MainActor
     @Test func ordinaryMessageNegativeProjectionIsClassifiedOnlyOnce() {
-        let cache = ConversationAgentEventProjectionCache()
+        let counter = ProjectionBuildCounter()
+        let cache = ConversationAgentEventProjectionCache(builders: counter.builders)
         let ordinary = TimelineItem.message(agentRecord(
             kind: MessageSemantics.kindChat,
             plaintext: "ordinary chat",
@@ -218,7 +222,7 @@ struct AgentEventPresentationTests {
 
         #expect(cache.display(for: ordinary) == nil)
         #expect(cache.display(for: ordinary) == nil)
-        #expect(cache.buildCountForTesting == 1)
+        #expect(counter.agentEventBuilds == 1)
 
         let changed = TimelineItem.message(agentRecord(
             kind: MessageSemantics.kindChat,
@@ -226,7 +230,7 @@ struct AgentEventPresentationTests {
             tags: []
         ))
         #expect(cache.display(for: changed) == nil)
-        #expect(cache.buildCountForTesting == 2)
+        #expect(counter.agentEventBuilds == 2)
     }
 }
 

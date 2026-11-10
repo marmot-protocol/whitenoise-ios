@@ -292,28 +292,29 @@ struct MarkdownTimestampTests {
     }
 
     @Test func generationChangeRebuildsTimestampRowsOnly() {
-        let cache = ConversationMarkdownProjectionCache()
+        let counter = ProjectionBuildCounter()
+        let cache = ConversationMarkdownProjectionCache(builders: counter.builders)
         let plain = item("plain", [.text(content: "hello")])
         let stamped = item("stamped", [.timestamp(unixSeconds: instant, style: .shortTime)])
         let relative = item("relative", [.timestamp(unixSeconds: instant, style: .relative)])
         let items = [plain, stamped, relative]
         cache.rebuild(for: items, onlyRowsWithMentions: false, resolver: { _ in nil })
-        #expect(cache.buildCountForTesting == 3)
+        #expect(counter.markdownBuilds == 3)
 
         cache.rebuild(for: items, onlyRowsWithMentions: false, resolver: { _ in nil })
-        #expect(cache.buildCountForTesting == 3)
+        #expect(counter.markdownBuilds == 3)
 
         cache.applyTimestampGeneration(1, to: items, resolver: { _ in nil })
-        #expect(cache.buildCountForTesting == 5)
+        #expect(counter.markdownBuilds == 5)
 
         cache.applyTimestampGeneration(1, to: items, resolver: { _ in nil })
         cache.rebuild(for: items, onlyRowsWithMentions: false, resolver: { _ in nil })
-        #expect(cache.buildCountForTesting == 5)
+        #expect(counter.markdownBuilds == 5)
 
         #expect(cache.relativeTimestampSeconds(forRowId: relative.id) == [instant])
         #expect(cache.relativeTimestampSeconds(forRowId: stamped.id).isEmpty)
         cache.refreshRelativeTimestamps(rowIds: [plain.id, stamped.id, relative.id], in: items, resolver: { _ in nil })
-        #expect(cache.buildCountForTesting == 6)
+        #expect(counter.markdownBuilds == 6)
     }
 
     // MARK: - Relative refresh scheduling
