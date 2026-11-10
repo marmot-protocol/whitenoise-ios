@@ -121,8 +121,12 @@ struct RelativeTimeTests {
         #expect(counter.dateFormatterBuilds == 2)
         #expect(counter.durationFormatterBuilds == 1)
 
-        // The first French lookup clears every cached formatter, not just the
-        // one it asked for: the other shapes rebuild in French too.
+        // A duration is the first French lookup: it clears every cached
+        // formatter, so it and both date shapes rebuild in French.
+        let frenchRecent = short(recentDate, french)
+        #expect(counter.durationFormatterBuilds == 2)
+        #expect(frenchRecent == (try expectedAbbreviatedDuration(4, unit: .minute, locale: french)))
+
         _ = short(weekdayDate, french)
         #expect(counter.dateFormatterBuilds == 3)
         #expect(counter.builtDateFormatters.last?.locale.identifier == french.identifier)
@@ -134,14 +138,12 @@ struct RelativeTimeTests {
         #expect(counter.dateFormatterBuilds == 4)
         #expect(frenchOlder == expectedFormatter.string(from: olderDate))
 
-        let frenchRecent = short(recentDate, french)
-        #expect(counter.durationFormatterBuilds == 2)
-        #expect(frenchRecent == (try expectedAbbreviatedDuration(4, unit: .minute, locale: french)))
-
-        // Switching back rebuilds again.
+        // Switching back with a date lookup first clears the duration too.
         _ = short(weekdayDate, english)
         #expect(counter.dateFormatterBuilds == 5)
         #expect(counter.builtDateFormatters.last?.locale.identifier == english.identifier)
+        _ = short(recentDate, english)
+        #expect(counter.durationFormatterBuilds == 3)
     }
 
     @Test func shortUsesLocalizedAbbreviatedDurationsForRecentRows() throws {
