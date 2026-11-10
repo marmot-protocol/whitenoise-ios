@@ -646,17 +646,18 @@ struct ChatsListProjectionTests {
         #expect(viewModel.archivedItems.first?.isArchived == true)
     }
 
-    @Test func localGroupChangeUpdatesProjectedAvatarURL() throws {
+    @Test func localGroupChangeUpdatesProjectedNameAndAvatar() throws {
         let viewModel = ChatsListViewModel(appState: AppState.test())
         let row = chatListRow(groupIdHex: hex("d6"), title: "General")
         viewModel.applyChatListSnapshot([row])
 
         viewModel.applyLocalGroupChange(group(
-            name: "General",
+            name: "Renamed",
             id: row.groupIdHex,
             avatarUrl: "https://cdn.example.com/group.png"
         ))
 
+        #expect(viewModel.items.first?.title == "Renamed")
         #expect(viewModel.items.first?.avatarURL?.absoluteString == "https://cdn.example.com/group.png")
     }
 
@@ -673,27 +674,7 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.first?.projectedGroup.leaveBlocked == true)
     }
 
-    @Test func localGroupChangeRefreshesCachedGroupDetailsDisplay() throws {
-        let groupId = hex("d8")
-        let viewModel = ChatsListViewModel(appState: AppState.test())
-        let row = chatListRow(groupIdHex: groupId, title: groupId, groupName: "")
-        viewModel.applyChatListSnapshot([row])
-        viewModel.seedGroupDetailsCacheForTesting(GroupDetailsFfi(
-            group: group(name: "Old name", id: groupId, avatarUrl: "https://cdn.example.com/old.png"),
-            members: [groupMember(memberIdHex: hex("11"), isAdmin: true, isSelf: true)]
-        ))
-
-        viewModel.applyLocalGroupChange(group(
-            name: "New name",
-            id: groupId,
-            avatarUrl: "https://cdn.example.com/new.png"
-        ))
-
-        #expect(viewModel.items.first?.title == "New name")
-        #expect(viewModel.items.first?.avatarURL?.absoluteString == "https://cdn.example.com/new.png")
-    }
-
-    @Test func chatListRowRefreshesCachedGroupDetailsDisplay() throws {
+    @Test func chatListRowRefreshesDisplayedNameAndAvatar() throws {
         let groupId = hex("d9")
         let viewModel = ChatsListViewModel(appState: AppState.test())
         let oldRow = chatListRow(
@@ -703,10 +684,6 @@ struct ChatsListProjectionTests {
             avatarUrl: "https://cdn.example.com/old.png"
         )
         viewModel.applyChatListSnapshot([oldRow])
-        viewModel.seedGroupDetailsCacheForTesting(GroupDetailsFfi(
-            group: group(name: "Old name", id: groupId, avatarUrl: "https://cdn.example.com/old.png"),
-            members: [groupMember(memberIdHex: hex("11"), isAdmin: true, isSelf: true)]
-        ))
 
         viewModel.applyChatListRow(chatListRow(
             groupIdHex: groupId,
@@ -719,29 +696,27 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.first?.avatarURL?.absoluteString == "https://cdn.example.com/new.png")
     }
 
-    @Test func liveRowWithoutNameOrAvatarKeepsEnrichedGroupDetails() throws {
+    @Test func liveRowWithoutAvatarKeepsTheKnownGroupAvatar() throws {
         let groupId = hex("da")
         let viewModel = ChatsListViewModel(appState: AppState.test())
-        viewModel.applyChatListSnapshot([chatListRow(groupIdHex: groupId, title: "Enriched name", groupName: "")])
-        viewModel.seedGroupDetailsCacheForTesting(GroupDetailsFfi(
-            group: group(name: "Enriched name", id: groupId, avatarUrl: "https://cdn.example.com/enriched.png"),
-            members: [groupMember(memberIdHex: hex("11"), isAdmin: true, isSelf: true)]
+        viewModel.applyChatListSnapshot([chatListRow(groupIdHex: groupId, title: "Named", groupName: "Named")])
+        viewModel.applyLocalGroupChange(group(
+            name: "Named",
+            id: groupId,
+            avatarUrl: "https://cdn.example.com/known.png"
         ))
 
-        // A routine live update (new message / unread change) carries neither
-        // a name nor an avatar; it must not wipe the enriched values.
+        // A routine live update (new message / unread change) carries no
+        // avatar; it must not drop the one the list already knows.
         viewModel.applyChatListRow(chatListRow(
             groupIdHex: groupId,
-            title: groupId,
-            groupName: "",
+            title: "Named",
+            groupName: "Named",
             avatarUrl: nil,
             unreadCount: 1
         ))
 
-        let cached = viewModel.groupDetailsCacheEntryForTesting(groupIdHex: groupId)
-        #expect(cached?.group.name == "Enriched name")
-        #expect(cached?.group.avatarUrl == "https://cdn.example.com/enriched.png")
-        #expect(viewModel.items.first?.avatarURL?.absoluteString == "https://cdn.example.com/enriched.png")
+        #expect(viewModel.items.first?.avatarURL?.absoluteString == "https://cdn.example.com/known.png")
         #expect(viewModel.items.first?.unreadCount == 1)
     }
 
