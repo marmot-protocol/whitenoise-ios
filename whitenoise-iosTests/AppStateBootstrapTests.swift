@@ -1,3 +1,4 @@
+import OSLog
 import Testing
 import Foundation
 import SwiftUI
@@ -1909,6 +1910,7 @@ struct AppStateBootstrapTests {
     }
 
     @Test func destructiveWipeClearsProfileProjectionState() async throws {
+        AppState.probe1302.error("test begin")
         // A destructive wipe into onboarding is the one place a whole-map reset is
         // safe: with no active account `canRefreshProfiles` is false, so no
         // in-flight load can re-bump a token for the gone account ids or
@@ -1925,7 +1927,9 @@ struct AppStateBootstrapTests {
         ]
         appState.profileStore.profileProjectionLoadVersions = [hex("aa"): 9, account.accountIdHex: 2]
 
-        await appState.signOutAndWipeActiveAccount()
+        AppState.probe1302.error("test seeded active=\(String(appState.activeAccountRef?.prefix(8) ?? "nil"), privacy: .public) phase=\(String(describing: appState.phase), privacy: .public) accounts=\(appState.accounts.map { String($0.label.prefix(8)) }.joined(separator: ","), privacy: .public)")
+        let wiped = await appState.signOutAndWipeActiveAccount()
+        AppState.probe1302.error("test wiped=\(wiped, privacy: .public) phase=\(String(describing: appState.phase), privacy: .public) accounts=\(appState.accounts.map { String($0.label.prefix(8)) }.joined(separator: ","), privacy: .public) versions=\(appState.profileStore.profileProjectionLoadVersions.map { "\($0.key.prefix(8)):\($0.value)" }.joined(separator: ","), privacy: .public)")
 
         #expect(appState.activeAccountRef == nil)
         #expect(appState.phase == .onboarding)

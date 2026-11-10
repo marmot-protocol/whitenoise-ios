@@ -292,6 +292,7 @@ final class ProfileStore {
         queuedProfileProjectionLoadIDs.removeAll { $0 == id }
         scheduledProfileProjectionLoadIDs.remove(id)
         profileProjectionRefreshAfterLoadIDs.remove(id)
+        AppState.probe1302.error("pp clearForAccountRemoval \(String(id.prefix(8)), privacy: .public) hadWork=\(hadProjectionWork, privacy: .public)")
         if hadProjectionWork {
             profileProjectionLoadVersions[id] = (profileProjectionLoadVersions[id] ?? 0) + 1
         }
@@ -478,6 +479,7 @@ final class ProfileStore {
 
     private func applyProfileProjection(_ projection: ProfileDisplayProjection, forAccountIdHex id: String) {
         guard profileProjectionCache[id] != projection else { return }
+        AppState.probe1302.error("pp apply \(String(id.prefix(8)), privacy: .public)")
         profileProjectionCache[id] = projection
         appState?.noteProfileRefreshCompleted()
     }
@@ -486,6 +488,7 @@ final class ProfileStore {
     private func bumpProfileProjectionLoadVersion(forAccountIdHex id: String) -> Int {
         let version = (profileProjectionLoadVersions[id] ?? 0) + 1
         profileProjectionLoadVersions[id] = version
+        AppState.probe1302.error("pp bump \(String(id.prefix(8)), privacy: .public) -> \(version, privacy: .public)")
         return version
     }
 
@@ -519,6 +522,7 @@ final class ProfileStore {
               !scheduledProfileProjectionLoadIDs.contains(id),
               !profileProjectionRefreshAfterLoadIDs.contains(id)
         else { return }
+        AppState.probe1302.error("pp prune \(String(id.prefix(8)), privacy: .public) at \(version, privacy: .public)")
         profileProjectionLoadVersions.removeValue(forKey: id)
     }
 

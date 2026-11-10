@@ -179,6 +179,7 @@ final class AppState {
     var isAccountSetupPresented = false
     private(set) var isFinishingAccountSetup = false
     private static let accountRefreshLog = Logger(subsystem: "dev.ipf.whitenoise", category: "account-refresh")
+    static let probe1302 = Logger(subsystem: "dev.ipf.whitenoise", category: "wn1302")
 #if DEBUG
     @ObservationIgnored var beforeAccountRefreshForTesting: (() async throws -> Void)?
     @ObservationIgnored var beforeOnboardingSnapshotReadForTesting: ((String) async throws -> Void)?
@@ -1014,9 +1015,12 @@ final class AppState {
             }
         }
 
+        Self.probe1302.error("completeSignOut refresh start destructive=\(destructive, privacy: .public) accountsBefore=\(self.accounts.map { "\($0.label.prefix(8)):\($0.signedOut)" }.joined(separator: ","), privacy: .public)")
         do {
             try await refreshAccounts()
+            Self.probe1302.error("completeSignOut refresh ok accounts=\(self.accounts.map { "\($0.label.prefix(8)):\($0.signedOut)" }.joined(separator: ","), privacy: .public)")
         } catch {
+            Self.probe1302.error("completeSignOut refresh threw \(String(describing: error), privacy: .public)")
             if destructive {
                 accountStore.accounts.removeAll { $0.label == removedRef }
             }
@@ -1030,6 +1034,7 @@ final class AppState {
         }
 
         accountStore.requestProfileSelection()
+        Self.probe1302.error("completeSignOut branch onboarding=\(!self.accounts.contains(where: { !$0.signedOut }), privacy: .public) removedId=\(String(removedAccountIdHex?.prefix(8) ?? "nil"), privacy: .public) versions=\(self.profileStore.profileProjectionLoadVersions.map { "\($0.key.prefix(8)):\($0.value)" }.joined(separator: ","), privacy: .public)")
         if !accounts.contains(where: { !$0.signedOut }) {
             // Last account signed out: tear the profile-projection state back
             // down to empty so cached peer data (#366), the per-account version
@@ -1084,6 +1089,7 @@ final class AppState {
     @MainActor
     @discardableResult
     func signOutAndWipeActiveAccount(onError: ((Toast) -> Void)? = nil) async -> Bool {
+        Self.probe1302.error("wipe begin active=\(String(self.activeAccountRef?.prefix(8) ?? "nil"), privacy: .public) accounts=\(self.accounts.map { "\($0.label.prefix(8)):\($0.signedOut)" }.joined(separator: ","), privacy: .public) phase=\(String(describing: self.phase), privacy: .public)")
         guard let wipingRef = activeAccountRef else { return false }
         guard DestructiveWipeGate.canBegin(
             isReady: phase == .ready,
@@ -1092,6 +1098,7 @@ final class AppState {
             isRuntimeSuspending: isRuntimeSuspending,
             hasRuntimeClient: client != nil
         ), !isSigningOut else {
+            Self.probe1302.error("wipe gate refused ready=\(self.phase == .ready, privacy: .public) active=\(self.isAppSceneActive, privacy: .public) signingOut=\(self.isSigningOut, privacy: .public)")
             (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
             return false
         }
@@ -1129,7 +1136,9 @@ final class AppState {
 
         let outcome: WipeOutcomeFfi
         do {
+            Self.probe1302.error("wipe ffi start")
             outcome = try await exitingClient.signOutAndWipe(accountRef: wipingRef)
+            Self.probe1302.error("wipe ffi done localCleanupCompleted=\(outcome.localCleanup.completed, privacy: .public)")
         } catch {
             // Total FFI failure: nothing was wiped. Roll native push back and toast.
             await restoreNativePushAfterFailedSignOut(
@@ -1567,6 +1576,7 @@ final class AppState {
         let attemptRevision = signInAttempts.revision
         let client = try runtimeClient()
         let localAccounts = try await client.listAccounts()
+        Self.probe1302.error("refreshAccounts listed=\(localAccounts.map { "\($0.label.prefix(8)):\($0.signedOut)" }.joined(separator: ","), privacy: .public) active=\(String(self.activeAccountRef?.prefix(8) ?? "nil"), privacy: .public)")
         try await restoreSignUpIfNeeded(accounts: localAccounts, client: client)
         var readyAccounts: [AccountSummaryFfi] = []
         var unfinished: [OnboardingSnapshotFfi] = []
@@ -1586,6 +1596,7 @@ final class AppState {
             } catch let error as MarmotKitError where error.isTransientStartupReadinessFailure {
                 throw error
             } catch {
+                Self.probe1302.error("snapshot read failed \(String(account.accountIdHex.prefix(8)), privacy: .public) \(String(describing: error), privacy: .public)")
                 // An unreadable checkpoint gates its identity, not other local accounts.
                 Self.accountRefreshLog.error("onboarding_snapshot_read_failed")
                 continue
@@ -1600,11 +1611,16 @@ final class AppState {
         try Task.checkCancellation()
         guard self.client === client else { throw CancellationError() }
         // An older account read must not discard a sign-in begun while it awaited storage.
-        guard pendingAccountSetup === setupAtReadStart, signInAttempts.revision == attemptRevision else { return }
+        guard pendingAccountSetup === setupAtReadStart, signInAttempts.revision == attemptRevision else {
+            Self.probe1302.error("refreshAccounts early return setupChanged=\(self.pendingAccountSetup !== setupAtReadStart, privacy: .public)")
+            return
+        }
         // Stage the usable accounts; neither guess readiness nor synthesize missing checkpoints.
         readyAccounts.removeAll { isUnfinishedSignUpAccount($0.accountIdHex) }
         accountStore.accounts = readyAccounts
+        Self.probe1302.error("refreshAccounts staged ready=\(readyAccounts.map { String($0.label.prefix(8)) }.joined(separator: ","), privacy: .public) unfinished=\(unfinished.count, privacy: .public)")
         if let activeAccountRef, !readyAccounts.contains(where: { $0.label == activeAccountRef }) {
+            Self.probe1302.error("refreshAccounts clears active \(String(activeAccountRef.prefix(8)), privacy: .public)")
             self.activeAccountRef = nil
         }
         accountSetupSnapshots = unfinished
