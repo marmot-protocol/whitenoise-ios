@@ -246,6 +246,23 @@ before every release tag.
       the tax/recurring copy with legal/accounting and repeat the App Store build
       on a signed physical device.
 
+## Data Usage
+
+- [ ] At the default auto-download settings, Reset Auto-Download Settings is
+      hidden. Change one media type: Reset appears. Tap it: the default choices
+      return and Reset disappears.
+- [ ] Photos, Audio, Videos and Files each offer Never, Wi-Fi Only, and Wi-Fi
+      and Cellular. Their helper text appears below the choices and explains
+      the Wi-Fi Only exclusions. Audio includes voice notes.
+- [ ] Sent Media Quality offers only Standard and High. Select each and reopen
+      the screen: the selected value remains. The helper describes outgoing
+      photos and voice notes, with videos sent unchanged.
+- [ ] Upgrade installations with Low and Original previously selected: they
+      now show Standard and High respectively, including after relaunch.
+      Existing Standard and High selections stay unchanged.
+- [ ] Data Usage has no Download Storage entry. Previously saved MDK download
+      limits remain in effect; removing the entry does not reset those limits.
+
 ## MarmotKit 0.10.4 upgrade
 
 - [ ] Back up the app's shared data before opening an existing installation with
@@ -447,10 +464,8 @@ before every release tag.
 - [ ] With Keep Media at 30 Days, download one of the removed attachments
       again. It stays after the app is backgrounded and reopened (a later
       download restarts its age).
-- [ ] Settings → Data Usage → Download Storage offers only Keep disk space free
-      and Automatic download size limit, and the footer points to Manage
-      Storage. Raise the automatic limit to 512 MB and Save: it saves without an
-      error.
+- [ ] Settings → Data Usage no longer offers Download Storage. Keep Media and
+      attachment removal remain available in Settings → Manage Storage.
 - [ ] Check VoiceOver on chat and attachment rows (name, count/date and size
       read together; Remove is offered as an action), Dynamic Type at an
       accessibility size, and light and dark appearance.
@@ -1878,10 +1893,10 @@ Marmot root. Automated simulator checks do not replace these device checks.
       background gate is enabled only when all categories are allowed; selective
       visible loads retain the existing downloader until MDK has a per-category API.
       Pending invitations must never start automatic attachment acquisition.
-- [ ] In Data Usage → Download Storage, save quota/reserve/size limits, reload and
-      check persistence for each profile. Full storage pauses new work without evicting
-      existing retained files. These MDK limits do not replace the temporary legacy
-      display cache's limits. Check save failure and account switching during saving.
+- [ ] On an upgraded installation with previously customized download limits,
+      those MDK limits still apply to the same profiles after switching profiles
+      and relaunching. Download Storage is no longer exposed in Data Usage.
+      Full storage pauses new work without evicting existing retained files.
 - [ ] Compare author and admin deletions in the timeline, replies, chat previews,
       moderation and transcript export. Historical unknown provenance stays generic.
 - [ ] Key Packages shows locally available inventory before relay refresh. Pull to
