@@ -369,10 +369,8 @@ struct MarkdownTimestampTests {
 
     @Test func schedulerRunsOnlyForVisibleRelativeRowsWhileActive() async throws {
         let sleeper = ControlledSleeper()
-        let scheduler = RelativeTimestampRefreshScheduler(
-            sleep: sleeper.sleep,
-            now: { [instant] in Date(timeIntervalSince1970: TimeInterval(instant)) }
-        )
+        let fixedNow = Date(timeIntervalSince1970: TimeInterval(instant))
+        let scheduler = RelativeTimestampRefreshScheduler(sleep: sleeper.sleep, now: { fixedNow })
         var refreshed: [Set<String>] = []
         scheduler.relativeUnixSeconds = { [instant] rowId in rowId == "relative" ? [instant] : [] }
         scheduler.refreshRows = { refreshed.append($0) }
@@ -411,6 +409,11 @@ struct MarkdownTimestampTests {
         await runPendingMainActorWork()
         #expect(refreshed.count == 3)
         #expect(sleeper.requestedDelays.count == 3)
+        // Every sleep waits until the next refresh after the injected clock.
+        let next = try #require(MarkdownRelativeTimestampSchedule.nextRefreshDate(
+            for: [instant], now: fixedNow, calendar: .autoupdatingCurrent
+        ))
+        #expect(sleeper.requestedDelays.allSatisfy { $0 == .seconds(max(0, next.timeIntervalSince(fixedNow))) })
         scheduler.cancel()
     }
 
