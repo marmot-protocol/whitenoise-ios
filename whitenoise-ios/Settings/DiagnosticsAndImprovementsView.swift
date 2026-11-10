@@ -159,7 +159,7 @@ struct DiagnosticsAndImprovementsView: View {
     }
 
     private var sharingAvailabilityNotice: String? {
-        guard !isPrompt, appState.diagnosticsConsent.usageEnabled else { return nil }
+        guard appState.diagnosticsConsent.usageEnabled else { return nil }
         return appState.diagnosticsConsent.snapshot?.unavailableSharingNotice
     }
 }
