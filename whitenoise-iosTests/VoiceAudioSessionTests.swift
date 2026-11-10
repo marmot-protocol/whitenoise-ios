@@ -116,20 +116,3 @@ struct AudioPlaybackLoadOutcomeTests {
         #expect(AudioPlaybackLoadOutcome.resolve(isCancelled: true) == .abort)
     }
 }
-
-private final class AudioSessionSpy: VoiceAudioSessionConfiguring {
-    private(set) var categoryCalls: [(category: AVAudioSession.Category, mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions)] = []
-    private(set) var activeCalls: [(active: Bool, options: AVAudioSession.SetActiveOptions)] = []
-
-    func setCategory(
-        _ category: AVAudioSession.Category,
-        mode: AVAudioSession.Mode,
-        options: AVAudioSession.CategoryOptions
-    ) throws {
-        categoryCalls.append((category, mode, options))
-    }
-
-    func setActive(_ active: Bool, options: AVAudioSession.SetActiveOptions) throws {
-        activeCalls.append((active, options))
-    }
-}
