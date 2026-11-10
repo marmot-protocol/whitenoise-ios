@@ -371,6 +371,7 @@ struct MarkdownTimestampTests {
         let sleeper = ControlledSleeper()
         let fixedNow = Date(timeIntervalSince1970: TimeInterval(instant))
         let scheduler = RelativeTimestampRefreshScheduler(sleep: sleeper.sleep, now: { fixedNow })
+        defer { scheduler.cancel() }
         var refreshed: [Set<String>] = []
         scheduler.relativeUnixSeconds = { [instant] rowId in rowId == "relative" ? [instant] : [] }
         scheduler.refreshRows = { refreshed.append($0) }
@@ -414,7 +415,6 @@ struct MarkdownTimestampTests {
             for: [instant], now: fixedNow, calendar: .autoupdatingCurrent
         ))
         #expect(sleeper.requestedDelays.allSatisfy { $0 == .seconds(max(0, next.timeIntervalSince(fixedNow))) })
-        scheduler.cancel()
     }
 
     /// Waits for a main-actor task queued after any the scheduler already
