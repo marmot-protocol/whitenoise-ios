@@ -417,11 +417,11 @@ struct MarkdownTimestampTests {
         scheduler.cancel()
     }
 
-    /// Lets main-actor tasks that are already queued run, such as one the
-    /// scheduler started: it inherits the main actor, so it reaches the
-    /// sleeper before the test resumes.
+    /// Waits for a main-actor task queued after any the scheduler already
+    /// started. Those inherit the main actor, which runs queued tasks in order,
+    /// so they have reached the sleeper by the time this returns.
     private func runPendingMainActorWork() async {
-        for _ in 0..<3 { await Task.yield() }
+        await Task { @MainActor in }.value
     }
 
     @Test func trackingKeepsTheRelativeInstantsClosestToTheRenderTime() {
