@@ -149135,6 +149135,242 @@
           }
         }
       }
+    },
+    "Decline invitation?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einladung ablehnen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Rechazar la invitación?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refuser l’invitation ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rifiutare l’invito?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recusar o convite?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отклонить приглашение?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Davet reddedilsin mi?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要拒绝邀请吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要拒絕邀請嗎？"
+          }
+        }
+      }
+    },
+    "Step Down and Decline" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurücktreten und ablehnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renunciar y rechazar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Démissionner et refuser"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dimettiti e rifiuta"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deixar o cargo e recusar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Уйти с поста и отклонить"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yöneticilikten Ayrıl ve Reddet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卸任并拒绝"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卸任並拒絕"
+          }
+        }
+      }
+    },
+    "You were added as an admin. You'll step down as admin first, then decline. Group members will see that you stepped down." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie wurden als Administrator hinzugefügt. Sie treten zunächst als Administrator zurück und lehnen dann ab. Gruppenmitglieder sehen, dass Sie zurückgetreten sind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te añadieron como administrador. Primero dejarás de ser administrador y luego rechazarás la invitación. Los miembros del grupo verán que renunciaste."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez été ajouté en tant qu’administrateur. Vous quitterez d’abord votre poste d’administrateur, puis refuserez l’invitation. Les membres du groupe verront que vous avez démissionné."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sei stato aggiunto come amministratore. Prima ti dimetterai dalla carica di amministratore, poi rifiuterai l’invito. I membri del gruppo vedranno che ti sei dimesso."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você foi adicionado como administrador. Primeiro você deixará o cargo de administrador e depois recusará o convite. Os membros do grupo verão que você deixou o cargo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вас добавили как администратора. Сначала вы уйдете с поста администратора, а затем отклоните приглашение. Участники группы увидят, что вы ушли с поста."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yönetici olarak eklendiniz. Önce yöneticilikten ayrılacak, ardından daveti reddedeceksiniz. Grup üyeleri yöneticilikten ayrıldığınızı görecek."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "您被添加为管理员。您将先卸任管理员，然后拒绝邀请。群组成员会看到您已卸任。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "您被新增為管理員。您將先卸任管理員，然後拒絕邀請。群組成員會看到您已卸任。"
+          }
+        }
+      }
+    },
+    "You're this group's only admin, so you can't decline. Accept the invitation, then make another member an admin before you leave." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie sind der einzige Administrator dieser Gruppe und können daher nicht ablehnen. Nehmen Sie die Einladung an und machen Sie dann ein anderes Mitglied zum Administrator, bevor Sie gehen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eres el único administrador de este grupo, así que no puedes rechazar la invitación. Acéptala y luego convierte a otro miembro en administrador antes de irte."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous êtes le seul administrateur de ce groupe, vous ne pouvez donc pas refuser. Acceptez l’invitation, puis faites d’un autre membre un administrateur avant de partir."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sei l'unico amministratore di questo gruppo, quindi non puoi rifiutare. Accetta l’invito, poi rendi un altro membro un amministratore prima di andartene."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você é o único administrador deste grupo, então não pode recusar. Aceite o convite e depois torne outro membro um administrador antes de sair."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы единственный администратор этой группы, поэтому не можете отклонить приглашение. Примите его, а затем сделайте другого участника администратором, прежде чем уйти."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu grubun tek yöneticisi sizsiniz, bu yüzden reddedemezsiniz. Daveti kabul edin, ardından ayrılmadan önce başka bir üyeyi yönetici yapın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "您是此群组唯一的管理员，因此无法拒绝。请先接受邀请，然后在离开之前让另一位成员成为管理员。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "您是此群組唯一的管理員，因此無法拒絕。請先接受邀請，然後在離開之前讓另一位成員成為管理員。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
