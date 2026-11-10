@@ -82,7 +82,7 @@ struct DiagnosticsAndImprovementsView: View {
         .navigationTitle(isPrompt ? "Help Improve White Noise" : "Diagnostics & Improvements")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showSharingDetails) {
-            DiagnosticsSharingDetailsView(isFinishing: isFinishing, onFinish: onFinish)
+            DiagnosticsSharingDetailsView(isPrompt: isPrompt)
         }
         .sheet(isPresented: $showSharingDetailsSheet) {
             NavigationStack {
@@ -98,7 +98,10 @@ struct DiagnosticsAndImprovementsView: View {
             .presentationDetents([.large])
             .appAppearance()
         }
-        .modifier(DiagnosticsPromptToolbar(isFinishing: isFinishing, onFinish: onFinish))
+        .modifier(DiagnosticsPromptToolbar(
+            isFinishing: isFinishing,
+            onFinish: showSharingDetails ? nil : onFinish
+        ))
         .task(id: appState.runtimeGeneration) { await reload() }
         .productScreen(.diagnostics, section: .diagnostics)
         .alert("Clear diagnostic logs?", isPresented: $model.showDeleteAuditLogsConfirmation) {

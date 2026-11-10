@@ -2,13 +2,12 @@ import SwiftUI
 
 struct DiagnosticsSharingDetailsView: View {
     @Environment(AppState.self) private var appState
-    var isFinishing = false
-    var onFinish: (() -> Void)?
+    var isPrompt = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                if onFinish != nil, let error = appState.diagnosticsConsent.errorMessage {
+                if isPrompt, let error = appState.diagnosticsConsent.errorMessage {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(error).foregroundStyle(.orange)
                         Button("Retry") {
@@ -49,7 +48,6 @@ struct DiagnosticsSharingDetailsView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .navigationTitle("What’s shared")
         .navigationBarTitleDisplayMode(.inline)
-        .modifier(DiagnosticsPromptToolbar(isFinishing: isFinishing, onFinish: onFinish))
     }
 
     private func disclosureSection<Content: View>(
