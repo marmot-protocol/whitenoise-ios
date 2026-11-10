@@ -13,16 +13,23 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
     var previouslyEnabled = false
     var policy = ""
     var runtimeAvailable = true
+    var productAnalyticsStatus: DiagnosticsExporterStatusFfi = .unconfigured
+    var telemetryStatus: DiagnosticsExporterStatusFfi = .unconfigured
+    var usageSaveStarted: TestLatch?
+    var usageSaveRelease: TestLatch?
 
     func deviceDiagnosticsSnapshot() async throws -> DeviceDiagnosticsSnapshot? { runtimeAvailable ? snapshot : nil }
     var snapshot: DeviceDiagnosticsSnapshot {
         DeviceDiagnosticsSnapshot(
             settings: UsageDiagnosticsSettingsFfi(decision: decision, policyRevision: policy, registryRevision: "registry", updatedAtMs: 0, previouslyEnabled: previouslyEnabled),
-            status: UsageDiagnosticsStatusFfi(consent: decision, telemetry: .unconfigured, productAnalytics: .unconfigured, queuedEvents: 0, droppedEvents: 0, acceptedBatches: 0, failedBatches: 0),
+            status: UsageDiagnosticsStatusFfi(consent: decision, telemetry: telemetryStatus, productAnalytics: productAnalyticsStatus, queuedEvents: 0, droppedEvents: 0, acceptedBatches: 0, failedBatches: 0),
             auditEnabled: audit
         )
     }
+    /// Allows tests to pause a save before it fails or records a confirmed choice.
     func saveUsageDiagnosticsConsent(_ enabled: Bool) async throws -> DeviceDiagnosticsSnapshot {
+        usageSaveStarted?.signal()
+        if let usageSaveRelease { try await usageSaveRelease.wait() }
         if failSave { throw CancellationError() }
         writes.append(enabled)
         decision = enabled ? .granted : .declined
@@ -37,6 +44,32 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
 
 @MainActor
 struct DeviceDiagnosticsConsentTests {
+    @Test(arguments: [
+        DiagnosticsExporterStatusFfi.unconfigured, .unsupportedBuild, .configurationRejected,
+    ])
+    func unavailableNoticeNamesTheAffectedSharing(status: DiagnosticsExporterStatusFfi) {
+        let source = DiagnosticsTestSource()
+        source.decision = .granted
+        source.productAnalyticsStatus = status
+        source.telemetryStatus = .ready
+        #expect(source.snapshot.unavailableSharingNotice == L10n.string("Usage sharing isn’t available in this build. Your preference is saved."))
+
+        source.productAnalyticsStatus = .ready
+        source.telemetryStatus = status
+        #expect(source.snapshot.unavailableSharingNotice == L10n.string("Performance sharing isn’t available in this build. Your preference is saved."))
+
+        source.productAnalyticsStatus = status
+        #expect(source.snapshot.unavailableSharingNotice == L10n.string("Usage and performance sharing isn’t available in this build. Your preference is saved."))
+    }
+
+    @Test(arguments: [DiagnosticsExporterStatusFfi.ready, .disabled, .consentRequired])
+    func normalExporterStatesDoNotClaimSharingIsUnavailable(status: DiagnosticsExporterStatusFfi) {
+        let source = DiagnosticsTestSource()
+        source.productAnalyticsStatus = status
+        source.telemetryStatus = status
+        #expect(source.snapshot.unavailableSharingNotice == nil)
+    }
+
     @Test func unavailableRuntimeReadOffersRetryAndReloadsWhenReady() async {
         let source = DiagnosticsTestSource()
         let model = DeviceDiagnosticsConsent()
@@ -95,6 +128,50 @@ struct DeviceDiagnosticsConsentTests {
         source.failSave = false
         await model.reload(using: source)
         #expect(await model.finishPrompt(using: source))
+    }
+
+    @Test func failedDismissalDeclineKeepsPromptOpenAndPreservesAuditChoice() async {
+        let source = DiagnosticsTestSource()
+        let model = DeviceDiagnosticsConsent()
+        await model.reload(using: source)
+        #expect(await model.setAudit(true, using: source))
+        source.failSave = true
+
+        #expect(!(await model.finishPrompt(using: source)))
+        #expect(model.errorMessage != nil)
+        #expect(!model.available)
+        #expect(source.decision == .acceptanceRequired)
+        #expect(source.audit)
+        #expect(source.writes.isEmpty)
+
+        source.failSave = false
+        await model.reload(using: source)
+        #expect(await model.finishPrompt(using: source))
+        #expect(source.decision == .declined)
+        #expect(source.audit)
+        #expect(source.writes == [false])
+    }
+
+    @Test func overlappingDismissalRequestsWaitForOneConfirmedDecline() async throws {
+        let source = DiagnosticsTestSource()
+        let model = DeviceDiagnosticsConsent()
+        await model.reload(using: source)
+        let started = TestLatch()
+        let release = TestLatch()
+        source.usageSaveStarted = started
+        source.usageSaveRelease = release
+        defer { release.signal() }
+
+        let firstDismissal = Task { await model.finishPrompt(using: source) }
+        try await started.wait()
+        #expect(!(await model.finishPrompt(using: source)))
+        #expect(source.decision == .acceptanceRequired)
+        #expect(source.writes.isEmpty)
+
+        release.signal()
+        #expect(await firstDismissal.value)
+        #expect(source.writes == [false])
+        #expect(!model.pending)
     }
 
     @Test func migrationExplanationDistinguishesLegacyOptInFromScopeChanges() async {

@@ -1459,17 +1459,17 @@ biometric paths); the simulator can fake enrollment via Features → Face ID.
 - [ ] While locked, a tapped notification still routes to the right chat
       after unlocking.
 - [ ] On a device without a passcode, the toggle is greyed out with the
-      explanatory footer.
+      explanatory description.
 
 ## Screen privacy
 
-- [ ] Enable **Hide Screen in App Switcher** in Privacy & Security. Background
+- [ ] Enable **Hide Sensitive Content** in Privacy & Security. Background
       the app from a conversation, a QR sheet, and a full-screen cover: the app
       switcher shows only the privacy cover. Returning restores the same content.
 - [ ] With the setting on, start screen recording or mirroring: once iOS reports
       capture, the cover hides the content on both the device and the recording.
       Stop capture and confirm content returns without relaunching.
-- [ ] Ordinary screenshots remain possible, as the settings footer explains.
+- [ ] Ordinary screenshots remain possible, as the toggle description explains.
 - [ ] With the setting off, recording and the app-switcher preview work normally
       unless the separate app-lock setting requires its own shield.
 - [ ] Repeat with app lock on/off, authentication prompts, rotation, large text,
