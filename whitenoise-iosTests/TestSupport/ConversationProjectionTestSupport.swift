@@ -7,6 +7,8 @@ import MarmotKit
 final class ProjectionBuildCounter {
     private(set) var markdownBuilds = 0
     private(set) var agentEventBuilds = 0
+    /// Media builds from resolved outcomes and from attachment tags together.
+    private(set) var mediaBuilds = 0
 
     var builders: ConversationProjectionBuilders {
         ConversationProjectionBuilders(
@@ -17,6 +19,14 @@ final class ProjectionBuildCounter {
             agentEvent: { [self] record in
                 agentEventBuilds += 1
                 return ConversationProjectionBuilders.live.agentEvent(record)
+            },
+            mediaFromOutcomes: { [self] outcomes, ownerId, messageId, sourceMessageId in
+                mediaBuilds += 1
+                return ConversationProjectionBuilders.live.mediaFromOutcomes(outcomes, ownerId, messageId, sourceMessageId)
+            },
+            mediaFromReferences: { [self] references, ownerId in
+                mediaBuilds += 1
+                return ConversationProjectionBuilders.live.mediaFromReferences(references, ownerId)
             }
         )
     }

@@ -236,7 +236,7 @@ final class TimelineStore {
     @ObservationIgnored let markdownProjections: ConversationMarkdownProjectionCache
     @ObservationIgnored let relativeTimestampRefresh = RelativeTimestampRefreshScheduler()
     @ObservationIgnored let agentEventProjections: ConversationAgentEventProjectionCache
-    @ObservationIgnored let mediaProjections = ConversationMediaProjectionCache()
+    @ObservationIgnored let mediaProjections: ConversationMediaProjectionCache
     private struct CustomEmojiCacheEntry {
         let candidates: [CustomEmojiShortcode: MessageMediaAttachment]
         let resolution: CustomEmojiRowResolution
@@ -267,6 +267,7 @@ final class TimelineStore {
         self.groupIdHex = groupIdHex
         markdownProjections = ConversationMarkdownProjectionCache(builders: projectionBuilders)
         agentEventProjections = ConversationAgentEventProjectionCache(builders: projectionBuilders)
+        mediaProjections = ConversationMediaProjectionCache(builders: projectionBuilders)
         self.hiddenMessageIds = Set(hiddenMessageIds.compactMap { Hex.normalized32Bytes($0) })
         relativeTimestampRefresh.relativeUnixSeconds = { [markdownProjections] rowId in
             markdownProjections.relativeTimestampSeconds(forRowId: rowId)
@@ -303,8 +304,6 @@ final class TimelineStore {
 
 #if DEBUG
     var groupSystemProjectionBuildCountForTesting: Int { groupSystemProjectionBuildCount }
-    var mediaItemProjectionBuildCountForTesting: Int { mediaProjections.buildCountForTesting }
-    var mediaReferenceCountForTesting: Int { mediaProjections.referenceCountForTesting }
     var streamDebugTimelineItemCountForTesting: Int { streamDebugTimelineItems.count }
     private(set) var timelineRebuildCountForTesting = 0
     private(set) var reactionTargetCollectionCountForTesting = 0
