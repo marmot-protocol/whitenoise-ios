@@ -1,9 +1,12 @@
+import MarmotKit
 import SwiftUI
 
 struct DiagnosticsAndImprovementsView: View {
     @Environment(AppState.self) private var appState
     @State private var model = PrivacySecuritySettingsViewModel()
+    @State private var hasLoadedLogs = false
     @State private var showSharingDetails = false
+    @State private var showSharingDetailsSheet = false
     var isPrompt = false
     var isFinishing = false
     var onFinish: (() -> Void)?
@@ -13,33 +16,60 @@ struct DiagnosticsAndImprovementsView: View {
             Section {
                 analyticsToggle
                 loggingToggle
+                if let notice = sharingAvailabilityNotice {
+                    Text(notice)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 4)
+                        .listRowSeparator(.visible, edges: .top)
+                }
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
                     if let explanation = appState.diagnosticsConsent.explanation {
                         Text(explanation)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Text(sharingSummary)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                         .tint(.primary)
                         .environment(\.openURL, OpenURLAction { _ in
-                            showSharingDetails = true
+                            if isPrompt {
+                                showSharingDetails = true
+                            } else {
+                                showSharingDetailsSheet = true
+                            }
                             return .handled
                         })
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !isPrompt {
-                if let snapshot = appState.diagnosticsConsent.snapshot {
-                    Section { Text(snapshot.exporterSummary).foregroundStyle(.secondary) }
-                }
                 Section {
-                    LabeledContent("On This iPhone", value: model.storedLogSize)
-                    Button("Clear Diagnostic Logs", role: .destructive) {
-                        model.showDeleteAuditLogsConfirmation = true
+                    VStack(alignment: .leading, spacing: 12) {
+                        if !hasLoadedLogs || model.filesLoading {
+                            ProgressView("Loading…")
+                        } else if model.errorMessage != nil || model.auditErrorMessage != nil || model.auditSettings == nil {
+                            Text("Unavailable").foregroundStyle(.secondary)
+                        } else if model.auditFileRows.isEmpty {
+                            Text("No diagnostic logs stored").foregroundStyle(.secondary)
+                        } else {
+                            LabeledContent("Stored on this device", value: model.storedLogSize)
+                            Text("Clearing removes local logs only. Uploaded copies and sharing settings stay unchanged.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            WNGrayButton(title: L10n.string("Clear Diagnostic Logs"), isDestructive: true) {
+                                model.showDeleteAuditLogsConfirmation = true
+                            }
+                            .disabled(model.auditDeleteDisabled)
+                        }
                     }
-                    .disabled(model.auditDeleteDisabled || model.auditFileRows.isEmpty)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20))
                 } header: {
                     Text("Stored Diagnostic Logs")
-                } footer: {
-                    Text("Clearing diagnostic logs deletes logs from this device only. It does not delete copies already uploaded to White Noise servers or turn off recording and automatic uploads.")
                 }
             }
             if let error = appState.diagnosticsConsent.errorMessage ?? model.errorMessage ?? model.auditErrorMessage {
@@ -53,6 +83,20 @@ struct DiagnosticsAndImprovementsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showSharingDetails) {
             DiagnosticsSharingDetailsView(isPrompt: isPrompt)
+        }
+        .sheet(isPresented: $showSharingDetailsSheet) {
+            NavigationStack {
+                DiagnosticsSharingDetailsView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            WNIconButton(title: "Close", systemImage: "xmark", chrome: .container) {
+                                showSharingDetailsSheet = false
+                            }
+                        }
+                    }
+            }
+            .presentationDetents([.large])
+            .appAppearance()
         }
         .modifier(DiagnosticsPromptToolbar(
             isFinishing: isFinishing,
@@ -82,7 +126,10 @@ struct DiagnosticsAndImprovementsView: View {
 
     private func reload() async {
         await appState.diagnosticsConsent.reload(using: appState)
-        if !isPrompt { await model.reload(using: appState) }
+        if !isPrompt {
+            await model.reload(using: appState)
+            if !Task.isCancelled { hasLoadedLogs = true }
+        }
     }
 
     private var analyticsToggle: some View {
@@ -111,5 +158,29 @@ struct DiagnosticsAndImprovementsView: View {
             }
         }
         .disabled(isFinishing || !appState.diagnosticsConsent.available)
+    }
+
+    private var sharingAvailabilityNotice: String? {
+        guard !isPrompt, appState.diagnosticsConsent.usageEnabled,
+              let snapshot = appState.diagnosticsConsent.snapshot else { return nil }
+        switch (sharingUnavailable(snapshot.status.productAnalytics), sharingUnavailable(snapshot.status.telemetry)) {
+        case (true, true):
+            return L10n.string("Usage and performance sharing isn’t available in this build. Your preference is saved.")
+        case (true, false):
+            return L10n.string("Usage sharing isn’t available in this build. Your preference is saved.")
+        case (false, true):
+            return L10n.string("Performance sharing isn’t available in this build. Your preference is saved.")
+        case (false, false):
+            return nil
+        }
+    }
+
+    private func sharingUnavailable(_ status: DiagnosticsExporterStatusFfi) -> Bool {
+        switch status {
+        case .unconfigured, .unsupportedBuild, .configurationRejected:
+            true
+        case .disabled, .consentRequired, .ready:
+            false
+        }
     }
 }

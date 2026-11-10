@@ -13,9 +13,23 @@ struct EraseAppDataView: View {
         NavigationStack {
             Form {
                 Section {
-                    Label("This can’t be undone", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text("Every profile and all local chats, media, drafts, keys, and settings will be removed from this iPhone.")
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.headline)
+                                .imageScale(.medium)
+                                .foregroundStyle(.red)
+                                .accessibilityHidden(true)
+                            Text("This can’t be undone")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                        }
+                        Text("Every profile and all local chats, media, drafts, keys, and settings will be removed from this iPhone.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20))
                 }
                 if !isRecovery { Section {
                     Text(phrase).font(.headline).textSelection(.enabled)
