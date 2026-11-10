@@ -124,6 +124,18 @@ struct GroupChangeAdvisoryTests {
         #expect(await answer.value == false)
     }
 
+    /// An advisory that arrives after its screen cancelled the change has no one
+    /// to answer it, so it declines instead of waiting.
+    @Test func anAdvisoryForAnAlreadyCancelledChangeDeclines() async {
+        let prompter = GroupChangeAdvisoryPrompter()
+        let answer = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await prompter.requestConsent(for: .catchingUp, isInvite: false)
+        }
+        #expect(await answer.value == false)
+        #expect(prompter.prompt == nil)
+    }
+
     private func shownPrompt(_ prompter: GroupChangeAdvisoryPrompter) async throws -> GroupChangeAdvisoryPrompter.Prompt {
         for _ in 0..<1_000 {
             if let prompt = prompter.prompt { return prompt }

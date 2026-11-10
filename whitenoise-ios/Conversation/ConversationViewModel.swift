@@ -323,6 +323,8 @@ final class ConversationViewModel {
     @ObservationIgnored private let daySectionProjections = ConversationDaySectionProjectionCache()
     @ObservationIgnored private let deleteMessageOperation: DeleteMessageOperation
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
+    @ObservationIgnored private let inviteDeclineCalls: InviteDeclineCalls
+    @ObservationIgnored let advisoryPrompter = GroupChangeAdvisoryPrompter()
     /// Sends NIP-30 custom emoji drawn from `customEmojiCatalog`; holds the
     /// uploaded references retries reuse.
     @ObservationIgnored lazy var customEmojiSender = ConversationCustomEmojiSender(
@@ -441,7 +443,6 @@ final class ConversationViewModel {
     var mediaItemProjectionBuildCountForTesting: Int { timelineStore.mediaProjections.buildCountForTesting }
     @ObservationIgnored var acceptGroupInviteForTesting: (@MainActor (String, String) async throws -> AppGroupRecordFfi)?
     @ObservationIgnored var refreshInviteStateForTesting: (@MainActor () async -> Bool)?
-    @ObservationIgnored var declineGroupInviteForTesting: (@MainActor (String, String) async throws -> GroupInviteDeclineResultFfi)?
 #endif
 
     /// First-open load timings. Visible under category "conversation-load" in
@@ -1109,7 +1110,8 @@ final class ConversationViewModel {
         },
         durableRetryOperations: DurableRetryOperations = .live,
         projectionBuilders: ConversationProjectionBuilders = .live,
-        composerMarmotCalls: ComposerMarmotCalls = .live
+        composerMarmotCalls: ComposerMarmotCalls = .live,
+        inviteDeclineCalls: InviteDeclineCalls = .live
     ) {
         self.appState = appState
         self.moderationAccountRef = appState.activeAccountRef
@@ -1121,6 +1123,7 @@ final class ConversationViewModel {
         self.onChatListRowUpdated = onChatListRowUpdated
         self.deleteMessageOperation = deleteMessageOperation
         self.durableRetryOperations = durableRetryOperations
+        self.inviteDeclineCalls = inviteDeclineCalls
         let hiddenMessageIds = appState.activeAccountRef.map {
             MessageHideStore.hiddenMessageIds(accountRef: $0, groupIdHex: group.groupIdHex)
         } ?? []
@@ -3113,7 +3116,24 @@ final class ConversationViewModel {
         return await refreshGroupManagement()
     }
 
-    func declineInvite() async -> AppGroupRecordFfi? {
+    /// Reads current admin state, since MDK refuses an admin invitee's decline
+    /// until it steps down.
+    func prepareInviteDecline() async -> InviteDeclinePlan? {
+        guard hasPendingInvite, inviteActionInFlight == nil else { return nil }
+        inviteActionInFlight = .declining
+        defer { inviteActionInFlight = nil }
+        _ = await refreshGroupManagement()
+        // A failed read keeps the last management state, which includes our own
+        // step-down; the window catches up later, so it only fills in for none.
+        let capabilities = conversationWindow?.header.capabilities
+        return ConversationInvitePresentation.declinePlan(
+            requiresStepDown: managementState?.requiresSelfDemoteBeforeLeave
+                ?? capabilities?.requiresSelfDemoteBeforeLeave ?? false,
+            isLastAdmin: managementState?.isLastAdmin ?? capabilities?.isLastAdmin ?? false
+        )
+    }
+
+    func declineInvite(steppingDown: Bool = false) async -> AppGroupRecordFfi? {
         guard hasPendingInvite,
               inviteActionInFlight == nil,
               let appState,
@@ -3122,27 +3142,19 @@ final class ConversationViewModel {
         inviteActionInFlight = .declining
         defer { inviteActionInFlight = nil }
         do {
-            let result: GroupInviteDeclineResultFfi
-#if DEBUG
-            if let declineGroupInviteForTesting {
-                result = try await declineGroupInviteForTesting(accountRef, group.groupIdHex)
-            } else {
-                let client = try appState.currentMarmotClient()
-                result = try await client.declineGroupInvite(
-                    accountRef: accountRef,
-                    groupIdHex: group.groupIdHex
-                )
+            if steppingDown {
+                applyGroupMutation(try await inviteDeclineCalls.selfDemote(
+                    appState, advisoryPrompter, accountRef, group.groupIdHex
+                ))
             }
-#else
-            let client = try appState.currentMarmotClient()
-            result = try await client.declineGroupInvite(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex
-            )
-#endif
+            let result = try await inviteDeclineCalls.decline(appState, accountRef, group.groupIdHex)
             applyGroupRecord(result.group)
             Haptics.warning()
             return result.group
+        } catch let declined as GroupChangeAdvisoryDeclined {
+            // Leaving the invite bar cancels the change; only a chosen Wait warns.
+            if !Task.isCancelled { appState.present(.warning(declined.advisory.declinedMessage)) }
+            return nil
         } catch {
             Haptics.error()
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't decline invitation"), error: error))

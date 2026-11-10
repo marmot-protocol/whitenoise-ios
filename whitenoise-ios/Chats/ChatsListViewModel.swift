@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import Observation
 import OSLog
@@ -335,7 +334,6 @@ final class ChatsListViewModel {
     private var inviterLookupCompletedGroupIds: Set<String> = []
     private var inviterLookupFailureCountByGroupId: [String: Int] = [:]
     private var retainedDirectPeerCache = ChatListDirectPeerCache()
-    private var groupDetailsCache: [String: GroupDetailsFfi] = [:]
     private var directPeerLookupCompletedGroupIds: Set<String> = []
     private var pendingDirectPeerRefreshGroupIds: Set<String> = []
     @ObservationIgnored private var defersPinOrderSnapshots = false
@@ -442,7 +440,6 @@ final class ChatsListViewModel {
             directPeerAccountIdByGroupId = accountRef.map {
                 retainedDirectPeerCache.restore(accountRef: $0)
             } ?? [:]
-            groupDetailsCache = [:]
             inviterAccountIdByGroupId = [:]
             inviterLookupCompletedGroupIds = []
             inviterLookupFailureCountByGroupId = [:]
@@ -800,7 +797,6 @@ final class ChatsListViewModel {
         var changed = false
         let muteLookup = currentMuteLookup()
         for row in snapshot {
-            updateCachedGroupDetails(with: row)
             let item = makeItem(for: row, muteLookup: muteLookup)
             nextRows[row.groupIdHex] = row
             nextItems[row.groupIdHex] = item
@@ -855,7 +851,6 @@ final class ChatsListViewModel {
     /// lifetime of the account binding. Mirrors `removeChatListRow`'s per-group
     /// cleanup for every group absent from the snapshot.
     private func pruneEnrichmentCaches(toSurviving surviving: Set<String>) {
-        groupDetailsCache = Self.intersecting(groupDetailsCache, with: surviving)
         avatarURLByGroupId = Self.intersecting(avatarURLByGroupId, with: surviving)
         directPeerAccountIdByGroupId = Self.intersecting(directPeerAccountIdByGroupId, with: surviving)
         inviterAccountIdByGroupId = Self.intersecting(inviterAccountIdByGroupId, with: surviving)
@@ -948,7 +943,6 @@ final class ChatsListViewModel {
         inviterAccountIdByGroupId[groupIdHex] = nil
         inviterLookupCompletedGroupIds.remove(groupIdHex)
         inviterLookupFailureCountByGroupId[groupIdHex] = nil
-        groupDetailsCache[groupIdHex] = nil
         directPeerLookupCompletedGroupIds.remove(groupIdHex)
         pendingDirectPeerRefreshGroupIds.remove(groupIdHex)
         if let currentAccount {
@@ -1002,7 +996,6 @@ final class ChatsListViewModel {
             row.title = name
         }
         avatarURLByGroupId[record.groupIdHex] = record.avatarUrl
-        updateCachedGroupDetails(with: record)
         if storeRow(row) {
             publishItems()
         }
@@ -1055,7 +1048,6 @@ final class ChatsListViewModel {
             inviterLookupCompletedGroupIds.remove(row.groupIdHex)
             inviterLookupFailureCountByGroupId[row.groupIdHex] = nil
         }
-        updateCachedGroupDetails(with: row)
         let item = makeItem(for: row, muteLookup: muteLookup)
         let changed = itemByGroupId[row.groupIdHex] != item
         rowByGroupId[row.groupIdHex] = row
@@ -1114,7 +1106,7 @@ final class ChatsListViewModel {
         prepared: PresentedChatRowFfi? = nil
     ) -> Item {
         let selected = selected ?? selectedPresentationByGroupId[row.groupIdHex]
-        let display = display(for: row, details: groupDetailsCache[row.groupIdHex], selected: selected)
+        let display = display(for: row, selected: selected)
         let muteLookup = muteLookup ?? currentMuteLookup()
         return Item(
             row: row,
@@ -1172,41 +1164,7 @@ final class ChatsListViewModel {
         return appState.accounts.first { $0.label == accountRef }?.accountIdHex
     }
 
-    private func updateCachedGroupDetails(with row: ChatListRowFfi) {
-        guard var details = groupDetailsCache[row.groupIdHex] else { return }
-        var group = details.group
-        var changed = false
-        // A live row is a projection, not authority: an absent name/avatar
-        // means "not carried", not "cleared" — enrichment exists to backfill
-        // exactly these fields. Clears arrive through the group-record path,
-        // so only concrete row values are adopted here.
-        if let rowName = ContentSanitizer.groupName(row.groupName), group.name != rowName {
-            group.name = rowName
-            changed = true
-        }
-        if let rowAvatarUrl = row.avatarUrl, group.avatarUrl != rowAvatarUrl {
-            group.avatarUrl = rowAvatarUrl
-            changed = true
-        }
-        guard changed else { return }
-        details.group = group
-        groupDetailsCache[row.groupIdHex] = details
-        if let rowAvatarUrl = row.avatarUrl {
-            avatarURLByGroupId[row.groupIdHex] = rowAvatarUrl
-        }
-    }
-
-    private func updateCachedGroupDetails(with group: AppGroupRecordFfi) {
-        guard var details = groupDetailsCache[group.groupIdHex] else { return }
-        details.group = group
-        groupDetailsCache[group.groupIdHex] = details
-    }
-
-    private func display(
-        for row: ChatListRowFfi,
-        details: GroupDetailsFfi?,
-        selected: ConversationPresentationFfi? = nil
-    ) -> Display {
+    private func display(for row: ChatListRowFfi, selected: ConversationPresentationFfi? = nil) -> Display {
         if let selected = selected ?? selectedPresentationByGroupId[row.groupIdHex] {
             // Nicknames are local-only; keep the rest of MDK's selection intact.
             let nickname = row.conversationKind == .direct
@@ -1218,7 +1176,7 @@ final class ChatsListViewModel {
         let fallbackAvatarURL = ContentSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex])
         return Self.display(
             for: row,
-            details: details,
+            details: nil,
             appState: appState,
             fallbackAvatarURL: fallbackAvatarURL,
             cachedDirectPeerAccountId: directPeerAccountIdByGroupId[row.groupIdHex]
@@ -1710,28 +1668,6 @@ final class ChatsListViewModel {
             return lhs < rhs
         }
     }
-
-    #if DEBUG
-    func groupDetailsCacheEntryForTesting(groupIdHex: String) -> GroupDetailsFfi? {
-        groupDetailsCache[groupIdHex]
-    }
-
-    func seedGroupDetailsCacheForTesting(_ details: GroupDetailsFfi) {
-        let groupId = details.group.groupIdHex
-        groupDetailsCache[groupId] = details
-        directPeerLookupCompletedGroupIds.insert(groupId)
-        if let avatarUrl = details.group.avatarUrl {
-            avatarURLByGroupId[groupId] = avatarUrl
-        }
-        if let row = rowByGroupId[groupId] {
-            let item = makeItem(for: row)
-            if itemByGroupId[groupId] != item {
-                itemByGroupId[groupId] = item
-                publishItems()
-            }
-        }
-    }
-    #endif
 
     /// Match Marmot's durable chat-list ordering: manually ordered pinned rows
     /// first, then activity order. `activitySortAt` survives secure pruning

@@ -81,4 +81,16 @@ struct ConversationInvitePresentationTests {
             timeline: []
         ))
     }
+
+    @Test func adminInviteeMustStepDownBeforeDeclining() {
+        #expect(ConversationInvitePresentation.declinePlan(requiresStepDown: true, isLastAdmin: false) == .stepDownFirst)
+        #expect(ConversationInvitePresentation.declinePlan(requiresStepDown: false, isLastAdmin: false) == .decline)
+        guard case .blocked(let reason) = ConversationInvitePresentation.declinePlan(
+            requiresStepDown: true, isLastAdmin: true
+        ) else {
+            Issue.record("The only admin can't step down, so it can't decline")
+            return
+        }
+        #expect(!reason.isEmpty)
+    }
 }

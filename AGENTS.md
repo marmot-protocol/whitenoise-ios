@@ -443,10 +443,10 @@ Do not add a second storage path for data Marmot already owns.
   `no_test_hook_in_app_code` rule enforces this in `whitenoise-ios/`,
   `Shared/` and `NotificationServiceExtension/`; a deliberate exception
   needs `// swiftlint:disable:next no_test_hook_in_app_code` with the reason
-  above it, on every line the rule flags. The rule's limits:
+  above it, on every line the rule flags. The rule's limits, and the
+  policy's documented exception:
   - It catches only names containing `ForTesting` or starting with
-    `forTesting`. Review covers the rest, such as `AppLanguage`'s
-    `testCurrentOverride` and `testDefaults` (#1241, item 3).
+    `forTesting`. Review covers the rest.
   - Files that still have hooks start with
     `// swiftlint:disable no_test_hook_in_app_code`, so a new hook in one
     of them passes. Never add that directive to another file; a hook that
@@ -454,6 +454,18 @@ Do not add a second storage path for data Marmot already owns.
     you change a hook or the code it serves, replace that hook with an
     injected dependency, and remove the directive once its last hook is
     gone (`superfluous_disable_command` fails the lint job otherwise).
+  - One documented exception to this policy: `AppLanguage`'s
+    `testCurrentOverride` (a DEBUG-only task-local language override) and
+    `testDefaults` (a process-scoped preference suite, separate from the
+    real App Group, used in unit-test processes) stay. The lint rule
+    doesn't match these names, so they carry no directive. The default
+    `L10n` entry points and `AppLanguage.currentLocale` defaults read the
+    process-wide language, so injecting it would thread a language through
+    all presentation code (#1241, item 3). Set a test's language with
+    `withAppLanguage(_:perform:)` (TestSupport), or
+    `AppLanguage.$testCurrentOverride.withValue` in async code; tests of
+    preference writes still inject their own `UserDefaults` and
+    `NotificationCenter` (see Code Style). Don't add other seams like them.
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:
