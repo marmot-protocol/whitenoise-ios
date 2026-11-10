@@ -108,6 +108,38 @@ struct ConversationInviteActionTests {
         #expect(viewModel.inviteActionInFlight == nil)
     }
 
+    @Test(arguments: [false, true])
+    func choosingWaitWarnsButLeavingTheInviteBarStaysQuiet(leftTheInviteBar: Bool) async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let pending = group(name: "invited", pendingConfirmation: true)
+        var calls: [String] = []
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            inviteDeclineCalls: inviteDeclineCalls(
+                log: { calls.append($0) },
+                pending: pending,
+                declined: pending,
+                selfDemoteError: GroupChangeAdvisoryDeclined(advisory: .catchingUp)
+            )
+        )
+
+        let updated = await Task { @MainActor in
+            if leftTheInviteBar { withUnsafeCurrentTask { $0?.cancel() } }
+            return await viewModel.declineInvite(steppingDown: true)
+        }.value
+
+        #expect(calls == ["selfDemote account-ref \(pending.groupIdHex)"])
+        #expect(updated == nil)
+        #expect(viewModel.hasPendingInvite)
+        if leftTheInviteBar {
+            #expect(appState.activeToast == nil)
+        } else {
+            #expect(appState.activeToast?.title == GroupChangeAdvisory.catchingUp.declinedMessage)
+        }
+    }
+
     @Test func declineAfterAStepDownThatOutlivedAFailedDeclineNeedsNoSecondStepDown() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"

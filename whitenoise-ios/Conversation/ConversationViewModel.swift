@@ -3152,7 +3152,8 @@ final class ConversationViewModel {
             Haptics.warning()
             return result.group
         } catch let declined as GroupChangeAdvisoryDeclined {
-            appState.present(.warning(declined.advisory.declinedMessage))
+            // Leaving the invite bar cancels the change; only a chosen Wait warns.
+            if !Task.isCancelled { appState.present(.warning(declined.advisory.declinedMessage)) }
             return nil
         } catch {
             Haptics.error()
