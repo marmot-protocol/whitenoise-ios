@@ -623,7 +623,7 @@ struct ChatsListProjectionTests {
         let row = chatListRow(groupIdHex: hex("d5"), title: "Unsafe Avatar")
         viewModel.applyChatListSnapshot([row])
 
-        // The same path keeps a public HTTPS URL (localGroupChangeUpdatesProjectedAvatarURL).
+        // The same path keeps a public HTTPS URL (localGroupChangeUpdatesProjectedNameAndAvatar).
         viewModel.applyLocalGroupChange(group(
             name: "Unsafe Avatar",
             id: row.groupIdHex,
@@ -684,6 +684,13 @@ struct ChatsListProjectionTests {
             avatarUrl: "https://cdn.example.com/old.png"
         )
         viewModel.applyChatListSnapshot([oldRow])
+        // The list remembers the old avatar from a local change; a live row
+        // with a new one still wins.
+        viewModel.applyLocalGroupChange(group(
+            name: "Old name",
+            id: groupId,
+            avatarUrl: "https://cdn.example.com/old.png"
+        ))
 
         viewModel.applyChatListRow(chatListRow(
             groupIdHex: groupId,
