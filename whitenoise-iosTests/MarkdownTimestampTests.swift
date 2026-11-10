@@ -367,26 +367,45 @@ struct MarkdownTimestampTests {
         #expect(MarkdownRelativeTimestampSchedule.nextRefreshDate(for: [Int64](), now: now, calendar: calendar) == nil)
     }
 
-    @Test func schedulerRunsOnlyForVisibleRelativeRowsWhileActive() {
-        let scheduler = RelativeTimestampRefreshScheduler()
+    @Test func schedulerRunsOnlyForVisibleRelativeRowsWhileActive() async throws {
+        let sleeper = ControlledSleeper()
+        let scheduler = RelativeTimestampRefreshScheduler(
+            sleep: sleeper.sleep,
+            now: { [instant] in Date(timeIntervalSince1970: TimeInterval(instant)) }
+        )
+        var refreshed: [Set<String>] = []
         scheduler.relativeUnixSeconds = { [instant] rowId in rowId == "relative" ? [instant] : [] }
+        scheduler.refreshRows = { refreshed.append($0) }
 
+        // Inactive: becoming visible refreshes the row but schedules nothing.
         scheduler.setRowVisible("relative", isVisible: true)
-        #expect(!scheduler.isScheduledForTesting)
+        #expect(refreshed == [["relative"]])
 
         scheduler.setActive(true)
-        #expect(scheduler.isScheduledForTesting)
+        try await eventually { sleeper.requestedDelays.count == 1 }
 
         scheduler.setActive(false)
-        #expect(!scheduler.isScheduledForTesting)
+        try await eventually { sleeper.cancelledCount == 1 }
 
+        // Only an absolute row is visible: nothing to schedule until the
+        // relative one comes back.
         scheduler.setRowVisible("relative", isVisible: false)
         scheduler.setRowVisible("absolute", isVisible: true)
         scheduler.setActive(true)
-        #expect(!scheduler.isScheduledForTesting)
-
         scheduler.setRowVisible("relative", isVisible: true)
-        #expect(scheduler.isScheduledForTesting)
+        try await eventually { sleeper.requestedDelays.count == 2 }
+
+        // A fire refreshes the visible relative rows and schedules the next one.
+        sleeper.releaseAll()
+        try await eventually { sleeper.requestedDelays.count == 3 }
+        #expect(refreshed == [["relative"], ["relative"], ["relative"]])
+
+        // A row scrolled away is not refreshed, and nothing is rescheduled.
+        scheduler.setRowVisible("relative", isVisible: false)
+        sleeper.releaseAll()
+        try await eventually { sleeper.completedCount == 2 }
+        #expect(refreshed.count == 3)
+        #expect(sleeper.requestedDelays.count == 3)
         scheduler.cancel()
     }
 
@@ -408,7 +427,8 @@ struct MarkdownTimestampTests {
     }
 
     @Test func aRelativeRowIsRefreshedEachTimeItBecomesVisible() {
-        let scheduler = RelativeTimestampRefreshScheduler()
+        let sleeper = ControlledSleeper()
+        let scheduler = RelativeTimestampRefreshScheduler(sleep: sleeper.sleep)
         var refreshed: [Set<String>] = []
         scheduler.relativeUnixSeconds = { [instant] rowId in rowId == "relative" ? [instant] : [] }
         scheduler.refreshRows = { refreshed.append($0) }
