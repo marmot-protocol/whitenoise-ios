@@ -379,7 +379,9 @@ struct MarkdownTimestampTests {
 
         // Inactive: becoming visible refreshes the row but schedules nothing.
         scheduler.setRowVisible("relative", isVisible: true)
+        await runPendingMainActorWork()
         #expect(refreshed == [["relative"]])
+        #expect(sleeper.requestedDelays.isEmpty)
 
         scheduler.setActive(true)
         try await eventually { sleeper.requestedDelays.count == 1 }
@@ -392,6 +394,8 @@ struct MarkdownTimestampTests {
         scheduler.setRowVisible("relative", isVisible: false)
         scheduler.setRowVisible("absolute", isVisible: true)
         scheduler.setActive(true)
+        await runPendingMainActorWork()
+        #expect(sleeper.requestedDelays.count == 1)
         scheduler.setRowVisible("relative", isVisible: true)
         try await eventually { sleeper.requestedDelays.count == 2 }
 
@@ -404,9 +408,17 @@ struct MarkdownTimestampTests {
         scheduler.setRowVisible("relative", isVisible: false)
         sleeper.releaseAll()
         try await eventually { sleeper.completedCount == 2 }
+        await runPendingMainActorWork()
         #expect(refreshed.count == 3)
         #expect(sleeper.requestedDelays.count == 3)
         scheduler.cancel()
+    }
+
+    /// Lets main-actor tasks that are already queued run, such as one the
+    /// scheduler started: it inherits the main actor, so it reaches the
+    /// sleeper before the test resumes.
+    private func runPendingMainActorWork() async {
+        for _ in 0..<3 { await Task.yield() }
     }
 
     @Test func trackingKeepsTheRelativeInstantsClosestToTheRenderTime() {
