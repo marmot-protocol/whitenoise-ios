@@ -123,6 +123,12 @@ struct ConversationInviteActionTests {
                 declineError: MarmotKitError.AccountWorkerBusy
             )
         )
+        // The open window still says admin until its next update.
+        var staleWindow = conversationWindowSnapshot(groupIdHex: pending.groupIdHex)
+        staleWindow.pendingConfirmation = true
+        staleWindow.header.capabilities.isLastAdmin = false
+        staleWindow.header.capabilities.requiresSelfDemoteBeforeLeave = true
+        viewModel.installConversationWindow(staleWindow)
 
         let updated = await viewModel.declineInvite(steppingDown: true)
 

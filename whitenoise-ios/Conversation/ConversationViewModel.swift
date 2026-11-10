@@ -3122,17 +3122,14 @@ final class ConversationViewModel {
         guard hasPendingInvite, inviteActionInFlight == nil else { return nil }
         inviteActionInFlight = .declining
         defer { inviteActionInFlight = nil }
-        if await refreshGroupManagement(), let state = managementState {
-            return ConversationInvitePresentation.declinePlan(
-                requiresStepDown: state.requiresSelfDemoteBeforeLeave,
-                isLastAdmin: state.isLastAdmin
-            )
-        }
-        // The window carries the same capabilities when the read fails.
+        _ = await refreshGroupManagement()
+        // A failed read keeps the last management state, which includes our own
+        // step-down; the window catches up later, so it only fills in for none.
         let capabilities = conversationWindow?.header.capabilities
         return ConversationInvitePresentation.declinePlan(
-            requiresStepDown: capabilities?.requiresSelfDemoteBeforeLeave ?? managementState?.requiresSelfDemoteBeforeLeave ?? false,
-            isLastAdmin: capabilities?.isLastAdmin ?? managementState?.isLastAdmin ?? false
+            requiresStepDown: managementState?.requiresSelfDemoteBeforeLeave
+                ?? capabilities?.requiresSelfDemoteBeforeLeave ?? false,
+            isLastAdmin: managementState?.isLastAdmin ?? capabilities?.isLastAdmin ?? false
         )
     }
 

@@ -638,6 +638,9 @@ struct ConversationView: View {
     @State private var selectedMessageIds = Set<String>()
     @State private var showBatchDeleteConfirmation = false
     @State private var showStepDownDeclineConfirmation = false
+    /// Cancelled when the invite bar goes away, so a late advisory can't wait
+    /// for an answer nobody can give.
+    @State private var inviteDeclineTask: Task<Void, Never>?
     @State private var batchDeleteOperationID: UUID?
     @State private var editSession: ComposerEditSession?
     @State private var editSaveInFlight = false
@@ -1644,14 +1647,17 @@ struct ConversationView: View {
             titleVisibility: .visible
         ) {
             Button(L10n.string("Step Down and Decline"), role: .destructive) {
-                Task { await finishInviteDecline(viewModel: viewModel, steppingDown: true) }
+                inviteDeclineTask = Task { await finishInviteDecline(viewModel: viewModel, steppingDown: true) }
             }
             Button(L10n.string("Cancel"), role: .cancel) {}
         } message: {
             Text("You were added as an admin. You'll step down as admin first, then decline. Group members will see that you stepped down.")
         }
         .groupChangeAdvisoryAlert(viewModel.advisoryPrompter)
-        .onDisappear { viewModel.advisoryPrompter.cancelPending() }
+        .onDisappear {
+            inviteDeclineTask?.cancel()
+            viewModel.advisoryPrompter.cancelPending()
+        }
     }
 
     private func blockedLeaveComposerAction(viewModel: ConversationViewModel) -> ComposerDisabledAction? {
@@ -2947,7 +2953,7 @@ struct ConversationView: View {
     }
 
     private func prepareInviteDecline(viewModel: ConversationViewModel) {
-        Task {
+        inviteDeclineTask = Task {
             switch await viewModel.prepareInviteDecline() {
             // Awaited in this task, so Accept can't start between the read and the decline.
             case .decline: await finishInviteDecline(viewModel: viewModel, steppingDown: false)
