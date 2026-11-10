@@ -26,7 +26,7 @@ nonisolated enum AccountSetupPresentation {
         case .follows: L10n.string("People you follow")
         case .relays: L10n.string("Your relays")
         case .inboxRelays: L10n.string("Message inbox")
-        case .singleDevice: L10n.string("Using one device")
+        case .singleDevice: L10n.string("Chats on this device")
         case .keyPackage: L10n.string("Secure messaging")
         }
     }
@@ -122,14 +122,15 @@ nonisolated enum AccountSetupPresentation {
         discovery == .noneFound ? L10n.string("Continue") : L10n.string("Continue anyway")
     }
 
-    static func deviceNotice(_ discovery: OnboardingDeviceDiscoveryFfi) -> String {
+    static func deviceNotice(_ discovery: OnboardingDeviceDiscoveryFfi) -> String? {
         switch discovery {
         case .otherInstallationPossible:
-            L10n.string("We found signs of another installation. This can also happen after reinstalling. Invitations may reach only one installation, and chats will not appear on both.")
-        case .noneFound:
-            L10n.string("No other installation was found on the sources we checked. This does not guarantee that the profile is unused elsewhere.")
+            L10n.string("Other sign-in records were found. They may belong to another installation or an earlier one.")
         case .unknown:
-            L10n.string("We couldn’t determine whether another installation exists. Invitations may reach only one installation, and chats will not appear on both.")
+            L10n.string("Other sign-ins could not be checked.")
+        // Finding nothing does not prove there are no other installations, so say nothing.
+        case .noneFound:
+            nil
         }
     }
 
