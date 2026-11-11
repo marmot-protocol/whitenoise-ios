@@ -57,10 +57,10 @@ struct RemoteImageLoaderTests {
         let fetches = Mutex(0)
         func load(at date: Date) async -> URLError? {
             do {
-                _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, now: { date }, fetch: { _ in
+                _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, fetch: { _ in
                     fetches.withLock { $0 += 1 }
                     throw URLError(.badServerResponse)
-                })
+                }, now: { date })
                 return nil
             } catch {
                 return error as? URLError

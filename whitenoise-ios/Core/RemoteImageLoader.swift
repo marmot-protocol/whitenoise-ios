@@ -424,8 +424,8 @@ enum RemoteAvatarImageLoader {
         for url: URL,
         maxPixelSize: Int,
         scale: CGFloat,
-        now: () -> Date = Date.init,
-        fetch: @escaping @Sendable (URL) async throws -> Data = RemoteImageFetch.imageData
+        fetch: @escaping @Sendable (URL) async throws -> Data = RemoteImageFetch.imageData,
+        now: () -> Date = Date.init
     ) async throws -> UIImage {
         try checkCacheWorkAllowed()
         let generation = cacheGeneration
