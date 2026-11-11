@@ -12,14 +12,14 @@ final class RelativeTimeFormatterBuildCounter {
     private(set) var builtDateFormatters: [DateFormatter] = []
 
     lazy var formatters = RelativeTimeFormatters(
-        makeDateFormatter: { [unowned self] in
-            self.dateFormatterBuilds += 1
+        makeDateFormatter: { [weak self] in
+            self?.dateFormatterBuilds += 1
             let formatter = DateFormatter()
-            self.builtDateFormatters.append(formatter)
+            self?.builtDateFormatters.append(formatter)
             return formatter
         },
-        makeDurationFormatter: { [unowned self] in
-            self.durationFormatterBuilds += 1
+        makeDurationFormatter: { [weak self] in
+            self?.durationFormatterBuilds += 1
             return DateComponentsFormatter()
         }
     )
