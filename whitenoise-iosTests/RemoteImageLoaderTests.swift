@@ -53,24 +53,25 @@ struct RemoteImageLoaderTests {
         RemoteAvatarImageLoader.resetCachesForTesting()
         defer { RemoteAvatarImageLoader.resetCachesForTesting() }
 
-        RemoteAvatarImageLoader.cacheFailureForTesting(URLError(.badServerResponse), for: url, now: now)
+        let key = RemoteAvatarImageLoader.failureCacheKey(for: url)
+        RemoteAvatarImageLoader.cacheFailure(URLError(.badServerResponse), for: key, now: now)
 
         let cached = try #require(
-            RemoteAvatarImageLoader.cachedFailureForTesting(
-                for: url,
+            RemoteAvatarImageLoader.cachedFailureError(
+                for: key,
                 now: now.addingTimeInterval(30)
             ) as? URLError
         )
         #expect(cached.code == .badServerResponse)
         #expect(
-            RemoteAvatarImageLoader.cachedFailureForTesting(
-                for: url,
+            RemoteAvatarImageLoader.cachedFailureError(
+                for: key,
                 now: now.addingTimeInterval(61)
             ) == nil
         )
-        #expect(!RemoteAvatarImageLoader.shouldCacheFailureForTesting(CancellationError()))
-        #expect(!RemoteAvatarImageLoader.shouldCacheFailureForTesting(URLError(.cancelled)))
-        #expect(!RemoteAvatarImageLoader.shouldCacheFailureForTesting(
+        #expect(!RemoteAvatarImageLoader.shouldCacheFailure(CancellationError()))
+        #expect(!RemoteAvatarImageLoader.shouldCacheFailure(URLError(.cancelled)))
+        #expect(!RemoteAvatarImageLoader.shouldCacheFailure(
             NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)
         ))
     }
@@ -83,7 +84,7 @@ struct RemoteImageLoaderTests {
         defer { RemoteAvatarImageLoader.resetCachesForTesting() }
 
         let first = Task { @MainActor in
-            try await RemoteAvatarImageLoader.imageDataForTesting(
+            try await RemoteAvatarImageLoader.imageData(
                 for: url,
                 keyString: url.absoluteString
             ) { _ in
@@ -93,7 +94,7 @@ struct RemoteImageLoaderTests {
         await probe.waitUntilStarted()
 
         let second = Task { @MainActor in
-            try await RemoteAvatarImageLoader.imageDataForTesting(
+            try await RemoteAvatarImageLoader.imageData(
                 for: url,
                 keyString: url.absoluteString
             ) { _ in
@@ -152,7 +153,7 @@ struct RemoteImageLoaderTests {
         _ = try await second.value
 
         #expect(await probe.callCount() == 1)
-        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 56) != nil)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 56) != nil)
     }
 
     @Test func avatarRemoteImageShowsTheCenterOfNonSquareImages() async throws {
@@ -231,7 +232,7 @@ struct RemoteImageLoaderTests {
         await cleanup.value
         await secondCleanup.value
         await #expect(throws: CancellationError.self) { _ = try await request.value }
-        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 8) == nil)
         #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
         #expect(await RemoteAvatarDiskCache.shared.data(for: arrivingURL) == nil)
         _ = try await RemoteAvatarImageLoader.image(for: arrivingURL, maxPixelSize: 8, scale: 1, fetch: { _ in data })
@@ -266,13 +267,13 @@ struct RemoteImageLoaderTests {
         #expect(slots.inFlight == 1)
         #expect(!fixture.didTimeOut)
         #expect(connections.withLock { $0 } == 0)
-        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 8) == nil)
         #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
         fixture.release()
         _ = try await exited.wait { _ in }
         #expect(slots.inFlight == 0)
         #expect(connections.withLock { $0 } == 0)
-        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 8) == nil)
         #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
     }
 

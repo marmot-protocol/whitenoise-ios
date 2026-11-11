@@ -106,6 +106,8 @@ enum GroupAvatarImageLoader {
     private static var cacheDrainTask: Task<Void, Never>?
     private static var cacheGeneration: UInt64 = 0
     #if DEBUG
+    // Documented exception (AGENTS.md): the loader is process-wide static
+    // state, so the drain test pauses a decode through this static slot.
     static var beforeDecodeForTesting: (@Sendable () async -> Void)?
     #endif
 
@@ -255,6 +257,7 @@ enum GroupAvatarImageLoader {
         fetchMilliseconds: Double = 0
     ) async throws -> ImageLoad {
         #if DEBUG
+        // Documented exception (AGENTS.md): pauses here in the drain test.
         await beforeDecodeForTesting?()
         #endif
         try checkCacheWorkAllowed()
@@ -480,6 +483,8 @@ enum GroupAvatarImageLoader {
     }
 
     #if DEBUG
+    // Documented exception (AGENTS.md): these caches are process-wide statics
+    // every group avatar view shares, so tests reset and observe them here.
     static var isDrainingForTesting: Bool { cacheDrainTask != nil }
     static func resetForTesting() { clearCaches() }
 

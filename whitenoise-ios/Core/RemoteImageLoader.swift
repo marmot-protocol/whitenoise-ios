@@ -495,7 +495,7 @@ enum RemoteAvatarImageLoader {
         return data
     }
 
-    private static func imageData(
+    static func imageData(
         for url: URL,
         keyString: String,
         fetch: @escaping @Sendable (URL) async throws -> Data
@@ -517,7 +517,7 @@ enum RemoteAvatarImageLoader {
         return try await task.value
     }
 
-    private static func cachedFailureError(for key: NSString, now: Date = Date()) -> Error? {
+    static func cachedFailureError(for key: NSString, now: Date = Date()) -> Error? {
         guard let cachedFailure = failureCache.object(forKey: key) else { return nil }
         if cachedFailure.isExpired(now: now) {
             failureCache.removeObject(forKey: key)
@@ -526,7 +526,7 @@ enum RemoteAvatarImageLoader {
         return cachedFailure.error
     }
 
-    private static func cacheFailure(_ error: Error, for key: NSString, now: Date = Date()) {
+    static func cacheFailure(_ error: Error, for key: NSString, now: Date = Date()) {
         guard cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
         guard shouldCacheFailure(error) else { return }
         failureCache.setObject(
@@ -535,7 +535,7 @@ enum RemoteAvatarImageLoader {
         )
     }
 
-    private static func shouldCacheFailure(_ error: Error) -> Bool {
+    static func shouldCacheFailure(_ error: Error) -> Bool {
         if error is CancellationError { return false }
         if (error as? URLError)?.code == .cancelled { return false }
         let nsError = error as NSError
@@ -547,7 +547,7 @@ enum RemoteAvatarImageLoader {
         "\(url.absoluteString):\(maxPixelSize)" as NSString
     }
 
-    private static func failureCacheKey(for url: URL) -> NSString {
+    static func failureCacheKey(for url: URL) -> NSString {
         url.absoluteString as NSString
     }
 
@@ -588,32 +588,10 @@ enum RemoteAvatarImageLoader {
     }
 
     #if DEBUG
+    // Documented exception (AGENTS.md): these caches are process-wide statics
+    // every avatar view shares, so tests reset and observe them here.
     static var isDrainingForTesting: Bool { cacheDrainTask != nil }
     static func resetCachesForTesting() { clearCaches() }
-
-    static func cacheFailureForTesting(_ error: Error, for url: URL, now: Date = Date()) {
-        cacheFailure(error, for: failureCacheKey(for: url), now: now)
-    }
-
-    static func cachedFailureForTesting(for url: URL, now: Date = Date()) -> Error? {
-        cachedFailureError(for: failureCacheKey(for: url), now: now)
-    }
-
-    static func shouldCacheFailureForTesting(_ error: Error) -> Bool {
-        shouldCacheFailure(error)
-    }
-
-    static func imageDataForTesting(
-        for url: URL,
-        keyString: String,
-        fetch: @escaping @Sendable (URL) async throws -> Data
-    ) async throws -> Data {
-        try await imageData(for: url, keyString: keyString, fetch: fetch)
-    }
-
-    static func cachedImageForTesting(for url: URL, maxPixelSize: Int) -> UIImage? {
-        cachedImage(for: url, maxPixelSize: maxPixelSize)
-    }
     #endif
 
     static func cachedImage(for url: URL, maxPixelSize: Int) -> UIImage? {
