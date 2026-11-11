@@ -1077,9 +1077,13 @@ struct MessageBubble: View {
         .systemGray5
     }
 
-    static func timeLabel(recordedAt: UInt64, locale: Locale = .autoupdatingCurrent) -> String {
+    static func timeLabel(
+        recordedAt: UInt64,
+        locale: Locale = .autoupdatingCurrent,
+        formatters: RelativeTimeFormatters = .shared
+    ) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(recordedAt))
-        return RelativeTime.shortTime(date, locale: locale)
+        return RelativeTime.shortTime(date, locale: locale, formatters: formatters)
     }
 }
 
