@@ -426,7 +426,7 @@ final class ProfileStore {
         }
     }
 
-    func finishProfileProjectionLoadQueue(taskID: UUID) {
+    private func finishProfileProjectionLoadQueue(taskID: UUID) {
         guard profileProjectionLoadTaskID == taskID else { return }
         profileProjectionLoadTask = nil
         profileProjectionLoadTaskID = nil
@@ -512,7 +512,7 @@ final class ProfileStore {
     /// after the entry is gone (a missing entry reads as `nil`, never equal to a
     /// positive captured token). This bounds the map to ids with pending work
     /// while preserving the monotonic-staleness invariant the guard needs.
-    func pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex id: String, matching version: Int) {
+    private func pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex id: String, matching version: Int) {
         guard profileProjectionLoadVersions[id] == version,
               !queuedProfileProjectionLoadIDs.contains(id),
               !scheduledProfileProjectionLoadIDs.contains(id),
@@ -576,7 +576,7 @@ final class ProfileStore {
         }
     }
 
-    func finishProfileFetchQueue(taskID: UUID) {
+    private func finishProfileFetchQueue(taskID: UUID) {
         guard profileFetchQueueTaskID == taskID else { return }
         profileFetchQueueTask = nil
         profileFetchQueueTaskID = nil

@@ -1869,6 +1869,42 @@ struct AppStateBootstrapTests {
         #expect(appState.profileStore.profileFetchQueueTaskID == nil)
     }
 
+    @Test func aCancelledProjectionRunnerFinishingLeavesItsReplacementInPlace() async throws {
+        let appState = try testAppState()
+        let store = appState.profileStore
+        #expect(appState.knownDisplayName(forAccountIdHex: hex("45")) == nil)
+        let replaced = try #require(store.profileProjectionLoadTask)
+        // A background pause cancels the runner and keeps its id queued; the next
+        // foreground resume starts a replacement before the old one has finished.
+        _ = appState.pauseProfileFetchQueue()
+        appState.resumeProfileFetchQueueIfNeeded()
+        let replacement = try #require(store.profileProjectionLoadTask)
+        let replacementID = store.profileProjectionLoadTaskID
+
+        // Both runners are main-actor work: the old one finishes before the
+        // replacement starts its load, and this test resumes before that load ends.
+        await replaced.value
+
+        #expect(store.profileProjectionLoadTask == replacement)
+        #expect(store.profileProjectionLoadTaskID == replacementID)
+        await appState.cancelProfileFetchQueue()?.value
+    }
+
+    @Test func aSettledProfileReloadPrunesItsLoadVersion() async throws {
+        let appState = try testAppState()
+        let store = appState.profileStore
+        let id = hex("46")
+        let reload = Task { await store.reloadProfileProjection(forAccountIdHex: id) }
+        // A main-actor task queued behind the reload runs once it is waiting on
+        // its read, so its version is in the map here.
+        await Task { @MainActor in }.value
+        #expect(store.profileProjectionLoadVersions[id] != nil)
+
+        await reload.value
+
+        #expect(store.profileProjectionLoadVersions[id] == nil)
+    }
+
     @Test func profileFetchQueueRearmsPreservedIDsWhenRefreshIsAllowed() async throws {
         let appState = try testAppState()
         let queued = [hex("33")]
