@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 import OSLog
@@ -427,7 +426,7 @@ final class ProfileStore {
         }
     }
 
-    private func finishProfileProjectionLoadQueue(taskID: UUID) {
+    func finishProfileProjectionLoadQueue(taskID: UUID) {
         guard profileProjectionLoadTaskID == taskID else { return }
         profileProjectionLoadTask = nil
         profileProjectionLoadTaskID = nil
@@ -513,7 +512,7 @@ final class ProfileStore {
     /// after the entry is gone (a missing entry reads as `nil`, never equal to a
     /// positive captured token). This bounds the map to ids with pending work
     /// while preserving the monotonic-staleness invariant the guard needs.
-    private func pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex id: String, matching version: Int) {
+    func pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex id: String, matching version: Int) {
         guard profileProjectionLoadVersions[id] == version,
               !queuedProfileProjectionLoadIDs.contains(id),
               !scheduledProfileProjectionLoadIDs.contains(id),
@@ -564,7 +563,7 @@ final class ProfileStore {
         startProfileFetchQueueIfNeeded()
     }
 
-    private func runProfileFetchQueue(taskID: UUID) async {
+    func runProfileFetchQueue(taskID: UUID) async {
         defer {
             finishProfileFetchQueue(taskID: taskID)
         }
@@ -577,7 +576,7 @@ final class ProfileStore {
         }
     }
 
-    private func finishProfileFetchQueue(taskID: UUID) {
+    func finishProfileFetchQueue(taskID: UUID) {
         guard profileFetchQueueTaskID == taskID else { return }
         profileFetchQueueTask = nil
         profileFetchQueueTaskID = nil
@@ -768,26 +767,4 @@ final class ProfileStore {
             return
         }
     }
-
-    #if DEBUG
-    func runProfileFetchQueueForTesting() async {
-        let taskID = UUID()
-        profileFetchQueueTaskID = taskID
-        await runProfileFetchQueue(taskID: taskID)
-    }
-
-    func finishProfileProjectionLoadQueueForTesting(taskID: UUID) {
-        finishProfileProjectionLoadQueue(taskID: taskID)
-    }
-
-    func finishProfileFetchQueueForTesting(taskID: UUID) {
-        finishProfileFetchQueue(taskID: taskID)
-    }
-
-    /// Test hook for the post-load version-map eviction (#353). Mirrors the call
-    /// the guarded load sites make after applying a projection.
-    func pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex id: String, matching version: Int) {
-        pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: id, matching: version)
-    }
-    #endif
 }

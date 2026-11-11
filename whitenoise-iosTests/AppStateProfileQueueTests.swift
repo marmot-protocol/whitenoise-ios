@@ -38,7 +38,7 @@ struct AppStateProfileQueueTests {
         appState.profileStore.profileFetchQueueTaskID = newTaskID
         appState.profileStore.activeProfileFetchID = hex("44")
 
-        appState.profileStore.finishProfileFetchQueueForTesting(taskID: oldTaskID)
+        appState.profileStore.finishProfileFetchQueue(taskID: oldTaskID)
 
         #expect(appState.profileStore.profileFetchQueueTask != nil)
         #expect(appState.profileStore.profileFetchQueueTaskID == newTaskID)
@@ -56,7 +56,7 @@ struct AppStateProfileQueueTests {
         appState.profileStore.profileProjectionLoadTask = newTask
         appState.profileStore.profileProjectionLoadTaskID = newTaskID
 
-        appState.profileStore.finishProfileProjectionLoadQueueForTesting(taskID: oldTaskID)
+        appState.profileStore.finishProfileProjectionLoadQueue(taskID: oldTaskID)
 
         #expect(appState.profileStore.profileProjectionLoadTask != nil)
         #expect(appState.profileStore.profileProjectionLoadTaskID == newTaskID)
@@ -102,7 +102,7 @@ struct AppStateProfileQueueTests {
         appState.profileStore.profileProjectionLoadVersions = [hex("66"): 7, hex("77"): 2]
 
         // id 66 settled at its current token, nothing pending -> evicted.
-        appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("66"), matching: 7)
+        appState.profileStore.pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: hex("66"), matching: 7)
 
         #expect(appState.profileStore.profileProjectionLoadVersions == [hex("77"): 2])
     }
@@ -119,13 +119,13 @@ struct AppStateProfileQueueTests {
         // (a) superseded token: a newer load bumped 88 from 4 to 5; an older
         // load settling with token 4 must NOT evict the live token 5.
         appState.profileStore.profileProjectionLoadVersions = [hex("88"): 5]
-        appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("88"), matching: 4)
+        appState.profileStore.pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: hex("88"), matching: 4)
         #expect(appState.profileStore.profileProjectionLoadVersions == [hex("88"): 5])
 
         // (b) work still pending: matching token but the id is still queued.
         appState.profileStore.profileProjectionLoadVersions = [hex("99"): 1]
         appState.profileStore.queuedProfileProjectionLoadIDs = [hex("99")]
-        appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("99"), matching: 1)
+        appState.profileStore.pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: hex("99"), matching: 1)
         #expect(appState.profileStore.profileProjectionLoadVersions == [hex("99"): 1])
     }
 }

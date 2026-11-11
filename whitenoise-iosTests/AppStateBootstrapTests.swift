@@ -1856,7 +1856,9 @@ struct AppStateBootstrapTests {
         appState.profileStore.scheduledProfileFetchIDs = Set(queued)
         appState.setAppSceneActive(false)
 
-        await appState.runProfileFetchQueueForTesting()
+        let taskID = UUID()
+        appState.profileStore.profileFetchQueueTaskID = taskID
+        await appState.profileStore.runProfileFetchQueue(taskID: taskID)
 
         #expect(appState.profileStore.queuedProfileFetchIDs == queued)
         #expect(appState.profileStore.scheduledProfileFetchIDs == Set(queued))
