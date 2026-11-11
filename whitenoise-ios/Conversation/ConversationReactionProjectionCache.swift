@@ -157,7 +157,7 @@ final class ConversationReactionProjectionCache {
 
     // MARK: Aggregation
 
-    /// All aggregated tallies (for full-recompute test hooks).
+    /// All aggregated tallies, keyed by target.
     var allTallies: [String: [ConversationViewModel.ReactionTally]] {
         detailsByTarget.mapValues(\.tallies)
     }

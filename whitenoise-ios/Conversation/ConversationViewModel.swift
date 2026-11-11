@@ -912,13 +912,6 @@ final class ConversationViewModel {
     /// All aggregated reaction tallies (full dict). Used by reaction tests.
     var reactions: [String: [ReactionTally]] { timelineStore.reactions }
 
-#if DEBUG
-    @discardableResult
-    func forceFullReactionRecomputeForTesting() -> [String: [ReactionTally]] {
-        timelineStore.forceFullReactionRecomputeForTesting()
-    }
-#endif
-
     func markdownDisplayBlocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
         timelineStore.markdownDisplayBlocks(for: item)
     }
@@ -2509,10 +2502,6 @@ final class ConversationViewModel {
     }
 
 #if DEBUG
-    var groupSystemProjectionBuildCountForTesting: Int {
-        timelineStore.groupSystemProjectionBuildCountForTesting
-    }
-
     var reactionTargetCollectionCountForTesting: Int {
         timelineStore.reactionTargetCollectionCountForTesting
     }

@@ -9,6 +9,7 @@ final class ProjectionBuildCounter {
     private(set) var agentEventBuilds = 0
     /// Media builds from resolved outcomes and from attachment tags together.
     private(set) var mediaBuilds = 0
+    private(set) var groupSystemBuilds = 0
 
     var builders: ConversationProjectionBuilders {
         ConversationProjectionBuilders(
@@ -27,6 +28,10 @@ final class ProjectionBuildCounter {
             mediaFromReferences: { [self] references, ownerId in
                 mediaBuilds += 1
                 return ConversationProjectionBuilders.live.mediaFromReferences(references, ownerId)
+            },
+            groupSystemText: { [self] record, groupSystem, currentAccountIdHex, displayName in
+                groupSystemBuilds += 1
+                return ConversationProjectionBuilders.live.groupSystemText(record, groupSystem, currentAccountIdHex, displayName)
             }
         )
     }
