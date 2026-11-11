@@ -419,10 +419,12 @@ enum RemoteAvatarImageLoader {
         category: "avatar-cache"
     )
 
+    /// `now` dates the 60-second failure cache; the default is the wall clock.
     static func image(
         for url: URL,
         maxPixelSize: Int,
         scale: CGFloat,
+        now: () -> Date = Date.init,
         fetch: @escaping @Sendable (URL) async throws -> Data = RemoteImageFetch.imageData
     ) async throws -> UIImage {
         try checkCacheWorkAllowed()
@@ -435,7 +437,7 @@ enum RemoteAvatarImageLoader {
             return cached
         }
 
-        if let cachedFailure = cachedFailureError(for: failureKey) {
+        if let cachedFailure = cachedFailureError(for: failureKey, now: now()) {
             throw cachedFailure
         }
 
@@ -468,7 +470,7 @@ enum RemoteAvatarImageLoader {
             )
             return image
         } catch {
-            if !task.isCancelled { cacheFailure(error, for: failureKey) }
+            if !task.isCancelled { cacheFailure(error, for: failureKey, now: now()) }
             throw error
         }
     }

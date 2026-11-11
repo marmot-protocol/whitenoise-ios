@@ -47,14 +47,15 @@ struct RemoteImageLoaderTests {
         #expect(!RemoteImageDecoder.isAllowedRemoteImageType(nil))
     }
 
-    @Test func avatarLoaderCachesAFailedFetchAndKeepsItsError() async throws {
+    @Test func avatarLoaderCachesAFailedFetchForItsRetryWindow() async throws {
         let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
         RemoteAvatarImageLoader.clearCaches()
         defer { RemoteAvatarImageLoader.clearCaches() }
+        let failedAt = Date()
         let fetches = Mutex(0)
-        func load() async -> URLError? {
+        func load(at date: Date) async -> URLError? {
             do {
-                _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { _ in
+                _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, now: { date }) { _ in
                     fetches.withLock { $0 += 1 }
                     throw URLError(.badServerResponse)
                 }
@@ -64,10 +65,13 @@ struct RemoteImageLoaderTests {
             }
         }
 
-        #expect(await load()?.code == .badServerResponse)
-        // The cached failure answers the next load without fetching again.
-        #expect(await load()?.code == .badServerResponse)
+        #expect(await load(at: failedAt)?.code == .badServerResponse)
+        // Within the 60-second window the cached failure answers without a fetch.
+        #expect(await load(at: failedAt.addingTimeInterval(30))?.code == .badServerResponse)
         #expect(fetches.withLock { $0 } == 1)
+        // After it, the loader fetches again.
+        #expect(await load(at: failedAt.addingTimeInterval(61))?.code == .badServerResponse)
+        #expect(fetches.withLock { $0 } == 2)
     }
 
     @Test func avatarLoaderNeverCachesACancelledFetch() async throws {
