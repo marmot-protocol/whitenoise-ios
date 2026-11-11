@@ -741,6 +741,28 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.hasMoreAfter)
     }
 
+    @Test func defaultTimingsReachTheAppAnalyticsRecorder() async throws {
+        let appState = AppState.test()
+        let stages = Mutex<[ProductTimingStage]>([])
+        appState.productAnalytics.activateSink(timing: { stage, _, _ in stages.withLock { $0.append(stage) } }) { _ in }
+        defer { appState.productAnalytics.replaceSink(nil) }
+        let groupIdHex = hex("aa")
+        let store = TimelineStore(appState: appState, groupIdHex: groupIdHex)
+
+        store.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [timelineRecord(messageIdHex: hex("e1"), groupIdHex: groupIdHex, timelineAt: 10)],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+
+        try await eventually {
+            stages.withLock { Set($0).isSuperset(of: [.timelineWindow, .timelineRebuild]) }
+        }
+    }
+
     @Test func liveProjectionUpdateMaintainsTimelineWithoutFullRebuild() throws {
         let groupIdHex = hex("aa")
         let stages = TimelineStageRecorder()
@@ -756,6 +778,7 @@ struct ConversationTimelineProjectionTests {
             placement: .window
         )
         let rebuildCount = stages.count(.timelineRebuild)
+        #expect(rebuildCount > 0)
 
         viewModel.applyTimelineSubscriptionUpdate(.projection(update: RuntimeProjectionUpdateFfi(
             accountIdHex: hex("01"),

@@ -336,6 +336,27 @@ struct ReactionTargetTallyTests {
     }
 
     @MainActor
+    @Test func incrementalWindowPageRecomputesItsChangedReactionTargets() {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        func window(_ reactions: TimelineReactionSummaryFfi) -> TimelinePageFfi {
+            TimelinePageFfi(
+                messages: [timelineRecord(messageIdHex: target, timelineAt: 1, reactions: reactions)],
+                hasMoreBefore: true,
+                hasMoreAfter: false
+            )
+        }
+        // The first page replaces the window; a page with the same bounds then
+        // updates it in place, recomputing only the targets it touched.
+        viewModel.applyTimelinePage(window(TimelineReactionSummaryFfi(byEmoji: [], userReactions: [])), placement: .window)
+        #expect(viewModel.reactions(for: target).isEmpty)
+
+        viewModel.applyTimelinePage(window(reactionSummary(emoji: "👍", senders: [other])), placement: .window)
+        #expect(viewModel.reactions(for: target) == [
+            ConversationViewModel.ReactionTally(emoji: "👍", count: 1, mine: false)
+        ])
+    }
+
+    @MainActor
     @Test func toggleRecomputesOnlyItsOwnTargetNotUnrelatedSummaries() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "no-such-account"

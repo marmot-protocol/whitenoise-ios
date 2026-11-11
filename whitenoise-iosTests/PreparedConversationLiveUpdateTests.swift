@@ -81,6 +81,7 @@ struct PreparedConversationLiveUpdateTests {
         #expect(model.timeline.map(\.id) == ["msg:old", "msg:one", "msg:two"])
         let generation = model.timelineStore.timelineProjectionGeneration
         let rebuilds = stages.count(.timelineRebuild)
+        #expect(rebuilds > 0)
         snapshot.header.selected.title = .literal(text: "Header changed")
         snapshot.readState.lastReadMessageIdHex = "new"
         // Pointerless fake revision: never pass it to MDK or includesChatListVersion.
