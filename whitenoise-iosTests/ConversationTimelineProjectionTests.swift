@@ -743,9 +743,11 @@ struct ConversationTimelineProjectionTests {
 
     @Test func liveProjectionUpdateMaintainsTimelineWithoutFullRebuild() throws {
         let groupIdHex = hex("aa")
+        let stages = TimelineStageRecorder()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: group(name: "", id: groupIdHex)
+            group: group(name: "", id: groupIdHex),
+            timelineTimings: stages.timings
         )
         let first = timelineRecord(messageIdHex: hex("e1"), groupIdHex: groupIdHex, timelineAt: 10)
         let second = timelineRecord(messageIdHex: hex("e2"), groupIdHex: groupIdHex, timelineAt: 20)
@@ -753,7 +755,7 @@ struct ConversationTimelineProjectionTests {
             TimelinePageFfi(messages: [first], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        let rebuildCount = viewModel.timelineRebuildCountForTesting
+        let rebuildCount = stages.count(.timelineRebuild)
 
         viewModel.applyTimelineSubscriptionUpdate(.projection(update: RuntimeProjectionUpdateFfi(
             accountIdHex: hex("01"),
@@ -768,7 +770,7 @@ struct ConversationTimelineProjectionTests {
         )))
 
         #expect(messageIds(in: viewModel.timeline) == [first.messageIdHex, second.messageIdHex])
-        #expect(viewModel.timelineRebuildCountForTesting == rebuildCount)
+        #expect(stages.count(.timelineRebuild) == rebuildCount)
     }
 
     @Test func projectedOutgoingMessageReplacesMatchingPendingBubble() throws {

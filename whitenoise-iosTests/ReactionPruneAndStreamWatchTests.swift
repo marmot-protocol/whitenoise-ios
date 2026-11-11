@@ -365,9 +365,11 @@ struct ReactionTargetTallyTests {
 
     @MainActor
     @Test func multiRecordProjectionUpdateRebuildsTimelineOnce() throws {
+        let stages = TimelineStageRecorder()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: testGroup()
+            group: testGroup(),
+            timelineTimings: stages.timings
         )
         viewModel.applyTimelinePage(
             TimelinePageFfi(
@@ -378,7 +380,7 @@ struct ReactionTargetTallyTests {
             placement: .window
         )
 
-        let rebuildsBefore = viewModel.timelineRebuildCountForTesting
+        let rebuildsBefore = stages.count(.timelineRebuild)
         let idA = otherTarget
         let idB = String(repeating: "d", count: 64)
         let idC = String(repeating: "e", count: 64)
@@ -390,7 +392,7 @@ struct ReactionTargetTallyTests {
             .upsert(trigger: .newMessage, message: timelineRecord(messageIdHex: idC, timelineAt: 4)),
         ])))
 
-        #expect(viewModel.timelineRebuildCountForTesting - rebuildsBefore == 1)
+        #expect(stages.count(.timelineRebuild) - rebuildsBefore == 1)
         let ids = viewModel.timeline.compactMap { item -> String? in
             if case .message(let record, _) = item.kind { return record.messageIdHex }
             return nil

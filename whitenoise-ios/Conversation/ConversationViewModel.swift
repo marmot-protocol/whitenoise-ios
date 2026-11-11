@@ -1102,6 +1102,7 @@ final class ConversationViewModel {
         },
         durableRetryOperations: DurableRetryOperations = .live,
         projectionBuilders: ConversationProjectionBuilders = .live,
+        timelineTimings: TimelineStoreTimings? = nil,
         composerMarmotCalls: ComposerMarmotCalls = .live,
         inviteDeclineCalls: InviteDeclineCalls = .live
     ) {
@@ -1123,7 +1124,8 @@ final class ConversationViewModel {
             appState: appState,
             groupIdHex: group.groupIdHex,
             hiddenMessageIds: hiddenMessageIds,
-            projectionBuilders: projectionBuilders
+            projectionBuilders: projectionBuilders,
+            timings: timelineTimings
         )
         self.streamWatcher = StreamWatcher(appState: appState, groupIdHex: group.groupIdHex)
         self.composer = ComposerModel(appState: appState, groupIdHex: group.groupIdHex, timelineStore: timelineStore,
@@ -2502,10 +2504,6 @@ final class ConversationViewModel {
     }
 
 #if DEBUG
-    var reactionTargetCollectionCountForTesting: Int {
-        timelineStore.reactionTargetCollectionCountForTesting
-    }
-
     @discardableResult
     func replaceMediaReferencesForTesting(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
         replaceMediaReferences(references, forMessageId: messageIdHex)
@@ -2517,10 +2515,6 @@ final class ConversationViewModel {
 
     func pendingMediaForTesting(rowId: String) -> [MessageMediaAttachment]? {
         timelineStore.mediaProjections.pending(forRowId: rowId)
-    }
-
-    var timelineRebuildCountForTesting: Int {
-        timelineStore.timelineRebuildCountForTesting
     }
 #endif
 
