@@ -1869,39 +1869,80 @@ struct AppStateBootstrapTests {
         #expect(appState.profileStore.profileFetchQueueTaskID == nil)
     }
 
+    @Test func aCancelledFetchRunnerFinishingLeavesItsReplacementInPlace() async throws {
+        let appState = try testAppState()
+        let store = appState.profileStore
+        store.queuedProfileFetchIDs = [hex("44")]
+        store.scheduledProfileFetchIDs = [hex("44")]
+        appState.resumeProfileFetchQueueIfNeeded()
+        let replaced = try #require(store.profileFetchQueueTask)
+        // A background pause cancels the runner and keeps its ids; the next
+        // foreground resume starts a replacement before the old one has run.
+        _ = appState.pauseProfileFetchQueue()
+        // Main-actor work runs in order: the cancelled runner, then this check,
+        // then the replacement started below.
+        let slotAfterOldRunner = Task { @MainActor in
+            (store.profileFetchQueueTask, store.profileFetchQueueTaskID)
+        }
+        appState.resumeProfileFetchQueueIfNeeded()
+        let replacement = try #require(store.profileFetchQueueTask)
+        let replacementID = store.profileFetchQueueTaskID
+        // Inactive before either runner runs, so neither starts a relay refresh.
+        appState.setAppSceneActive(false)
+
+        let (task, taskID) = await slotAfterOldRunner.value
+
+        #expect(task == replacement)
+        #expect(taskID == replacementID)
+        await replaced.value
+        await replacement.value
+    }
+
     @Test func aCancelledProjectionRunnerFinishingLeavesItsReplacementInPlace() async throws {
         let appState = try testAppState()
         let store = appState.profileStore
         #expect(appState.knownDisplayName(forAccountIdHex: hex("45")) == nil)
         let replaced = try #require(store.profileProjectionLoadTask)
-        // A background pause cancels the runner and keeps its id queued; the next
-        // foreground resume starts a replacement before the old one has finished.
         _ = appState.pauseProfileFetchQueue()
+        let slotAfterOldRunner = Task { @MainActor in
+            (store.profileProjectionLoadTask, store.profileProjectionLoadTaskID)
+        }
         appState.resumeProfileFetchQueueIfNeeded()
         let replacement = try #require(store.profileProjectionLoadTask)
         let replacementID = store.profileProjectionLoadTaskID
+        appState.setAppSceneActive(false)
 
-        // Both runners are main-actor work: the old one finishes before the
-        // replacement starts its load, and this test resumes before that load ends.
+        let (task, taskID) = await slotAfterOldRunner.value
+
+        #expect(task == replacement)
+        #expect(taskID == replacementID)
         await replaced.value
-
-        #expect(store.profileProjectionLoadTask == replacement)
-        #expect(store.profileProjectionLoadTaskID == replacementID)
-        await appState.cancelProfileFetchQueue()?.value
+        await replacement.value
     }
 
     @Test func aSettledProfileReloadPrunesItsLoadVersion() async throws {
         let appState = try testAppState()
         let store = appState.profileStore
         let id = hex("46")
-        let reload = Task { await store.reloadProfileProjection(forAccountIdHex: id) }
-        // A main-actor task queued behind the reload runs once it is waiting on
-        // its read, so its version is in the map here.
-        await Task { @MainActor in }.value
-        #expect(store.profileProjectionLoadVersions[id] != nil)
 
-        await reload.value
+        await store.reloadProfileProjection(forAccountIdHex: id)
 
+        // A filled cache shows the reload took a version and applied its load.
+        #expect(store.profileProjectionCache[id] != nil)
+        #expect(store.profileProjectionLoadVersions[id] == nil)
+    }
+
+    @Test func aSettledQueuedProfileLoadPrunesItsLoadVersion() async throws {
+        let appState = try testAppState()
+        let store = appState.profileStore
+        let id = hex("47")
+
+        // Without refresh-after-load, the queued load never schedules a relay refresh.
+        appState.warmProfileProjection(forAccountIdHex: id)
+        let runner = try #require(store.profileProjectionLoadTask)
+        await runner.value
+
+        #expect(store.profileProjectionCache[id] != nil)
         #expect(store.profileProjectionLoadVersions[id] == nil)
     }
 
