@@ -747,9 +747,10 @@ struct ConversationTimelineProjectionTests {
         appState.productAnalytics.activateSink(timing: { stage, _, _ in stages.withLock { $0.append(stage) } }) { _ in }
         defer { appState.productAnalytics.replaceSink(nil) }
         let groupIdHex = hex("aa")
-        let store = TimelineStore(appState: appState, groupIdHex: groupIdHex)
+        // Built the way the app builds it, so the view model's default counts too.
+        let viewModel = ConversationViewModel(appState: appState, group: group(name: "", id: groupIdHex))
 
-        store.applyTimelinePage(
+        viewModel.applyTimelinePage(
             TimelinePageFfi(
                 messages: [timelineRecord(messageIdHex: hex("e1"), groupIdHex: groupIdHex, timelineAt: 10)],
                 hasMoreBefore: false,
