@@ -588,10 +588,9 @@ enum RemoteAvatarImageLoader {
     }
 
     #if DEBUG
-    // Documented exception (AGENTS.md): these caches are process-wide statics
-    // every avatar view shares, so tests reset and observe them here.
+    // Documented exception (AGENTS.md): the drain task is process-wide static
+    // state every avatar view shares, so tests observe it here.
     static var isDrainingForTesting: Bool { cacheDrainTask != nil }
-    static func resetCachesForTesting() { clearCaches() }
     #endif
 
     static func cachedImage(for url: URL, maxPixelSize: Int) -> UIImage? {

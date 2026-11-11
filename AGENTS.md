@@ -473,13 +473,15 @@ Do not add a second storage path for data Marmot already owns.
     preference writes still inject their own `UserDefaults` and
     `NotificationCenter` (see Code Style). Don't add other seams like them.
   - A second documented exception: the static avatar loaders
-    (`RemoteAvatarImageLoader`, `GroupAvatarImageLoader`) keep their caches in
-    process-wide statics that every avatar view shares, so there is nothing
-    to inject. Their cache resets, `isDrainingForTesting`,
-    `hasSeedForTesting` and the group loader's `beforeDecodeForTesting`
-    decode pause stay, each with a comment pointing here; their files keep
-    the directive (#1241, item 16). Their private steps that tests need are
-    internal and called directly, not wrapped in hooks.
+    (`RemoteAvatarImageLoader`, `GroupAvatarImageLoader`) keep their caches,
+    drain task and seeds in process-wide statics that every avatar view
+    shares. Three hooks that observe or pause that shared state stay, each
+    with a comment pointing here: `isDrainingForTesting` on both loaders,
+    and the group loader's `hasSeedForTesting` and `beforeDecodeForTesting`
+    (the drain test pauses a shared in-flight decode through it). Their
+    files keep the directive (#1241, item 16). Everything else the tests
+    need, including `clearCaches()`, is internal and called directly; don't
+    wrap it in a hook.
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:

@@ -50,8 +50,8 @@ struct RemoteImageLoaderTests {
     @Test func avatarLoaderCachesFailuresWithTTLAndPreservesError() throws {
         let url = try #require(URL(string: "https://example.com/broken-avatar.png"))
         let now = Date()
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
 
         let key = RemoteAvatarImageLoader.failureCacheKey(for: url)
         RemoteAvatarImageLoader.cacheFailure(URLError(.badServerResponse), for: key, now: now)
@@ -80,8 +80,8 @@ struct RemoteImageLoaderTests {
         let url = try #require(URL(string: "https://example.com/avatar.png"))
         let data = Data([0xCA, 0xFE])
         let probe = RemoteImageFetchProbe(data: data)
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
 
         let first = Task { @MainActor in
             try await RemoteAvatarImageLoader.imageData(
@@ -126,8 +126,8 @@ struct RemoteImageLoaderTests {
         }
         let data = try #require(source.pngData())
         let probe = RemoteImageFetchProbe(data: data)
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
 
         let first = Task { @MainActor in
             try await RemoteAvatarImageLoader.image(
@@ -157,8 +157,8 @@ struct RemoteImageLoaderTests {
     }
 
     @Test func avatarRemoteImageShowsTheCenterOfNonSquareImages() async throws {
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.preferredRange = .standard
@@ -246,8 +246,8 @@ struct RemoteImageLoaderTests {
         let exited = PinnedFetchWaitGate<Void>()
         let slots = PinnedDNSResolutionSlots(limit: 1, onRelease: { exited.complete(.success(())) })
         let connections = Mutex(0)
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
         let request = Task {
             try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { url in
                 let result = try await PinnedHTTPSFetcher.fetch(
@@ -434,8 +434,8 @@ struct RemoteImageLoaderTests {
             imageHashHex: imageHashHex,
             maxPixelSize: request.maxPixelSize
         )
-        GroupAvatarImageLoader.resetForTesting()
-        defer { GroupAvatarImageLoader.resetForTesting() }
+        GroupAvatarImageLoader.clearCaches()
+        defer { GroupAvatarImageLoader.clearCaches() }
 
         await RemoteAvatarDiskCache.groupThumbnailShared.store(thumbnailData, forKey: key)
         let image = try await withTestClient { client in
@@ -465,8 +465,8 @@ struct RemoteImageLoaderTests {
             accountRef: accountRef,
             imageHashHex: imageHashHex
         )
-        GroupAvatarImageLoader.resetForTesting()
-        defer { GroupAvatarImageLoader.resetForTesting() }
+        GroupAvatarImageLoader.clearCaches()
+        defer { GroupAvatarImageLoader.clearCaches() }
         await RemoteAvatarDiskCache.groupShared.store(imageData, forKey: legacyKey)
 
         _ = try await withTestClient { client in
@@ -495,8 +495,8 @@ struct RemoteImageLoaderTests {
         }.jpegData(compressionQuality: 0.8))
         let accountRef = "seed-account-\(UUID().uuidString)"
         let groupIdHex = "seed-group"
-        GroupAvatarImageLoader.resetForTesting()
-        defer { GroupAvatarImageLoader.resetForTesting() }
+        GroupAvatarImageLoader.clearCaches()
+        defer { GroupAvatarImageLoader.clearCaches() }
         GroupAvatarImageLoader.seed(
             data: imageData,
             accountRef: accountRef,
