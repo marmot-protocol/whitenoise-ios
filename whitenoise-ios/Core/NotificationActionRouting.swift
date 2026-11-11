@@ -6,8 +6,8 @@ import UserNotifications
 enum NotificationActionOperation: Equatable {
     case openChat(LocalNotificationRoute)
     case reply(LocalNotificationRoute, text: String)
-    /// A reply over the protocol's max length: nothing is sent and the user
-    /// is told it failed, like any other unsent reply (#1276).
+    /// A reply over the protocol's max length: nothing is sent (#1276) and the
+    /// user sees the composer's "Message too long" notice (#1288).
     case rejectedReply(LocalNotificationRoute)
     case markRead(LocalNotificationRoute, messageIdHex: String)
 }
