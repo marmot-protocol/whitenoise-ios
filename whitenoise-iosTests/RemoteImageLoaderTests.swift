@@ -47,73 +47,79 @@ struct RemoteImageLoaderTests {
         #expect(!RemoteImageDecoder.isAllowedRemoteImageType(nil))
     }
 
-    @Test func avatarLoaderCachesFailuresWithTTLAndPreservesError() throws {
-        let url = try #require(URL(string: "https://example.com/broken-avatar.png"))
-        let now = Date()
+    @Test func avatarLoaderCachesAFailedFetchAndKeepsItsError() async throws {
+        let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
         RemoteAvatarImageLoader.clearCaches()
         defer { RemoteAvatarImageLoader.clearCaches() }
+        let fetches = Mutex(0)
+        func load() async -> URLError? {
+            do {
+                _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { _ in
+                    fetches.withLock { $0 += 1 }
+                    throw URLError(.badServerResponse)
+                }
+                return nil
+            } catch {
+                return error as? URLError
+            }
+        }
 
-        let key = RemoteAvatarImageLoader.failureCacheKey(for: url)
-        RemoteAvatarImageLoader.cacheFailure(URLError(.badServerResponse), for: key, now: now)
-
-        let cached = try #require(
-            RemoteAvatarImageLoader.cachedFailureError(
-                for: key,
-                now: now.addingTimeInterval(30)
-            ) as? URLError
-        )
-        #expect(cached.code == .badServerResponse)
-        #expect(
-            RemoteAvatarImageLoader.cachedFailureError(
-                for: key,
-                now: now.addingTimeInterval(61)
-            ) == nil
-        )
-        #expect(!RemoteAvatarImageLoader.shouldCacheFailure(CancellationError()))
-        #expect(!RemoteAvatarImageLoader.shouldCacheFailure(URLError(.cancelled)))
-        #expect(!RemoteAvatarImageLoader.shouldCacheFailure(
-            NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)
-        ))
+        #expect(await load()?.code == .badServerResponse)
+        // The cached failure answers the next load without fetching again.
+        #expect(await load()?.code == .badServerResponse)
+        #expect(fetches.withLock { $0 } == 1)
     }
 
-    @Test func avatarLoaderCoalescesInFlightDataLoadsByURLKey() async throws {
-        let url = try #require(URL(string: "https://example.com/avatar.png"))
-        let data = Data([0xCA, 0xFE])
+    @Test func avatarLoaderNeverCachesACancelledFetch() async throws {
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
+        let cancellations: [@Sendable () -> any Error] = [
+            { CancellationError() },
+            { URLError(.cancelled) },
+            { NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled) },
+        ]
+        for makeCancellation in cancellations {
+            let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
+            let fetches = Mutex(0)
+            for _ in 0..<2 {
+                _ = try? await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { _ in
+                    fetches.withLock { $0 += 1 }
+                    throw makeCancellation()
+                }
+            }
+            // Nothing was cached, so the second load fetched again.
+            #expect(fetches.withLock { $0 } == 2, "\(makeCancellation())")
+        }
+    }
+
+    @Test func avatarLoaderSharesOneFetchBetweenSizesOfTheSameAvatar() async throws {
+        let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
+        let data = try #require(UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { context in
+            UIColor.green.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }.pngData())
         let probe = RemoteImageFetchProbe(data: data)
         RemoteAvatarImageLoader.clearCaches()
         defer { RemoteAvatarImageLoader.clearCaches() }
 
-        let first = Task { @MainActor in
-            try await RemoteAvatarImageLoader.imageData(
-                for: url,
-                keyString: url.absoluteString
-            ) { _ in
-                await probe.fetch()
-            }
+        let small = Task { @MainActor in
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { _ in await probe.fetch() }
         }
         await probe.waitUntilStarted()
-
-        let second = Task { @MainActor in
-            try await RemoteAvatarImageLoader.imageData(
-                for: url,
-                keyString: url.absoluteString
-            ) { _ in
-                await probe.fetch()
-            }
+        let large = Task { @MainActor in
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 16, scale: 1) { _ in await probe.fetch() }
         }
-
-        // Let `second` run up to its in-flight coalescing await on the MainActor
-        // before releasing the fetch. Otherwise `first` can complete and clear
-        // the in-flight slot before `second` checks it, making `second` start a
-        // second fetch and racing the single-fetch expectation.
-        for _ in 0..<10 { await Task.yield() }
+        // A different size is its own decode, so `large` looks in the disk cache
+        // before it reaches the in-flight fetch. Let it start that lookup, queue
+        // a read behind it, then let it reach the fetch before releasing it.
+        await Task { @MainActor in }.value
+        _ = await RemoteAvatarDiskCache.shared.data(for: url)
+        await Task { @MainActor in }.value
 
         await probe.release()
-        let firstData = try await first.value
-        let secondData = try await second.value
+        _ = try await small.value
+        _ = try await large.value
 
-        #expect(firstData == data)
-        #expect(secondData == data)
         #expect(await probe.callCount() == 1)
     }
 

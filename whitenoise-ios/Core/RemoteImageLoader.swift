@@ -495,7 +495,7 @@ enum RemoteAvatarImageLoader {
         return data
     }
 
-    static func imageData(
+    private static func imageData(
         for url: URL,
         keyString: String,
         fetch: @escaping @Sendable (URL) async throws -> Data
@@ -517,7 +517,7 @@ enum RemoteAvatarImageLoader {
         return try await task.value
     }
 
-    static func cachedFailureError(for key: NSString, now: Date = Date()) -> Error? {
+    private static func cachedFailureError(for key: NSString, now: Date = Date()) -> Error? {
         guard let cachedFailure = failureCache.object(forKey: key) else { return nil }
         if cachedFailure.isExpired(now: now) {
             failureCache.removeObject(forKey: key)
@@ -526,7 +526,7 @@ enum RemoteAvatarImageLoader {
         return cachedFailure.error
     }
 
-    static func cacheFailure(_ error: Error, for key: NSString, now: Date = Date()) {
+    private static func cacheFailure(_ error: Error, for key: NSString, now: Date = Date()) {
         guard cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
         guard shouldCacheFailure(error) else { return }
         failureCache.setObject(
@@ -535,7 +535,7 @@ enum RemoteAvatarImageLoader {
         )
     }
 
-    static func shouldCacheFailure(_ error: Error) -> Bool {
+    private static func shouldCacheFailure(_ error: Error) -> Bool {
         if error is CancellationError { return false }
         if (error as? URLError)?.code == .cancelled { return false }
         let nsError = error as NSError
@@ -547,7 +547,7 @@ enum RemoteAvatarImageLoader {
         "\(url.absoluteString):\(maxPixelSize)" as NSString
     }
 
-    static func failureCacheKey(for url: URL) -> NSString {
+    private static func failureCacheKey(for url: URL) -> NSString {
         url.absoluteString as NSString
     }
 

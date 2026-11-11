@@ -480,8 +480,8 @@ Do not add a second storage path for data Marmot already owns.
     and the group loader's `hasSeedForTesting` and `beforeDecodeForTesting`
     (the drain test pauses a shared in-flight decode through it). Their
     files keep the directive (#1241, item 16). Everything else the tests
-    need, including `clearCaches()`, is internal and called directly; don't
-    wrap it in a hook.
+    check goes through the loaders' own entry points or `clearCaches()`,
+    which the app already calls; don't widen or wrap anything for tests.
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:
