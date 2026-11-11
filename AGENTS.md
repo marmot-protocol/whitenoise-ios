@@ -475,7 +475,7 @@ Do not add a second storage path for data Marmot already owns.
   - A second documented exception: the static avatar loaders
     (`RemoteAvatarImageLoader`, `GroupAvatarImageLoader`) keep their caches,
     drain task and seeds in process-wide statics that every avatar view
-    shares. Three hooks that observe or pause that shared state stay, each
+    shares. These hooks, which observe or pause that shared state, stay, each
     with a comment pointing here: `isDrainingForTesting` on both loaders,
     and the group loader's `hasSeedForTesting` and `beforeDecodeForTesting`
     (the drain test pauses a shared in-flight decode through it). Their
