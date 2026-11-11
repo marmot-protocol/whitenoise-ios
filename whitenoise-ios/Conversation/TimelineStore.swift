@@ -1472,7 +1472,7 @@ final class TimelineStore {
 
     // MARK: - Reactions
 
-    /// All aggregated reaction tallies (full dict) — for test hooks.
+    /// All aggregated reaction tallies, keyed by target.
     var reactions: [String: [ConversationViewModel.ReactionTally]] { reactionProjections.allTallies }
 
     private func collectReactionTargets(affectedBy record: AppMessageRecordFfi, into targets: inout Set<String>) {

@@ -95,14 +95,21 @@ struct StreamDebugTimelineWindowTests {
             store.streamAppendDebugRow(debugRow(sequence: UInt64(index), timestamp: UInt64(index)))
         }
 
-        // Every retained debug row is published, so this also bounds the backing map.
-        let debugRowCount = store.timeline.filter { item in
-            if case .streamDebugEvent = item.kind { return true }
-            return false
-        }.count
-        #expect(debugRowCount == cap)
-        // The earliest debug row is no longer in the published timeline.
         let firstId = debugRow(sequence: 0, timestamp: 0).id
+        func debugRowCount() -> Int {
+            store.timeline.filter { item in
+                if case .streamDebugEvent = item.kind { return true }
+                return false
+            }.count
+        }
+        #expect(debugRowCount() == cap)
+        // The earliest debug row is no longer in the published timeline.
+        #expect(!store.timeline.contains { $0.id == firstId })
+
+        // A full rebuild republishes every retained row, so the backing map
+        // holds no more than the cap and no evicted row comes back.
+        store.rebuildProjectedState()
+        #expect(debugRowCount() == cap)
         #expect(!store.timeline.contains { $0.id == firstId })
     }
 }
