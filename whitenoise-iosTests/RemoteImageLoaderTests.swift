@@ -371,8 +371,9 @@ struct RemoteImageLoaderTests {
 
         await cache.store(Data(repeating: 0x01, count: 5), for: url)
 
-        #expect(await cache.data(for: url) == nil)
+        // Count before reading: a read deletes an oversized file it finds.
         #expect(cachedFileCount(in: root) == 0)
+        #expect(await cache.data(for: url) == nil)
     }
 
     @Test func avatarDiskCacheSupportsContentAddressedGroupKeys() async throws {
