@@ -563,7 +563,7 @@ final class ProfileStore {
         startProfileFetchQueueIfNeeded()
     }
 
-    func runProfileFetchQueue(taskID: UUID) async {
+    private func runProfileFetchQueue(taskID: UUID) async {
         defer {
             finishProfileFetchQueue(taskID: taskID)
         }

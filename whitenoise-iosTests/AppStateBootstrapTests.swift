@@ -1854,16 +1854,19 @@ struct AppStateBootstrapTests {
         let queued = [hex("11"), hex("22")]
         appState.profileStore.queuedProfileFetchIDs = queued
         appState.profileStore.scheduledProfileFetchIDs = Set(queued)
-        appState.setAppSceneActive(false)
 
-        let taskID = UUID()
-        appState.profileStore.profileFetchQueueTaskID = taskID
-        await appState.profileStore.runProfileFetchQueue(taskID: taskID)
+        appState.resumeProfileFetchQueueIfNeeded()
+        let runner = try #require(appState.profileStore.profileFetchQueueTask)
+        // The runner is main-actor work queued behind this test, so it first
+        // runs after the scene has gone inactive.
+        appState.setAppSceneActive(false)
+        await runner.value
 
         #expect(appState.profileStore.queuedProfileFetchIDs == queued)
         #expect(appState.profileStore.scheduledProfileFetchIDs == Set(queued))
         #expect(appState.profileStore.activeProfileFetchID == nil)
         #expect(appState.profileStore.profileFetchQueueTask == nil)
+        #expect(appState.profileStore.profileFetchQueueTaskID == nil)
     }
 
     @Test func profileFetchQueueRearmsPreservedIDsWhenRefreshIsAllowed() async throws {
