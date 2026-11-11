@@ -392,7 +392,7 @@ struct RemoteImageLoaderTests {
 
         await cache.store(data, forKey: key)
 
-        #expect(cachedFileCount(in: root, directoryName: "GroupAvatars") == 1)
+        #expect(cachedFileCount(in: root) == 1)
         #expect(await cache.data(forKey: key) == data)
     }
 
@@ -661,10 +661,11 @@ private actor RemoteImageFetchProbe {
     }
 }
 
-/// Files a disk cache built on `root` holds, read straight from the directory,
-/// so a test sees what is on disk rather than what the cache answers.
-private func cachedFileCount(in root: URL, directoryName: String = "ProfileAvatars") -> Int {
-    let directory = root.appendingPathComponent(directoryName, isDirectory: true)
-    let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-    return files?.count ?? 0
+/// Regular files anywhere under a disk cache's `root`, read straight from disk,
+/// so a test sees what was written rather than what the cache answers.
+private func cachedFileCount(in root: URL) -> Int {
+    let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey])
+    return (files?.allObjects as? [URL] ?? []).filter {
+        (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+    }.count
 }
