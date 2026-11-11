@@ -1,9 +1,9 @@
 import Foundation
 import MarmotKit
 
-/// The builds behind the conversation timeline's per-row markdown, agent-event
-/// and media projection caches. The caches decide when a row needs a build;
-/// these produce it.
+/// The builds behind the conversation timeline's per-row markdown, agent-event,
+/// media and group-system projection caches. The caches decide when a row needs
+/// a build; these produce it.
 struct ConversationProjectionBuilders {
     var markdown: @MainActor (
         AppMessageRecordFfi, _ mentionDisplayName: @escaping MarkdownMentionResolver
@@ -19,6 +19,12 @@ struct ConversationProjectionBuilders {
     var mediaFromReferences: @MainActor (
         [MediaAttachmentReferenceFfi], _ ownerId: String
     ) -> [MessageMediaAttachment]
+    /// A group system row's display text, from its projected event when Marmot
+    /// supplied one, otherwise from its payload; nil for any other message.
+    var groupSystemText: @MainActor (
+        AppMessageRecordFfi, GroupSystemEventFfi?, _ currentAccountIdHex: String?,
+        _ displayName: @escaping GroupSystemEventPresentation.DisplayNameResolver
+    ) -> String?
 
     static let live = ConversationProjectionBuilders(
         markdown: { record, mentionDisplayName in
@@ -39,6 +45,11 @@ struct ConversationProjectionBuilders {
         },
         mediaFromReferences: { references, ownerId in
             MessageMediaAttachment.displayItems(from: references, ownerId: ownerId)
+        },
+        groupSystemText: { record, groupSystem, currentAccountIdHex, displayName in
+            GroupSystemEventPresentation.displayText(
+                for: record, groupSystem: groupSystem, currentAccountIdHex: currentAccountIdHex, displayName: displayName
+            )
         }
     )
 }
