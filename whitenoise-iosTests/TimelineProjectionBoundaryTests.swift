@@ -45,9 +45,11 @@ struct TimelineProjectionBoundaryTests {
     }
 
     @Test func timelineDoesNotRenderTagMediaWhenRowProjectionIsEmpty() throws {
+        let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: testGroup()
+            group: testGroup(),
+            projectionBuilders: counter.builders
         )
         let reference = mediaReference(sourceEpoch: 7)
         let record = timelineRecord(
@@ -64,7 +66,7 @@ struct TimelineProjectionBoundaryTests {
 
         let item = try #require(viewModel.timeline.first)
         #expect(viewModel.mediaItems(for: item).isEmpty)
-        #expect(viewModel.mediaItemProjectionBuildCountForTesting == 0)
+        #expect(counter.mediaBuilds == 0)
     }
 
     @Test func mirroredNilReplyTargetDoesNotFallBackToTags() throws {
@@ -119,9 +121,11 @@ struct TimelineProjectionBoundaryTests {
     }
 
     @Test func projectedReplyPreviewCarriesResolvedMediaWithoutAnotherLookup() throws {
+        let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: testGroup()
+            group: testGroup(),
+            projectionBuilders: counter.builders
         )
         let targetID = hexId(11)
         let reference = mediaReference(sourceEpoch: 23)
@@ -150,7 +154,7 @@ struct TimelineProjectionBoundaryTests {
         let preview = try #require(viewModel.replyPreview(for: replyRecord))
         #expect(preview.media?.reference == reference)
         #expect(preview.media?.id.contains(targetID) == true)
-        #expect(viewModel.mediaItemProjectionBuildCountForTesting == 0)
+        #expect(counter.mediaBuilds == 0)
     }
 
     @Test func markdownProjectionCacheSkipsUnchangedWindowRows() throws {
@@ -192,9 +196,11 @@ struct TimelineProjectionBoundaryTests {
     }
 
     @Test func mediaProjectionCacheSkipsUnchangedWindowRows() throws {
+        let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: testGroup()
+            group: testGroup(),
+            projectionBuilders: counter.builders
         )
         let reference = mediaReference(sourceEpoch: 7)
         let record = timelineRecord(
@@ -208,13 +214,13 @@ struct TimelineProjectionBoundaryTests {
             TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        #expect(viewModel.mediaItemProjectionBuildCountForTesting == 1)
+        #expect(counter.mediaBuilds == 1)
 
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        #expect(viewModel.mediaItemProjectionBuildCountForTesting == 1)
+        #expect(counter.mediaBuilds == 1)
 
         let updatedReference = mediaReference(sourceEpoch: 8)
         let updated = timelineRecord(
@@ -227,7 +233,7 @@ struct TimelineProjectionBoundaryTests {
             TimelinePageFfi(messages: [updated], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        #expect(viewModel.mediaItemProjectionBuildCountForTesting == 2)
+        #expect(counter.mediaBuilds == 2)
     }
 
     @Test func authoritativeWindowSkipsDiscardedReactionTargetCollection() throws {

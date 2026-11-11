@@ -440,7 +440,6 @@ final class ConversationViewModel {
     /// `init` so `timelineStore.streamWatcher` is wired before the first page apply.
     @ObservationIgnored private let streamWatcher: StreamWatcher
 #if DEBUG
-    var mediaItemProjectionBuildCountForTesting: Int { timelineStore.mediaProjections.buildCountForTesting }
     @ObservationIgnored var acceptGroupInviteForTesting: (@MainActor (String, String) async throws -> AppGroupRecordFfi)?
     @ObservationIgnored var refreshInviteStateForTesting: (@MainActor () async -> Bool)?
 #endif
@@ -2529,10 +2528,6 @@ final class ConversationViewModel {
 
     func pendingMediaForTesting(rowId: String) -> [MessageMediaAttachment]? {
         timelineStore.mediaProjections.pending(forRowId: rowId)
-    }
-
-    var mediaReferenceCountForTesting: Int {
-        timelineStore.mediaProjections.referenceCountForTesting
     }
 
     var timelineRebuildCountForTesting: Int {

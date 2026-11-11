@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 
@@ -33,11 +32,11 @@ final class ConversationMediaProjectionCache {
     private var projectionsByRowId: [String: [MessageMediaAttachment]] = [:]
     private var projectionKeysByRowId: [String: ProjectionKey] = [:]
     private var customEmojiByRowId: [String: RowCustomEmoji] = [:]
-#if DEBUG
-    // Counts build invocations across both record-backed and classify-backed
-    // media paths so tests can catch accidental body-time rebuilds.
-    private(set) var buildCountForTesting = 0
-#endif
+    private let builders: ConversationProjectionBuilders
+
+    init(builders: ConversationProjectionBuilders = .live) {
+        self.builders = builders
+    }
 
     private enum ProjectionSourceKey: Equatable {
         case mirrored([MediaAttachmentOutcomeFfi])
@@ -108,17 +107,10 @@ final class ConversationMediaProjectionCache {
         // (e.g. local/optimistic sends before the confirmed row is mirrored).
         if let outcomes = referencesByMessageId[record.messageIdHex] {
             guard !outcomes.isEmpty else { return [] }
-#if DEBUG
-            buildCountForTesting += 1
-#endif
-            return MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: ownerId,
-                messageId: record.messageIdHex, sourceMessageId: sourceIDs[record.messageIdHex])
+            return builders.mediaFromOutcomes(outcomes, ownerId, record.messageIdHex, sourceIDs[record.messageIdHex])
         }
         guard case .media(let references) = MessageSemantics.classify(record) else { return [] }
-#if DEBUG
-        buildCountForTesting += 1
-#endif
-        return MessageMediaAttachment.displayItems(from: references, ownerId: ownerId)
+        return builders.mediaFromReferences(references, ownerId)
     }
 
     // MARK: Resolved references (ingest write-path)
@@ -254,12 +246,6 @@ final class ConversationMediaProjectionCache {
         }
         return update(for: item)
     }
-
-#if DEBUG
-    var referenceCountForTesting: Int {
-        referencesByMessageId.values.reduce(0) { $0 + $1.count }
-    }
-#endif
 }
 
 nonisolated struct OwnSendMediaStore {
