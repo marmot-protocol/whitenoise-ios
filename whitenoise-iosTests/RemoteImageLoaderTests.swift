@@ -57,10 +57,10 @@ struct RemoteImageLoaderTests {
         let fetches = Mutex(0)
         func load(at date: Date) async -> URLError? {
             do {
-                _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, now: { date }) { _ in
+                _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, now: { date }, fetch: { _ in
                     fetches.withLock { $0 += 1 }
                     throw URLError(.badServerResponse)
-                }
+                })
                 return nil
             } catch {
                 return error as? URLError
@@ -88,10 +88,10 @@ struct RemoteImageLoaderTests {
             let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
             let fetches = Mutex(0)
             for _ in 0..<2 {
-                _ = try? await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { _ in
+                _ = try? await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, fetch: { _ in
                     fetches.withLock { $0 += 1 }
                     throw makeCancellation()
-                }
+                })
             }
             // Nothing was cached, so the second load fetched again.
             #expect(fetches.withLock { $0 } == 2, "\(makeCancellation())")
@@ -109,11 +109,11 @@ struct RemoteImageLoaderTests {
         defer { RemoteAvatarImageLoader.clearCaches() }
 
         let small = Task { @MainActor in
-            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { _ in await probe.fetch() }
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, fetch: { _ in await probe.fetch() })
         }
         await probe.waitUntilStarted()
         let large = Task { @MainActor in
-            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 16, scale: 1) { _ in await probe.fetch() }
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 16, scale: 1, fetch: { _ in await probe.fetch() })
         }
         // A different size is its own decode, so `large` looks in the disk cache
         // before it reaches the in-flight fetch. Let it start that lookup, queue
@@ -261,7 +261,7 @@ struct RemoteImageLoaderTests {
         RemoteAvatarImageLoader.clearCaches()
         defer { RemoteAvatarImageLoader.clearCaches() }
         let request = Task {
-            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { url in
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, fetch: { url in
                 let result = try await PinnedHTTPSFetcher.fetch(
                     URLRequest(url: url), maximumResponseBytes: 1024,
                     resolver: fixture.resolve, slots: slots,
@@ -271,7 +271,7 @@ struct RemoteImageLoaderTests {
                     }
                 )
                 return result.0
-            }
+            })
         }
         _ = try await fixture.started.wait { _ in }
         await RemoteAvatarImageLoader.clearCachesAndDrain()
