@@ -51,7 +51,9 @@ struct RemoteImageLoaderTests {
         let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
         RemoteAvatarImageLoader.clearCaches()
         defer { RemoteAvatarImageLoader.clearCaches() }
-        let failedAt = Date()
+        // Far from the wall clock, so ignoring the injected clock on either the
+        // store or the lookup changes the outcome.
+        let failedAt = Date(timeIntervalSinceReferenceDate: 0)
         let fetches = Mutex(0)
         func load(at date: Date) async -> URLError? {
             do {

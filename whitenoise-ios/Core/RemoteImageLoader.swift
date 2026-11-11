@@ -387,7 +387,7 @@ enum RemoteAvatarImageLoader {
             self.expiresAt = expiresAt
         }
 
-        func isExpired(now: Date = Date()) -> Bool {
+        func isExpired(now: Date) -> Bool {
             now >= expiresAt
         }
     }
@@ -519,7 +519,7 @@ enum RemoteAvatarImageLoader {
         return try await task.value
     }
 
-    private static func cachedFailureError(for key: NSString, now: Date = Date()) -> Error? {
+    private static func cachedFailureError(for key: NSString, now: Date) -> Error? {
         guard let cachedFailure = failureCache.object(forKey: key) else { return nil }
         if cachedFailure.isExpired(now: now) {
             failureCache.removeObject(forKey: key)
@@ -528,7 +528,7 @@ enum RemoteAvatarImageLoader {
         return cachedFailure.error
     }
 
-    private static func cacheFailure(_ error: Error, for key: NSString, now: Date = Date()) {
+    private static func cacheFailure(_ error: Error, for key: NSString, now: Date) {
         guard cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
         guard shouldCacheFailure(error) else { return }
         failureCache.setObject(
