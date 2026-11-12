@@ -22,6 +22,18 @@ struct AsyncActionGateTests {
         #expect(gate.isRunning == true)
     }
 
+    @Test func invalidatingReloadsRejectsEarlierTicketsWithoutBlockingActions() throws {
+        var gate = AsyncActionGate()
+        let staleTicket = try #require(gate.reloadTicket())
+        gate.invalidateReloads()
+
+        #expect(gate.canApplyReload(startedAt: staleTicket) == false)
+        let freshTicket = try #require(gate.reloadTicket())
+        #expect(gate.canApplyReload(startedAt: freshTicket))
+        let began = gate.tryBegin()
+        #expect(began)
+    }
+
     @Test func endReleasesGateForNextAction() {
         var gate = AsyncActionGate()
         #expect(gate.tryBegin() == true)

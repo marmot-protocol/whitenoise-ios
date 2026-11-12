@@ -217,11 +217,15 @@ final class PrivacySecuritySettingsViewModel {
         sleep: @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) async {
         let accountRef = dataSource.activeAccountRef
+        // A reload that started before the wait ended may return pre-deletion
+        // rows; it then re-reads through deferOrReload instead of applying them.
+        defer { actionGate.invalidateReloads() }
         for read in 1...Self.retentionSweepReads {
             guard let ticket = actionGate.reloadTicket() else { return }
             if let rows = try? await dataSource.auditLogFileRows() {
                 guard canApplyReload(startedAt: ticket, accountRef: accountRef, using: dataSource) else { return }
                 auditFileRows = rows
+                auditErrorMessage = nil
                 if !rows.contains(where: { ($0.modifiedAtMs ?? .max) < cutoffMs }) { return }
             }
             guard read < Self.retentionSweepReads else { return }

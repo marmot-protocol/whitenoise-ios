@@ -114,6 +114,20 @@ struct PrivacySecuritySettingsViewModelTests {
         #expect(!showedLoading)
     }
 
+    @Test func aSuccessfulReadDuringTheWaitClearsAnEarlierFileReadError() async {
+        let cutoff: UInt64 = 1_000_000
+        let recent = logRow("recent.jsonl", modifiedAtMs: cutoff + 1)
+        let source = MockPrivacyDataSource()
+        source.auditRows = [recent]
+        let model = PrivacySecuritySettingsViewModel()
+        model.auditErrorMessage = "earlier read failed"
+
+        await model.reloadAuditFilesAfterRetentionChange(cutoffMs: cutoff, using: source) { _ in }
+
+        #expect(model.auditErrorMessage == nil)
+        #expect(model.auditFileRows == [recent])
+    }
+
     @Test func aSweepThatNeverLandsStopsAfterABoundedNumberOfReads() async {
         let cutoff: UInt64 = 1_000_000
         let source = MockPrivacyDataSource()
