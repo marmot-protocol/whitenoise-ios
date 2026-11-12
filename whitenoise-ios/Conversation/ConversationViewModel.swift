@@ -324,6 +324,7 @@ final class ConversationViewModel {
     @ObservationIgnored private let deleteMessageOperation: DeleteMessageOperation
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
     @ObservationIgnored private let inviteDeclineCalls: InviteDeclineCalls
+    @ObservationIgnored private let groupCalls: ConversationGroupCalls
     @ObservationIgnored let advisoryPrompter = GroupChangeAdvisoryPrompter()
     /// Sends NIP-30 custom emoji drawn from `customEmojiCatalog`; holds the
     /// uploaded references retries reuse.
@@ -439,10 +440,6 @@ final class ConversationViewModel {
     /// `timelineStore` through `StreamWatcherTimelineSink`. Constructed eagerly in
     /// `init` so `timelineStore.streamWatcher` is wired before the first page apply.
     @ObservationIgnored private let streamWatcher: StreamWatcher
-#if DEBUG
-    @ObservationIgnored var acceptGroupInviteForTesting: (@MainActor (String, String) async throws -> AppGroupRecordFfi)?
-    @ObservationIgnored var refreshInviteStateForTesting: (@MainActor () async -> Bool)?
-#endif
 
     /// First-open load timings. Visible under category "conversation-load" in
     /// Console.app. Measures how long each Marmot read on the open path takes so
@@ -1104,7 +1101,8 @@ final class ConversationViewModel {
         projectionBuilders: ConversationProjectionBuilders = .live,
         timelineTimings: TimelineStoreTimings? = nil,
         composerMarmotCalls: ComposerMarmotCalls = .live,
-        inviteDeclineCalls: InviteDeclineCalls = .live
+        inviteDeclineCalls: InviteDeclineCalls = .live,
+        groupCalls: ConversationGroupCalls = .live
     ) {
         self.appState = appState
         self.moderationAccountRef = appState.activeAccountRef
@@ -1117,6 +1115,7 @@ final class ConversationViewModel {
         self.deleteMessageOperation = deleteMessageOperation
         self.durableRetryOperations = durableRetryOperations
         self.inviteDeclineCalls = inviteDeclineCalls
+        self.groupCalls = groupCalls
         let hiddenMessageIds = appState.activeAccountRef.map {
             MessageHideStore.hiddenMessageIds(accountRef: $0, groupIdHex: group.groupIdHex)
         } ?? []
@@ -2837,12 +2836,8 @@ final class ConversationViewModel {
     func refreshGroupManagement(announceRosterChanges: Bool = false) async -> Bool {
         guard let appState, let accountRef = appState.activeAccountRef else { return false }
         do {
-            let client = try appState.currentMarmotClient()
             let detailsStart = ContinuousClock.now
-            let snapshot = try await client.groupConversationSnapshot(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex
-            )
+            let snapshot = try await groupCalls.conversationSnapshot(appState, accountRef, group.groupIdHex)
             logLoadDuration("group.conversation_snapshot", since: detailsStart)
             applyGroupDetails(
                 snapshot.details,
@@ -3072,26 +3067,12 @@ final class ConversationViewModel {
         accountRef: String,
         groupIdHex: String
     ) async throws -> AppGroupRecordFfi {
-#if DEBUG
-        if let acceptGroupInviteForTesting {
-            return try await acceptGroupInviteForTesting(accountRef, groupIdHex)
-        }
-#endif
         guard let appState else { throw CancellationError() }
-        let client = try appState.currentMarmotClient()
-        return try await client.acceptGroupInvite(
-            accountRef: accountRef,
-            groupIdHex: groupIdHex
-        )
+        return try await groupCalls.acceptInvite(appState, accountRef, groupIdHex)
     }
 
     private func refreshInviteState() async -> Bool {
-#if DEBUG
-        if let refreshInviteStateForTesting {
-            return await refreshInviteStateForTesting()
-        }
-#endif
-        return await refreshGroupManagement()
+        await refreshGroupManagement()
     }
 
     /// Reads current admin state, since MDK refuses an admin invitee's decline
