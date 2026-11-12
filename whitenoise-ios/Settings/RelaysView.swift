@@ -10,12 +10,25 @@ import MarmotKit
 struct RelaysView: View {
     @Environment(AppState.self) private var appState
     @State private var model = RelaysViewModel()
+    @State private var liveness = RelayLivenessModel()
+    /// Bumped by Retry and pull to refresh to restart the liveness watch.
+    @State private var livenessAttempt = 0
     @State private var addRelayTarget: RelayListTarget?
+
+    /// Restarts the liveness watch on account, runtime and foreground changes;
+    /// a suspended runtime ends MDK's subscription, so it reopens on resume.
+    private struct LivenessKey: Hashable {
+        let accountRef: String?
+        let runtimeGeneration: Int
+        let canUseRuntime: Bool
+        let attempt: Int
+    }
 
     var body: some View {
         Form {
             accountRelaysSection
             inboxRelaysSection
+            connectionStatusSection
             publishedListsSection
         }
         .localizedNavigationTitle("Relays")
@@ -28,7 +41,19 @@ struct RelaysView: View {
             }
         }
         .task(id: appState.activeAccountRef) { await model.reload(using: appState) }
-        .refreshable { await model.reload(using: appState) }
+        .task(id: LivenessKey(
+            accountRef: appState.activeAccountRef,
+            runtimeGeneration: appState.runtimeGeneration,
+            canUseRuntime: appState.canUseRuntimeForLocalForegroundWork,
+            attempt: livenessAttempt
+        )) {
+            let accountRef = appState.canUseRuntimeForLocalForegroundWork ? appState.activeAccountRef : nil
+            await liveness.observe(accountRef: accountRef, using: appState)
+        }
+        .refreshable {
+            livenessAttempt &+= 1
+            await model.reload(using: appState)
+        }
         .sheet(item: $addRelayTarget) { target in
             AddRelaySettingsSheet(existingRelays: model.relays(for: target)) { url in
                 model.pendingUrl = url
@@ -120,6 +145,86 @@ struct RelaysView: View {
             Label(saveError, systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.red)
                 .font(.callout)
+        }
+    }
+
+    // MARK: - Connection status
+
+    private var connectionStatusSection: some View {
+        Section {
+            if let relays = liveness.relays {
+                if relays.isEmpty {
+                    Text("No relays configured")
+                        .foregroundStyle(.secondary)
+                }
+                // Positional identity: sanitized display strings can collide.
+                ForEach(Array(RelayLivenessPresentation.rows(relays).enumerated()), id: \.offset) { _, row in
+                    livenessRow(row)
+                }
+            } else if liveness.loadFailed {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Connection status is unavailable", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                    Button("Retry") { livenessAttempt &+= 1 }
+                }
+            } else {
+                ProgressView("Checking connections")
+            }
+        } header: {
+            Text("Connection Status")
+        } footer: {
+            Text("This device's connections to every relay your profile uses. Reconnect tries one relay again now.")
+                .font(.footnote)
+        }
+    }
+
+    private func livenessRow(_ row: RelayLivenessPresentation.Row) -> some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(statusColor(row.status))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.display)
+                        .font(.system(.callout, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(row.statusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let detail = row.detail {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 8)
+            if row.canReconnect {
+                if liveness.reconnectingURLs.contains(row.url) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel(Text("Reconnecting…"))
+                } else {
+                    Button("Reconnect") {
+                        Task { await liveness.reconnect(url: row.url, using: appState) }
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.callout)
+                }
+            }
+        }
+    }
+
+    private func statusColor(_ status: RelayStatusFfi) -> Color {
+        switch status {
+        case .connected: .green
+        case .connecting: .orange
+        case .offline: .red
+        case .unknown: .secondary
         }
     }
 
