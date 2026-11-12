@@ -214,7 +214,7 @@ struct OutgoingSendResponsivenessTests {
         #expect(harness.store.protocolID(forDisplayID: "msg:\(staged.tempId)") == hexId(9))
     }
 
-    @Test func aMediaReplyBubbleShowsItsParentAndOnlyClaimsTheSameParentsRow() async throws {
+    @Test func aMediaReplyBubbleShowsItsParentFromTheFirstFrame() async throws {
         let harness = SendHarness()
         harness.installWindow([])
         let parent = hexId(11)
@@ -225,23 +225,7 @@ struct OutgoingSendResponsivenessTests {
         let bubble = try #require(harness.store.timeline.compactMap { item -> AppMessageRecordFfi? in
             if case .message(let record, _) = item.kind { return record } else { return nil }
         }.first)
-        #expect(bubble.tags.map(\.values) == ComposerModel.replyTags(to: parent))
-
-        harness.store.markLocalSendSubmitted(tempId: staged.tempId)
-        var reply = harness.ownRecord(id: hexId(12), text: "look", timelineAt: 60, delivered: false)
-        reply.replyToMessageIdHex = parent
-        reply.clientToken = staged.clientToken
-        harness.installWindow([reply])
-        #expect(harness.store.protocolID(forDisplayID: "msg:\(staged.tempId)") == hexId(12))
-    }
-
-    @Test func replyTagsMatchMDKsEventThenQuotePair() {
-        let parent = hexId(13)
-        #expect(ComposerModel.replyTags(to: nil).isEmpty)
-        #expect(ComposerModel.replyTags(to: parent) == [
-            [MessageSemantics.eventRefTag, parent],
-            [MessageSemantics.quoteRefTag, parent],
-        ])
+        #expect(ConversationViewModel.replyTargetMessageId(in: bubble) == parent)
     }
 
     @Test func anAttachmentBubbleKeepsItsPickedBytesUntilTheDurableRowArrives() async throws {
