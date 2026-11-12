@@ -11,7 +11,9 @@ struct PreparedConversationLiveUpdateTests {
         var snapshot = conversationWindowSnapshot(groupIdHex: groupRecord.groupIdHex, title: "Prepared window")
         let state = AppState.test()
         let counter = ProjectionBuildCounter()
-        let model = ConversationViewModel(appState: state, group: groupRecord, projectionBuilders: counter.builders)
+        let stages = TimelineStageRecorder()
+        let model = ConversationViewModel(appState: state, group: groupRecord, projectionBuilders: counter.builders,
+                                          timelineTimings: stages.timings)
         func record(_ id: String, _ time: UInt64, text: String = "OK") -> TimelineMessageRecordFfi {
             TimelineMessageRecordFfi(messageIdHex: id, sourceMessageIdHex: id, direction: "sent",
                 groupIdHex: groupRecord.groupIdHex, sender: accountIdHex, plaintext: text,
@@ -78,7 +80,8 @@ struct PreparedConversationLiveUpdateTests {
         install([old, new, second])
         #expect(model.timeline.map(\.id) == ["msg:old", "msg:one", "msg:two"])
         let generation = model.timelineStore.timelineProjectionGeneration
-        let rebuilds = model.timelineStore.timelineRebuildCountForTesting
+        let rebuilds = stages.count(.timelineRebuild)
+        #expect(rebuilds > 0)
         snapshot.header.selected.title = .literal(text: "Header changed")
         snapshot.readState.lastReadMessageIdHex = "new"
         // Pointerless fake revision: never pass it to MDK or includesChatListVersion.
@@ -87,14 +90,14 @@ struct PreparedConversationLiveUpdateTests {
                 replyToMessageIdHex: nil, mediaAttachments: [], createdAtMs: 1, updatedAtMs: 1))
         install([old, new, second])
         #expect(model.timelineStore.timelineProjectionGeneration == generation)
-        #expect(model.timelineStore.timelineRebuildCountForTesting == rebuilds)
+        #expect(stages.count(.timelineRebuild) == rebuilds)
         let tallies = ConversationReactionsFfi(totalCount: 1, totalKinds: 1,
             items: [.init(emoji: "👍", count: 1, reactors: ["peer"], viewerReacted: false, reactionMessageIdHex: nil)],
             omittedKinds: 0)
         install([old, new, second], reactions: ["new": tallies])
         #expect(model.reactions(for: "new").first?.count == 1)
         #expect(model.reactions(for: "old").isEmpty)
-        #expect(model.timelineStore.timelineRebuildCountForTesting == rebuilds)
+        #expect(stages.count(.timelineRebuild) == rebuilds)
         snapshot.identities = [.init(accountIdHex: accountIdHex, displayName: "New name",
             avatar: snapshot.header.selected.avatar, hasCachedProfile: true, avatarAsset: nil)]
         install([old, new, second])

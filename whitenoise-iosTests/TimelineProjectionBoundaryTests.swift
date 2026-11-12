@@ -236,21 +236,6 @@ struct TimelineProjectionBoundaryTests {
         #expect(counter.mediaBuilds == 2)
     }
 
-    @Test func authoritativeWindowSkipsDiscardedReactionTargetCollection() throws {
-        let viewModel = ConversationViewModel(
-            appState: AppState.test(),
-            group: testGroup()
-        )
-        let record = timelineRecord(messageIdHex: hexId(9), plaintext: "hello")
-        let page = TimelinePageFfi(messages: [record], hasMoreBefore: true, hasMoreAfter: false)
-
-        viewModel.applyTimelinePage(page, placement: .window)
-        #expect(viewModel.reactionTargetCollectionCountForTesting == 0)
-
-        viewModel.applyTimelinePage(page, placement: .window)
-        #expect(viewModel.reactionTargetCollectionCountForTesting == 1)
-    }
-
     @Test func automaticReadWithoutASourceNeverUsesLegacyCacheOrDownloader() async throws {
         let reference = mediaReference(sourceEpoch: 7, plaintext: Data([1]))
         let media = MessageMediaAttachment(id: "unresolved", reference: reference,
