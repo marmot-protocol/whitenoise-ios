@@ -8,8 +8,8 @@ private final class MockPrivacyDataSource: PrivacySecuritySettingsViewModelDataS
     var activeAccountRef: String?
     var projection: PrivacySecuritySettingsProjection?
     var auditRows: [AuditFileRow]?
-    /// Lists returned by successive reads before falling back to `auditRows`.
-    var queuedAuditRows: [[AuditFileRow]] = []
+    /// Lists returned by successive reads (nil: unreadable) before falling back to `auditRows`.
+    var queuedAuditRows: [[AuditFileRow]?] = []
     private(set) var auditRowsReads = 0
     var suspendProjection = false
     var suspendAuditRows = false
@@ -90,6 +90,28 @@ struct PrivacySecuritySettingsViewModelTests {
         #expect(model.auditFileRows == [recent])
         #expect(source.auditRowsReads == 3)
         #expect(sleeps == 2)
+    }
+
+    @Test func anUnreadableListDuringTheWaitKeepsTheRowsAndKeepsWaiting() async {
+        let cutoff: UInt64 = 1_000_000
+        let old = logRow("old.jsonl", modifiedAtMs: cutoff - 1)
+        let recent = logRow("recent.jsonl", modifiedAtMs: cutoff + 1)
+        let source = MockPrivacyDataSource()
+        source.auditRows = [old, recent]
+        let model = PrivacySecuritySettingsViewModel()
+        await model.reloadAuditFiles(using: source)
+        source.queuedAuditRows = [nil, [old, recent], [recent]]
+        var rowsDuringWait: [[AuditFileRow]] = []
+        var showedLoading = false
+
+        await model.reloadAuditFilesAfterRetentionChange(cutoffMs: cutoff, using: source) { _ in
+            rowsDuringWait.append(model.auditFileRows)
+            showedLoading = showedLoading || model.filesLoading
+        }
+
+        #expect(rowsDuringWait.first == [old, recent])
+        #expect(model.auditFileRows == [recent])
+        #expect(!showedLoading)
     }
 
     @Test func aSweepThatNeverLandsStopsAfterABoundedNumberOfReads() async {
