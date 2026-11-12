@@ -565,14 +565,11 @@ struct GroupDetailsArchiveActionTests {
             let appState = AppState.test(client: client)
             appState.activeAccountRef = "account-1"
             let groupIdHex = String(repeating: "ab", count: 32)
-            let conversation = ConversationViewModel(
+            let conversation = try await conversationWithManagementState(
                 appState: appState,
-                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
+                group: archiveTestGroup(groupIdHex: groupIdHex, archived: false),
+                managementState: disbandManagementState(disbandingEnabled: true, canDisband: true)
             )
-            conversation.setManagementStateForTesting(disbandManagementState(
-                disbandingEnabled: true,
-                canDisband: true
-            ))
             let marmot = GroupDetailsMarmotDouble()
             let model = groupDetailsModel(marmot: marmot)
             var disbandRequests: [(String, String)] = []
@@ -607,10 +604,11 @@ struct GroupDetailsArchiveActionTests {
             appState.activeAccountRef = "account-1"
             let groupIdHex = String(repeating: "ab", count: 32)
             let group = archiveTestGroup(groupIdHex: groupIdHex, archived: false)
-            let conversation = ConversationViewModel(appState: appState, group: group)
-            conversation.setManagementStateForTesting(disbandManagementState(
-                canEnableDisbanding: true
-            ))
+            let conversation = try await conversationWithManagementState(
+                appState: appState,
+                group: group,
+                managementState: disbandManagementState(canEnableDisbanding: true)
+            )
             let marmot = GroupDetailsMarmotDouble()
             let model = groupDetailsModel(marmot: marmot)
             var enableCount = 0
@@ -1044,6 +1042,34 @@ private func archiveTestGroup(
         welcomerAccountIdHex: nil,
         viaWelcomeMessageIdHex: nil
     )
+}
+
+/// A conversation whose management state came from its group snapshot, loaded
+/// the way the conversation loads it: through `refreshGroupManagement()`.
+@MainActor
+private func conversationWithManagementState(
+    appState: AppState,
+    group: AppGroupRecordFfi,
+    managementState: GroupManagementStateFfi
+) async throws -> ConversationViewModel {
+    let conversation = ConversationViewModel(
+        appState: appState,
+        group: group,
+        groupCalls: ConversationGroupCalls(
+            acceptInvite: { _, _, _ in
+                Issue.record("Unexpected invite acceptance")
+                return group
+            },
+            conversationSnapshot: { _, _, _ in
+                GroupConversationSnapshotFfi(
+                    details: GroupDetailsFfi(group: group, members: []),
+                    managementState: managementState
+                )
+            }
+        )
+    )
+    try #require(await conversation.refreshGroupManagement())
+    return conversation
 }
 
 private func disbandManagementState(
