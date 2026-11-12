@@ -35,6 +35,7 @@ nonisolated struct AuditFileRow: Identifiable, Equatable, Sendable {
     let detailText: String
     let path: String
     var sizeBytes: UInt64 = 0
+    var modifiedAtMs: UInt64?
 }
 
 nonisolated enum AuditFileRowProjection {
@@ -56,7 +57,8 @@ nonisolated enum AuditFileRowProjection {
             fileName: file.fileName,
             detailText: details(for: file),
             path: file.path,
-            sizeBytes: file.sizeBytes
+            sizeBytes: file.sizeBytes,
+            modifiedAtMs: file.modifiedAtMs
         )
     }
 

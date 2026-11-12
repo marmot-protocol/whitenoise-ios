@@ -217,6 +217,10 @@ final class AuditLogRetentionModel {
     private(set) var retention: AuditLogRetentionFfi?
     private(set) var loadFailed = false
     private(set) var isSaving = false
+    /// Set from a confirmed shorter period until the screen has caught up with
+    /// what MDK deleted, so a second change can't start mid-refresh.
+    private(set) var isApplyingShorterPeriod = false
+    var isBusy: Bool { isSaving || isApplyingShorterPeriod }
     /// A shorter period waiting for the user to confirm deleting older logs.
     var pendingShorterDays: UInt32?
     /// Bumped by every save, so a read that started before it can't put the
@@ -241,7 +245,7 @@ final class AuditLogRetentionModel {
     /// A longer period applies at once; a shorter one deletes logs, so it
     /// waits in `pendingShorterDays` for confirmation.
     func choose(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async {
-        guard let current = retention, days != current.maxAgeDays else { return }
+        guard !isBusy, let current = retention, days != current.maxAgeDays else { return }
         if days < current.maxAgeDays {
             pendingShorterDays = days
             return
@@ -250,14 +254,28 @@ final class AuditLogRetentionModel {
     }
 
     /// `days` comes from the alert that presented it: dismissing the alert
-    /// clears `pendingShorterDays` before the button's task runs.
-    func confirmShorter(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async {
+    /// clears `pendingShorterDays` before the button's task runs. After a
+    /// successful save, `refreshAfterDeletion` updates what the deletion
+    /// changed; the model stays busy until it returns. Returns whether the
+    /// shorter period was saved.
+    @discardableResult
+    func confirmShorter(
+        days: UInt32,
+        using dataSource: any AuditLogRetentionDataSource,
+        refreshAfterDeletion: @MainActor () async -> Void = {}
+    ) async -> Bool {
         pendingShorterDays = nil
-        await save(days: days, using: dataSource)
+        guard !isBusy else { return false }
+        isApplyingShorterPeriod = true
+        defer { isApplyingShorterPeriod = false }
+        guard await save(days: days, using: dataSource) else { return false }
+        await refreshAfterDeletion()
+        return true
     }
 
-    private func save(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async {
-        guard let current = retention, !isSaving else { return }
+    @discardableResult
+    private func save(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async -> Bool {
+        guard let current = retention, !isSaving else { return false }
         saveGeneration &+= 1
         isSaving = true
         defer { isSaving = false }
@@ -265,13 +283,15 @@ final class AuditLogRetentionModel {
             retention = try await dataSource.setAuditLogRetention(
                 AuditLogRetentionFfi(maxAgeDays: days, maxBytesPerAccount: current.maxBytesPerAccount)
             )
+            return true
         } catch is CancellationError {
-            return
+            return false
         } catch {
             dataSource.present(UserFacingError.toast(
                 title: L10n.string("Couldn't change how long logs are kept"),
                 error: error
             ))
+            return false
         }
     }
 }
@@ -286,6 +306,12 @@ nonisolated enum AuditLogRetentionPresentation {
     static func options(including current: UInt32) -> [UInt32] {
         let clamped = min(max(current, dayRange.lowerBound), dayRange.upperBound)
         return Array(Set(standardDays + [clamped])).sorted()
+    }
+
+    /// Logs last modified before this (Unix milliseconds) are past `days`.
+    static func cutoffMs(days: UInt32, now: Date = Date()) -> UInt64 {
+        let cutoff = now.timeIntervalSince1970 - TimeInterval(days) * 86_400
+        return UInt64(max(0, cutoff * 1_000))
     }
 
     static func title(days: UInt32) -> String {
