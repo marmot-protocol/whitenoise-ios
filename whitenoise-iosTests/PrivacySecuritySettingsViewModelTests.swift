@@ -8,6 +8,9 @@ private final class MockPrivacyDataSource: PrivacySecuritySettingsViewModelDataS
     var activeAccountRef: String?
     var projection: PrivacySecuritySettingsProjection?
     var auditRows: [AuditFileRow]?
+    /// Lists returned by successive reads before falling back to `auditRows`.
+    var queuedAuditRows: [[AuditFileRow]] = []
+    private(set) var auditRowsReads = 0
     var suspendProjection = false
     var suspendAuditRows = false
     private(set) var auditSettingsRequests: [AuditLogSettingsFfi] = []
@@ -34,6 +37,8 @@ private final class MockPrivacyDataSource: PrivacySecuritySettingsViewModelDataS
     }
 
     func auditLogFileRows() async throws -> [AuditFileRow]? {
+        auditRowsReads += 1
+        if !queuedAuditRows.isEmpty { auditRows = queuedAuditRows.removeFirst() }
         auditRowsStarted = true
         auditRowsStartedWaiters.forEach { $0.resume() }
         auditRowsStartedWaiters = []
@@ -67,6 +72,37 @@ private final class MockPrivacyDataSource: PrivacySecuritySettingsViewModelDataS
 
 @MainActor
 struct PrivacySecuritySettingsViewModelTests {
+    private func logRow(_ name: String, modifiedAtMs: UInt64) -> AuditFileRow {
+        AuditFileRow(fileName: name, detailText: name, path: "/logs/\(name)", sizeBytes: 1_024, modifiedAtMs: modifiedAtMs)
+    }
+
+    @Test func aShorterRetentionRereadsLogsUntilTheSweepHasRemovedTheOldOnes() async {
+        let cutoff: UInt64 = 1_000_000
+        let old = logRow("old.jsonl", modifiedAtMs: cutoff - 1)
+        let recent = logRow("recent.jsonl", modifiedAtMs: cutoff + 1)
+        let source = MockPrivacyDataSource()
+        source.queuedAuditRows = [[old, recent], [old, recent], [recent]]
+        let model = PrivacySecuritySettingsViewModel()
+        var sleeps = 0
+
+        await model.reloadAuditFilesAfterRetentionChange(cutoffMs: cutoff, using: source) { _ in sleeps += 1 }
+
+        #expect(model.auditFileRows == [recent])
+        #expect(source.auditRowsReads == 3)
+        #expect(sleeps == 2)
+    }
+
+    @Test func aSweepThatNeverLandsStopsAfterABoundedNumberOfReads() async {
+        let cutoff: UInt64 = 1_000_000
+        let source = MockPrivacyDataSource()
+        source.auditRows = [logRow("old.jsonl", modifiedAtMs: cutoff - 1)]
+        let model = PrivacySecuritySettingsViewModel()
+
+        await model.reloadAuditFilesAfterRetentionChange(cutoffMs: cutoff, using: source) { _ in }
+
+        #expect(source.auditRowsReads == PrivacySecuritySettingsViewModel.retentionSweepReads)
+    }
+
     @Test func enablingAuditLoggingUpdatesTheEngineSetting() async {
         let model = PrivacySecuritySettingsViewModel()
         let source = MockPrivacyDataSource()

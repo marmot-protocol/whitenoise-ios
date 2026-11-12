@@ -191,7 +191,7 @@ struct AuditDeliveryTests {
 
         // The alert's dismissal clears the pending value before its button's task runs.
         model.pendingShorterDays = nil
-        await model.confirmShorter(days: 7, using: source)
+        #expect(await model.confirmShorter(days: 7, using: source))
 
         #expect(source.saved == [AuditLogRetentionFfi(maxAgeDays: 7, maxBytesPerAccount: 256 << 20)])
         #expect(model.retention?.maxAgeDays == 7)
@@ -212,6 +212,16 @@ struct AuditDeliveryTests {
 
         #expect(source.stored.maxAgeDays == 7)
         #expect(model.retention?.maxAgeDays == 7)
+    }
+
+    @Test func aFailedShorterSaveReportsThatNothingWasDeleted() async {
+        let source = AuditLogRetentionSourceStub(stored: AuditLogRetentionFfi(maxAgeDays: 30, maxBytesPerAccount: 256 << 20))
+        source.saveError = MarmotKitError.Io(details: "disk full")
+        let model = AuditLogRetentionModel()
+        await model.load(using: source)
+
+        #expect(await model.confirmShorter(days: 7, using: source) == false)
+        #expect(model.retention?.maxAgeDays == 30)
     }
 
     @Test func aFailedSaveKeepsTheStoredPeriodAndTellsTheUser() async {

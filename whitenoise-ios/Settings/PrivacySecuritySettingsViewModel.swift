@@ -204,6 +204,25 @@ final class PrivacySecuritySettingsViewModel {
         }
     }
 
+    /// MDK deletes logs older than a new retention period on its own worker
+    /// and reports no completion, so re-read the list until no log older than
+    /// `cutoffMs` remains, a bounded number of times, so the stored size and
+    /// Clear button reflect the deletion.
+    func reloadAuditFilesAfterRetentionChange(
+        cutoffMs: UInt64,
+        using dataSource: any PrivacySecuritySettingsViewModelDataSource,
+        sleep: @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    ) async {
+        for read in 1...Self.retentionSweepReads {
+            await reloadAuditFiles(using: dataSource)
+            let swept = !auditFileRows.contains { ($0.modifiedAtMs ?? .max) < cutoffMs }
+            guard !swept, read < Self.retentionSweepReads else { return }
+            do { try await sleep(.milliseconds(250)) } catch { return }
+        }
+    }
+
+    static let retentionSweepReads = 8
+
     func reloadAuditFiles(using dataSource: any PrivacySecuritySettingsViewModelDataSource) async {
         guard let reloadTicket = actionGate.reloadTicket() else {
             requestAuditFilesReloadAfterAction()

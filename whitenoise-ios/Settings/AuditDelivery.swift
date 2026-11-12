@@ -250,14 +250,18 @@ final class AuditLogRetentionModel {
     }
 
     /// `days` comes from the alert that presented it: dismissing the alert
-    /// clears `pendingShorterDays` before the button's task runs.
-    func confirmShorter(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async {
+    /// clears `pendingShorterDays` before the button's task runs. Returns
+    /// whether the shorter period was saved, so the caller can refresh what
+    /// the deletion changed.
+    @discardableResult
+    func confirmShorter(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async -> Bool {
         pendingShorterDays = nil
-        await save(days: days, using: dataSource)
+        return await save(days: days, using: dataSource)
     }
 
-    private func save(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async {
-        guard let current = retention, !isSaving else { return }
+    @discardableResult
+    private func save(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async -> Bool {
+        guard let current = retention, !isSaving else { return false }
         saveGeneration &+= 1
         isSaving = true
         defer { isSaving = false }
@@ -265,13 +269,15 @@ final class AuditLogRetentionModel {
             retention = try await dataSource.setAuditLogRetention(
                 AuditLogRetentionFfi(maxAgeDays: days, maxBytesPerAccount: current.maxBytesPerAccount)
             )
+            return true
         } catch is CancellationError {
-            return
+            return false
         } catch {
             dataSource.present(UserFacingError.toast(
                 title: L10n.string("Couldn't change how long logs are kept"),
                 error: error
             ))
+            return false
         }
     }
 }
@@ -286,6 +292,12 @@ nonisolated enum AuditLogRetentionPresentation {
     static func options(including current: UInt32) -> [UInt32] {
         let clamped = min(max(current, dayRange.lowerBound), dayRange.upperBound)
         return Array(Set(standardDays + [clamped])).sorted()
+    }
+
+    /// Logs last modified before this (Unix milliseconds) are past `days`.
+    static func cutoffMs(days: UInt32, now: Date = Date()) -> UInt64 {
+        let cutoff = now.timeIntervalSince1970 - TimeInterval(days) * 86_400
+        return UInt64(max(0, cutoff * 1_000))
     }
 
     static func title(days: UInt32) -> String {

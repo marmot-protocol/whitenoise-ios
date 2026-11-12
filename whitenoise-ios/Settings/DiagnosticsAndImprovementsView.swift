@@ -116,7 +116,13 @@ struct DiagnosticsAndImprovementsView: View {
             presenting: retention.pendingShorterDays
         ) { days in
             Button("Delete Older Logs", role: .destructive) {
-                Task { await retention.confirmShorter(days: days, using: appState) }
+                Task {
+                    guard await retention.confirmShorter(days: days, using: appState) else { return }
+                    await model.reloadAuditFilesAfterRetentionChange(
+                        cutoffMs: AuditLogRetentionPresentation.cutoffMs(days: days),
+                        using: appState
+                    )
+                }
             }
             Button("Cancel", role: .cancel) { retention.pendingShorterDays = nil }
         } message: { days in
