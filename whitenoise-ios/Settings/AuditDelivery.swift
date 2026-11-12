@@ -217,6 +217,10 @@ final class AuditLogRetentionModel {
     private(set) var retention: AuditLogRetentionFfi?
     private(set) var loadFailed = false
     private(set) var isSaving = false
+    /// Set from a confirmed shorter period until the screen has caught up with
+    /// what MDK deleted, so a second change can't start mid-refresh.
+    private(set) var isApplyingShorterPeriod = false
+    var isBusy: Bool { isSaving || isApplyingShorterPeriod }
     /// A shorter period waiting for the user to confirm deleting older logs.
     var pendingShorterDays: UInt32?
     /// Bumped by every save, so a read that started before it can't put the
@@ -241,7 +245,7 @@ final class AuditLogRetentionModel {
     /// A longer period applies at once; a shorter one deletes logs, so it
     /// waits in `pendingShorterDays` for confirmation.
     func choose(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async {
-        guard let current = retention, days != current.maxAgeDays else { return }
+        guard !isBusy, let current = retention, days != current.maxAgeDays else { return }
         if days < current.maxAgeDays {
             pendingShorterDays = days
             return
@@ -250,13 +254,23 @@ final class AuditLogRetentionModel {
     }
 
     /// `days` comes from the alert that presented it: dismissing the alert
-    /// clears `pendingShorterDays` before the button's task runs. Returns
-    /// whether the shorter period was saved, so the caller can refresh what
-    /// the deletion changed.
+    /// clears `pendingShorterDays` before the button's task runs. After a
+    /// successful save, `refreshAfterDeletion` updates what the deletion
+    /// changed; the model stays busy until it returns. Returns whether the
+    /// shorter period was saved.
     @discardableResult
-    func confirmShorter(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async -> Bool {
+    func confirmShorter(
+        days: UInt32,
+        using dataSource: any AuditLogRetentionDataSource,
+        refreshAfterDeletion: @MainActor () async -> Void = {}
+    ) async -> Bool {
         pendingShorterDays = nil
-        return await save(days: days, using: dataSource)
+        guard !isBusy else { return false }
+        isApplyingShorterPeriod = true
+        defer { isApplyingShorterPeriod = false }
+        guard await save(days: days, using: dataSource) else { return false }
+        await refreshAfterDeletion()
+        return true
     }
 
     @discardableResult

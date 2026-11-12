@@ -11,6 +11,8 @@ private final class MockPrivacyDataSource: PrivacySecuritySettingsViewModelDataS
     /// Lists returned by successive reads (nil: unreadable) before falling back to `auditRows`.
     var queuedAuditRows: [[AuditFileRow]?] = []
     private(set) var auditRowsReads = 0
+    /// Holds only the next read, after it captured its result.
+    var suspendNextAuditRowsRead = false
     var suspendProjection = false
     var suspendAuditRows = false
     private(set) var auditSettingsRequests: [AuditLogSettingsFfi] = []
@@ -38,14 +40,15 @@ private final class MockPrivacyDataSource: PrivacySecuritySettingsViewModelDataS
 
     func auditLogFileRows() async throws -> [AuditFileRow]? {
         auditRowsReads += 1
-        if !queuedAuditRows.isEmpty { auditRows = queuedAuditRows.removeFirst() }
+        let result = queuedAuditRows.isEmpty ? auditRows : queuedAuditRows.removeFirst()
         auditRowsStarted = true
         auditRowsStartedWaiters.forEach { $0.resume() }
         auditRowsStartedWaiters = []
-        if suspendAuditRows {
+        if suspendAuditRows || suspendNextAuditRowsRead {
+            suspendNextAuditRowsRead = false
             await withCheckedContinuation { auditGate = $0 }
         }
-        return auditRows
+        return suspendAuditRows ? auditRows : result
     }
 
     func waitUntilProjectionStarted() async {
@@ -125,6 +128,26 @@ struct PrivacySecuritySettingsViewModelTests {
         await model.reloadAuditFilesAfterRetentionChange(cutoffMs: cutoff, using: source) { _ in }
 
         #expect(model.auditErrorMessage == nil)
+        #expect(model.auditFileRows == [recent])
+    }
+
+    @Test func aReloadThatStartedBeforeTheWaitEndedRereadsInsteadOfRestoringOldRows() async {
+        let cutoff: UInt64 = 1_000_000
+        let old = logRow("old.jsonl", modifiedAtMs: cutoff - 1)
+        let recent = logRow("recent.jsonl", modifiedAtMs: cutoff + 1)
+        let source = MockPrivacyDataSource()
+        source.auditRows = [recent]
+        source.queuedAuditRows = [[old, recent]]
+        source.suspendNextAuditRowsRead = true
+        let model = PrivacySecuritySettingsViewModel()
+
+        let staleReload = Task { await model.reloadAuditFiles(using: source) }
+        await source.waitUntilAuditRowsStarted()
+        await model.reloadAuditFilesAfterRetentionChange(cutoffMs: cutoff, using: source) { _ in }
+        #expect(model.auditFileRows == [recent])
+
+        source.releaseSuspendedAuditRows()
+        await staleReload.value
         #expect(model.auditFileRows == [recent])
     }
 

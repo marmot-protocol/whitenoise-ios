@@ -214,6 +214,26 @@ struct AuditDeliveryTests {
         #expect(model.retention?.maxAgeDays == 7)
     }
 
+    @Test func noOtherChangeStartsUntilTheShorterPeriodsRefreshFinishes() async {
+        let source = AuditLogRetentionSourceStub(stored: AuditLogRetentionFfi(maxAgeDays: 30, maxBytesPerAccount: 256 << 20))
+        let model = AuditLogRetentionModel()
+        await model.load(using: source)
+        var busyDuringRefresh = false
+        var overlappingConfirmSaved = true
+
+        let saved = await model.confirmShorter(days: 14, using: source) {
+            busyDuringRefresh = model.isBusy
+            overlappingConfirmSaved = await model.confirmShorter(days: 7, using: source)
+            await model.choose(days: 30, using: source)
+        }
+
+        #expect(saved)
+        #expect(busyDuringRefresh)
+        #expect(!overlappingConfirmSaved)
+        #expect(source.saved.map(\.maxAgeDays) == [14])
+        #expect(!model.isBusy)
+    }
+
     @Test func aFailedShorterSaveReportsThatNothingWasDeleted() async {
         let source = AuditLogRetentionSourceStub(stored: AuditLogRetentionFfi(maxAgeDays: 30, maxBytesPerAccount: 256 << 20))
         source.saveError = MarmotKitError.Io(details: "disk full")
