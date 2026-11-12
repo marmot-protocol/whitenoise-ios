@@ -125,12 +125,14 @@ final class ConversationViewModel {
     ) async throws -> SendSummaryFfi
 
     nonisolated struct DurableRetryOperations {
+        let isOnline: @MainActor () -> Bool
         let catchUp: @MainActor (MarmotClient) async throws -> Void
         let converge: @MainActor (MarmotClient, String, String) async throws -> SendSummaryFfi
         let sleep: @MainActor (UInt64) async throws -> Void
         let refresh: @MainActor (ConversationViewModel) async -> Void
 
         static let live = DurableRetryOperations(
+            isOnline: { MediaAutoDownloadStore.shared.isOnline },
             catchUp: { try await $0.catchUpAccounts() },
             converge: { client, accountRef, groupIdHex in
                 try await client.retryGroupConvergence(
@@ -1491,7 +1493,7 @@ final class ConversationViewModel {
 
     func retryFailedSend(rowId: String) async {
         if let messageIdHex = timelineStore.undeliveredDurableMessageId(rowId: rowId) {
-            guard MediaAutoDownloadStore.shared.isOnline else {
+            guard durableRetryOperations.isOnline() else {
                 composer.onError(L10n.string("You're offline. Try again once you're connected."))
                 return
             }
