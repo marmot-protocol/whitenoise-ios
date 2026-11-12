@@ -38,6 +38,9 @@ final class RelayLivenessModel {
 
     /// Watches `accountRef` for as long as the calling task runs. Cancelling
     /// that task cancels the subscription, which ends MDK's pending `next()`.
+    /// The subscription is the only writer of `relays`. A failed subscribe or
+    /// receive clears the list and sets `loadFailed`, so the screen offers
+    /// Retry instead of showing old states as live.
     func observe(accountRef: String?, using dataSource: any RelayLivenessDataSource) async {
         observation &+= 1
         let ticket = observation
@@ -57,11 +60,16 @@ final class RelayLivenessModel {
         await withTaskCancellationHandler {
             guard !Task.isCancelled, observation == ticket else { return }
             relays = subscription.snapshot()
-            // nil after cancel() or runtime shutdown; an error also ends the watch
-            // and keeps the last list, which the next observation replaces.
-            while let next = try? await subscription.next() {
-                guard !Task.isCancelled, observation == ticket else { break }
-                relays = next
+            do {
+                // nil after cancel() or runtime shutdown, which restarts the watch.
+                while let next = try await subscription.next() {
+                    guard !Task.isCancelled, observation == ticket else { break }
+                    relays = next
+                }
+            } catch {
+                guard !Task.isCancelled, observation == ticket else { return }
+                relays = nil
+                loadFailed = true
             }
         } onCancel: {
             subscription.cancel()
@@ -69,15 +77,16 @@ final class RelayLivenessModel {
         subscription.cancel()
     }
 
+    /// The new state arrives through the subscription, so the returned state
+    /// is not applied: it could be older than a list the subscription already
+    /// delivered.
     func reconnect(url: String, using dataSource: any RelayLivenessDataSource) async {
         guard let accountRef, !reconnectingURLs.contains(url) else { return }
         let ticket = observation
         reconnectingURLs.insert(url)
         defer { if observation == ticket { reconnectingURLs.remove(url) } }
         do {
-            let updated = try await dataSource.reconnectRelay(accountRef: accountRef, url: url)
-            guard observation == ticket else { return }
-            relays = RelayLivenessPresentation.replacing(updated, in: relays)
+            _ = try await dataSource.reconnectRelay(accountRef: accountRef, url: url)
         } catch is CancellationError {
             return
         } catch {
@@ -131,18 +140,16 @@ nonisolated enum RelayLivenessPresentation {
         }
     }
 
-    /// When the last attempt was, for relays that aren't connected.
+    /// When the last attempt was, for relays that aren't connected. An
+    /// absolute time stays true while the row sits unchanged on screen.
     static func detail(_ relay: RelayLivenessFfi, now: Date, locale: Locale) -> String? {
         guard relay.status != .connected, let seconds = relay.lastAttemptUnix, seconds > 0 else { return nil }
         let attempt = Date(timeIntervalSince1970: TimeInterval(Int64(clamping: seconds)))
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = locale
-        formatter.unitsStyle = .full
-        return L10n.formatted("Last tried %@", formatter.localizedString(for: min(attempt, now), relativeTo: now))
-    }
-
-    /// Applies a Reconnect result to the current list by URL.
-    static func replacing(_ updated: RelayLivenessFfi, in relays: [RelayLivenessFfi]?) -> [RelayLivenessFfi]? {
-        relays.map { list in list.map { $0.url == updated.url ? updated : $0 } }
+        var calendar = Calendar.current
+        calendar.locale = locale
+        let style = calendar.isDate(attempt, inSameDayAs: now)
+            ? Date.FormatStyle(date: .omitted, time: .shortened)
+            : Date.FormatStyle(date: .abbreviated, time: .shortened)
+        return L10n.formatted("Last tried %@", attempt.formatted(style.locale(locale)))
     }
 }

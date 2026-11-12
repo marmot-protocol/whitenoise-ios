@@ -68,15 +68,23 @@ struct RelayLivenessModelTests {
         #expect(source.subscribedAccountRefs == ["account"])
     }
 
-    @Test func reconnectReplacesOnlyThatRelaysRow() async throws {
+    @Test func aReconnectResultCannotOverwriteANewerList() async throws {
         let subscription = FakeRelayLivenessSubscription(snapshot: [relay(eu, .offline), relay(us, .connected)])
         let source = RelayLivenessDataSourceStub(subscription: subscription)
-        source.reconnectResult = .success(relay(eu, .connected))
+        source.reconnectResult = .success(relay(eu, .connecting))
+        let gate = (entered: TestLatch(), released: TestLatch())
+        source.reconnectGate = gate
         let model = RelayLivenessModel()
         let watch = Task { await model.observe(accountRef: "account", using: source) }
         try await eventually { model.relays != nil }
 
-        await model.reconnect(url: eu, using: source)
+        let reconnect = Task { await model.reconnect(url: eu, using: source) }
+        try await gate.entered.wait()
+        #expect(model.reconnectingURLs == [eu])
+        subscription.deliver([relay(eu, .connected), relay(us, .connected)])
+        try await eventually { model.relays?.first?.status == .connected }
+        gate.released.signal()
+        await reconnect.value
 
         #expect(source.reconnects == [ReconnectCall(accountRef: "account", url: eu)])
         #expect(model.relays == [relay(eu, .connected), relay(us, .connected)])
@@ -84,6 +92,28 @@ struct RelayLivenessModelTests {
         #expect(source.presentedToasts.isEmpty)
         watch.cancel()
         await watch.value
+    }
+
+    @Test func aFailedReceiveClearsTheListAndARetryWatchesAgain() async throws {
+        let first = FakeRelayLivenessSubscription(snapshot: [relay(eu, .connected)])
+        let model = RelayLivenessModel()
+        let failing = Task {
+            await model.observe(accountRef: "account", using: RelayLivenessDataSourceStub(subscription: first))
+        }
+        try await eventually { model.relays != nil }
+        first.fail()
+        await failing.value
+        #expect(model.relays == nil)
+        #expect(model.loadFailed)
+
+        let second = FakeRelayLivenessSubscription(snapshot: [relay(eu, .offline)])
+        let retry = Task {
+            await model.observe(accountRef: "account", using: RelayLivenessDataSourceStub(subscription: second))
+        }
+        try await eventually { model.relays == [relay(eu, .offline)] }
+        #expect(!model.loadFailed)
+        retry.cancel()
+        await retry.value
     }
 
     @Test func aFailedReconnectKeepsTheRowAndTellsTheUser() async throws {
@@ -125,14 +155,17 @@ struct RelayLivenessModelTests {
         #expect(Set(rows.map(\.statusText)).count == 3)
     }
 
-    @Test func aFutureAttemptTimeReadsAsNowRatherThanAhead() {
+    @Test func anAttemptTodayShowsItsTimeAndAnOlderOneAlsoItsDate() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        let future = relay(eu, .offline, lastAttempt: UInt64(now.timeIntervalSince1970) + 3_600)
-        let present = relay(eu, .offline, lastAttempt: UInt64(now.timeIntervalSince1970))
         let locale = Locale(identifier: "en")
+        let today = RelayLivenessPresentation.detail(
+            relay(eu, .offline, lastAttempt: UInt64(now.timeIntervalSince1970) - 60), now: now, locale: locale)
+        let lastWeek = RelayLivenessPresentation.detail(
+            relay(eu, .offline, lastAttempt: UInt64(now.timeIntervalSince1970) - 7 * 86_400), now: now, locale: locale)
 
-        #expect(RelayLivenessPresentation.detail(future, now: now, locale: locale)
-            == RelayLivenessPresentation.detail(present, now: now, locale: locale))
+        let todayText = try #require(today)
+        let lastWeekText = try #require(lastWeek)
+        #expect(lastWeekText.count > todayText.count)
     }
 
     @Test func relayURLsAreSanitizedForDisplay() {
@@ -156,6 +189,7 @@ private struct ReconnectCall: Equatable {
 private final class RelayLivenessDataSourceStub: RelayLivenessDataSource {
     let subscription: FakeRelayLivenessSubscription?
     var reconnectResult: Result<RelayLivenessFfi, any Error> = .failure(CancellationError())
+    var reconnectGate: (entered: TestLatch, released: TestLatch)?
     private(set) var subscribedAccountRefs: [String] = []
     private(set) var reconnects: [ReconnectCall] = []
     private(set) var presentedToasts: [Toast] = []
@@ -174,6 +208,10 @@ private final class RelayLivenessDataSourceStub: RelayLivenessDataSource {
 
     func reconnectRelay(accountRef: String, url: String) async throws -> RelayLivenessFfi {
         reconnects.append(ReconnectCall(accountRef: accountRef, url: url))
+        if let reconnectGate {
+            reconnectGate.entered.signal()
+            await reconnectGate.released.hold()
+        }
         return try reconnectResult.get()
     }
 
@@ -182,14 +220,15 @@ private final class RelayLivenessDataSourceStub: RelayLivenessDataSource {
     }
 }
 
-/// Stands in for MDK's subscription: `next()` waits for `deliver`, and
-/// returns nil after `cancel()` or `finish()`, as MDK does after cancel or
-/// runtime shutdown.
+/// Stands in for MDK's subscription: `next()` waits for `deliver`, returns
+/// nil after `cancel()` or `finish()`, as MDK does after cancel or runtime
+/// shutdown, and throws after `fail()`.
 private final class FakeRelayLivenessSubscription: RelayLivenessSubscriptionProtocol {
     private struct State {
         var pending: [[RelayLivenessFfi]] = []
-        var waiter: CheckedContinuation<[RelayLivenessFfi]?, Never>?
+        var waiter: CheckedContinuation<[RelayLivenessFfi]?, any Error>?
         var ended = false
+        var failed = false
         var cancelled = false
     }
 
@@ -204,20 +243,33 @@ private final class FakeRelayLivenessSubscription: RelayLivenessSubscriptionProt
 
     func snapshot() -> [RelayLivenessFfi] { initial }
 
+    private struct ReceiveFailed: Error {}
+
     func next() async throws -> [RelayLivenessFfi]? {
-        await withCheckedContinuation { continuation in
-            let ready: [RelayLivenessFfi]?? = state.withLock { state in
-                if !state.pending.isEmpty { return .some(state.pending.removeFirst()) }
-                if state.ended { return .some(nil) }
+        try await withCheckedThrowingContinuation { continuation in
+            let ready: Result<[RelayLivenessFfi]?, any Error>? = state.withLock { state in
+                if !state.pending.isEmpty { return .success(state.pending.removeFirst()) }
+                if state.failed { return .failure(ReceiveFailed()) }
+                if state.ended { return .success(nil) }
                 state.waiter = continuation
-                return .none
+                return nil
             }
-            if let ready { continuation.resume(returning: ready) }
+            if let ready { continuation.resume(with: ready) }
         }
     }
 
+    func fail() {
+        let waiter = state.withLock { state -> CheckedContinuation<[RelayLivenessFfi]?, any Error>? in
+            state.failed = true
+            let waiter = state.waiter
+            state.waiter = nil
+            return waiter
+        }
+        waiter?.resume(throwing: ReceiveFailed())
+    }
+
     func deliver(_ relays: [RelayLivenessFfi]) {
-        let waiter = state.withLock { state -> CheckedContinuation<[RelayLivenessFfi]?, Never>? in
+        let waiter = state.withLock { state -> CheckedContinuation<[RelayLivenessFfi]?, any Error>? in
             guard !state.ended else { return nil }
             if let waiter = state.waiter {
                 state.waiter = nil
@@ -238,7 +290,7 @@ private final class FakeRelayLivenessSubscription: RelayLivenessSubscriptionProt
     }
 
     private func end(cancelled: Bool) {
-        let waiter = state.withLock { state -> CheckedContinuation<[RelayLivenessFfi]?, Never>? in
+        let waiter = state.withLock { state -> CheckedContinuation<[RelayLivenessFfi]?, any Error>? in
             state.ended = true
             if cancelled { state.cancelled = true }
             let waiter = state.waiter

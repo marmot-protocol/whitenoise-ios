@@ -11,6 +11,8 @@ struct RelaysView: View {
     @Environment(AppState.self) private var appState
     @State private var model = RelaysViewModel()
     @State private var liveness = RelayLivenessModel()
+    /// Bumped by Retry and pull to refresh to restart the liveness watch.
+    @State private var livenessAttempt = 0
     @State private var addRelayTarget: RelayListTarget?
 
     /// Restarts the liveness watch on account, runtime and foreground changes;
@@ -19,6 +21,7 @@ struct RelaysView: View {
         let accountRef: String?
         let runtimeGeneration: Int
         let canUseRuntime: Bool
+        let attempt: Int
     }
 
     var body: some View {
@@ -41,12 +44,16 @@ struct RelaysView: View {
         .task(id: LivenessKey(
             accountRef: appState.activeAccountRef,
             runtimeGeneration: appState.runtimeGeneration,
-            canUseRuntime: appState.canUseRuntimeForLocalForegroundWork
+            canUseRuntime: appState.canUseRuntimeForLocalForegroundWork,
+            attempt: livenessAttempt
         )) {
             let accountRef = appState.canUseRuntimeForLocalForegroundWork ? appState.activeAccountRef : nil
             await liveness.observe(accountRef: accountRef, using: appState)
         }
-        .refreshable { await model.reload(using: appState) }
+        .refreshable {
+            livenessAttempt &+= 1
+            await model.reload(using: appState)
+        }
         .sheet(item: $addRelayTarget) { target in
             AddRelaySettingsSheet(existingRelays: model.relays(for: target)) { url in
                 model.pendingUrl = url
@@ -155,9 +162,12 @@ struct RelaysView: View {
                     livenessRow(row)
                 }
             } else if liveness.loadFailed {
-                Label("Connection status is unavailable", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Connection status is unavailable", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                    Button("Retry") { livenessAttempt &+= 1 }
+                }
             } else {
                 ProgressView("Checking connections")
             }
