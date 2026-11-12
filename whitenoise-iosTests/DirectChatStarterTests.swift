@@ -9,10 +9,10 @@ struct DirectChatStarterTests {
     @Test func reopensAnExistingDirectChatWithoutCreating() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
-        let starter = directChatStarter { _, _ in
+        let starter = directChatStarter(create: { _, _ in
             Issue.record("must not create when an open direct chat exists")
             throw TestError.unexpectedCreate
-        }
+        })
 
         let outcome = await starter.start(
             accountIdHex: alice,
@@ -70,10 +70,10 @@ struct DirectChatStarterTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
         var observedRefs: [String] = []
-        let starter = directChatStarter { accountRef, memberRef in
+        let starter = directChatStarter(create: { accountRef, memberRef in
             observedRefs = [accountRef, memberRef]
             return "separate-dm"
-        }
+        })
 
         let outcome = await starter.start(
             accountIdHex: alice,
@@ -177,10 +177,10 @@ struct DirectChatStarterTests {
     @Test func failsWithoutAnActiveAccount() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = nil
-        let starter = directChatStarter { _, _ in
+        let starter = directChatStarter(create: { _, _ in
             Issue.record("no conversation may be created without an active account")
             return "unexpected"
-        }
+        })
 
         let outcome = await starter.start(
             accountIdHex: alice,
