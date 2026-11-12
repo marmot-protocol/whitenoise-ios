@@ -113,7 +113,8 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
 
 nonisolated enum AccountSetupFailure: Equatable, Sendable {
     case settingsChanged, operation, updatesStopped, loadChecks, closeSignIn, refreshAccounts, discovery
-    /// Every relay refused a setup publish for size; the same retry fails again.
+    /// Every relay refused a setup publish (the KeyPackage) for size. Setup keeps
+    /// its actions; changing relays is the remedy, and a retry fails the same way.
     case tooLarge
 
     /// The failure for a setup operation that threw `error`.

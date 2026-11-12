@@ -46,7 +46,7 @@ struct AccountSetupCheckView: View {
                 if model.hasConnectionFailure && activeAction == nil {
                     WNOnboardingButton(title: "Close") { dismiss() }
                         .disabled(isBusy)
-                } else if let action = recovery.primaryAction(operationFailure: model.failure) {
+                } else if let action = recovery.primaryAction {
                     WNOnboardingButton(
                         title: action == .acknowledge
                             ? LocalizedStringKey(AccountSetupPresentation.deviceAction(presentation.snapshot.singleDeviceNotice?.discovery))
@@ -54,8 +54,6 @@ struct AccountSetupCheckView: View {
                         isLoading: isBusy && activeAction == action
                     ) { perform(action) }
                     .disabled(isBusy || !model.isConnected)
-                } else if model.failure == .tooLarge {
-                    WNOnboardingButton(title: "Close") { dismiss() }
                 }
             }
         }

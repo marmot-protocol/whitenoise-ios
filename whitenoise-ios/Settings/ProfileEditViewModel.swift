@@ -28,7 +28,7 @@ final class ProfileEditViewModel {
     var hasLoadError = false
     var saveFailure: SaveFailure?
 
-    enum SaveFailure {
+    enum SaveFailure: Equatable {
         case publish
         /// Every relay refused the profile for size; the same draft fails again.
         case tooLarge

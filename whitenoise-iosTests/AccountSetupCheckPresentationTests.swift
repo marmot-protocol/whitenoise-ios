@@ -68,18 +68,6 @@ struct AccountSetupCheckPresentationTests {
         }
     }
 
-    @Test func aSizeRefusalWithholdsOnlyTheSameKeyPackageRetry() {
-        let messaging = AccountSetupCheckPresentation(
-            check: .secureMessaging, snapshot: snapshot(status: .retryableFailure, messagingActions: [.retry]))
-        #expect(messaging.primaryAction(operationFailure: nil) == .retry)
-        #expect(messaging.primaryAction(operationFailure: .operation) == .retry)
-        #expect(messaging.primaryAction(operationFailure: .tooLarge) == nil)
-
-        let device = AccountSetupCheckPresentation(
-            check: .device, snapshot: snapshot(deviceActions: [.continueAnyway]))
-        #expect(device.primaryAction(operationFailure: .tooLarge) == .acknowledge)
-    }
-
     private func snapshot(
         status: OnboardingStatusFfi = .needsInput,
         deviceActions: [OnboardingActionFfi] = [],
