@@ -4,8 +4,12 @@ import Testing
 
 @MainActor
 struct GroupChangeNoticeTests {
-    private func quarantine(_ reason: AppGroupHydrationQuarantineReasonFfi, group: String = "group") -> MarmotEventFfi {
-        .groupEvent(accountIdHex: "account", accountLabel: "private profile", groupIdHex: group,
+    private func quarantine(
+        _ reason: AppGroupHydrationQuarantineReasonFfi,
+        account: String = "account",
+        group: String = "group"
+    ) -> MarmotEventFfi {
+        .groupEvent(accountIdHex: account, accountLabel: "private profile", groupIdHex: group,
                     event: .groupHydrationQuarantined(reason: reason))
     }
 
@@ -19,14 +23,16 @@ struct GroupChangeNoticeTests {
         }
     }
 
-    @Test func eachGroupsFailedRewindRestoreIsAnnouncedOnce() {
+    @Test func eachAccountsFailedRewindRestoreOfAGroupIsAnnouncedOnce() {
         var announcements = RefusedIntentAnnouncements()
         let admitted = [
-            announcements.admit(quarantine(.rewindRestoreFailed, group: "a")),
-            announcements.admit(quarantine(.rewindRestoreFailed, group: "a")),
-            announcements.admit(quarantine(.rewindRestoreFailed, group: "b")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "alice", group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "alice", group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "alice", group: "b")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "bob", group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "bob", group: "a")),
         ]
-        #expect(admitted == [true, false, true])
+        #expect(admitted == [true, false, true, true, false])
     }
 
     private func event(kind: String = "group_profile", outcome: String) -> MarmotEventFfi {

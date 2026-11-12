@@ -88,8 +88,9 @@ enum GroupChangeNotice {
 }
 
 /// MDK may deliver the same refusal more than once; announce each dropped
-/// send once, and a group's failed rewind restore once per session. Bounded,
-/// so a long session cannot grow it without limit.
+/// send once, and each account's failed rewind restore of a group once per
+/// session (quarantine is per account's local state, and accounts can share a
+/// group). Bounded, so a long session cannot grow it without limit.
 struct RefusedIntentAnnouncements {
     private var seen: [String] = []
     private let capacity = 64
@@ -100,8 +101,8 @@ struct RefusedIntentAnnouncements {
         switch event {
         case .groupEvent(_, _, _, .queuedIntentRefused(let intentIdHex, _, _, _, _)):
             key = "intent:" + intentIdHex
-        case .groupEvent(_, _, let groupIdHex, .groupHydrationQuarantined(.rewindRestoreFailed)):
-            key = "rewind:" + groupIdHex
+        case .groupEvent(let accountIdHex, _, let groupIdHex, .groupHydrationQuarantined(.rewindRestoreFailed)):
+            key = "rewind:" + accountIdHex + ":" + groupIdHex
         default:
             return true
         }
