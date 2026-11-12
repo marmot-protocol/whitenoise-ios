@@ -174,6 +174,32 @@ struct ConversationChoiceProjectionTests {
         #expect(openedGroupIdHex == "new-after-retry")
     }
 
+    @Test func profileRetryAfterStartNewFailureRetriesTheSeparateCreate() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+        var createCount = 0
+        let model = ProfileViewModel(starter: directChatStarter(create: { _, _ in
+            createCount += 1
+            if createCount == 1 {
+                throw TestFailure.createFailed
+            }
+            return "new-after-retry"
+        }))
+        model.conversationChooser = chooser()
+        var openedGroupIdHex: String?
+
+        await model.startNewConversation(using: appState) { _ in }
+        #expect(model.startPrompt?.startsSeparateChat == true)
+
+        await model.retryStart(using: appState) {
+            openedGroupIdHex = $0
+        }
+
+        // The default startDirect spy records an issue if the canonical route runs.
+        #expect(createCount == 2)
+        #expect(openedGroupIdHex == "new-after-retry")
+    }
+
     private func snapshot(
         groupIdHex: String,
         name: String?,

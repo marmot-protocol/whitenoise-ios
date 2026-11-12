@@ -144,6 +144,7 @@ final class NewChatFlowViewModel {
                 accountIdHex: accountIdHex,
                 memberRef: memberRef,
                 existingGroupIdHex: nil,
+                startsSeparateChat: false,
                 failureRetryMode: .exact,
                 using: appState,
                 onOpen: onOpen
@@ -174,6 +175,7 @@ final class NewChatFlowViewModel {
             accountIdHex: chooser.targetAccountIdHex,
             memberRef: chooser.memberRef,
             existingGroupIdHex: choice.groupIdHex,
+            startsSeparateChat: false,
             failureRetryMode: .exact,
             using: appState,
             onOpen: onOpen
@@ -231,6 +233,7 @@ final class NewChatFlowViewModel {
             accountIdHex: accountIdHex,
             memberRef: memberRef,
             existingGroupIdHex: existing,
+            startsSeparateChat: false,
             failureRetryMode: .canonicalLookup,
             using: appState,
             onOpen: onOpen
@@ -288,7 +291,7 @@ final class NewChatFlowViewModel {
         accountIdHex: String,
         memberRef: String,
         existingGroupIdHex: String?,
-        startsSeparateChat: Bool = false,
+        startsSeparateChat: Bool,
         failureRetryMode: RetryStartMode,
         using appState: AppState,
         onOpen: (String) -> Void

@@ -20,10 +20,14 @@ final class ProfileViewModel {
     private(set) var groupsLoadState = SharedGroupsLoadState()
     var verifiedNip05: String? { addressVerification.verifiedNip05 }
 
-    let starter = DirectChatStarter()
+    let starter: DirectChatStarter
     let directory = RecipientDirectory()
     private let addressVerification = ProfileAddressVerificationModel()
     private var resolutionGeneration: UInt64 = 0
+
+    init(starter: DirectChatStarter? = nil) {
+        self.starter = starter ?? DirectChatStarter()
+    }
 
     func resolve(
         npub: String,
@@ -192,6 +196,7 @@ final class ProfileViewModel {
             accountIdHex: hex,
             memberRef: memberRef,
             existingGroupIdHex: nil,
+            startsSeparateChat: false,
             using: appState,
             onOpen: onOpen
         )
@@ -208,6 +213,7 @@ final class ProfileViewModel {
             accountIdHex: chooser.targetAccountIdHex,
             memberRef: chooser.memberRef,
             existingGroupIdHex: choice.groupIdHex,
+            startsSeparateChat: false,
             using: appState,
             onOpen: onOpen
         )
@@ -236,7 +242,7 @@ final class ProfileViewModel {
             accountIdHex: prompt.accountIdHex,
             memberRef: prompt.memberRef,
             existingGroupIdHex: prompt.existingGroupIdHex,
-                startsSeparateChat: prompt.startsSeparateChat,
+            startsSeparateChat: prompt.startsSeparateChat,
             using: appState,
             onOpen: onOpen
         )
@@ -246,7 +252,7 @@ final class ProfileViewModel {
         accountIdHex: String,
         memberRef: String,
         existingGroupIdHex: String?,
-        startsSeparateChat: Bool = false,
+        startsSeparateChat: Bool,
         using appState: AppState,
         onOpen: (String) -> Void
     ) async {
