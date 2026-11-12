@@ -1193,6 +1193,18 @@ nonisolated final class MarmotClient: Sendable {
         await marmot.relayHealth()
     }
 
+    /// Per-relay connection state for the account. Reads never dial; cancel the
+    /// subscription when its screen closes (that does not disconnect relays).
+    func subscribeRelayLiveness(accountRef: String) async throws -> RelayLivenessSubscription {
+        try await marmot.subscribeRelayLiveness(accountRef: accountRef)
+    }
+
+    /// Dials one relay the account has configured, keeping its roles, and
+    /// returns its next observed state. Any other URL fails as `Runtime`.
+    func reconnectRelay(accountRef: String, url: String) async throws -> RelayLivenessFfi {
+        try await marmot.reconnectRelay(accountRef: accountRef, url: url)
+    }
+
     func configureTelemetryRuntime() async throws {
         // MDK replaces this placeholder with its consent-scoped diagnostic ID.
         try await marmot.setRelayTelemetryRuntimeConfig(
