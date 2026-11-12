@@ -3,8 +3,8 @@ import MarmotKit
 
 enum GroupChangeNotice {
     static func toast(for event: MarmotEventFfi) -> Toast? {
-        if case .groupEvent(_, _, _, .queuedIntentRefused(_, let intentKind, let reason)) = event {
-            return refusedIntentToast(intentKind: intentKind, reason: reason)
+        if case .groupEvent(_, _, _, .queuedIntentRefused(_, let intentKind, let reason, let artifact, _)) = event {
+            return refusedIntentToast(intentKind: intentKind, reason: reason, artifact: artifact)
         }
         guard case .groupChangeSuperseded(_, _, _, _, let kind, let outcome, _) = event,
               outcome != "reissued" else { return nil }
@@ -30,8 +30,13 @@ enum GroupChangeNotice {
 
     /// A send that waited for the group to settle and was then dropped unsent:
     /// the settled state refused it and nothing retries it. `reason` is MDK's
-    /// stable tag; any other detail stays out of the toast.
-    static func refusedIntentToast(intentKind: String, reason: String) -> Toast {
+    /// stable tag; any other detail stays out of the toast. `artifact` is set
+    /// only for `event_too_large`.
+    static func refusedIntentToast(
+        intentKind: String,
+        reason: String,
+        artifact: OversizedArtifactFfi? = nil
+    ) -> Toast {
         let title: String
         switch intentKind {
         case "invite":
@@ -55,6 +60,17 @@ enum GroupChangeNotice {
             message = L10n.string("You're no longer an admin of this group.")
         case "not_a_member":
             message = L10n.string("You're no longer a member of this group.")
+        case "event_too_large":
+            // A queued change's own artifact is a commit or a Welcome; any
+            // other value still went to this group's relays.
+            switch artifact {
+            case .welcome:
+                message = UserFacingError.eventTooLargeMessage(.welcome)
+            case .applicationMessage:
+                message = UserFacingError.eventTooLargeMessage(.applicationMessage)
+            case .commit, .other, nil:
+                message = UserFacingError.eventTooLargeMessage(.commit)
+            }
         default:
             message = L10n.string("The group changed while this was waiting to send. Check the chat, then try again.")
         }
@@ -70,7 +86,7 @@ struct RefusedIntentAnnouncements {
 
     /// Whether `event` is a refusal not announced before; records it if so.
     mutating func admit(_ event: MarmotEventFfi) -> Bool {
-        guard case .groupEvent(_, _, _, .queuedIntentRefused(let intentIdHex, _, _)) = event else { return true }
+        guard case .groupEvent(_, _, _, .queuedIntentRefused(let intentIdHex, _, _, _, _)) = event else { return true }
         guard !seen.contains(intentIdHex) else { return false }
         seen.append(intentIdHex)
         if seen.count > capacity { seen.removeFirst(seen.count - capacity) }

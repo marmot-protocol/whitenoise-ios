@@ -136,14 +136,16 @@ Install a formal release or a dated nightly using its version:
 ./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-The app pins the formal MarmotKit 0.15.0 release. Nightlies are for testing only
+The app pins the formal MarmotKit 0.16.0 release. Nightlies are for testing only
 and are deleted after 30 days; pin a formal release before shipping. For local
 reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
-Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten
-adapter using the released UniFFI native future cancellation API; preserve it on
-binding refresh and run its native cancellation test. Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+Keep the XCFramework ignored. Since 0.16.0 the generated Swift ships
+`nextCancellable()` for the five snapshot subscriptions; never add host-side
+copies, which Swift rejects as duplicates. On each binding refresh run the native
+cancellation tests (`CancellableSubscriptionAdapterTests` and
+`RuntimeOwnershipTests`). Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
 
 Every `Marmot` construction, including the NSE and tests, passes
 `marmotDeploymentWhiteNoise()`; its keychain service is the one existing installs

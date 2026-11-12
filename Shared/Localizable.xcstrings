@@ -80767,6 +80767,126 @@
         }
       }
     },
+    "Rewind restore failed" : {
+      "comment" : "Reason for quarantine: a read of the group's earlier state could not restore its current state.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederherstellung nach Zurückspulen fehlgeschlagen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falló la restauración tras el rebobinado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échec de la restauration après retour en arrière"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristino dopo il riavvolgimento non riuscito"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falha ao restaurar após retroceder"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось восстановить состояние после отката"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geri sarma sonrası geri yükleme başarısız oldu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回退后恢复失败"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回溯後還原失敗"
+          }
+        }
+      }
+    },
+    "Reading this group's earlier state left it unable to return to its current state. Restart the app to restore it; retrying here can't clear it." : {
+      "comment" : "Guidance for a quarantined group whose rewind restore failed; retry is not offered.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Lesen eines früheren Zustands dieser Gruppe konnte sie nicht in ihren aktuellen Zustand zurückkehren. Starte die App neu, um ihn wiederherzustellen; ein erneuter Versuch hier kann das nicht beheben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al leer un estado anterior de este grupo, no pudo volver a su estado actual. Reinicia la app para restaurarlo; reintentar aquí no lo soluciona."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La lecture d’un état antérieur de ce groupe l’a empêché de revenir à son état actuel. Redémarrez l’application pour le restaurer. Réessayer ici ne peut pas résoudre le problème."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La lettura di uno stato precedente di questo gruppo gli ha impedito di tornare allo stato attuale. Riavvia l’app per ripristinarlo; riprovare qui non può risolverlo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A leitura de um estado anterior deste grupo impediu que ele voltasse ao estado atual. Reinicie o app para restaurá-lo; tentar novamente aqui não resolve."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтение более раннего состояния этой группы не позволило ей вернуться к текущему состоянию. Перезапустите приложение, чтобы восстановить его; повторная попытка здесь не поможет."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu grubun önceki durumunun okunması, grubun mevcut durumuna dönmesini engelledi. Geri yüklemek için uygulamayı yeniden başlatın; burada yeniden denemek bunu düzeltemez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读取此群组的较早状态后，它无法回到当前状态。请重新启动应用以恢复；在此重试无法解决。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "讀取此群組的較早狀態後，它無法回到目前狀態。請重新啟動應用程式以還原；在此重試無法解決。"
+          }
+        }
+      }
+    },
     "Pending replacement on this device" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -143421,62 +143541,62 @@
         }
       }
     },
-    "This chat's relays refused the invitation because it's too large. Try inviting fewer people at once." : {
-      "comment" : "Error when relays rejected an oversized invitation.",
+    "The invitation is too large for the relays of someone you're inviting. Try inviting fewer people at once." : {
+      "comment" : "Error when an invitee's inbox relays would refuse an oversized invitation.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Relays dieses Chats haben die Einladung abgelehnt, weil sie zu groß ist. Lade weniger Personen auf einmal ein."
+            "value" : "Die Einladung ist zu groß für die Relays einer Person, die du einlädst. Lade weniger Personen auf einmal ein."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los relés de este chat rechazaron la invitación porque es demasiado grande. Invita a menos personas a la vez."
+            "value" : "La invitación es demasiado grande para los relés de alguien a quien invitas. Invita a menos personas a la vez."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les relais de cette discussion ont refusé l’invitation, car elle est trop volumineuse. Invitez moins de personnes à la fois."
+            "value" : "L’invitation est trop volumineuse pour les relais d’une personne que vous invitez. Invitez moins de personnes à la fois."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I relay di questa chat hanno rifiutato l’invito perché è troppo grande. Invita meno persone alla volta."
+            "value" : "L’invito è troppo grande per i relay di una persona che stai invitando. Invita meno persone alla volta."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Os relays desta conversa recusaram o convite porque ele é grande demais. Convide menos pessoas de cada vez."
+            "value" : "O convite é grande demais para os relays de alguém que você está convidando. Convide menos pessoas de cada vez."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Релеи этого чата отклонили приглашение, потому что оно слишком большое. Пригласите меньше людей за раз."
+            "value" : "Приглашение слишком большое для релеев одного из приглашаемых. Пригласите меньше людей за раз."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu sohbetin röleleri daveti çok büyük olduğu için reddetti. Aynı anda daha az kişi davet edin."
+            "value" : "Davet, davet ettiğiniz birinin röleleri için çok büyük. Aynı anda daha az kişi davet edin."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此聊天的中继因邀请过大而拒绝了它。请一次邀请更少的人。"
+            "value" : "邀请过大，某位受邀者的中继无法接收。请一次邀请更少的人。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此聊天的中繼因邀請過大而拒絕了它。請一次邀請更少的人。"
+            "value" : "邀請過大，某位受邀者的中繼無法接收。請一次邀請更少的人。"
           }
         }
       }
@@ -143541,62 +143661,62 @@
         }
       }
     },
-    "This chat's relays refused this update because it's too large." : {
-      "comment" : "Error when relays rejected some other oversized event.",
+    "Your relays refused this update because it's too large." : {
+      "comment" : "Error when the account's relays refused an oversized profile, list, sticker or key package update.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Relays dieses Chats haben diese Aktualisierung abgelehnt, weil sie zu groß ist."
+            "value" : "Deine Relays haben diese Aktualisierung abgelehnt, weil sie zu groß ist."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los relés de este chat rechazaron esta actualización porque es demasiado grande."
+            "value" : "Tus relés rechazaron esta actualización porque es demasiado grande."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les relais de cette discussion ont refusé cette mise à jour, car elle est trop volumineuse."
+            "value" : "Vos relais ont refusé cette mise à jour, car elle est trop volumineuse."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I relay di questa chat hanno rifiutato questo aggiornamento perché è troppo grande."
+            "value" : "I tuoi relay hanno rifiutato questo aggiornamento perché è troppo grande."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Os relays desta conversa recusaram esta atualização porque ela é grande demais."
+            "value" : "Seus relays recusaram esta atualização porque ela é grande demais."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Релеи этого чата отклонили это обновление, потому что оно слишком большое."
+            "value" : "Ваши релеи отклонили это обновление, потому что оно слишком большое."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu sohbetin röleleri bu güncellemeyi çok büyük olduğu için reddetti."
+            "value" : "Rölelerin bu güncellemeyi çok büyük olduğu için reddetti."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此聊天的中继因更新过大而拒绝了它。"
+            "value" : "你的中继因更新过大而拒绝了它。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此聊天的中繼因更新過大而拒絕了它。"
+            "value" : "你的中繼因更新過大而拒絕了它。"
           }
         }
       }
