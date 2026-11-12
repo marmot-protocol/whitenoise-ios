@@ -6,6 +6,7 @@ extension View {
         _ failure: Binding<Failure?>,
         title: String,
         retryEnabled: Bool = true,
+        offersRetry: @escaping (Failure) -> Bool = { _ in true },
         dismissTitle: @escaping (Failure) -> String = { _ in L10n.string("Close") },
         message: @escaping (Failure) -> String,
         retry: @escaping (Failure) -> Void
@@ -14,8 +15,10 @@ extension View {
             get: { failure.wrappedValue != nil },
             set: { if !$0 { failure.wrappedValue = nil } }
         ), presenting: failure.wrappedValue) { presented in
-            Button("Retry") { retry(presented) }
-                .disabled(!retryEnabled)
+            if offersRetry(presented) {
+                Button("Retry") { retry(presented) }
+                    .disabled(!retryEnabled)
+            }
             Button(dismissTitle(presented), role: .cancel) {}
         } message: { presented in
             Text(message(presented))

@@ -4,6 +4,49 @@ import Testing
 
 @MainActor
 struct GroupChangeNoticeTests {
+    private func quarantine(
+        _ reason: AppGroupHydrationQuarantineReasonFfi,
+        account: String = "account",
+        group: String = "group"
+    ) -> MarmotEventFfi {
+        .groupEvent(accountIdHex: account, accountLabel: "private profile", groupIdHex: group,
+                    event: .groupHydrationQuarantined(reason: reason))
+    }
+
+    @Test func onlyAFailedRewindRestoreTellsTheUserToRestart() {
+        let restart = GroupChangeNotice.toast(for: quarantine(.rewindRestoreFailed))
+        #expect(restart?.style == .warning)
+        #expect(restart?.message?.isEmpty == false)
+        for reason in [AppGroupHydrationQuarantineReasonFfi.openMlsLoadFailed, .openMlsGroupMissing,
+                       .memberValidationFailed, .groupRecordLoadFailed, .pendingCommitRecoveryFailed] {
+            #expect(GroupChangeNotice.toast(for: quarantine(reason)) == nil)
+        }
+    }
+
+    @Test func onlyRewindRestoreRowsFromTheQuarantineListBecomeNotices() {
+        let alice = accountSummary("Alice", byte: "aa")
+        let events = GroupChangeNotice.rewindRestoreEvents(account: alice, quarantined: [
+            AppQuarantinedGroupFfi(groupIdHex: "stuck", reason: .rewindRestoreFailed),
+            AppQuarantinedGroupFfi(groupIdHex: "other", reason: .openMlsLoadFailed),
+        ])
+        #expect(events == [.groupEvent(
+            accountIdHex: alice.accountIdHex, accountLabel: alice.label, groupIdHex: "stuck",
+            event: .groupHydrationQuarantined(reason: .rewindRestoreFailed)
+        )])
+    }
+
+    @Test func eachAccountsFailedRewindRestoreOfAGroupIsAnnouncedOnce() {
+        var announcements = RefusedIntentAnnouncements()
+        let admitted = [
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "alice", group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "alice", group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "alice", group: "b")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "bob", group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "bob", group: "a")),
+        ]
+        #expect(admitted == [true, false, true, true, false])
+    }
+
     private func event(kind: String = "group_profile", outcome: String) -> MarmotEventFfi {
         .groupChangeSuperseded(accountIdHex: "account", accountLabel: "private profile",
                                groupIdHex: "group", commitIdHex: "commit", kind: kind,

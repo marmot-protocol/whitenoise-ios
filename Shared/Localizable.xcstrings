@@ -151215,6 +151215,126 @@
           }
         }
       }
+    },
+    "Restart White Noise" : {
+      "comment" : "Toast title when a chat is stuck on an earlier state until the app restarts.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise neu starten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reinicia White Noise"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redémarrez White Noise"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riavvia White Noise"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reinicie o White Noise"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перезапустите White Noise"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise'u yeniden başlatın"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请重新启动 White Noise"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請重新啟動 White Noise"
+          }
+        }
+      }
+    },
+    "A chat couldn't return to its latest state. Restart the app to restore it." : {
+      "comment" : "Toast message when MDK reports a failed rewind restore; retrying in the app can't fix it.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Chat konnte nicht zu seinem aktuellen Stand zurückkehren. Starte die App neu, um ihn wiederherzustellen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un chat no pudo volver a su estado más reciente. Reinicia la app para restaurarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une discussion n’a pas pu revenir à son état le plus récent. Redémarrez l’application pour la restaurer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una chat non è riuscita a tornare al suo stato più recente. Riavvia l’app per ripristinarla."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uma conversa não conseguiu voltar ao estado mais recente. Reinicie o app para restaurá-la."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось вернуть чат к последнему состоянию. Перезапустите приложение, чтобы восстановить его."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir sohbet en son durumuna dönemedi. Geri yüklemek için uygulamayı yeniden başlatın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某个聊天无法回到最新状态。请重新启动应用以恢复。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某個聊天無法回到最新狀態。請重新啟動應用程式以還原。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

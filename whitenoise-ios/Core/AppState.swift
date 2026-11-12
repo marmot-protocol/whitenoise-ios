@@ -469,8 +469,19 @@ final class AppState {
 
     func observeRuntimeEvents() async {
         guard let generation = runtimeEventsGeneration, let client else { return }
-        let subscription = client.subscribeEvents()
-        for await event in SubscriptionDriver.events(subscription) {
+        let events = SubscriptionDriver.events(client.subscribeEvents())
+        // A rewind restore can fail while accounts open, before this subscription
+        // exists, and events don't replay; MDK's quarantine list still has it.
+        // Read it in this task (the stream buffers meanwhile), so the reads stop
+        // with the runtime instead of overlapping its storage closure.
+        for account in accounts where !account.signedOut {
+            guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
+            guard let groups = try? await client.quarantinedGroups(accountRef: account.accountIdHex) else { continue }
+            for event in GroupChangeNotice.rewindRestoreEvents(account: account, quarantined: groups) {
+                handleRuntimeEvent(event, generation: generation)
+            }
+        }
+        for await event in events {
             guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
             handleRuntimeEvent(event, generation: generation)
         }
@@ -534,7 +545,8 @@ final class AppState {
         switch event {
         case .groupChangeSuperseded(let accountID, _, _, _, _, _, _):
             noticeAccountID = accountID
-        case .groupEvent(let accountID, _, _, .queuedIntentRefused):
+        case .groupEvent(let accountID, _, _, .queuedIntentRefused),
+             .groupEvent(let accountID, _, _, .groupHydrationQuarantined(.rewindRestoreFailed)):
             noticeAccountID = accountID
         default:
             return

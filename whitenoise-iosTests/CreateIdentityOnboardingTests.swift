@@ -7,6 +7,16 @@ import UIKit
 
 @MainActor
 struct CreateIdentityOnboardingTests {
+    @Test func aSignUpPublishTooLargeForTheRelaysSaysSoAndOffersNoRetry() {
+        let tooLarge = CreateIdentityViewModel.Failure.submitting(MarmotKitError.EventTooLarge(artifact: .other, sizeClass: .over4Mib), phase: .finishingSetup)
+        #expect(tooLarge == .tooLarge)
+        #expect(!tooLarge.offersRetry)
+        #expect(tooLarge.message == UserFacingError.message(for: MarmotKitError.EventTooLarge(artifact: .other, sizeClass: .over4Mib)))
+        let offline = CreateIdentityViewModel.Failure.submitting(URLError(.timedOut), phase: .finishingSetup)
+        #expect(offline == .setup)
+        #expect(offline.offersRetry)
+    }
+
     @Test func reopeningSignUpDoesNotReplayRetainedFailure() {
         var presentation = SignUpFailurePresentation(retaining: .profile)
         #expect(presentation.takeNewFailure(.profile) == nil)

@@ -1812,6 +1812,21 @@ struct AppStateBootstrapTests {
         #expect(appState.activeToast?.style == .warning)
         appState.dismissToast()
 
+        let rewind = MarmotEventFfi.groupEvent(
+            accountIdHex: account.accountIdHex, accountLabel: account.label, groupIdHex: "group",
+            event: .groupHydrationQuarantined(reason: .rewindRestoreFailed)
+        )
+        appState.handleRuntimeEvent(rewind, generation: generation - 1)
+        #expect(appState.activeToast == nil)
+        appState.handleRuntimeEvent(.groupEvent(
+            accountIdHex: "unavailable-account", accountLabel: "private", groupIdHex: "group",
+            event: .groupHydrationQuarantined(reason: .rewindRestoreFailed)
+        ), generation: generation)
+        #expect(appState.activeToast == nil)
+        appState.handleRuntimeEvent(rewind, generation: generation)
+        #expect(appState.activeToast?.style == .warning)
+        appState.dismissToast()
+
         await appState.startRuntimeSuspension().value
         #expect(appState.runtimeEventsGeneration == nil)
         appState.handleRuntimeEvent(event, generation: generation)

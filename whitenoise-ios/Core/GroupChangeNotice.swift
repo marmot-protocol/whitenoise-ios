@@ -6,6 +6,15 @@ enum GroupChangeNotice {
         if case .groupEvent(_, _, _, .queuedIntentRefused(_, let intentKind, let reason, let artifact, _)) = event {
             return refusedIntentToast(intentKind: intentKind, reason: reason, artifact: artifact)
         }
+        // Retry and rejoin can't clear this; MDK restores the live state at
+        // the next account open, and Quarantined Groups is Developer Tools only.
+        if case .groupEvent(_, _, _, .groupHydrationQuarantined(.rewindRestoreFailed)) = event {
+            return .warning(
+                L10n.string("Restart White Noise"),
+                message: L10n.string("A chat couldn't return to its latest state. Restart the app to restore it."),
+                duration: 8
+            )
+        }
         guard case .groupChangeSuperseded(_, _, _, _, let kind, let outcome, _) = event,
               outcome != "reissued" else { return nil }
 
@@ -26,6 +35,19 @@ enum GroupChangeNotice {
             }
         }
         return .warning(L10n.string("Review group changes"), message: message, duration: 6)
+    }
+
+    /// The quarantine events for `account`'s groups whose rewind restore
+    /// failed, so failures from before the event subscription get the same
+    /// notice and dedupe as live ones.
+    static func rewindRestoreEvents(
+        account: AccountSummaryFfi,
+        quarantined: [AppQuarantinedGroupFfi]
+    ) -> [MarmotEventFfi] {
+        quarantined.filter { $0.reason == .rewindRestoreFailed }.map {
+            .groupEvent(accountIdHex: account.accountIdHex, accountLabel: account.label, groupIdHex: $0.groupIdHex,
+                        event: .groupHydrationQuarantined(reason: .rewindRestoreFailed))
+        }
     }
 
     /// A send that waited for the group to settle and was then dropped unsent:
@@ -79,16 +101,26 @@ enum GroupChangeNotice {
 }
 
 /// MDK may deliver the same refusal more than once; announce each dropped
-/// send once. Bounded, so a long session cannot grow it without limit.
+/// send once, and each account's failed rewind restore of a group once per
+/// session (quarantine is per account's local state, and accounts can share a
+/// group). Bounded, so a long session cannot grow it without limit.
 struct RefusedIntentAnnouncements {
     private var seen: [String] = []
     private let capacity = 64
 
-    /// Whether `event` is a refusal not announced before; records it if so.
+    /// Whether `event` is a notice not announced before; records it if so.
     mutating func admit(_ event: MarmotEventFfi) -> Bool {
-        guard case .groupEvent(_, _, _, .queuedIntentRefused(let intentIdHex, _, _, _, _)) = event else { return true }
-        guard !seen.contains(intentIdHex) else { return false }
-        seen.append(intentIdHex)
+        let key: String
+        switch event {
+        case .groupEvent(_, _, _, .queuedIntentRefused(let intentIdHex, _, _, _, _)):
+            key = "intent:" + intentIdHex
+        case .groupEvent(let accountIdHex, _, let groupIdHex, .groupHydrationQuarantined(.rewindRestoreFailed)):
+            key = "rewind:" + accountIdHex + ":" + groupIdHex
+        default:
+            return true
+        }
+        guard !seen.contains(key) else { return false }
+        seen.append(key)
         if seen.count > capacity { seen.removeFirst(seen.count - capacity) }
         return true
     }
