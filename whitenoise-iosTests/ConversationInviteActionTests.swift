@@ -196,11 +196,13 @@ struct ConversationInviteActionTests {
     /// group, or fails when the test gives none.
     private func groupCalls(
         accept: @escaping @MainActor (String, String) async throws -> AppGroupRecordFfi,
-        refreshed: (@MainActor () -> AppGroupRecordFfi)? = nil
+        refreshed: (@MainActor () -> AppGroupRecordFfi)? = nil,
+        snapshotArguments: (@MainActor (String, String) -> Void)? = nil
     ) -> ConversationGroupCalls {
         ConversationGroupCalls(
             acceptInvite: { _, accountRef, groupIdHex in try await accept(accountRef, groupIdHex) },
-            conversationSnapshot: { _, _, _ in
+            conversationSnapshot: { _, accountRef, groupIdHex in
+                snapshotArguments?(accountRef, groupIdHex)
                 guard let refreshed else { throw CancellationError() }
                 return GroupConversationSnapshotFfi(
                     details: GroupDetailsFfi(group: refreshed(), members: []),
@@ -303,6 +305,7 @@ struct ConversationInviteActionTests {
             archived: true,
             selfMembership: .left
         )
+        var snapshotArguments: (String, String)?
         var attempts = 0
         let viewModel = ConversationViewModel(
             appState: appState,
@@ -312,7 +315,8 @@ struct ConversationInviteActionTests {
                     attempts += 1
                     throw MarmotKitError.GroupInviteNotPending
                 },
-                refreshed: { terminal }
+                refreshed: { terminal },
+                snapshotArguments: { snapshotArguments = ($0, $1) }
             )
         )
 
@@ -320,6 +324,8 @@ struct ConversationInviteActionTests {
 
         #expect(attempts == 1)
         #expect(updated == terminal)
+        #expect(snapshotArguments?.0 == "account-ref")
+        #expect(snapshotArguments?.1 == pending.groupIdHex)
         #expect(!viewModel.hasPendingInvite)
         #expect(viewModel.inviteActionInFlight == nil)
     }

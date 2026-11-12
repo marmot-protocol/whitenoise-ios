@@ -54,16 +54,6 @@ enum AgentStreamWatchAdmission {
     }
 }
 
-enum TimelineTailRefreshTaskLifetime {
-    static func nextGeneration(after generation: UInt64) -> UInt64 {
-        generation &+ 1
-    }
-
-    static func shouldClearStoredTask(currentGeneration: UInt64, completedGeneration: UInt64) -> Bool {
-        currentGeneration == completedGeneration
-    }
-}
-
 enum ConversationRuntimeStartDecision: Equatable {
     case skipForegroundWork
     case loadLocalSnapshot(startLiveWork: Bool)
@@ -270,8 +260,7 @@ final class ConversationViewModel {
     private var timelineTask: Task<Void, Never>?
     private var groupStateTask: Task<Void, Never>?
     private var groupDetailsTask: Task<Void, Never>?
-    private var tailRefreshTask: Task<Void, Never>?
-    private var tailRefreshGeneration: UInt64 = 0
+    private var tailRefreshTask = OwnedTask()
 
     private static let timelinePageLimit: UInt32 = 50
     private static let liveSubscriptionInitialRetryDelayNanoseconds: UInt64 = 500_000_000
@@ -1155,7 +1144,7 @@ final class ConversationViewModel {
         if let windowSubscription { Task { await windowSubscription.cancel() } }
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
-        tailRefreshTask?.cancel()
+        tailRefreshTask.cancel()
         streamWatcher.cancelAll()
         composer.cancelDraftMediaUploads()
     }
@@ -2121,28 +2110,16 @@ final class ConversationViewModel {
     }
 
     private func scheduleTimelineTailRefresh(operation: @escaping TimelineTailRefreshOperation) {
-        cancelTimelineTailRefresh()
-        let generation = tailRefreshGeneration
-        tailRefreshTask = Task { @MainActor [weak self] in
+        let id = UUID()
+        tailRefreshTask.install(id, Task { @MainActor [weak self] in
             guard !Task.isCancelled else { return }
             await operation()
-            guard !Task.isCancelled else { return }
-            self?.clearTimelineTailRefreshTask(generation: generation)
-        }
+            self?.tailRefreshTask.finish(id)
+        })
     }
 
     private func cancelTimelineTailRefresh() {
-        tailRefreshGeneration = TimelineTailRefreshTaskLifetime.nextGeneration(after: tailRefreshGeneration)
-        tailRefreshTask?.cancel()
-        tailRefreshTask = nil
-    }
-
-    private func clearTimelineTailRefreshTask(generation: UInt64) {
-        guard TimelineTailRefreshTaskLifetime.shouldClearStoredTask(
-            currentGeneration: tailRefreshGeneration,
-            completedGeneration: generation
-        ) else { return }
-        tailRefreshTask = nil
+        tailRefreshTask.cancel()
     }
 
     private func timelineTailRefreshRequest() -> TimelineTailRefreshRequest? {
@@ -2185,20 +2162,6 @@ final class ConversationViewModel {
               group.groupIdHex == request.groupIdHex else { return }
         applyTimelinePage(page, placement: .tailRefresh)
     }
-
-#if DEBUG
-    func scheduleTimelineTailRefreshForTesting(operation: @escaping TimelineTailRefreshOperation) {
-        scheduleTimelineTailRefresh(operation: operation)
-    }
-
-    func cancelTimelineTailRefreshForTesting() {
-        cancelTimelineTailRefresh()
-    }
-
-    var hasTimelineTailRefreshTaskForTesting: Bool {
-        tailRefreshTask != nil
-    }
-#endif
 
     func loadOlderTimelinePage() async {
         guard !isLocallyReset, !isAwaitingPageCompletion, hasMoreBefore, !isLoadingOlder, windowSubscription != nil else { return }
