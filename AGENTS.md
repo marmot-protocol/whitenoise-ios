@@ -136,14 +136,16 @@ Install a formal release or a dated nightly using its version:
 ./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-The app pins the formal MarmotKit 0.15.0 release. Nightlies are for testing only
+The app pins the formal MarmotKit 0.16.0 release. Nightlies are for testing only
 and are deleted after 30 days; pin a formal release before shipping. For local
 reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
-Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten
-adapter using the released UniFFI native future cancellation API; preserve it on
-binding refresh and run its native cancellation test. Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+Keep the XCFramework ignored. Since 0.16.0 the generated Swift ships
+`nextCancellable()` for the five snapshot subscriptions; never add host-side
+copies, which Swift rejects as duplicates. On each binding refresh run the native
+cancellation tests (`CancellableSubscriptionAdapterTests` and
+`RuntimeOwnershipTests`). Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
 
 Every `Marmot` construction, including the NSE and tests, passes
 `marmotDeploymentWhiteNoise()`; its keychain service is the one existing installs
@@ -224,6 +226,10 @@ unread/pin updates. Reopen when the account-store epoch changes. Cancel native
 Resolve just-created destinations from the creation cache immediately, then overlay
 the keyed presented row. Unrelated live updates must not discard that keyed read;
 preserve a newer target row and reject account/runtime/handle replacements.
+Start a chat with one person through `startDirectConversation`, which reuses or
+creates the canonical direct chat and is safe to retry; seed the creation cache
+from a `chatListRow` read after it. Only the chooser's explicit Start New
+Conversation creates a separate group, and its retry prompt keeps that intent.
 
 Read group recovery on conversation entry and raw `groupStateUpdated` events;
 the ordinary group-record subscription can deduplicate recovery-only updates.
@@ -358,7 +364,7 @@ Do not add a second storage path for data Marmot already owns.
 - Keep pure formatting/projection helpers in `Shared/` only when the extension also needs them.
 - Use `LocalNotificationProjection` for notification title/body/thread/userInfo decisions.
 - Use `LocalNotificationSuppressionPolicy` for foreground suppression decisions.
-- Analytics export and diagnostic logging are device-wide runtime choices. The consent sheet never appears over Welcome and never gates Sign In or Sign Up; it is prompted once Chats is visible and other sheets have dismissed, on first launch and on existing installations alike. MDK owns the sole consent receipt; never use the legacy prompt-seen flag to suppress acceptance. Preserve existing choices; closing without a usage grant durably declines combined usage/diagnostics consent. Diagnostic-log consent stays independent. Never dismiss a failed save as confirmed. Privacy & Security owns the controls and clearing; Developer Tools only inspects/exports logs.
+- Analytics export and diagnostic logging are device-wide runtime choices. The consent sheet never appears over Welcome and never gates Sign In or Sign Up; it is prompted once Chats is visible and other sheets have dismissed, on first launch and on existing installations alike. MDK owns the sole consent receipt; never use the legacy prompt-seen flag to suppress acceptance. Preserve existing choices; closing without a usage grant durably declines combined usage/diagnostics consent. Diagnostic-log consent stays independent. Never dismiss a failed save as confirmed. Privacy & Security owns the controls, log retention ("Keep Logs For"; a shorter period deletes logs, so confirm it) and clearing; Developer Tools inspects/exports logs and shows the active profile's audit delivery status, offering Resume Delivery only while MDK has paused delivery.
 - A missing consent snapshot must show a retryable load state in Privacy & Security. `ChatsListView` owns the snapshot read and must reload when foreground runtime readiness changes, even if the runtime generation is unchanged: bootstrap's own refresh runs while the phase is still `.bootstrapping`, so it cannot see the runtime. Welcome must not read consent at all — a stuck `onboardingVisible` from a torn-down Welcome sheet would suppress the prompt forever.
 - Audit-log settings hot-swap against the running Marmot runtime; do not restart the runtime for a settings toggle.
 - Erase App Data removes every stored profile through MDK before closing the runtime. Acquire its `.marmot-runtime.lock` lease before removing remaining root contents, and never unlink or replace the lock inode. Preserve an unfinished-erasure marker for retry after interruption.

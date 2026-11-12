@@ -315,7 +315,8 @@ struct ReactionTargetTallyTests {
             ConversationViewModel.ReactionTally(emoji: "👍", count: 1, mine: false)
         ])
         #expect(targetedAfterAdd[otherTarget] == unrelatedTally)
-        #expect(viewModel.forceFullReactionRecomputeForTesting() == targetedAfterAdd)
+        _ = viewModel.timelineStore.recomputeReactions()
+        #expect(viewModel.reactions == targetedAfterAdd)
 
         viewModel.applyTimelineSubscriptionUpdate(.projection(update: projectionUpdate(changes: [
             .upsert(
@@ -330,7 +331,8 @@ struct ReactionTargetTallyTests {
         let targetedAfterRemove = viewModel.reactions
         #expect(targetedAfterRemove[target] == nil)
         #expect(targetedAfterRemove[otherTarget] == unrelatedTally)
-        #expect(viewModel.forceFullReactionRecomputeForTesting() == targetedAfterRemove)
+        _ = viewModel.timelineStore.recomputeReactions()
+        #expect(viewModel.reactions == targetedAfterRemove)
     }
 
     @MainActor

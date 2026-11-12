@@ -216,6 +216,7 @@ final class TimelineStore {
     /// through MDK's durable pending-edit queue.
     @ObservationIgnored private var unsettledClientTokenByMessageId: [String: String] = [:]
     @ObservationIgnored private var groupSystemDisplayCache: [String: GroupSystemDisplayCacheEntry] = [:]
+    @ObservationIgnored private let projectionBuilders: ConversationProjectionBuilders
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
     @ObservationIgnored private var systemTimelineItems: [TimelineItem] = []
     /// Transient QUIC debug rows keyed by timeline id (streaming debug only).
@@ -236,7 +237,7 @@ final class TimelineStore {
     @ObservationIgnored let markdownProjections: ConversationMarkdownProjectionCache
     @ObservationIgnored let relativeTimestampRefresh = RelativeTimestampRefreshScheduler()
     @ObservationIgnored let agentEventProjections: ConversationAgentEventProjectionCache
-    @ObservationIgnored let mediaProjections = ConversationMediaProjectionCache()
+    @ObservationIgnored let mediaProjections: ConversationMediaProjectionCache
     private struct CustomEmojiCacheEntry {
         let candidates: [CustomEmojiShortcode: MessageMediaAttachment]
         let resolution: CustomEmojiRowResolution
@@ -265,8 +266,10 @@ final class TimelineStore {
     ) {
         self.appState = appState
         self.groupIdHex = groupIdHex
+        self.projectionBuilders = projectionBuilders
         markdownProjections = ConversationMarkdownProjectionCache(builders: projectionBuilders)
         agentEventProjections = ConversationAgentEventProjectionCache(builders: projectionBuilders)
+        mediaProjections = ConversationMediaProjectionCache(builders: projectionBuilders)
         self.hiddenMessageIds = Set(hiddenMessageIds.compactMap { Hex.normalized32Bytes($0) })
         relativeTimestampRefresh.relativeUnixSeconds = { [markdownProjections] rowId in
             markdownProjections.relativeTimestampSeconds(forRowId: rowId)
@@ -302,13 +305,8 @@ final class TimelineStore {
     }
 
 #if DEBUG
-    var groupSystemProjectionBuildCountForTesting: Int { groupSystemProjectionBuildCount }
-    var mediaItemProjectionBuildCountForTesting: Int { mediaProjections.buildCountForTesting }
-    var mediaReferenceCountForTesting: Int { mediaProjections.referenceCountForTesting }
-    var streamDebugTimelineItemCountForTesting: Int { streamDebugTimelineItems.count }
     private(set) var timelineRebuildCountForTesting = 0
     private(set) var reactionTargetCollectionCountForTesting = 0
-    private var groupSystemProjectionBuildCount = 0
 #endif
 
     private struct MessageTimelineSignature: Equatable {
@@ -746,14 +744,11 @@ final class TimelineStore {
         if let cached = groupSystemDisplayCache[record.messageIdHex], cached.key == key {
             return cached.text
         }
-#if DEBUG
-        groupSystemProjectionBuildCount += 1
-#endif
-        let text = GroupSystemEventPresentation.displayText(
-            for: record,
-            groupSystem: groupSystemByMessageId[record.messageIdHex],
-            currentAccountIdHex: myAccountId,
-            displayName: { self.resolvedAccountDisplayName($0) }
+        let text = projectionBuilders.groupSystemText(
+            record,
+            groupSystemByMessageId[record.messageIdHex],
+            myAccountId,
+            { self.resolvedAccountDisplayName($0) }
         )
         groupSystemDisplayCache[record.messageIdHex] = GroupSystemDisplayCacheEntry(key: key, text: text)
         return text
@@ -1477,7 +1472,7 @@ final class TimelineStore {
 
     // MARK: - Reactions
 
-    /// All aggregated reaction tallies (full dict) — for test hooks.
+    /// All aggregated reaction tallies, keyed by target.
     var reactions: [String: [ConversationViewModel.ReactionTally]] { reactionProjections.allTallies }
 
     private func collectReactionTargets(affectedBy record: AppMessageRecordFfi, into targets: inout Set<String>) {
@@ -1501,14 +1496,6 @@ final class TimelineStore {
     func recomputeReactions(for targets: Set<String>) -> Bool {
         reactionProjections.recompute(targets: targets, deletedMessageIds: deletedProjections.deletedMessageIds, me: myAccountId ?? "")
     }
-
-#if DEBUG
-    @discardableResult
-    func forceFullReactionRecomputeForTesting() -> [String: [ConversationViewModel.ReactionTally]] {
-        _ = recomputeReactions()
-        return reactions
-    }
-#endif
 
     func beginMessageVisibility(rowID: String, operation: HostPerformanceOperationFfi) {
         guard let appState, appState.canUseRuntimeForForegroundWork,

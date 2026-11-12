@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 import OSLog
@@ -768,26 +767,4 @@ final class ProfileStore {
             return
         }
     }
-
-    #if DEBUG
-    func runProfileFetchQueueForTesting() async {
-        let taskID = UUID()
-        profileFetchQueueTaskID = taskID
-        await runProfileFetchQueue(taskID: taskID)
-    }
-
-    func finishProfileProjectionLoadQueueForTesting(taskID: UUID) {
-        finishProfileProjectionLoadQueue(taskID: taskID)
-    }
-
-    func finishProfileFetchQueueForTesting(taskID: UUID) {
-        finishProfileFetchQueue(taskID: taskID)
-    }
-
-    /// Test hook for the post-load version-map eviction (#353). Mirrors the call
-    /// the guarded load sites make after applying a projection.
-    func pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex id: String, matching version: Int) {
-        pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: id, matching: version)
-    }
-    #endif
 }

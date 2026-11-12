@@ -440,7 +440,6 @@ final class ConversationViewModel {
     /// `init` so `timelineStore.streamWatcher` is wired before the first page apply.
     @ObservationIgnored private let streamWatcher: StreamWatcher
 #if DEBUG
-    var mediaItemProjectionBuildCountForTesting: Int { timelineStore.mediaProjections.buildCountForTesting }
     @ObservationIgnored var acceptGroupInviteForTesting: (@MainActor (String, String) async throws -> AppGroupRecordFfi)?
     @ObservationIgnored var refreshInviteStateForTesting: (@MainActor () async -> Bool)?
 #endif
@@ -912,13 +911,6 @@ final class ConversationViewModel {
 
     /// All aggregated reaction tallies (full dict). Used by reaction tests.
     var reactions: [String: [ReactionTally]] { timelineStore.reactions }
-
-#if DEBUG
-    @discardableResult
-    func forceFullReactionRecomputeForTesting() -> [String: [ReactionTally]] {
-        timelineStore.forceFullReactionRecomputeForTesting()
-    }
-#endif
 
     func markdownDisplayBlocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
         timelineStore.markdownDisplayBlocks(for: item)
@@ -2510,10 +2502,6 @@ final class ConversationViewModel {
     }
 
 #if DEBUG
-    var groupSystemProjectionBuildCountForTesting: Int {
-        timelineStore.groupSystemProjectionBuildCountForTesting
-    }
-
     var reactionTargetCollectionCountForTesting: Int {
         timelineStore.reactionTargetCollectionCountForTesting
     }
@@ -2529,10 +2517,6 @@ final class ConversationViewModel {
 
     func pendingMediaForTesting(rowId: String) -> [MessageMediaAttachment]? {
         timelineStore.mediaProjections.pending(forRowId: rowId)
-    }
-
-    var mediaReferenceCountForTesting: Int {
-        timelineStore.mediaProjections.referenceCountForTesting
     }
 
     var timelineRebuildCountForTesting: Int {
@@ -2553,9 +2537,9 @@ final class ConversationViewModel {
             return false
         }
 
-        // A media optimistic record is built with `tags: []` and
-        // `plaintext: caption`, so it is otherwise indistinguishable from a
-        // plain text send carrying the same text. Without a media
+        // A media optimistic record has no `imeta` tags yet (only the `e` + `q`
+        // pair when it is a reply, as for text) and `plaintext: caption`, so it
+        // is otherwise indistinguishable from a text send carrying the same text. Without a media
         // discriminator, the incoming confirmation for one can reconcile away
         // the other's pending bubble (#262). Treat the pending row as media
         // when it has staged local attachments or its own record already

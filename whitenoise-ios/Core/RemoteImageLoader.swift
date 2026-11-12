@@ -366,20 +366,6 @@ actor RemoteAvatarDiskCache {
             if totalBytes <= maximumBytes { break }
         }
     }
-
-    #if DEBUG
-    func removeAllForTesting() {
-        try? FileManager.default.removeItem(at: directoryURL)
-    }
-
-    func cachedFileExistsForTesting(for url: URL) -> Bool {
-        FileManager.default.fileExists(atPath: cachedFileURL(forKey: url.absoluteString).path)
-    }
-
-    func cachedFileExistsForTesting(forKey key: String) -> Bool {
-        FileManager.default.fileExists(atPath: cachedFileURL(forKey: key).path)
-    }
-    #endif
 }
 
 @MainActor

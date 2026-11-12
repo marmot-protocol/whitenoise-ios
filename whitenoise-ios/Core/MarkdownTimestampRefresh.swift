@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import Observation
 import UIKit
@@ -136,9 +135,16 @@ final class RelativeTimestampRefreshScheduler {
     var relativeUnixSeconds: (String) -> [Int64] = { _ in [] }
     /// Rebuilds the given rows' display projections.
     var refreshRows: (Set<String>) -> Void = { _ in }
-    var now: () -> Date = Date.init
+    private let sleep: @MainActor (Duration) async throws -> Void
+    private let now: @MainActor () -> Date
 
-    var isScheduledForTesting: Bool { task != nil }
+    init(
+        sleep: @escaping @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0, tolerance: .seconds(1)) },
+        now: @escaping @MainActor () -> Date = Date.init
+    ) {
+        self.sleep = sleep
+        self.now = now
+    }
 
     func setRowVisible(_ rowId: String, isVisible: Bool) {
         if isVisible {
@@ -182,8 +188,9 @@ final class RelativeTimestampRefreshScheduler {
         task?.cancel()
         scheduledDate = next
         let delay = max(0, next.timeIntervalSince(now()))
+        let sleep = self.sleep
         task = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(delay), tolerance: .seconds(1))
+            try? await sleep(.seconds(delay))
             guard !Task.isCancelled else { return }
             self?.fire()
         }

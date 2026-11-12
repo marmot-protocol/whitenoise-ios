@@ -1,8 +1,10 @@
+import MarmotKit
 import SwiftUI
 
 struct DiagnosticsAndImprovementsView: View {
     @Environment(AppState.self) private var appState
     @State private var model = PrivacySecuritySettingsViewModel()
+    @State private var retention = AuditLogRetentionModel()
     @State private var hasLoadedLogs = false
     @State private var showSharingDetails = false
     @State private var showSharingDetailsSheet = false
@@ -48,6 +50,7 @@ struct DiagnosticsAndImprovementsView: View {
             }
             if !isPrompt {
                 Section {
+                    retentionRow
                     VStack(alignment: .leading, spacing: 12) {
                         if !hasLoadedLogs || model.filesLoading {
                             ProgressView("Loading…")
@@ -69,6 +72,8 @@ struct DiagnosticsAndImprovementsView: View {
                     .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20))
                 } header: {
                     Text("Stored Diagnostic Logs")
+                } footer: {
+                    Text("Logs older than this are deleted from this device, including ones not uploaded yet.")
                 }
             }
             if let error = appState.diagnosticsConsent.errorMessage ?? model.errorMessage ?? model.auditErrorMessage {
@@ -102,6 +107,24 @@ struct DiagnosticsAndImprovementsView: View {
         ))
         .task(id: appState.runtimeGeneration) { await reload() }
         .productScreen(.diagnostics, section: .diagnostics)
+        .alert(
+            "Delete older logs?",
+            isPresented: Binding(
+                get: { retention.pendingShorterDays != nil },
+                set: { if !$0 { retention.pendingShorterDays = nil } }
+            ),
+            presenting: retention.pendingShorterDays
+        ) { days in
+            Button("Delete Older Logs", role: .destructive) {
+                Task { await retention.confirmShorter(days: days, using: appState) }
+            }
+            Button("Cancel", role: .cancel) { retention.pendingShorterDays = nil }
+        } message: { days in
+            Text(L10n.formatted(
+                "Keeping logs for %@ deletes older logs on this device now, including ones not uploaded yet.",
+                AuditLogRetentionPresentation.title(days: days)
+            ))
+        }
         .alert("Clear diagnostic logs?", isPresented: $model.showDeleteAuditLogsConfirmation) {
             Button("Clear Logs", role: .destructive) { Task { await model.deleteAllAuditLogs(using: appState) } }
             Button("Cancel", role: .cancel) {}
@@ -125,8 +148,30 @@ struct DiagnosticsAndImprovementsView: View {
     private func reload() async {
         await appState.diagnosticsConsent.reload(using: appState)
         if !isPrompt {
+            await retention.load(using: appState)
             await model.reload(using: appState)
             if !Task.isCancelled { hasLoadedLogs = true }
+        }
+    }
+
+    @ViewBuilder
+    private var retentionRow: some View {
+        if let current = retention.retention {
+            if retention.isSaving {
+                LabeledContent("Keep Logs For") { ProgressView() }
+            } else {
+                Picker("Keep Logs For", selection: Binding(
+                    get: { current.maxAgeDays },
+                    set: { days in Task { await retention.choose(days: days, using: appState) } }
+                )) {
+                    ForEach(AuditLogRetentionPresentation.options(including: current.maxAgeDays), id: \.self) { days in
+                        Text(AuditLogRetentionPresentation.title(days: days)).tag(days)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+        } else if retention.loadFailed {
+            Button("Retry Loading Log Retention") { Task { await retention.load(using: appState) } }
         }
     }
 

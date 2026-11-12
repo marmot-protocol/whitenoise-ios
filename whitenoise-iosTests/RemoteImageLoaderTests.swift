@@ -232,8 +232,8 @@ struct RemoteImageLoaderTests {
         await secondCleanup.value
         await #expect(throws: CancellationError.self) { _ = try await request.value }
         #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
-        #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
-        #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: arrivingURL)))
+        #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
+        #expect(await RemoteAvatarDiskCache.shared.data(for: arrivingURL) == nil)
         _ = try await RemoteAvatarImageLoader.image(for: arrivingURL, maxPixelSize: 8, scale: 1, fetch: { _ in data })
     }
 
@@ -267,13 +267,13 @@ struct RemoteImageLoaderTests {
         #expect(!fixture.didTimeOut)
         #expect(connections.withLock { $0 } == 0)
         #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
-        #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
+        #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
         fixture.release()
         _ = try await exited.wait { _ in }
         #expect(slots.inFlight == 0)
         #expect(connections.withLock { $0 } == 0)
         #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
-        #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
+        #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
     }
 
     @Test(.marmotRuntimeConcurrencyLimit)
@@ -308,7 +308,7 @@ struct RemoteImageLoaderTests {
             await #expect(throws: CancellationError.self) { _ = try await load.value }
             #expect(GroupAvatarImageLoader.cachedImage(for: request) == nil)
             let dataKey = GroupAvatarCacheKey.rawData(accountRef: request.accountRef, imageHashHex: request.imageHashHex)
-            #expect(!(await RemoteAvatarDiskCache.groupShared.cachedFileExistsForTesting(forKey: dataKey)))
+            #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: dataKey) == nil)
             GroupAvatarImageLoader.beforeDecodeForTesting = nil
             GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
                                        groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
@@ -351,10 +351,10 @@ struct RemoteImageLoaderTests {
 
         await cache.store(data, for: url, now: writtenAt)
 
-        #expect(await cache.cachedFileExistsForTesting(for: url))
+        #expect(cachedFileCount(in: root) == 1)
         #expect(await cache.data(for: url, now: writtenAt.addingTimeInterval(59)) == data)
         #expect(await cache.data(for: url, now: writtenAt.addingTimeInterval(120)) == nil)
-        #expect(!(await cache.cachedFileExistsForTesting(for: url)))
+        #expect(cachedFileCount(in: root) == 0)
     }
 
     @Test func avatarDiskCacheRejectsOversizedEntries() async throws {
@@ -371,8 +371,9 @@ struct RemoteImageLoaderTests {
 
         await cache.store(Data(repeating: 0x01, count: 5), for: url)
 
+        // Count before reading: a read deletes an oversized file it finds.
+        #expect(cachedFileCount(in: root) == 0)
         #expect(await cache.data(for: url) == nil)
-        #expect(!(await cache.cachedFileExistsForTesting(for: url)))
     }
 
     @Test func avatarDiskCacheSupportsContentAddressedGroupKeys() async throws {
@@ -391,7 +392,7 @@ struct RemoteImageLoaderTests {
 
         await cache.store(data, forKey: key)
 
-        #expect(await cache.cachedFileExistsForTesting(forKey: key))
+        #expect(cachedFileCount(in: root) == 1)
         #expect(await cache.data(forKey: key) == data)
     }
 
@@ -658,4 +659,13 @@ private actor RemoteImageFetchProbe {
     func callCount() -> Int {
         fetchCount
     }
+}
+
+/// Regular files anywhere under a disk cache's `root`, read straight from disk,
+/// so a test sees what was written rather than what the cache answers.
+private func cachedFileCount(in root: URL) -> Int {
+    let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey])
+    return (files?.allObjects as? [URL] ?? []).filter {
+        (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+    }.count
 }

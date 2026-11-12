@@ -550,9 +550,11 @@ struct GroupSystemEventPresentationTests {
 
     @MainActor
     @Test func groupSystemTimelineDisplayTextIsCachedPerProjectionGeneration() throws {
+        let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: testGroup()
+            group: testGroup(),
+            projectionBuilders: counter.builders
         )
         let row = timelineRecord(
             messageIdHex: hex("aa"),
@@ -572,14 +574,14 @@ struct GroupSystemEventPresentationTests {
 
         #expect(viewModel.groupSystemDisplayText(for: record) == "Member added")
         #expect(viewModel.groupSystemDisplayText(for: record) == "Member added")
-        #expect(viewModel.groupSystemProjectionBuildCountForTesting == 1)
+        #expect(counter.groupSystemBuilds == 1)
 
         let projectionGeneration = viewModel.timelineProjectionGeneration
         viewModel.refreshProfileDependentTimelineProjections()
 
         #expect(viewModel.timelineProjectionGeneration == projectionGeneration + 1)
         #expect(viewModel.groupSystemDisplayText(for: record) == "Member added")
-        #expect(viewModel.groupSystemProjectionBuildCountForTesting == 2)
+        #expect(counter.groupSystemBuilds == 2)
     }
 }
 
