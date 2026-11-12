@@ -395,7 +395,7 @@ final class AppState {
         client.recordHostPerformance(operation: .windowInit, durationMs: milliseconds, outcome: .success)
     }
     let notifications: AppNotifications
-    @ObservationIgnored let notificationCoordinator = NotificationCoordinator()
+    @ObservationIgnored let notificationCoordinator: NotificationCoordinator
     let appReviewDemo = AppReviewDemoCoordinator()
     let toastState = ToastState()
     let navigation = NavigationState()
@@ -612,8 +612,10 @@ final class AppState {
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = {
             delay in try await Task.sleep(for: delay)
         },
-        runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground
+        runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
+        notificationCatchUpCalls: NotificationCatchUpCalls = .live
     ) {
+        self.notificationCoordinator = NotificationCoordinator(catchUpCalls: notificationCatchUpCalls)
         self.runtimeLifecycle = RuntimeLifecycle(
             client: client,
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,

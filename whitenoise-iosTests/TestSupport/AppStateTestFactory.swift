@@ -35,7 +35,8 @@ extension AppState {
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = TelemetryBuildConfig.current(),
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory = RuntimeLifecycle.defaultRuntimeClientFactory,
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = { delay in try await Task.sleep(for: delay) },
-        runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground
+        runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
+        notificationCatchUpCalls: NotificationCatchUpCalls = .live
     ) -> AppState {
         let resources = AppStateTestResources()
         let isolatedDefaults = accountDefaults ?? resources.makeDefaults("AppStateTest")
@@ -55,7 +56,8 @@ extension AppState {
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
             runtimeClientFactory: runtimeClientFactory,
             runtimeRetrySleeper: runtimeRetrySleeper,
-            runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy
+            runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy,
+            notificationCatchUpCalls: notificationCatchUpCalls
         )
         objc_setAssociatedObject(state, &AppStateTestResources.key, resources, .OBJC_ASSOCIATION_RETAIN)
         return state
