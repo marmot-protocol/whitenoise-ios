@@ -214,6 +214,36 @@ struct OutgoingSendResponsivenessTests {
         #expect(harness.store.protocolID(forDisplayID: "msg:\(staged.tempId)") == hexId(9))
     }
 
+    @Test func aMediaReplyBubbleShowsItsParentAndOnlyClaimsTheSameParentsRow() async throws {
+        let harness = SendHarness()
+        harness.installWindow([])
+        let parent = hexId(11)
+        let photo = MediaDraftAttachment(fileName: "photo.jpg", mediaType: "image/jpeg", data: Data([1, 2, 3]), dim: nil)
+        let staged = try #require(harness.composer.stage(text: "look", attachments: [photo], replyTargetId: parent))
+
+        #expect(staged.replyTargetId == parent)
+        let bubble = try #require(harness.store.timeline.compactMap { item -> AppMessageRecordFfi? in
+            if case .message(let record, _) = item.kind { return record } else { return nil }
+        }.first)
+        #expect(bubble.tags.map(\.values) == ComposerModel.replyTags(to: parent))
+
+        harness.store.markLocalSendSubmitted(tempId: staged.tempId)
+        var reply = harness.ownRecord(id: hexId(12), text: "look", timelineAt: 60, delivered: false)
+        reply.replyToMessageIdHex = parent
+        reply.clientToken = staged.clientToken
+        harness.installWindow([reply])
+        #expect(harness.store.protocolID(forDisplayID: "msg:\(staged.tempId)") == hexId(12))
+    }
+
+    @Test func replyTagsMatchMDKsEventThenQuotePair() {
+        let parent = hexId(13)
+        #expect(ComposerModel.replyTags(to: nil).isEmpty)
+        #expect(ComposerModel.replyTags(to: parent) == [
+            [MessageSemantics.eventRefTag, parent],
+            [MessageSemantics.quoteRefTag, parent],
+        ])
+    }
+
     @Test func anAttachmentBubbleKeepsItsPickedBytesUntilTheDurableRowArrives() async throws {
         let harness = SendHarness()
         harness.installWindow([])

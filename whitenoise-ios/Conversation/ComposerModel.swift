@@ -241,17 +241,13 @@ final class ComposerModel {
         let clientToken = UUID().uuidString
         let tempId = retryTempId ?? clientToken
         let rowID = "msg:\(tempId)"
-        // A media send carries its caption, never a reply target.
-        let replyTargetId = attachments.isEmpty ? (overrideReplyTargetId ?? replyTargetMessageId()) : nil
+        // Media replies keep their target: the draft carries it and MDK tags the
+        // sent media message, so the bubble shows the reply from the first frame.
+        let replyTargetId = overrideReplyTargetId ?? replyTargetMessageId()
         let now = UInt64(Date().timeIntervalSince1970)
         // A reply is a kind-9 with `e` + `q` tags pointing at the parent; a plain
         // message is a bare kind-9.
-        let optimisticTags: [MessageTagFfi] = replyTargetId.map {
-            [
-                MessageTagFfi(values: [MessageSemantics.eventRefTag, $0]),
-                MessageTagFfi(values: [MessageSemantics.quoteRefTag, $0]),
-            ]
-        } ?? []
+        let optimisticTags = Self.replyTags(to: replyTargetId).map { MessageTagFfi(values: $0) }
         // Staged with no parsed tokens: `displayBlocks` returns nil for an empty
         // document and the bubble renders its plain-text path until the
         // off-MainActor parse upgrades the row (#226 kept the parse off the UI
@@ -554,6 +550,16 @@ final class ComposerModel {
         }.value
     }
 
+    /// The `e` + `q` pair MDK puts on a reply, for the optimistic row and for
+    /// a media upload that sends itself.
+    nonisolated static func replyTags(to targetMessageId: String?) -> [[String]] {
+        guard let targetMessageId else { return [] }
+        return [
+            [MessageSemantics.eventRefTag, targetMessageId],
+            [MessageSemantics.quoteRefTag, targetMessageId],
+        ]
+    }
+
     private func uploadWithClientToken(
         _ attachments: [MediaDraftAttachment],
         client: MarmotClient,
@@ -564,6 +570,9 @@ final class ComposerModel {
         let groupIdHex = groupIdHex
         let caption = staged.text.isEmpty ? nil : staged.text
         let clientToken = staged.clientToken
+        // A draft send takes its reply from the draft; an upload that sends
+        // itself carries it as tags, which MDK keeps since 0.16.0.
+        let messageTags = send ? Self.replyTags(to: staged.replyTargetId) : []
         switch MediaUploadRoute.route(for: attachments) {
         case .bytes:
             return try await client.uploadWithClientToken(
@@ -573,7 +582,8 @@ final class ComposerModel {
                     attachments: attachments.map(\.uploadRequest),
                     caption: caption,
                     send: send,
-                    blossomServer: nil
+                    blossomServer: nil,
+                    messageTags: messageTags
                 ),
                 clientToken: clientToken
             )
@@ -593,7 +603,8 @@ final class ComposerModel {
                         attachments: sources,
                         caption: caption,
                         send: send,
-                        blossomServer: nil
+                        blossomServer: nil,
+                        messageTags: messageTags
                     ),
                     control: control,
                     clientToken: clientToken
