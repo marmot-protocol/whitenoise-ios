@@ -185,7 +185,7 @@ SHARED_WORDS = {
     "Stickers": "es", "stream %@": "es it pt",
     "Streaming…": "de fr it", "System": "de", "Tokens": "es pt", "USD": "de es fr it pt ru tr", "Version": "de fr",
     "Version %lld": "de fr", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt", "Video": "de es it tr",
-    "Videos": "de es", "Votes": "fr", "White Noise Support": "de", "Wi-Fi": "es fr it pt ru tr zh-Hans zh-Hant",
+    "Videos": "de es", "Votes": "fr", "White Noise Support": "de",
     "wss://relay.example.com": "de it pt ru tr zh-Hans zh-Hant",
 }
 # (key, locale) pairs, or (key, "*"); an entry that no longer shows English fails the check.

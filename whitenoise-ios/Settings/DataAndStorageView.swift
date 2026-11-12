@@ -7,6 +7,12 @@ struct DataAndStorageView: View {
     @State private var quality = MediaQualityStore.quality()
     @State private var store = MediaAutoDownloadStore.shared
     @State private var remoteGIFStore = RemoteGIFLoadingStore.shared
+    @AccessibilityFocusState(for: .voiceOver) private var focusedAutoDownload: AutoDownloadFocus?
+
+    private enum AutoDownloadFocus: Hashable {
+        case media(MediaAutoDownloadType)
+        case reset
+    }
 
     var body: some View {
         Form {
@@ -22,23 +28,23 @@ struct DataAndStorageView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .accessibilityFocused($focusedAutoDownload, equals: .media(type))
                 }
-                Button {
-                    store.resetToDefaults()
-                } label: {
-                    Text("Reset Auto-Download Settings")
+                if store.matrix != .defaultMatrix {
+                    Button {
+                        if focusedAutoDownload == .reset {
+                            focusedAutoDownload = .media(.image)
+                        }
+                        store.resetToDefaults()
+                    } label: {
+                        Text("Reset Auto-Download Settings")
+                    }
+                    .accessibilityFocused($focusedAutoDownload, equals: .reset)
                 }
-                .disabled(store.matrix == .defaultMatrix)
             } header: {
                 Text("Auto-Download")
             } footer: {
-                Text("Media that isn't downloaded automatically shows a download button.")
-            }
-
-            Section {
-                NavigationLink("Download Storage") {
-                    AttachmentStorageSettingsView()
-                }
+                Text("Media that doesn’t download automatically can be downloaded by tapping it.")
             }
 
             Section {
@@ -52,19 +58,19 @@ struct DataAndStorageView: View {
             } header: {
                 Text("Remote Media")
             } footer: {
-                Text("When enabled, opening a conversation can tell GIPHY your IP address and which GIF was requested. Otherwise, received GIFs load only when you tap them.")
+                Text("Loading GIFs shares your IP address and the requested GIF with GIPHY. When off, tap a GIF to load it.")
             }
 
             Section {
                 NavigationLink {
                     SentMediaQualityView(quality: $quality)
                 } label: {
-                    LabeledContent("Sent Media Quality", value: qualityTitle(quality))
+                    LabeledContent("Sent Media Quality", value: Self.qualityTitle(quality))
                 }
             } header: {
                 Text("Sent Media")
             } footer: {
-                Text("Choose the quality for photos and videos you send.")
+                Text("Set the quality of photos and voice notes you send.")
             }
         }
         .productScreen(.settings, section: .storage)
@@ -72,29 +78,20 @@ struct DataAndStorageView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// Shares choice labels with the picker; Wi-Fi Only also excludes metered connections.
     static func levelTitle(_ level: MediaAutoDownloadLevel) -> String {
         switch level {
         case .never: return L10n.string("Never")
-        case .wifiOnly: return L10n.string("Wi-Fi")
+        case .wifiOnly: return L10n.string("Wi-Fi Only")
         case .wifiAndCellular: return L10n.string("Wi-Fi and Cellular")
         }
     }
 
-    private func qualityTitle(_ level: MediaQuality) -> String {
+    /// Keeps the summary and picker labels aligned after the store normalizes legacy values.
+    fileprivate static func qualityTitle(_ level: MediaQuality) -> String {
         switch level {
-        case .low: return L10n.string("Low")
         case .standard: return L10n.string("Standard")
         case .high: return L10n.string("High")
-        case .original: return L10n.string("Original")
-        }
-    }
-
-    private func qualitySubtitle(_ level: MediaQuality) -> String {
-        switch level {
-        case .low: return L10n.string("Smallest data use")
-        case .standard: return L10n.string("Balanced quality and data use")
-        case .high: return L10n.string("Sharper photos, more data")
-        case .original: return L10n.string("Full resolution, metadata still removed")
         }
     }
 
@@ -114,60 +111,46 @@ private struct SentMediaQualityView: View {
     var body: some View {
         List {
             Section {
-                ForEach(MediaQuality.allCases, id: \.self) { level in
-                    Button {
-                        quality = level
-                        MediaQualityStore.setQuality(level)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(title(level))
-                                    .foregroundStyle(.primary)
-                                Text(subtitle(level))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if quality == level {
-                                Image(systemName: "checkmark")
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(quality == level ? .isSelected : [])
-                }
+                qualityRow(.standard, subtitle: L10n.string("Smaller files, less data"))
+                qualityRow(.high, subtitle: L10n.string("Higher quality, larger files"))
             } header: {
-                Text("Photos and Videos")
+                Text("Photos and Voice Notes")
             } footer: {
-                Text("Higher quality uses more data. Identifying photo metadata, like location, is always removed before sending.")
+                Text("Identifying photo metadata, including location, is removed at both quality levels. Videos are sent unchanged.")
             }
         }
         .localizedNavigationTitle("Sent Media Quality")
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func title(_ level: MediaQuality) -> String {
-        switch level {
-        case .low: L10n.string("Low")
-        case .standard: L10n.string("Standard")
-        case .high: L10n.string("High")
-        case .original: L10n.string("Original")
+    /// Saves immediately and keeps the picker open so the selected choice confirms the change.
+    private func qualityRow(_ level: MediaQuality, subtitle: String) -> some View {
+        Button {
+            quality = level
+            MediaQualityStore.setQuality(level)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(DataAndStorageView.qualityTitle(level))
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if quality == level {
+                    Image(systemName: "checkmark")
+                        .fontWeight(.semibold)
+                }
+            }
+            .contentShape(.rect)
         }
-    }
-
-    private func subtitle(_ level: MediaQuality) -> String {
-        switch level {
-        case .low: L10n.string("Smallest data use")
-        case .standard: L10n.string("Balanced quality and data use")
-        case .high: L10n.string("Sharper photos, more data")
-        case .original: L10n.string("Full resolution, metadata still removed")
-        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(quality == level ? .isSelected : [])
     }
 }
 
-/// Radio-style level picker for one media type: Never / Wi-Fi /
+/// Radio-style level picker for one media type: Never / Wi-Fi Only /
 /// Wi-Fi and Cellular, checkmark on the current choice.
 private struct AutoDownloadLevelView: View {
     let type: MediaAutoDownloadType
@@ -194,9 +177,24 @@ private struct AutoDownloadLevelView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            } footer: {
+                Text(helperText)
             }
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var helperText: String {
+        switch type {
+        case .image:
+            L10n.string("Choose when photos download automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode.")
+        case .audio:
+            L10n.string("Choose when audio, including voice notes, downloads automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode.")
+        case .video:
+            L10n.string("Choose when videos download automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode.")
+        case .document:
+            L10n.string("Choose when files download automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode.")
+        }
     }
 }
