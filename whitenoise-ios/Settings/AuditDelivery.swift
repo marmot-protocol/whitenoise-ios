@@ -30,30 +30,49 @@ final class AuditDeliveryStatusModel {
     // https://github.com/swiftlang/swift/issues/88036
     nonisolated deinit {}
 
-    /// nil once loaded means MDK reported no status for this profile.
-    private(set) var status: AuditDeliveryStatusV5Ffi?
-    private(set) var hasLoaded = false
+    /// The active profile's rows, built off the main actor; nil until loaded.
+    private(set) var summary: AuditDeliveryPresentation.Summary?
     private(set) var loadFailed = false
     private(set) var isResuming = false
 
     private var ticket = 0
+    private var summaryAccountRef: String?
 
+    func reset() {
+        ticket &+= 1
+        summary = nil
+        summaryAccountRef = nil
+        loadFailed = false
+    }
+
+    /// Another profile's rows never stay up: they clear when the profile
+    /// changes, and a failed read clears them so the error and Retry show.
     func reload(using dataSource: any AuditDeliveryDataSource) async {
         ticket &+= 1
         let current = ticket
         let accountRef = dataSource.activeAccountRef
+        if accountRef != summaryAccountRef {
+            summary = nil
+            summaryAccountRef = accountRef
+        }
         do {
             let all = try await dataSource.auditDeliveryStatus()
             guard current == ticket, dataSource.activeAccountRef == accountRef else { return }
-            status = accountRef.flatMap { ref in
+            let status = accountRef.flatMap { ref in
                 all.first { $0.accountRef.caseInsensitiveCompare(ref) == .orderedSame }
             }
+            let locale = AppLanguage.currentLocale
+            let built = await Task.detached(priority: .utility) {
+                AuditDeliveryPresentation.summary(status, now: Date(), locale: locale)
+            }.value
+            guard current == ticket, dataSource.activeAccountRef == accountRef else { return }
+            summary = built
             loadFailed = false
-            hasLoaded = true
         } catch is CancellationError {
             return
         } catch {
             guard current == ticket else { return }
+            summary = nil
             loadFailed = true
         }
     }
@@ -91,7 +110,10 @@ nonisolated enum AuditDeliveryPresentation {
         now: Date = Date(),
         locale: Locale = AppLanguage.currentLocale
     ) -> Summary {
-        guard let status, status.destinationConfigured else {
+        guard let status else {
+            return Summary(rows: [Row(title: L10n.string("Status"), value: L10n.string("No delivery record yet"))], canResume: false)
+        }
+        guard status.destinationConfigured else {
             return Summary(rows: [Row(title: L10n.string("Status"), value: L10n.string("Not configured"))], canResume: false)
         }
         var rows = [
@@ -197,14 +219,21 @@ final class AuditLogRetentionModel {
     private(set) var isSaving = false
     /// A shorter period waiting for the user to confirm deleting older logs.
     var pendingShorterDays: UInt32?
+    /// Bumped by every save, so a read that started before it can't put the
+    /// old period back on screen.
+    private var saveGeneration = 0
 
     func load(using dataSource: any AuditLogRetentionDataSource) async {
+        let generation = saveGeneration
         do {
-            retention = try await dataSource.auditLogRetention()
+            let loaded = try await dataSource.auditLogRetention()
+            guard generation == saveGeneration else { return }
+            retention = loaded
             loadFailed = false
         } catch is CancellationError {
             return
         } catch {
+            guard generation == saveGeneration else { return }
             loadFailed = true
         }
     }
@@ -229,6 +258,7 @@ final class AuditLogRetentionModel {
 
     private func save(days: UInt32, using dataSource: any AuditLogRetentionDataSource) async {
         guard let current = retention, !isSaving else { return }
+        saveGeneration &+= 1
         isSaving = true
         defer { isSaving = false }
         do {

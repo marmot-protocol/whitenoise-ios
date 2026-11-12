@@ -11,12 +11,14 @@ struct AuditDeliveryTests {
 
     // MARK: - Delivery status presentation
 
-    @Test func anUnconfiguredOrMissingDestinationShowsOnlyItsStatus() {
-        for status in [nil, status(configured: false)] {
-            let summary = AuditDeliveryPresentation.summary(status, now: now)
+    @Test func anUnconfiguredBuildAndAProfileWithoutARecordReadDifferently() {
+        let missing = AuditDeliveryPresentation.summary(nil, now: now)
+        let unconfigured = AuditDeliveryPresentation.summary(status(configured: false), now: now)
+        for summary in [missing, unconfigured] {
             #expect(summary.rows.count == 1)
             #expect(!summary.canResume)
         }
+        #expect(missing.rows[0].value != unconfigured.rows[0].value)
     }
 
     @Test func onlyAPausedDeliveryOffersResume() {
@@ -72,13 +74,12 @@ struct AuditDeliveryTests {
         let model = AuditDeliveryStatusModel()
 
         await model.reload(using: source)
-        #expect(model.status?.accountRef.lowercased() == active)
-        #expect(model.status?.paused == false)
+        #expect(model.summary?.canResume == false)
+        #expect(model.summary?.rows.first?.value == AuditDeliveryPresentation.statusText(status(account: active)))
 
-        source.statuses = [status(account: other)]
+        source.statuses = [status(account: other, paused: true)]
         await model.reload(using: source)
-        #expect(model.hasLoaded)
-        #expect(model.status == nil)
+        #expect(model.summary == AuditDeliveryPresentation.summary(nil))
     }
 
     @Test func aStatusReadForAPreviousProfileIsIgnored() async {
@@ -89,8 +90,42 @@ struct AuditDeliveryTests {
 
         await model.reload(using: source)
 
-        #expect(!model.hasLoaded)
-        #expect(model.status == nil)
+        #expect(model.summary == nil)
+    }
+
+    @Test func aFailedReloadClearsTheRowsSoTheErrorShows() async {
+        let source = AuditDeliverySourceStub(activeAccountRef: active)
+        source.statuses = [status(account: active, paused: true)]
+        let model = AuditDeliveryStatusModel()
+        await model.reload(using: source)
+        #expect(model.summary?.canResume == true)
+
+        source.readError = MarmotKitError.Io(details: "unreadable")
+        await model.reload(using: source)
+
+        #expect(model.summary == nil)
+        #expect(model.loadFailed)
+    }
+
+    @Test func switchingProfilesDropsThePreviousProfilesRowsBeforeTheRead() async throws {
+        let source = AuditDeliverySourceStub(activeAccountRef: active)
+        source.statuses = [status(account: active, paused: true)]
+        let model = AuditDeliveryStatusModel()
+        await model.reload(using: source)
+        #expect(model.summary?.canResume == true)
+
+        let gate = (entered: TestLatch(), released: TestLatch())
+        source.activeAccountRef = other
+        source.readGate = gate
+        source.readError = MarmotKitError.Io(details: "unreadable")
+        let read = Task { await model.reload(using: source) }
+        try await gate.entered.wait()
+        #expect(model.summary == nil)
+
+        gate.released.signal()
+        await read.value
+        #expect(model.summary == nil)
+        #expect(model.loadFailed)
     }
 
     @Test func resumeRunsTheDeliveryPassThenRereads() async {
@@ -103,7 +138,7 @@ struct AuditDeliveryTests {
         await model.resume(using: source)
 
         #expect(source.resumeCount == 1)
-        #expect(model.status?.paused == false)
+        #expect(model.summary?.canResume == false)
         #expect(!model.isResuming)
         #expect(source.presentedToasts.isEmpty)
     }
@@ -117,7 +152,7 @@ struct AuditDeliveryTests {
         await model.resume(using: source)
 
         #expect(source.presentedToasts.count == 1)
-        #expect(model.status?.paused == true)
+        #expect(model.summary?.canResume == true)
     }
 
     // MARK: - Retention
@@ -159,6 +194,23 @@ struct AuditDeliveryTests {
         await model.confirmShorter(days: 7, using: source)
 
         #expect(source.saved == [AuditLogRetentionFfi(maxAgeDays: 7, maxBytesPerAccount: 256 << 20)])
+        #expect(model.retention?.maxAgeDays == 7)
+    }
+
+    @Test func aReadThatStartedBeforeASaveCannotRestoreTheOldPeriod() async throws {
+        let source = AuditLogRetentionSourceStub(stored: AuditLogRetentionFfi(maxAgeDays: 30, maxBytesPerAccount: 256 << 20))
+        let model = AuditLogRetentionModel()
+        await model.load(using: source)
+
+        let gate = (entered: TestLatch(), released: TestLatch())
+        source.readGate = gate
+        let staleRead = Task { await model.load(using: source) }
+        try await gate.entered.wait()
+        await model.confirmShorter(days: 7, using: source)
+        gate.released.signal()
+        await staleRead.value
+
+        #expect(source.stored.maxAgeDays == 7)
         #expect(model.retention?.maxAgeDays == 7)
     }
 
@@ -206,6 +258,8 @@ private final class AuditDeliverySourceStub: AuditDeliveryDataSource {
     var activeAccountRef: String?
     var statuses: [AuditDeliveryStatusV5Ffi] = []
     var resumeError: (any Error)?
+    var readError: (any Error)?
+    var readGate: (entered: TestLatch, released: TestLatch)?
     var onRead: (() -> Void)?
     var onResume: (() -> Void)?
     private(set) var resumeCount = 0
@@ -217,6 +271,11 @@ private final class AuditDeliverySourceStub: AuditDeliveryDataSource {
 
     func auditDeliveryStatus() async throws -> [AuditDeliveryStatusV5Ffi] {
         onRead?()
+        if let readGate {
+            readGate.entered.signal()
+            await readGate.released.hold()
+        }
+        if let readError { throw readError }
         return statuses
     }
 
@@ -235,6 +294,8 @@ private final class AuditDeliverySourceStub: AuditDeliveryDataSource {
 private final class AuditLogRetentionSourceStub: AuditLogRetentionDataSource {
     var stored: AuditLogRetentionFfi
     var saveError: (any Error)?
+    /// Holds a read after it captured the stored policy.
+    var readGate: (entered: TestLatch, released: TestLatch)?
     private(set) var saved: [AuditLogRetentionFfi] = []
     private(set) var presentedToasts: [Toast] = []
 
@@ -242,7 +303,14 @@ private final class AuditLogRetentionSourceStub: AuditLogRetentionDataSource {
         self.stored = stored
     }
 
-    func auditLogRetention() async throws -> AuditLogRetentionFfi { stored }
+    func auditLogRetention() async throws -> AuditLogRetentionFfi {
+        let snapshot = stored
+        if let readGate {
+            readGate.entered.signal()
+            await readGate.released.hold()
+        }
+        return snapshot
+    }
 
     func setAuditLogRetention(_ retention: AuditLogRetentionFfi) async throws -> AuditLogRetentionFfi {
         if let saveError { throw saveError }

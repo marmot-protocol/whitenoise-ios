@@ -225,9 +225,15 @@ struct DeveloperToolsSettingsView: View {
         .task(id: appState.developerMode ? appState.activeAccountRef : nil) {
             if appState.developerMode {
                 await quarantinedGroupsModel.reload(using: appState)
-                await auditDelivery.reload(using: appState)
             } else {
                 quarantinedGroupsModel.reset()
+            }
+        }
+        .task(id: appState.developerMode ? appState.activeAccountRef : nil) {
+            if appState.developerMode {
+                await auditDelivery.reload(using: appState)
+            } else {
+                auditDelivery.reset()
             }
         }
         .refreshable {
@@ -333,8 +339,7 @@ struct DeveloperToolsSettingsView: View {
     @ViewBuilder
     private var auditDeliverySection: some View {
         Section {
-            if auditDelivery.hasLoaded {
-                let summary = AuditDeliveryPresentation.summary(auditDelivery.status)
+            if let summary = auditDelivery.summary {
                 ForEach(Array(summary.rows.enumerated()), id: \.offset) { _, row in
                     LabeledContent(row.title, value: row.value)
                 }
