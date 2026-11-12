@@ -534,7 +534,8 @@ final class AppState {
         switch event {
         case .groupChangeSuperseded(let accountID, _, _, _, _, _, _):
             noticeAccountID = accountID
-        case .groupEvent(let accountID, _, _, .queuedIntentRefused):
+        case .groupEvent(let accountID, _, _, .queuedIntentRefused),
+             .groupEvent(let accountID, _, _, .groupHydrationQuarantined(.rewindRestoreFailed)):
             noticeAccountID = accountID
         default:
             return

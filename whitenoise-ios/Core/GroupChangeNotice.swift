@@ -6,6 +6,15 @@ enum GroupChangeNotice {
         if case .groupEvent(_, _, _, .queuedIntentRefused(_, let intentKind, let reason, let artifact, _)) = event {
             return refusedIntentToast(intentKind: intentKind, reason: reason, artifact: artifact)
         }
+        // Retry and rejoin can't clear this; MDK restores the live state at
+        // the next account open, and Quarantined Groups is Developer Tools only.
+        if case .groupEvent(_, _, _, .groupHydrationQuarantined(.rewindRestoreFailed)) = event {
+            return .warning(
+                L10n.string("Restart White Noise"),
+                message: L10n.string("A chat couldn't return to its latest state. Restart the app to restore it."),
+                duration: 8
+            )
+        }
         guard case .groupChangeSuperseded(_, _, _, _, let kind, let outcome, _) = event,
               outcome != "reissued" else { return nil }
 
@@ -79,16 +88,25 @@ enum GroupChangeNotice {
 }
 
 /// MDK may deliver the same refusal more than once; announce each dropped
-/// send once. Bounded, so a long session cannot grow it without limit.
+/// send once, and a group's failed rewind restore once per session. Bounded,
+/// so a long session cannot grow it without limit.
 struct RefusedIntentAnnouncements {
     private var seen: [String] = []
     private let capacity = 64
 
-    /// Whether `event` is a refusal not announced before; records it if so.
+    /// Whether `event` is a notice not announced before; records it if so.
     mutating func admit(_ event: MarmotEventFfi) -> Bool {
-        guard case .groupEvent(_, _, _, .queuedIntentRefused(let intentIdHex, _, _, _, _)) = event else { return true }
-        guard !seen.contains(intentIdHex) else { return false }
-        seen.append(intentIdHex)
+        let key: String
+        switch event {
+        case .groupEvent(_, _, _, .queuedIntentRefused(let intentIdHex, _, _, _, _)):
+            key = "intent:" + intentIdHex
+        case .groupEvent(_, _, let groupIdHex, .groupHydrationQuarantined(.rewindRestoreFailed)):
+            key = "rewind:" + groupIdHex
+        default:
+            return true
+        }
+        guard !seen.contains(key) else { return false }
+        seen.append(key)
         if seen.count > capacity { seen.removeFirst(seen.count - capacity) }
         return true
     }

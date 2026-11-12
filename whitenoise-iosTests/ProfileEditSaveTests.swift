@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import whitenoise_ios
+import MarmotKit
 
 @MainActor
 struct ProfileEditSaveTests {
@@ -11,6 +12,19 @@ struct ProfileEditSaveTests {
         model.displayName = "Edited name"
         model.about = "Unsaved about text"
         return model
+    }
+
+    @Test func aProfileTooLargeForTheRelaysSaysSoAndOffersNoSameDraftRetry() async {
+        let model = loadedModel()
+        let failed = await model.publish(accountIdHex: "account", isCurrentAccount: { true }) { _ in
+            throw MarmotKitError.EventTooLarge(artifact: .other, sizeClass: .over4Mib)
+        }
+
+        #expect(!failed)
+        #expect(model.saveFailure == .tooLarge)
+        #expect(model.saveFailure?.offersRetry == false)
+        #expect(model.saveFailure?.message == UserFacingError.message(for: MarmotKitError.EventTooLarge(artifact: .other, sizeClass: .over4Mib)))
+        #expect(ProfileEditViewModel.SaveFailure.publishing(URLError(.notConnectedToInternet)).offersRetry)
     }
 
     @Test func failedSavePreservesDraftAndOnlySuccessfulRetryEndsEditing() async {

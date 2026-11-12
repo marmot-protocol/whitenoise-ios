@@ -4,6 +4,31 @@ import Testing
 
 @MainActor
 struct GroupChangeNoticeTests {
+    private func quarantine(_ reason: AppGroupHydrationQuarantineReasonFfi, group: String = "group") -> MarmotEventFfi {
+        .groupEvent(accountIdHex: "account", accountLabel: "private profile", groupIdHex: group,
+                    event: .groupHydrationQuarantined(reason: reason))
+    }
+
+    @Test func onlyAFailedRewindRestoreTellsTheUserToRestart() {
+        let restart = GroupChangeNotice.toast(for: quarantine(.rewindRestoreFailed))
+        #expect(restart?.style == .warning)
+        #expect(restart?.message?.isEmpty == false)
+        for reason in [AppGroupHydrationQuarantineReasonFfi.openMlsLoadFailed, .openMlsGroupMissing,
+                       .memberValidationFailed, .groupRecordLoadFailed, .pendingCommitRecoveryFailed] {
+            #expect(GroupChangeNotice.toast(for: quarantine(reason)) == nil)
+        }
+    }
+
+    @Test func eachGroupsFailedRewindRestoreIsAnnouncedOnce() {
+        var announcements = RefusedIntentAnnouncements()
+        let admitted = [
+            announcements.admit(quarantine(.rewindRestoreFailed, group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, group: "b")),
+        ]
+        #expect(admitted == [true, false, true])
+    }
+
     private func event(kind: String = "group_profile", outcome: String) -> MarmotEventFfi {
         .groupChangeSuperseded(accountIdHex: "account", accountLabel: "private profile",
                                groupIdHex: "group", commitIdHex: "commit", kind: kind,
