@@ -640,6 +640,18 @@ nonisolated final class MarmotClient: Sendable {
         )
     }
 
+    /// Reuses or creates the canonical direct chat and returns its group id.
+    /// Success means local state is canonical, not that the Welcome arrived.
+    func startDirectConversation(
+        accountRef: String,
+        peerAccountId: String
+    ) async throws -> String {
+        try await marmot.startDirectConversation(
+            accountRef: accountRef,
+            peerAccountId: peerAccountId
+        )
+    }
+
     // MARK: - Group mutations & reads
 
     /// Group/message mutation and read wrappers. The generated `Marmot`
