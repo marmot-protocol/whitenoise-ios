@@ -23,6 +23,18 @@ struct GroupChangeNoticeTests {
         }
     }
 
+    @Test func onlyRewindRestoreRowsFromTheQuarantineListBecomeNotices() {
+        let alice = accountSummary("Alice", byte: "aa")
+        let events = GroupChangeNotice.rewindRestoreEvents(account: alice, quarantined: [
+            AppQuarantinedGroupFfi(groupIdHex: "stuck", reason: .rewindRestoreFailed),
+            AppQuarantinedGroupFfi(groupIdHex: "other", reason: .openMlsLoadFailed),
+        ])
+        #expect(events == [.groupEvent(
+            accountIdHex: alice.accountIdHex, accountLabel: alice.label, groupIdHex: "stuck",
+            event: .groupHydrationQuarantined(reason: .rewindRestoreFailed)
+        )])
+    }
+
     @Test func eachAccountsFailedRewindRestoreOfAGroupIsAnnouncedOnce() {
         var announcements = RefusedIntentAnnouncements()
         let admitted = [

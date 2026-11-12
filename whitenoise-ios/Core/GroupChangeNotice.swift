@@ -37,6 +37,19 @@ enum GroupChangeNotice {
         return .warning(L10n.string("Review group changes"), message: message, duration: 6)
     }
 
+    /// The quarantine events for `account`'s groups whose rewind restore
+    /// failed, so failures from before the event subscription get the same
+    /// notice and dedupe as live ones.
+    static func rewindRestoreEvents(
+        account: AccountSummaryFfi,
+        quarantined: [AppQuarantinedGroupFfi]
+    ) -> [MarmotEventFfi] {
+        quarantined.filter { $0.reason == .rewindRestoreFailed }.map {
+            .groupEvent(accountIdHex: account.accountIdHex, accountLabel: account.label, groupIdHex: $0.groupIdHex,
+                        event: .groupHydrationQuarantined(reason: .rewindRestoreFailed))
+        }
+    }
+
     /// A send that waited for the group to settle and was then dropped unsent:
     /// the settled state refused it and nothing retries it. `reason` is MDK's
     /// stable tag; any other detail stays out of the toast. `artifact` is set

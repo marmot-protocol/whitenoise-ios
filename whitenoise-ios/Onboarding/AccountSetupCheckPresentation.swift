@@ -27,6 +27,12 @@ nonisolated struct AccountSetupCheckPresentation {
         return step?.actions.contains(.retry) == true ? .retry : nil
     }
 
+    /// A size refusal fails the same way on retry, so Try Again isn't offered.
+    func primaryAction(operationFailure: AccountSetupFailure?) -> Action? {
+        guard let action = primaryAction else { return nil }
+        return action == .retry && operationFailure == .tooLarge ? nil : action
+    }
+
     func command(for action: Action) -> AccountSetupCommand {
         switch action {
         case .acknowledge:

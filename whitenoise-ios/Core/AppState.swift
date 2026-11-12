@@ -470,6 +470,18 @@ final class AppState {
     func observeRuntimeEvents() async {
         guard let generation = runtimeEventsGeneration, let client else { return }
         let subscription = client.subscribeEvents()
+        // A rewind restore can fail while accounts open, before this subscription
+        // exists, and events don't replay; MDK's quarantine list still has it.
+        let signedIn = accounts.filter { !$0.signedOut }
+        Task { [weak self] in
+            for account in signedIn {
+                guard let groups = try? await client.quarantinedGroups(accountRef: account.accountIdHex) else { continue }
+                for event in GroupChangeNotice.rewindRestoreEvents(account: account, quarantined: groups) {
+                    guard let self, !Task.isCancelled else { return }
+                    self.handleRuntimeEvent(event, generation: generation)
+                }
+            }
+        }
         for await event in SubscriptionDriver.events(subscription) {
             guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
             handleRuntimeEvent(event, generation: generation)
