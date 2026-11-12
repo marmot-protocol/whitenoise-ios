@@ -2537,9 +2537,9 @@ final class ConversationViewModel {
             return false
         }
 
-        // A media optimistic record is built with `tags: []` and
-        // `plaintext: caption`, so it is otherwise indistinguishable from a
-        // plain text send carrying the same text. Without a media
+        // A media optimistic record has no `imeta` tags yet (only the `e` + `q`
+        // pair when it is a reply, as for text) and `plaintext: caption`, so it
+        // is otherwise indistinguishable from a text send carrying the same text. Without a media
         // discriminator, the incoming confirmation for one can reconcile away
         // the other's pending bubble (#262). Treat the pending row as media
         // when it has staged local attachments or its own record already

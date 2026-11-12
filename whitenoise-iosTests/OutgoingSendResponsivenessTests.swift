@@ -214,6 +214,20 @@ struct OutgoingSendResponsivenessTests {
         #expect(harness.store.protocolID(forDisplayID: "msg:\(staged.tempId)") == hexId(9))
     }
 
+    @Test func aMediaReplyBubbleShowsItsParentFromTheFirstFrame() async throws {
+        let harness = SendHarness()
+        harness.installWindow([])
+        let parent = hexId(11)
+        let photo = MediaDraftAttachment(fileName: "photo.jpg", mediaType: "image/jpeg", data: Data([1, 2, 3]), dim: nil)
+        let staged = try #require(harness.composer.stage(text: "look", attachments: [photo], replyTargetId: parent))
+
+        #expect(staged.replyTargetId == parent)
+        let bubble = try #require(harness.store.timeline.compactMap { item -> AppMessageRecordFfi? in
+            if case .message(let record, _) = item.kind { return record } else { return nil }
+        }.first)
+        #expect(ConversationViewModel.replyTargetMessageId(in: bubble) == parent)
+    }
+
     @Test func anAttachmentBubbleKeepsItsPickedBytesUntilTheDurableRowArrives() async throws {
         let harness = SendHarness()
         harness.installWindow([])
