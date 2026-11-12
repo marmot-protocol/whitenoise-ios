@@ -3,10 +3,10 @@ import MarmotKit
 import Testing
 @testable import whitenoise_ios
 
-/// Each `nextCancellable()` in the handwritten `CancellablePresentedChatList`
-/// adapter binds its own native `next` symbol and converter, so each
-/// subscription type needs its own cancellation check (AGENTS.md, Rust
-/// Bindings). `RuntimeOwnershipTests` covers `PresentedChatListSubscription`.
+/// Each `nextCancellable()` MarmotKit generates binds its own native `next`
+/// symbol and converter, and the app relies on it to suspend the runtime, so
+/// each subscription type the app uses gets its own cancellation check
+/// (AGENTS.md, Rust Bindings). `RuntimeOwnershipTests` covers `PresentedChatListSubscription`.
 /// These tests assert only that a pending wait ends in `CancellationError`
 /// and leaves the runtime usable.
 @MainActor

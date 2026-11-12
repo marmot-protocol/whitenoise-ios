@@ -38,9 +38,37 @@ struct GroupChangeNoticeTests {
         #expect(text.contains("superseded"))
     }
 
-    private func refusal(id: String = "intent", kind: String, reason: String) -> MarmotEventFfi {
+    private func refusal(
+        id: String = "intent",
+        kind: String,
+        reason: String,
+        artifact: OversizedArtifactFfi? = nil,
+        sizeClass: EventSizeClassFfi? = nil
+    ) -> MarmotEventFfi {
         .groupEvent(accountIdHex: "account", accountLabel: "private profile", groupIdHex: "group",
-                    event: .queuedIntentRefused(intentIdHex: id, intentKind: kind, reason: reason))
+                    event: .queuedIntentRefused(intentIdHex: id, intentKind: kind, reason: reason,
+                                                artifact: artifact, sizeClass: sizeClass))
+    }
+
+    @Test func oversizedQueuedChangesSayWhichRelaysRefusedThem() {
+        let generic = GroupChangeNotice.toast(for: refusal(kind: "invite", reason: "future_reason"))
+        let commit = GroupChangeNotice.toast(
+            for: refusal(kind: "remove_members", reason: "event_too_large", artifact: .commit, sizeClass: .over4Mib))
+        let welcome = GroupChangeNotice.toast(
+            for: refusal(kind: "invite", reason: "event_too_large", artifact: .welcome, sizeClass: .from2To4Mib))
+        let unspecified = GroupChangeNotice.toast(for: refusal(kind: "invite", reason: "event_too_large"))
+        #expect(commit?.message == UserFacingError.eventTooLargeMessage(.commit))
+        #expect(welcome?.message == UserFacingError.eventTooLargeMessage(.welcome))
+        #expect(unspecified?.message == commit?.message)
+        #expect(Set([generic?.message, commit?.message, welcome?.message]).count == 3)
+    }
+
+    @Test func diagnosticsIncludeOversizedRefusalDetails() {
+        let text = DiagnosticsView.diagnosticText(
+            for: refusal(kind: "invite", reason: "event_too_large", artifact: .welcome, sizeClass: .from2To4Mib))
+        #expect(text.contains("event_too_large"))
+        #expect(text.contains("welcome"))
+        #expect(text.contains("from2To4Mib"))
     }
 
     @Test(arguments: ["invite", "remove_members", "update_group_data", "leave", "disband", "app_message", "future_kind"])

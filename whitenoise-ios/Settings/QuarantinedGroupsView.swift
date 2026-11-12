@@ -91,19 +91,21 @@ struct QuarantinedGroupsView: View {
                 retryStatusView(retryStatus)
             }
 
-            Button {
-                Task { await model.retry(group, using: appState) }
-            } label: {
-                if isRetrying {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Retrying Recovery…")
+            if presentation.allowsRetry {
+                Button {
+                    Task { await model.retry(group, using: appState) }
+                } label: {
+                    if isRetrying {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Retrying Recovery…")
+                        }
+                    } else {
+                        Label("Retry Recovery", systemImage: "arrow.clockwise")
                     }
-                } else {
-                    Label("Retry Recovery", systemImage: "arrow.clockwise")
                 }
+                .disabled(isRetrying || appState.activeAccountRef == nil)
             }
-            .disabled(isRetrying || appState.activeAccountRef == nil)
         }
         .padding(.vertical, 4)
     }
