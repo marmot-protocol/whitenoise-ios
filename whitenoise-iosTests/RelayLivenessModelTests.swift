@@ -156,15 +156,20 @@ struct RelayLivenessModelTests {
     }
 
     @Test func anAttemptTodayShowsItsTimeAndAnOlderOneAlsoItsDate() throws {
-        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        // A fixed calendar keeps "today" independent of the machine's time zone.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "UTC"))
+        let now = try #require(calendar.date(from: DateComponents(year: 2027, month: 1, day: 15, hour: 15)))
+        let lastWeek = try #require(calendar.date(byAdding: .day, value: -7, to: now))
         let locale = Locale(identifier: "en")
-        let today = RelayLivenessPresentation.detail(
-            relay(eu, .offline, lastAttempt: UInt64(now.timeIntervalSince1970) - 60), now: now, locale: locale)
-        let lastWeek = RelayLivenessPresentation.detail(
-            relay(eu, .offline, lastAttempt: UInt64(now.timeIntervalSince1970) - 7 * 86_400), now: now, locale: locale)
+        func detail(_ attempt: Date) -> String? {
+            RelayLivenessPresentation.detail(
+                relay(eu, .offline, lastAttempt: UInt64(attempt.timeIntervalSince1970)),
+                now: now, locale: locale, calendar: calendar)
+        }
 
-        let todayText = try #require(today)
-        let lastWeekText = try #require(lastWeek)
+        let todayText = try #require(detail(now.addingTimeInterval(-60)))
+        let lastWeekText = try #require(detail(lastWeek))
         #expect(lastWeekText.count > todayText.count)
     }
 

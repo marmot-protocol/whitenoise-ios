@@ -149673,7 +149673,7 @@
       }
     },
     "Last tried %@" : {
-      "comment" : "When the app last tried to connect to a relay; %@ is a relative time such as '5 minutes ago'.",
+      "comment" : "When the app last tried to connect to a relay; %@ is a clock time (for example 2:05 PM), or a short date and time when the attempt was on an earlier day.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {

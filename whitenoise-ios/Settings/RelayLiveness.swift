@@ -142,14 +142,18 @@ nonisolated enum RelayLivenessPresentation {
 
     /// When the last attempt was, for relays that aren't connected. An
     /// absolute time stays true while the row sits unchanged on screen.
-    static func detail(_ relay: RelayLivenessFfi, now: Date, locale: Locale) -> String? {
+    static func detail(
+        _ relay: RelayLivenessFfi,
+        now: Date,
+        locale: Locale,
+        calendar: Calendar = .current
+    ) -> String? {
         guard relay.status != .connected, let seconds = relay.lastAttemptUnix, seconds > 0 else { return nil }
         let attempt = Date(timeIntervalSince1970: TimeInterval(Int64(clamping: seconds)))
-        var calendar = Calendar.current
-        calendar.locale = locale
-        let style = calendar.isDate(attempt, inSameDayAs: now)
+        var style = calendar.isDate(attempt, inSameDayAs: now)
             ? Date.FormatStyle(date: .omitted, time: .shortened)
             : Date.FormatStyle(date: .abbreviated, time: .shortened)
+        style.timeZone = calendar.timeZone
         return L10n.formatted("Last tried %@", attempt.formatted(style.locale(locale)))
     }
 }
