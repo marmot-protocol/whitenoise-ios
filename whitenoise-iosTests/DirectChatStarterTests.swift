@@ -26,14 +26,14 @@ struct DirectChatStarterTests {
         #expect(!starter.isCreating)
     }
 
-    @Test func createsWhenNoDirectChatExistsAndClearsRowScopedProgress() async throws {
+    @Test func startsTheCanonicalChatWhenNoneIsOpenAndClearsRowScopedProgress() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
         var observedRefs: [String] = []
-        let starter = directChatStarter { accountRef, memberRef in
+        let starter = directChatStarter(startDirect: { accountRef, memberRef in
             observedRefs = [accountRef, memberRef]
-            return "new-group"
-        }
+            return "canonical-dm"
+        })
 
         let outcome = await starter.start(
             accountIdHex: alice,
@@ -42,11 +42,75 @@ struct DirectChatStarterTests {
             using: appState
         )
 
-        #expect(outcome == .created(groupIdHex: "new-group"))
+        #expect(outcome == .started(groupIdHex: "canonical-dm"))
         #expect(observedRefs == ["account", alice])
-        #expect(appState.directChatPeerAccountId(accountRef: "account", groupIdHex: "new-group") == alice)
-        #expect(appState.createdChatListRow(accountRef: "account", groupIdHex: "new-group")?.groupIdHex == "new-group")
+        #expect(appState.directChatPeerAccountId(accountRef: "account", groupIdHex: "canonical-dm") == alice)
+        #expect(appState.createdChatListRow(accountRef: "account", groupIdHex: "canonical-dm")?.groupIdHex == "canonical-dm")
         #expect(starter.creatingAccountIdHex == nil)
+    }
+
+    @Test func aCanonicalStartWithoutARowStillOpensAndLeavesTheKeyedReadToChats() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+        let starter = directChatStarter(startDirect: { _, _ in "canonical-dm" }, startDirectRow: false)
+
+        let outcome = await starter.startMapped(
+            accountIdHex: alice,
+            memberRef: alice,
+            existingGroupIdHex: nil,
+            using: appState
+        )
+
+        #expect(outcome == .open(groupIdHex: "canonical-dm"))
+        #expect(appState.createdChatListRow(accountRef: "account", groupIdHex: "canonical-dm") == nil)
+        #expect(appState.directChatPeerAccountId(accountRef: "account", groupIdHex: "canonical-dm") == alice)
+    }
+
+    @Test func anExplicitNewConversationCreatesASeparateChat() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+        var observedRefs: [String] = []
+        let starter = directChatStarter { accountRef, memberRef in
+            observedRefs = [accountRef, memberRef]
+            return "separate-dm"
+        }
+
+        let outcome = await starter.start(
+            accountIdHex: alice,
+            memberRef: alice,
+            existingGroupIdHex: nil,
+            startsSeparateChat: true,
+            using: appState
+        )
+
+        #expect(outcome == .created(groupIdHex: "separate-dm"))
+        #expect(observedRefs == ["account", alice])
+        #expect(appState.createdChatListRow(accountRef: "account", groupIdHex: "separate-dm")?.groupIdHex == "separate-dm")
+    }
+
+    @Test(arguments: [false, true])
+    func aFailedStartsPromptRemembersWhichRouteToRetry(startsSeparateChat: Bool) async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+        let failing: @MainActor (String, String) async throws -> String = { _, _ in throw TestError.unexpectedCreate }
+        let starter = startsSeparateChat
+            ? directChatStarter(create: failing)
+            : directChatStarter(startDirect: failing)
+
+        let outcome = await starter.startMapped(
+            accountIdHex: alice,
+            memberRef: alice,
+            existingGroupIdHex: nil,
+            startsSeparateChat: startsSeparateChat,
+            using: appState
+        )
+
+        guard case .prompt(let prompt) = outcome else {
+            Issue.record("expected a retry prompt")
+            return
+        }
+        #expect(prompt.startsSeparateChat == startsSeparateChat)
+        #expect(prompt.existingGroupIdHex == nil)
     }
 
     @Test func recentDirectPeerHandoffIsAccountScopedAndBounded() throws {
@@ -76,15 +140,15 @@ struct DirectChatStarterTests {
         #expect(store.row(accountRef: "second", groupIdHex: "other")?.title == "other")
     }
 
-    @Test func secondTapIsIgnoredWhileTheFirstCreateIsInFlight() async throws {
+    @Test func secondTapIsIgnoredWhileTheFirstStartIsInFlight() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
         let gate = (entered: TestLatch(), released: TestLatch())
-        let starter = directChatStarter { _, _ in
+        let starter = directChatStarter(startDirect: { _, _ in
             gate.entered.signal()
             await gate.released.hold()
             return "new-group"
-        }
+        })
 
         let first = Task {
             await starter.start(
@@ -106,7 +170,7 @@ struct DirectChatStarterTests {
         gate.released.signal()
 
         #expect(second == .ignored)
-        #expect(await first.value == .created(groupIdHex: "new-group"))
+        #expect(await first.value == .started(groupIdHex: "new-group"))
         #expect(starter.creatingAccountIdHex == nil)
     }
 

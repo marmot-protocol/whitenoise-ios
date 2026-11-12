@@ -58,6 +58,8 @@ nonisolated struct StartChatPrompt: Equatable {
     let accountIdHex: String
     let memberRef: String
     let existingGroupIdHex: String?
+    /// Retry repeats an explicit "Start New Conversation", not the canonical chat.
+    var startsSeparateChat = false
 
     static func kind(for failure: StartChatFailurePresentation.Failure) -> Kind {
         switch failure {
@@ -82,6 +84,8 @@ final class DirectChatStarter {
 
     enum Outcome: Equatable {
         case opened(groupIdHex: String)
+        /// MDK reused or created the canonical direct chat.
+        case started(groupIdHex: String)
         case created(groupIdHex: String)
         case failed(StartChatFailurePresentation.Failure)
         /// Another start was already in flight; nothing happened.
@@ -97,17 +101,53 @@ final class DirectChatStarter {
     /// Support opens quietly while other entry points keep their existing feedback.
     var playsSuccessHaptic = true
 
-    /// Creates the unnamed two-member group for `accountRef` and `memberRef`.
+    /// The canonical direct chat MDK reused or created, with its chat-list row
+    /// when a read right after could supply one.
+    struct StartedDirectChat: Equatable {
+        let groupIdHex: String
+        let chatListRow: ChatListRowFfi?
+    }
+
+    /// Reuses or creates the canonical direct chat with `memberRef` (hex or npub).
+    typealias StartDirect = @MainActor (
+        _ appState: AppState,
+        _ accountRef: String,
+        _ memberRef: String
+    ) async throws -> StartedDirectChat
+
+    /// Creates a separate unnamed two-member group for `accountRef` and `memberRef`.
     typealias CreateGroup = @MainActor (
         _ appState: AppState,
         _ accountRef: String,
         _ memberRef: String
     ) async throws -> CreatedGroupFfi
 
+    @ObservationIgnored private let startDirect: StartDirect
     @ObservationIgnored private let createGroup: CreateGroup
 
-    init(createGroup: @escaping CreateGroup = DirectChatStarter.createGroupInMarmot) {
+    init(
+        startDirect: @escaping StartDirect = DirectChatStarter.startDirectInMarmot,
+        createGroup: @escaping CreateGroup = DirectChatStarter.createGroupInMarmot
+    ) {
+        self.startDirect = startDirect
         self.createGroup = createGroup
+    }
+
+    /// MDK looks up and creates on the account worker, so a retry after a
+    /// cancellation or lost response reuses the same chat. Its row seeds the
+    /// creation cache; if the read fails, Chats falls back to a keyed read.
+    private static func startDirectInMarmot(
+        appState: AppState,
+        accountRef: String,
+        memberRef: String
+    ) async throws -> StartedDirectChat {
+        let client = try appState.currentMarmotClient()
+        let groupIdHex = try await client.startDirectConversation(
+            accountRef: accountRef,
+            peerAccountId: memberRef
+        )
+        let row = try? await client.chatListRow(accountRef: accountRef, groupIdHex: groupIdHex)
+        return StartedDirectChat(groupIdHex: groupIdHex, chatListRow: row ?? nil)
     }
 
     private static func createGroupInMarmot(
@@ -128,12 +168,14 @@ final class DirectChatStarter {
     }
 
     /// Opens `existingGroupIdHex` when the person already shares an open
-    /// direct chat; otherwise creates an unnamed two-member group. The guard
-    /// is taken synchronously before the first await.
+    /// direct chat. Otherwise starts the canonical direct chat, or, for an
+    /// explicit "Start New Conversation", creates a separate unnamed
+    /// two-member group. The guard is taken synchronously before the first await.
     func start(
         accountIdHex: String,
         memberRef: String,
         existingGroupIdHex: String?,
+        startsSeparateChat: Bool = false,
         using appState: AppState
     ) async -> Outcome {
         guard creatingAccountIdHex == nil else { return .ignored }
@@ -152,9 +194,18 @@ final class DirectChatStarter {
         defer { creatingAccountIdHex = nil }
         let performance = HostActionPerformance.begin()
         do {
-            let created = try await createGroup(appState, accountRef, memberRef)
-            let groupIdHex = created.groupIdHex
-            appState.noteCreatedChatListRow(accountRef: accountRef, row: created.chatListRow)
+            let groupIdHex: String
+            let row: ChatListRowFfi?
+            if startsSeparateChat {
+                let created = try await createGroup(appState, accountRef, memberRef)
+                (groupIdHex, row) = (created.groupIdHex, created.chatListRow)
+            } else {
+                let started = try await startDirect(appState, accountRef, memberRef)
+                (groupIdHex, row) = (started.groupIdHex, started.chatListRow)
+            }
+            if let row {
+                appState.noteCreatedChatListRow(accountRef: accountRef, row: row)
+            }
             HostActionPerformance.groupBecameCanonical(
                 groupIdHex: groupIdHex,
                 since: performance
@@ -164,7 +215,7 @@ final class DirectChatStarter {
                 groupIdHex: groupIdHex,
                 peerAccountIdHex: accountIdHex
             )
-            return .created(groupIdHex: groupIdHex)
+            return startsSeparateChat ? .created(groupIdHex: groupIdHex) : .started(groupIdHex: groupIdHex)
         } catch {
             return .failed(StartChatFailurePresentation.failure(for: error))
         }
@@ -182,16 +233,18 @@ final class DirectChatStarter {
         accountIdHex: String,
         memberRef: String,
         existingGroupIdHex: String?,
+        startsSeparateChat: Bool = false,
         using appState: AppState
     ) async -> MappedOutcome {
         let outcome = await start(
             accountIdHex: accountIdHex,
             memberRef: memberRef,
             existingGroupIdHex: existingGroupIdHex,
+            startsSeparateChat: startsSeparateChat,
             using: appState
         )
         switch outcome {
-        case .opened(let groupIdHex), .created(let groupIdHex):
+        case .opened(let groupIdHex), .started(let groupIdHex), .created(let groupIdHex):
             if playsSuccessHaptic { Haptics.success() }
             return .open(groupIdHex: groupIdHex)
         case .failed(let failure):
@@ -201,7 +254,8 @@ final class DirectChatStarter {
                 recipientName: appState.knownDisplayName(forAccountIdHex: accountIdHex),
                 accountIdHex: accountIdHex,
                 memberRef: memberRef,
-                existingGroupIdHex: existingGroupIdHex
+                existingGroupIdHex: existingGroupIdHex,
+                startsSeparateChat: startsSeparateChat
             ))
         case .ignored:
             return .ignored

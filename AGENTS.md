@@ -226,6 +226,10 @@ unread/pin updates. Reopen when the account-store epoch changes. Cancel native
 Resolve just-created destinations from the creation cache immediately, then overlay
 the keyed presented row. Unrelated live updates must not discard that keyed read;
 preserve a newer target row and reject account/runtime/handle replacements.
+Start a chat with one person through `startDirectConversation`, which reuses or
+creates the canonical direct chat and is safe to retry; seed the creation cache
+from a `chatListRow` read after it. Only the chooser's explicit Start New
+Conversation creates a separate group, and its retry prompt keeps that intent.
 
 Read group recovery on conversation entry and raw `groupStateUpdated` events;
 the ordinary group-record subscription can deduplicate recovery-only updates.

@@ -223,6 +223,7 @@ final class ProfileViewModel {
             accountIdHex: chooser.targetAccountIdHex,
             memberRef: chooser.memberRef,
             existingGroupIdHex: nil,
+            startsSeparateChat: true,
             using: appState,
             onOpen: onOpen
         )
@@ -235,6 +236,7 @@ final class ProfileViewModel {
             accountIdHex: prompt.accountIdHex,
             memberRef: prompt.memberRef,
             existingGroupIdHex: prompt.existingGroupIdHex,
+                startsSeparateChat: prompt.startsSeparateChat,
             using: appState,
             onOpen: onOpen
         )
@@ -244,6 +246,7 @@ final class ProfileViewModel {
         accountIdHex: String,
         memberRef: String,
         existingGroupIdHex: String?,
+        startsSeparateChat: Bool = false,
         using appState: AppState,
         onOpen: (String) -> Void
     ) async {
@@ -254,6 +257,7 @@ final class ProfileViewModel {
             accountIdHex: accountIdHex,
             memberRef: memberRef,
             existingGroupIdHex: existingGroupIdHex,
+            startsSeparateChat: startsSeparateChat,
             using: appState
         )
         guard !Task.isCancelled,
