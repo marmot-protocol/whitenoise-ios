@@ -204,6 +204,37 @@ final class PrivacySecuritySettingsViewModel {
         }
     }
 
+    /// MDK deletes logs older than a new retention period on its own worker
+    /// and reports no completion, so re-read the list until no log older than
+    /// `cutoffMs` remains, a bounded number of times, so the stored size and
+    /// Clear button reflect the deletion. Only a list that was actually read
+    /// is applied or ends the wait; an unreadable runtime keeps the rows on
+    /// screen. The reads skip the screen's loading state, and a user action
+    /// that starts meanwhile ends the wait, since it reloads the list itself.
+    func reloadAuditFilesAfterRetentionChange(
+        cutoffMs: UInt64,
+        using dataSource: any PrivacySecuritySettingsViewModelDataSource,
+        sleep: @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    ) async {
+        let accountRef = dataSource.activeAccountRef
+        // A reload that started before the wait ended may return pre-deletion
+        // rows; it then re-reads through deferOrReload instead of applying them.
+        defer { actionGate.invalidateReloads() }
+        for read in 1...Self.retentionSweepReads {
+            guard let ticket = actionGate.reloadTicket() else { return }
+            if let rows = try? await dataSource.auditLogFileRows() {
+                guard canApplyReload(startedAt: ticket, accountRef: accountRef, using: dataSource) else { return }
+                auditFileRows = rows
+                auditErrorMessage = nil
+                if !rows.contains(where: { ($0.modifiedAtMs ?? .max) < cutoffMs }) { return }
+            }
+            guard read < Self.retentionSweepReads else { return }
+            do { try await sleep(.milliseconds(250)) } catch { return }
+        }
+    }
+
+    static let retentionSweepReads = 8
+
     func reloadAuditFiles(using dataSource: any PrivacySecuritySettingsViewModelDataSource) async {
         guard let reloadTicket = actionGate.reloadTicket() else {
             requestAuditFilesReloadAfterAction()

@@ -336,6 +336,27 @@ struct ReactionTargetTallyTests {
     }
 
     @MainActor
+    @Test func incrementalWindowPageRecomputesItsChangedReactionTargets() {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        func window(_ reactions: TimelineReactionSummaryFfi) -> TimelinePageFfi {
+            TimelinePageFfi(
+                messages: [timelineRecord(messageIdHex: target, timelineAt: 1, reactions: reactions)],
+                hasMoreBefore: true,
+                hasMoreAfter: false
+            )
+        }
+        // The first page replaces the window; a page with the same bounds then
+        // updates it in place, recomputing only the targets it touched.
+        viewModel.applyTimelinePage(window(TimelineReactionSummaryFfi(byEmoji: [], userReactions: [])), placement: .window)
+        #expect(viewModel.reactions(for: target).isEmpty)
+
+        viewModel.applyTimelinePage(window(reactionSummary(emoji: "👍", senders: [other])), placement: .window)
+        #expect(viewModel.reactions(for: target) == [
+            ConversationViewModel.ReactionTally(emoji: "👍", count: 1, mine: false)
+        ])
+    }
+
+    @MainActor
     @Test func toggleRecomputesOnlyItsOwnTargetNotUnrelatedSummaries() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "no-such-account"
@@ -365,9 +386,11 @@ struct ReactionTargetTallyTests {
 
     @MainActor
     @Test func multiRecordProjectionUpdateRebuildsTimelineOnce() throws {
+        let stages = TimelineStageRecorder()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: testGroup()
+            group: testGroup(),
+            timelineTimings: stages.timings
         )
         viewModel.applyTimelinePage(
             TimelinePageFfi(
@@ -378,7 +401,7 @@ struct ReactionTargetTallyTests {
             placement: .window
         )
 
-        let rebuildsBefore = viewModel.timelineRebuildCountForTesting
+        let rebuildsBefore = stages.count(.timelineRebuild)
         let idA = otherTarget
         let idB = String(repeating: "d", count: 64)
         let idC = String(repeating: "e", count: 64)
@@ -390,7 +413,7 @@ struct ReactionTargetTallyTests {
             .upsert(trigger: .newMessage, message: timelineRecord(messageIdHex: idC, timelineAt: 4)),
         ])))
 
-        #expect(viewModel.timelineRebuildCountForTesting - rebuildsBefore == 1)
+        #expect(stages.count(.timelineRebuild) - rebuildsBefore == 1)
         let ids = viewModel.timeline.compactMap { item -> String? in
             if case .message(let record, _) = item.kind { return record.messageIdHex }
             return nil

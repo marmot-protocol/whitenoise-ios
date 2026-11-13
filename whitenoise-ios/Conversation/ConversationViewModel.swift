@@ -54,16 +54,6 @@ enum AgentStreamWatchAdmission {
     }
 }
 
-enum TimelineTailRefreshTaskLifetime {
-    static func nextGeneration(after generation: UInt64) -> UInt64 {
-        generation &+ 1
-    }
-
-    static func shouldClearStoredTask(currentGeneration: UInt64, completedGeneration: UInt64) -> Bool {
-        currentGeneration == completedGeneration
-    }
-}
-
 enum ConversationRuntimeStartDecision: Equatable {
     case skipForegroundWork
     case loadLocalSnapshot(startLiveWork: Bool)
@@ -125,12 +115,14 @@ final class ConversationViewModel {
     ) async throws -> SendSummaryFfi
 
     nonisolated struct DurableRetryOperations {
+        let isOnline: @MainActor () -> Bool
         let catchUp: @MainActor (MarmotClient) async throws -> Void
         let converge: @MainActor (MarmotClient, String, String) async throws -> SendSummaryFfi
         let sleep: @MainActor (UInt64) async throws -> Void
         let refresh: @MainActor (ConversationViewModel) async -> Void
 
         static let live = DurableRetryOperations(
+            isOnline: { MediaAutoDownloadStore.shared.isOnline },
             catchUp: { try await $0.catchUpAccounts() },
             converge: { client, accountRef, groupIdHex in
                 try await client.retryGroupConvergence(
@@ -270,8 +262,7 @@ final class ConversationViewModel {
     private var timelineTask: Task<Void, Never>?
     private var groupStateTask: Task<Void, Never>?
     private var groupDetailsTask: Task<Void, Never>?
-    private var tailRefreshTask: Task<Void, Never>?
-    private var tailRefreshGeneration: UInt64 = 0
+    private var tailRefreshTask = OwnedTask()
 
     private static let timelinePageLimit: UInt32 = 50
     private static let liveSubscriptionInitialRetryDelayNanoseconds: UInt64 = 500_000_000
@@ -324,6 +315,7 @@ final class ConversationViewModel {
     @ObservationIgnored private let deleteMessageOperation: DeleteMessageOperation
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
     @ObservationIgnored private let inviteDeclineCalls: InviteDeclineCalls
+    @ObservationIgnored private let groupCalls: ConversationGroupCalls
     @ObservationIgnored let advisoryPrompter = GroupChangeAdvisoryPrompter()
     /// Sends NIP-30 custom emoji drawn from `customEmojiCatalog`; holds the
     /// uploaded references retries reuse.
@@ -439,10 +431,6 @@ final class ConversationViewModel {
     /// `timelineStore` through `StreamWatcherTimelineSink`. Constructed eagerly in
     /// `init` so `timelineStore.streamWatcher` is wired before the first page apply.
     @ObservationIgnored private let streamWatcher: StreamWatcher
-#if DEBUG
-    @ObservationIgnored var acceptGroupInviteForTesting: (@MainActor (String, String) async throws -> AppGroupRecordFfi)?
-    @ObservationIgnored var refreshInviteStateForTesting: (@MainActor () async -> Bool)?
-#endif
 
     /// First-open load timings. Visible under category "conversation-load" in
     /// Console.app. Measures how long each Marmot read on the open path takes so
@@ -1102,8 +1090,10 @@ final class ConversationViewModel {
         },
         durableRetryOperations: DurableRetryOperations = .live,
         projectionBuilders: ConversationProjectionBuilders = .live,
+        timelineTimings: TimelineStoreTimings? = nil,
         composerMarmotCalls: ComposerMarmotCalls = .live,
-        inviteDeclineCalls: InviteDeclineCalls = .live
+        inviteDeclineCalls: InviteDeclineCalls = .live,
+        groupCalls: ConversationGroupCalls = .live
     ) {
         self.appState = appState
         self.moderationAccountRef = appState.activeAccountRef
@@ -1116,6 +1106,7 @@ final class ConversationViewModel {
         self.deleteMessageOperation = deleteMessageOperation
         self.durableRetryOperations = durableRetryOperations
         self.inviteDeclineCalls = inviteDeclineCalls
+        self.groupCalls = groupCalls
         let hiddenMessageIds = appState.activeAccountRef.map {
             MessageHideStore.hiddenMessageIds(accountRef: $0, groupIdHex: group.groupIdHex)
         } ?? []
@@ -1123,7 +1114,8 @@ final class ConversationViewModel {
             appState: appState,
             groupIdHex: group.groupIdHex,
             hiddenMessageIds: hiddenMessageIds,
-            projectionBuilders: projectionBuilders
+            projectionBuilders: projectionBuilders,
+            timings: timelineTimings
         )
         self.streamWatcher = StreamWatcher(appState: appState, groupIdHex: group.groupIdHex)
         self.composer = ComposerModel(appState: appState, groupIdHex: group.groupIdHex, timelineStore: timelineStore,
@@ -1154,7 +1146,7 @@ final class ConversationViewModel {
         if let windowSubscription { Task { await windowSubscription.cancel() } }
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
-        tailRefreshTask?.cancel()
+        tailRefreshTask.cancel()
         streamWatcher.cancelAll()
         composer.cancelDraftMediaUploads()
     }
@@ -1489,7 +1481,7 @@ final class ConversationViewModel {
 
     func retryFailedSend(rowId: String) async {
         if let messageIdHex = timelineStore.undeliveredDurableMessageId(rowId: rowId) {
-            guard MediaAutoDownloadStore.shared.isOnline else {
+            guard durableRetryOperations.isOnline() else {
                 composer.onError(L10n.string("You're offline. Try again once you're connected."))
                 return
             }
@@ -2120,28 +2112,16 @@ final class ConversationViewModel {
     }
 
     private func scheduleTimelineTailRefresh(operation: @escaping TimelineTailRefreshOperation) {
-        cancelTimelineTailRefresh()
-        let generation = tailRefreshGeneration
-        tailRefreshTask = Task { @MainActor [weak self] in
+        let id = UUID()
+        tailRefreshTask.install(id, Task { @MainActor [weak self] in
             guard !Task.isCancelled else { return }
             await operation()
-            guard !Task.isCancelled else { return }
-            self?.clearTimelineTailRefreshTask(generation: generation)
-        }
+            self?.tailRefreshTask.finish(id)
+        })
     }
 
     private func cancelTimelineTailRefresh() {
-        tailRefreshGeneration = TimelineTailRefreshTaskLifetime.nextGeneration(after: tailRefreshGeneration)
-        tailRefreshTask?.cancel()
-        tailRefreshTask = nil
-    }
-
-    private func clearTimelineTailRefreshTask(generation: UInt64) {
-        guard TimelineTailRefreshTaskLifetime.shouldClearStoredTask(
-            currentGeneration: tailRefreshGeneration,
-            completedGeneration: generation
-        ) else { return }
-        tailRefreshTask = nil
+        tailRefreshTask.cancel()
     }
 
     private func timelineTailRefreshRequest() -> TimelineTailRefreshRequest? {
@@ -2184,20 +2164,6 @@ final class ConversationViewModel {
               group.groupIdHex == request.groupIdHex else { return }
         applyTimelinePage(page, placement: .tailRefresh)
     }
-
-#if DEBUG
-    func scheduleTimelineTailRefreshForTesting(operation: @escaping TimelineTailRefreshOperation) {
-        scheduleTimelineTailRefresh(operation: operation)
-    }
-
-    func cancelTimelineTailRefreshForTesting() {
-        cancelTimelineTailRefresh()
-    }
-
-    var hasTimelineTailRefreshTaskForTesting: Bool {
-        tailRefreshTask != nil
-    }
-#endif
 
     func loadOlderTimelinePage() async {
         guard !isLocallyReset, !isAwaitingPageCompletion, hasMoreBefore, !isLoadingOlder, windowSubscription != nil else { return }
@@ -2502,10 +2468,6 @@ final class ConversationViewModel {
     }
 
 #if DEBUG
-    var reactionTargetCollectionCountForTesting: Int {
-        timelineStore.reactionTargetCollectionCountForTesting
-    }
-
     @discardableResult
     func replaceMediaReferencesForTesting(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
         replaceMediaReferences(references, forMessageId: messageIdHex)
@@ -2517,10 +2479,6 @@ final class ConversationViewModel {
 
     func pendingMediaForTesting(rowId: String) -> [MessageMediaAttachment]? {
         timelineStore.mediaProjections.pending(forRowId: rowId)
-    }
-
-    var timelineRebuildCountForTesting: Int {
-        timelineStore.timelineRebuildCountForTesting
     }
 #endif
 
@@ -2843,12 +2801,8 @@ final class ConversationViewModel {
     func refreshGroupManagement(announceRosterChanges: Bool = false) async -> Bool {
         guard let appState, let accountRef = appState.activeAccountRef else { return false }
         do {
-            let client = try appState.currentMarmotClient()
             let detailsStart = ContinuousClock.now
-            let snapshot = try await client.groupConversationSnapshot(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex
-            )
+            let snapshot = try await groupCalls.conversationSnapshot(appState, accountRef, group.groupIdHex)
             logLoadDuration("group.conversation_snapshot", since: detailsStart)
             applyGroupDetails(
                 snapshot.details,
@@ -3078,26 +3032,12 @@ final class ConversationViewModel {
         accountRef: String,
         groupIdHex: String
     ) async throws -> AppGroupRecordFfi {
-#if DEBUG
-        if let acceptGroupInviteForTesting {
-            return try await acceptGroupInviteForTesting(accountRef, groupIdHex)
-        }
-#endif
         guard let appState else { throw CancellationError() }
-        let client = try appState.currentMarmotClient()
-        return try await client.acceptGroupInvite(
-            accountRef: accountRef,
-            groupIdHex: groupIdHex
-        )
+        return try await groupCalls.acceptInvite(appState, accountRef, groupIdHex)
     }
 
     private func refreshInviteState() async -> Bool {
-#if DEBUG
-        if let refreshInviteStateForTesting {
-            return await refreshInviteStateForTesting()
-        }
-#endif
-        return await refreshGroupManagement()
+        await refreshGroupManagement()
     }
 
     /// Reads current admin state, since MDK refuses an admin invitee's decline

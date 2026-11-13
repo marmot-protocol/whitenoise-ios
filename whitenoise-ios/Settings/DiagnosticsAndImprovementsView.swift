@@ -116,7 +116,14 @@ struct DiagnosticsAndImprovementsView: View {
             presenting: retention.pendingShorterDays
         ) { days in
             Button("Delete Older Logs", role: .destructive) {
-                Task { await retention.confirmShorter(days: days, using: appState) }
+                Task {
+                    await retention.confirmShorter(days: days, using: appState) {
+                        await model.reloadAuditFilesAfterRetentionChange(
+                            cutoffMs: AuditLogRetentionPresentation.cutoffMs(days: days),
+                            using: appState
+                        )
+                    }
+                }
             }
             Button("Cancel", role: .cancel) { retention.pendingShorterDays = nil }
         } message: { days in
@@ -157,7 +164,7 @@ struct DiagnosticsAndImprovementsView: View {
     @ViewBuilder
     private var retentionRow: some View {
         if let current = retention.retention {
-            if retention.isSaving {
+            if retention.isBusy {
                 LabeledContent("Keep Logs For") { ProgressView() }
             } else {
                 Picker("Keep Logs For", selection: Binding(

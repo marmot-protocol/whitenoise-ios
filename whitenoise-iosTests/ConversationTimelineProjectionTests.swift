@@ -12,8 +12,9 @@ import Synchronization
 struct ConversationTimelineProjectionTests {
 
     private func durableRetryFixture(
-        client: MarmotClient,
+        client: MarmotClient?,
         invalidationStatus: String? = nil,
+        isOnline: @escaping @MainActor () -> Bool = { true },
         catchUp: @escaping @MainActor (MarmotClient) async throws -> Void = { _ in },
         converge: @escaping @MainActor (MarmotClient, String, String) async throws -> SendSummaryFfi,
         sleep: @escaping @MainActor (UInt64) async throws -> Void = { _ in },
@@ -31,6 +32,7 @@ struct ConversationTimelineProjectionTests {
             appState: appState,
             group: group(name: "", id: groupIdHex),
             durableRetryOperations: ConversationViewModel.DurableRetryOperations(
+                isOnline: isOnline,
                 catchUp: catchUp,
                 converge: converge,
                 sleep: sleep,
@@ -741,11 +743,36 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.hasMoreAfter)
     }
 
+    @Test func defaultTimingsReachTheAppAnalyticsRecorder() async throws {
+        let appState = AppState.test()
+        let stages = Mutex<[ProductTimingStage]>([])
+        appState.productAnalytics.activateSink(timing: { stage, _, _ in stages.withLock { $0.append(stage) } }) { _ in }
+        defer { appState.productAnalytics.replaceSink(nil) }
+        let groupIdHex = hex("aa")
+        // Built the way the app builds it, so the view model's default counts too.
+        let viewModel = ConversationViewModel(appState: appState, group: group(name: "", id: groupIdHex))
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [timelineRecord(messageIdHex: hex("e1"), groupIdHex: groupIdHex, timelineAt: 10)],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+
+        try await eventually {
+            stages.withLock { Set($0).isSuperset(of: [.timelineWindow, .timelineRebuild]) }
+        }
+    }
+
     @Test func liveProjectionUpdateMaintainsTimelineWithoutFullRebuild() throws {
         let groupIdHex = hex("aa")
+        let stages = TimelineStageRecorder()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: group(name: "", id: groupIdHex)
+            group: group(name: "", id: groupIdHex),
+            timelineTimings: stages.timings
         )
         let first = timelineRecord(messageIdHex: hex("e1"), groupIdHex: groupIdHex, timelineAt: 10)
         let second = timelineRecord(messageIdHex: hex("e2"), groupIdHex: groupIdHex, timelineAt: 20)
@@ -753,7 +780,8 @@ struct ConversationTimelineProjectionTests {
             TimelinePageFfi(messages: [first], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        let rebuildCount = viewModel.timelineRebuildCountForTesting
+        let rebuildCount = stages.count(.timelineRebuild)
+        #expect(rebuildCount > 0)
 
         viewModel.applyTimelineSubscriptionUpdate(.projection(update: RuntimeProjectionUpdateFfi(
             accountIdHex: hex("01"),
@@ -768,7 +796,7 @@ struct ConversationTimelineProjectionTests {
         )))
 
         #expect(messageIds(in: viewModel.timeline) == [first.messageIdHex, second.messageIdHex])
-        #expect(viewModel.timelineRebuildCountForTesting == rebuildCount)
+        #expect(stages.count(.timelineRebuild) == rebuildCount)
     }
 
     @Test func projectedOutgoingMessageReplacesMatchingPendingBubble() throws {
@@ -954,33 +982,39 @@ struct ConversationTimelineProjectionTests {
     }
 
     @Test func durableRetryReportsUnavailableRuntime() async throws {
-        let groupIdHex = hex("aa")
-        let appState = AppState.test()
-        appState.activeAccountRef = "account-ref"
-        let viewModel = ConversationViewModel(
-            appState: appState,
-            group: group(name: "", id: groupIdHex)
-        )
-        let record = timelineRecord(
-            messageIdHex: hex("d1"),
-            sourceMessageIdHex: .some(nil),
-            direction: "sent",
-            groupIdHex: groupIdHex,
-            sender: hex("11"),
-            plaintext: "durable retry",
-            timelineAt: 20,
-            invalidationStatus: "local_publish_failed"
-        )
-        let rowId = "msg:\(record.messageIdHex)"
-        viewModel.applyTimelinePage(
-            TimelinePageFfi(messages: [record], hasMoreBefore: true, hasMoreAfter: false),
-            placement: .window
+        let fixture = try durableRetryFixture(
+            client: nil,
+            invalidationStatus: "local_publish_failed",
+            converge: { _, _, _ in unpublishedRetrySummary() }
         )
 
-        await viewModel.retryFailedSend(rowId: rowId)
+        await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
 
-        #expect(status(of: rowId, in: viewModel) == .failed)
-        #expect(viewModel.error == L10n.string("Send failed"))
+        #expect(status(of: fixture.rowId, in: fixture.viewModel) == .failed)
+        #expect(fixture.viewModel.error == L10n.string("Send failed"))
+    }
+
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func offlineDurableRetryReportsOfflineWithoutRetrying() async throws {
+        var retryCalls = 0
+        try await withTestClient { client in
+            let fixture = try durableRetryFixture(
+                client: client,
+                invalidationStatus: "local_publish_failed",
+                isOnline: { false },
+                catchUp: { _ in retryCalls += 1 },
+                converge: { _, _, _ in
+                    retryCalls += 1
+                    return unpublishedRetrySummary()
+                }
+            )
+
+            await fixture.viewModel.retryFailedSend(rowId: fixture.rowId)
+
+            #expect(retryCalls == 0)
+            #expect(status(of: fixture.rowId, in: fixture.viewModel) == .failed)
+            #expect(fixture.viewModel.error == L10n.string("You're offline. Try again once you're connected."))
+        }
     }
 
     @Test(.marmotRuntimeConcurrencyLimit)

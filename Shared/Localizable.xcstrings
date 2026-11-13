@@ -1,6 +1,786 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Choose when audio, including voice notes, downloads automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle, wann Audio, einschließlich Sprachnachrichten, automatisch heruntergeladen wird. „Nur WLAN“ schließt persönliche Hotspots und Verbindungen im Datensparmodus aus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose when audio, including voice notes, downloads automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige cuándo se descarga el audio automáticamente, incluidas las notas de voz. Solo Wi-Fi excluye los puntos de acceso personales y las conexiones con el modo de datos reducidos activado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez quand les fichiers audio, y compris les messages vocaux, se téléchargent automatiquement. Wi-Fi uniquement exclut les partages de connexion et les connexions en mode Faibles données."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli quando scaricare automaticamente gli audio, inclusi i messaggi vocali. Solo Wi-Fi esclude gli hotspot personali e le connessioni in modalità Consumo limitato di dati."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha quando baixar áudios automaticamente, incluindo mensagens de voz. Somente Wi-Fi exclui acessos pessoais e conexões no Modo de Economia de Dados."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите, когда аудио, включая голосовые сообщения, скачивается автоматически. Режим «Только Wi-Fi» исключает персональные точки доступа и подключения в режиме экономии данных."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sesli mesajlar dahil ses dosyalarının ne zaman otomatik indirileceğini seçin. Yalnızca Wi-Fi, kişisel erişim noktalarını ve Düşük Veri Modu kullanılan bağlantıları kapsamaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择何时自动下载音频，包括语音消息。“仅 Wi-Fi”不包括个人热点和使用低数据模式的连接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇何時自動下載音訊，包括語音訊息。「僅限 Wi-Fi」不包括個人熱點和使用低數據模式的連線。"
+          }
+        }
+      }
+    },
+    "Choose when files download automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle, wann Dateien automatisch heruntergeladen werden. „Nur WLAN“ schließt persönliche Hotspots und Verbindungen im Datensparmodus aus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose when files download automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige cuándo se descargan los archivos automáticamente. Solo Wi-Fi excluye los puntos de acceso personales y las conexiones con el modo de datos reducidos activado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez quand les fichiers se téléchargent automatiquement. Wi-Fi uniquement exclut les partages de connexion et les connexions en mode Faibles données."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli quando scaricare automaticamente i file. Solo Wi-Fi esclude gli hotspot personali e le connessioni in modalità Consumo limitato di dati."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha quando baixar arquivos automaticamente. Somente Wi-Fi exclui acessos pessoais e conexões no Modo de Economia de Dados."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите, когда файлы скачиваются автоматически. Режим «Только Wi-Fi» исключает персональные точки доступа и подключения в режиме экономии данных."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dosyaların ne zaman otomatik indirileceğini seçin. Yalnızca Wi-Fi, kişisel erişim noktalarını ve Düşük Veri Modu kullanılan bağlantıları kapsamaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择何时自动下载文件。“仅 Wi-Fi”不包括个人热点和使用低数据模式的连接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇何時自動下載檔案。「僅限 Wi-Fi」不包括個人熱點和使用低數據模式的連線。"
+          }
+        }
+      }
+    },
+    "Choose when photos download automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle, wann Fotos automatisch heruntergeladen werden. „Nur WLAN“ schließt persönliche Hotspots und Verbindungen im Datensparmodus aus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose when photos download automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige cuándo se descargan las fotos automáticamente. Solo Wi-Fi excluye los puntos de acceso personales y las conexiones con el modo de datos reducidos activado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez quand les photos se téléchargent automatiquement. Wi-Fi uniquement exclut les partages de connexion et les connexions en mode Faibles données."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli quando scaricare automaticamente le foto. Solo Wi-Fi esclude gli hotspot personali e le connessioni in modalità Consumo limitato di dati."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha quando baixar fotos automaticamente. Somente Wi-Fi exclui acessos pessoais e conexões no Modo de Economia de Dados."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите, когда фотографии скачиваются автоматически. Режим «Только Wi-Fi» исключает персональные точки доступа и подключения в режиме экономии данных."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotoğrafların ne zaman otomatik indirileceğini seçin. Yalnızca Wi-Fi, kişisel erişim noktalarını ve Düşük Veri Modu kullanılan bağlantıları kapsamaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择何时自动下载照片。“仅 Wi-Fi”不包括个人热点和使用低数据模式的连接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇何時自動下載照片。「僅限 Wi-Fi」不包括個人熱點和使用低數據模式的連線。"
+          }
+        }
+      }
+    },
+    "Choose when videos download automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle, wann Videos automatisch heruntergeladen werden. „Nur WLAN“ schließt persönliche Hotspots und Verbindungen im Datensparmodus aus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose when videos download automatically. Wi-Fi Only excludes personal hotspots and connections using Low Data Mode."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige cuándo se descargan los videos automáticamente. Solo Wi-Fi excluye los puntos de acceso personales y las conexiones con el modo de datos reducidos activado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez quand les vidéos se téléchargent automatiquement. Wi-Fi uniquement exclut les partages de connexion et les connexions en mode Faibles données."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli quando scaricare automaticamente i video. Solo Wi-Fi esclude gli hotspot personali e le connessioni in modalità Consumo limitato di dati."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha quando baixar vídeos automaticamente. Somente Wi-Fi exclui acessos pessoais e conexões no Modo de Economia de Dados."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите, когда видео скачиваются автоматически. Режим «Только Wi-Fi» исключает персональные точки доступа и подключения в режиме экономии данных."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videoların ne zaman otomatik indirileceğini seçin. Yalnızca Wi-Fi, kişisel erişim noktalarını ve Düşük Veri Modu kullanılan bağlantıları kapsamaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择何时自动下载视频。“仅 Wi-Fi”不包括个人热点和使用低数据模式的连接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇何時自動下載影片。「僅限 Wi-Fi」不包括個人熱點和使用低數據模式的連線。"
+          }
+        }
+      }
+    },
+    "Higher quality, larger files" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Höhere Qualität, größere Dateien"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Higher quality, larger files"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mayor calidad, archivos más grandes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualité supérieure, fichiers plus volumineux"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualità superiore, file più grandi"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualidade superior, arquivos maiores"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выше качество, больше размер файлов"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daha yüksek kalite, daha büyük dosyalar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "质量更高，文件更大"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "品質較高，檔案較大"
+          }
+        }
+      }
+    },
+    "Identifying photo metadata, including location, is removed at both quality levels. Videos are sent unchanged." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identifizierende Foto-Metadaten, einschließlich Standort, werden bei beiden Qualitätsstufen entfernt. Videos werden unverändert gesendet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identifying photo metadata, including location, is removed at both quality levels. Videos are sent unchanged."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los metadatos identificativos de las fotos, incluida la ubicación, se eliminan en ambos niveles de calidad. Los videos se envían sin cambios."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les métadonnées permettant de vous identifier, dont la localisation, sont supprimées des photos aux deux niveaux de qualité. Les vidéos sont envoyées sans modification."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I metadati identificativi delle foto, inclusa la posizione, vengono rimossi a entrambi i livelli di qualità. I video vengono inviati senza modifiche."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os metadados de identificação das fotos, incluindo a localização, são removidos nos dois níveis de qualidade. Os vídeos são enviados sem alterações."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идентифицирующие метаданные фотографий, включая геопозицию, удаляются при обоих уровнях качества. Видео отправляются без изменений."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konum dahil kimlik belirleyici fotoğraf meta verileri her iki kalite düzeyinde de kaldırılır. Videolar değiştirilmeden gönderilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两种质量设置都会移除照片中可用于识别身份的元数据，包括位置。视频按原样发送。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "兩種品質設定都會移除照片中可用於識別身分的中繼資料，包括位置。影片以原樣傳送。"
+          }
+        }
+      }
+    },
+    "Loading GIFs shares your IP address and the requested GIF with GIPHY. When off, tap a GIF to load it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Laden von GIFs erfährt GIPHY deine IP-Adresse und welches GIF du anforderst. Ist die Option aus, tippe zum Laden auf ein GIF."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading GIFs shares your IP address and the requested GIF with GIPHY. When off, tap a GIF to load it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al cargar GIFs, se comparte con GIPHY tu dirección IP y el GIF solicitado. Si desactivas esta opción, toca un GIF para cargarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le chargement des GIF partage votre adresse IP et le GIF demandé avec GIPHY. Si cette option est désactivée, touchez un GIF pour le charger."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il caricamento delle GIF condivide con GIPHY il tuo indirizzo IP e la GIF richiesta. Se disattivato, tocca una GIF per caricarla."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ao carregar GIFs, seu endereço IP e o GIF solicitado são compartilhados com o GIPHY. Com a opção desativada, toque em um GIF para carregá-lo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "При загрузке GIF сервис GIPHY получает ваш IP-адрес и сведения о запрошенном GIF. Если настройка выключена, нажмите на GIF, чтобы загрузить его."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIF yüklemek, IP adresinizi ve istenen GIF’i GIPHY ile paylaşır. Kapalıyken yüklemek için GIF’e dokunun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加载 GIF 会向 GIPHY 分享你的 IP 地址和所请求的 GIF。关闭后，轻点 GIF 即可加载。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "載入 GIF 會向 GIPHY 分享你的 IP 位址和所請求的 GIF。關閉後，點一下 GIF 即可載入。"
+          }
+        }
+      }
+    },
+    "Media that doesn’t download automatically can be downloaded by tapping it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medien, die nicht automatisch heruntergeladen werden, kannst du durch Antippen herunterladen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media that doesn’t download automatically can be downloaded by tapping it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puedes descargar los archivos multimedia que no se descarguen automáticamente tocándolos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touchez les médias qui ne se téléchargent pas automatiquement pour les télécharger."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca i contenuti multimediali che non vengono scaricati automaticamente per scaricarli."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque nos arquivos de mídia que não forem baixados automaticamente para baixá-los."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажмите на медиафайл, который не загрузился автоматически, чтобы скачать его."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otomatik indirilmeyen medyayı üzerine dokunarak indirebilirsiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未自动下载的媒体可以通过轻点来下载。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未自動下載的媒體可透過點一下來下載。"
+          }
+        }
+      }
+    },
+    "Photos and Voice Notes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos und Sprachnachrichten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photos and Voice Notes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos y notas de voz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photos et messages vocaux"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto e messaggi vocali"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos e mensagens de voz"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фотографии и голосовые сообщения"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotoğraflar ve Sesli Mesajlar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照片和语音消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照片和語音訊息"
+          }
+        }
+      }
+    },
+    "Set the quality of photos and voice notes you send." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lege die Qualität gesendeter Fotos und Sprachnachrichten fest."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set the quality of photos and voice notes you send."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configura la calidad de las fotos y notas de voz que envías."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Définissez la qualité des photos et messages vocaux que vous envoyez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imposta la qualità delle foto e dei messaggi vocali che invii."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Defina a qualidade das fotos e mensagens de voz que você envia."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настройте качество отправляемых фотографий и голосовых сообщений."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gönderdiğiniz fotoğrafların ve sesli mesajların kalitesini ayarlayın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置发送照片和语音消息的质量。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定傳送照片和語音訊息的品質。"
+          }
+        }
+      }
+    },
+    "Smaller files, less data" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kleinere Dateien, weniger Daten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smaller files, less data"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivos más pequeños, menos datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers plus petits, moins de données"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File più piccoli, meno dati"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arquivos menores, menos dados"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Меньше размер файлов и расход трафика"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daha küçük dosyalar, daha az veri"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件更小，流量更少"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檔案較小，用量較少"
+          }
+        }
+      }
+    },
+    "Wi-Fi Only" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur WLAN"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wi-Fi Only"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo Wi-Fi"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wi-Fi uniquement"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo Wi-Fi"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Somente Wi-Fi"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Только Wi-Fi"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yalnızca Wi-Fi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅 Wi-Fi"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅限 Wi-Fi"
+          }
+        }
+      }
+    },
     "Clearing removes local logs only. Uploaded copies and sharing settings stay unchanged." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21281,65 +22061,6 @@
         }
       }
     },
-    "Automatic download size limit" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Größenlimit für automatische Downloads"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tamaño máximo de descarga automática"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Taille maximale des téléchargements automatiques"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dimensione massima dei download automatici"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tamanho máximo de download automático"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Максимальный размер автозагрузки"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otomatik indirme boyutu sınırı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自动下载大小限制"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動下載大小限制"
-          }
-        }
-      }
-    },
     "Automatically gathers and uploads feature activity and telemetry metrics for every profile on this device." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -21716,71 +22437,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "返回登入"
-          }
-        }
-      }
-    },
-    "Balanced quality and data use" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ausgewogene Qualität und Datenverbrauch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Balanced quality and data use"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Calidad y uso de datos equilibrados"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Équilibre entre qualité et données"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Qualità e consumo dati bilanciati"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Qualidade e uso de dados equilibrados"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Баланс качества и трафика"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dengeli kalite ve veri kullanımı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "质量与数据用量均衡"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "品質與數據用量均衡"
           }
         }
       }
@@ -26566,66 +27222,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇讀取、寫入或兩者。"
-          }
-        }
-      }
-    },
-    "Choose the quality for photos and videos you send." : {
-      "comment" : "A description of the data usage of photos and videos.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wähle die Qualität für Fotos und Videos, die du sendest."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige la calidad de las fotos y los videos que envías."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisissez la qualité des photos et vidéos que vous envoyez."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scegli la qualità di foto e video che invii."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escolha a qualidade das fotos e vídeos que você envia."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выберите качество отправляемых фото и видео."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gönderdiğiniz fotoğraf ve videoların kalitesini seçin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择发送照片和视频的画质。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選擇傳送照片和影片的畫質。"
           }
         }
       }
@@ -33084,65 +33680,6 @@
         }
       }
     },
-    "Couldn't load download settings." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloadeinstellungen konnten nicht geladen werden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo cargar la configuración de descargas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de charger les réglages de téléchargement."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile caricare le impostazioni dei download."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível carregar as configurações de download."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось загрузить настройки загрузок."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme ayarları yüklenemedi."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法加载下载设置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法載入下載設定。"
-          }
-        }
-      }
-    },
     "Couldn't load download status." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -35492,65 +36029,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法儲存診斷記錄。請重試。"
-          }
-        }
-      }
-    },
-    "Couldn't save download settings." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloadeinstellungen konnten nicht gespeichert werden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo guardar la configuración de descargas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible d’enregistrer les réglages de téléchargement."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile salvare le impostazioni dei download."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível salvar as configurações de download."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось сохранить настройки загрузок."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme ayarları kaydedilemedi."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法保存下载设置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法儲存下載設定。"
           }
         }
       }
@@ -44744,124 +45222,6 @@
         }
       }
     },
-    "Download settings saved" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloadeinstellungen gespeichert"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configuración de descargas guardada"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Réglages de téléchargement enregistrés"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impostazioni dei download salvate"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configurações de download salvas"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Настройки загрузок сохранены"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme ayarları kaydedildi"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下载设置已保存"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下載設定已儲存"
-          }
-        }
-      }
-    },
-    "Download Storage" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Download-Speicher"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Almacenamiento de descargas"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stockage des téléchargements"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spazio per i download"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Armazenamento de downloads"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Хранилище загрузок"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme depolama alanı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下载存储"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下載儲存空間"
-          }
-        }
-      }
-    },
     "Download unavailable" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -52895,71 +53255,6 @@
         }
       }
     },
-    "Full resolution, metadata still removed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Volle Auflösung, Metadaten werden dennoch entfernt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Full resolution, metadata still removed"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Resolución completa, los metadatos se eliminan igualmente"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pleine résolution, métadonnées toujours supprimées"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Risoluzione piena, i metadati vengono comunque rimossi"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Resolução total, metadados ainda removidos"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Полное разрешение, метаданные всё равно удаляются"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tam çözünürlük, meta veriler yine kaldırılır"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完整分辨率，元数据仍会被移除"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完整解析度，中繼資料仍會被移除"
-          }
-        }
-      }
-    },
     "Generate Identity" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -56967,66 +57262,6 @@
         }
       }
     },
-    "Higher quality uses more data. Identifying photo metadata, like location, is always removed before sending." : {
-      "comment" : "A description of the quality of the photos and videos that are sent.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Höhere Qualität verbraucht mehr Daten. Identifizierende Foto-Metadaten wie der Standort werden vor dem Senden immer entfernt."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Una calidad más alta consume más datos. Los metadatos identificativos de las fotos, como la ubicación, siempre se eliminan antes de enviarlas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Une qualité supérieure consomme plus de données. Les métadonnées identifiantes des photos, comme la localisation, sont toujours supprimées avant l’envoi."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Una qualità più alta consuma più dati. I metadati identificativi delle foto, come la posizione, vengono sempre rimossi prima dell’invio."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Qualidade mais alta consome mais dados. Metadados identificáveis das fotos, como a localização, são sempre removidos antes do envio."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Более высокое качество расходует больше данных. Идентифицирующие метаданные фото, например геопозиция, всегда удаляются перед отправкой."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Daha yüksek kalite daha fazla veri kullanır. Konum gibi kimlik belirtici fotoğraf üst verileri gönderilmeden önce her zaman kaldırılır."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "画质越高，流量消耗越大。位置等可识别身份的照片元数据在发送前始终会被移除。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "畫質越高，流量消耗越大。位置等可識別身分的照片中介資料在傳送前一律會被移除。"
-          }
-        }
-      }
-    },
     "History may be incomplete" : {
       "comment" : "Title of a notice that some message history could not be confirmed complete.",
       "extractionState" : "manual",
@@ -60736,65 +60971,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "至少保留一個中繼。"
-          }
-        }
-      }
-    },
-    "Keep disk space free" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speicherplatz freihalten"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mantener espacio libre"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conserver de l’espace libre"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mantieni spazio libero"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Manter espaço livre"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Оставлять свободное место"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Boş disk alanını koru"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保留可用磁盘空间"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保留可用磁碟空間"
           }
         }
       }
@@ -66329,71 +66505,6 @@
         }
       }
     },
-    "Low" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Niedrig"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Low"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Baja"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Basse"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bassa"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Baixa"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Низкое"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Düşük"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "低"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "低"
-          }
-        }
-      }
-    },
     "Made admin" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -67648,66 +67759,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Otomatik indirilmeyen medya bunun yerine bir indirme düğmesi gösterir."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未自动下载的媒体会显示下载按钮。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未自動下載的媒體會顯示下載按鈕。"
-          }
-        }
-      }
-    },
-    "Media that isn't downloaded automatically shows a download button." : {
-      "comment" : "A description of the auto-download feature.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Medien, die nicht automatisch geladen werden, zeigen eine Download-Schaltfläche."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los archivos multimedia que no se descargan automáticamente muestran un botón de descarga."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les médias qui ne sont pas téléchargés automatiquement affichent un bouton de téléchargement."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I media che non vengono scaricati automaticamente mostrano un pulsante di download."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As mídias que não são baixadas automaticamente exibem um botão de download."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Медиафайлы, которые не загружаются автоматически, показывают кнопку загрузки."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otomatik indirilmeyen medya, bir indirme düğmesi gösterir."
           }
         },
         "zh-Hans" : {
@@ -101891,71 +101942,6 @@
         }
       }
     },
-    "Sharper photos, more data" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schärfere Fotos, mehr Daten"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sharper photos, more data"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fotos más nítidas, más datos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Photos plus nettes, plus de données"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Foto più nitide, più dati"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fotos mais nítidas, mais dados"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Чётче фото, больше трафика"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Daha net fotoğraflar, daha fazla veri"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "照片更清晰，数据用量更多"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "照片更清晰，數據用量更多"
-          }
-        }
-      }
-    },
     "Shorten your message, then send again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -104092,71 +104078,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已略過"
-          }
-        }
-      }
-    },
-    "Smallest data use" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Geringster Datenverbrauch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Smallest data use"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Menor uso de datos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Utilisation minimale des données"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Consumo dati minimo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Menor uso de dados"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Минимальный расход трафика"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En az veri kullanımı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "数据用量最小"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "數據用量最小"
           }
         }
       }
@@ -123957,65 +123878,6 @@
         }
       }
     },
-    "When enabled, opening a conversation can tell GIPHY your IP address and which GIF was requested. Otherwise, received GIFs load only when you tap them." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wenn aktiviert, kann das Öffnen einer Unterhaltung GIPHY deine IP-Adresse und das angeforderte GIF mitteilen. Andernfalls werden empfangene GIFs erst geladen, wenn du sie antippst."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Si está activado, abrir una conversación puede revelar a GIPHY tu dirección IP y qué GIF se solicitó. Si no, los GIFs recibidos solo se cargan cuando los tocas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Si cette option est activée, l’ouverture d’une conversation peut communiquer à GIPHY votre adresse IP et le GIF demandé. Sinon, les GIF reçus ne se chargent que lorsque vous les touchez."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se attivo, aprire una conversazione può comunicare a GIPHY il tuo indirizzo IP e quale GIF è stata richiesta. Altrimenti, le GIF ricevute si caricano solo quando le tocchi."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quando ativado, abrir uma conversa pode informar ao GIPHY o seu endereço IP e qual GIF foi solicitado. Caso contrário, os GIFs recebidos só são carregados quando você os toca."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Если включено, открытие разговора может сообщить GIPHY ваш IP-адрес и какой GIF был запрошен. Иначе полученные GIF загружаются только по нажатию."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Etkinleştirildiğinde, bir sohbeti açmak GIPHY’ye IP adresinizi ve hangi GIF’in istendiğini bildirebilir. Aksi hâlde alınan GIF’ler yalnızca dokunduğunuzda yüklenir."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用后，打开对话可能会向 GIPHY 透露你的 IP 地址以及所请求的 GIF。否则，收到的 GIF 仅在你轻点时才加载。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "啟用後，開啟對話可能會向 GIPHY 透露你的 IP 位址以及所請求的 GIF。否則，收到的 GIF 僅在你輕點時才載入。"
-          }
-        }
-      }
-    },
     "White Noise" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -124559,71 +124421,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise 可與 AI 代理搭配使用。你的代理在你自己的電腦或伺服器上作為獨立的 Marmot 帳戶執行；你可以在這裡像與任何聯絡人一樣與它端到端加密聊天。"
-          }
-        }
-      }
-    },
-    "Wi-Fi" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WLAN"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wi-Fi"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wi-Fi"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wi-Fi"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wi-Fi"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wi-Fi"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wi-Fi"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wi-Fi"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wi-Fi"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wi-Fi"
           }
         }
       }
@@ -135315,65 +135112,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "仍由聊天資料庫檔案佔用"
-          }
-        }
-      }
-    },
-    "Limits apply to this profile. A download waits when it would leave less free space than this, and continues when you free up space. To remove attachments or choose how long to keep them, go to Manage Storage. Automatic downloads also follow your media and network preferences." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Limits gelten für dieses Profil. Ein Download wartet, wenn danach weniger freier Speicher als dieser Wert bliebe, und wird fortgesetzt, sobald du Speicherplatz freigibst. Um Anhänge zu entfernen oder festzulegen, wie lange sie behalten werden, öffne „Speicher verwalten“. Automatische Downloads berücksichtigen auch deine Medien- und Netzwerkeinstellungen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los límites se aplican a este perfil. Una descarga espera si dejaría menos espacio libre que este valor y continúa cuando liberas espacio. Para eliminar archivos adjuntos o elegir cuánto tiempo conservarlos, ve a Gestionar almacenamiento. Las descargas automáticas también respetan tus preferencias de contenido y red."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les limites s’appliquent à ce profil. Un téléchargement attend s’il laisserait moins d’espace libre que cette valeur, puis reprend lorsque vous libérez de l’espace. Pour supprimer des pièces jointes ou choisir combien de temps les conserver, accédez à Gérer le stockage. Les téléchargements automatiques respectent aussi vos préférences de médias et de réseau."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I limiti si applicano a questo profilo. Un download resta in attesa se lascerebbe meno spazio libero di questo valore e riprende quando liberi spazio. Per rimuovere gli allegati o scegliere per quanto tempo conservarli, vai a Gestisci spazio. I download automatici rispettano anche le preferenze relative ai contenuti e alla rete."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Os limites se aplicam a este perfil. Um download aguarda se deixar menos espaço livre do que este valor e continua quando você libera espaço. Para remover anexos ou escolher por quanto tempo mantê-los, acesse Gerenciar armazenamento. Os downloads automáticos também respeitam suas preferências de mídia e rede."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Лимиты действуют для этого профиля. Загрузка ждёт, если после неё останется меньше свободного места, чем указано, и продолжается, когда вы освободите место. Чтобы удалить вложения или выбрать, как долго их хранить, откройте «Управление хранилищем». Автозагрузка также учитывает настройки медиа и сети."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sınırlar bu profil için geçerlidir. Bir indirme, bundan daha az boş alan bırakacaksa bekler ve alan açtığınızda devam eder. Ekleri kaldırmak veya ne kadar süre saklanacaklarını seçmek için Depolama alanını yönet bölümüne gidin. Otomatik indirmeler medya ve ağ tercihlerinize de uyar."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "限制适用于此个人资料。如果下载后剩余的可用空间少于此值，下载会等待，并在你释放空间后继续。要移除附件或选择保留时长，请前往“管理存储空间”。自动下载也遵循你的媒体和网络偏好设置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "限制適用於此個人檔案。如果下載後剩餘的可用空間少於此值，下載會等待，並在你釋出空間後繼續。若要移除附件或選擇保留時間，請前往「管理儲存空間」。自動下載也遵循你的媒體和網路偏好設定。"
           }
         }
       }
@@ -151474,6 +151212,126 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "尚無上傳記錄"
+          }
+        }
+      }
+    },
+    "Restart White Noise" : {
+      "comment" : "Toast title when a chat is stuck on an earlier state until the app restarts.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise neu starten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reinicia White Noise"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redémarrez White Noise"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riavvia White Noise"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reinicie o White Noise"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перезапустите White Noise"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise'u yeniden başlatın"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请重新启动 White Noise"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請重新啟動 White Noise"
+          }
+        }
+      }
+    },
+    "A chat couldn't return to its latest state. Restart the app to restore it." : {
+      "comment" : "Toast message when MDK reports a failed rewind restore; retrying in the app can't fix it.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Chat konnte nicht zu seinem aktuellen Stand zurückkehren. Starte die App neu, um ihn wiederherzustellen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un chat no pudo volver a su estado más reciente. Reinicia la app para restaurarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une discussion n’a pas pu revenir à son état le plus récent. Redémarrez l’application pour la restaurer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una chat non è riuscita a tornare al suo stato più recente. Riavvia l’app per ripristinarla."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uma conversa não conseguiu voltar ao estado mais recente. Reinicie o app para restaurá-la."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось вернуть чат к последнему состоянию. Перезапустите приложение, чтобы восстановить его."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir sohbet en son durumuna dönemedi. Geri yüklemek için uygulamayı yeniden başlatın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某个聊天无法回到最新状态。请重新启动应用以恢复。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某個聊天無法回到最新狀態。請重新啟動應用程式以還原。"
           }
         }
       }

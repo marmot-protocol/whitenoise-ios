@@ -113,9 +113,23 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
 
 nonisolated enum AccountSetupFailure: Equatable, Sendable {
     case settingsChanged, operation, updatesStopped, loadChecks, closeSignIn, refreshAccounts, discovery
+    /// Every relay refused a setup publish (the KeyPackage) for size. Setup keeps
+    /// its actions; changing relays is the remedy, and a retry fails the same way.
+    case tooLarge
+
+    /// The failure for a setup operation that threw `error`.
+    static func operation(_ error: Error) -> AccountSetupFailure {
+        guard let error = error as? MarmotKitError else { return .operation }
+        switch error {
+        case .OnboardingActionUnavailable: return .settingsChanged
+        case .EventTooLarge: return .tooLarge
+        default: return .operation
+        }
+    }
 
     var message: String {
         switch self {
+        case .tooLarge: UserFacingError.eventTooLargeMessage(.other)
         case .settingsChanged: L10n.string("Setup changed. Try again to review the latest options.")
         case .operation: L10n.string("Couldn’t finish this step. Try again.")
         case .updatesStopped: L10n.string("Setup updates stopped. Try again to continue.")
@@ -225,11 +239,7 @@ final class AccountSetupModel {
             } catch {
                 guard let self, self.session == id, !Task.isCancelled else { return }
                 Self.log.error("Setup \(AccountSetupLogLabel.caseName(command), privacy: .public) failed: \(AccountSetupLogLabel.caseName(error), privacy: .public)")
-                if let error = error as? MarmotKitError, case .OnboardingActionUnavailable = error {
-                    self.failure = .settingsChanged
-                } else {
-                    self.failure = .operation
-                }
+                self.failure = AccountSetupFailure.operation(error)
             }
             guard let self, self.session == id else { return }
             self.isBusy = false
