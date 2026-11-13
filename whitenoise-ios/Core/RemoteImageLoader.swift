@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import CryptoKit
 import Foundation
 import ImageIO
@@ -387,7 +386,7 @@ enum RemoteAvatarImageLoader {
             self.expiresAt = expiresAt
         }
 
-        func isExpired(now: Date = Date()) -> Bool {
+        func isExpired(now: Date) -> Bool {
             now >= expiresAt
         }
     }
@@ -419,11 +418,13 @@ enum RemoteAvatarImageLoader {
         category: "avatar-cache"
     )
 
+    /// `now` dates the 60-second failure cache; the default is the wall clock.
     static func image(
         for url: URL,
         maxPixelSize: Int,
         scale: CGFloat,
-        fetch: @escaping @Sendable (URL) async throws -> Data = RemoteImageFetch.imageData
+        fetch: @escaping @Sendable (URL) async throws -> Data = RemoteImageFetch.imageData,
+        now: () -> Date = Date.init
     ) async throws -> UIImage {
         try checkCacheWorkAllowed()
         let generation = cacheGeneration
@@ -435,7 +436,7 @@ enum RemoteAvatarImageLoader {
             return cached
         }
 
-        if let cachedFailure = cachedFailureError(for: failureKey) {
+        if let cachedFailure = cachedFailureError(for: failureKey, now: now()) {
             throw cachedFailure
         }
 
@@ -468,7 +469,7 @@ enum RemoteAvatarImageLoader {
             )
             return image
         } catch {
-            if !task.isCancelled { cacheFailure(error, for: failureKey) }
+            if !task.isCancelled { cacheFailure(error, for: failureKey, now: now()) }
             throw error
         }
     }
@@ -517,7 +518,7 @@ enum RemoteAvatarImageLoader {
         return try await task.value
     }
 
-    private static func cachedFailureError(for key: NSString, now: Date = Date()) -> Error? {
+    private static func cachedFailureError(for key: NSString, now: Date) -> Error? {
         guard let cachedFailure = failureCache.object(forKey: key) else { return nil }
         if cachedFailure.isExpired(now: now) {
             failureCache.removeObject(forKey: key)
@@ -526,7 +527,7 @@ enum RemoteAvatarImageLoader {
         return cachedFailure.error
     }
 
-    private static func cacheFailure(_ error: Error, for key: NSString, now: Date = Date()) {
+    private static func cacheFailure(_ error: Error, for key: NSString, now: Date) {
         guard cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
         guard shouldCacheFailure(error) else { return }
         failureCache.setObject(
@@ -586,35 +587,6 @@ enum RemoteAvatarImageLoader {
         inFlightImageTasks.values.forEach { $0.cancel() }
         inFlightImageTasks.removeAll()
     }
-
-    #if DEBUG
-    static var isDrainingForTesting: Bool { cacheDrainTask != nil }
-    static func resetCachesForTesting() { clearCaches() }
-
-    static func cacheFailureForTesting(_ error: Error, for url: URL, now: Date = Date()) {
-        cacheFailure(error, for: failureCacheKey(for: url), now: now)
-    }
-
-    static func cachedFailureForTesting(for url: URL, now: Date = Date()) -> Error? {
-        cachedFailureError(for: failureCacheKey(for: url), now: now)
-    }
-
-    static func shouldCacheFailureForTesting(_ error: Error) -> Bool {
-        shouldCacheFailure(error)
-    }
-
-    static func imageDataForTesting(
-        for url: URL,
-        keyString: String,
-        fetch: @escaping @Sendable (URL) async throws -> Data
-    ) async throws -> Data {
-        try await imageData(for: url, keyString: keyString, fetch: fetch)
-    }
-
-    static func cachedImageForTesting(for url: URL, maxPixelSize: Int) -> UIImage? {
-        cachedImage(for: url, maxPixelSize: maxPixelSize)
-    }
-    #endif
 
     static func cachedImage(for url: URL, maxPixelSize: Int) -> UIImage? {
         cache.object(forKey: cacheKey(for: url, maxPixelSize: max(maxPixelSize, 1)))?.image
