@@ -1,4 +1,5 @@
 import Foundation
+import MarmotKit
 import SwiftUI
 import Synchronization
 import Testing
@@ -317,9 +318,13 @@ struct RemoteImageLoaderTests {
             let cleanup = Task { await GroupAvatarImageLoader.clearCachesAndDrain() }
             // The drain is in place before clearCachesAndDrain first suspends, so
             // one main-actor turn is enough; the rejected load below proves it.
+            // It asks for another image so it can't join the paused load: without
+            // the drain it would reach the client and fail with a different error.
             await Task { @MainActor in }.value
+            let arriving = GroupAvatarImageRequest(accountRef: request.accountRef, groupIdHex: request.groupIdHex,
+                                                   imageHashHex: "arriving", maxPixelSize: 8)
             await #expect(throws: CancellationError.self) {
-                try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+                try await GroupAvatarImageLoader.image(request: arriving, scale: 1, priority: .foreground, client: client)
             }
             await probe.release()
             await cleanup.value
@@ -545,9 +550,9 @@ struct RemoteImageLoaderTests {
             let loaded = try await load(imageHashHex: "new-hash")
             #expect(loaded.cgImage?.width == 56)
 
-            // The seed was used up: the next replacement misses every cache
-            // and the client fails it locally.
-            await #expect(throws: (any Error).self) {
+            // The seed was used up: the next replacement misses every cache and
+            // reaches the client, which rejects the non-hex group id locally.
+            await #expect(throws: MarmotKitError.self) {
                 _ = try await load(imageHashHex: "newer-hash")
             }
         }
