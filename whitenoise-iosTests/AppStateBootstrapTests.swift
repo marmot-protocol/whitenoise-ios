@@ -503,13 +503,15 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(original)
         originalClient = nil
 
+        let timings = HostPerformanceRecorderStub()
         let relaunched = try ownedAppState(
             client: try reopenedClient(
                 rootPath: originalRootPath,
                 relayUrls: originalRelayUrls
             ),
             notifications: deniedNotifications(),
-            accountDefaults: accountDefaults
+            accountDefaults: accountDefaults,
+            hostPerformanceRecorder: timings.recorder
         )
         relaunched.setAppSceneActive(true)
         let checkpoint = AsyncTestCheckpoint()
@@ -518,7 +520,7 @@ struct AppStateBootstrapTests {
         }
         var splashReadySuccesses = 0
         var phaseWhenSplashReadyWasRecorded: AppState.Phase?
-        relaunched.runtimeLifecycle.hostPerformanceObserverForTesting = { operation, _, outcome in
+        timings.onRecord = { operation, _, outcome in
             if case .splashReady = operation, case .success = outcome {
                 splashReadySuccesses += 1
                 phaseWhenSplashReadyWasRecorded = relaunched.phase
@@ -540,7 +542,7 @@ struct AppStateBootstrapTests {
         await relaunched.drainUnreadSummaryRefresh()
         #expect(splashReadySuccesses == 1)
         relaunched.beforeUnreadSummaryRefreshForTesting = nil
-        relaunched.runtimeLifecycle.hostPerformanceObserverForTesting = nil
+        timings.onRecord = nil
         await stopReadyRuntime(relaunched)
     }
 
@@ -1007,7 +1009,8 @@ struct AppStateBootstrapTests {
     /// but it cannot hold the whole conversation UI in "Connecting…".
     @Test func runtimeWarmupClearsBeforeForegroundCatchUpCompletes() async throws {
         let catchUp = NotificationCatchUpStub()
-        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
+        let timings = HostPerformanceRecorderStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp, timings: timings)
         let appState = seeded.appState
 
         await appState.startRuntimeSuspension().value
@@ -1020,7 +1023,7 @@ struct AppStateBootstrapTests {
         }
         var localReadySuccesses = 0
         var warmingUpWhenLocalReadyWasRecorded: Bool?
-        appState.runtimeLifecycle.hostPerformanceObserverForTesting = { operation, _, outcome in
+        timings.onRecord = { operation, _, outcome in
             if case .foregroundLocalReady = operation, case .success = outcome {
                 localReadySuccesses += 1
                 warmingUpWhenLocalReadyWasRecorded = appState.isRuntimeWarmingUp
@@ -1042,7 +1045,7 @@ struct AppStateBootstrapTests {
         await checkpoint.release()
         await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
         catchUp.onCatchUp = nil
-        appState.runtimeLifecycle.hostPerformanceObserverForTesting = nil
+        timings.onRecord = nil
 
         #expect(!appState.isRuntimeWarmingUp)
         #expect(!appState.runtimeSuspendedForBackground)
@@ -1070,16 +1073,17 @@ struct AppStateBootstrapTests {
     }
 
     @Test func foregroundRebuildReportsRuntimeAndAccountStagesAgain() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let timings = HostPerformanceRecorderStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(timings: timings)
         let appState = seeded.appState
         await appState.startRuntimeSuspension().value
 
         var stages: [(HostPerformanceOperationFfi, HostPerformanceOutcomeFfi)] = []
-        appState.runtimeLifecycle.hostPerformanceObserverForTesting = { operation, _, outcome in
+        timings.onRecord = { operation, _, outcome in
             stages.append((operation, outcome))
         }
         await appState.startForegroundActivation().value
-        appState.runtimeLifecycle.hostPerformanceObserverForTesting = nil
+        timings.onRecord = nil
 
         #expect(stages.contains { $0.0 == .runtimeInit && $0.1 == .success })
         #expect(stages.contains { $0.0 == .accountLoad && $0.1 == .success })
@@ -1152,7 +1156,8 @@ struct AppStateBootstrapTests {
 
     @Test func staleForegroundActivationDoesNotScheduleCatchUpAfterBackgroundWins() async throws {
         let catchUp = NotificationCatchUpStub()
-        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
+        let timings = HostPerformanceRecorderStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp, timings: timings)
         let appState = seeded.appState
 
         await appState.startRuntimeSuspension().value
@@ -1166,7 +1171,7 @@ struct AppStateBootstrapTests {
         catchUp.onCatchUp = {
             catchUpAttempts += 1
         }
-        appState.runtimeLifecycle.hostPerformanceObserverForTesting = { operation, _, _ in
+        timings.onRecord = { operation, _, _ in
             if case .foregroundLocalReady = operation {
                 localReadySamples += 1
             }
@@ -1181,7 +1186,7 @@ struct AppStateBootstrapTests {
         await suspension.value
         await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
         appState.runtimeLifecycle.afterForegroundRuntimeCreatedForTesting = nil
-        appState.runtimeLifecycle.hostPerformanceObserverForTesting = nil
+        timings.onRecord = nil
         catchUp.onCatchUp = nil
 
         #expect(catchUpAttempts == 0)
@@ -2262,7 +2267,8 @@ struct AppStateBootstrapTests {
         notifications: AppNotifications? = nil,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig? = nil,
         relayUrls: [String] = MarmotClient.unreachableTestRelays,
-        catchUp: NotificationCatchUpStub? = nil
+        catchUp: NotificationCatchUpStub? = nil,
+        timings: HostPerformanceRecorderStub? = nil
     ) throws -> AppState {
         resetPersistedActiveAccountRef()
         return try ownedAppState(
@@ -2270,7 +2276,8 @@ struct AppStateBootstrapTests {
             notifications: notifications ?? deniedNotifications(),
             accountDefaults: accountDefaults,
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig ?? TelemetryBuildConfig.current(),
-            notificationCatchUpCalls: catchUp?.calls ?? .live
+            notificationCatchUpCalls: catchUp?.calls ?? .live,
+            hostPerformanceRecorder: timings?.recorder ?? RuntimeLifecycle.recordHostPerformanceOnClient
         )
     }
 
@@ -2294,7 +2301,9 @@ struct AppStateBootstrapTests {
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = TelemetryBuildConfig.current(),
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = AppStateTestResources.immediateRetry,
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
-        notificationCatchUpCalls: NotificationCatchUpCalls = .live
+        notificationCatchUpCalls: NotificationCatchUpCalls = .live,
+        hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
+            RuntimeLifecycle.recordHostPerformanceOnClient
     ) throws -> AppState {
         try TestRuntimeScope.own(AppState.test(
             client: client,
@@ -2303,7 +2312,8 @@ struct AppStateBootstrapTests {
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
             runtimeRetrySleeper: runtimeRetrySleeper,
             runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy,
-            notificationCatchUpCalls: notificationCatchUpCalls
+            notificationCatchUpCalls: notificationCatchUpCalls,
+            hostPerformanceRecorder: hostPerformanceRecorder
         ))
     }
 
@@ -2313,9 +2323,10 @@ struct AppStateBootstrapTests {
     /// which unit tests must never contact.
     private func readyAppStateWithCreatedIdentities(
         notifications: AppNotifications? = nil,
-        catchUp: NotificationCatchUpStub? = nil
+        catchUp: NotificationCatchUpStub? = nil,
+        timings: HostPerformanceRecorderStub? = nil
     ) async throws -> (appState: AppState, accounts: [AccountSummaryFfi]) {
-        let appState = try testAppState(notifications: notifications, catchUp: catchUp)
+        let appState = try testAppState(notifications: notifications, catchUp: catchUp, timings: timings)
         await appState.bootstrap()
         #expect(appState.phase == .onboarding)
         let account = try await appState.createIdentity()
