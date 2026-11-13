@@ -67,6 +67,22 @@ struct EventuallyHelperTests {
         }
     }
 
+    /// When the code under test never reaches its pause, or the test never
+    /// releases it, the wait must fail the test instead of hanging the suite.
+    @Test func aCheckpointThatIsNeverPausedOrReleasedFailsInsteadOfHanging() async {
+        let checkpoint = AsyncTestCheckpoint()
+        await withKnownIssue("never paused") {
+            await checkpoint.waitUntilPaused(timeout: .zero)
+        } matching: { issue in
+            issue.error is TestWaitTimeout
+        }
+        await withKnownIssue("never released") {
+            await checkpoint.pause(timeout: .zero)
+        } matching: { issue in
+            issue.error is TestWaitTimeout
+        }
+    }
+
     @Test func aConditionThatBecomesTrueReturnsWithoutThrowing() async throws {
         var checks = 0
         try await eventually(timeout: .zero, minimumAttempts: 10) {
