@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import CryptoKit
 import Foundation
 import ImageIO
@@ -588,12 +587,6 @@ enum RemoteAvatarImageLoader {
         inFlightImageTasks.values.forEach { $0.cancel() }
         inFlightImageTasks.removeAll()
     }
-
-    #if DEBUG
-    // Documented exception (AGENTS.md): the drain task is process-wide static
-    // state every avatar view shares, so tests observe it here.
-    static var isDrainingForTesting: Bool { cacheDrainTask != nil }
-    #endif
 
     static func cachedImage(for url: URL, maxPixelSize: Int) -> UIImage? {
         cache.object(forKey: cacheKey(for: url, maxPixelSize: max(maxPixelSize, 1)))?.image

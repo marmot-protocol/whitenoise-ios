@@ -450,7 +450,7 @@ Do not add a second storage path for data Marmot already owns.
   `Shared/` and `NotificationServiceExtension/`; a deliberate exception
   needs `// swiftlint:disable:next no_test_hook_in_app_code` with the reason
   above it, on every line the rule flags. The rule's limits, and the
-  policy's documented exceptions:
+  policy's documented exception:
   - It catches only names containing `ForTesting` or starting with
     `forTesting`. Review covers the rest.
   - Files that still have hooks start with
@@ -460,7 +460,7 @@ Do not add a second storage path for data Marmot already owns.
     you change a hook or the code it serves, replace that hook with an
     injected dependency, and remove the directive once its last hook is
     gone (`superfluous_disable_command` fails the lint job otherwise).
-  - A documented exception to this policy: `AppLanguage`'s
+  - One documented exception to this policy: `AppLanguage`'s
     `testCurrentOverride` (a DEBUG-only task-local language override) and
     `testDefaults` (a process-scoped preference suite, separate from the
     real App Group, used in unit-test processes) stay. The lint rule
@@ -472,16 +472,6 @@ Do not add a second storage path for data Marmot already owns.
     `AppLanguage.$testCurrentOverride.withValue` in async code; tests of
     preference writes still inject their own `UserDefaults` and
     `NotificationCenter` (see Code Style). Don't add other seams like them.
-  - A second documented exception: the static avatar loaders
-    (`RemoteAvatarImageLoader`, `GroupAvatarImageLoader`) keep their caches,
-    drain task and seeds in process-wide statics that every avatar view
-    shares. These hooks, which observe or pause that shared state, stay, each
-    with a comment pointing here: `isDrainingForTesting` on both loaders,
-    and the group loader's `hasSeedForTesting` and `beforeDecodeForTesting`
-    (the drain test pauses a shared in-flight decode through it). Their
-    files keep the directive (#1241, item 16). Everything else the tests
-    check goes through the loaders' own entry points or `clearCaches()`,
-    which the app already calls; don't widen or wrap anything for tests.
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:

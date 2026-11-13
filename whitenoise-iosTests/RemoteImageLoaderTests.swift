@@ -226,8 +226,9 @@ struct RemoteImageLoaderTests {
             await RemoteAvatarImageLoader.clearCachesAndDrain()
             drained = true
         }
-        for _ in 0..<1_000 where !RemoteAvatarImageLoader.isDrainingForTesting { await Task.yield() }
-        #expect(RemoteAvatarImageLoader.isDrainingForTesting)
+        // The drain is in place before clearCachesAndDrain first suspends, so
+        // one main-actor turn is enough; the rejected load below proves it.
+        await Task { @MainActor in }.value
         #expect(!drained)
         let arrivingURL = try #require(URL(string: "https://example.com/\(UUID()).png"))
         await #expect(throws: CancellationError.self) {
@@ -290,7 +291,7 @@ struct RemoteImageLoaderTests {
     }
 
     @Test(.marmotRuntimeConcurrencyLimit)
-    func groupAvatarDrainBlocksNewLoadsAndSeedsUntilDecodeSettles() async throws {
+    func groupAvatarDrainBlocksNewLoadsUntilDecodeSettles() async throws {
         try await withTestClient { client in
             let request = GroupAvatarImageRequest(accountRef: "drain-\(UUID())", groupIdHex: "group",
                                                   imageHashHex: "image", maxPixelSize: 8)
@@ -299,20 +300,24 @@ struct RemoteImageLoaderTests {
                 context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
             }.pngData())
             let probe = RemoteImageFetchProbe(data: data)
-            GroupAvatarImageLoader.beforeDecodeForTesting = { _ = await probe.fetch() }
-            defer { GroupAvatarImageLoader.beforeDecodeForTesting = nil }
             GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
                                        groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
             let load = Task {
-                try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+                try await GroupAvatarImageLoader.image(
+                    request: request, scale: 1, priority: .foreground, client: client,
+                    downsample: { data, maxPixelSize, scale in
+                        _ = await probe.fetch()
+                        return await RemoteImageDecoder.downsampledImage(
+                            from: data, maxPixelSize: maxPixelSize, scale: scale
+                        )
+                    }
+                )
             }
             await probe.waitUntilStarted()
             let cleanup = Task { await GroupAvatarImageLoader.clearCachesAndDrain() }
-            for _ in 0..<1_000 where !GroupAvatarImageLoader.isDrainingForTesting { await Task.yield() }
-            #expect(GroupAvatarImageLoader.isDrainingForTesting)
-            GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
-                                       groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
-            #expect(!GroupAvatarImageLoader.hasSeedForTesting(accountRef: request.accountRef, groupIdHex: request.groupIdHex))
+            // The drain is in place before clearCachesAndDrain first suspends, so
+            // one main-actor turn is enough; the rejected load below proves it.
+            await Task { @MainActor in }.value
             await #expect(throws: CancellationError.self) {
                 try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
             }
@@ -322,7 +327,6 @@ struct RemoteImageLoaderTests {
             #expect(GroupAvatarImageLoader.cachedImage(for: request) == nil)
             let dataKey = GroupAvatarCacheKey.rawData(accountRef: request.accountRef, imageHashHex: request.imageHashHex)
             #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: dataKey) == nil)
-            GroupAvatarImageLoader.beforeDecodeForTesting = nil
             GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
                                        groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
             _ = try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
@@ -520,30 +524,33 @@ struct RemoteImageLoaderTests {
             replacingImageHashHex: "old-hash",
             requestedImageHashHex: "old-hash"
         ))
-        #expect(GroupAvatarImageLoader.hasSeedForTesting(
-            accountRef: accountRef,
-            groupIdHex: groupIdHex
-        ))
 
-        let loaded = try await withTestClient { client in
-            try await GroupAvatarImageLoader.image(
-                request: GroupAvatarImageRequest(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex,
-                    imageHashHex: "new-hash",
-                    maxPixelSize: 56
-                ),
-                scale: 1,
-                priority: .foreground,
-                client: client
-            )
+        try await withTestClient { client in
+            func load(imageHashHex: String) async throws -> UIImage {
+                try await GroupAvatarImageLoader.image(
+                    request: GroupAvatarImageRequest(
+                        accountRef: accountRef,
+                        groupIdHex: groupIdHex,
+                        imageHashHex: imageHashHex,
+                        maxPixelSize: 56
+                    ),
+                    scale: 1,
+                    priority: .foreground,
+                    client: client
+                )
+            }
+
+            // The test client has no such account or group, so a successful
+            // load can only come from the seed.
+            let loaded = try await load(imageHashHex: "new-hash")
+            #expect(loaded.cgImage?.width == 56)
+
+            // The seed was used up: the next replacement misses every cache
+            // and the client fails it locally.
+            await #expect(throws: (any Error).self) {
+                _ = try await load(imageHashHex: "newer-hash")
+            }
         }
-
-        #expect(loaded.cgImage?.width == 56)
-        #expect(!GroupAvatarImageLoader.hasSeedForTesting(
-            accountRef: accountRef,
-            groupIdHex: groupIdHex
-        ))
     }
 
     @Test func groupAvatarRawCacheKeyIsContentAddressedAndAccountScoped() {
