@@ -289,9 +289,15 @@ final class ConversationViewModel {
     @ObservationIgnored private var navigationFailure: String?
     private(set) var windowAnchorMessageId: String?
     @ObservationIgnored var windowWillChange: ((ConversationWindowSnapshotFfi) -> Void)?
+    /// Runs once an installed window's rows are in the timeline, before they render.
+    @ObservationIgnored var windowDidChange: (() -> Void)?
     private(set) var windowIdentities: [String: ConversationIdentityFfi] = [:]
     private(set) var windowReactions: [String: ConversationReactionsFfi] = [:]
     @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
+    @ObservationIgnored private lazy var mediaPrefetcher = ConversationMediaPrefetcher { [weak self] media in
+        _ = try? await self?.data(for: media)
+    }
+    @ObservationIgnored private var prefetchableImages: (generation: Int, byRow: [String: [MessageMediaAttachment]]) = (0, [:])
     /// Decoded inline NIP-30 custom emoji for this conversation's rows.
     @ObservationIgnored lazy var customEmojiStore = ConversationCustomEmojiStore(
         scopeProvider: { [weak self] in self?.customEmojiScope },
@@ -1603,6 +1609,7 @@ final class ConversationViewModel {
 
     private func stopLiveSubscriptions() async {
         windowLifetime = UUID()
+        mediaPrefetcher.cancelWaiting()
         let retiringLifetime = windowLifetime
         let previous = timelineTask
         let commands = windowCommandTask
@@ -1801,7 +1808,11 @@ final class ConversationViewModel {
             }
         }
         conversationWindow = snapshot
-        pageAdmission.observe(snapshot.revision)
+        // Mutating an observed property invalidates the whole conversation view,
+        // so only touch the admission when a page is actually pending.
+        if pageAdmission.unresolvedRevision != nil {
+            pageAdmission.observe(snapshot.revision)
+        }
         if let accountRef = appState?.activeAccountRef {
             appState?.conversationDraftStore.receiveSelection(snapshot.draft, accountRef: accountRef, groupIdHex: group.groupIdHex)
         }
@@ -1827,6 +1838,7 @@ final class ConversationViewModel {
             timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affected)
         }
         error = navigationFailure
+        windowDidChange?()
     }
 
     func displayID(for messageID: String) -> String { timelineStore.displayID(for: messageID) }
@@ -2353,6 +2365,39 @@ final class ConversationViewModel {
 
     func data(for media: MessageMediaAttachment) async throws -> Data {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
+    }
+
+    /// Requests the images in rows just beyond the viewport under the same
+    /// automatic policy a visible row uses, so they are held by the time the
+    /// reader reaches them.
+    func prefetchMedia(nearVisibleRowKeys visibleRowKeys: Set<String>) {
+        guard MediaAutoDownloadStore.shared.shouldAutoDownload(.image) else {
+            mediaPrefetcher.cancelWaiting()
+            return
+        }
+        let rows = timeline
+        guard let visible = TimelineDownArrowPolicy.visibleIndices(
+            rowKeys: rows.lazy.map(\.rowFrameKey), visibleRowKeys: visibleRowKeys
+        ) else { return }
+        let candidates = TimelineMediaLookahead.rowIndices(rowCount: rows.count, visible: visible)
+            .flatMap { prefetchableImages(in: rows[$0]) }
+        mediaPrefetcher.update(candidates: candidates)
+    }
+
+    /// Runs on every row that scrolls into view, so each row is projected once
+    /// per timeline projection rather than on each call.
+    private func prefetchableImages(in row: TimelineItem) -> [MessageMediaAttachment] {
+        let generation = timelineProjectionGeneration
+        if prefetchableImages.generation != generation {
+            prefetchableImages = (generation, [:])
+        }
+        if let known = prefetchableImages.byRow[row.id] { return known }
+        var images: [MessageMediaAttachment] = []
+        if case .message(let record, _) = row.kind, !isDeleted(record.messageIdHex) {
+            images = mediaItems(for: row).filter { $0.isImage && $0.localData == nil && $0.reference != nil }
+        }
+        prefetchableImages.byRow[row.id] = images
+        return images
     }
 
     func openHandoff(for media: MessageMediaAttachment,

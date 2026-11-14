@@ -245,6 +245,24 @@ struct TimelineBottomTests {
         ))
     }
 
+    /// A lazy timeline does not report its scroll targets again after a
+    /// layout-only change, so the opening position would never settle on them alone.
+    @Test func aVisibleRowOrTheMeasuredTailConfirmsTheOpeningPosition() {
+        func settles(_ target: TimelineInitialPositionTarget, rows: Set<String> = [], isTail: Bool = false) -> Bool {
+            TimelineInitialTargetScrollPolicy.shouldSettle(
+                target: target,
+                visibleTargetIDs: TimelineInitialTargetScrollPolicy.onScreenTargetIDs(
+                    scrollTargetIDs: [], visibleRowKeys: rows, isMeasuredTail: isTail, bottomSentinelID: "bottom"),
+                didApplyRequestedPosition: true
+            )
+        }
+
+        #expect(settles(.item(id: "msg:target", anchor: .top), rows: ["msg:target"]))
+        #expect(!settles(.item(id: "msg:target", anchor: .top), rows: ["msg:other"], isTail: true))
+        #expect(settles(.latest(id: "bottom"), isTail: true))
+        #expect(!settles(.latest(id: "bottom"), rows: ["msg:other"]))
+    }
+
     @Test func initialPositionSettlesOnlyAfterTheRequestedScrollIsApplied() {
         let target = TimelineInitialPositionTarget.item(
             id: "unread:message-target",

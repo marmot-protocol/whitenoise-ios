@@ -146,6 +146,111 @@ struct ChatListViewportTests {
                 "Retained row moved \(newOffset - oldOffset)pt during a \(gesture) gesture")
     }
 
+    // MARK: - Lazy containers
+
+    /// A lazy container lays out only the rows around its viewport, at the
+    /// positions the full list would give them.
+    private func layoutLazily(ids: [String], in scroll: UIScrollView, viewport: ChatListViewport, sequence: UInt64) {
+        scroll.subviews.forEach { $0.removeFromSuperview() }
+        scroll.contentSize = CGSize(width: scroll.bounds.width, height: CGFloat(ids.count) * rowHeight)
+        let laidOut = (scroll.contentOffset.y - rowHeight)...(scroll.contentOffset.y + viewportHeight + rowHeight)
+        for (index, id) in ids.enumerated() where laidOut.contains(CGFloat(index) * rowHeight) {
+            let row = ChatListAnchorView()
+            row.frame = CGRect(x: 0, y: CGFloat(index) * rowHeight, width: scroll.bounds.width, height: rowHeight)
+            row.groupId = id
+            row.sequence = sequence
+            row.viewport = viewport
+            scroll.addSubview(row)
+        }
+        scroll.layoutIfNeeded()
+    }
+
+    private func window(_ ids: [String], sequence: UInt64) -> ConversationWindowSnapshotFfi {
+        var snapshot = conversationWindowSnapshot(messages: ids.map { conversationMessage(timelineRecord(messageIdHex: $0, timelineAt: 1)) })
+        snapshot.revision = ConversationWindowRevisionFfi(generation: "test", sequence: sequence)
+        snapshot.anchor = ConversationAnchorOutcomeFfi(kind: .retained, index: 0)
+        return snapshot
+    }
+
+    /// The row a lazy restoration follows: the one nearest the middle of the viewport.
+    private func middleRow(in scroll: UIScrollView) throws -> String {
+        let middle = scroll.contentOffset.y + viewportHeight / 2
+        return try #require(scroll.subviews.compactMap { $0 as? ChatListAnchorView }
+            .min { abs($0.frame.midY - middle) < abs($1.frame.midY - middle) }?.groupId)
+    }
+
+    @Test(arguments: [Gesture?.none, .dragging, .decelerating])
+    func aPageAboveTheReaderKeepsTheirRowInALazyContainer(gesture: Gesture?) throws {
+        let viewport = ChatListViewport()
+        let gestureScroll = GestureScrollView()
+        let old = (100..<200).map(String.init)
+        let (window, scroll) = try makeList(ids: [], viewport: viewport, scroll: gestureScroll)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        scroll.contentSize.height = CGFloat(old.count) * rowHeight
+        scroll.contentOffset.y = 10 * rowHeight + 17
+        layoutLazily(ids: old, in: scroll, viewport: viewport, sequence: 0)
+        let anchor = try middleRow(in: scroll)
+        let oldOffset = try offset(of: anchor, in: scroll)
+        gestureScroll.gesture = gesture
+
+        let new = (50..<200).map(String.init)
+        viewport.prepare(for: self.window(new, sequence: 1), displayID: { $0 }, lazyRowIDs: old)
+        viewport.followPendingRow()
+        // A gesture keeps moving the viewport while the page lands.
+        let gestureTravel: CGFloat = gesture == nil ? 0 : 30
+        scroll.contentOffset.y += gestureTravel
+        layoutLazily(ids: new, in: scroll, viewport: viewport, sequence: 1)
+
+        #expect(abs(try offset(of: anchor, in: scroll) - (oldOffset - gestureTravel)) < 0.5)
+    }
+
+    @Test func aRowTheLazyContainerDroppedIsFoundAgain() async throws {
+        let viewport = ChatListViewport()
+        let old = (100..<200).map(String.init)
+        let (window, scroll) = try makeList(ids: [], viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        scroll.contentSize.height = CGFloat(old.count) * rowHeight
+        scroll.contentOffset.y = 10 * rowHeight + 17
+        layoutLazily(ids: old, in: scroll, viewport: viewport, sequence: 0)
+        let anchor = try middleRow(in: scroll)
+        let oldOffset = try offset(of: anchor, in: scroll)
+
+        // The container renders the page before the viewport has moved, so the
+        // reader's row is no longer among the rows it lays out.
+        let new = (0..<200).map(String.init)
+        viewport.prepare(for: self.window(new, sequence: 1), displayID: { $0 }, lazyRowIDs: old)
+        layoutLazily(ids: new, in: scroll, viewport: viewport, sequence: 1)
+        #expect(!viewport.isLaidOut(anchor))
+
+        try await eventually {
+            layoutLazily(ids: new, in: scroll, viewport: viewport, sequence: 1)
+            guard viewport.isLaidOut(anchor) else { return false }
+            return abs(try offset(of: anchor, in: scroll) - oldOffset) < 0.5
+        }
+    }
+
+    @Test func aLazyRestorationIsAbandonedOnceANewerWindowRenders() throws {
+        let viewport = ChatListViewport()
+        let old = (100..<200).map(String.init)
+        let (window, scroll) = try makeList(ids: [], viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        scroll.contentSize.height = CGFloat(old.count) * rowHeight
+        scroll.contentOffset.y = 10 * rowHeight + 17
+        layoutLazily(ids: old, in: scroll, viewport: viewport, sequence: 0)
+        let anchor = try middleRow(in: scroll)
+
+        let new = (0..<200).map(String.init)
+        viewport.prepare(for: self.window(new, sequence: 1), displayID: { $0 }, lazyRowIDs: old)
+        layoutLazily(ids: new, in: scroll, viewport: viewport, sequence: 2)
+        // The reader scrolls on; reaching the old row must not pull them back.
+        scroll.contentOffset.y = CGFloat(new.firstIndex(of: anchor)!) * rowHeight - 300
+        let settled = scroll.contentOffset.y
+        layoutLazily(ids: new, in: scroll, viewport: viewport, sequence: 2)
+
+        #expect(viewport.isLaidOut(anchor))
+        #expect(scroll.contentOffset.y == settled)
+    }
+
     @Test func recoveredRowTakesTheDeletedAnchorsOffset() throws {
         let viewport = ChatListViewport()
         var ids = (0..<200).map(String.init)

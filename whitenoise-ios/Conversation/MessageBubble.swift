@@ -177,6 +177,54 @@ nonisolated enum MessageBodyCollapsePresentation {
 /// One chat bubble. Aligned right for our own messages, left for everyone
 /// else. Renders an optional quoted reply header, the message body, a
 /// external time/delivery metadata, and any reaction chips.
+/// A timeline pass rebuilds every row's `MessageBubble` value with fresh
+/// closures, which SwiftUI cannot compare, so every bubble body used to re-run
+/// on each pass. Equality covers what the bubble draws; handlers are compared
+/// only by presence, because they act on the same record and view model.
+extension MessageBubble: Equatable {
+    static func == (lhs: MessageBubble, rhs: MessageBubble) -> Bool {
+        lhs.record == rhs.record
+            && lhs.status == rhs.status
+            && lhs.debugStyle == rhs.debugStyle
+            && lhs.isDeleted == rhs.isDeleted
+            && lhs.deletionSource == rhs.deletionSource
+            && lhs.isEdited == rhs.isEdited
+            && lhs.hasReports == rhs.hasReports
+            && lhs.usesReviewLayout == rhs.usesReviewLayout
+            && lhs.clusterPresentation == rhs.clusterPresentation
+            && lhs.replyPreview == rhs.replyPreview
+            && Self.sameMedia(lhs.mediaItems, rhs.mediaItems)
+            && lhs.customEmoji == rhs.customEmoji
+            && lhs.markdownBlocks == rhs.markdownBlocks
+            && lhs.poll == rhs.poll
+            && lhs.reactions == rhs.reactions
+            && lhs.omittedReactionKinds == rhs.omittedReactionKinds
+            && lhs.projectedReactionTotal == rhs.projectedReactionTotal
+            && (lhs.onPollVote == nil) == (rhs.onPollVote == nil)
+            && (lhs.onViewPollVotes == nil) == (rhs.onViewPollVotes == nil)
+            && (lhs.identityName == nil) == (rhs.identityName == nil)
+            && (lhs.identityAvatar == nil) == (rhs.identityAvatar == nil)
+            && (lhs.identityAvatarAsset == nil) == (rhs.identityAvatarAsset == nil)
+            && (lhs.mediaForwardingContext == nil) == (rhs.mediaForwardingContext == nil)
+            && (lhs.onGoToMessage == nil) == (rhs.onGoToMessage == nil)
+            && (lhs.onViewEditHistory == nil) == (rhs.onViewEditHistory == nil)
+            && (lhs.onFailedTap == nil) == (rhs.onFailedTap == nil)
+            && (lhs.onSenderAvatarTap == nil) == (rhs.onSenderAvatarTap == nil)
+    }
+
+    /// `MessageMediaAttachment`'s own equality leaves out the fields that decide
+    /// how an attachment loads, and a row must redraw when those change.
+    private static func sameMedia(_ lhs: [MessageMediaAttachment], _ rhs: [MessageMediaAttachment]) -> Bool {
+        lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { left, right in
+            left == right
+                && left.localTarget == right.localTarget
+                && left.sourceHint == right.sourceHint
+                && left.demand == right.demand
+                && left.thumbnail === right.thumbnail
+        }
+    }
+}
+
 struct MessageBubble: View {
     @Environment(AppState.self) private var appState
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -3493,7 +3541,8 @@ enum MessageVideoThumbnailDecoder {
     static func clear() { cache.removeAllObjects() }
     private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
-        cache.totalCostLimit = 50 * 1024 * 1024
+        cache.totalCostLimit = MediaThumbnailCacheBudget.videoPosters
+        MediaThumbnailCacheBudget.emptyOnBackground(cache)
         return cache
     }()
 
@@ -3547,7 +3596,8 @@ enum MessageMediaThumbnailDecoder {
 
     private static let cache: NSCache<NSString, CachedThumbnail> = {
         let cache = NSCache<NSString, CachedThumbnail>()
-        cache.totalCostLimit = 50 * 1024 * 1024
+        cache.totalCostLimit = MediaThumbnailCacheBudget.images
+        MediaThumbnailCacheBudget.emptyOnBackground(cache)
         return cache
     }()
 
@@ -3575,7 +3625,9 @@ enum MessageMediaThumbnailDecoder {
     static func image(data: Data, maxPixelSize: Int, scale: CGFloat) async -> UIImage? {
         let targetPixelSize = max(1, maxPixelSize)
         let imageScale = max(1, scale)
-        return await Task.detached(priority: .utility) { () -> UIImage? in
+        // Only rows on screen decode, so this is work the user is waiting on;
+        // utility priority left it queued behind scrolling on a busy device.
+        return await Task.detached(priority: .userInitiated) { () -> UIImage? in
             decodeThumbnailImage(
                 data: data,
                 targetPixelSize: targetPixelSize,
