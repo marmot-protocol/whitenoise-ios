@@ -295,7 +295,8 @@ final class ConversationViewModel {
     private(set) var windowReactions: [String: ConversationReactionsFfi] = [:]
     @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
     @ObservationIgnored private lazy var mediaPrefetcher = ConversationMediaPrefetcher { [weak self] media in
-        _ = try? await self?.data(for: media)
+        guard let self else { return }
+        await mediaDownloader.fetchAhead(media, groupIdHex: group.groupIdHex, appState: appState)
     }
     @ObservationIgnored private var prefetchableImages: (generation: Int, byRow: [String: [MessageMediaAttachment]]) = (0, [:])
     /// Decoded inline NIP-30 custom emoji for this conversation's rows.
@@ -1609,7 +1610,7 @@ final class ConversationViewModel {
 
     private func stopLiveSubscriptions() async {
         windowLifetime = UUID()
-        mediaPrefetcher.cancelWaiting()
+        await mediaPrefetcher.cancelAndDrain()
         let retiringLifetime = windowLifetime
         let previous = timelineTask
         let commands = windowCommandTask
@@ -2372,7 +2373,7 @@ final class ConversationViewModel {
     /// reader reaches them.
     func prefetchMedia(nearVisibleRowKeys visibleRowKeys: Set<String>) {
         guard MediaAutoDownloadStore.shared.shouldAutoDownload(.image) else {
-            mediaPrefetcher.cancelWaiting()
+            mediaPrefetcher.update(candidates: [])
             return
         }
         let rows = timeline

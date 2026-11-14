@@ -32,7 +32,7 @@ final class ConversationMediaPrefetcher {
     private let load: Load
     private var waiting: [MessageMediaAttachment] = []
     private var requested: Set<String> = []
-    private var running = 0
+    private var running: [String: Task<Void, Never>] = [:]
 
     init(load: @escaping Load) {
         self.load = load
@@ -45,18 +45,21 @@ final class ConversationMediaPrefetcher {
         startWaiting()
     }
 
-    func cancelWaiting() {
+    /// A load in flight waits on MDK, so stopping cancels it and waits for it to end.
+    func cancelAndDrain() async {
         waiting = []
+        let loads = Array(running.values)
+        loads.forEach { $0.cancel() }
+        for load in loads { await load.value }
     }
 
     private func startWaiting() {
-        while running < Self.concurrentLoads, !waiting.isEmpty {
+        while running.count < Self.concurrentLoads, !waiting.isEmpty {
             let media = waiting.removeFirst()
             guard requested.insert(media.id).inserted else { continue }
-            running += 1
-            Task { @MainActor [weak self, load] in
+            running[media.id] = Task { @MainActor [weak self, load] in
                 await load(media)
-                self?.running -= 1
+                self?.running[media.id] = nil
                 self?.startWaiting()
             }
         }

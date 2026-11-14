@@ -110,21 +110,28 @@ extension MarmotClient {
             onLocalHit?(ProductAnalyticsRecorder.elapsedMilliseconds(from: localReadStartedAt, to: .now))
             return data
         }
+        try await fetchAttachment(accountRef: accountRef, groupID: groupID, target: target, demand: demand)
+        guard let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target)
+        else { throw AttachmentReadError.stale }
+        return data
+    }
+
+    /// Asks MDK for an attachment and returns once it holds the bytes, without reading them.
+    func fetchAttachment(accountRef: String, groupID: String, target: AttachmentLocalTargetFfi,
+                         demand: AttachmentDemand) async throws {
         guard try await demand.record(accountRef: accountRef, groupID: groupID, target: target, with: marmot) else {
             throw AttachmentReadError.unavailable
         }
         let subscription = try await marmot.subscribeAttachmentTransfers(accountRef: accountRef,
             groupIdHex: groupID, targets: [target])
-        return try await withTaskCancellationHandler {
+        try await withTaskCancellationHandler {
             defer { subscription.cancel() }
             while let snapshot = try await subscription.next() {
                 try Task.checkCancellation()
                 guard let current = snapshot.items.first else { throw AttachmentReadError.unavailable }
                 switch current.state {
                 case .ready:
-                    guard let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target)
-                    else { throw AttachmentReadError.stale }
-                    return data
+                    return
                 case .unavailable, .cancelled, .removed, .cleanedBySetting, .failed, .policyBlocked, .paused,
                      .previouslyAcquiredUnavailable, .completedUnretained, .retryExhausted, .notRequested:
                     throw AttachmentReadError.unavailable

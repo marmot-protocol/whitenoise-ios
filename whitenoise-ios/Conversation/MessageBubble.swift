@@ -180,7 +180,9 @@ nonisolated enum MessageBodyCollapsePresentation {
 /// A timeline pass rebuilds every row's `MessageBubble` value with fresh
 /// closures, which SwiftUI cannot compare, so every bubble body used to re-run
 /// on each pass. Equality covers what the bubble draws; handlers are compared
-/// only by presence, because they act on the same record and view model.
+/// only by presence, because they act on the same record and view model. What
+/// an identity lookup returns is read in `body`, so a changed name or avatar
+/// redraws the bubble through Observation, not through this comparison.
 extension MessageBubble: Equatable {
     static func == (lhs: MessageBubble, rhs: MessageBubble) -> Bool {
         lhs.record == rhs.record

@@ -204,29 +204,35 @@ struct ChatListViewportTests {
         #expect(abs(try offset(of: anchor, in: scroll) - (oldOffset - gestureTravel)) < 0.5)
     }
 
-    @Test func aRowTheLazyContainerDroppedIsFoundAgain() async throws {
+    @Test(arguments: [Gesture?.none, .dragging, .decelerating])
+    func aRowTheLazyContainerDroppedIsFoundAgain(gesture: Gesture?) async throws {
         let viewport = ChatListViewport()
+        let gestureScroll = GestureScrollView()
         let old = (100..<200).map(String.init)
-        let (window, scroll) = try makeList(ids: [], viewport: viewport)
+        let (window, scroll) = try makeList(ids: [], viewport: viewport, scroll: gestureScroll)
         defer { window.isHidden = true; window.rootViewController = nil }
         scroll.contentSize.height = CGFloat(old.count) * rowHeight
         scroll.contentOffset.y = 10 * rowHeight + 17
         layoutLazily(ids: old, in: scroll, viewport: viewport, sequence: 0)
         let anchor = try middleRow(in: scroll)
         let oldOffset = try offset(of: anchor, in: scroll)
+        gestureScroll.gesture = gesture
 
         // The container renders the page before the viewport has moved, so the
         // reader's row is no longer among the rows it lays out.
         let new = (0..<200).map(String.init)
         viewport.prepare(for: self.window(new, sequence: 1), displayID: { $0 }, lazyRowIDs: old)
+        // A gesture keeps moving the viewport while the row is being found.
+        let gestureTravel: CGFloat = gesture == nil ? 0 : 30
+        scroll.contentOffset.y += gestureTravel
         layoutLazily(ids: new, in: scroll, viewport: viewport, sequence: 1)
         #expect(!viewport.isLaidOut(anchor))
 
         try await eventually {
             layoutLazily(ids: new, in: scroll, viewport: viewport, sequence: 1)
-            guard viewport.isLaidOut(anchor) else { return false }
-            return abs(try offset(of: anchor, in: scroll) - oldOffset) < 0.5
+            return viewport.isLaidOut(anchor)
         }
+        #expect(abs(try offset(of: anchor, in: scroll) - (oldOffset - gestureTravel)) < 0.5)
     }
 
     @Test func aLazyRestorationIsAbandonedOnceANewerWindowRenders() throws {

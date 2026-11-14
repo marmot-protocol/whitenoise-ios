@@ -12,6 +12,7 @@ import Testing
         private(set) var started: [String] = []
         private(set) var active = 0
         private(set) var peak = 0
+        private(set) var cancelled: [String] = []
         private var held: [CheckedContinuation<Void, Never>] = []
 
         func load(_ media: MessageMediaAttachment) async {
@@ -19,6 +20,7 @@ import Testing
             active += 1
             peak = max(peak, active)
             await withCheckedContinuation { held.append($0) }
+            if Task.isCancelled { cancelled.append(media.id) }
             active -= 1
         }
 
@@ -62,6 +64,23 @@ import Testing
         }
 
         #expect(loads.started == ["a", "b", "e"])
+    }
+
+    @Test func stoppingCancelsLoadsInFlightAndStartsNoMore() async throws {
+        let loads = Loads()
+        let prefetcher = ConversationMediaPrefetcher { await loads.load($0) }
+
+        prefetcher.update(candidates: ["a", "b", "c"].map(image))
+        try await eventually { loads.active == ConversationMediaPrefetcher.concurrentLoads }
+        async let stopped: Void = prefetcher.cancelAndDrain()
+        try await eventually {
+            loads.releaseAll()
+            return loads.active == 0
+        }
+        await stopped
+
+        #expect(loads.started == ["a", "b"])
+        #expect(loads.cancelled == ["a", "b"])
     }
 
     @Test func anAttachmentIsRequestedOnce() async throws {

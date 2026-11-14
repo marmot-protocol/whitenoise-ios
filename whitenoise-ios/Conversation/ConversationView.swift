@@ -708,6 +708,8 @@ struct ConversationView: View {
     @State private var messageNavigationTask: Task<Void, Never>?
     @State private var messageNavigationGeneration = 0
     @State private var timelineNavigations = 0
+    /// A jump to a row that was not laid out, in flight until the row appears.
+    @State private var timelineJumpAwaitingRow: (rowID: String, token: UUID)?
     @State private var visibleChatRoute: VisibleChatRoute?
     @ScaledMetric(relativeTo: .caption)
     private var replyCloseIconSize = ReplyPreviewLayout.closeIconSize
@@ -1959,6 +1961,7 @@ struct ConversationView: View {
                                                         viewModel.setTimestampRowVisible(item.rowFrameKey, isVisible: isVisible)
                                                     }
                                                 ))
+                                                .onAppear { finishTimelineJump(reaching: item.id) }
                                         }
                                     }
                                     .padding(.bottom, 4)
@@ -2038,6 +2041,7 @@ struct ConversationView: View {
                             }
                             if isUserScrollingTimeline {
                                 cancelPendingBottomScroll()
+                                finishTimelineJump()
                             }
                             if phase == .idle {
                                 viewModel.reportConversationViewport(atTail: isMeasuredConversationTail(viewModel),
@@ -3894,6 +3898,7 @@ struct ConversationView: View {
         proxy: ScrollViewProxy
     ) {
         cancelPendingBottomScroll()
+        finishTimelineJump()
         let viewportToken = beginTimelineNavigation()
         if let model = viewModel, let id = model.protocolID(forDisplayID: rowID ?? itemId) {
             model.setVisibleConversationAnchor(id)
@@ -3913,7 +3918,7 @@ struct ConversationView: View {
             // laid out, and an animated scroll would end on that estimate.
             guard conversationViewport.isLaidOut(rowID ?? itemId) else {
                 scrollTo(itemId, proxy: proxy, anchor: anchor)
-                endTimelineNavigation(viewportToken)
+                timelineJumpAwaitingRow = (rowID ?? itemId, viewportToken)
                 return
             }
             withAnimation(.smooth(duration: 0.2), completionCriteria: .logicallyComplete) {
@@ -3939,9 +3944,18 @@ struct ConversationView: View {
         conversationViewport.endProgrammaticScroll(token)
     }
 
+    /// Ends the jump once its row appears, or, with no row, when the reader
+    /// scrolls or another jump takes over before it does.
+    private func finishTimelineJump(reaching rowID: String? = nil) {
+        guard let jump = timelineJumpAwaitingRow, rowID == nil || rowID == jump.rowID else { return }
+        timelineJumpAwaitingRow = nil
+        endTimelineNavigation(jump.token)
+    }
+
     private func cancelPendingSearchMatchScroll() {
         pendingSearchMatchScrollTask?.cancel()
         pendingSearchMatchScrollTask = nil
+        finishTimelineJump()
     }
 
     // MARK: - Message selection

@@ -24,10 +24,19 @@ final class ChatListViewport {
         let startOffset: CGFloat
         /// Where the viewport was last put; anything beyond it is the reader's own scrolling.
         var placedOffset: CGFloat
+        /// The reader's scrolling before the viewport was last put somewhere.
+        var travel: CGFloat = 0
         /// Estimated height of the rows landing above the pending row, until applied.
         var estimatedMove: CGFloat
         var searches = 0
         var isSearchScheduled = false
+
+        /// Where to put a viewport now at `current` so it sits at `offset` plus the reader's scrolling.
+        mutating func place(at offset: CGFloat, from current: CGFloat) -> CGFloat {
+            travel += current - placedOffset
+            placedOffset = offset + travel
+            return placedOffset
+        }
     }
 
     /// A row that is still not laid out after this many estimated moves is given up on.
@@ -153,11 +162,11 @@ final class ChatListViewport {
     /// container lays out the new rows at the new offset in one pass.
     func followPendingRow() {
         guard var pending, var lazy = pending.lazy, lazy.estimatedMove != 0, let scrollView else { return }
-        lazy.placedOffset = scrollView.contentOffset.y + lazy.estimatedMove
+        let offset = lazy.place(at: lazy.startOffset + lazy.estimatedMove, from: scrollView.contentOffset.y)
         lazy.estimatedMove = 0
         pending.lazy = lazy
         self.pending = pending
-        scrollView.contentOffset.y = lazy.placedOffset
+        scrollView.contentOffset.y = offset
     }
 
     /// Height of `rows` rows in a container that averages `contentHeight` over
@@ -207,10 +216,11 @@ final class ChatListViewport {
         let estimatedMinY = nearest.minY + Self.estimatedHeight(
             ofRows: target - nearest.index, contentHeight: scrollView.contentSize.height, rowCount: lazy.order.count)
         lazy.searches += 1
-        lazy.placedOffset = estimatedMinY - scrollView.adjustedContentInset.top - pending.offset
+        let offset = lazy.place(at: estimatedMinY - scrollView.adjustedContentInset.top - pending.offset,
+                                from: scrollView.contentOffset.y)
         pending.lazy = lazy
         self.pending = pending
-        scrollView.contentOffset.y = lazy.placedOffset
+        scrollView.contentOffset.y = offset
     }
 
     private func prepare(anchor: ChatListAnchorOutcomeFfi, sequence: UInt64) {
@@ -255,9 +265,9 @@ final class ChatListViewport {
         if Self.isUserScrolling(scrollView) {
             if let previousMinY = pending.retainedMinY {
                 let delta = view.convert(view.bounds, to: scrollView).minY - previousMinY
-                if let lazy = pending.lazy {
+                if var lazy = pending.lazy {
                     // The viewport has already been moved toward the row; keep only the reader's own travel.
-                    scrollView.contentOffset.y = lazy.startOffset + delta + (scrollView.contentOffset.y - lazy.placedOffset)
+                    scrollView.contentOffset.y = lazy.place(at: lazy.startOffset + delta, from: scrollView.contentOffset.y)
                 } else {
                     scrollView.contentOffset.y += delta
                 }
