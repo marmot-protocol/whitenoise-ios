@@ -183,7 +183,7 @@ struct PreparedConversationLiveUpdateTests {
         await model.returnConversationToLatest()
         model.reportConversationViewport(atTail: true, visibleRowID: "msg:two")
         #expect(model.viewportIntent == .followingLatest)
-        model.resetOptimisticStateForTesting()
+        model.timelineStore.resetOptimisticState()
         let fullWindow = (0..<200).map { record("retained-\($0)", UInt64($0)) }
         install(fullWindow)
         await model.returnConversationToLatest()
@@ -197,7 +197,7 @@ struct PreparedConversationLiveUpdateTests {
         install(Array(fullWindow.dropFirst(2)) + [record("incoming", 200), record("tail-durable", 201)])
         #expect(model.timeline.count == 200)
         #expect(model.timeline.last?.id == "msg:tail-send")
-        model.resetOptimisticStateForTesting()
+        model.timelineStore.resetOptimisticState()
         model.confirmSent(tempId: "unknown", record: pending, messageId: "late")
         #expect(!model.timeline.contains { $0.id == "msg:unknown" })
         for index in 0..<TimelineStore.maximumLocalEchoes {
