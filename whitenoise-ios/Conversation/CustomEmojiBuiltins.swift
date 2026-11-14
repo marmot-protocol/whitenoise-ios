@@ -2,8 +2,8 @@ import CryptoKit
 import Foundation
 import UIKit
 
-// Built-in `:marmot:`, `:wn:` and the `:marmot_*:` expressions, the same PNG
-// bytes White Noise for Android and Linux ship. Untagged text renders them
+// Built-in `:marmot:`, `:wn:` and the `:marmot_*:` emoji, the PNG bytes White
+// Noise for Android and Linux are adopting. Untagged text renders them
 // from the app bundle; a message or reaction using one carries the image like
 // any custom emoji, so clients without them still see it.
 
