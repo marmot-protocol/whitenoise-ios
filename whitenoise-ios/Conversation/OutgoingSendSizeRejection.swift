@@ -22,7 +22,13 @@ nonisolated enum OutgoingSendSizePolicy {
     /// Outbound text over the protocol's max length is rejected, never
     /// shortened (#1276). Check the canonical text, after mention expansion.
     static func admitsText(_ text: String) -> Bool {
-        text.count <= ContentSanitizer.maxMessageLength
+        textOverage(text) == nil
+    }
+
+    static func textOverage(_ text: String?) -> Int? {
+        guard let text else { return nil }
+        let overage = text.count - ContentSanitizer.maxMessageLength
+        return overage > 0 ? overage : nil
     }
 
     static func oversizedAttachmentIDs(in attachments: [MediaDraftAttachment]) -> Set<UUID> {

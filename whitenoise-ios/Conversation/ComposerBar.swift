@@ -118,6 +118,18 @@ nonisolated enum ComposerAvailabilityPresentation {
         hasSendableContent ? sendBlockedMessage : nil
     }
 
+    /// The over-limit count shows only above a visible text field, since the
+    /// text has to be shortened there.
+    static func textOverageNotice(
+        overage: Int?,
+        disabledMessage: String?,
+        hasAudioDraft: Bool,
+        voiceRecordingActive: Bool
+    ) -> Int? {
+        guard showsInput(disabledMessage: disabledMessage), !hasAudioDraft, !voiceRecordingActive else { return nil }
+        return overage
+    }
+
     static func awaitsLiveConversationState(
         usesLiveWindow: Bool,
         hasWindowSnapshot: Bool,
@@ -216,6 +228,7 @@ struct ComposerBar: View {
     /// An action offered under `disabledMessage`, such as cancelling a blocked leave.
     var disabledAction: ComposerDisabledAction?
     var sendBlockedMessage: String?
+    var textOverage: Int?
     let voiceRecordingActive: Bool
     let voiceRecordingLocked: Bool
     let voiceRecordingSamples: [CGFloat]
@@ -288,6 +301,15 @@ struct ComposerBar: View {
                     inactiveComposerMessage(notice)
                 }
 
+                if let textOverage = ComposerAvailabilityPresentation.textOverageNotice(
+                    overage: textOverage,
+                    disabledMessage: disabledMessage,
+                    hasAudioDraft: audioDraft != nil,
+                    voiceRecordingActive: voiceRecordingActive
+                ) {
+                    ComposerTextOverageLabel(overage: textOverage, trailingInset: controlSize / 2)
+                }
+
                 if ComposerAvailabilityPresentation.showsInput(disabledMessage: disabledMessage) {
                     bottomInputGlassContainer(spacing: ComposerInputChrome.rowSpacing) {
                         HStack(alignment: .bottom, spacing: ComposerInputChrome.rowSpacing) {
@@ -334,6 +356,7 @@ struct ComposerBar: View {
         .fullScreenCover(isPresented: $showExpandedEditor) {
             ExpandedComposerEditor(
                 draft: $draft,
+                textOverage: textOverage,
                 canSend: canSend,
                 onDone: { showExpandedEditor = false },
                 onSend: {
@@ -971,20 +994,46 @@ nonisolated enum ComposerExpandedEditorPresentation {
     }
 }
 
+private struct ComposerTextOverageLabel: View {
+    let overage: Int
+    var trailingInset: CGFloat = 12
+
+    var body: some View {
+        Text(L10n.plural("%lld characters over", Int64(overage)))
+            .font(.footnote.weight(.medium))
+            .monospacedDigit()
+            .foregroundStyle(.red)
+            .multilineTextAlignment(.trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.trailing, trailingInset)
+            .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
 private struct ExpandedComposerEditor: View {
     @Binding var draft: String
+    let textOverage: Int?
     let canSend: Bool
     let onDone: () -> Void
     let onSend: () -> Void
 
     @FocusState private var focused: Bool
 
+    private let margin: CGFloat = 16
+
     var body: some View {
         NavigationStack {
             TextEditor(text: $draft)
                 .font(.body)
-                .padding()
+                .padding(margin)
                 .focused($focused)
+                .safeAreaInset(edge: .bottom) {
+                    if let textOverage {
+                        ComposerTextOverageLabel(overage: textOverage, trailingInset: 5)
+                            .padding(.horizontal, margin)
+                            .padding(.bottom, 8)
+                    }
+                }
                 .navigationTitle(L10n.string("Message"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

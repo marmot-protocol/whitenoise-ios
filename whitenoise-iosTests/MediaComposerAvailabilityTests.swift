@@ -235,6 +235,29 @@ struct MediaComposerAvailabilityTests {
             sendBlockedMessage: nil, hasSendableContent: true) == nil)
     }
 
+    @Test func textOverageNoticeShowsOnlyAboveAVisibleTextField() {
+        func notice(
+            overage: Int? = 100,
+            disabledMessage: String? = nil,
+            hasAudioDraft: Bool = false,
+            voiceRecordingActive: Bool = false
+        ) -> Int? {
+            ComposerAvailabilityPresentation.textOverageNotice(
+                overage: overage,
+                disabledMessage: disabledMessage,
+                hasAudioDraft: hasAudioDraft,
+                voiceRecordingActive: voiceRecordingActive
+            )
+        }
+
+        #expect(notice() == 100)
+        #expect(notice(overage: nil) == nil)
+        // A chat that became inactive hides the field but keeps the draft.
+        #expect(notice(disabledMessage: "inactive") == nil)
+        #expect(notice(hasAudioDraft: true) == nil)
+        #expect(notice(voiceRecordingActive: true) == nil)
+    }
+
     @Test func openingConversationWindowAwaitsLiveState() {
         #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
