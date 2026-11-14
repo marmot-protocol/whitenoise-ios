@@ -520,7 +520,8 @@ Do not add a second storage path for data Marmot already owns.
     `backgroundSuspensionWaitForTesting` observer, stay. They sit inside the
     launch, suspend and resume sequence, and the maintainers judged
     refactoring that sequence to inject them riskier than keeping them
-    (#1241, item 19). Don't add more hooks there; lifecycle tests await the
+    (#1241, item 19), so they are exempt from the replace-on-change rule
+    above. Don't add more hooks there; lifecycle tests await the
     tasks `startRuntimeSuspension()` and `startForegroundActivation()` return
     and wait on observable state or injected calls.
 - No source-text assertions (see Architecture).

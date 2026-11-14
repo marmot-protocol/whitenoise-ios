@@ -709,22 +709,16 @@ struct AppStateBootstrapTests {
     @Test func createIdentityKeepsNotificationDefaultsOffWhenPermissionIsDenied() async throws {
         try await notificationDefaultsTestGate.withLock {
             var remoteRegistrationRequestCount = 0
-            let permissionRequested = TestLatch()
-            let notifications = AppNotifications(
-                requestAuthorizationHandler: {
-                    permissionRequested.signal()
-                    return false
-                },
-                authorizationStatusProvider: { .denied },
-                remoteNotificationRegistrar: { remoteRegistrationRequestCount += 1 }
-            )
+            let notifications = deniedNotifications {
+                remoteRegistrationRequestCount += 1
+            }
             let appState = try testAppState(notifications: notifications)
             await appState.bootstrap()
 
             let account = try await appState.createIdentity()
-            // After a denied request the follow-up writes local notifications off
-            // and stops; native push stays off, so nothing can register.
-            try await permissionRequested.wait()
+            // New accounts start with local notifications on; after a denied
+            // request the follow-up writes them off and stops, with native push
+            // still off, so nothing can register.
             try await eventually { await appState.notificationSettings(for: account.label)?.localNotificationsEnabled == false }
 
             let maybeSettings = await appState.notificationSettings(for: account.label)
