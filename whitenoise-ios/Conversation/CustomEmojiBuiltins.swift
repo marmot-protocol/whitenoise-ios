@@ -2,16 +2,23 @@ import CryptoKit
 import Foundation
 import UIKit
 
-// Built-in `:marmot:` and `:wn:`, the same PNG bytes White Noise for Android
-// and Linux ship. Untagged text renders them from the app bundle; a message
-// or reaction using one carries the image like any custom emoji, so clients
-// without them still see it.
+// Built-in `:marmot:`, `:wn:` and the `:marmot_*:` expressions, the same PNG
+// bytes White Noise for Android and Linux ship. Untagged text renders them
+// from the app bundle; a message or reaction using one carries the image like
+// any custom emoji, so clients without them still see it.
 
-/// One built-in emoji: its shortcode, product name and bundled PNG bytes.
+/// One built-in emoji: its shortcode, spoken name and bundled PNG bytes.
 nonisolated struct CustomEmojiBuiltin: Hashable, Sendable {
+    /// What VoiceOver reads in place of the shortcode.
+    enum Name: Hashable, Sendable {
+        /// A product name, not translated (as on Android).
+        case product(String)
+        /// A string catalog key, read in the app language when spoken.
+        case localized(String)
+    }
+
     let shortcode: CustomEmojiShortcode
-    /// Product name read by VoiceOver in place of the shortcode.
-    let spokenName: String
+    let name: Name
     let data: Data
     let plaintextSha256: String
     let dim: String?
@@ -19,9 +26,16 @@ nonisolated struct CustomEmojiBuiltin: Hashable, Sendable {
     var fileName: String { "\(shortcode.name).png" }
     var mediaType: String { "image/png" }
 
-    init(shortcode: CustomEmojiShortcode, spokenName: String, data: Data, dim: String?) {
+    var spokenName: String {
+        switch name {
+        case .product(let name): name
+        case .localized(let key): L10n.string(String.LocalizationValue(key))
+        }
+    }
+
+    init(shortcode: CustomEmojiShortcode, name: Name, data: Data, dim: String?) {
         self.shortcode = shortcode
-        self.spokenName = spokenName
+        self.name = name
         self.data = data
         self.dim = dim
         plaintextSha256 = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
@@ -32,13 +46,24 @@ nonisolated enum CustomEmojiBuiltins {
     private struct Definition {
         let shortcode: String
         let asset: String
-        let spokenName: String
+        let name: CustomEmojiBuiltin.Name
     }
 
-    // Product names, not translated (as on Android).
+    // Keys must match Shared/Localizable.xcstrings.
     private static let definitions = [
-        Definition(shortcode: "marmot", asset: "BuiltinEmojiMarmot", spokenName: "Marmot"),
-        Definition(shortcode: "wn", asset: "BuiltinEmojiWN", spokenName: "White Noise"),
+        Definition(shortcode: "marmot", asset: "BuiltinEmojiMarmot", name: .product("Marmot")),
+        Definition(shortcode: "wn", asset: "BuiltinEmojiWN", name: .product("White Noise")),
+        Definition(shortcode: "marmot_classic", asset: "BuiltinEmojiMarmotClassic", name: .localized("Classic marmot")),
+        Definition(shortcode: "marmot_wave", asset: "BuiltinEmojiMarmotWave", name: .localized("Waving marmot")),
+        Definition(shortcode: "marmot_yes", asset: "BuiltinEmojiMarmotYes", name: .localized("Marmot thumbs up")),
+        Definition(shortcode: "marmot_laugh", asset: "BuiltinEmojiMarmotLaugh", name: .localized("Laughing marmot")),
+        Definition(shortcode: "marmot_love", asset: "BuiltinEmojiMarmotLove", name: .localized("Marmot with heart")),
+        Definition(shortcode: "marmot_party", asset: "BuiltinEmojiMarmotParty", name: .localized("Party marmot")),
+        Definition(shortcode: "marmot_fire", asset: "BuiltinEmojiMarmotFire", name: .localized("Marmot on fire")),
+        Definition(shortcode: "marmot_wow", asset: "BuiltinEmojiMarmotWow", name: .localized("Surprised marmot")),
+        Definition(shortcode: "marmot_smirk", asset: "BuiltinEmojiMarmotSmirk", name: .localized("Smirking marmot")),
+        Definition(shortcode: "marmot_cry", asset: "BuiltinEmojiMarmotCry", name: .localized("Crying marmot")),
+        Definition(shortcode: "marmot_angry", asset: "BuiltinEmojiMarmotAngry", name: .localized("Angry marmot")),
     ]
 
     /// Every built-in whose bundled bytes load, in picker order.
@@ -46,7 +71,7 @@ nonisolated enum CustomEmojiBuiltins {
         guard let shortcode = CustomEmojiShortcode(definition.shortcode),
               let data = NSDataAsset(name: definition.asset)?.data, !data.isEmpty else { return nil }
         let size = UIImage(data: data)?.cgImage.map { "\($0.width)x\($0.height)" }
-        return CustomEmojiBuiltin(shortcode: shortcode, spokenName: definition.spokenName, data: data, dim: size)
+        return CustomEmojiBuiltin(shortcode: shortcode, name: definition.name, data: data, dim: size)
     }
 
     static let shortcodes = Set(all.map(\.shortcode))
