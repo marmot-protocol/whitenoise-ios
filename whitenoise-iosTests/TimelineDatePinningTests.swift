@@ -57,6 +57,27 @@ struct TimelineDatePinningTests {
         ) == nil)
     }
 
+    /// A lazy timeline lays out only the headers near the viewport.
+    @Test func aDayWhoseHeaderIsNotLaidOutStillPins() {
+        #expect(TimelineDatePinning.presentation(
+            orderedHeaderIDs: ["first", "second", "third"], positions: [:], topRowHeaderID: "second"
+        ) == .init(headerID: "second", offset: 0))
+        #expect(TimelineDatePinning.presentation(
+            orderedHeaderIDs: ["first", "second", "third"],
+            positions: ["third": .approaching(offset: -12)], topRowHeaderID: "second"
+        ) == .init(headerID: "second", offset: -12))
+    }
+
+    @Test func aTopRowWhoseHeaderIsStillOnScreenLeavesThePreviousDayPinned() {
+        #expect(TimelineDatePinning.presentation(
+            orderedHeaderIDs: ["first", "second"],
+            positions: ["second": .approaching(offset: -8)], topRowHeaderID: "second"
+        ) == .init(headerID: "first", offset: -8))
+        #expect(TimelineDatePinning.presentation(
+            orderedHeaderIDs: ["first", "second"], positions: ["first": .below], topRowHeaderID: "first"
+        ) == nil)
+    }
+
     @Test func geometryChangesOnlyMatterAtTheHeaderTransition() {
         #expect(TimelineDatePinning.position(minY: 100, height: 50) == .below)
         #expect(TimelineDatePinning.position(minY: 50, height: 50) == .below)

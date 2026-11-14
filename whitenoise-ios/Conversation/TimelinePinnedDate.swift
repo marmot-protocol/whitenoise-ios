@@ -36,8 +36,17 @@ struct TimelineInlineDateHeader: View {
     }
 }
 
+/// The day header owning the topmost visible row. Observed only by the pinned
+/// date, so a row scrolling past does not rebuild the conversation.
+@MainActor
+@Observable
+final class TimelineTopRowDay {
+    var headerID: String?
+}
+
 struct TimelinePinnedDateModifier: ViewModifier {
     let headings: [TimelineDateHeading]
+    var topRowDay: TimelineTopRowDay?
     @State private var positions: [String: TimelineDatePinning.Position] = [:]
 
     func body(content: Content) -> some View {
@@ -46,7 +55,8 @@ struct TimelinePinnedDateModifier: ViewModifier {
             .overlay(alignment: .top) {
                 ZStack(alignment: .top) {
                     if let presentation = TimelineDatePinning.presentation(
-                        orderedHeaderIDs: headings.map(\.id), positions: positions
+                        orderedHeaderIDs: headings.map(\.id), positions: positions,
+                        topRowHeaderID: topRowDay?.headerID
                     ), let heading = headings.first(where: { $0.id == presentation.headerID }) {
                         TimelineDateLabel(day: heading.day)
                             .foregroundStyle(.primary)

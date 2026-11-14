@@ -70,7 +70,8 @@ final class MediaDownloadInFlightStore {
 
 nonisolated enum MediaPlaintextHash {
     static func matches(_ data: Data, expectedSha256: String) async -> Bool {
-        await Task.detached(priority: .utility) {
+        // Runs on the path of a visible attachment load, so it must not queue at utility.
+        await Task.detached(priority: .userInitiated) {
             sha256Hex(of: data) == expectedSha256.lowercased()
         }.value
     }
@@ -145,6 +146,19 @@ final class ConversationMediaDownloader {
     }
 
     func resume() { isStopped = false }
+
+    /// Has MDK fetch an attachment ahead of its row. The bytes are not read
+    /// here: the row's own load reads and verifies them. Returns false when
+    /// MDK could not be asked yet.
+    func fetchAhead(_ media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Bool {
+        guard media.localData == nil, let reference = media.reference,
+              EncryptedMediaLocatorValidation.isStaticallySafe(reference.locators),
+              let target = media.localTarget else { return true }
+        guard !isStopped, let appState, let account = appState.activeAccountRef,
+              let client = try? appState.currentMarmotClient() else { return false }
+        try? await client.fetchAttachment(accountRef: account, groupID: groupIdHex, target: target, demand: .automatic)
+        return true
+    }
 
     func data(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async throws -> Data {
         guard !isStopped else { throw CancellationError() }

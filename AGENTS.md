@@ -51,6 +51,17 @@ Conversation initial positioning may hide timeline content until the first
 layout-driven scroll to the bottom or targeted message has settled. Keep that
 path cancellable and tied to scroll/layout callbacks, not fixed delay chains.
 
+The conversation timeline is a `LazyVStack`, so only the rows around the
+viewport are laid out and the rest have estimated positions. Keep each
+`ForEach` element a single view. Keep the reader's place across a window
+replacement through `ChatListViewport` (an estimated move once the rows are in
+the model, then an exact restore when the row lays out), not `ScrollViewProxy`:
+UIKit overrides a proxy scroll during a touch. Scroll to a row that is not laid
+out without animation, do not request pages while a jump is in flight, and aim
+the jump again if a window still lands under it.
+After a layout-only change, row visibility and the measured tail are reliable;
+`onScrollTargetVisibilityChange` is not.
+
 Do not write tests that assert on source text via `String(contentsOf:)` (or
 any other read of a `.swift` file's contents). They test that code is *spelled*
 a certain way, not that it *behaves* a certain way, so they pass while broken

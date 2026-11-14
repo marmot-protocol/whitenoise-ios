@@ -1710,32 +1710,22 @@ struct ChatDestination: View {
 
     @ViewBuilder private var destination: some View {
         if let item {
-            ConversationView(
+            ChatDestinationConversation(
                 chat: item.projectedGroup,
-                accountRef: appState.activeAccountRef,
-                initialTitle: item.title,
-                initialAvatarAsset: item.avatarAsset,
-                initialAvatarSeed: item.selectedAvatar != nil ? item.avatarSeed : nil,
-                initialOtherMember: item.directPeerAccountIdHex,
-                initialMemberCount: item.isDirectMessage == true ? 2 : nil,
-                initialLeaveRequestPending: item.leaveRequestPending,
-                initialTargetMessageIdHex: target.messageIdHex,
-                initialUnreadMessageIdHex: target.unreadMessageIdHex,
-                initialAppState: appState,
-                openPerformance: performance,
-                forwardDestinationProvider: {
-                    try await viewModel.forwardDestinations(excludingGroupIdHex: target.groupIdHex)
-                },
-                onChatListRowUpdated: { viewModel.enqueueChatListRowUpdate($0) },
-                onGroupChanged: { viewModel.applyLocalGroupChange($0) },
+                title: item.title,
+                avatarAsset: item.avatarAsset,
+                avatarSeed: item.selectedAvatar != nil ? item.avatarSeed : nil,
+                otherMember: item.directPeerAccountIdHex,
+                memberCount: item.isDirectMessage == true ? 2 : nil,
+                leaveRequestPending: item.leaveRequestPending,
+                target: target,
+                performance: performance,
+                viewModel: viewModel,
+                appState: appState,
                 onGroupLeft: onGroupLeft,
-                onGroupDeleted: onGroupDeleted,
-                onDraftChanged: { viewModel.refreshDisplayProjections() }
+                onGroupDeleted: onGroupDeleted
             )
-            .id(target.groupIdHex)
-            .onAppear {
-                HostActionPerformance.conversationBecameVisible(groupIdHex: target.groupIdHex)
-            }
+            .equatable()
         } else if timedOut {
             // A slow network can take longer than the spin-wait to deliver the
             // chat-list row. Offer Retry instead of a dead end so the user can
@@ -1762,6 +1752,86 @@ struct ChatDestination: View {
                     timedOut = true
                 }
         }
+    }
+}
+
+/// The chat list model republishes its rows whenever any chat changes, which
+/// re-evaluates `ChatDestination`. The callbacks handed to `ConversationView`
+/// are fresh closures SwiftUI cannot compare, so each of those passes used to
+/// rebuild the whole open timeline. This view holds no state of its own and is
+/// compared by the values the conversation actually consumes.
+private struct ChatDestinationConversation: View, Equatable {
+    let chat: AppGroupRecordFfi
+    let title: String
+    let avatarAsset: AvatarAssetFfi?
+    let avatarSeed: String?
+    let otherMember: String?
+    let memberCount: Int?
+    let leaveRequestPending: Bool
+    let target: ChatsListView.ChatNavigationTarget
+    let performance: ConversationOpenPerformance?
+    let viewModel: ChatsListViewModel
+    let appState: AppState
+    let onGroupLeft: (String) -> Void
+    let onGroupDeleted: (String) -> Void
+
+    static func == (lhs: ChatDestinationConversation, rhs: ChatDestinationConversation) -> Bool {
+        ChatDestinationConversationInputs(lhs) == ChatDestinationConversationInputs(rhs)
+            && lhs.performance === rhs.performance
+            && lhs.viewModel === rhs.viewModel
+            && lhs.appState === rhs.appState
+    }
+
+    var body: some View {
+        ConversationView(
+            chat: chat,
+            accountRef: appState.activeAccountRef,
+            initialTitle: title,
+            initialAvatarAsset: avatarAsset,
+            initialAvatarSeed: avatarSeed,
+            initialOtherMember: otherMember,
+            initialMemberCount: memberCount,
+            initialLeaveRequestPending: leaveRequestPending,
+            initialTargetMessageIdHex: target.messageIdHex,
+            initialUnreadMessageIdHex: target.unreadMessageIdHex,
+            initialAppState: appState,
+            openPerformance: performance,
+            forwardDestinationProvider: {
+                try await viewModel.forwardDestinations(excludingGroupIdHex: target.groupIdHex)
+            },
+            onChatListRowUpdated: { viewModel.enqueueChatListRowUpdate($0) },
+            onGroupChanged: { viewModel.applyLocalGroupChange($0) },
+            onGroupLeft: onGroupLeft,
+            onGroupDeleted: onGroupDeleted,
+            onDraftChanged: { viewModel.refreshDisplayProjections() }
+        )
+        .id(target.groupIdHex)
+        .onAppear {
+            HostActionPerformance.conversationBecameVisible(groupIdHex: target.groupIdHex)
+        }
+    }
+}
+
+/// The values of a chat-list row that an open conversation consumes.
+nonisolated struct ChatDestinationConversationInputs: Equatable {
+    let chat: AppGroupRecordFfi
+    let title: String
+    let avatarAsset: AvatarAssetFfi?
+    let avatarSeed: String?
+    let otherMember: String?
+    let memberCount: Int?
+    let leaveRequestPending: Bool
+    let groupIdHex: String
+    let messageIdHex: String?
+    let unreadMessageIdHex: String?
+}
+
+private extension ChatDestinationConversationInputs {
+    @MainActor init(_ view: ChatDestinationConversation) {
+        self.init(chat: view.chat, title: view.title, avatarAsset: view.avatarAsset, avatarSeed: view.avatarSeed,
+                  otherMember: view.otherMember, memberCount: view.memberCount,
+                  leaveRequestPending: view.leaveRequestPending, groupIdHex: view.target.groupIdHex,
+                  messageIdHex: view.target.messageIdHex, unreadMessageIdHex: view.target.unreadMessageIdHex)
     }
 }
 
