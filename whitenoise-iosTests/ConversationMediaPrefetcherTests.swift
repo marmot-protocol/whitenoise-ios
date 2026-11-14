@@ -3,7 +3,7 @@ import Testing
 @testable import whitenoise_ios
 
 /// Look-ahead requests must stay behind the attachments on screen: bounded,
-/// droppable until they start, and never repeated.
+/// droppable until they start, and repeated only when MDK was not left holding the request.
 @MainActor
 @Suite struct ConversationMediaPrefetcherTests {
     /// Holds every load open until the test releases it.
@@ -13,10 +13,13 @@ import Testing
         private(set) var active = 0
         private(set) var peak = 0
         private(set) var cancelled: Set<String> = []
+        /// Attachments MDK cannot be asked for yet.
+        var unaskable: Set<String> = []
         private var held: [CheckedContinuation<Void, Never>] = []
 
-        func load(_ media: MessageMediaAttachment) async {
+        func load(_ media: MessageMediaAttachment) async -> Bool {
             started.append(media.id)
+            guard !unaskable.contains(media.id) else { return false }
             active += 1
             peak = max(peak, active)
             let id = media.id
@@ -26,6 +29,7 @@ import Testing
                 Task { @MainActor in self.cancelled.insert(id) }
             }
             active -= 1
+            return true
         }
 
         func releaseAll() {
@@ -119,6 +123,48 @@ import Testing
         }
 
         #expect(loads.started == ["a", "b"])
+    }
+
+    @Test func aStopLetsEverythingBeAskedForAgain() async throws {
+        let loads = Loads()
+        let prefetcher = ConversationMediaPrefetcher { await loads.load($0) }
+
+        prefetcher.update(candidates: [image("finished")])
+        try await eventually {
+            loads.releaseAll()
+            return loads.started == ["finished"] && loads.active == 0
+        }
+        prefetcher.update(candidates: ["b", "c"].map(image))
+        try await eventually { loads.active == ConversationMediaPrefetcher.concurrentLoads }
+        prefetcher.cancel()
+        try await eventually {
+            loads.releaseAll()
+            return loads.active == 0
+        }
+        prefetcher.update(candidates: ["finished", "b", "c"].map(image))
+        try await eventually {
+            loads.releaseAll()
+            return loads.started.count == 6 && loads.active == 0
+        }
+
+        #expect(loads.started == ["finished", "b", "c", "finished", "b", "c"])
+    }
+
+    @Test func anAttachmentMDKWasNotAskedForIsTriedAgain() async throws {
+        let loads = Loads()
+        let prefetcher = ConversationMediaPrefetcher { await loads.load($0) }
+
+        loads.unaskable = ["a"]
+        prefetcher.update(candidates: [image("a")])
+        try await eventually { loads.started == ["a"] }
+        loads.unaskable = []
+        try await eventually {
+            prefetcher.update(candidates: [image("a")])
+            loads.releaseAll()
+            return loads.started.count == 2 && loads.active == 0
+        }
+
+        #expect(loads.started == ["a", "a"])
     }
 
     @Test func lookAheadTakesTheNearestRowsOutsideTheViewport() {

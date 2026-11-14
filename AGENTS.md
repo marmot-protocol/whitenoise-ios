@@ -57,7 +57,8 @@ viewport are laid out and the rest have estimated positions. Keep each
 replacement through `ChatListViewport` (an estimated move once the rows are in
 the model, then an exact restore when the row lays out), not `ScrollViewProxy`:
 UIKit overrides a proxy scroll during a touch. Scroll to a row that is not laid
-out without animation, and do not request pages while a jump is in flight.
+out without animation, do not request pages while a jump is in flight, and aim
+the jump again if a window still lands under it.
 After a layout-only change, row visibility and the measured tail are reliable;
 `onScrollTargetVisibilityChange` is not.
 

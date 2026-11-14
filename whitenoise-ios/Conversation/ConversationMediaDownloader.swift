@@ -148,13 +148,16 @@ final class ConversationMediaDownloader {
     func resume() { isStopped = false }
 
     /// Has MDK fetch an attachment ahead of its row. The bytes are not read
-    /// here: the row's own load reads and verifies them.
-    func fetchAhead(_ media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async {
-        guard !isStopped, media.localData == nil, let reference = media.reference,
+    /// here: the row's own load reads and verifies them. Returns false when
+    /// MDK could not be asked yet.
+    func fetchAhead(_ media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Bool {
+        guard media.localData == nil, let reference = media.reference,
               EncryptedMediaLocatorValidation.isStaticallySafe(reference.locators),
-              let target = media.localTarget, let appState, let account = appState.activeAccountRef,
-              let client = try? appState.currentMarmotClient() else { return }
+              let target = media.localTarget else { return true }
+        guard !isStopped, let appState, let account = appState.activeAccountRef,
+              let client = try? appState.currentMarmotClient() else { return false }
         try? await client.fetchAttachment(accountRef: account, groupID: groupIdHex, target: target, demand: .automatic)
+        return true
     }
 
     func data(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async throws -> Data {

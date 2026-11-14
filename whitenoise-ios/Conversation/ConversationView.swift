@@ -709,7 +709,7 @@ struct ConversationView: View {
     @State private var messageNavigationGeneration = 0
     @State private var timelineNavigations = 0
     /// A jump to a row that was not laid out, in flight until the row appears.
-    @State private var timelineJumpAwaitingRow: (rowID: String, token: UUID)?
+    @State private var timelineJumpAwaitingRow: TimelineJumpAwaitingRow?
     @State private var visibleChatRoute: VisibleChatRoute?
     @ScaledMetric(relativeTo: .caption)
     private var replyCloseIconSize = ReplyPreviewLayout.closeIconSize
@@ -767,6 +767,14 @@ struct ConversationView: View {
         let scrollID: String
         let rowID: String
         let anchor: UnitPoint
+    }
+
+    /// What a jump needs to be aimed again, and the navigation hold it ends.
+    private struct TimelineJumpAwaitingRow {
+        let itemID: String
+        let rowID: String
+        let anchor: UnitPoint
+        let token: UUID
     }
 
     private struct FailedSendTarget: Identifiable {
@@ -2148,6 +2156,7 @@ struct ConversationView: View {
                             viewModel.search.refreshAfterTimelineChange()
                             pruneMessageSelection(viewModel: viewModel)
                             handleTimelineProjectionChange(viewModel: viewModel)
+                            reaimTimelineJump(proxy: proxy, viewModel: viewModel)
                         }
                         .onChange(of: viewModel.search.scrollRequest) { _, request in
                             guard let request else { return }
@@ -3918,7 +3927,8 @@ struct ConversationView: View {
             // laid out, and an animated scroll would end on that estimate.
             guard conversationViewport.isLaidOut(rowID ?? itemId) else {
                 scrollTo(itemId, proxy: proxy, anchor: anchor)
-                timelineJumpAwaitingRow = (rowID ?? itemId, viewportToken)
+                timelineJumpAwaitingRow = TimelineJumpAwaitingRow(
+                    itemID: itemId, rowID: rowID ?? itemId, anchor: anchor, token: viewportToken)
                 return
             }
             withAnimation(.smooth(duration: 0.2), completionCriteria: .logicallyComplete) {
@@ -3950,6 +3960,18 @@ struct ConversationView: View {
         guard let jump = timelineJumpAwaitingRow, rowID == nil || rowID == jump.rowID else { return }
         timelineJumpAwaitingRow = nil
         endTimelineNavigation(jump.token)
+    }
+
+    /// A page requested before the jump can still land under it and move the
+    /// rows it was aimed at. Aims again once they render, or ends the jump if
+    /// its row is gone.
+    private func reaimTimelineJump(proxy: ScrollViewProxy, viewModel: ConversationViewModel) {
+        guard let jump = timelineJumpAwaitingRow else { return }
+        guard viewModel.timeline.contains(where: { $0.id == jump.rowID }) else {
+            finishTimelineJump()
+            return
+        }
+        scheduleSearchMatchScroll(to: jump.itemID, rowID: jump.rowID, anchor: jump.anchor, proxy: proxy)
     }
 
     private func cancelPendingSearchMatchScroll() {
