@@ -61,7 +61,8 @@ struct ProfileEditForm<Avatar: View>: View {
             Binding(get: { isEditing ? saveFailure : nil }, set: { saveFailure = $0 }),
             title: L10n.string("Couldn’t save your profile"),
             retryEnabled: !saveDisabled,
-            message: { _ in L10n.string("Couldn’t save your profile details. Please try again.") },
+            offersRetry: { $0.offersRetry },
+            message: { $0.message },
             retry: { _ in onRetrySave() }
         )
         .sheet(isPresented: $showPrivacyDetails) {

@@ -84,9 +84,10 @@ extension AppState {
                 await self.refreshAccountUnreadSummaries(using: client)
             }
         case .rejectedReply(let route):
+            let notice = ConversationSendRecovery.notice(for: .text, restored: true)
             await notifications.presentNotificationActionFailure(
-                title: L10n.string("Reply not sent"),
-                body: L10n.string("Open the chat to try again."),
+                title: notice.title,
+                body: notice.message,
                 route: route
             )
         case .markRead(let route, let messageIdHex):

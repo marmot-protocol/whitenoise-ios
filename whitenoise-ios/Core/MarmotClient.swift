@@ -414,6 +414,31 @@ nonisolated final class MarmotClient: Sendable {
         }.value
     }
 
+    /// Per-profile v5 audit delivery state from local files; never dials.
+    func auditDeliveryStatus() async throws -> [AuditDeliveryStatusV5Ffi] {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try marmot.auditDeliveryStatusV5()
+        }.value
+    }
+
+    /// Runs MDK's manual audit delivery pass, which also lifts a paused delivery.
+    func resumeAuditDelivery() async throws {
+        _ = try await marmot.postAuditLogTrackerUpdateV5()
+    }
+
+    func auditLogRetention() async throws -> AuditLogRetentionFfi {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try marmot.auditLogRetention()
+        }.value
+    }
+
+    /// Persists the device-wide policy and returns the clamped value MDK stored.
+    func setAuditLogRetention(_ retention: AuditLogRetentionFfi) async throws -> AuditLogRetentionFfi {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try marmot.setAuditLogRetention(retention: retention)
+        }.value
+    }
+
     func auditFileRows() async throws -> [AuditFileRow] {
         try await Task.detached(priority: .utility) { [marmot] in
             AuditFileRowProjection.rows(from: try marmot.auditLogFiles())
@@ -635,6 +660,18 @@ nonisolated final class MarmotClient: Sendable {
         peerAccountId: String
     ) async throws -> ExistingDirectConversationFfi? {
         try await marmot.existingDirectConversation(
+            accountRef: accountRef,
+            peerAccountId: peerAccountId
+        )
+    }
+
+    /// Reuses or creates the canonical direct chat and returns its group id.
+    /// Success means local state is canonical, not that the Welcome arrived.
+    func startDirectConversation(
+        accountRef: String,
+        peerAccountId: String
+    ) async throws -> String {
+        try await marmot.startDirectConversation(
             accountRef: accountRef,
             peerAccountId: peerAccountId
         )

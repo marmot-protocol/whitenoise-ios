@@ -140,10 +140,10 @@ struct SupportChatTests {
         appState.activeAccountRef = "active"
         var didCreate = false
         let marmot = NewChatFlowMarmotDouble()
-        let flow = newChatFlow(starter: directChatStarter { _, _ in
+        let flow = newChatFlow(starter: directChatStarter(startDirect: { _, _ in
             didCreate = true
             return "duplicate-support-dm"
-        }, marmot: marmot)
+        }), marmot: marmot)
         var lookupAttempt = 0
         marmot.existingDirectChat = { _, _ in
             lookupAttempt += 1
@@ -250,10 +250,10 @@ struct SupportChatTests {
         appState.activeAccountRef = "active"
         var didCreate = false
         let marmot = NewChatFlowMarmotDouble()
-        let flow = newChatFlow(starter: directChatStarter { _, _ in
+        let flow = newChatFlow(starter: directChatStarter(startDirect: { _, _ in
             didCreate = true
             return "unexpected"
-        }, marmot: marmot)
+        }), marmot: marmot)
         let gate = (entered: TestLatch(), released: TestLatch())
         marmot.existingDirectChat = { _, _ in
             gate.entered.signal()
@@ -464,19 +464,20 @@ struct SupportChatTests {
         #expect(!entry.isLoading)
     }
 
-    /// A flow whose existing-chat lookup finds `existingGroupIdHex`. Pass
-    /// `marmot` to change the lookup later in the test.
+    /// A flow whose existing-chat lookup finds `existingGroupIdHex` and whose
+    /// canonical direct-chat start runs `start`. Pass `marmot` to change the
+    /// lookup later in the test.
     private func testFlow(
         existingGroupIdHex: String?,
         marmot: NewChatFlowMarmotDouble? = nil,
-        create: @escaping @MainActor (_ accountRef: String, _ memberRef: String) async throws -> String = { _, _ in
-            Issue.record("this flow must not create a conversation")
+        start: @escaping @MainActor (_ accountRef: String, _ memberRef: String) async throws -> String = { _, _ in
+            Issue.record("this flow must not start a conversation")
             return "unexpected"
         }
     ) -> NewChatFlowViewModel {
         let marmot = marmot ?? NewChatFlowMarmotDouble()
         marmot.existingDirectChat = { _, _ in existingGroupIdHex }
-        return newChatFlow(starter: directChatStarter(create: create), marmot: marmot)
+        return newChatFlow(starter: directChatStarter(startDirect: start), marmot: marmot)
     }
 
     private func directChatSnapshot(

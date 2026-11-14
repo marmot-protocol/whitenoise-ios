@@ -826,8 +826,6 @@ struct AppStateBootstrapTests {
         let auditRows = try await appState.auditLogFileRows()
         let privacyProjection = try await appState.privacySecuritySettingsProjection()
         let optimisticMarkdown = await appState.parseMarkdown(text: "**hello**")
-        let nativePushAccountRefs = await appState.notificationCoordinator
-            .nativePushEnabledAccountRefsForTesting(host: appState)
 
         #expect(!appState.isAppSceneActive)
         #expect(appState.runtimeSuspendedForBackground)
@@ -841,7 +839,6 @@ struct AppStateBootstrapTests {
         #expect(privacyProjection == nil)
         #expect(optimisticMarkdown.blocks.isEmpty)
         #expect(!optimisticMarkdown.truncated)
-        #expect(nativePushAccountRefs.isEmpty)
         #expect(appState.client == nil)
         #expect(appState.runtimeSuspendedForBackground)
         #expect(appState.runtimeGeneration == generation)
@@ -860,10 +857,11 @@ struct AppStateBootstrapTests {
     /// resume must rebuild it, all while staying in `.onboarding` and without
     /// starting the account-scoped notification subscription.
     @Test func onboardingRuntimeSuspendsForBackgroundAndResumesForForeground() async throws {
-        let appState = try testAppState()
+        let catchUp = NotificationCatchUpStub()
+        let appState = try testAppState(catchUp: catchUp)
         await appState.bootstrap()
         var catchUpAttempts = 0
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = {
+        catchUp.onCatchUp = {
             catchUpAttempts += 1
         }
 
@@ -899,7 +897,7 @@ struct AppStateBootstrapTests {
         #expect(!appState.isRuntimeWarmingUp)
         await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
         #expect(catchUpAttempts == 0)
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = nil
+        catchUp.onCatchUp = nil
 
         await appState.startRuntimeSuspension().value
         resetPersistedActiveAccountRef()
@@ -1008,14 +1006,15 @@ struct AppStateBootstrapTests {
     /// initial relay sync asynchronously. Foreground catch-up must still run,
     /// but it cannot hold the whole conversation UI in "Connecting…".
     @Test func runtimeWarmupClearsBeforeForegroundCatchUpCompletes() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let catchUp = NotificationCatchUpStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
         let appState = seeded.appState
 
         await appState.startRuntimeSuspension().value
 
         let checkpoint = AsyncTestCheckpoint()
         var catchUpAttempts = 0
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = {
+        catchUp.onCatchUp = {
             catchUpAttempts += 1
             await checkpoint.pause()
         }
@@ -1036,14 +1035,13 @@ struct AppStateBootstrapTests {
         #expect(!appState.runtimeSuspendedForBackground)
         #expect(appState.client != nil)
         #expect(catchUpAttempts == 1)
-        #expect(appState.notificationCoordinator.hasConnectivityCatchUpTaskForTesting)
         #expect(appState.isConnectivityCatchUpInProgress)
         #expect(localReadySuccesses == 1)
         #expect(warmingUpWhenLocalReadyWasRecorded == false)
 
         await checkpoint.release()
         await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = nil
+        catchUp.onCatchUp = nil
         appState.runtimeLifecycle.hostPerformanceObserverForTesting = nil
 
         #expect(!appState.isRuntimeWarmingUp)
@@ -1106,20 +1104,21 @@ struct AppStateBootstrapTests {
     }
 
     @Test func foregroundCatchUpFailureDoesNotFailOrReblockReadyRuntime() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let catchUp = NotificationCatchUpStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
         let appState = seeded.appState
 
         await appState.startRuntimeSuspension().value
 
         var catchUpAttempts = 0
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = {
+        catchUp.onCatchUp = {
             catchUpAttempts += 1
             throw ForegroundRuntimeMutationError.runtimeUnavailable
         }
 
         await appState.startForegroundActivation().value
         await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = nil
+        catchUp.onCatchUp = nil
 
         #expect(catchUpAttempts == 1)
         #expect(appState.phase == .ready)
@@ -1131,13 +1130,14 @@ struct AppStateBootstrapTests {
     }
 
     @Test func connectivityRestoredWakesDurableRetriesBeforeCatchUp() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let catchUp = NotificationCatchUpStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
         let appState = seeded.appState
         var operations: [String] = []
-        appState.notificationCoordinator.connectivityRestoredOperationForTesting = {
+        catchUp.onConnectivityRestored = {
             operations.append("wake")
         }
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = {
+        catchUp.onCatchUp = {
             operations.append("catch-up")
         }
 
@@ -1145,13 +1145,14 @@ struct AppStateBootstrapTests {
         await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
 
         #expect(operations == ["wake", "catch-up"])
-        appState.notificationCoordinator.connectivityRestoredOperationForTesting = nil
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = nil
+        catchUp.onConnectivityRestored = nil
+        catchUp.onCatchUp = nil
         await stopReadyRuntime(appState)
     }
 
     @Test func staleForegroundActivationDoesNotScheduleCatchUpAfterBackgroundWins() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let catchUp = NotificationCatchUpStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
         let appState = seeded.appState
 
         await appState.startRuntimeSuspension().value
@@ -1162,7 +1163,7 @@ struct AppStateBootstrapTests {
         }
         var catchUpAttempts = 0
         var localReadySamples = 0
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = {
+        catchUp.onCatchUp = {
             catchUpAttempts += 1
         }
         appState.runtimeLifecycle.hostPerformanceObserverForTesting = { operation, _, _ in
@@ -1181,7 +1182,7 @@ struct AppStateBootstrapTests {
         await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
         appState.runtimeLifecycle.afterForegroundRuntimeCreatedForTesting = nil
         appState.runtimeLifecycle.hostPerformanceObserverForTesting = nil
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = nil
+        catchUp.onCatchUp = nil
 
         #expect(catchUpAttempts == 0)
         #expect(localReadySamples == 0)
@@ -1698,12 +1699,13 @@ struct AppStateBootstrapTests {
     }
 
     @Test func suspensionClosesStorageBeforeConnectivityCatchUpDrains() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let catchUp = NotificationCatchUpStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
         let appState = seeded.appState
         let checkpoint = AsyncTestCheckpoint()
 
         await appState.startRuntimeSuspension().value
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = {
+        catchUp.onCatchUp = {
             await checkpoint.pause()
         }
         let activation = appState.startForegroundActivation()
@@ -1728,7 +1730,7 @@ struct AppStateBootstrapTests {
         await checkpoint.release()
         await suspension.value
         await observer.value
-        appState.notificationCoordinator.foregroundCatchUpOperationForTesting = nil
+        catchUp.onCatchUp = nil
 
         #expect(suspensionCompleted)
         #expect(appState.client == nil)
@@ -1812,6 +1814,21 @@ struct AppStateBootstrapTests {
         #expect(appState.activeToast?.style == .warning)
         appState.dismissToast()
 
+        let rewind = MarmotEventFfi.groupEvent(
+            accountIdHex: account.accountIdHex, accountLabel: account.label, groupIdHex: "group",
+            event: .groupHydrationQuarantined(reason: .rewindRestoreFailed)
+        )
+        appState.handleRuntimeEvent(rewind, generation: generation - 1)
+        #expect(appState.activeToast == nil)
+        appState.handleRuntimeEvent(.groupEvent(
+            accountIdHex: "unavailable-account", accountLabel: "private", groupIdHex: "group",
+            event: .groupHydrationQuarantined(reason: .rewindRestoreFailed)
+        ), generation: generation)
+        #expect(appState.activeToast == nil)
+        appState.handleRuntimeEvent(rewind, generation: generation)
+        #expect(appState.activeToast?.style == .warning)
+        appState.dismissToast()
+
         await appState.startRuntimeSuspension().value
         #expect(appState.runtimeEventsGeneration == nil)
         appState.handleRuntimeEvent(event, generation: generation)
@@ -1854,14 +1871,96 @@ struct AppStateBootstrapTests {
         let queued = [hex("11"), hex("22")]
         appState.profileStore.queuedProfileFetchIDs = queued
         appState.profileStore.scheduledProfileFetchIDs = Set(queued)
-        appState.setAppSceneActive(false)
 
-        await appState.runProfileFetchQueueForTesting()
+        appState.resumeProfileFetchQueueIfNeeded()
+        let runner = try #require(appState.profileStore.profileFetchQueueTask)
+        // The runner is main-actor work queued behind this test, so it first
+        // runs after the scene has gone inactive.
+        appState.setAppSceneActive(false)
+        await runner.value
 
         #expect(appState.profileStore.queuedProfileFetchIDs == queued)
         #expect(appState.profileStore.scheduledProfileFetchIDs == Set(queued))
         #expect(appState.profileStore.activeProfileFetchID == nil)
         #expect(appState.profileStore.profileFetchQueueTask == nil)
+        #expect(appState.profileStore.profileFetchQueueTaskID == nil)
+    }
+
+    @Test func aCancelledFetchRunnerFinishingLeavesItsReplacementInPlace() async throws {
+        let appState = try testAppState()
+        let store = appState.profileStore
+        store.queuedProfileFetchIDs = [hex("44")]
+        store.scheduledProfileFetchIDs = [hex("44")]
+        appState.resumeProfileFetchQueueIfNeeded()
+        let replaced = try #require(store.profileFetchQueueTask)
+        // A background pause cancels the runner and keeps its ids; the next
+        // foreground resume starts a replacement before the old one has run.
+        _ = appState.pauseProfileFetchQueue()
+        // Main-actor work runs in order: the cancelled runner, then this check,
+        // then the replacement started below.
+        let slotAfterOldRunner = Task { @MainActor in
+            (store.profileFetchQueueTask, store.profileFetchQueueTaskID)
+        }
+        appState.resumeProfileFetchQueueIfNeeded()
+        let replacement = try #require(store.profileFetchQueueTask)
+        let replacementID = store.profileFetchQueueTaskID
+        // Inactive before either runner runs, so neither starts a relay refresh.
+        appState.setAppSceneActive(false)
+
+        let (task, taskID) = await slotAfterOldRunner.value
+
+        #expect(task == replacement)
+        #expect(taskID == replacementID)
+        await replaced.value
+        await replacement.value
+    }
+
+    @Test func aCancelledProjectionRunnerFinishingLeavesItsReplacementInPlace() async throws {
+        let appState = try testAppState()
+        let store = appState.profileStore
+        #expect(appState.knownDisplayName(forAccountIdHex: hex("45")) == nil)
+        let replaced = try #require(store.profileProjectionLoadTask)
+        _ = appState.pauseProfileFetchQueue()
+        let slotAfterOldRunner = Task { @MainActor in
+            (store.profileProjectionLoadTask, store.profileProjectionLoadTaskID)
+        }
+        appState.resumeProfileFetchQueueIfNeeded()
+        let replacement = try #require(store.profileProjectionLoadTask)
+        let replacementID = store.profileProjectionLoadTaskID
+        appState.setAppSceneActive(false)
+
+        let (task, taskID) = await slotAfterOldRunner.value
+
+        #expect(task == replacement)
+        #expect(taskID == replacementID)
+        await replaced.value
+        await replacement.value
+    }
+
+    @Test func aSettledProfileReloadPrunesItsLoadVersion() async throws {
+        let appState = try testAppState()
+        let store = appState.profileStore
+        let id = hex("46")
+
+        await store.reloadProfileProjection(forAccountIdHex: id)
+
+        // A filled cache shows the reload took a version and applied its load.
+        #expect(store.profileProjectionCache[id] != nil)
+        #expect(store.profileProjectionLoadVersions[id] == nil)
+    }
+
+    @Test func aSettledQueuedProfileLoadPrunesItsLoadVersion() async throws {
+        let appState = try testAppState()
+        let store = appState.profileStore
+        let id = hex("47")
+
+        // Without refresh-after-load, the queued load never schedules a relay refresh.
+        appState.warmProfileProjection(forAccountIdHex: id)
+        let runner = try #require(store.profileProjectionLoadTask)
+        await runner.value
+
+        #expect(store.profileProjectionCache[id] != nil)
+        #expect(store.profileProjectionLoadVersions[id] == nil)
     }
 
     @Test func profileFetchQueueRearmsPreservedIDsWhenRefreshIsAllowed() async throws {
@@ -2162,14 +2261,16 @@ struct AppStateBootstrapTests {
     private func testAppState(
         notifications: AppNotifications? = nil,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig? = nil,
-        relayUrls: [String] = MarmotClient.unreachableTestRelays
+        relayUrls: [String] = MarmotClient.unreachableTestRelays,
+        catchUp: NotificationCatchUpStub? = nil
     ) throws -> AppState {
         resetPersistedActiveAccountRef()
         return try ownedAppState(
             client: try ownedTestClient(relayUrls: relayUrls),
             notifications: notifications ?? deniedNotifications(),
             accountDefaults: accountDefaults,
-            suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig ?? TelemetryBuildConfig.current()
+            suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig ?? TelemetryBuildConfig.current(),
+            notificationCatchUpCalls: catchUp?.calls ?? .live
         )
     }
 
@@ -2192,7 +2293,8 @@ struct AppStateBootstrapTests {
         accountDefaults: UserDefaults,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = TelemetryBuildConfig.current(),
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = AppStateTestResources.immediateRetry,
-        runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground
+        runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
+        notificationCatchUpCalls: NotificationCatchUpCalls = .live
     ) throws -> AppState {
         try TestRuntimeScope.own(AppState.test(
             client: client,
@@ -2200,7 +2302,8 @@ struct AppStateBootstrapTests {
             accountDefaults: accountDefaults,
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
             runtimeRetrySleeper: runtimeRetrySleeper,
-            runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy
+            runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy,
+            notificationCatchUpCalls: notificationCatchUpCalls
         ))
     }
 
@@ -2209,9 +2312,10 @@ struct AppStateBootstrapTests {
     /// published, so a second activated account would need a real relay —
     /// which unit tests must never contact.
     private func readyAppStateWithCreatedIdentities(
-        notifications: AppNotifications? = nil
+        notifications: AppNotifications? = nil,
+        catchUp: NotificationCatchUpStub? = nil
     ) async throws -> (appState: AppState, accounts: [AccountSummaryFfi]) {
-        let appState = try testAppState(notifications: notifications)
+        let appState = try testAppState(notifications: notifications, catchUp: catchUp)
         await appState.bootstrap()
         #expect(appState.phase == .onboarding)
         let account = try await appState.createIdentity()

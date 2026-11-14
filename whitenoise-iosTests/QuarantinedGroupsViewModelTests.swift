@@ -75,6 +75,15 @@ struct QuarantinedGroupsViewModelTests {
         #expect(presentation.guidance.contains("only helps if that state becomes available"))
     }
 
+    @Test func onlyAFailedRewindRestoreWithholdsRetry() {
+        let reasons: [AppGroupHydrationQuarantineReasonFfi] = [
+            .openMlsLoadFailed, .openMlsGroupMissing, .memberValidationFailed,
+            .groupRecordLoadFailed, .pendingCommitRecoveryFailed, .rewindRestoreFailed,
+        ]
+        let withheld = reasons.filter { !QuarantinedGroupPresentation.reason($0).allowsRetry }
+        #expect(withheld == [.rewindRestoreFailed])
+    }
+
     private func group(
         _ groupIdHex: String,
         reason: AppGroupHydrationQuarantineReasonFfi

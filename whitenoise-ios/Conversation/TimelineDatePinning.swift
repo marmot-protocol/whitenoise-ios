@@ -19,14 +19,24 @@ nonisolated enum TimelineDatePinning {
         return .below
     }
 
+    /// `topRowHeaderID` is the header of the day the topmost visible row belongs
+    /// to. A lazy timeline lays out only the headers near the viewport, so the
+    /// rest report no position; the top row still says which day is on screen.
     static func presentation(
         orderedHeaderIDs: [String],
-        positions: [String: Position]
+        positions: [String: Position],
+        topRowHeaderID: String? = nil
     ) -> Presentation? {
         // Protocol order can revisit a calendar day; choose a row, not max(date).
-        guard let index = orderedHeaderIDs.lastIndex(where: { positions[$0] == .passed }) else {
-            return nil
+        let passed: Int?
+        if let topRowHeaderID, let current = orderedHeaderIDs.firstIndex(of: topRowHeaderID) {
+            // That day's own header is above the viewport unless it reports being on screen.
+            let isAbove = positions[topRowHeaderID].map { $0 == .passed } ?? true
+            passed = isAbove ? current : (current > 0 ? current - 1 : nil)
+        } else {
+            passed = orderedHeaderIDs.lastIndex(where: { positions[$0] == .passed })
         }
+        guard let index = passed else { return nil }
         let offset = orderedHeaderIDs.dropFirst(index + 1).compactMap { id -> CGFloat? in
             if case .approaching(let offset) = positions[id] { return offset }
             return nil

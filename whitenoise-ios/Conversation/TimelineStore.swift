@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import Observation
 import OSLog
@@ -216,6 +215,7 @@ final class TimelineStore {
     /// through MDK's durable pending-edit queue.
     @ObservationIgnored private var unsettledClientTokenByMessageId: [String: String] = [:]
     @ObservationIgnored private var groupSystemDisplayCache: [String: GroupSystemDisplayCacheEntry] = [:]
+    @ObservationIgnored private let projectionBuilders: ConversationProjectionBuilders
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
     @ObservationIgnored private var systemTimelineItems: [TimelineItem] = []
     /// Transient QUIC debug rows keyed by timeline id (streaming debug only).
@@ -236,7 +236,7 @@ final class TimelineStore {
     @ObservationIgnored let markdownProjections: ConversationMarkdownProjectionCache
     @ObservationIgnored let relativeTimestampRefresh = RelativeTimestampRefreshScheduler()
     @ObservationIgnored let agentEventProjections: ConversationAgentEventProjectionCache
-    @ObservationIgnored let mediaProjections = ConversationMediaProjectionCache()
+    @ObservationIgnored let mediaProjections: ConversationMediaProjectionCache
     private struct CustomEmojiCacheEntry {
         let candidates: [CustomEmojiShortcode: MessageMediaAttachment]
         let resolution: CustomEmojiRowResolution
@@ -250,6 +250,7 @@ final class TimelineStore {
     @ObservationIgnored private var messageClusterPresentations: [String: MessageClusterPresentation] = [:]
 
     @ObservationIgnored private weak var appState: AppState?
+    @ObservationIgnored private let timings: TimelineStoreTimings
     @ObservationIgnored private let groupIdHex: String
     @ObservationIgnored weak var streamWatcher: StreamWatcher?
     /// Resolves a mention entity to a display name (off the profile cache); set by
@@ -261,12 +262,16 @@ final class TimelineStore {
         appState: AppState?,
         groupIdHex: String,
         hiddenMessageIds: Set<String> = [],
-        projectionBuilders: ConversationProjectionBuilders = .live
+        projectionBuilders: ConversationProjectionBuilders = .live,
+        timings: TimelineStoreTimings? = nil
     ) {
         self.appState = appState
+        self.timings = timings ?? .analytics(of: appState)
         self.groupIdHex = groupIdHex
+        self.projectionBuilders = projectionBuilders
         markdownProjections = ConversationMarkdownProjectionCache(builders: projectionBuilders)
         agentEventProjections = ConversationAgentEventProjectionCache(builders: projectionBuilders)
+        mediaProjections = ConversationMediaProjectionCache(builders: projectionBuilders)
         self.hiddenMessageIds = Set(hiddenMessageIds.compactMap { Hex.normalized32Bytes($0) })
         relativeTimestampRefresh.relativeUnixSeconds = { [markdownProjections] rowId in
             markdownProjections.relativeTimestampSeconds(forRowId: rowId)
@@ -300,16 +305,6 @@ final class TimelineStore {
             displayName: { self.resolvedAccountDisplayName($0) }
         )
     }
-
-#if DEBUG
-    var groupSystemProjectionBuildCountForTesting: Int { groupSystemProjectionBuildCount }
-    var mediaItemProjectionBuildCountForTesting: Int { mediaProjections.buildCountForTesting }
-    var mediaReferenceCountForTesting: Int { mediaProjections.referenceCountForTesting }
-    var streamDebugTimelineItemCountForTesting: Int { streamDebugTimelineItems.count }
-    private(set) var timelineRebuildCountForTesting = 0
-    private(set) var reactionTargetCollectionCountForTesting = 0
-    private var groupSystemProjectionBuildCount = 0
-#endif
 
     private struct MessageTimelineSignature: Equatable {
         let messageIdHex: String
@@ -746,14 +741,11 @@ final class TimelineStore {
         if let cached = groupSystemDisplayCache[record.messageIdHex], cached.key == key {
             return cached.text
         }
-#if DEBUG
-        groupSystemProjectionBuildCount += 1
-#endif
-        let text = GroupSystemEventPresentation.displayText(
-            for: record,
-            groupSystem: groupSystemByMessageId[record.messageIdHex],
-            currentAccountIdHex: myAccountId,
-            displayName: { self.resolvedAccountDisplayName($0) }
+        let text = projectionBuilders.groupSystemText(
+            record,
+            groupSystemByMessageId[record.messageIdHex],
+            myAccountId,
+            { self.resolvedAccountDisplayName($0) }
         )
         groupSystemDisplayCache[record.messageIdHex] = GroupSystemDisplayCacheEntry(key: key, text: text)
         return text
@@ -828,8 +820,8 @@ final class TimelineStore {
     }
 
     private func applyTimelineWindowPage(_ page: TimelinePageFfi, completeReplacement: Bool = false) {
-        let timing = appState?.productAnalytics.beginTiming()
-        defer { appState?.productAnalytics.recordTiming(.timelineWindow, since: timing) }
+        let timing = timings.begin()
+        defer { timings.record(.timelineWindow, timing) }
 
         var projectionChanged = false
         var changedReactionTargets: Set<String> = []
@@ -881,8 +873,8 @@ final class TimelineStore {
         let update = runtimeUpdate.update
         guard update.groupIdHex == groupIdHex else { return }
 
-        let timing = appState?.productAnalytics.beginTiming()
-        defer { appState?.productAnalytics.recordTiming(.timelineDelta, since: timing) }
+        let timing = timings.begin()
+        defer { timings.record(.timelineDelta, timing) }
 
         var projectionChanged = false
         var changedReactionTargets: Set<String> = []
@@ -942,8 +934,8 @@ final class TimelineStore {
     }
 
     private func applyTimelineTailRefreshPage(_ page: TimelinePageFfi) {
-        let timing = appState?.productAnalytics.beginTiming()
-        defer { appState?.productAnalytics.recordTiming(.timelineTail, since: timing) }
+        let timing = timings.begin()
+        defer { timings.record(.timelineTail, timing) }
 
         let existingMessageIds = Set(messageById.keys)
         let records = hasMoreAfter
@@ -1163,14 +1155,11 @@ final class TimelineStore {
 
     @discardableResult
     private func rebuildTimeline() -> Bool {
-        let timing = appState?.productAnalytics.beginTiming()
-        defer { appState?.productAnalytics.recordTiming(.timelineRebuild, since: timing) }
+        let timing = timings.begin()
+        defer { timings.record(.timelineRebuild, timing) }
 
         let signpost = Self.performanceSignposter.beginInterval("TimelineStore.rebuildTimeline")
         defer { Self.performanceSignposter.endInterval("TimelineStore.rebuildTimeline", signpost) }
-        #if DEBUG
-        timelineRebuildCountForTesting += 1
-        #endif
 
         var next: [TimelineItem] = messageById.values.compactMap { record in
             visibleTimelineItem(for: record, status: messageStatusById[record.messageIdHex])
@@ -1183,16 +1172,16 @@ final class TimelineStore {
         next.append(contentsOf: streamDebugTimelineItems.values)
         next.append(contentsOf: systemTimelineItems)
         next = orderedTimeline(next)
-        let markdownTiming = appState?.productAnalytics.beginTiming()
+        let markdownTiming = timings.begin()
         let markdownChanged = markdownProjections.rebuild(
             for: next,
             onlyRowsWithMentions: false,
             resolver: mentionDisplayNameResolver
         )
-        appState?.productAnalytics.recordTiming(.markdownRebuild, since: markdownTiming)
-        let mediaTiming = appState?.productAnalytics.beginTiming()
+        timings.record(.markdownRebuild, markdownTiming)
+        let mediaTiming = timings.begin()
         let mediaChanged = mediaProjections.rebuild(for: next)
-        appState?.productAnalytics.recordTiming(.mediaRebuild, since: mediaTiming)
+        timings.record(.mediaRebuild, mediaTiming)
         agentEventProjections.prune(keeping: Set(next.map(\.id)))
         return assignTimeline(next) || markdownChanged || mediaChanged
     }
@@ -1256,8 +1245,8 @@ final class TimelineStore {
     }
 
     func refreshProfileDependentTimelineProjections(affectedMessageIDs: Set<String>? = nil) {
-        let timing = appState?.productAnalytics.beginTiming()
-        defer { appState?.productAnalytics.recordTiming(.timelineProfiles, since: timing) }
+        let timing = timings.begin()
+        defer { timings.record(.timelineProfiles, timing) }
 
         if let affectedMessageIDs {
             guard !affectedMessageIDs.isEmpty else { return }
@@ -1477,13 +1466,10 @@ final class TimelineStore {
 
     // MARK: - Reactions
 
-    /// All aggregated reaction tallies (full dict) — for test hooks.
+    /// All aggregated reaction tallies, keyed by target.
     var reactions: [String: [ConversationViewModel.ReactionTally]] { reactionProjections.allTallies }
 
     private func collectReactionTargets(affectedBy record: AppMessageRecordFfi, into targets: inout Set<String>) {
-#if DEBUG
-        reactionTargetCollectionCountForTesting += 1
-#endif
         if !record.messageIdHex.isEmpty {
             targets.insert(record.messageIdHex)
         }
@@ -1502,14 +1488,6 @@ final class TimelineStore {
         reactionProjections.recompute(targets: targets, deletedMessageIds: deletedProjections.deletedMessageIds, me: myAccountId ?? "")
     }
 
-#if DEBUG
-    @discardableResult
-    func forceFullReactionRecomputeForTesting() -> [String: [ConversationViewModel.ReactionTally]] {
-        _ = recomputeReactions()
-        return reactions
-    }
-#endif
-
     func beginMessageVisibility(rowID: String, operation: HostPerformanceOperationFfi) {
         guard let appState, appState.canUseRuntimeForForegroundWork,
               appState.visibleChat == VisibleChatRoute(accountRef: appState.activeAccountRef ?? "", groupIdHex: groupIdHex) else { return }
@@ -1526,8 +1504,8 @@ final class TimelineStore {
     // MARK: - Optimistic send overlay
 
     func applyPendingOutgoingMessage(tempId: String, record: AppMessageRecordFfi, clientToken: String? = nil) {
-        let timing = appState?.productAnalytics.beginTiming()
-        defer { appState?.productAnalytics.recordTiming(.outgoingProjection, since: timing) }
+        let timing = timings.begin()
+        defer { timings.record(.outgoingProjection, timing) }
 
         let rowID = "msg:\(tempId)"
         localSendPhases[rowID] = .pending
@@ -1540,7 +1518,7 @@ final class TimelineStore {
         releaseLocalSendCorrelation(rowID: rowID)
         localSendCorrelations[rowID] = LocalSendCorrelation(
             clientToken: clientToken ?? tempId,
-            stagedAt: appState?.productAnalytics.beginTiming()
+            stagedAt: timings.begin()
         )
         let item = TimelineItem.pendingMessage(tempId: tempId, record: record)
         transientTimelineItems[item.id] = item
@@ -1585,7 +1563,7 @@ final class TimelineStore {
         guard let rowID = claimedRowID(forMessageID: messageID),
               let timing = localSendCorrelations[rowID]?.stagedAt else { return }
         localSendCorrelations[rowID]?.stagedAt = nil
-        appState?.productAnalytics.recordTiming(.sendProjection, since: timing)
+        timings.record(.sendProjection, timing)
     }
 
     private func releaseLocalSendCorrelation(rowID: String, clearDisplayID: Bool = true) {
@@ -1617,8 +1595,8 @@ final class TimelineStore {
     }
 
     func confirmSent(tempId: String, record: AppMessageRecordFfi, messageId: String?, published: Bool = true) {
-        let timing = appState?.productAnalytics.beginTiming()
-        defer { appState?.productAnalytics.recordTiming(.outgoingConfirmation, since: timing) }
+        let timing = timings.begin()
+        defer { timings.record(.outgoingConfirmation, timing) }
 
         guard localSendPhases["msg:\(tempId)"] != nil else { return }
         var projectionChanged = false

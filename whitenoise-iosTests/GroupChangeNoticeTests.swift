@@ -4,6 +4,49 @@ import Testing
 
 @MainActor
 struct GroupChangeNoticeTests {
+    private func quarantine(
+        _ reason: AppGroupHydrationQuarantineReasonFfi,
+        account: String = "account",
+        group: String = "group"
+    ) -> MarmotEventFfi {
+        .groupEvent(accountIdHex: account, accountLabel: "private profile", groupIdHex: group,
+                    event: .groupHydrationQuarantined(reason: reason))
+    }
+
+    @Test func onlyAFailedRewindRestoreTellsTheUserToRestart() {
+        let restart = GroupChangeNotice.toast(for: quarantine(.rewindRestoreFailed))
+        #expect(restart?.style == .warning)
+        #expect(restart?.message?.isEmpty == false)
+        for reason in [AppGroupHydrationQuarantineReasonFfi.openMlsLoadFailed, .openMlsGroupMissing,
+                       .memberValidationFailed, .groupRecordLoadFailed, .pendingCommitRecoveryFailed] {
+            #expect(GroupChangeNotice.toast(for: quarantine(reason)) == nil)
+        }
+    }
+
+    @Test func onlyRewindRestoreRowsFromTheQuarantineListBecomeNotices() {
+        let alice = accountSummary("Alice", byte: "aa")
+        let events = GroupChangeNotice.rewindRestoreEvents(account: alice, quarantined: [
+            AppQuarantinedGroupFfi(groupIdHex: "stuck", reason: .rewindRestoreFailed),
+            AppQuarantinedGroupFfi(groupIdHex: "other", reason: .openMlsLoadFailed),
+        ])
+        #expect(events == [.groupEvent(
+            accountIdHex: alice.accountIdHex, accountLabel: alice.label, groupIdHex: "stuck",
+            event: .groupHydrationQuarantined(reason: .rewindRestoreFailed)
+        )])
+    }
+
+    @Test func eachAccountsFailedRewindRestoreOfAGroupIsAnnouncedOnce() {
+        var announcements = RefusedIntentAnnouncements()
+        let admitted = [
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "alice", group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "alice", group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "alice", group: "b")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "bob", group: "a")),
+            announcements.admit(quarantine(.rewindRestoreFailed, account: "bob", group: "a")),
+        ]
+        #expect(admitted == [true, false, true, true, false])
+    }
+
     private func event(kind: String = "group_profile", outcome: String) -> MarmotEventFfi {
         .groupChangeSuperseded(accountIdHex: "account", accountLabel: "private profile",
                                groupIdHex: "group", commitIdHex: "commit", kind: kind,
@@ -38,9 +81,37 @@ struct GroupChangeNoticeTests {
         #expect(text.contains("superseded"))
     }
 
-    private func refusal(id: String = "intent", kind: String, reason: String) -> MarmotEventFfi {
+    private func refusal(
+        id: String = "intent",
+        kind: String,
+        reason: String,
+        artifact: OversizedArtifactFfi? = nil,
+        sizeClass: EventSizeClassFfi? = nil
+    ) -> MarmotEventFfi {
         .groupEvent(accountIdHex: "account", accountLabel: "private profile", groupIdHex: "group",
-                    event: .queuedIntentRefused(intentIdHex: id, intentKind: kind, reason: reason))
+                    event: .queuedIntentRefused(intentIdHex: id, intentKind: kind, reason: reason,
+                                                artifact: artifact, sizeClass: sizeClass))
+    }
+
+    @Test func oversizedQueuedChangesSayWhichRelaysRefusedThem() {
+        let generic = GroupChangeNotice.toast(for: refusal(kind: "invite", reason: "future_reason"))
+        let commit = GroupChangeNotice.toast(
+            for: refusal(kind: "remove_members", reason: "event_too_large", artifact: .commit, sizeClass: .over4Mib))
+        let welcome = GroupChangeNotice.toast(
+            for: refusal(kind: "invite", reason: "event_too_large", artifact: .welcome, sizeClass: .from2To4Mib))
+        let unspecified = GroupChangeNotice.toast(for: refusal(kind: "invite", reason: "event_too_large"))
+        #expect(commit?.message == UserFacingError.eventTooLargeMessage(.commit))
+        #expect(welcome?.message == UserFacingError.eventTooLargeMessage(.welcome))
+        #expect(unspecified?.message == commit?.message)
+        #expect(Set([generic?.message, commit?.message, welcome?.message]).count == 3)
+    }
+
+    @Test func diagnosticsIncludeOversizedRefusalDetails() {
+        let text = DiagnosticsView.diagnosticText(
+            for: refusal(kind: "invite", reason: "event_too_large", artifact: .welcome, sizeClass: .from2To4Mib))
+        #expect(text.contains("event_too_large"))
+        #expect(text.contains("welcome"))
+        #expect(text.contains("from2To4Mib"))
     }
 
     @Test(arguments: ["invite", "remove_members", "update_group_data", "leave", "disband", "app_message", "future_kind"])

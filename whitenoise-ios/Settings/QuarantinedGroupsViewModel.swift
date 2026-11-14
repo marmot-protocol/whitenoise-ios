@@ -30,6 +30,8 @@ nonisolated enum QuarantinedGroupPresentation {
     struct Reason: Equatable {
         let title: String
         let guidance: String
+        /// False when MDK's retry cannot clear the reason, so Retry isn't offered.
+        var allowsRetry = true
     }
 
     static func reason(_ reason: AppGroupHydrationQuarantineReasonFfi) -> Reason {
@@ -58,6 +60,14 @@ nonisolated enum QuarantinedGroupPresentation {
             Reason(
                 title: L10n.string("Pending commit recovery failed"),
                 guidance: L10n.string("Marmot found a stranded MLS commit but could not recover it. Retry re-runs the same non-destructive recovery.")
+            )
+        case .rewindRestoreFailed:
+            // retryHydrateQuarantinedGroup returns false and no rejoin is
+            // offered; the next account open restores the live state.
+            Reason(
+                title: L10n.string("Rewind restore failed"),
+                guidance: L10n.string("Reading this group's earlier state left it unable to return to its current state. Restart the app to restore it; retrying here can't clear it."),
+                allowsRetry: false
             )
         @unknown default:
             Reason(

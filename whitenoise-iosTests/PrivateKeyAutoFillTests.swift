@@ -203,21 +203,24 @@ private struct Harness {
         let controller = UIHostingController(rootView: HarnessView(model: model))
         try await withHostedWindow(controller, frame: CGRect(x: 0, y: 0, width: 402, height: 700)) { _ in
             let field = try XCTUnwrap(secureField(in: controller.view))
+            // The tests drive focus, not typing. Without the system keyboard,
+            // a slow keyboard process can't take focus from the field mid-test.
+            field.inputView = UIView()
             defer { field.resignFirstResponder() }
             try await body(Harness(model: model, controller: controller, field: field))
         }
     }
 
     func focusFromSwiftUI() async throws {
-        // A Simulator keyboard reconnect can drop focus after acquisition.
-        // Retry only initial setup, within the existing bounded wait.
+        model.isFocused = true
+        // Quiet drain rounds can finish before SwiftUI applies the focus request.
         try await eventually {
-            model.isFocused = true
             controller.view.layoutIfNeeded()
-            guard field.isFirstResponder && model.isFocused else { return false }
-            try await settle()
             return field.isFirstResponder && model.isFocused
         }
+        try await settle()
+        XCTAssertTrue(field.isFirstResponder)
+        XCTAssertTrue(model.isFocused)
     }
 
     func presentPicker() {

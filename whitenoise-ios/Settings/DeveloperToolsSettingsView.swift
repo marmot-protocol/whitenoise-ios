@@ -14,6 +14,7 @@ struct DeveloperToolsSettingsView: View {
     @State private var exportError: String?
     @State private var showDemoConfirmation = false
     @State private var quarantinedGroupsModel = QuarantinedGroupsViewModel()
+    @State private var auditDelivery = AuditDeliveryStatusModel()
 
     var body: some View {
         @Bindable var model = model
@@ -186,6 +187,8 @@ struct DeveloperToolsSettingsView: View {
                 } header: { Text("Diagnostic Logs") } footer: {
                     Text("Export the most recently modified audit log on this device, or tap a file to export it. Exports preserve the full original JSONL, including event details. Configure or clear logs in Privacy & Security → Diagnostics & Improvements.")
                 }
+
+                auditDeliverySection
             }
 
             if let errorMessage = model.errorMessage ?? model.auditErrorMessage {
@@ -226,10 +229,18 @@ struct DeveloperToolsSettingsView: View {
                 quarantinedGroupsModel.reset()
             }
         }
+        .task(id: appState.developerMode ? appState.activeAccountRef : nil) {
+            if appState.developerMode {
+                await auditDelivery.reload(using: appState)
+            } else {
+                auditDelivery.reset()
+            }
+        }
         .refreshable {
             await model.reload(using: appState)
             if appState.developerMode {
                 await quarantinedGroupsModel.reload(using: appState)
+                await auditDelivery.reload(using: appState)
             }
         }
         .fileExporter(isPresented: $showExport, document: exportDocument, contentType: .data,
@@ -323,6 +334,45 @@ struct DeveloperToolsSettingsView: View {
 
     private var marmotBuildLabel: String {
         MarmotKitBuildLabel.text(tag: MarmotKitVersion.mdkTag, sha: MarmotKitVersion.mdkSHA)
+    }
+
+    @ViewBuilder
+    private var auditDeliverySection: some View {
+        Section {
+            if let summary = auditDelivery.summary {
+                ForEach(Array(summary.rows.enumerated()), id: \.offset) { _, row in
+                    LabeledContent(row.title, value: row.value)
+                }
+                if summary.canResume {
+                    Button {
+                        Task { await auditDelivery.resume(using: appState) }
+                    } label: {
+                        if auditDelivery.isResuming {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text("Resuming…")
+                            }
+                        } else {
+                            Label("Resume Delivery", systemImage: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(auditDelivery.isResuming)
+                }
+            } else if auditDelivery.loadFailed {
+                Label("Couldn't load delivery status", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+                Button("Retry") {
+                    Task { await auditDelivery.reload(using: appState) }
+                }
+            } else {
+                ProgressView()
+            }
+        } header: {
+            Text("Audit Delivery")
+        } footer: {
+            Text("Uploads of this profile's diagnostic logs. Delivery pauses when the receiver refuses this build's configuration; Resume Delivery tries again once the receiver is fixed.")
+        }
     }
 
     private func auditFileRow(_ row: AuditFileRow) -> some View {

@@ -119,11 +119,8 @@ struct MediaAutoDownloadMatrixTests {
 
 struct MediaQualityTests {
     @Test func levelsCarryTheSharedKnobs() {
-        #expect(MediaQuality.low.imageMaxEdgePx == 1024)
         #expect(MediaQuality.standard.imageMaxEdgePx == 2048)
         #expect(MediaQuality.high.imageMaxEdgePx == 4096)
-        #expect(MediaQuality.original.imageMaxEdgePx == .greatestFiniteMagnitude)
-        #expect(MediaQuality.low.audioBitrateBps == 32_000)
         #expect(MediaQuality.standard.audioBitrateBps == 64_000)
         #expect(MediaQuality.high.audioBitrateBps == 96_000)
         #expect(MediaQuality.defaultQuality == .standard)
@@ -143,8 +140,27 @@ struct MediaQualityTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         #expect(MediaQualityStore.quality(defaults: defaults) == .standard)
-        MediaQualityStore.setQuality(.original, defaults: defaults)
-        #expect(MediaQualityStore.quality(defaults: defaults) == .original)
+        MediaQualityStore.setQuality(.high, defaults: defaults)
+        #expect(MediaQualityStore.quality(defaults: defaults) == .high)
+        MediaQualityStore.setQuality(.standard, defaults: defaults)
+        #expect(MediaQualityStore.quality(defaults: defaults) == .standard)
+    }
+
+    @Test(arguments: [("low", MediaQuality.standard), ("original", MediaQuality.high)])
+    func readsLegacyQualityWithoutWritingUntilAnExplicitChoice(raw: String, expected: MediaQuality) {
+        let suiteName = "media-quality-tests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(raw, forKey: MediaQualityStore.storageKey)
+
+        #expect(MediaQualityStore.quality(defaults: defaults) == expected)
+        #expect(defaults.string(forKey: MediaQualityStore.storageKey) == raw)
+        #expect(MediaQualityStore.quality(defaults: defaults) == expected)
+
+        let selected: MediaQuality = expected == .standard ? .high : .standard
+        MediaQualityStore.setQuality(selected, defaults: defaults)
+        #expect(MediaQualityStore.quality(defaults: defaults) == selected)
+        #expect(defaults.string(forKey: MediaQualityStore.storageKey) == selected.rawValue)
     }
 }
 

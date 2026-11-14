@@ -28,8 +28,24 @@ final class ProfileEditViewModel {
     var hasLoadError = false
     var saveFailure: SaveFailure?
 
-    enum SaveFailure {
+    enum SaveFailure: Equatable {
         case publish
+        /// Every relay refused the profile for size; the same draft fails again.
+        case tooLarge
+
+        static func publishing(_ error: Error) -> SaveFailure {
+            if let error = error as? MarmotKitError, case .EventTooLarge = error { return .tooLarge }
+            return .publish
+        }
+
+        var offersRetry: Bool { self != .tooLarge }
+
+        var message: String {
+            switch self {
+            case .publish: L10n.string("Couldn’t save your profile details. Please try again.")
+            case .tooLarge: UserFacingError.eventTooLargeMessage(.other)
+            }
+        }
     }
 
     private(set) var loadedAccountIdHex: String?
@@ -268,7 +284,7 @@ final class ProfileEditViewModel {
                 return false
             }
             Haptics.error()
-            saveFailure = .publish
+            saveFailure = .publishing(error)
             return false
         }
     }

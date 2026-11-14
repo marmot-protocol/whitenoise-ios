@@ -173,9 +173,21 @@ protocol NotificationCoordinatorHost: AnyObject {
     func restorePendingNativePush() async
 }
 
+/// The Marmot calls behind the coordinator's best-effort catch-ups.
+struct NotificationCatchUpCalls {
+    var catchUpAccounts: @MainActor (NotificationCoordinatorHost) async throws -> Void
+    var notifyConnectivityRestored: @MainActor (NotificationCoordinatorHost) async throws -> Void
+
+    static let live = NotificationCatchUpCalls(
+        catchUpAccounts: { host in try await host.currentMarmotClient().catchUpAccounts() },
+        notifyConnectivityRestored: { host in try await host.currentMarmotClient().notifyConnectivityRestored() }
+    )
+}
+
 @MainActor
 @Observable
 final class NotificationCoordinator {
+    @ObservationIgnored private let catchUpCalls: NotificationCatchUpCalls
     @ObservationIgnored private let notificationDriver = NotificationDriver()
     @ObservationIgnored private var nativePushRegistrationTask: Task<Void, Never>?
     @ObservationIgnored private var connectivityCatchUpTask: Task<Void, Never>?
@@ -184,10 +196,9 @@ final class NotificationCoordinator {
     private(set) var isForegroundCatchUpRunning = false
     private var notificationSubscriptionFailureToastPresented = false
     private var nativePushRegistrationFailureToastPresented = false
-#if DEBUG
-    var foregroundCatchUpOperationForTesting: (() async throws -> Void)?
-    var connectivityRestoredOperationForTesting: (() async throws -> Void)?
-#endif
+    init(catchUpCalls: NotificationCatchUpCalls = .live) {
+        self.catchUpCalls = catchUpCalls
+    }
 
     private static let notificationSubscriptionInitialRetryDelayNanoseconds: UInt64 = 1_000_000_000
     private static let notificationSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 60_000_000_000
@@ -685,15 +696,7 @@ final class NotificationCoordinator {
         guard !Task.isCancelled else { return }
 
         do {
-#if DEBUG
-            if let foregroundCatchUpOperationForTesting {
-                try await foregroundCatchUpOperationForTesting()
-            } else {
-                try await host.currentMarmotClient().catchUpAccounts()
-            }
-#else
-            try await host.currentMarmotClient().catchUpAccounts()
-#endif
+            try await catchUpCalls.catchUpAccounts(host)
             try Task.checkCancellation()
             outcome = "succeeded"
         } catch is CancellationError {
@@ -731,15 +734,7 @@ final class NotificationCoordinator {
 
     private func notifyConnectivityRestored(host: NotificationCoordinatorHost) async {
         do {
-#if DEBUG
-            if let connectivityRestoredOperationForTesting {
-                try await connectivityRestoredOperationForTesting()
-            } else {
-                try await host.currentMarmotClient().notifyConnectivityRestored()
-            }
-#else
-            try await host.currentMarmotClient().notifyConnectivityRestored()
-#endif
+            try await catchUpCalls.notifyConnectivityRestored(host)
         } catch {
             // Best effort. The following catch-up and MDK's durable retry
             // scheduler remain available if the runtime changed underneath us.
@@ -780,20 +775,12 @@ final class NotificationCoordinator {
     }
 
     #if DEBUG
-    func nativePushEnabledAccountRefsForTesting(host: NotificationCoordinatorHost) async -> [String] {
-        await nativePushEnabledAccountRefs(host: host)
-    }
-
     func drainNativePushRegistrationTaskForTesting() async {
         await nativePushRegistrationTask?.value
     }
 
     func drainConnectivityCatchUpTaskForTesting() async {
         await connectivityCatchUpTask?.value
-    }
-
-    var hasConnectivityCatchUpTaskForTesting: Bool {
-        connectivityCatchUpTask != nil
     }
     #endif
 }

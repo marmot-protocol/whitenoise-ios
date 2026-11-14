@@ -5,6 +5,14 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func aSizeRefusalDuringSetupShowsTheSizeMessageNotAGenericRetry() {
+        let tooLarge = AccountSetupFailure.operation(MarmotKitError.EventTooLarge(artifact: .other, sizeClass: .over4Mib))
+        #expect(tooLarge == .tooLarge)
+        #expect(tooLarge.message == UserFacingError.message(for: MarmotKitError.EventTooLarge(artifact: .other, sizeClass: .over4Mib)))
+        #expect(AccountSetupFailure.operation(MarmotKitError.OnboardingActionUnavailable) == .settingsChanged)
+        #expect(AccountSetupFailure.operation(URLError(.timedOut)) == .operation)
+    }
+
     @Test func discoverySearchFailsOnlyOnAThrownErrorOrLostUpdates() {
         #expect(AccountSetupDiscoveryOutcome.failure(nil, isConnected: true) == nil)
         #expect(AccountSetupDiscoveryOutcome.failure(.operation, isConnected: true) == .discovery)

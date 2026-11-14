@@ -77,9 +77,9 @@ struct NotificationActionRoutingTests {
         #expect(operation == .reply(route, text: exact))
     }
 
-    /// #1276: an over-limit reply sends nothing and starts no runtime, and is
-    /// reported with the same notice as any reply that failed to send.
-    @Test func rejectedReplyIsReportedAsUnsentWithoutStartingARuntime() async throws {
+    /// #1276/#1288: an over-limit reply sends nothing and starts no runtime,
+    /// and is reported with the composer's over-limit text notice.
+    @Test func rejectedReplyIsReportedAsTooLongWithoutStartingARuntime() async throws {
         var scheduled: [UNNotificationRequest] = []
         let runtimeRequests = Mutex(0)
         let appState = AppState.test(
@@ -94,8 +94,9 @@ struct NotificationActionRoutingTests {
 
         let request = try #require(scheduled.first)
         #expect(scheduled.count == 1)
-        #expect(request.content.title == L10n.string("Reply not sent"))
-        #expect(request.content.body == L10n.string("Open the chat to try again."))
+        let composerNotice = ConversationSendRecovery.notice(for: .text, restored: true)
+        #expect(request.content.title == composerNotice.title)
+        #expect(request.content.body == composerNotice.message)
         #expect(runtimeRequests.withLock { $0 } == 0)
     }
 

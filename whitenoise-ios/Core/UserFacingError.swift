@@ -189,18 +189,20 @@ struct UserFacingError: Equatable {
         }
     }
 
-    /// The relays refused it for size on this attempt. MDK keeps its own
-    /// retries and infers no relay limit, so this never claims a final outcome.
-    private nonisolated static func eventTooLargeMessage(_ artifact: OversizedArtifactFfi) -> String {
+    /// Every relay refused it for size, by its own answer or over a limit MDK
+    /// knows. A Welcome goes to the invitee's inbox relays; `.other` covers
+    /// account publishes (profile, relay and block lists, stickers,
+    /// KeyPackages), which go to the account's own relays.
+    nonisolated static func eventTooLargeMessage(_ artifact: OversizedArtifactFfi) -> String {
         switch artifact {
         case .applicationMessage:
             return L10n.string("This chat's relays refused this message because it's too large. Shorten it or send fewer attachments.")
         case .welcome:
-            return L10n.string("This chat's relays refused the invitation because it's too large. Try inviting fewer people at once.")
+            return L10n.string("The invitation is too large for the relays of someone you're inviting. Try inviting fewer people at once.")
         case .commit:
             return L10n.string("This chat's relays refused this group change because it's too large.")
         case .other:
-            return L10n.string("This chat's relays refused this update because it's too large.")
+            return L10n.string("Your relays refused this update because it's too large.")
         }
     }
 

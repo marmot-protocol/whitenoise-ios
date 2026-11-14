@@ -345,9 +345,11 @@ struct MessageSemanticsTests {
     @MainActor
     @Test func timelineMediaItemsUseCachedReferenceProjection() throws {
         let messageId = hex("dd")
+        let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: group(name: "", id: hex("aa"))
+            group: group(name: "", id: hex("aa")),
+            projectionBuilders: counter.builders
         )
         let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
         let firstReference = encryptedMediaReference(
@@ -372,21 +374,23 @@ struct MessageSemanticsTests {
         viewModel.replaceMediaReferencesForTesting([firstReference, secondReference], forMessageId: messageId)
 
         let firstRead = viewModel.mediaItems(for: item)
-        let buildCountAfterProjection = viewModel.mediaItemProjectionBuildCountForTesting
+        let buildCountAfterProjection = counter.mediaBuilds
         let secondRead = viewModel.mediaItems(for: item)
 
         #expect(firstRead.map(\.fileName) == ["first.jpg", "second.jpg"])
         #expect(secondRead == firstRead)
-        #expect(viewModel.mediaItemProjectionBuildCountForTesting == buildCountAfterProjection)
+        #expect(counter.mediaBuilds == buildCountAfterProjection)
     }
 
     @MainActor
     @Test func mediaReferenceUpdateRefreshesOnlyChangedTimelineProjection() throws {
         let messageId = hex("dd")
         let otherMessageId = hex("ee")
+        let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: group(name: "", id: hex("aa"))
+            group: group(name: "", id: hex("aa")),
+            projectionBuilders: counter.builders
         )
         let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
         let otherRecord = timelineRecord(messageIdHex: otherMessageId, timelineAt: 2)
@@ -402,7 +406,7 @@ struct MessageSemanticsTests {
         let otherItem = try #require(viewModel.timeline.first { $0.id == "msg:\(otherMessageId)" })
         viewModel.replaceMediaReferencesForTesting([firstReference], forMessageId: messageId)
         viewModel.replaceMediaReferencesForTesting([otherReference], forMessageId: otherMessageId)
-        let buildCountAfterInitialProjection = viewModel.mediaItemProjectionBuildCountForTesting
+        let buildCountAfterInitialProjection = counter.mediaBuilds
 
         #expect(viewModel.replaceMediaReferencesForTesting([replacementReference], forMessageId: messageId))
         let updated = viewModel.mediaItems(for: item)
@@ -410,15 +414,17 @@ struct MessageSemanticsTests {
 
         #expect(updated.map(\.fileName) == ["replacement.jpg"])
         #expect(unchanged.map(\.fileName) == ["other.jpg"])
-        #expect(viewModel.mediaItemProjectionBuildCountForTesting == buildCountAfterInitialProjection + 1)
+        #expect(counter.mediaBuilds == buildCountAfterInitialProjection + 1)
     }
 
     @MainActor
     @Test func timelineMediaItemsDoNotClassifyTagsWhenRowProjectionIsEmpty() throws {
         let messageId = hex("dd")
+        let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
             appState: AppState.test(),
-            group: group(name: "", id: hex("aa"))
+            group: group(name: "", id: hex("aa")),
+            projectionBuilders: counter.builders
         )
         let record = timelineRecord(
             messageIdHex: messageId,
@@ -432,14 +438,14 @@ struct MessageSemanticsTests {
             placement: .window
         )
         let item = try #require(viewModel.timeline.first)
-        let buildCountAfterProjection = viewModel.mediaItemProjectionBuildCountForTesting
+        let buildCountAfterProjection = counter.mediaBuilds
 
         let firstRead = viewModel.mediaItems(for: item)
         let secondRead = viewModel.mediaItems(for: item)
 
         #expect(firstRead.isEmpty)
         #expect(secondRead.isEmpty)
-        #expect(viewModel.mediaItemProjectionBuildCountForTesting == buildCountAfterProjection)
+        #expect(counter.mediaBuilds == buildCountAfterProjection)
     }
 
     @MainActor

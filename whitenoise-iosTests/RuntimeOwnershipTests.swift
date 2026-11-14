@@ -94,8 +94,9 @@ private actor RuntimeRetryGate {
 @MainActor
 @Suite(.serialized, .marmotRuntimeConcurrencyLimit, .closesTestRuntimes)
 struct RuntimeOwnershipTests {
-    // The native cancellation test for the handwritten CancellablePresentedChatList
-    // adapter (AGENTS.md, Rust Bindings): keep it and run it on every binding refresh.
+    // The native cancellation test for MarmotKit's generated
+    // PresentedChatListSubscription.nextCancellable() (AGENTS.md, Rust Bindings):
+    // keep it and run it on every binding refresh.
     @Test func publishedPresentationSubscriptionCancelsWithoutAnotherEvent() async throws {
         try await withTestClient { client in
             try await client.startRuntime()

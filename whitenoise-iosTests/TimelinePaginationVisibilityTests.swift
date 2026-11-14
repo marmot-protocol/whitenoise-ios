@@ -71,6 +71,22 @@ struct TimelinePaginationEdgeStateTests {
     }
 }
 
+struct TimelinePaginationReachTests {
+    /// The next page is asked for before the reader runs into the end of the
+    /// loaded rows, and not while they are far from it.
+    @Test func aPageIsRequestedAheadOfTheEdgeButNotFromAfar() {
+        let viewport: CGFloat = 700
+        #expect(TimelinePaginationReach.isWithinReach(distanceToEdge: 0, viewportHeight: viewport))
+        #expect(TimelinePaginationReach.isWithinReach(distanceToEdge: viewport, viewportHeight: viewport))
+        #expect(!TimelinePaginationReach.isWithinReach(distanceToEdge: viewport * 20, viewportHeight: viewport))
+    }
+
+    @Test func unmeasuredGeometryRequestsNothing() {
+        #expect(!TimelinePaginationReach.isWithinReach(distanceToEdge: 0, viewportHeight: 0))
+        #expect(!TimelinePaginationReach.isWithinReach(distanceToEdge: .nan, viewportHeight: 700))
+    }
+}
+
 @MainActor
 private final class PaginationScrollModel: ObservableObject {
     @Published var isEnabled = true

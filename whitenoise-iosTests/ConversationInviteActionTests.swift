@@ -18,12 +18,15 @@ struct ConversationInviteActionTests {
             pendingConfirmation: true,
             welcomerAccountIdHex: hex("44")
         )
-        let viewModel = ConversationViewModel(appState: appState, group: pending)
         var receivedArguments: (String, String)?
-        viewModel.acceptGroupInviteForTesting = { accountRef, groupIdHex in
-            receivedArguments = (accountRef, groupIdHex)
-            return group(name: "invited", id: groupIdHex)
-        }
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            groupCalls: groupCalls(accept: { accountRef, groupIdHex in
+                receivedArguments = (accountRef, groupIdHex)
+                return group(name: "invited", id: groupIdHex)
+            })
+        )
 
         let updated = await viewModel.acceptInvite()
 
@@ -189,6 +192,26 @@ struct ConversationInviteActionTests {
         #expect(viewModel.inviteActionInFlight == nil)
     }
 
+    /// Accepts through `accept`. A group re-read answers with `refreshed`'s
+    /// group, or fails when the test gives none.
+    private func groupCalls(
+        accept: @escaping @MainActor (String, String) async throws -> AppGroupRecordFfi,
+        refreshed: (@MainActor () -> AppGroupRecordFfi)? = nil,
+        snapshotArguments: (@MainActor (String, String) -> Void)? = nil
+    ) -> ConversationGroupCalls {
+        ConversationGroupCalls(
+            acceptInvite: { _, accountRef, groupIdHex in try await accept(accountRef, groupIdHex) },
+            conversationSnapshot: { _, accountRef, groupIdHex in
+                snapshotArguments?(accountRef, groupIdHex)
+                guard let refreshed else { throw CancellationError() }
+                return GroupConversationSnapshotFfi(
+                    details: GroupDetailsFfi(group: refreshed(), members: []),
+                    managementState: managementState(isSelfAdmin: false, isLastAdmin: false)
+                )
+            }
+        )
+    }
+
     /// The step-down leaves the invitation pending with admin status removed;
     /// only the decline ends it.
     private func inviteDeclineCalls(
@@ -220,20 +243,25 @@ struct ConversationInviteActionTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let pending = group(name: "invited", pendingConfirmation: true)
-        let viewModel = ConversationViewModel(appState: appState, group: pending)
         var attempts = 0
         var refreshes = 0
-        viewModel.acceptGroupInviteForTesting = { _, groupIdHex in
-            attempts += 1
-            if attempts == 1 {
-                throw MarmotKitError.AccountWorkerBusy
-            }
-            return group(name: "invited", id: groupIdHex)
-        }
-        viewModel.refreshInviteStateForTesting = {
-            refreshes += 1
-            return true
-        }
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            groupCalls: groupCalls(
+                accept: { _, groupIdHex in
+                    attempts += 1
+                    if attempts == 1 {
+                        throw MarmotKitError.AccountWorkerBusy
+                    }
+                    return group(name: "invited", id: groupIdHex)
+                },
+                refreshed: {
+                    refreshes += 1
+                    return pending
+                }
+            )
+        )
 
         let updated = await viewModel.acceptInvite()
 
@@ -247,16 +275,18 @@ struct ConversationInviteActionTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let pending = group(name: "invited", pendingConfirmation: true)
-        let viewModel = ConversationViewModel(appState: appState, group: pending)
         var attempts = 0
-        viewModel.acceptGroupInviteForTesting = { _, _ in
-            attempts += 1
-            throw MarmotKitError.AccountWorkerResponseTimedOut
-        }
-        viewModel.refreshInviteStateForTesting = {
-            viewModel.applyGroupRecord(group(name: "invited", id: pending.groupIdHex))
-            return true
-        }
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            groupCalls: groupCalls(
+                accept: { _, _ in
+                    attempts += 1
+                    throw MarmotKitError.AccountWorkerResponseTimedOut
+                },
+                refreshed: { group(name: "invited", id: pending.groupIdHex) }
+            )
+        )
 
         let updated = await viewModel.acceptInvite()
 
@@ -269,27 +299,33 @@ struct ConversationInviteActionTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
         let pending = group(name: "invited", pendingConfirmation: true)
-        let viewModel = ConversationViewModel(appState: appState, group: pending)
         let terminal = group(
             name: "invited",
             id: pending.groupIdHex,
             archived: true,
             selfMembership: .left
         )
+        var snapshotArguments: (String, String)?
         var attempts = 0
-        viewModel.acceptGroupInviteForTesting = { _, _ in
-            attempts += 1
-            throw MarmotKitError.GroupInviteNotPending
-        }
-        viewModel.refreshInviteStateForTesting = {
-            viewModel.applyGroupRecord(terminal)
-            return true
-        }
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            groupCalls: groupCalls(
+                accept: { _, _ in
+                    attempts += 1
+                    throw MarmotKitError.GroupInviteNotPending
+                },
+                refreshed: { terminal },
+                snapshotArguments: { snapshotArguments = ($0, $1) }
+            )
+        )
 
         let updated = await viewModel.acceptInvite()
 
         #expect(attempts == 1)
         #expect(updated == terminal)
+        #expect(snapshotArguments?.0 == "account-ref")
+        #expect(snapshotArguments?.1 == pending.groupIdHex)
         #expect(!viewModel.hasPendingInvite)
         #expect(viewModel.inviteActionInFlight == nil)
     }

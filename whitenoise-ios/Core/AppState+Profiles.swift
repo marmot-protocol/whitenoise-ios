@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 
@@ -195,16 +194,4 @@ extension AppState {
     func cancelProfileFetchQueue() -> Task<Void, Never>? {
         profileStore.cancelProfileFetchQueue()
     }
-
-    #if DEBUG
-    @MainActor
-    func runProfileFetchQueueForTesting() async {
-        await profileStore.runProfileFetchQueueForTesting()
-    }
-
-    @MainActor
-    func pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex id: String, matching version: Int) {
-        profileStore.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: id, matching: version)
-    }
-    #endif
 }

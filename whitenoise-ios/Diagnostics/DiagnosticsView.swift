@@ -313,8 +313,10 @@ struct DiagnosticsView: View {
             return "local copy restored"
         case .groupMemberLeavesRemoved:
             return "member leaves removed"
-        case .queuedIntentRefused(_, let intentKind, let reason):
-            return "queued \(intentKind) refused (\(reason))"
+        case .queuedIntentRefused(_, let intentKind, let reason, let artifact, let sizeClass):
+            let size = [artifact.map { "\($0)" }, sizeClass.map { "\($0)" }].compactMap { $0 }
+            let detail = ([reason] + size).joined(separator: ", ")
+            return "queued \(intentKind) refused (\(detail))"
         }
     }
 

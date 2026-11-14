@@ -77,6 +77,23 @@ struct CustomEmojiBuiltinsTests {
         #expect(CustomEmojiPickerSearch.results(in: all, query: ":wn:").map(\.id) == ["wn"])
     }
 
+    /// A catalog key that doesn't match falls back to the English key, so a
+    /// typo shows up as an untranslated or duplicated name.
+    @Test func everyBuiltinHasADistinctTranslatedSpokenName() {
+        let languages = AppLanguage.allCases.filter { $0 != .system }
+        let english = withAppLanguage(.english) { CustomEmojiBuiltins.all.map(\.spokenName) }
+        for language in languages {
+            let names = withAppLanguage(language) { CustomEmojiBuiltins.all.map(\.spokenName) }
+            #expect(Set(names).count == names.count, "\(language)")
+            #expect(names.allSatisfy { !$0.isEmpty }, "\(language)")
+            guard language != .english else { continue }
+            for (index, builtin) in CustomEmojiBuiltins.all.enumerated() {
+                guard case .localized = builtin.name else { continue }
+                #expect(names[index] != english[index], "\(language) \(builtin.shortcode.name)")
+            }
+        }
+    }
+
     @Test func voiceOverReadsTheProductNameOfABuiltin() throws {
         let builtin = try #require(CustomEmojiBuiltins.all.first)
         #expect(CustomEmojiShortcode.spokenReaction(builtin.shortcode.token) == builtin.spokenName)

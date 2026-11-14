@@ -26,4 +26,9 @@ struct AsyncActionGate {
         generation += 1
         isRunning = false
     }
+
+    /// Rejects reloads that started before this call, without blocking actions.
+    mutating func invalidateReloads() {
+        generation += 1
+    }
 }

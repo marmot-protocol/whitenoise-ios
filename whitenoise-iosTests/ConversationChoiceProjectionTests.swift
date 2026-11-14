@@ -104,10 +104,10 @@ struct ConversationChoiceProjectionTests {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
         var createdMemberRef: String?
-        let model = NewChatFlowViewModel(starter: directChatStarter { _, memberRef in
+        let model = NewChatFlowViewModel(starter: directChatStarter(create: { _, memberRef in
             createdMemberRef = memberRef
             return "new-conversation"
-        })
+        }))
         model.conversationChooser = chooser()
         var openedGroupIdHex: String?
 
@@ -123,10 +123,10 @@ struct ConversationChoiceProjectionTests {
     @Test func openingAChoiceNeverCreatesAnotherGroup() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"
-        let model = NewChatFlowViewModel(starter: directChatStarter { _, _ in
+        let model = NewChatFlowViewModel(starter: directChatStarter(create: { _, _ in
             Issue.record("opening an existing choice must not create")
             throw TestFailure.unexpectedCreate
-        })
+        }))
         let chooser = chooser()
         model.conversationChooser = chooser
         var openedGroupIdHex: String?
@@ -147,13 +147,13 @@ struct ConversationChoiceProjectionTests {
         appState.activeAccountRef = "account"
         var createCount = 0
         let marmot = NewChatFlowMarmotDouble()
-        let model = newChatFlow(starter: directChatStarter { _, _ in
+        let model = newChatFlow(starter: directChatStarter(create: { _, _ in
             createCount += 1
             if createCount == 1 {
                 throw TestFailure.createFailed
             }
             return "new-after-retry"
-        }, marmot: marmot)
+        }), marmot: marmot)
         model.conversationChooser = chooser()
         var lookupCount = 0
         marmot.existingDirectChat = { _, _ in
@@ -170,6 +170,32 @@ struct ConversationChoiceProjectionTests {
         }
 
         #expect(lookupCount == 0)
+        #expect(createCount == 2)
+        #expect(openedGroupIdHex == "new-after-retry")
+    }
+
+    @Test func profileRetryAfterStartNewFailureRetriesTheSeparateCreate() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+        var createCount = 0
+        let model = ProfileViewModel(starter: directChatStarter(create: { _, _ in
+            createCount += 1
+            if createCount == 1 {
+                throw TestFailure.createFailed
+            }
+            return "new-after-retry"
+        }))
+        model.conversationChooser = chooser()
+        var openedGroupIdHex: String?
+
+        await model.startNewConversation(using: appState) { _ in }
+        #expect(model.startPrompt?.startsSeparateChat == true)
+
+        await model.retryStart(using: appState) {
+            openedGroupIdHex = $0
+        }
+
+        // The default startDirect spy records an issue if the canonical route runs.
         #expect(createCount == 2)
         #expect(openedGroupIdHex == "new-after-retry")
     }

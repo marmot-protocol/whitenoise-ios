@@ -188,6 +188,7 @@ struct IdentityProfileSetupView: View {
         .wnProfileFailureAlert(
             $signUpFailure,
             title: signUpFailure == .photoUpload ? L10n.string("Couldn’t upload photo") : L10n.string("Couldn’t finish sign-up"),
+            offersRetry: { $0.offersRetry },
             dismissTitle: { $0 == .photoUpload ? L10n.string("Cancel") : L10n.string("Close") },
             message: { $0.message },
             retry: { _ in submitProfile() }

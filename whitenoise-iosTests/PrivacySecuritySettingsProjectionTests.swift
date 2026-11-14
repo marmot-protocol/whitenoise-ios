@@ -23,6 +23,19 @@ struct PrivacySecuritySettingsProjectionTests {
         #expect(row.detailText == "\(ByteCountFormatter.string(fromByteCount: 1_536, countStyle: .file)) - 12345678...abcdef")
     }
 
+    @Test func auditRowsKeepTheFilesModifiedTime() {
+        let file = AuditLogFileFfi(accountRef: "account", path: "/tmp/a.jsonl", fileName: "a.jsonl",
+                                   sizeBytes: 1, modifiedAtMs: 1_799_999_999_000)
+        #expect(AuditFileRowProjection.rows(from: [file])[0].modifiedAtMs == file.modifiedAtMs)
+    }
+
+    @Test func retentionCutoffIsThatManyDaysBeforeNowInMilliseconds() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let nowMs = UInt64(now.timeIntervalSince1970 * 1_000)
+        #expect(AuditLogRetentionPresentation.cutoffMs(days: 7, now: now) == nowMs - 7 * 86_400_000)
+        #expect(AuditLogRetentionPresentation.cutoffMs(days: 1, now: now) > AuditLogRetentionPresentation.cutoffMs(days: 7, now: now))
+    }
+
     @Test func auditRowsListNewestCaptureFirstRegardlessOfFileName() {
         func file(_ name: String, _ modifiedAtMs: UInt64?) -> AuditLogFileFfi {
             AuditLogFileFfi(accountRef: "account", path: "/tmp/\(name)", fileName: name,

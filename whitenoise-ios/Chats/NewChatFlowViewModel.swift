@@ -144,6 +144,7 @@ final class NewChatFlowViewModel {
                 accountIdHex: accountIdHex,
                 memberRef: memberRef,
                 existingGroupIdHex: nil,
+                startsSeparateChat: false,
                 failureRetryMode: .exact,
                 using: appState,
                 onOpen: onOpen
@@ -174,6 +175,7 @@ final class NewChatFlowViewModel {
             accountIdHex: chooser.targetAccountIdHex,
             memberRef: chooser.memberRef,
             existingGroupIdHex: choice.groupIdHex,
+            startsSeparateChat: false,
             failureRetryMode: .exact,
             using: appState,
             onOpen: onOpen
@@ -190,6 +192,7 @@ final class NewChatFlowViewModel {
             accountIdHex: chooser.targetAccountIdHex,
             memberRef: chooser.memberRef,
             existingGroupIdHex: nil,
+            startsSeparateChat: true,
             failureRetryMode: .exact,
             using: appState,
             onOpen: onOpen
@@ -230,6 +233,7 @@ final class NewChatFlowViewModel {
             accountIdHex: accountIdHex,
             memberRef: memberRef,
             existingGroupIdHex: existing,
+            startsSeparateChat: false,
             failureRetryMode: .canonicalLookup,
             using: appState,
             onOpen: onOpen
@@ -275,6 +279,7 @@ final class NewChatFlowViewModel {
                 accountIdHex: prompt.accountIdHex,
                 memberRef: prompt.memberRef,
                 existingGroupIdHex: prompt.existingGroupIdHex,
+                startsSeparateChat: prompt.startsSeparateChat,
                 failureRetryMode: .exact,
                 using: appState,
                 onOpen: onOpen
@@ -286,6 +291,7 @@ final class NewChatFlowViewModel {
         accountIdHex: String,
         memberRef: String,
         existingGroupIdHex: String?,
+        startsSeparateChat: Bool,
         failureRetryMode: RetryStartMode,
         using appState: AppState,
         onOpen: (String) -> Void
@@ -294,6 +300,7 @@ final class NewChatFlowViewModel {
             accountIdHex: accountIdHex,
             memberRef: memberRef,
             existingGroupIdHex: existingGroupIdHex,
+            startsSeparateChat: startsSeparateChat,
             using: appState
         )
         switch outcome {

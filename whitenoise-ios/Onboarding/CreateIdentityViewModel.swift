@@ -133,8 +133,25 @@ final class CreateIdentityViewModel {
 
     enum Failure: Equatable {
         case creation, setup, photoUpload, profile, draftStorage, restore, restart
+        /// Every relay refused a publish for size; retrying the same draft fails again.
+        case tooLarge
+
+        var offersRetry: Bool { self != .tooLarge }
+
+        /// The failure for a sign-up submission that threw `error` during `phase`.
+        static func submitting(_ error: Error, phase: Phase) -> Failure {
+            if let error = error as? MarmotKitError, case .EventTooLarge = error { return .tooLarge }
+            switch phase {
+            case .creating: return .creation
+            case .finishingSetup: return .setup
+            case .uploadingPhoto: return .photoUpload
+            default: return .profile
+            }
+        }
+
         var message: String {
             switch self {
+            case .tooLarge: UserFacingError.eventTooLargeMessage(.other)
             case .restart: L10n.string("Couldn’t restart sign-up. Please try again to finish clearing your progress.")
             case .creation: L10n.string("Couldn’t create your account. Please try again.")
             case .setup: L10n.string("Couldn’t finish setting up your account. Check your connection and try again.")
@@ -408,12 +425,7 @@ final class CreateIdentityViewModel {
                 isRestorationBlocked = true
                 failure = .restore
             } else {
-                switch phase {
-                case .creating: failure = .creation
-                case .finishingSetup: failure = .setup
-                case .uploadingPhoto: failure = .photoUpload
-                default: failure = .profile
-                }
+                failure = Failure.submitting(error, phase: phase)
             }
             phase = createdIdentity == nil ? .creationFailed : phase == .finishingSetup ? .setupFailed : .profileSaveFailed
             if Task.isCancelled {
