@@ -45,11 +45,20 @@ final class ConversationMediaPrefetcher {
         startWaiting()
     }
 
-    /// A load in flight waits on MDK, so stopping cancels it and waits for it to end.
-    func cancelAndDrain() async {
+    isolated deinit {
+        cancel()
+    }
+
+    /// Stops look-ahead: nothing waiting starts, and loads in flight, which wait on MDK, are cancelled.
+    func cancel() {
         waiting = []
+        running.values.forEach { $0.cancel() }
+    }
+
+    /// Cancels, then waits until no load is still calling MDK.
+    func cancelAndDrain() async {
         let loads = Array(running.values)
-        loads.forEach { $0.cancel() }
+        cancel()
         for load in loads { await load.value }
     }
 

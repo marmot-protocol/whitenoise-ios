@@ -294,9 +294,10 @@ final class ConversationViewModel {
     private(set) var windowIdentities: [String: ConversationIdentityFfi] = [:]
     private(set) var windowReactions: [String: ConversationReactionsFfi] = [:]
     @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
-    @ObservationIgnored private lazy var mediaPrefetcher = ConversationMediaPrefetcher { [weak self] media in
-        guard let self else { return }
-        await mediaDownloader.fetchAhead(media, groupIdHex: group.groupIdHex, appState: appState)
+    /// Captures no view model: a fetch can outlast the conversation's screen.
+    @ObservationIgnored private lazy var mediaPrefetcher = ConversationMediaPrefetcher {
+        [mediaDownloader, groupIdHex = group.groupIdHex, weak appState] media in
+        await mediaDownloader.fetchAhead(media, groupIdHex: groupIdHex, appState: appState)
     }
     @ObservationIgnored private var prefetchableImages: (generation: Int, byRow: [String: [MessageMediaAttachment]]) = (0, [:])
     /// Decoded inline NIP-30 custom emoji for this conversation's rows.
@@ -1194,6 +1195,7 @@ final class ConversationViewModel {
         resetOptimisticState()
         await stopLiveSubscriptions()
         await mediaDownloader.stopAndDrain()
+        await mediaPrefetcher.cancelAndDrain()
     }
 
     func resumeAfterFailedLocalGroupReset() async {
@@ -1610,7 +1612,7 @@ final class ConversationViewModel {
 
     private func stopLiveSubscriptions() async {
         windowLifetime = UUID()
-        await mediaPrefetcher.cancelAndDrain()
+        mediaPrefetcher.cancel()
         let retiringLifetime = windowLifetime
         let previous = timelineTask
         let commands = windowCommandTask

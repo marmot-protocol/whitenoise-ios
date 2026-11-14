@@ -12,15 +12,19 @@ import Testing
         private(set) var started: [String] = []
         private(set) var active = 0
         private(set) var peak = 0
-        private(set) var cancelled: [String] = []
+        private(set) var cancelled: Set<String> = []
         private var held: [CheckedContinuation<Void, Never>] = []
 
         func load(_ media: MessageMediaAttachment) async {
             started.append(media.id)
             active += 1
             peak = max(peak, active)
-            await withCheckedContinuation { held.append($0) }
-            if Task.isCancelled { cancelled.append(media.id) }
+            let id = media.id
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { held.append($0) }
+            } onCancel: {
+                Task { @MainActor in self.cancelled.insert(id) }
+            }
             active -= 1
         }
 
@@ -73,6 +77,7 @@ import Testing
         prefetcher.update(candidates: ["a", "b", "c"].map(image))
         try await eventually { loads.active == ConversationMediaPrefetcher.concurrentLoads }
         async let stopped: Void = prefetcher.cancelAndDrain()
+        try await eventually { loads.cancelled == ["a", "b"] }
         try await eventually {
             loads.releaseAll()
             return loads.active == 0
@@ -80,7 +85,22 @@ import Testing
         await stopped
 
         #expect(loads.started == ["a", "b"])
-        #expect(loads.cancelled == ["a", "b"])
+    }
+
+    @Test func aClosedConversationCancelsItsLoadsInFlight() async throws {
+        let loads = Loads()
+        var prefetcher: ConversationMediaPrefetcher? = ConversationMediaPrefetcher { await loads.load($0) }
+
+        prefetcher?.update(candidates: ["a", "b", "c"].map(image))
+        try await eventually { loads.active == ConversationMediaPrefetcher.concurrentLoads }
+        prefetcher = nil
+        try await eventually { loads.cancelled == ["a", "b"] }
+        try await eventually {
+            loads.releaseAll()
+            return loads.active == 0
+        }
+
+        #expect(loads.started == ["a", "b"])
     }
 
     @Test func anAttachmentIsRequestedOnce() async throws {
