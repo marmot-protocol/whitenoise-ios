@@ -35,7 +35,10 @@ final class ConversationMediaPrefetcher {
     private var waiting: [MessageMediaAttachment] = []
     /// Asked of MDK since look-ahead was last stopped.
     private var requested: Set<String> = []
-    private var running: [String: Task<Void, Never>] = [:]
+    /// The load that counts for each attachment being asked for.
+    private var running: [String: UUID] = [:]
+    /// Every load still calling MDK, cancelled ones included.
+    private var loads: [UUID: Task<Void, Never>] = [:]
 
     init(load: @escaping Load) {
         self.load = load
@@ -57,26 +60,30 @@ final class ConversationMediaPrefetcher {
     /// taking its downloads with it, so everything can be asked for again.
     func cancel() {
         waiting = []
-        running.values.forEach { $0.cancel() }
+        loads.values.forEach { $0.cancel() }
         running = [:]
         requested = []
     }
 
-    /// Cancels, then waits until no load is still calling MDK.
+    /// Cancels, then waits until no load is still calling MDK, including
+    /// loads an earlier stop cancelled.
     func cancelAndDrain() async {
-        let loads = Array(running.values)
         cancel()
-        for load in loads { await load.value }
+        for load in Array(loads.values) { await load.value }
     }
 
     private func startWaiting() {
         while running.count < Self.concurrentLoads, !waiting.isEmpty {
             let media = waiting.removeFirst()
             guard isUnrequested(media) else { continue }
-            running[media.id] = Task { @MainActor [weak self, load] in
+            let token = UUID()
+            running[media.id] = token
+            loads[token] = Task { @MainActor [weak self, load] in
                 let asked = await load(media)
-                // `cancel` has already let go of a cancelled load.
-                guard let self, !Task.isCancelled else { return }
+                guard let self else { return }
+                loads[token] = nil
+                // A stop has already let go of this load.
+                guard running[media.id] == token else { return }
                 running[media.id] = nil
                 if asked { requested.insert(media.id) }
                 startWaiting()

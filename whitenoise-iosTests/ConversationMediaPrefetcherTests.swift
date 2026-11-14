@@ -74,20 +74,24 @@ import Testing
         #expect(loads.started == ["a", "b", "e"])
     }
 
-    @Test func stoppingCancelsLoadsInFlightAndStartsNoMore() async throws {
+    /// A drain can follow a stop that already cancelled the loads, as it does before a local group reset.
+    @Test(arguments: [false, true])
+    func drainingCancelsLoadsInFlightAndWaitsForThem(stoppedFirst: Bool) async throws {
         let loads = Loads()
         let prefetcher = ConversationMediaPrefetcher { await loads.load($0) }
 
         prefetcher.update(candidates: ["a", "b", "c"].map(image))
         try await eventually { loads.active == ConversationMediaPrefetcher.concurrentLoads }
-        async let stopped: Void = prefetcher.cancelAndDrain()
-        try await eventually { loads.cancelled == ["a", "b"] }
-        try await eventually {
-            loads.releaseAll()
-            return loads.active == 0
+        if stoppedFirst { prefetcher.cancel() }
+        let drain = Task { @MainActor in
+            await prefetcher.cancelAndDrain()
+            return loads.active
         }
-        await stopped
+        try await eventually { loads.cancelled == ["a", "b"] }
+        #expect(loads.active == ConversationMediaPrefetcher.concurrentLoads)
+        loads.releaseAll()
 
+        #expect(await drain.value == 0)
         #expect(loads.started == ["a", "b"])
     }
 
