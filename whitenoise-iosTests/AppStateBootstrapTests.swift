@@ -2183,12 +2183,14 @@ struct AppStateBootstrapTests {
         // after the push cleanup and re-register the signed-out account.
         let permissionRequested = TestLatch()
         let permissionAnswered = TestLatch()
+        let promptCancelled = TestLatch()
         let notifications = AppNotifications(
             requestAuthorizationHandler: {
                 permissionRequested.signal()
                 try await withTaskCancellationHandler {
                     try await permissionAnswered.wait()
                 } onCancel: {
+                    promptCancelled.signal()
                     permissionAnswered.signal()
                 }
                 try Task.checkCancellation()
@@ -2211,6 +2213,9 @@ struct AppStateBootstrapTests {
         let signedOut = await appState.signOut()
 
         #expect(signedOut)
+        // The prompt is still waiting when sign-out cancels the follow-up; a
+        // sign-out that skipped the cancel would let it be answered instead.
+        #expect(promptCancelled.isSignalled)
         #expect(await appState.notificationSettings(for: account.label)?.nativePushEnabled == false)
         #expect(await appState.pushRegistration(for: account.label) == nil)
 
