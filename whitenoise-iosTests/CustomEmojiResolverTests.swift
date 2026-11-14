@@ -34,7 +34,7 @@ enum CustomEmojiFixtures {
     static func tag(_ values: String...) -> MessageTagFfi { MessageTagFfi(values: values) }
 
     static func builtin(_ name: String, spokenName: String = "Built-in", bytes: String? = nil) -> CustomEmojiBuiltin {
-        CustomEmojiBuiltin(shortcode: CustomEmojiShortcode(name)!, spokenName: spokenName,
+        CustomEmojiBuiltin(shortcode: CustomEmojiShortcode(name)!, name: .product(spokenName),
                            data: Data((bytes ?? "\(name)-png").utf8), dim: "72x72")
     }
 }

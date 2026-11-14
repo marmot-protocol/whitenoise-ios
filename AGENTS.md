@@ -311,8 +311,14 @@ The group image web search is an explicit third-party egress surface. Keep DuckD
 
 ## Built-in Emoji
 
-`:marmot:` and `:wn:` (`CustomEmojiBuiltins`) ship as asset data sets with the
-same PNG bytes as White Noise for Android and Linux; keep them byte-identical.
+`:marmot:`, `:wn:` and the `:marmot_*:` emoji (`CustomEmojiBuiltins`) ship as
+asset data sets. `:marmot:` and the expressions are 128 px pixel art;
+`:marmot_classic:` is the previous 72 px `:marmot:`. White Noise for Android and
+Linux are adopting these PNG bytes and show the classic image for plain
+`:marmot:` until they do; never revert the iOS assets to match them. Once
+adopted, keep every client byte-identical. The same bytes are published as White Noise's
+`white-noise` kind 30030 emoji set. Product names (Marmot, White Noise) are
+spoken untranslated; the expressions' VoiceOver names come from the string catalog.
 Untagged text and reactions render them from the bundle, but a row's own NIP-30
 tag wins. Sending one uploads the bundled bytes like any custom emoji, so other
 clients get the image, and a built-in shortcode always sends the built-in image.
