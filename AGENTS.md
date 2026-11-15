@@ -205,9 +205,13 @@ cancelling the awaiting task.
 Only bytes MDK has no slot for (an outgoing draft) use the host export.
 Outgoing attachments may reach MDK's 512 MiB blob limit. Read picked files through
 `PickedMediaFile` (an unlinked, mapped clone), never into resident memory. MDK's draft
-API copies every attachment on each save, so attachments over
-`maxDraftAttachmentBytes` stay out of saved drafts, are not pre-uploaded, and their
-message sends without a draft revision, until marmot-protocol/mdk#3431 lands.
+API copies every attachment on each save, so until marmot-protocol/mdk#3431 lands,
+attachments over `maxDraftAttachmentBytes` are not saved in drafts or pre-uploaded,
+and their message sends without a draft revision. Such a message has no recovery
+copy: leaving the chat before Send drops the attachment, and a failed send stays in
+its bubble. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
+draft. Images keep `maxImageSourceBytes` before decoding. The composer refuses an
+attachment that would take one send past `maxFileMediaCiphertextBytes()`.
 Conversation-open performance ends at rendered layout, uses the navigation consent
 ticket, and records unavailable/cancelled/timeout outcomes separately from success.
 

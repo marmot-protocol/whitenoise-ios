@@ -152,6 +152,33 @@ struct MediaAttachmentPolicyTests {
         }
     }
 
+    @Test(arguments: [
+        (fileName: "photo.jpg", typeIdentifier: UTType.jpeg.identifier as String?),
+        (fileName: "loop.gif", typeIdentifier: UTType.gif.identifier as String?),
+        (fileName: "photo.jpg", typeIdentifier: nil),
+    ])
+    func imagesOverTheDecodeLimitAreRefusedBeforeDecoding(fileName: String, typeIdentifier: String?) {
+        let data = Data(count: MediaDraftProcessor.maxImageSourceBytes + 1)
+
+        let error = #expect(throws: MediaDraftProcessor.Failure.self) {
+            try MediaDraftProcessor.attachment(from: data, fileName: fileName, typeIdentifier: typeIdentifier)
+        }
+
+        guard case .attachmentTooLarge = error else {
+            Issue.record("Expected attachmentTooLarge, got \(String(describing: error))")
+            return
+        }
+    }
+
+    @Test func aVideoOverTheImageDecodeLimitIsAccepted() throws {
+        let data = Data(count: MediaDraftProcessor.maxImageSourceBytes + 1)
+
+        let draft = try MediaDraftProcessor.attachment(from: data, fileName: "clip.mov", typeIdentifier: UTType.quickTimeMovie.identifier)
+
+        #expect(draft.kind == .video)
+        #expect(draft.data.count == data.count)
+    }
+
     @Test func imageDraftGeneratesDimAndThumbhashForUpload() throws {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1

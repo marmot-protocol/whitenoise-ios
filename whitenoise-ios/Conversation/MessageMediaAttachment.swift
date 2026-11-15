@@ -558,6 +558,9 @@ nonisolated enum MediaDraftProcessor {
     static let maxAttachmentCount = 10
     static let maxLongEdge: CGFloat = 2048
     static let maxImageAttachmentBytes = 10 * 1024 * 1024
+    /// Images are decoded into a resident bitmap before they are re-encoded,
+    /// so their source stays under this bound whatever the attachment cap.
+    static let maxImageSourceBytes = 50 * 1024 * 1024
     /// MDK's largest encrypted media blob (512 MiB) less the AEAD tag that
     /// encryption adds to it.
     static let maxAttachmentBytes = 512 * 1024 * 1024 - Int(MediaFileUploadLimit.aeadTagBytes)
@@ -758,25 +761,28 @@ nonisolated enum MediaDraftProcessor {
         typeIdentifier: String?,
         videoMetadata: MediaVideoMetadata.Metadata?
     ) throws -> MediaDraftAttachment {
-        if let gif = animatedGIFAttachment(from: data, fileName: fileName) {
+        let decodable = data.count <= maxImageSourceBytes
+        if decodable, let gif = animatedGIFAttachment(from: data, fileName: fileName) {
             return gif
         }
         if let typeIdentifier,
            let type = UTType(typeIdentifier),
            type.conforms(to: .image)
         {
+            guard decodable else { throw Failure.attachmentTooLarge(data.count) }
             guard let image = UIImage(data: data) else {
                 throw Failure.unsupportedImage
             }
             return try attachment(from: image, fileName: fileName)
         }
 
-        if typeIdentifier == nil, let image = UIImage(data: data) {
+        if typeIdentifier == nil, decodable, let image = UIImage(data: data) {
             return try attachment(from: image, fileName: fileName)
         }
 
         let kind = kind(for: typeIdentifier, fileName: fileName)
         if kind == .image {
+            guard decodable else { throw Failure.attachmentTooLarge(data.count) }
             guard let image = UIImage(data: data) else {
                 throw Failure.unsupportedImage
             }

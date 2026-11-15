@@ -3172,7 +3172,8 @@ struct ConversationView: View {
             return
         }
         // Drafts can't hold every attachment, so there is no draft revision to
-        // claim; clearing the composer deletes whatever draft was saved.
+        // claim: clearing the composer deletes the saved draft, and a failed
+        // send stays in its bubble.
         let sendsThroughDraft = MediaDraftProcessor.sendsThroughDraft(payload.attachments)
         if sendsThroughDraft {
             appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
@@ -3622,14 +3623,18 @@ struct ConversationView: View {
     private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
         guard viewModel?.composerAdmitsNewAttachments != false else { return false }
         let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
-        let accepted = Array(attachments.prefix(availableSlots))
-        guard !accepted.isEmpty else {
+        let slotted = Array(attachments.prefix(availableSlots))
+        guard !slotted.isEmpty else {
             presentMaxAttachmentWarning()
             return false
         }
+        let (accepted, refused) = MediaFileUploadLimit.admitting(slotted, alongside: mediaDrafts)
         mediaDrafts.append(contentsOf: accepted)
-        if accepted.count < attachments.count {
+        if slotted.count < attachments.count {
             presentMaxAttachmentWarning()
+        }
+        if refused > 0 {
+            presentBatchLimitWarning()
         }
         requestComposerFocus()
         return accepted.count == attachments.count
@@ -3859,6 +3864,10 @@ struct ConversationView: View {
             presentMaxAttachmentWarning()
             return false
         }
+        guard MediaFileUploadLimit.admitting([attachment], alongside: mediaDrafts).refused == 0 else {
+            presentBatchLimitWarning()
+            return false
+        }
         mediaDrafts.append(attachment)
         if attachment.kind == .audio {
             draft = ""
@@ -3888,6 +3897,13 @@ struct ConversationView: View {
             includedItemIDs: includedItemIDs,
             to: mediaDrafts
         )
+    }
+
+    private func presentBatchLimitWarning() {
+        appState.present(UserFacingError.toast(
+            title: L10n.string("Couldn't add attachment"),
+            error: MediaFileUploadFailure.exceedsTransferLimit(attachmentCount: 2)
+        ))
     }
 
     private func presentMaxAttachmentWarning() {

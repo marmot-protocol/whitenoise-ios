@@ -65,6 +65,18 @@ struct MediaFileUploadTests {
         #expect(!OutgoingSendSizePolicy.isSizeRejection(MediaFileUploadFailure.cancelled))
     }
 
+    @Test func composerAdmitsOnlyWhatStillFitsInOneSend() {
+        let existing = [Self.attachment(bytes: 400)]
+        let tooBig = Self.attachment("big.mov", bytes: 600)
+        let fits = Self.attachment("small.mov", bytes: 100)
+
+        let result = MediaFileUploadLimit.admitting([tooBig, fits], alongside: existing, limit: 1_000)
+
+        #expect(result.admitted.map(\.id) == [fits.id])
+        #expect(result.refused == 1)
+        #expect(MediaFileUploadLimit.admitting([tooBig], alongside: [], limit: 1_000).refused == 0)
+    }
+
     @Test func limitMessageNamesOneOrSeveralAttachments() {
         #expect(MediaFileUploadFailure.exceedsTransferLimit(attachmentCount: 1).errorDescription
             == L10n.string("That attachment is too large to send."))
