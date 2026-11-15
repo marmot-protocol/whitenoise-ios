@@ -321,6 +321,7 @@ struct ComposerBar: View {
     @State private var voiceHoldStart: CGPoint?
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body)
     private var fieldFontSize = BottomInputChromeLayout.fieldFontSize
 
@@ -758,11 +759,11 @@ struct ComposerBar: View {
                 .background {
                     if holding {
                         VoiceRecordingBubble(level: voiceRecordingLevel)
-                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                            .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
                     }
                 }
                 .offset(holding ? HoldGesturePolicy.thumbOffset(holdTranslation) : .zero)
-                .animation(.spring(duration: 0.2), value: holding)
+                .animation(reduceMotion ? nil : .spring(duration: 0.2), value: holding)
                 .contentShape(Rectangle())
                 .gesture(voiceGesture)
                 .accessibilityLabel("Voice message")
@@ -848,10 +849,12 @@ struct ComposerBar: View {
                             ? -VoiceRecordingBubbleMetrics.lockHintLift
                             : -HoldLockHint.liftAboveComposer
                     )
-                    .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+                    .transition(
+                        reduceMotion ? .opacity : .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity)
+                    )
             }
         }
-        .animation(.spring(duration: 0.25), value: showsLockHint)
+        .animation(reduceMotion ? nil : .spring(duration: 0.25), value: showsLockHint)
         .allowsHitTesting(false)
     }
 
@@ -872,10 +875,13 @@ struct ComposerBar: View {
                 holdTranslation = value.translation
                 onVoiceDragChanged(value.translation)
             }
-            .onEnded { _ in
+            .onEnded { value in
                 voiceHoldStart = nil
                 holdTranslation = .zero
                 guard inputEnabled else { return }
+                // A fast slide can cross the cancel threshold only in the
+                // release event.
+                onVoiceDragChanged(value.translation)
                 onVoicePressEnded()
             }
     }

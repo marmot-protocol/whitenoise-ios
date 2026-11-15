@@ -3846,9 +3846,13 @@ struct ConversationView: View {
         Task { @MainActor in
             do {
                 let attachment = try await MediaDraftProcessor.preparedVoiceAttachment(from: result)
-                let composerUnchanged = composerHoldSnapshot == baseline
+                let sends = sendsWhenReady && ComposerDictationPresentation.sendsOnFinish(
+                    isEditing: editSession != nil,
+                    composerAtHoldStart: baseline,
+                    composerNow: composerHoldSnapshot
+                )
                 let appended = try appendMediaDraft(attachment)
-                if sendsWhenReady, appended, composerUnchanged {
+                if sends, appended {
                     send()
                 }
             } catch is CancellationError {

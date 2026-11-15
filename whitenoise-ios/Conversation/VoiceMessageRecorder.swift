@@ -348,11 +348,6 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
     }
 }
 
-nonisolated enum AudioWaveformMode {
-    case playback
-    case liveRecording
-}
-
 nonisolated struct AudioWaveformBar: Equatable, Sendable {
     let amplitude: CGFloat?
 
@@ -374,24 +369,12 @@ nonisolated enum AudioWaveformPresentation {
 
     static func bars(
         for samples: [CGFloat],
-        mode: AudioWaveformMode,
         count: Int = MediaWaveformAnalyzer.sampleCount
     ) -> [AudioWaveformBar] {
-        let targetCount = max(0, count)
-        switch mode {
-        case .playback:
-            guard targetCount > 0 else { return [] }
-            return MediaWaveformAnalyzer.normalized(samples, count: targetCount)
-                .map(displayAmplitude)
-                .map(AudioWaveformBar.visible)
-        case .liveRecording:
-            guard targetCount > 0 else { return [] }
-            let visibleSamples = samples.suffix(targetCount)
-                .map(displayAmplitude)
-                .map(AudioWaveformBar.visible)
-            let blankCount = max(0, targetCount - visibleSamples.count)
-            return Array(repeating: AudioWaveformBar.blank, count: blankCount) + visibleSamples
-        }
+        guard count > 0 else { return [] }
+        return MediaWaveformAnalyzer.normalized(samples, count: count)
+            .map(displayAmplitude)
+            .map(AudioWaveformBar.visible)
     }
 
     private static func displayAmplitude(_ sample: CGFloat) -> CGFloat {
@@ -405,11 +388,10 @@ struct AudioWaveformView: View {
     let progress: CGFloat
     let barColor: Color
     let playedColor: Color
-    var mode: AudioWaveformMode = .playback
 
     var body: some View {
         GeometryReader { geometry in
-            let bars = AudioWaveformPresentation.bars(for: samples, mode: mode)
+            let bars = AudioWaveformPresentation.bars(for: samples)
             let spacing: CGFloat = 2
             let barCount = max(1, bars.count)
             let availableWidth = geometry.size.width - spacing * CGFloat(max(0, barCount - 1))
