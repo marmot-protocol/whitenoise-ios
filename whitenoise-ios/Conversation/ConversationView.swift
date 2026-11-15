@@ -3678,7 +3678,9 @@ struct ConversationView: View {
                         url.stopAccessingSecurityScopedResource()
                     }
                 }
-                if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
+                let source = try? url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+                if let size = source?.fileSize,
+                   MediaDraftProcessor.sendsSourceBytes(typeIdentifier: source?.contentType?.identifier),
                    !MediaFileUploadLimit.fits(size, alongside: mediaDrafts.map(\.data.count)) {
                     presentBatchLimitWarning()
                     continue

@@ -570,11 +570,17 @@ nonisolated enum MediaDraftProcessor {
     static let maxDraftAttachmentBytes = 50 * 1024 * 1024
     static let draftThumbnailPixelSize: CGFloat = 160
 
+    /// Whether a picked file is sent as its own bytes. Images are decoded and
+    /// re-encoded, so their source size is neither the upload size nor bound
+    /// by the attachment cap.
+    static func sendsSourceBytes(typeIdentifier: String?) -> Bool {
+        typeIdentifier.flatMap(UTType.init)?.conforms(to: .image) != true
+    }
+
     /// The size a picked file may have before it is copied: images are refused
     /// at their decode limit, everything else at the attachment cap.
     static func maxSourceBytes(forTypeIdentifier typeIdentifier: String?) -> Int {
-        let isImage = typeIdentifier.flatMap(UTType.init)?.conforms(to: .image) == true
-        return isImage ? maxImageSourceBytes : maxAttachmentBytes
+        sendsSourceBytes(typeIdentifier: typeIdentifier) ? maxAttachmentBytes : maxImageSourceBytes
     }
 
     static func persistsInDraft(_ attachment: MediaDraftAttachment) -> Bool {

@@ -84,6 +84,13 @@ struct MediaFileUploadTests {
         #expect(!MediaFileUploadLimit.fits(.max, alongside: [.max, .max], limit: .max))
     }
 
+    @Test func onlyFilesSentAsTheirOwnBytesAreCheckedAgainstTheBatchBySourceSize() {
+        #expect(!MediaDraftProcessor.sendsSourceBytes(typeIdentifier: UTType.jpeg.identifier))
+        #expect(MediaDraftProcessor.sendsSourceBytes(typeIdentifier: UTType.quickTimeMovie.identifier))
+        #expect(MediaDraftProcessor.sendsSourceBytes(typeIdentifier: UTType.pdf.identifier))
+        #expect(MediaDraftProcessor.sendsSourceBytes(typeIdentifier: nil))
+    }
+
     @Test func imagesAreRefusedBeforeTheyAreCopiedAtTheImageSourceLimit() {
         #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: UTType.jpeg.identifier) == MediaDraftProcessor.maxImageSourceBytes)
         #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: UTType.gif.identifier) == MediaDraftProcessor.maxImageSourceBytes)
