@@ -268,6 +268,8 @@ struct ComposerBar: View {
     let voiceRecordingActive: Bool
     let voiceRecordingLocked: Bool
     let voiceRecordingDurationSeconds: Double
+    /// The latest microphone level while recording, 0...1.
+    let voiceRecordingLevel: CGFloat
     let focusRequest: Int
     let dismissRequest: Int
     /// Reports text-input focus upward so the conversation can restore it
@@ -742,8 +744,9 @@ struct ComposerBar: View {
             // the icon, while recording a red bubble under the thumb that
             // follows the slide.
             let holding = voiceRecordingActive
-            Image(systemName: "waveform")
+            Image(systemName: holding ? "mic.fill" : "waveform")
                 .font(.system(size: sideControlIconSize, weight: .semibold))
+                .scaleEffect(holding ? 1.4 : 1)
                 .foregroundStyle(
                     holding
                         ? Color.white
@@ -753,11 +756,11 @@ struct ComposerBar: View {
                 )
                 .frame(width: controlSize, height: controlSize)
                 .background {
-                    Circle()
-                        .fill(Color.red)
-                        .opacity(holding ? 1 : 0)
+                    if holding {
+                        VoiceRecordingBubble(level: voiceRecordingLevel)
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    }
                 }
-                .scaleEffect(holding ? 1.5 : 1)
                 .offset(holding ? HoldGesturePolicy.thumbOffset(holdTranslation) : .zero)
                 .animation(.spring(duration: 0.2), value: holding)
                 .contentShape(Rectangle())
@@ -841,7 +844,9 @@ struct ComposerBar: View {
                     .fixedSize()
                     .position(
                         x: holdAnchor.x - proxy.frame(in: .global).minX,
-                        y: -HoldLockHint.liftAboveComposer
+                        y: voiceRecordingActive
+                            ? -VoiceRecordingBubbleMetrics.lockHintLift
+                            : -HoldLockHint.liftAboveComposer
                     )
                     .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
             }

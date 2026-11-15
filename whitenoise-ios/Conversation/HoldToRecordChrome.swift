@@ -39,6 +39,60 @@ struct HoldLockHint: View {
     }
 }
 
+/// Sizes the red bubble under the thumb while a voice message records.
+enum VoiceRecordingBubbleMetrics {
+    /// Wide enough to show around a thumb.
+    static let diameter: CGFloat = 84
+    static let restingHaloScale: CGFloat = 1.08
+    static let loudestHaloScale: CGFloat = 1.4
+
+    /// The ring around the bubble grows with the microphone level (0...1).
+    static func haloScale(level: CGFloat) -> CGFloat {
+        let clamped = min(1, max(0, level))
+        return restingHaloScale + (loudestHaloScale - restingHaloScale) * clamped
+    }
+
+    /// The lock hint floats this far above the composer during a voice
+    /// hold, so the loudest ring stays clear of it.
+    static let lockHintLift: CGFloat = 104
+}
+
+/// The red bubble under the thumb while a voice message records: it
+/// breathes steadily and its ring swells with the voice, so it reads as
+/// live even under a finger.
+struct VoiceRecordingBubble: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The latest microphone level, 0...1.
+    let level: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.red.opacity(0.28))
+                .scaleEffect(
+                    reduceMotion
+                        ? VoiceRecordingBubbleMetrics.restingHaloScale
+                        : VoiceRecordingBubbleMetrics.haloScale(level: level)
+                )
+                .animation(.easeOut(duration: 0.12), value: level)
+            if reduceMotion {
+                Circle().fill(Color.red)
+            } else {
+                Circle()
+                    .fill(Color.red)
+                    .phaseAnimator([CGFloat(0.94), 1.02]) { circle, scale in
+                        circle.scaleEffect(scale)
+                    } animation: { _ in
+                        .easeInOut(duration: 0.7)
+                    }
+            }
+        }
+        .frame(width: VoiceRecordingBubbleMetrics.diameter, height: VoiceRecordingBubbleMetrics.diameter)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 /// The message field while a voice message records: a blinking dot, the
 /// elapsed time, and, until it locks, the slide-left-to-cancel prompt.
 struct ComposerVoiceRecordingStatus: View {
@@ -61,21 +115,13 @@ struct ComposerVoiceRecordingStatus: View {
                 .foregroundStyle(.red)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-            Spacer(minLength: 8)
             if !isLocked {
-                HStack(spacing: 4) {
-                    // Physical left: the gesture is a leftward slide in every layout direction.
-                    Image(systemName: "chevron.left")
-                        .font(.footnote.weight(.semibold))
-                    Text(L10n.string("Slide to cancel"))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .offset(x: min(0, dragX))
-                .opacity(1 - HoldGesturePolicy.cancelProgress(CGSize(width: dragX, height: 0)))
+                slideToCancel
+                    .padding(.leading, 20)
+                    .offset(x: min(0, dragX))
+                    .opacity(1 - HoldGesturePolicy.cancelProgress(CGSize(width: dragX, height: 0)))
             }
+            Spacer(minLength: 0)
         }
         .padding(.leading, 14)
         .padding(.trailing, 8)
@@ -88,5 +134,31 @@ struct ComposerVoiceRecordingStatus: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.formatted("Recording, %@", elapsed))
+    }
+
+    /// Drifts gently left and back to hint at the slide.
+    @ViewBuilder
+    private var slideToCancel: some View {
+        let prompt = HStack(spacing: 4) {
+            // Physical left: the gesture is a leftward slide in every layout direction.
+            Image(systemName: "chevron.left")
+                .font(.footnote.weight(.semibold))
+            Text(L10n.string("Slide to cancel"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+
+        if reduceMotion {
+            prompt
+        } else {
+            prompt
+                .phaseAnimator([CGFloat(0), -6]) { content, drift in
+                    content.offset(x: drift)
+                } animation: { _ in
+                    .easeInOut(duration: 0.9)
+                }
+        }
     }
 }

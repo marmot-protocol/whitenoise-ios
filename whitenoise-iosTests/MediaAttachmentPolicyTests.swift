@@ -279,6 +279,20 @@ struct MediaAttachmentPolicyTests {
         #expect(HoldGesturePolicy.thumbOffset(CGSize(width: 40, height: 40)) == .zero)
     }
 
+    /// The ring around the recording bubble swells with the voice, always
+    /// stays outside the bubble, and stops growing at full level.
+    @Test func recordingRingGrowsWithTheVoiceWithinItsBounds() {
+        let silent = VoiceRecordingBubbleMetrics.haloScale(level: 0)
+        let speaking = VoiceRecordingBubbleMetrics.haloScale(level: 0.5)
+        let loudest = VoiceRecordingBubbleMetrics.haloScale(level: 1)
+
+        #expect(silent > 1)
+        #expect(silent < speaking)
+        #expect(speaking < loudest)
+        #expect(VoiceRecordingBubbleMetrics.haloScale(level: 4) == loudest)
+        #expect(VoiceRecordingBubbleMetrics.haloScale(level: -1) == silent)
+    }
+
     @Test func terminalAttachmentStatesDoNotWaitOrRetryAutomatically() {
         for state in [AttachmentTransferStateFfi.previouslyAcquiredUnavailable, .completedUnretained,
                       .retryExhausted, .removed, .cancelled, .failed, .policyBlocked, .paused, .unavailable,

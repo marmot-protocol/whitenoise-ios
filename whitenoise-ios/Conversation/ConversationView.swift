@@ -1552,6 +1552,7 @@ struct ConversationView: View {
                     voiceRecordingActive: voiceRecorder.isActive,
                     voiceRecordingLocked: voiceRecorder.isLocked,
                     voiceRecordingDurationSeconds: voiceRecorder.durationSeconds,
+                    voiceRecordingLevel: voiceRecorder.waveformSamples.last ?? 0,
                     focusRequest: composerFocusRequest,
                     dismissRequest: composerDismissRequest,
                     onInputFocusChange: { isComposerInputFocused = $0 },
