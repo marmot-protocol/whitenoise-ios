@@ -349,15 +349,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
 }
 
 nonisolated struct AudioWaveformBar: Equatable, Sendable {
-    let amplitude: CGFloat?
-
-    var isVisible: Bool {
-        amplitude != nil
-    }
-
-    static var blank: AudioWaveformBar {
-        AudioWaveformBar(amplitude: nil)
-    }
+    let amplitude: CGFloat
 
     static func visible(_ amplitude: CGFloat) -> AudioWaveformBar {
         AudioWaveformBar(amplitude: min(1, max(0.05, amplitude)))
@@ -398,19 +390,13 @@ struct AudioWaveformView: View {
             let barWidth = max(2, availableWidth / CGFloat(barCount))
             HStack(alignment: .center, spacing: spacing) {
                 ForEach(Array(bars.enumerated()), id: \.offset) { index, bar in
-                    if let sample = bar.amplitude {
-                        let played = CGFloat(index) / CGFloat(max(1, bars.count - 1)) <= progress
-                        Capsule()
-                            .fill(played ? playedColor : barColor)
-                            .frame(
-                                width: barWidth,
-                                height: max(4, geometry.size.height * min(1, max(0.08, sample)))
-                            )
-                    } else {
-                        Capsule()
-                            .fill(Color.clear)
-                            .frame(width: barWidth, height: 4)
-                    }
+                    let played = CGFloat(index) / CGFloat(max(1, bars.count - 1)) <= progress
+                    Capsule()
+                        .fill(played ? playedColor : barColor)
+                        .frame(
+                            width: barWidth,
+                            height: max(4, geometry.size.height * min(1, max(0.08, bar.amplitude)))
+                        )
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
