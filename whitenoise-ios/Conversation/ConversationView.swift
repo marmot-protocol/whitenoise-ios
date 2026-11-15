@@ -3682,7 +3682,9 @@ struct ConversationView: View {
                 let source = try? url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
                 if let size = source?.fileSize,
                    MediaDraftProcessor.sendsSourceBytes(typeIdentifier: source?.contentType?.identifier),
-                   !MediaFileUploadLimit.fits(size, alongside: mediaDrafts.map(\.data.count)) {
+                   !MediaFileUploadLimit.fits(size, alongside: MediaDraftProcessor.draftsKept(
+                       mediaDrafts, addingAudio: source?.contentType?.conforms(to: .audio) == true
+                   ).map(\.data.count)) {
                     presentBatchLimitWarning()
                     continue
                 }
@@ -3865,18 +3867,16 @@ struct ConversationView: View {
     @discardableResult
     private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
         guard viewModel?.composerAdmitsNewAttachments != false else { return false }
-        if attachment.kind == .audio {
-            mediaDrafts.removeAll { $0.kind == .audio }
-        }
-        guard mediaDrafts.count < MediaDraftProcessor.maxAttachmentCount else {
+        let kept = MediaDraftProcessor.draftsKept(mediaDrafts, addingAudio: attachment.kind == .audio)
+        guard kept.count < MediaDraftProcessor.maxAttachmentCount else {
             presentMaxAttachmentWarning()
             return false
         }
-        guard MediaFileUploadLimit.admitting([attachment], alongside: mediaDrafts).refused == 0 else {
+        guard MediaFileUploadLimit.admitting([attachment], alongside: kept).refused == 0 else {
             presentBatchLimitWarning()
             return false
         }
-        mediaDrafts.append(attachment)
+        mediaDrafts = kept + [attachment]
         if attachment.kind == .audio {
             draft = ""
             dismissKeyboard()

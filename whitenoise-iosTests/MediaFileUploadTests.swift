@@ -78,6 +78,14 @@ struct MediaFileUploadTests {
         #expect(MediaFileUploadLimit.admitting([tooBig], alongside: [], limit: 1_000).refused == 0)
     }
 
+    @Test func newAudioIsCheckedAgainstTheDraftsThatRemainAfterItReplacesTheOldAudio() {
+        let video = Self.attachment()
+        let voice = Self.attachment("voice.m4a", mediaType: "audio/mp4")
+
+        #expect(MediaDraftProcessor.draftsKept([video, voice], addingAudio: true).map(\.id) == [video.id])
+        #expect(MediaDraftProcessor.draftsKept([video, voice], addingAudio: false).map(\.id) == [video.id, voice.id])
+    }
+
     @Test func aFileIsCheckedAgainstTheBatchBeforeItIsRead() {
         #expect(MediaFileUploadLimit.fits(500, alongside: [400], limit: 1_000))
         #expect(!MediaFileUploadLimit.fits(600, alongside: [400], limit: 1_000))

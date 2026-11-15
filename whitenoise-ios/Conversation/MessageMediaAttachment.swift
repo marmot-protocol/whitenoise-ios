@@ -583,6 +583,12 @@ nonisolated enum MediaDraftProcessor {
         sendsSourceBytes(typeIdentifier: typeIdentifier) ? maxAttachmentBytes : maxImageSourceBytes
     }
 
+    /// The composer's attachments once one more is added: new audio replaces
+    /// the previous audio attachment.
+    static func draftsKept(_ drafts: [MediaDraftAttachment], addingAudio: Bool) -> [MediaDraftAttachment] {
+        addingAudio ? drafts.filter { $0.kind != .audio } : drafts
+    }
+
     static func persistsInDraft(_ attachment: MediaDraftAttachment) -> Bool {
         attachment.data.count <= maxDraftAttachmentBytes
     }
