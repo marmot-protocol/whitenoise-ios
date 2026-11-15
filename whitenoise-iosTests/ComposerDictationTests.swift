@@ -118,6 +118,18 @@ struct ComposerDictationPresentationTests {
         #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: false, draftChangedDuringHold: true))
     }
 
+    /// A media-only saved draft restored mid-hold leaves the text untouched;
+    /// the baseline must still see it, or release sends the attachments.
+    @Test func restoredAttachmentsOrAReplyCountAsAChangedComposer() {
+        let baseline = DictationComposerSnapshot(draft: "", attachmentIDs: [], replyTargetMessageIdHex: nil)
+        var restoredMedia = baseline
+        restoredMedia.attachmentIDs = [UUID()]
+        var restoredReply = baseline
+        restoredReply.replyTargetMessageIdHex = hex("ab")
+        #expect(restoredMedia != baseline)
+        #expect(restoredReply != baseline)
+    }
+
     @Test func textRecognitionDidNotSettleIsLeftForReviewInsteadOfSent() {
         #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: false, isComplete: false))
     }

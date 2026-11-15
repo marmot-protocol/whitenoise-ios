@@ -633,9 +633,9 @@ struct ConversationView: View {
     @State private var dictation = ComposerDictationController()
     @State private var dictationPreferences = ComposerDictationPreferenceStore.shared
     @State private var dictationInstallWatch: Task<Void, Never>?
-    /// The draft when the hold began, so a draft changed underneath it isn't
+    /// The composer when the hold began, so one changed underneath it isn't
     /// sent unseen.
-    @State private var dictationDraftBaseline = ""
+    @State private var dictationBaseline: DictationComposerSnapshot?
     @State private var showCameraCapture = false
     @State private var fileProductTicket: ProductAnalyticsRecorder.Ticket?
     @State private var showPhotoLibraryPicker = false
@@ -3692,7 +3692,7 @@ struct ConversationView: View {
             activeKeyboardLanguages: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage),
             preferredLanguages: Locale.preferredLanguages
         )
-        dictationDraftBaseline = draft
+        dictationBaseline = dictationComposerSnapshot
         dictation.begin(
             localeIdentifiers: languages,
             locked: locked,
@@ -3703,7 +3703,16 @@ struct ConversationView: View {
 
     /// Dictation is the fast path: what was said goes out at once. Editing a
     /// sent message only fills the field, since saving is a separate decision.
+    private var dictationComposerSnapshot: DictationComposerSnapshot {
+        DictationComposerSnapshot(
+            draft: draft,
+            attachmentIDs: mediaDrafts.map(\.id),
+            replyTargetMessageIdHex: viewModel?.replyTargetMessageIdHex
+        )
+    }
+
     private func finishDictation(_ result: DictationResult) {
+        let composerChanged = dictationComposerSnapshot != dictationBaseline
         let merged = DictationTextMerge.merged(draft: draft, transcript: result.text)
         guard merged != draft else {
             if !result.isComplete {
@@ -3721,10 +3730,7 @@ struct ConversationView: View {
         guard ComposerDictationPresentation.sendsOnFinish(
             isEditing: editSession != nil,
             isComplete: result.isComplete,
-            draftChangedDuringHold: merged != DictationTextMerge.merged(
-                draft: dictationDraftBaseline,
-                transcript: result.text
-            )
+            draftChangedDuringHold: composerChanged
         ) else { return }
         send()
     }

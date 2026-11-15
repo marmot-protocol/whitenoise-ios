@@ -63,6 +63,15 @@ nonisolated enum DictationModelStatus: Equatable {
     }
 }
 
+/// Everything a send would publish besides the dictated words. If any of it
+/// changes during a hold (a restored draft brings back text, attachments or
+/// a reply), release must not send it unseen.
+nonisolated struct DictationComposerSnapshot: Equatable {
+    var draft: String
+    var attachmentIDs: [UUID]
+    var replyTargetMessageIdHex: String?
+}
+
 /// Joins dictated text onto the existing draft.
 nonisolated enum DictationTextMerge {
     static func merged(draft: String, transcript: String) -> String {
