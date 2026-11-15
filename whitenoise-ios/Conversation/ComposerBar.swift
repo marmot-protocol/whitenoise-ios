@@ -548,6 +548,7 @@ struct ComposerBar: View {
         .buttonStyle(.plain)
         .contentShape(Circle())
         .accessibilityLabel("Cancel recording")
+        .accessibilityShowsLargeContentViewer()
     }
 
     private var sendButton: some View {
@@ -595,6 +596,7 @@ struct ComposerBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Finish recording")
+            .accessibilityShowsLargeContentViewer()
         } else if showsSend {
             sendButton
                 .transition(.scale(scale: 0.88).combined(with: .opacity))
