@@ -308,6 +308,10 @@ struct ChatSurfacePresentationTests {
             for: String(repeating: "a", count: ComposerExpandedEditorPresentation.minimumExpandCharacterCount)
         ))
         #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "one\ntwo\nthree\nfour"))
+        #expect(!ComposerExpandedEditorPresentation.shouldShowExpandButton(
+            for: "one\ntwo\nthree\nfour",
+            isDictating: true
+        ))
     }
 
     @Test func cappedComposerTextInputEnablesInternalScrollingForLongDrafts() {

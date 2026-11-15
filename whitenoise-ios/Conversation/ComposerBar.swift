@@ -562,7 +562,7 @@ struct ComposerBar: View {
             .padding(.leading, BottomInputChromeLayout.fieldLeadingPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if ComposerExpandedEditorPresentation.shouldShowExpandButton(for: draft) {
+            if ComposerExpandedEditorPresentation.shouldShowExpandButton(for: draft, isDictating: dictationActive) {
                 Button {
                     Haptics.tap()
                     showExpandedEditor = true
@@ -1153,8 +1153,10 @@ private struct ComposerAttachmentUnavailableTooltip: View {
 nonisolated enum ComposerExpandedEditorPresentation {
     static let minimumExpandCharacterCount = 180
 
-    static func shouldShowExpandButton(for text: String) -> Bool {
-        text.count >= minimumExpandCharacterCount
+    /// Dictation owns the field, so its hidden controls can't be tapped.
+    static func shouldShowExpandButton(for text: String, isDictating: Bool = false) -> Bool {
+        guard !isDictating else { return false }
+        return text.count >= minimumExpandCharacterCount
             || text.contains(where: \.isNewline)
     }
 }
