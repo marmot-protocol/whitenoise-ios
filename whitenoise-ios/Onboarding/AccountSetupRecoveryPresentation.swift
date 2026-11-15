@@ -18,13 +18,11 @@ nonisolated struct AccountSetupRecoveryPresentation {
     mutating func clearChildFailure() { childFailure = nil }
 
     // Keep the last reviewed content visible while its sheet dismisses.
-    // Callers update only while idle, so a stalled step goes back to Check Again.
     mutating func update(_ next: OnboardingSnapshotFfi, step: OnboardingStepFfi, operationFailure: AccountSetupFailure? = nil) -> Bool {
         if let status = next.steps.first(where: { $0.step == step })?.status,
            status == .passed || status == .skipped {
             return true
         }
-        if operationFailure == nil, AccountSetupWayForward.stalledStep(next) == step { return true }
         // The snapshot that caused a child failure must not erase that failure.
         if operationFailure == nil, let childFailure, next.revision > childFailure.revision {
             self.childFailure = nil

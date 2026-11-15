@@ -85,7 +85,6 @@ struct IdentityProfileSetupView: View {
         let status = setup.snapshot.steps.first { $0.step == .profile }?.status
         return profileActionCompleted || status == .passed || status == .skipped
             || (!setup.isBusy && pendingProfileDiscard?.isComplete(in: setup.snapshot) == true)
-            || (!setup.isBusy && setup.failure == nil && AccountSetupWayForward.stalledStep(setup.snapshot) == .profile)
     }
 
     private var hasFooterActions: Bool {

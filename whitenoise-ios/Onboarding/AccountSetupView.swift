@@ -64,6 +64,8 @@ struct AccountSetupView: View {
             if appState.canUseRuntimeForLocalForegroundWork { await appState.connectAccountSetup() }
         }
         .onDisappear { model.suspend() }
+        // Whichever sheet is open, a stalled run continues from Check Again here, not from that sheet.
+        .onChange(of: needsCheckAgain) { if needsCheckAgain { decision = nil } }
         .sheet(item: $decision) { decision in
             AccountSetupActions(model: model, selectedStep: decision.step) {
                 self.decision = nil
