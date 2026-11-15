@@ -196,6 +196,55 @@ nonisolated enum ComposerAudioDraftPreviewPresentation {
     }
 }
 
+/// What the composer needs to offer hold-to-dictate.
+struct ComposerDictationBinding {
+    let state: ComposerDictationController.State
+    let transcript: DictationTranscript
+    let onBegin: (_ keyboardLanguage: String?, _ locked: Bool) -> Void
+    let onDrag: (CGSize) -> Void
+    let onEnd: () -> Void
+    let onCancel: () -> Void
+    let onStop: () -> Void
+    /// Finishing sends the message rather than leaving it in the field.
+    let sendsOnFinish: Bool
+}
+
+nonisolated enum ComposerDictationPresentation {
+    /// The dictated text shown in the field: the settled part, then the
+    /// recognizer's current guess, joined onto the draft as it will be inserted.
+    static func preview(draft: String, transcript: DictationTranscript) -> (settled: String, pending: String) {
+        let settled = DictationTextMerge.merged(draft: draft, transcript: transcript.finalized)
+        let full = DictationTextMerge.merged(draft: settled, transcript: transcript.volatile)
+        return (settled, String(full.dropFirst(settled.count)))
+    }
+
+    /// A send or edit save in flight still owns the draft, so no new hold
+    /// starts; one already running keeps its gesture so its release lands.
+    static func admitsHold(isSending: Bool, isDictating: Bool) -> Bool {
+        isDictating || !isSending
+    }
+
+    /// Dictation sends at once, except an edit (saving stays a separate
+    /// decision), text that recognition didn't finish settling, or a composer
+    /// something else changed during the hold (a restored rejected send, a
+    /// late saved-draft load) that the person hasn't seen whole.
+    static func sendsOnFinish(
+        isEditing: Bool,
+        isComplete: Bool = true,
+        composerAtHoldStart: DictationComposerSnapshot?,
+        composerNow: DictationComposerSnapshot
+    ) -> Bool {
+        !isEditing && isComplete && composerAtHoldStart == composerNow
+    }
+
+    /// The resting field says how to use it; once typing, it's the usual prompt.
+    static func placeholder(offersDictation: Bool, isTyping: Bool) -> String {
+        offersDictation && !isTyping
+            ? L10n.string("Tap to type, hold to dictate")
+            : L10n.string("Message")
+    }
+}
+
 /// Conversation composer with attachment, emoji, text, send, and voice controls.
 struct ComposerDisabledAction {
     let title: String
@@ -229,6 +278,8 @@ struct ComposerBar: View {
     var submissionEnabled = true
     var submissionAccessibilityLabel = L10n.string("Send")
     var voiceMessagesEnabled = true
+    /// Hold-to-dictate; nil where the feature is off or unsupported.
+    var dictation: ComposerDictationBinding?
     var cameraAvailable = true
     var gifsAvailable = true
     var pollsAvailable = false
@@ -301,6 +352,8 @@ struct ComposerBar: View {
                         HStack(alignment: .bottom, spacing: ComposerInputChrome.rowSpacing) {
                             if ComposerVoiceChromePresentation.showsCancel(isActive: voiceRecordingActive) {
                                 recordingCancelButton
+                            } else if dictationActive, let dictation {
+                                dictationCancelButton(dictation)
                             } else {
                                 attachmentButton
                             }
@@ -339,6 +392,11 @@ struct ComposerBar: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .preservesKeyboardOnTap()
+        .onDisappear {
+            // Search, message selection and the like replace the composer;
+            // dictation must not keep listening, or send, behind them.
+            if dictationActive { dictation?.onCancel() }
+        }
         .fullScreenCover(isPresented: $showExpandedEditor) {
             ExpandedComposerEditor(
                 draft: $draft,
@@ -458,12 +516,24 @@ struct ComposerBar: View {
                 .transition(.opacity)
             } else {
                 ZStack {
+                    // Dictation hides the field without disabling hit-testing:
+                    // the hold that started it is still tracking there.
                     composerTextEntry
-                        .opacity(ComposerVoiceChromePresentation.textEntryOpacity(isActive: voiceRecordingActive))
+                        .opacity(ComposerVoiceChromePresentation.textEntryOpacity(
+                            isActive: voiceRecordingActive || dictationActive
+                        ))
                         .allowsHitTesting(!voiceRecordingActive)
-                        .accessibilityHidden(voiceRecordingActive)
+                        .accessibilityHidden(voiceRecordingActive || dictationActive)
 
-                    if voiceRecordingActive {
+                    if dictationActive, let dictation {
+                        ComposerDictationInput(
+                            draft: draft,
+                            transcript: dictation.transcript,
+                            isFinishing: dictation.state == .finishing,
+                            fontSize: fieldFontSize
+                        )
+                        .allowsHitTesting(false)
+                    } else if voiceRecordingActive {
                         ComposerVoiceRecordingInput(
                             samples: voiceRecordingSamples,
                             durationSeconds: voiceRecordingDurationSeconds
@@ -480,7 +550,10 @@ struct ComposerBar: View {
         HStack(alignment: .bottom, spacing: 0) {
             ZStack(alignment: .topLeading) {
                 if draft.isEmpty {
-                    Text(L10n.string("Message"))
+                    Text(ComposerDictationPresentation.placeholder(
+                        offersDictation: dictationGesture != nil,
+                        isTyping: isTextInputFocused
+                    ))
                         .font(.system(size: fieldFontSize))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -494,13 +567,15 @@ struct ComposerBar: View {
                     isFocused: $isTextInputFocused,
                     fontSize: fieldFontSize,
                     focusRequest: focusRequest &* 1_000 &+ localFocusRequest,
-                    onPasteImage: onPasteImage
+                    onPasteImage: onPasteImage,
+                    dictation: dictationGesture,
+                    blocksEditing: dictationActive
                 )
             }
             .padding(.leading, BottomInputChromeLayout.fieldLeadingPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if ComposerExpandedEditorPresentation.shouldShowExpandButton(for: draft) {
+            if ComposerExpandedEditorPresentation.shouldShowExpandButton(for: draft, isDictating: dictationActive) {
                 Button {
                     Haptics.tap()
                     showExpandedEditor = true
@@ -533,6 +608,52 @@ struct ComposerBar: View {
                 onRemove: onRemovePreparedAttachment,
                 onPreviewVisual: onPreviewPreparedMedia
             )
+        }
+    }
+
+    private func dictationCancelButton(_ dictation: ComposerDictationBinding) -> some View {
+        Button(action: dictation.onCancel) {
+            sideCircleIcon(
+                "xmark",
+                weight: .semibold,
+                size: sideControlIconSize,
+                tone: .destructive
+            )
+        }
+        .buttonStyle(.plain)
+        .contentShape(Circle())
+        .accessibilityLabel(L10n.string("Cancel dictation"))
+    }
+
+    @ViewBuilder
+    private func dictationTrailingControl(_ dictation: ComposerDictationBinding) -> some View {
+        let appearance = ComposerSendButtonAppearance.colorScheme(colorScheme)
+        switch dictation.state {
+        case .listening(locked: true):
+            Button(action: dictation.onStop) {
+                Image(systemName: dictation.sendsOnFinish ? "arrow.up" : "checkmark")
+                    .font(.system(size: inlineSendIconSize, weight: .bold))
+                    .foregroundStyle(appearance.symbol.color)
+                    .frame(width: inlineSendSize, height: inlineSendSize)
+                    .background(Circle().fill(appearance.fill.color))
+                    .frame(width: controlSize, height: controlSize)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                dictation.sendsOnFinish ? submissionAccessibilityLabel : L10n.string("Finish dictation")
+            )
+        case .finishing, .starting:
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: controlSize, height: controlSize)
+        case .listening(locked: false), .idle:
+            // Sliding up locks dictation, as it does a voice message.
+            Image(systemName: "lock")
+                .font(.system(size: sideControlIconSize * 0.8, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: controlSize, height: controlSize)
+                .accessibilityHidden(true)
         }
     }
 
@@ -581,7 +702,9 @@ struct ComposerBar: View {
 
     @ViewBuilder
     private var trailingActionSlot: some View {
-        if ComposerVoiceChromePresentation.showsStop(
+        if dictationActive, let dictation {
+            dictationTrailingControl(dictation)
+        } else if ComposerVoiceChromePresentation.showsStop(
             isActive: voiceRecordingActive,
             isLocked: voiceRecordingLocked
         ) {
@@ -641,6 +764,25 @@ struct ComposerBar: View {
 
     private var showsSend: Bool {
         hasSendableContent
+    }
+
+    private var dictationActive: Bool {
+        dictation?.state.isActive ?? false
+    }
+
+    /// The hold stays installed while dictation runs, so the hold that
+    /// started it keeps tracking.
+    private var dictationGesture: ComposerDictationGesture? {
+        guard let dictation, inputEnabled, audioDraft == nil, !voiceRecordingActive,
+              ComposerDictationPresentation.admitsHold(isSending: isSending, isDictating: dictationActive)
+        else { return nil }
+        return ComposerDictationGesture(
+            onBegan: { language in dictation.onBegin(language, false) },
+            onChanged: dictation.onDrag,
+            onEnded: dictation.onEnd,
+            onCancelled: dictation.onCancel,
+            onAccessibilityDictate: { language in dictation.onBegin(language, true) }
+        )
     }
 
     private var showsMic: Bool {
@@ -788,6 +930,51 @@ private struct ComposerVoiceRecordingInput: View {
         .frame(maxWidth: .infinity, minHeight: ComposerInputChrome.controlSize)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(verbatim: "Recording, \(AudioDurationLabel.label(for: durationSeconds))"))
+    }
+}
+
+private struct ComposerDictationInput: View {
+    let draft: String
+    let transcript: DictationTranscript
+    let isFinishing: Bool
+    let fontSize: CGFloat
+
+    var body: some View {
+        let preview = ComposerDictationPresentation.preview(draft: draft, transcript: transcript)
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: "mic.fill")
+                .font(.system(size: fontSize * 0.9, weight: .semibold))
+                .foregroundStyle(.red)
+                .symbolEffect(.pulse, options: .repeating, isActive: !isFinishing)
+                .accessibilityHidden(true)
+
+            Group {
+                if preview.settled.isEmpty, preview.pending.isEmpty {
+                    Text(L10n.string("Listening…"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(Self.attributed(settled: preview.settled, pending: preview.pending))
+                        .truncationMode(.head)
+                }
+            }
+            .font(.system(size: fontSize))
+            .lineLimit(4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, 14)
+        .padding(.vertical, BottomInputChromeLayout.fieldVerticalPadding)
+        .frame(maxWidth: .infinity, minHeight: ComposerInputChrome.controlSize, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.string("Listening…"))
+        .accessibilityValue(Text(verbatim: preview.settled + preview.pending))
+    }
+
+    private static func attributed(settled: String, pending: String) -> AttributedString {
+        var text = AttributedString(settled)
+        var guess = AttributedString(pending)
+        guess.foregroundColor = .secondary
+        text.append(guess)
+        return text
     }
 }
 
@@ -981,8 +1168,10 @@ private struct ComposerAttachmentUnavailableTooltip: View {
 nonisolated enum ComposerExpandedEditorPresentation {
     static let minimumExpandCharacterCount = 180
 
-    static func shouldShowExpandButton(for text: String) -> Bool {
-        text.count >= minimumExpandCharacterCount
+    /// Dictation owns the field, so its hidden controls can't be tapped.
+    static func shouldShowExpandButton(for text: String, isDictating: Bool = false) -> Bool {
+        guard !isDictating else { return false }
+        return text.count >= minimumExpandCharacterCount
             || text.contains(where: \.isNewline)
     }
 }

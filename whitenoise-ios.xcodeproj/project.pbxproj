@@ -486,7 +486,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "White Noise uses the camera to scan profile QR codes and take photos and videos for encrypted chats.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "White Noise uses Face ID to unlock the app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "White Noise uses your location only when you choose to share it in an encrypted chat.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "White Noise uses the microphone to record encrypted voice messages and chat videos.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "White Noise uses the microphone to record encrypted voice messages and chat videos, and to dictate messages on this device.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "White Noise saves photos and videos to your photo library only when you choose to save them from the share sheet.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -540,7 +540,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "White Noise uses the camera to scan profile QR codes and take photos and videos for encrypted chats.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "White Noise uses Face ID to unlock the app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "White Noise uses your location only when you choose to share it in an encrypted chat.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "White Noise uses the microphone to record encrypted voice messages and chat videos.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "White Noise uses the microphone to record encrypted voice messages and chat videos, and to dictate messages on this device.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "White Noise saves photos and videos to your photo library only when you choose to save them from the share sheet.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -806,7 +806,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "White Noise uses the camera to scan profile QR codes and take photos and videos for encrypted chats.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "White Noise uses Face ID to unlock the app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "White Noise uses your location only when you choose to share it in an encrypted chat.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "White Noise uses the microphone to record encrypted voice messages and chat videos.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "White Noise uses the microphone to record encrypted voice messages and chat videos, and to dictate messages on this device.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "White Noise saves photos and videos to your photo library only when you choose to save them from the share sheet.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -860,7 +860,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "White Noise uses the camera to scan profile QR codes and take photos and videos for encrypted chats.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "White Noise uses Face ID to unlock the app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "White Noise uses your location only when you choose to share it in an encrypted chat.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "White Noise uses the microphone to record encrypted voice messages and chat videos.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "White Noise uses the microphone to record encrypted voice messages and chat videos, and to dictate messages on this device.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "White Noise saves photos and videos to your photo library only when you choose to save them from the share sheet.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

@@ -65,6 +65,10 @@ struct AppearanceSettingsView: View {
             } footer: {
                 Text("Show link titles and images in chats. Loading previews shares your IP address with the linked website and image host.")
             }
+
+            if #available(iOS 26.0, *) {
+                DictationSettingsSection()
+            }
         }
         .localizedNavigationTitle("Appearance")
         .productScreen(.settings, section: .appearance)
