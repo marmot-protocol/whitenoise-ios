@@ -11,15 +11,20 @@ nonisolated enum AccountSetupWayForward {
         !actions.contains { $0 == .retry || $0 == .cancelRepair || $0 == .continueWithout }
     }
 
-    /// MDK's run returns once a step needs attention, so a finished run that leaves
-    /// the current step waiting or checking needs another run to continue.
+    /// MDK's run returns once a step needs attention, so when nothing is running, a
+    /// current step still waiting or checking needs another run to continue. Its sheet
+    /// hands back to the main screen, which offers Check Again.
+    static func stalledStep(_ snapshot: OnboardingSnapshotFfi) -> OnboardingStepFfi? {
+        guard !snapshot.ready, !snapshot.cancellationPending,
+              let step = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }),
+              step.status == .pending || step.status == .checking else { return nil }
+        return step.step
+    }
+
     static func needsCheckAgain(
         _ snapshot: OnboardingSnapshotFfi, isBusy: Bool, isConnected: Bool, hasFailure: Bool, isCancelled: Bool
     ) -> Bool {
-        guard isConnected, !isBusy, !hasFailure, !isCancelled, !snapshot.ready, !snapshot.cancellationPending,
-              let step = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped })
-        else { return false }
-        return step.status == .pending || step.status == .checking
+        isConnected && !isBusy && !hasFailure && !isCancelled && stalledStep(snapshot) != nil
     }
 
     static var cannotContinueMessage: String {

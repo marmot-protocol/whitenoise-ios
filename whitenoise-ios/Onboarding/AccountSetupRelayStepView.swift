@@ -70,7 +70,8 @@ struct AccountSetupRelayStepView: View {
                         if recovery.canSearchDefaults {
                             Divider()
                             Text("Search these relays for your existing settings. This won’t publish changes to your profile.")
-                        } else if !recovery.isInvalid, !recovery.isManualReview, proposal != nil || allows(.useRecommendedRelays) {
+                        } else if !recovery.isInvalid, !recovery.isManualReview, !recovery.offersCancelSignIn,
+                                  proposal != nil || allows(.useRecommendedRelays) {
                             Divider()
                             publicationExplanation
                         }

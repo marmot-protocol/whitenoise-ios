@@ -63,6 +63,7 @@ struct AccountSetupActions: View {
             })
             .onChange(of: model.snapshot.revision) {
                 if let step, step.status == .passed || step.status == .skipped { dismiss() }
+                else if !model.isBusy, AccountSetupWayForward.stalledStep(model.snapshot) == selectedStep { dismiss() }
             }
         }
     }

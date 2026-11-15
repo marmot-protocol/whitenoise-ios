@@ -12,6 +12,25 @@ struct AccountSetupRecoveryPresentationTests {
         #expect(presentation.snapshot == reviewed)
     }
 
+    @Test(arguments: [OnboardingStatusFfi.pending, .checking])
+    func stalledStepHandsBackToCheckAgainInsteadOfOfferingCancel(_ status: OnboardingStatusFfi) {
+        var stalled = snapshot(status: status, revision: 2)
+        stalled.steps[0].actions = [.cancelOnboarding]
+        var presentation = AccountSetupRecoveryPresentation(snapshot: snapshot(status: .needsInput, revision: 1))
+        let dismissesStalled = presentation.update(stalled, step: .relays)
+        #expect(dismissesStalled)
+        // A failed operation keeps its explanation on screen.
+        presentation = AccountSetupRecoveryPresentation(snapshot: snapshot(status: .needsInput, revision: 1))
+        let keepsFailure = presentation.update(stalled, step: .relays, operationFailure: .operation)
+        #expect(!keepsFailure)
+        // A step queued behind an earlier check that needs review stays for Review Sign-In Checks.
+        var queued = snapshot(status: .retryableFailure, revision: 3, step: .relays)
+        queued.steps[1].status = status
+        presentation = AccountSetupRecoveryPresentation(snapshot: snapshot(status: .needsInput, revision: 1))
+        let keepsQueued = presentation.update(queued, step: .inboxRelays)
+        #expect(!keepsQueued)
+    }
+
     @Test func failedRetryUpdatesTheVisibleRecoveryOptions() {
         var presentation = AccountSetupRecoveryPresentation(snapshot: snapshot(status: .needsInput, revision: 1))
         let failed = snapshot(status: .retryableFailure, revision: 2)
