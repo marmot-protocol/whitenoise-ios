@@ -156326,6 +156326,71 @@
           }
         }
       }
+    },
+    "The addresses below are an update that didn’t finish publishing." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The addresses below are an update that didn’t finish publishing."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Adressen unten sind eine Aktualisierung, deren Veröffentlichung nicht abgeschlossen wurde."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las direcciones de abajo son una actualización cuya publicación no terminó."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les adresses ci-dessous sont une mise à jour dont la publication n’a pas abouti."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli indirizzi qui sotto sono un aggiornamento la cui pubblicazione non è stata completata."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os endereços abaixo são uma atualização cuja publicação não foi concluída."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Адреса ниже — обновление, публикация которого не завершилась."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aşağıdaki adresler, yayımlanması tamamlanmayan bir güncellemedir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以下地址是一项未完成发布的更新。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以下位址是一項未完成發布的更新。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

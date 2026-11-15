@@ -217,6 +217,8 @@ struct AccountSetupRelayStepView: View {
             Text(failureExplanation(failure))
         } else if recovery.offersCancelSignIn {
             Text(AccountSetupWayForward.cannotContinueMessage)
+            // Nothing here can save, so describe the listed addresses without a publishing promise.
+            if proposal != nil { Text("The addresses below are an update that didn’t finish publishing.") }
         } else if interrupted {
             Text(isInbox
                  ? "Your previous update hasn’t finished. Try again to finish publishing it."
