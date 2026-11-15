@@ -59,11 +59,18 @@ struct AccountSetupCheckPresentationTests {
     }
 
     @Test func retryableFailureWithoutFindingsStillExplainsTheFailure() {
-        let reviewed = snapshot(status: .retryableFailure)
+        let retryable = snapshot(status: .retryableFailure, deviceActions: [.retry], messagingActions: [.retry])
+        // Without a retry the sheet can only cancel sign-in, so it must not ask the person to try again.
+        let stranded = snapshot(status: .retryableFailure, deviceActions: [.cancelOnboarding], messagingActions: [.cancelOnboarding])
         for check in [AccountSetupCheckPresentation.Check.device, .secureMessaging] {
-            let presentation = AccountSetupCheckPresentation(check: check, snapshot: reviewed)
+            let presentation = AccountSetupCheckPresentation(check: check, snapshot: retryable)
             #expect(presentation.failureMessages(isBusy: false, hasConnectionFailure: false, operationFailure: nil) == [
                 L10n.string("Couldn’t finish this step. Try again.")
+            ])
+            let withoutRetry = AccountSetupCheckPresentation(check: check, snapshot: stranded)
+            #expect(withoutRetry.primaryAction == nil)
+            #expect(withoutRetry.failureMessages(isBusy: false, hasConnectionFailure: false, operationFailure: nil) == [
+                AccountSetupWayForward.cannotContinueMessage
             ])
         }
     }

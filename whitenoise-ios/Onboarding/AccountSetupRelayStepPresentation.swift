@@ -122,6 +122,10 @@ nonisolated struct AccountSetupRelayStepPresentation {
         return canEdit ? .init(action: .edit) : nil
     }
 
+    /// MDK can leave a step with nothing this sheet renders, such as an approved update
+    /// that was interrupted and offers only `cancelOnboarding`.
+    var offersCancelSignIn: Bool { primaryAction == nil && secondaryActions.isEmpty }
+
     var secondaryActions: [Action] {
         let primary = primaryAction?.action
         var result: [Action] = []

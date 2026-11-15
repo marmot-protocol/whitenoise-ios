@@ -134,6 +134,19 @@ struct AccountSetupRelayStepPresentationTests {
         #expect(unavailable.primaryAction == nil)
     }
 
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func interruptedUpdateWithoutRetryStillOffersAWayOut(_ step: OnboardingStepFfi) {
+        // A restored approved update can offer only cancelOnboarding.
+        let stranded = Presentation(step: step, actions: [.cancelOnboarding], proposal: proposal(step: step))
+        #expect(stranded.isInterrupted)
+        #expect(stranded.offersCancelSignIn)
+        let retryable = Presentation(step: step, actions: [.retry, .cancelOnboarding], proposal: proposal(step: step))
+        #expect(!retryable.offersCancelSignIn)
+        // Any rendered action, even a secondary one, is a way forward.
+        let searchable = Presentation(step: step, actions: [.editDiscoveryRelays, .cancelOnboarding], proposal: nil)
+        #expect(!searchable.offersCancelSignIn)
+    }
+
     @Test(arguments: [OnboardingStepFfi.profile, .relays])
     func restartedEarlierCheckProvidesARouteBackToSignIn(_ earlierStep: OnboardingStepFfi) {
         var updated = snapshot(revision: 2)

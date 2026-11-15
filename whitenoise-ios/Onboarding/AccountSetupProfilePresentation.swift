@@ -3,9 +3,10 @@ import SwiftUI
 
 struct AccountSetupProfileView: View {
     let model: AccountSetupModel
+    let cancelSignIn: () -> Void
 
     var body: some View {
-        NavigationStack { IdentityProfileSetupView(accountSetup: model) }
+        NavigationStack { IdentityProfileSetupView(accountSetup: model, cancelSignIn: cancelSignIn) }
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
             .presentationSizing(.page)
@@ -95,6 +96,9 @@ nonisolated struct AccountSetupProfilePresentation {
         let action: Action
         let isRetry: Bool
     }
+
+    /// No save, retry or skip: an interrupted publish can offer only `cancelOnboarding`.
+    var offersCancelSignIn: Bool { !canEdit && !canRetry && !canSkip }
 
     func primaryAction(failure: Failure?) -> PrimaryAction? {
         if canEdit {
@@ -189,6 +193,8 @@ struct AccountSetupProfileStatus<PrivacyContent: View>: View {
             } else {
                 Text(failureMessage)
             }
+        } else if presentation.offersCancelSignIn {
+            Text(AccountSetupWayForward.cannotContinueMessage)
         } else if presentation.isInterrupted {
             Text("We couldn’t finish sharing your changes. Try again to complete the update.")
         } else if presentation.profile != nil {

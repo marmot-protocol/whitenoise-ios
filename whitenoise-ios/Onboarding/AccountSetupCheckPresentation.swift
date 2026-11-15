@@ -46,6 +46,7 @@ nonisolated struct AccountSetupCheckPresentation {
               step.status == .retryableFailure || (check == .secureMessaging && step.status == .waitingForSigner)
         else { return [] }
         let messages = AccountSetupPresentation.findingMessages(step.findings)
-        return messages.isEmpty ? [L10n.string("Couldn’t finish this step. Try again.")] : messages
+        guard messages.isEmpty else { return messages }
+        return [primaryAction == nil ? AccountSetupWayForward.cannotContinueMessage : L10n.string("Couldn’t finish this step. Try again.")]
     }
 }
