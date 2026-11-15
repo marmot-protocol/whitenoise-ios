@@ -184,6 +184,27 @@ struct ComposerDictationControllerTests {
         #expect(controller.state == .idle)
     }
 
+    @Test func cancellingWhileTheLastWordsSettleDeliversNothing() async throws {
+        let engine = DictationEngineDouble(finalText: "Too late.")
+        let checkpoint = AsyncTestCheckpoint()
+        engine.beforeFinish = { await checkpoint.pause() }
+        let controller = ComposerDictationController(engine: engine.engine)
+        let inserted = Inserted()
+
+        controller.begin(localeIdentifiers: ["en-US"], onFinish: inserted.record, onError: { Issue.record($0) })
+        try await eventually { controller.state == .listening(locked: false) }
+        controller.endPress()
+        await checkpoint.waitUntilPaused()
+        #expect(controller.state == .finishing)
+
+        controller.cancel()
+        #expect(controller.state == .idle)
+        await checkpoint.release()
+        try await eventually { engine.finishes == 1 }
+        await Task.yield()
+        #expect(inserted.results.isEmpty)
+    }
+
     @Test func slidingUpLocksSoReleasingKeepsListeningUntilStopped() async throws {
         let engine = DictationEngineDouble(finalText: "Hands free.")
         let controller = ComposerDictationController(engine: engine.engine)
@@ -303,6 +324,7 @@ private final class ErrorLog {
 private final class DictationEngineDouble {
     let finalText: String
     var finishesComplete = true
+    var beforeFinish: (@MainActor () async -> Void)?
     var beforeStart: (@MainActor () async -> Void)?
     var startError: Error?
     private(set) var requestedLocales: [[String]] = []
@@ -322,6 +344,7 @@ private final class DictationEngineDouble {
             latestUpdate = onUpdate
             return DictationSession(
                 finish: { [self] in
+                    await beforeFinish?()
                     finishes += 1
                     return DictationResult(text: finalText, isComplete: finishesComplete)
                 },

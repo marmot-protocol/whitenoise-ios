@@ -3030,6 +3030,9 @@ struct ConversationView: View {
         viewModel.replyingTo = nil
         mediaDrafts.removeAll()
         cancelVoiceRecording()
+        // Dictation belongs to the draft it started on; it must not land in,
+        // or be sent from, another one.
+        dictation.cancel()
         editSession = ComposerEditSession(
             message: message,
             preservedDraft: preservedDraft,
@@ -3054,6 +3057,7 @@ struct ConversationView: View {
 
     private func cancelEdit() {
         guard let editSession else { return }
+        dictation.cancel()
         self.editSession = nil
         viewModel?.restoreComposerMentionDraftState(editSession.preservedMentionState)
         viewModel?.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
@@ -3106,6 +3110,7 @@ struct ConversationView: View {
                 defer { editSaveInFlight = false }
                 guard await viewModel.editMessage(editSession.message, content: editedContent) else { return }
                 guard self.editSession?.id == editSession.id else { return }
+                dictation.cancel()
                 self.editSession = nil
                 viewModel.restoreComposerMentionDraftState(editSession.preservedMentionState)
                 viewModel.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
