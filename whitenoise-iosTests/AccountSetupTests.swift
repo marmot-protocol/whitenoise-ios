@@ -450,20 +450,62 @@ struct AccountSetupTests {
         #expect(observations == 1)
     }
 
-    @Test func deviceButtonDistinguishesCleanAndUncertainDiscovery() {
-        #expect(AccountSetupPresentation.deviceAction(.noneFound) == L10n.string("Continue"))
-        #expect(AccountSetupPresentation.deviceAction(.unknown) == L10n.string("Continue anyway"))
-        #expect(AccountSetupPresentation.deviceAction(.otherInstallationPossible) == L10n.string("Continue anyway"))
-        #expect(AccountSetupPresentation.deviceAction(nil) == L10n.string("Continue anyway"))
+    private func deviceNotice(
+        _ discovery: OnboardingDeviceDiscoveryFfi, publishedAt: [UInt64] = []
+    ) -> AccountSetupDeviceNoticePresentation {
+        let packages = publishedAt.enumerated().map { index, publishedAt in
+            OnboardingDevicePackageFfi(slotId: "slot-\(index)", keyPackageRefHex: nil, eventIdHex: hex("\(index)"),
+                                       publishedAt: publishedAt, expiresAt: nil, usable: true)
+        }
+        return AccountSetupDeviceNoticePresentation(
+            OnboardingSingleDeviceNoticeFfi(discovery: discovery, otherPackages: packages,
+                                            discoveryComplete: discovery == .noneFound, acknowledgedAt: nil),
+            now: Date(timeIntervalSince1970: 2_000_000_000)
+        )
     }
 
-    @Test func deviceDiscoveryAddsANoteOnlyForUncertainOutcomes() {
-        #expect(AccountSetupPresentation.deviceNotice(.noneFound) == nil)
-        let unknown = AccountSetupPresentation.deviceNotice(.unknown)
-        let possible = AccountSetupPresentation.deviceNotice(.otherInstallationPossible)
-        #expect(unknown != nil)
-        #expect(possible != nil)
-        #expect(unknown != possible)
+    @Test func deviceButtonDistinguishesCleanAndUncertainDiscovery() {
+        #expect(deviceNotice(.noneFound).actionTitle == L10n.string("Continue"))
+        #expect(deviceNotice(.unknown).actionTitle == L10n.string("Continue anyway"))
+        #expect(deviceNotice(.otherInstallationPossible, publishedAt: [1]).actionTitle == L10n.string("Continue anyway"))
+        #expect(AccountSetupDeviceNoticePresentation(nil).actionTitle == L10n.string("Continue anyway"))
+    }
+
+    @Test func eachCheckedOutcomeStatesItsFinding() {
+        #expect(AccountSetupDeviceNoticePresentation(nil).finding == nil)
+        #expect(deviceNotice(.noneFound).finding
+            == L10n.string("We didn’t find messaging keys from another app or device."))
+        #expect(deviceNotice(.unknown).finding
+            == L10n.string("We couldn’t check whether this account uses another app or device for messaging."))
+        #expect(deviceNotice(.otherInstallationPossible).finding
+            == L10n.string("We found messaging keys this account published from another app or device."))
+    }
+
+    @Test func explanationDescribesASeparateInstallationOnlyWhenAnotherAppMayExist() {
+        #expect(deviceNotice(.noneFound).explanation.isEmpty)
+        let unchecked = [L10n.string(
+            "If you use another app for messaging, this device will have its own separate chats, and chats in that app won’t appear here."
+        )]
+        #expect(deviceNotice(.unknown).explanation == unchecked)
+        // A failed or pending check makes no claim about other apps either way.
+        #expect(AccountSetupDeviceNoticePresentation(nil).explanation == unchecked)
+        #expect(deviceNotice(.otherInstallationPossible, publishedAt: [1]).explanation == [
+            L10n.string("This device will have its own separate chats. Chats in the other app stay there and won’t appear here."),
+            L10n.string("When someone starts a new chat with you, it may arrive in either app.")
+        ])
+    }
+
+    @Test func otherAppsFindingNamesTheLatestPastPublication() {
+        let older: UInt64 = 1_700_000_000, latest: UInt64 = 1_900_000_000, future: UInt64 = 2_100_000_000
+        let undated = deviceNotice(.otherInstallationPossible).finding
+        let latestOnly = deviceNotice(.otherInstallationPossible, publishedAt: [latest]).finding
+        #expect(latestOnly != undated)
+        #expect(latestOnly != deviceNotice(.otherInstallationPossible, publishedAt: [older]).finding)
+        #expect(deviceNotice(.otherInstallationPossible, publishedAt: [older, latest]).finding == latestOnly)
+        #expect(deviceNotice(.otherInstallationPossible, publishedAt: [latest, future]).finding == latestOnly)
+        #expect(deviceNotice(.otherInstallationPossible, publishedAt: [future]).finding == undated)
+        #expect(deviceNotice(.otherInstallationPossible, publishedAt: [.max]).finding == undated)
+        #expect(deviceNotice(.otherInstallationPossible, publishedAt: [0]).finding == undated)
     }
 
     @Test func validatesRelayListsBeforeSubmitting() {
