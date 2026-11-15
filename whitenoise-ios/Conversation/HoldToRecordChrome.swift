@@ -3,8 +3,9 @@ import SwiftUI
 /// Floats above the thumb during a hold: slide up to the lock to keep
 /// recording or dictating hands-free.
 struct HoldLockHint: View {
-    /// Center of the hint above the composer's top edge, clear of the thumb.
-    static let liftAboveComposer: CGFloat = 64
+    /// Gap from the composer's top edge to the hint's bottom edge, clear of
+    /// the thumb. A taller hint at larger text sizes grows upward from it.
+    static let gapAboveComposer: CGFloat = 22
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 0 at rest, 1 when the slide reaches the lock.
@@ -52,9 +53,9 @@ enum VoiceRecordingBubbleMetrics {
         return restingHaloScale + (loudestHaloScale - restingHaloScale) * clamped
     }
 
-    /// The lock hint floats this far above the composer during a voice
-    /// hold, so the loudest ring stays clear of it.
-    static let lockHintLift: CGFloat = 104
+    /// The lock hint's bottom edge sits this far above the composer during a
+    /// voice hold, so the loudest ring stays clear of it.
+    static let lockHintGap: CGFloat = 62
 }
 
 /// The red bubble under the thumb while a voice message records: it

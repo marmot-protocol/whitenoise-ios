@@ -842,12 +842,15 @@ struct ComposerBar: View {
         GeometryReader { proxy in
             if showsLockHint, let holdAnchor {
                 HoldLockHint(progress: HoldGesturePolicy.lockProgress(holdTranslation))
+                    .dynamicTypeSize(...WNChromeDynamicType.maximum)
                     .fixedSize()
+                    // Anchor the bottom edge, so a taller hint grows away from the thumb.
+                    .frame(height: 0, alignment: .bottom)
                     .position(
                         x: holdAnchor.x - proxy.frame(in: .global).minX,
                         y: voiceRecordingActive
-                            ? -VoiceRecordingBubbleMetrics.lockHintLift
-                            : -HoldLockHint.liftAboveComposer
+                            ? -VoiceRecordingBubbleMetrics.lockHintGap
+                            : -HoldLockHint.gapAboveComposer
                     )
                     .transition(
                         reduceMotion ? .opacity : .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity)
