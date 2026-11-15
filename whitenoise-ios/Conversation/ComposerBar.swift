@@ -218,16 +218,22 @@ nonisolated enum ComposerDictationPresentation {
         return (settled, String(full.dropFirst(settled.count)))
     }
 
-    /// Dictation sends at once, except an edit (saving stays a separate
-    /// decision) or text that recognition didn't finish settling.
     /// A send or edit save in flight still owns the draft, so no new hold
     /// starts; one already running keeps its gesture so its release lands.
     static func admitsHold(isSending: Bool, isDictating: Bool) -> Bool {
         isDictating || !isSending
     }
 
-    static func sendsOnFinish(isEditing: Bool, isComplete: Bool = true) -> Bool {
-        !isEditing && isComplete
+    /// Dictation sends at once, except an edit (saving stays a separate
+    /// decision), text that recognition didn't finish settling, or a draft
+    /// something else changed during the hold (a restored rejected send, a
+    /// late saved-draft load) that the person hasn't seen whole.
+    static func sendsOnFinish(
+        isEditing: Bool,
+        isComplete: Bool = true,
+        draftChangedDuringHold: Bool = false
+    ) -> Bool {
+        !isEditing && isComplete && !draftChangedDuringHold
     }
 
     /// The resting field says how to use it; once typing, it's the usual prompt.

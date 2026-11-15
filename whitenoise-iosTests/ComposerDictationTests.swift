@@ -114,6 +114,10 @@ struct ComposerDictationPresentationTests {
         #expect(DictationModelStatus.afterInstallAttempt(.unsupportedLanguage) == .unsupportedLanguage)
     }
 
+    @Test func aDraftChangedUnderneathTheHoldIsLeftForReviewInsteadOfSent() {
+        #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: false, draftChangedDuringHold: true))
+    }
+
     @Test func textRecognitionDidNotSettleIsLeftForReviewInsteadOfSent() {
         #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: false, isComplete: false))
     }
