@@ -146,6 +146,24 @@ struct AppearanceThemeTests {
         #expect(reopened.density == .compact)
     }
 
+    @Test func resetAfterErasureRestoresDefaultThemeAndDensity() throws {
+        let suiteName = "appearance-reset-tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = AppAppearanceStore(defaults: defaults, themeApplier: { _ in })
+        store.setTheme(.dark)
+        store.setDensity(.compact)
+        // Erasure wipes the stored preferences before the live store is reset.
+        defaults.removePersistentDomain(forName: suiteName)
+
+        store.resetToDefaults()
+        store.setDensity(.compact)
+
+        #expect(store.theme == .system)
+        // The reset leaves the store able to persist the next choice.
+        #expect(defaults.string(forKey: AppDensity.storageKey) == AppDensity.compact.rawValue)
+    }
+
     @Test func returningToSystemClearsForcedWindowStyle() {
         let window = UIWindow()
 

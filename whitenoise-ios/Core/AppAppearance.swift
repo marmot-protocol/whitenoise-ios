@@ -66,6 +66,13 @@ final class AppAppearanceStore {
         HostSettingsSaveTiming.measure { defaults.set(density.rawValue, forKey: AppDensity.storageKey) }
     }
 
+    /// Erase App Data clears the stored preferences; this brings the live
+    /// values back in line with them.
+    func resetToDefaults() {
+        setTheme(.system)
+        setDensity(.standard)
+    }
+
     func applyCurrentTheme() {
         themeApplier(theme)
     }

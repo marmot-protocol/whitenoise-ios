@@ -121,7 +121,7 @@ struct whitenoise_iosApp: App {
                     .environment(appState.navigation)
                     .environment(appearance)
                     .onChange(of: appState.appDataErasureGeneration) {
-                        appearance.setTheme(.system)
+                        appearance.resetToDefaults()
                         AppLanguage.setCurrentRawValue(AppLanguage.system.rawValue)
                     }
                     .appAppearance(appearance)
