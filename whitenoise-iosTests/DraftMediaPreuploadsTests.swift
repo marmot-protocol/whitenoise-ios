@@ -133,6 +133,31 @@ struct DraftMediaPreuploadsTests {
         #expect(probe.calls == [UploadCall(accountRef: "account-ref", fileName: "photo.jpg", cancelled: true)])
     }
 
+    @Test func composerUploadsNothingAheadOfAMessageThatDraftsCannotHold() async throws {
+        let state = AppState.test()
+        state.activeAccountRef = "account-ref"
+        let probe = UploadProbe()
+        let composer = ComposerModel(
+            appState: state,
+            groupIdHex: hex("aa"),
+            timelineStore: TimelineStore(appState: state, groupIdHex: hex("aa")),
+            draftMediaUploader: probe.uploader()
+        )
+        let video = MediaDraftAttachment(
+            fileName: "clip.mov",
+            mediaType: "video/quicktime",
+            data: Data(count: MediaDraftProcessor.maxDraftAttachmentBytes + 1),
+            dim: nil
+        )
+
+        composer.reconcileDraftMediaUploads([attachment("photo.jpg"), video])
+        composer.reconcileDraftMediaUploads([attachment("later.jpg")])
+        await probe.waitForCalls(1)
+
+        // Uploads start in order, so one started for the first composer would come first.
+        #expect(probe.calls.first == UploadCall(accountRef: "account-ref", fileName: "later.jpg", cancelled: false))
+    }
+
     @Test(arguments: [
         (sourceEpoch: UInt64(4), currentEpoch: UInt64?(4), reusable: true),
         (sourceEpoch: UInt64(4), currentEpoch: UInt64?(nil), reusable: true),

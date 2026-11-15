@@ -303,6 +303,17 @@ microphone on a Mac without one.
       dictation; Finish dictation and Cancel dictation are announced.
 - [ ] Airplane mode: dictation still works once the model is installed.
 
+## Large attachments
+
+- [ ] Pick a video of 300–500 MB from Photos and another from Files. Each
+      appears in the composer with its thumbnail, the app stays responsive, and
+      it sends with upload progress. A recipient can play it.
+- [ ] Pick a file over 512 MB: it is refused as too large before any upload.
+- [ ] Add a video over 50 MB with a caption, leave the chat and relaunch: the
+      caption comes back without the video. A video of 50 MB or less comes back.
+- [ ] Send a reply with a video over 50 MB: it sends as a reply, and the saved
+      draft is gone afterwards.
+
 ## MarmotKit 0.10.4 upgrade
 
 - [ ] Back up the app's shared data before opening an existing installation with

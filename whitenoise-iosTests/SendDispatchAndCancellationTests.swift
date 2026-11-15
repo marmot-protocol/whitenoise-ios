@@ -67,6 +67,16 @@ struct SendDispatchAndCancellationTests {
         #expect(drafts == before)
     }
 
+    @Test func aMessageWithAnAttachmentDraftsCannotHoldIsNotSentThroughTheDraft() {
+        let fits = attachment(bytes: MediaDraftProcessor.maxDraftAttachmentBytes)
+        let large = attachment(bytes: MediaDraftProcessor.maxDraftAttachmentBytes + 1)
+
+        #expect(MediaDraftProcessor.sendsThroughDraft([]))
+        #expect(MediaDraftProcessor.sendsThroughDraft([fits]))
+        #expect(!MediaDraftProcessor.sendsThroughDraft([fits, large]))
+        #expect(MediaDraftProcessor.maxDraftAttachmentBytes < MediaDraftProcessor.maxAttachmentBytes)
+    }
+
     @Test func serverSizeRejectionOfASingleUploadIdentifiesThatAttachment() {
         let only = attachment(bytes: 1_024)
         let error = MarmotKitError.Runtime(details: "upload returned HTTP 413: File too large")

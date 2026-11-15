@@ -3171,7 +3171,12 @@ struct ConversationView: View {
             mediaDrafts = composerState.mediaDrafts
             return
         }
-        appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
+        // Drafts can't hold every attachment, so there is no draft revision to
+        // claim; clearing the composer deletes whatever draft was saved.
+        let sendsThroughDraft = MediaDraftProcessor.sendsThroughDraft(payload.attachments)
+        if sendsThroughDraft {
+            appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
+        }
         // The bubble is already in the timeline above. Everything below is
         // viewport follow-up: it never gates the local row, and when the window
         // is already on the live tail it issues no window command at all — a
@@ -3180,6 +3185,15 @@ struct ConversationView: View {
         userMovedAwayFromTimelineBottom = false
         viewModel.followConversationLatest()
         composerSendBottomScrollRequest &+= 1
+
+        guard sendsThroughDraft else {
+            viewModel.enqueueStagedSubmission {
+                if let rejection = await viewModel.submitStagedSend(staged) {
+                    recoverSizeRejectedSend(staged, rejection: rejection, tapped: tappedContents, mentionState: mentionState)
+                }
+            }
+            return
+        }
 
         // `ConversationDraftStore` admits one revision-checked submission at a
         // time, so queued sends serialize here while their bubbles are already up.

@@ -3,6 +3,7 @@ import UIKit
 import AVKit
 @preconcurrency import AVFoundation
 import Combine
+import MarmotKit
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -1474,11 +1475,10 @@ struct PhotoLibrarySelection: Hashable {
         selectionsByPickerIndex.compactMap { $0 }
     }
 
-    /// All accepted selections stay resident until the composer hands them
-    /// off, so the per-item cap alone still allows count × cap in RAM. The
-    /// session budget bounds the sum; selections beyond it are rejected the
+    /// Selections are mapped, not resident, so the session budget is what one
+    /// send can carry: MDK's batch limit. Selections beyond it are rejected the
     /// same way as oversized ones.
-    static let maxTotalSelectionBytes = 3 * MediaDraftProcessor.maxAttachmentBytes
+    static let maxTotalSelectionBytes = Int(clamping: maxFileMediaCiphertextBytes())
 
     /// Size gate applied before any bytes are read into memory; the same cap
     /// the draft processor enforces, moved ahead of materialization, plus the
@@ -1631,7 +1631,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                         )
                         return
                     }
-                    guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+                    guard let data = try? PickedMediaFile.mappedData(from: url), !data.isEmpty else {
                         continuation.resume(throwing: PhotoLibraryPickerError.noReadableMedia)
                         return
                     }

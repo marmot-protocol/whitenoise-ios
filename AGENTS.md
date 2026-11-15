@@ -203,6 +203,11 @@ the lease on completion and on dismissal through the live runtime (idempotent; r
 opened it). Cancel a copy only through its `MediaFileTransferControlFfi`, never by
 cancelling the awaiting task.
 Only bytes MDK has no slot for (an outgoing draft) use the host export.
+Outgoing attachments may reach MDK's 512 MiB blob limit. Read picked files through
+`PickedMediaFile` (an unlinked, mapped clone), never into resident memory. MDK's draft
+API copies every attachment on each save, so attachments over
+`maxDraftAttachmentBytes` stay out of saved drafts, are not pre-uploaded, and their
+message sends without a draft revision, until marmot-protocol/mdk#3431 lands.
 Conversation-open performance ends at rendered layout, uses the navigation consent
 ticket, and records unavailable/cancelled/timeout outcomes separately from success.
 
