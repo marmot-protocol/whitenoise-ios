@@ -22,6 +22,10 @@ nonisolated enum AccountSetupWayForward {
         return step.status == .pending || step.status == .checking
     }
 
+    static var cannotContinueMessage: String {
+        L10n.string("This sign-in can’t continue from here. Cancel sign-in, then sign in again. Changes that were already published are kept.")
+    }
+
     static var checkAgainHeader: (title: String, subtitle: String) {
         (L10n.string("Checks didn’t finish"), L10n.string("Check again to continue signing in."))
     }

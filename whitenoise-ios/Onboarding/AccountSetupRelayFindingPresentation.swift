@@ -45,9 +45,7 @@ nonisolated enum AccountSetupRelayFindingPresentation {
 
     private static func listMessage(_ finding: OnboardingFindingFfi, inbox: Bool) -> String {
         switch finding.issue {
-        case .noUsableRoute where finding.context == .declaredRoute:
-            inbox ? L10n.string("None of the relays in your message inbox answered.")
-                : L10n.string("None of the relays in your relay list answered.")
+        // A relay that answered but demanded sign-in or payment also leaves no route, so don't claim silence.
         case .noUsableRoute:
             inbox ? L10n.string("Your message inbox has no relay White Noise can use.")
                 : L10n.string("Your relay list has no relay White Noise can use.")

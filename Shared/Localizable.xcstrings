@@ -153792,136 +153792,6 @@
         }
       }
     },
-    "None of the relays in your message inbox answered." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "None of the relays in your message inbox answered."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keines der Relays in deinem Nachrichteneingang hat geantwortet."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ninguno de los relays de tu bandeja de mensajes respondió."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucun des relais de votre boîte de réception n’a répondu."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nessuno dei relay della tua posta in arrivo ha risposto."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nenhum dos relays da sua caixa de mensagens respondeu."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ни один ретранслятор из ваших входящих сообщений не ответил."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mesaj gelen kutundaki rölelerin hiçbiri yanıt vermedi."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的消息收件箱中的中继都没有响应。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的訊息收件匣中的中繼都沒有回應。"
-          }
-        }
-      }
-    },
-    "None of the relays in your relay list answered." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "None of the relays in your relay list answered."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keines der Relays in deiner Relay-Liste hat geantwortet."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ninguno de los relays de tu lista de relays respondió."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucun des relais de votre liste de relais n’a répondu."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nessuno dei relay del tuo elenco di relay ha risposto."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nenhum dos relays da sua lista de relays respondeu."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ни один ретранслятор из вашего списка не ответил."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Röle listendeki rölelerin hiçbiri yanıt vermedi."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的中继列表中的中继都没有响应。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的中繼清單中的中繼都沒有回應。"
-          }
-        }
-      }
-    },
     "Your message inbox has no relay White Noise can use." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -156388,6 +156258,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你需要重新登入才能繼續。已發布的變更會保留。"
+          }
+        }
+      }
+    },
+    "This sign-in can’t continue from here. Cancel sign-in, then sign in again. Changes that were already published are kept." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This sign-in can’t continue from here. Cancel sign-in, then sign in again. Changes that were already published are kept."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Anmeldung kann hier nicht fortgesetzt werden. Brich die Anmeldung ab und melde dich dann erneut an. Bereits veröffentlichte Änderungen bleiben erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este inicio de sesión no puede continuar desde aquí. Cancela el inicio de sesión y vuelve a iniciar sesión. Los cambios ya publicados se conservan."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette connexion ne peut pas continuer ici. Annulez la connexion, puis reconnectez-vous. Les modifications déjà publiées sont conservées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo accesso non può continuare da qui. Annulla l’accesso, poi accedi di nuovo. Le modifiche già pubblicate vengono mantenute."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este início de sessão não pode continuar daqui. Cancele o início de sessão e entre novamente. As alterações já publicadas são mantidas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот вход нельзя продолжить отсюда. Отмените вход, затем войдите снова. Уже опубликованные изменения сохранятся."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu giriş buradan devam edemiyor. Girişi iptal et, sonra yeniden giriş yap. Önceden yayımlanan değişiklikler korunur."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此登录无法从这里继续。请取消登录，然后重新登录。已发布的更改会保留。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此登入無法從這裡繼續。請取消登入，然後重新登入。已發布的變更會保留。"
           }
         }
       }

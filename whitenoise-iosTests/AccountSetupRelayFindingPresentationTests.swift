@@ -6,6 +6,7 @@ import Testing
 struct AccountSetupRelayFindingPresentationTests {
     private typealias Presentation = AccountSetupRelayFindingPresentation
 
+    // A members-only relay answers but refuses, so the summary must not claim the relays were silent.
     @Test func inboxFailureNamesTheListAndEachRelayByHost() {
         let findings = [
             relayFinding(.authenticationRequired, "wss://auth.example/"),
@@ -17,14 +18,14 @@ struct AccountSetupRelayFindingPresentationTests {
         let messages = Presentation.messages(step: .inboxRelays, findings: findings,
                                              actions: [.retry, .editDiscoveryRelays, .cancelOnboarding])
         #expect(messages == [
-            L10n.string("None of the relays in your message inbox answered."),
+            L10n.string("Your message inbox has no relay White Noise can use."),
             L10n.formatted("%@ requires sign-in that White Noise couldn’t complete.", "auth.example"),
             L10n.formatted("%@ couldn’t be reached.", "dead.example"),
             L10n.formatted("%@ requires payment.", "paid.example"),
             L10n.string("If this keeps happening, add a relay that works to your message inbox in another Nostr app, then sign in again."),
         ])
         let relayList = Presentation.messages(step: .relays, findings: findings, actions: [.retry])
-        #expect(relayList.first == L10n.string("None of the relays in your relay list answered."))
+        #expect(relayList.first == L10n.string("Your relay list has no relay White Noise can use."))
         #expect(Set(relayList).isDisjoint(with: [messages[0], messages[4]]))
     }
 

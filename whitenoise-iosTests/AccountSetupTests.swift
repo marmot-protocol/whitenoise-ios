@@ -130,9 +130,13 @@ struct AccountSetupTests {
                 == .init(action: .retry, isRetry: true))
         #expect(!presentation.canEdit && !presentation.canSkip && !presentation.canCancelRepair)
 
-        value.steps[0].actions = []
+        #expect(!presentation.offersCancelSignIn)
+
+        // A restored approved publish can offer only cancelOnboarding.
+        value.steps[0].actions = [.cancelOnboarding]
         presentation = AccountSetupProfilePresentation(snapshot: value)
         #expect(presentation.primaryAction(failure: nil) == nil)
+        #expect(presentation.offersCancelSignIn)
     }
 
     @Test func discardingAProfileProposalClosesOnlyAfterConfirmedCancellation() {

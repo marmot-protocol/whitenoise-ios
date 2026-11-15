@@ -18,7 +18,7 @@ struct AccountSetupActions: View {
 
     var body: some View {
         if selectedStep == .profile {
-            AccountSetupProfileView(model: model)
+            AccountSetupProfileView(model: model, cancelSignIn: cancelSignIn)
         } else if selectedStep == .relays || selectedStep == .inboxRelays {
             AccountSetupRelayStepView(model: model, selectedStep: selectedStep, cancelSignIn: cancelSignIn)
         } else if selectedStep == .singleDevice {
@@ -68,7 +68,9 @@ struct AccountSetupActions: View {
     }
 
     @ViewBuilder private var explanation: some View {
-        if proposal != nil, step?.actions.contains(.approveRepair) != true,
+        if let step, AccountSetupWayForward.followsNeedsCancelSignIn(step.actions) {
+            Text(AccountSetupWayForward.cannotContinueMessage)
+        } else if proposal != nil, step?.actions.contains(.approveRepair) != true,
            step?.actions.contains(.cancelRepair) != true {
             Text("Your previous update hasn’t finished. Try again to finish publishing it.")
         } else {

@@ -214,6 +214,8 @@ struct AccountSetupRelayStepView: View {
             Text("Couldn’t discard your relay changes. Use Back to try again.")
         } else if let failure = model.failure ?? childFailure?.failure {
             Text(failureExplanation(failure))
+        } else if recovery.offersCancelSignIn {
+            Text(AccountSetupWayForward.cannotContinueMessage)
         } else if interrupted {
             Text(isInbox
                  ? "Your previous update hasn’t finished. Try again to finish publishing it."
