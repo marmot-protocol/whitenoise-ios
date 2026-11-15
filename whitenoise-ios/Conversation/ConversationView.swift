@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import UIKit
 import MarmotKit
@@ -629,6 +630,9 @@ struct ConversationView: View {
     @State private var composerChangedBeforeDraftRestore = false
     @State private var mediaDrafts: [MediaDraftAttachment] = []
     @StateObject private var voiceRecorder = VoiceMessageRecorder()
+    @State private var dictation = ComposerDictationController()
+    @State private var dictationPreferences = ComposerDictationPreferenceStore.shared
+    @State private var dictationInstallWatch: Task<Void, Never>?
     @State private var showCameraCapture = false
     @State private var fileProductTicket: ProductAnalyticsRecorder.Ticket?
     @State private var showPhotoLibraryPicker = false
@@ -1387,6 +1391,15 @@ struct ConversationView: View {
             .onChange(of: viewModel?.inactiveGroupMessage != nil) { _, composerHidden in
                 handleComposerAvailabilityChange(composerHidden: composerHidden)
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                dictation.cancel()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
+                // A call or another app took the microphone.
+                if DictationInterruptionPolicy.cancelsDictation(notification.userInfo) {
+                    dictation.cancel()
+                }
+            }
     }
 
     var body: some View {
@@ -1423,6 +1436,9 @@ struct ConversationView: View {
                     appState.endViewingChat(visibleChatRoute)
                 }
                 voiceRecorder.cancelIfActive()
+                dictation.cancel()
+                dictationInstallWatch?.cancel()
+                dictationInstallWatch = nil
                 viewModel?.search.end()
                 cancelPendingTimelineFollowUpWork()
                 dismissKeyboard()
@@ -1541,6 +1557,7 @@ struct ConversationView: View {
                         ? L10n.string("Send")
                         : L10n.string("Save edit"),
                     voiceMessagesEnabled: editSession == nil,
+                    dictation: composerDictationBinding,
                     cameraAvailable: ComposerAttachmentCapabilities.cameraAvailable,
                     gifsAvailable: ComposerAttachmentCapabilities.gifsAvailable,
                     pollsAvailable: editSession == nil && (viewModel?.canCreatePolls ?? false),
@@ -3291,6 +3308,7 @@ struct ConversationView: View {
     private func handleComposerAvailabilityChange(composerHidden: Bool) {
         guard composerHidden else { return }
         cancelEdit()
+        dictation.cancel()
         if let recording = voiceRecorder.finishIfActive() {
             addVoiceRecording(recording)
         }
@@ -3643,7 +3661,69 @@ struct ConversationView: View {
         }
     }
 
+    private var composerDictationBinding: ComposerDictationBinding? {
+        guard ComposerDictationSupport.isSupportedOS, dictationPreferences.isEnabled else { return nil }
+        return ComposerDictationBinding(
+            state: dictation.state,
+            transcript: dictation.transcript,
+            onBegin: beginDictation,
+            onDrag: { dictation.updateDrag($0) },
+            onEnd: { dictation.endPress() },
+            onCancel: { dictation.cancel() },
+            onStop: { dictation.stopLocked() },
+            sendsOnFinish: ComposerDictationPresentation.sendsOnFinish(isEditing: editSession != nil)
+        )
+    }
+
+    private func beginDictation(keyboardLanguage: String?, locked: Bool) {
+        guard !voiceRecorder.isActive else { return }
+        let languages = DictationLocalePolicy.candidateIdentifiers(
+            lastKeyboardLanguage: keyboardLanguage,
+            activeKeyboardLanguages: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage),
+            preferredLanguages: Locale.preferredLanguages
+        )
+        dictation.begin(
+            localeIdentifiers: languages,
+            locked: locked,
+            onFinish: finishDictation,
+            onError: presentDictationError
+        )
+    }
+
+    /// Dictation is the fast path: what was said goes out at once. Editing a
+    /// sent message only fills the field, since saving is a separate decision.
+    private func finishDictation(_ text: String) {
+        let merged = DictationTextMerge.merged(draft: draft, transcript: text)
+        guard merged != draft else { return }
+        draft = merged
+        guard ComposerDictationPresentation.sendsOnFinish(isEditing: editSession != nil) else { return }
+        send()
+    }
+
+    private func presentDictationError(_ error: Error) {
+        guard case DictationFailure.modelDownloading = error else {
+            appState.present(UserFacingError.toast(title: L10n.string("Couldn't dictate"), error: error))
+            return
+        }
+        appState.present(.warning(L10n.string("Getting dictation ready"), message: error.localizedDescription))
+        guard #available(iOS 26.0, *),
+              dictationInstallWatch == nil,
+              let install = DictationModelInstaller.shared.currentInstall
+        else { return }
+        dictationInstallWatch = Task { @MainActor in
+            let installed = await install.value
+            dictationInstallWatch = nil
+            guard !Task.isCancelled else { return }
+            if installed {
+                appState.present(.success(L10n.string("Dictation is ready")))
+            } else {
+                appState.present(.error(L10n.string("Couldn't download the speech model")))
+            }
+        }
+    }
+
     private func beginVoicePress() {
+        guard !dictation.isActive else { return }
         guard canBeginMediaSelection() else { return }
         voiceRecorder.beginPress { error in
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't record audio"), error: error))

@@ -265,6 +265,44 @@ before every release tag.
 - [ ] Data Usage has no Download Storage entry. Previously saved MDK download
       limits remain in effect; removing the entry does not reset those limits.
 
+## Hold to dictate
+
+Needs a physical iPhone on iOS 26 or later; the simulator has no usable
+microphone on a Mac without one.
+
+- [ ] On iOS 18–25, Settings → Appearance has no Dictation section and holding
+      the message field behaves as before.
+- [ ] On a fresh install, Settings → Appearance → Hold to Dictate is on.
+      Speech Model shows Ready, or Downloading… and then Ready, for the first
+      enabled keyboard's language. An unsupported language shows Not available
+      for your language.
+- [ ] Turn Hold to Dictate off: the resting field reads "Message" and a hold
+      does nothing. The choice survives a relaunch.
+- [ ] With the keyboard down and an empty draft, the field reads "Tap to type,
+      hold to dictate"; with the keyboard up it reads "Message".
+- [ ] With the keyboard down, hold the message field: after a short hold the
+      field shows a pulsing microphone and Listening…, the + button becomes a red
+      ✕, and words appear as you speak (the unsettled guess dimmed). Release:
+      the text is sent at once, after any existing draft text with one space.
+      Silence sends nothing.
+- [ ] Hold and slide left: dictation is discarded and nothing is sent.
+- [ ] Hold and slide up: dictation locks. Lift the finger and keep speaking;
+      the send arrow sends the text and the ✕ discards it.
+- [ ] While editing a sent message, releasing (or ✓ when locked) only adds the
+      text to the field; Save stays a separate tap.
+- [ ] With the keyboard up, holding the field still moves the cursor (loupe);
+      a quick tap on the resting field still opens the keyboard.
+- [ ] First use asks for microphone access only. Denying it shows "Couldn't
+      dictate" with the microphone explanation.
+- [ ] Holding while the model is downloading shows "Getting dictation ready",
+      then "Dictation is ready" when the download finishes.
+- [ ] Background the app, take a call, or leave the chat while dictating:
+      dictation stops and nothing is inserted. A voice message can't start
+      while dictating, or the reverse.
+- [ ] VoiceOver: the message field's Dictate action starts hands-free
+      dictation; Finish dictation and Cancel dictation are announced.
+- [ ] Airplane mode: dictation still works once the model is installed.
+
 ## MarmotKit 0.10.4 upgrade
 
 - [ ] Back up the app's shared data before opening an existing installation with

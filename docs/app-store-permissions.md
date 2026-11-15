@@ -15,7 +15,7 @@ Version 2026.9.9 build 33 and the existing configuration values are unchanged.
 | Feature | Plist declaration | Behavior |
 | --- | --- | --- |
 | Scan profile QR codes; capture chat photos/videos | `NSCameraUsageDescription` | Camera access is requested for scanning or capture. |
-| Voice messages; video audio | `NSMicrophoneUsageDescription` | Audio capture requests microphone access. |
+| Voice messages; video audio; hold-to-dictate | `NSMicrophoneUsageDescription` | Audio capture requests microphone access. Dictation transcribes on device with `SpeechAnalyzer` (iOS 26+) and keeps no audio. |
 | Share a location | `NSLocationWhenInUseUsageDescription` | The location picker requests foreground access. No always/background location mode. |
 | Biometric app unlock | `NSFaceIDUsageDescription` | Local Authentication unlocks the app. |
 | Save shared media to Photos | `NSPhotoLibraryAddUsageDescription` | The system share sheet can save selected photos/videos. Add-only wording; no general library-read request. |
@@ -35,7 +35,9 @@ Photo selection uses `PHPickerViewController`; contact sharing uses
 do not justify blanket Photos/Contacts access. Notification authorization uses
 UserNotifications and APNS entitlements, not a custom notification usage string.
 No tracking authorization, background location, Bonjour discovery, Bluetooth,
-health, calendar, or speech-recognition feature was found in the host code.
+health, or calendar feature was found in the host code. Hold-to-dictate uses
+on-device `SpeechAnalyzer`, not the server-backed `SFSpeechRecognizer`, and
+requests no speech-recognition authorization.
 Do not add those permission declarations speculatively.
 
 Sources: [Apple protected resources](https://developer.apple.com/documentation/bundleresources/protected-resources),
