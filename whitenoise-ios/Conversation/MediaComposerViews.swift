@@ -671,6 +671,7 @@ struct MediaApprovalView: View {
         .sheet(isPresented: $showPhotoLibraryPicker) {
             PhotoLibraryPickerView(
                 selectionLimit: remainingSelectionLimit,
+                budget: PhotoLibrarySelection.remainingBudget(alongside: attachments),
                 onSelection: onAddSelections,
                 onError: onSelectionError,
                 onDismiss: { showPhotoLibraryPicker = false }
@@ -1486,9 +1487,24 @@ struct PhotoLibrarySelection: Hashable {
     static func admitsSelection(
         bytes: Int,
         cap: Int = MediaDraftProcessor.maxAttachmentBytes,
+        cost: Int? = nil,
         remaining: Int = maxTotalSelectionBytes
     ) -> Bool {
-        bytes > 0 && bytes <= cap && bytes <= remaining
+        bytes > 0 && bytes <= cap && (cost ?? bytes) <= remaining
+    }
+
+    /// What a selection draws from the session budget: a file sent as its own
+    /// bytes costs its size, an image the most its re-encoding can send.
+    static func budgetCost(bytes: Int, typeIdentifier: String?) -> Int {
+        MediaDraftProcessor.sendsSourceBytes(typeIdentifier: typeIdentifier)
+            ? bytes
+            : MediaDraftProcessor.maxImageAttachmentBytes
+    }
+
+    /// The budget a picker session starts with beside the composer's attachments.
+    static func remainingBudget(alongside existing: [MediaDraftAttachment]) -> Int {
+        let used = MediaFileUploadLimit.ciphertextBytes(plaintextByteCounts: existing.map(\.data.count))
+        return max(0, maxTotalSelectionBytes - Int(clamping: used ?? .max))
     }
 }
 
@@ -1506,13 +1522,15 @@ private enum PhotoLibraryPickerError: LocalizedError {
 struct PhotoLibraryPickerView: UIViewControllerRepresentable {
     @Environment(AppState.self) private var appState
     let selectionLimit: Int
+    var budget = PhotoLibrarySelection.maxTotalSelectionBytes
     var filter: PHPickerFilter = .any(of: [.images, .videos])
     let onSelection: ([PhotoLibrarySelection]) -> Void
     let onError: (Error) -> Void
     let onDismiss: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onSelection: onSelection, onError: onError, onDismiss: onDismiss, analytics: appState.productAnalytics)
+        Coordinator(budget: budget, onSelection: onSelection, onError: onError, onDismiss: onDismiss,
+                    analytics: appState.productAnalytics)
     }
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
@@ -1532,11 +1550,13 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
         private let analytics: ProductAnalyticsRecorder
         private let analyticsTicket: ProductAnalyticsRecorder.Ticket?
         private var didFinish = false
+        private let budget: Int
         private let onSelection: ([PhotoLibrarySelection]) -> Void
         private let onError: (Error) -> Void
         private let onDismiss: () -> Void
 
         init(
+            budget: Int,
             onSelection: @escaping ([PhotoLibrarySelection]) -> Void,
             onError: @escaping (Error) -> Void,
             onDismiss: @escaping () -> Void,
@@ -1544,6 +1564,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
         ) {
             self.analytics = analytics
             self.analyticsTicket = analytics.ticket()
+            self.budget = budget
             self.onSelection = onSelection
             self.onError = onError
             self.onDismiss = onDismiss
@@ -1564,7 +1585,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
             Task {
                 var selectionsByPickerIndex = [PhotoLibrarySelection?](repeating: nil, count: results.count)
                 var firstError: Error?
-                var remainingBudget = PhotoLibrarySelection.maxTotalSelectionBytes
+                var remainingBudget = budget
 
                 for (index, result) in results.enumerated() {
                     let provider = result.itemProvider
@@ -1580,7 +1601,10 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                             fileName: fileName,
                             remainingBudget: remainingBudget
                         )
-                        remainingBudget -= selection.data.count
+                        remainingBudget -= PhotoLibrarySelection.budgetCost(
+                            bytes: selection.data.count,
+                            typeIdentifier: typeIdentifier
+                        )
                         selectionsByPickerIndex[index] = selection
                     } catch {
                         if firstError == nil { firstError = error }
@@ -1628,6 +1652,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                     guard PhotoLibrarySelection.admitsSelection(
                         bytes: size,
                         cap: MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: typeIdentifier),
+                        cost: PhotoLibrarySelection.budgetCost(bytes: size, typeIdentifier: typeIdentifier),
                         remaining: remainingBudget
                     ) else {
                         continuation.resume(

@@ -1198,6 +1198,7 @@ struct ConversationView: View {
             .sheet(isPresented: $showPhotoLibraryPicker) {
                 PhotoLibraryPickerView(
                     selectionLimit: remainingMediaDraftSlots,
+                    budget: PhotoLibrarySelection.remainingBudget(alongside: mediaDrafts),
                     onSelection: addPhotoLibrarySelections,
                     onError: { error in
                         appState.present(UserFacingError.toast(title: L10n.string("Couldn't add attachment"), error: error))
