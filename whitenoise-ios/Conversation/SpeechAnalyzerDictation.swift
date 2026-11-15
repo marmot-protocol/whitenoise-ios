@@ -202,19 +202,21 @@ enum SpeechAnalyzerDictation {
         do {
             try await pipeline.start(onUpdate: onUpdate)
         } catch {
-            await pipeline.cancel()
+            pipeline.cancel()
             VoiceAudioSession.deactivate(lease)
             DictationDiagnostics.log.error("Dictation failed to start: \(String(describing: error), privacy: .public)")
             throw DictationFailure.startFailed
         }
+        // The microphone goes back as soon as listening stops, before the
+        // recognizer settles, so a slow recognizer can't hold other audio.
         return DictationSession(
             finish: {
-                let text = await pipeline.finish()
+                pipeline.stopListening()
                 VoiceAudioSession.deactivate(lease)
-                return text
+                return await pipeline.finish()
             },
             cancel: {
-                await pipeline.cancel()
+                pipeline.cancel()
                 VoiceAudioSession.deactivate(lease)
             }
         )
@@ -284,11 +286,16 @@ private final class SpeechAnalyzerPipeline {
         }
     }
 
+    /// Stops the microphone and closes the input; safe to call repeatedly.
+    func stopListening() {
+        capture.stop()
+        inputContinuation.finish()
+    }
+
     func finish() async -> DictationResult {
         guard !ended else { return DictationResult(text: transcript.text, isComplete: false) }
         ended = true
-        capture.stop()
-        inputContinuation.finish()
+        stopListening()
         let analyzer = analyzer
         let analysisTask = analysisTask
         let resultsTask = resultsTask
@@ -307,20 +314,21 @@ private final class SpeechAnalyzerPipeline {
         }
         if finalized == nil {
             DictationDiagnostics.log.error("Dictation timed out finalizing")
-            await analyzer.cancelAndFinishNow()
+            Task { await analyzer.cancelAndFinishNow() }
             resultsTask?.cancel()
         }
         return DictationResult(text: transcript.text, isComplete: finalized == true && !resultsFailed)
     }
 
-    func cancel() async {
+    /// Discards the session without waiting for the recognizer to wind down.
+    func cancel() {
         guard !ended else { return }
         ended = true
-        capture.stop()
-        inputContinuation.finish()
+        stopListening()
         analysisTask?.cancel()
         resultsTask?.cancel()
-        await analyzer.cancelAndFinishNow()
+        let analyzer = analyzer
+        Task { await analyzer.cancelAndFinishNow() }
     }
 
     /// Runs `work` and returns its result, or nil when it doesn't finish in

@@ -265,6 +265,11 @@ struct ComposerTextInput: UIViewRepresentable {
                     height: location.y - dictationPressOrigin.y
                 ))
             case .ended:
+                // A fast slide can land past the cancel point only on release.
+                parent.dictation?.onChanged(CGSize(
+                    width: location.x - dictationPressOrigin.x,
+                    height: location.y - dictationPressOrigin.y
+                ))
                 parent.dictation?.onEnded()
                 updateDictationAvailability()
             case .cancelled:
