@@ -1812,6 +1812,10 @@ struct ConversationView: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint(isSelectingMessages ? "" : L10n.string("Shows conversation details"))
+        // The bar caps the title's text size; a long press shows it at full size.
+        .accessibilityShowsLargeContentViewer {
+            Text(chrome.title)
+        }
     }
 
     @ViewBuilder

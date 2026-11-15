@@ -484,6 +484,8 @@ struct ComposerBar: View {
                         .font(.system(size: fieldFontSize))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        // Longer translations shrink rather than lose letters.
+                        .minimumScaleFactor(0.5)
                         .padding(.top, BottomInputChromeLayout.fieldVerticalPadding)
                 }
 

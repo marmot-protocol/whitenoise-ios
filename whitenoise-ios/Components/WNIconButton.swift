@@ -34,7 +34,6 @@ struct WNIconButton: View {
                 .labelStyle(.iconOnly)
         }
         .wnIconButtonChrome(emphasis: emphasis, chrome: chrome)
-        .wnChromeDynamicType()
     }
 }
 
@@ -45,12 +44,16 @@ private struct WNIconButtonChrome: ViewModifier {
     let chrome: WNIconButton.Chrome
 
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *),
-           WNIconButton.inheritsContainerSurface(emphasis: emphasis, chrome: chrome) {
-            content.foregroundStyle(.primary)
-        } else {
-            content.buttonStyle(WNStandaloneIconButtonStyle(emphasis: emphasis))
+        Group {
+            if #available(iOS 26.0, *),
+               WNIconButton.inheritsContainerSurface(emphasis: emphasis, chrome: chrome) {
+                content.foregroundStyle(.primary)
+            } else {
+                content.buttonStyle(WNStandaloneIconButtonStyle(emphasis: emphasis))
+            }
         }
+        // Outside the style, so its scaled diameter sees the cap too.
+        .wnChromeDynamicType()
     }
 }
 

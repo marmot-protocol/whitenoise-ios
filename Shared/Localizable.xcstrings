@@ -96,7 +96,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Компактная"
+            "value" : "Компактное"
           }
         },
         "tr" : {
@@ -155,7 +155,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Свободная"
+            "value" : "Свободное"
           }
         },
         "tr" : {
