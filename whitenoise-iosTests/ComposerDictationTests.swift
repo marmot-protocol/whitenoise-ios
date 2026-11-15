@@ -96,9 +96,28 @@ struct ComposerDictationPresentationTests {
         #expect(ComposerDictationPresentation.placeholder(offersDictation: true, isTyping: true) == message)
     }
 
+    private static let composer = DictationComposerSnapshot(
+        draft: "On my way",
+        attachmentIDs: [],
+        replyTargetMessageIdHex: nil
+    )
+
+    private static func sends(
+        isEditing: Bool = false,
+        isComplete: Bool = true,
+        composerNow: DictationComposerSnapshot = composer
+    ) -> Bool {
+        ComposerDictationPresentation.sendsOnFinish(
+            isEditing: isEditing,
+            isComplete: isComplete,
+            composerAtHoldStart: composer,
+            composerNow: composerNow
+        )
+    }
+
     @Test func dictationSendsExceptWhileEditingASentMessage() {
-        #expect(ComposerDictationPresentation.sendsOnFinish(isEditing: false))
-        #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: true))
+        #expect(Self.sends())
+        #expect(!Self.sends(isEditing: true))
     }
 
     @Test func noNewHoldStartsWhileASendOwnsTheDraft() {
@@ -114,24 +133,22 @@ struct ComposerDictationPresentationTests {
         #expect(DictationModelStatus.afterInstallAttempt(.unsupportedLanguage) == .unsupportedLanguage)
     }
 
-    @Test func aDraftChangedUnderneathTheHoldIsLeftForReviewInsteadOfSent() {
-        #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: false, draftChangedDuringHold: true))
-    }
-
-    /// A media-only saved draft restored mid-hold leaves the text untouched;
-    /// the baseline must still see it, or release sends the attachments.
-    @Test func restoredAttachmentsOrAReplyCountAsAChangedComposer() {
-        let baseline = DictationComposerSnapshot(draft: "", attachmentIDs: [], replyTargetMessageIdHex: nil)
-        var restoredMedia = baseline
-        restoredMedia.attachmentIDs = [UUID()]
-        var restoredReply = baseline
-        restoredReply.replyTargetMessageIdHex = hex("ab")
-        #expect(restoredMedia != baseline)
-        #expect(restoredReply != baseline)
+    /// A restored rejected send or a late saved-draft load can change the
+    /// text, bring back attachments, or restore a reply under the hold.
+    @Test func aComposerChangedUnderneathTheHoldIsLeftForReviewInsteadOfSent() {
+        var text = Self.composer
+        text.draft = "Yesterday's caption"
+        var media = Self.composer
+        media.attachmentIDs = [UUID()]
+        var reply = Self.composer
+        reply.replyTargetMessageIdHex = hex("ab")
+        #expect(!Self.sends(composerNow: text))
+        #expect(!Self.sends(composerNow: media))
+        #expect(!Self.sends(composerNow: reply))
     }
 
     @Test func textRecognitionDidNotSettleIsLeftForReviewInsteadOfSent() {
-        #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: false, isComplete: false))
+        #expect(!Self.sends(isComplete: false))
     }
 }
 

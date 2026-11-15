@@ -3681,7 +3681,11 @@ struct ConversationView: View {
             onEnd: { dictation.endPress() },
             onCancel: { dictation.cancel() },
             onStop: { dictation.stopLocked() },
-            sendsOnFinish: ComposerDictationPresentation.sendsOnFinish(isEditing: editSession != nil)
+            sendsOnFinish: ComposerDictationPresentation.sendsOnFinish(
+                isEditing: editSession != nil,
+                composerAtHoldStart: dictationBaseline,
+                composerNow: dictationComposerSnapshot
+            )
         )
     }
 
@@ -3712,7 +3716,7 @@ struct ConversationView: View {
     }
 
     private func finishDictation(_ result: DictationResult) {
-        let composerChanged = dictationComposerSnapshot != dictationBaseline
+        let composerNow = dictationComposerSnapshot
         let merged = DictationTextMerge.merged(draft: draft, transcript: result.text)
         guard merged != draft else {
             if !result.isComplete {
@@ -3730,7 +3734,8 @@ struct ConversationView: View {
         guard ComposerDictationPresentation.sendsOnFinish(
             isEditing: editSession != nil,
             isComplete: result.isComplete,
-            draftChangedDuringHold: composerChanged
+            composerAtHoldStart: dictationBaseline,
+            composerNow: composerNow
         ) else { return }
         send()
     }

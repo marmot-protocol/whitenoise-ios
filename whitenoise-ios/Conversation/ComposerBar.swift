@@ -225,15 +225,16 @@ nonisolated enum ComposerDictationPresentation {
     }
 
     /// Dictation sends at once, except an edit (saving stays a separate
-    /// decision), text that recognition didn't finish settling, or a draft
+    /// decision), text that recognition didn't finish settling, or a composer
     /// something else changed during the hold (a restored rejected send, a
     /// late saved-draft load) that the person hasn't seen whole.
     static func sendsOnFinish(
         isEditing: Bool,
         isComplete: Bool = true,
-        draftChangedDuringHold: Bool = false
+        composerAtHoldStart: DictationComposerSnapshot?,
+        composerNow: DictationComposerSnapshot
     ) -> Bool {
-        !isEditing && isComplete && !draftChangedDuringHold
+        !isEditing && isComplete && composerAtHoldStart == composerNow
     }
 
     /// The resting field says how to use it; once typing, it's the usual prompt.
