@@ -3690,7 +3690,9 @@ struct ConversationView: View {
     }
 
     private func beginDictation(keyboardLanguage: String?, locked: Bool) {
-        guard !voiceRecorder.isActive else { return }
+        // A second hold during locked dictation must not move the running
+        // session's baseline.
+        guard !voiceRecorder.isActive, !dictation.isActive else { return }
         let languages = DictationLocalePolicy.candidateIdentifiers(
             lastKeyboardLanguage: keyboardLanguage,
             activeKeyboardLanguages: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage),

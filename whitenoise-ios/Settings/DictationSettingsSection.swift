@@ -38,8 +38,9 @@ struct DictationSettingsSection: View {
         .task(id: preferences.isEnabled) {
             guard preferences.isEnabled else { return }
             await installer.refresh(localeIdentifiers: Self.languages)
-            // Turning dictation on is the request for its model.
-            if installer.status == .notInstalled {
+            // Turning dictation on is the request for its model, so turning
+            // it back off during the check must not start a download.
+            if installer.status == .notInstalled, preferences.isEnabled, !Task.isCancelled {
                 installer.install(localeIdentifiers: Self.languages)
             }
         }
