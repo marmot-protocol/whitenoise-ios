@@ -52,11 +52,11 @@ final class AttachmentPolicyBridge {
     private var revision: UInt64 = 0
     private var policyTail: Task<Void, Error>?
     private var revocationTail: Task<[(AccountSummaryFfi, String)], Error>?
-    private let permissions: () -> any AttachmentPermissionSource
+    private let permissions: @MainActor () -> any AttachmentPermissionSource
 
     /// `permissions` is read per event so the shared bridge and
     /// `MediaAutoDownloadStore.shared` can refer to each other.
-    init(permissions: @escaping () -> any AttachmentPermissionSource = { MediaAutoDownloadStore.shared }) {
+    init(permissions: @escaping @MainActor () -> any AttachmentPermissionSource = { MediaAutoDownloadStore.shared }) {
         self.permissions = permissions
     }
 

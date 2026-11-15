@@ -174,7 +174,7 @@ protocol NotificationCoordinatorHost: AnyObject {
 }
 
 /// The Marmot calls behind the coordinator's best-effort catch-ups.
-struct NotificationCatchUpCalls {
+nonisolated struct NotificationCatchUpCalls: Sendable {
     var catchUpAccounts: @MainActor (NotificationCoordinatorHost) async throws -> Void
     var notifyConnectivityRestored: @MainActor (NotificationCoordinatorHost) async throws -> Void
 

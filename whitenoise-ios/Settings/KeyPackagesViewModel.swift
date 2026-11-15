@@ -64,9 +64,9 @@ final class KeyPackagesViewModel {
     var deletingEventIds: Set<String> = []
     var loadError: String?
     var maintenanceLoadError: String?
-    private let runtime: (AppState) throws -> any KeyPackageRuntime
+    private let runtime: @MainActor (AppState) throws -> any KeyPackageRuntime
 
-    init(runtime: @escaping (AppState) throws -> any KeyPackageRuntime = { try $0.currentMarmotClient() }) {
+    init(runtime: @escaping @MainActor (AppState) throws -> any KeyPackageRuntime = { try $0.currentMarmotClient() }) {
         self.runtime = runtime
     }
 
