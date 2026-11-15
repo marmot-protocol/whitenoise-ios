@@ -5,13 +5,15 @@ struct AccountSetupCheckView: View {
     @Environment(\.dismiss) private var dismiss
     let model: AccountSetupModel
     let check: AccountSetupCheckPresentation.Check
+    let cancelSignIn: () -> Void
     @State private var isDismissing = false
     @State private var presentation: AccountSetupRecoveryPresentation
     @State private var activeAction: AccountSetupCheckPresentation.Action?
 
-    init(model: AccountSetupModel, check: AccountSetupCheckPresentation.Check) {
+    init(model: AccountSetupModel, check: AccountSetupCheckPresentation.Check, cancelSignIn: @escaping () -> Void) {
         self.model = model
         self.check = check
+        self.cancelSignIn = cancelSignIn
         _presentation = State(initialValue: AccountSetupRecoveryPresentation(snapshot: model.snapshot))
     }
 
@@ -54,6 +56,9 @@ struct AccountSetupCheckView: View {
                         isLoading: isBusy && activeAction == action
                     ) { perform(action) }
                     .disabled(isBusy || !model.isConnected)
+                } else {
+                    AccountSetupCancelSignInButton(action: cancelSignIn)
+                        .disabled(isBusy)
                 }
             }
         }

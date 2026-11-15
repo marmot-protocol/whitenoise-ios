@@ -53,6 +53,7 @@ struct AccountSetupView: View {
         }
         .modifier(WNOnboardingActionBar(
             isPresented: model.errorMessage != nil || (!model.cancelled && (model.isDurablyReady || isOpeningChats || reviewStep != nil))
+                || needsCheckAgain
         ) {
             bottomAction
                 .safeAreaPadding(.horizontal, 16)
@@ -64,7 +65,10 @@ struct AccountSetupView: View {
         }
         .onDisappear { model.suspend() }
         .sheet(item: $decision) { decision in
-            AccountSetupActions(model: model, selectedStep: decision.step)
+            AccountSetupActions(model: model, selectedStep: decision.step) {
+                self.decision = nil
+                Task { await close() }
+            }
                 .appAppearance()
         }
     }
@@ -72,6 +76,13 @@ struct AccountSetupView: View {
     private var reviewStep: OnboardingStepFfi? {
         guard !model.cancelled else { return nil }
         return AccountSetupPresentation.stepToReview(model.snapshot, isBusy: model.isBusy, isConnected: model.isConnected)
+    }
+
+    private var needsCheckAgain: Bool {
+        AccountSetupWayForward.needsCheckAgain(
+            model.snapshot, isBusy: model.isBusy, isConnected: model.isConnected,
+            hasFailure: model.failure != nil, isCancelled: model.cancelled
+        )
     }
 
     private var closeFailed: Bool {
@@ -100,11 +111,14 @@ struct AccountSetupView: View {
                 decision = SetupDecision(step: step)
             }
             .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
+        } else if needsCheckAgain {
+            WNOnboardingButton(title: "Check Again") { model.send(.run) }
+                .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
         }
     }
 
     private var header: some View {
-        let content = AccountSetupPresentation.header(
+        let content = needsCheckAgain ? AccountSetupWayForward.checkAgainHeader : AccountSetupPresentation.header(
             model.snapshot, reviewStep: reviewStep, errorMessage: model.errorMessage,
             isOpeningChats: isOpeningChats, closeFailed: closeFailed, isCancelled: model.cancelled
         )
@@ -128,7 +142,7 @@ struct AccountSetupView: View {
                 }
             } icon: {
                 Group {
-                    if state == .checking {
+                    if state == .checking, !needsCheckAgain {
                         ProgressView()
                     } else {
                         Image(systemName: state.symbol)

@@ -5,6 +5,7 @@ struct AccountSetupRelayStepView: View {
     @Environment(\.dismiss) private var dismiss
     let model: AccountSetupModel
     let selectedStep: OnboardingStepFfi
+    let cancelSignIn: () -> Void
     @State private var isDismissing = false
     @State private var presentation: AccountSetupRecoveryPresentation
     @State private var editor: Editor?
@@ -30,9 +31,10 @@ struct AccountSetupRelayStepView: View {
               lookupFailed: step?.status == .retryableFailure, defaultRelays: defaultRelays)
     }
 
-    init(model: AccountSetupModel, selectedStep: OnboardingStepFfi) {
+    init(model: AccountSetupModel, selectedStep: OnboardingStepFfi, cancelSignIn: @escaping () -> Void) {
         self.model = model
         self.selectedStep = selectedStep
+        self.cancelSignIn = cancelSignIn
         _presentation = State(initialValue: AccountSetupRecoveryPresentation(snapshot: model.snapshot))
         _proposedDraft = State(initialValue: AccountSetupRelayDraft(
             proposal: model.snapshot.proposal.flatMap { $0.step == selectedStep ? $0 : nil }
@@ -109,6 +111,7 @@ struct AccountSetupRelayStepView: View {
                             .environment(\.isEnabled, activeAction == action || (!isBusy && model.isConnected))
                             .accessibilityValue(activeAction == action ? "In progress" : "")
                     }
+                    if recovery.offersCancelSignIn { AccountSetupCancelSignInButton(action: cancelSignIn) }
                 }
                 .disabled(isBusy || !model.isConnected)
             }
@@ -194,7 +197,18 @@ struct AccountSetupRelayStepView: View {
             Text(progressMessage)
         } else if recovery.needsEarlierReview {
             Text("Another sign-in check needs your attention. Review it before continuing.")
-        } else if settingsChanged {
+        } else {
+            statusExplanation
+            if let step {
+                ForEach(AccountSetupRelayFindingPresentation.messages(
+                    step: selectedStep, findings: step.findings, actions: step.actions
+                ), id: \.self) { Text(verbatim: $0) }
+            }
+        }
+    }
+
+    @ViewBuilder private var statusExplanation: some View {
+        if settingsChanged {
             Text("Your relay settings changed during this step. Review the current options before continuing.")
         } else if lastAction == .discard, model.errorMessage != nil, allows(.cancelRepair) {
             Text("Couldn’t discard your relay changes. Use Back to try again.")
@@ -210,9 +224,6 @@ struct AccountSetupRelayStepView: View {
                  : "This list needs a valid write relay, and every address must be valid. Edit the relays below to continue.")
         } else {
             readyMessage
-            if let step {
-                ForEach(AccountSetupPresentation.findingMessages(step.findings), id: \.self) { Text(verbatim: $0) }
-            }
         }
     }
 

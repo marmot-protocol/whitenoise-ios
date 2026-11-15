@@ -329,6 +329,37 @@ struct AccountSetupTests {
         #expect(AccountSetupPresentation.stepToReview(snapshot(cancellationPending: true), isBusy: false, isConnected: true) == nil)
     }
 
+    @Test func finishedRunLeavingAQueuedCheckOffersCheckAgain() {
+        var current = snapshot()
+        current.steps[0].status = .checking
+        current.steps[0].actions = [.cancelOnboarding]
+        let stalled: (OnboardingSnapshotFfi, Bool, Bool, Bool, Bool) -> Bool = {
+            AccountSetupWayForward.needsCheckAgain($0, isBusy: $1, isConnected: $2, hasFailure: $3, isCancelled: $4)
+        }
+        #expect(stalled(current, false, true, false, false))
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == nil)
+        // A running check, a lost connection, an error with its own retry, or a cancelled attempt is not stalled.
+        #expect(!stalled(current, true, true, false, false))
+        #expect(!stalled(current, false, false, false, false))
+        #expect(!stalled(current, false, true, true, false))
+        #expect(!stalled(current, false, true, false, true))
+        current.steps[0].status = .pending
+        #expect(stalled(current, false, true, false, false))
+        // A step that needs a decision is reviewed instead.
+        #expect(!stalled(snapshot(), false, true, false, false))
+        #expect(!stalled(snapshot(ready: true), false, true, false, false))
+        #expect(!stalled(snapshot(status: .checking, cancellationPending: true), false, true, false, false))
+    }
+
+    @Test func followsWithoutARenderedActionOffersCancelSignIn() {
+        // Setup never publishes follows, so editFollows alone is no way forward.
+        #expect(AccountSetupWayForward.followsNeedsCancelSignIn([.editFollows, .cancelOnboarding]))
+        #expect(AccountSetupWayForward.followsNeedsCancelSignIn([]))
+        for action in [OnboardingActionFfi.retry, .cancelRepair, .continueWithout] {
+            #expect(!AccountSetupWayForward.followsNeedsCancelSignIn([.editFollows, action]))
+        }
+    }
+
     @Test func accountRelaysAddGeneralPurposeRelaysOnlyToProductionSeeds() {
         #expect(AppContainerConfig.accountRelays(runtimeRelays: AppContainerConfig.seedRelays) == [
             "wss://relay.eu.whitenoise.chat", "wss://relay.us.whitenoise.chat",
