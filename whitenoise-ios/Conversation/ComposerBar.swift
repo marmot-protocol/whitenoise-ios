@@ -218,8 +218,10 @@ nonisolated enum ComposerDictationPresentation {
         return (settled, String(full.dropFirst(settled.count)))
     }
 
-    static func sendsOnFinish(isEditing: Bool) -> Bool {
-        !isEditing
+    /// Dictation sends at once, except an edit (saving stays a separate
+    /// decision) or text that recognition didn't finish settling.
+    static func sendsOnFinish(isEditing: Bool, isComplete: Bool = true) -> Bool {
+        !isEditing && isComplete
     }
 
     /// The resting field says how to use it; once typing, it's the usual prompt.
@@ -377,6 +379,11 @@ struct ComposerBar: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .preservesKeyboardOnTap()
+        .onDisappear {
+            // Search, message selection and the like replace the composer;
+            // dictation must not keep listening, or send, behind them.
+            if dictationActive { dictation?.onCancel() }
+        }
         .fullScreenCover(isPresented: $showExpandedEditor) {
             ExpandedComposerEditor(
                 draft: $draft,
@@ -758,6 +765,7 @@ struct ComposerBar: View {
             onBegan: { language in dictation.onBegin(language, false) },
             onChanged: dictation.onDrag,
             onEnded: dictation.onEnd,
+            onCancelled: dictation.onCancel,
             onAccessibilityDictate: { language in dictation.onBegin(language, true) }
         )
     }

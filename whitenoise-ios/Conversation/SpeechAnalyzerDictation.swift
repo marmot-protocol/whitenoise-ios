@@ -236,6 +236,7 @@ private final class SpeechAnalyzerPipeline {
     private var analysisTask: Task<Void, Error>?
     private var resultsTask: Task<Void, Never>?
     private var transcript = DictationTranscript()
+    private var resultsFailed = false
     private var ended = false
 
     init(recognizer: DictationRecognizer) {
@@ -266,6 +267,7 @@ private final class SpeechAnalyzerPipeline {
                     onUpdate(self.transcript)
                 }
             } catch {
+                self?.resultsFailed = true
                 DictationDiagnostics.log.error("Dictation results ended: \(String(describing: type(of: error)), privacy: .public)")
             }
         }
@@ -282,28 +284,33 @@ private final class SpeechAnalyzerPipeline {
         }
     }
 
-    func finish() async -> String {
-        guard !ended else { return transcript.text }
+    func finish() async -> DictationResult {
+        guard !ended else { return DictationResult(text: transcript.text, isComplete: false) }
         ended = true
         capture.stop()
         inputContinuation.finish()
         let analyzer = analyzer
         let analysisTask = analysisTask
         let resultsTask = resultsTask
-        let settled = await Self.complete(within: Self.finishTimeoutNanoseconds) {
+        let finalized = await Self.complete(within: Self.finishTimeoutNanoseconds) { () -> Bool in
+            var finalized = true
             do {
                 try await analysisTask?.value
                 try await analyzer.finalizeAndFinishThroughEndOfInput()
             } catch {
+                finalized = false
+                DictationDiagnostics.log.error("Dictation didn't finalize: \(String(describing: error), privacy: .public)")
                 await analyzer.cancelAndFinishNow()
             }
             await resultsTask?.value
+            return finalized
         }
-        if !settled {
+        if finalized == nil {
+            DictationDiagnostics.log.error("Dictation timed out finalizing")
             await analyzer.cancelAndFinishNow()
             resultsTask?.cancel()
         }
-        return transcript.text
+        return DictationResult(text: transcript.text, isComplete: finalized == true && !resultsFailed)
     }
 
     func cancel() async {
@@ -316,22 +323,21 @@ private final class SpeechAnalyzerPipeline {
         await analyzer.cancelAndFinishNow()
     }
 
-    /// Runs `work` and reports whether it finished in time, without waiting
-    /// for a recognizer that ignores cancellation.
+    /// Runs `work` and returns its result, or nil when it doesn't finish in
+    /// time, without waiting for a recognizer that ignores cancellation.
     private static func complete(
         within nanoseconds: UInt64,
-        _ work: @escaping @Sendable () async -> Void
-    ) async -> Bool {
+        _ work: @escaping @Sendable () async -> Bool
+    ) async -> Bool? {
         let gate = DictationResumeGate()
         return await withCheckedContinuation { continuation in
             gate.install(continuation)
             Task {
-                await work()
-                gate.resume(true)
+                gate.resume(await work())
             }
             Task {
                 try? await Task.sleep(nanoseconds: nanoseconds)
-                gate.resume(false)
+                gate.resume(nil)
             }
         }
     }
@@ -339,13 +345,13 @@ private final class SpeechAnalyzerPipeline {
 
 /// Resumes a continuation once, from whichever side finishes first.
 nonisolated private final class DictationResumeGate: Sendable {
-    private let continuation = Mutex<CheckedContinuation<Bool, Never>?>(nil)
+    private let continuation = Mutex<CheckedContinuation<Bool?, Never>?>(nil)
 
-    func install(_ continuation: CheckedContinuation<Bool, Never>) {
+    func install(_ continuation: CheckedContinuation<Bool?, Never>) {
         self.continuation.withLock { $0 = continuation }
     }
 
-    func resume(_ value: Bool) {
+    func resume(_ value: Bool?) {
         let continuation = self.continuation.withLock { stored in
             defer { stored = nil }
             return stored

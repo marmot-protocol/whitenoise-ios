@@ -8,12 +8,32 @@ struct ComposerDictationGesture {
     /// The finger moved, measured from where the hold began.
     var onChanged: (CGSize) -> Void
     var onEnded: () -> Void
+    /// The system took the touch (a call, an alert): discard, never send.
+    var onCancelled: () -> Void
     /// VoiceOver's Dictate action, which starts hands-free dictation.
     var onAccessibilityDictate: (_ keyboardLanguage: String?) -> Void
 }
 
 nonisolated enum ComposerDictationGesturePolicy {
     static let minimumPressDuration: TimeInterval = 0.3
+
+    enum Event: Equatable {
+        case began
+        case changed
+        case ended
+        case cancelled
+    }
+
+    /// Only a lifted finger finishes; a hold UIKit cancels is discarded.
+    static func event(for state: UIGestureRecognizer.State) -> Event? {
+        switch state {
+        case .began: .began
+        case .changed: .changed
+        case .ended: .ended
+        case .cancelled: .cancelled
+        default: nil
+        }
+    }
 
     /// A focused field keeps the system's hold-to-move-the-cursor gesture.
     static func admitsHold(isAvailable: Bool, isEditing: Bool) -> Bool {
@@ -235,7 +255,7 @@ struct ComposerTextInput: UIViewRepresentable {
 
         @objc private func handleDictationPress(_ recognizer: UILongPressGestureRecognizer) {
             let location = recognizer.location(in: nil)
-            switch recognizer.state {
+            switch ComposerDictationGesturePolicy.event(for: recognizer.state) {
             case .began:
                 dictationPressOrigin = location
                 parent.dictation?.onBegan(lastKeyboardLanguage)
@@ -244,10 +264,13 @@ struct ComposerTextInput: UIViewRepresentable {
                     width: location.x - dictationPressOrigin.x,
                     height: location.y - dictationPressOrigin.y
                 ))
-            case .ended, .cancelled, .failed:
+            case .ended:
                 parent.dictation?.onEnded()
                 updateDictationAvailability()
-            default:
+            case .cancelled:
+                parent.dictation?.onCancelled()
+                updateDictationAvailability()
+            case nil:
                 break
             }
         }

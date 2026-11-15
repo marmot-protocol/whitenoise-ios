@@ -156,10 +156,18 @@ nonisolated enum DictationFailure: LocalizedError, Equatable {
     }
 }
 
+/// What a finished dictation recognized.
+nonisolated struct DictationResult: Equatable, Sendable {
+    var text: String
+    /// False when recognition failed or timed out before settling, so the
+    /// text may be missing words and must not be sent unseen.
+    var isComplete: Bool
+}
+
 /// A transcription in progress.
 nonisolated struct DictationSession {
     /// Stops listening and returns everything recognized.
-    var finish: @MainActor () async -> String
+    var finish: @MainActor () async -> DictationResult
     /// Stops listening and discards the text.
     var cancel: @MainActor () async -> Void
 }
@@ -212,7 +220,7 @@ final class ComposerDictationController {
     @ObservationIgnored private var startTask: Task<Void, Never>?
     @ObservationIgnored private var limitTask: Task<Void, Never>?
     @ObservationIgnored private var releasedWhileStarting = false
-    @ObservationIgnored private var onFinish: ((String) -> Void)?
+    @ObservationIgnored private var onFinish: ((DictationResult) -> Void)?
     @ObservationIgnored private var generation = 0
 
     var isActive: Bool { state.isActive }
@@ -239,7 +247,7 @@ final class ComposerDictationController {
     func begin(
         localeIdentifiers: [String],
         locked: Bool = false,
-        onFinish: @escaping (String) -> Void,
+        onFinish: @escaping (DictationResult) -> Void,
         onError: @escaping (Error) -> Void
     ) {
         guard state == .idle else { return }
@@ -333,12 +341,12 @@ final class ComposerDictationController {
         state = .finishing
         let generation = generation
         Task { @MainActor [weak self] in
-            let text = await session.finish()
+            let result = await session.finish()
             guard let self, self.generation == generation else { return }
             let onFinish = self.onFinish
             self.reset()
             Haptics.tap()
-            onFinish?(text)
+            onFinish?(result)
         }
     }
 

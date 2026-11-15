@@ -3692,11 +3692,25 @@ struct ConversationView: View {
 
     /// Dictation is the fast path: what was said goes out at once. Editing a
     /// sent message only fills the field, since saving is a separate decision.
-    private func finishDictation(_ text: String) {
-        let merged = DictationTextMerge.merged(draft: draft, transcript: text)
-        guard merged != draft else { return }
+    private func finishDictation(_ result: DictationResult) {
+        let merged = DictationTextMerge.merged(draft: draft, transcript: result.text)
+        guard merged != draft else {
+            if !result.isComplete {
+                appState.present(.error(L10n.string("Couldn't dictate")))
+            }
+            return
+        }
         draft = merged
-        guard ComposerDictationPresentation.sendsOnFinish(isEditing: editSession != nil) else { return }
+        if !result.isComplete {
+            appState.present(.warning(
+                L10n.string("Dictation stopped early"),
+                message: L10n.string("Check the message before sending.")
+            ))
+        }
+        guard ComposerDictationPresentation.sendsOnFinish(
+            isEditing: editSession != nil,
+            isComplete: result.isComplete
+        ) else { return }
         send()
     }
 

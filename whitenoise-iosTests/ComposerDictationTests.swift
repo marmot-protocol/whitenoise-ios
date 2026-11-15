@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Testing
+import UIKit
 @testable import whitenoise_ios
 
 struct DictationTextMergeTests {
@@ -99,9 +100,20 @@ struct ComposerDictationPresentationTests {
         #expect(ComposerDictationPresentation.sendsOnFinish(isEditing: false))
         #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: true))
     }
+
+    @Test func textRecognitionDidNotSettleIsLeftForReviewInsteadOfSent() {
+        #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: false, isComplete: false))
+    }
 }
 
 struct DictationGestureAndInterruptionTests {
+    @Test func onlyALiftedFingerFinishesAHold() {
+        #expect(ComposerDictationGesturePolicy.event(for: .ended) == .ended)
+        #expect(ComposerDictationGesturePolicy.event(for: .cancelled) == .cancelled)
+        #expect(ComposerDictationGesturePolicy.event(for: .failed) == nil)
+        #expect(ComposerDictationGesturePolicy.event(for: .possible) == nil)
+    }
+
     @Test func aHoldDictatesOnlyOnTheRestingField() {
         #expect(ComposerDictationGesturePolicy.admitsHold(isAvailable: true, isEditing: false))
         #expect(!ComposerDictationGesturePolicy.admitsHold(isAvailable: true, isEditing: true))
@@ -216,6 +228,19 @@ struct ComposerDictationControllerTests {
         #expect(engine.cancels == 0)
     }
 
+    @Test func anUnsettledRecognitionReachesTheComposerAsIncomplete() async throws {
+        let engine = DictationEngineDouble(finalText: "Half a")
+        engine.finishesComplete = false
+        let controller = ComposerDictationController(engine: engine.engine)
+        let inserted = Inserted()
+
+        controller.begin(localeIdentifiers: ["en-US"], onFinish: inserted.record, onError: { Issue.record($0) })
+        try await eventually { controller.state == .listening(locked: false) }
+        controller.endPress()
+
+        try await eventually { inserted.results == [DictationResult(text: "Half a", isComplete: false)] }
+    }
+
     @Test func aStartFailureIsReportedAndLeavesTheComposerIdle() async throws {
         let engine = DictationEngineDouble(finalText: "")
         engine.startError = DictationFailure.unsupportedLanguage
@@ -255,8 +280,9 @@ struct ComposerDictationControllerTests {
 
 @MainActor
 private final class Inserted {
-    private(set) var texts: [String] = []
-    func record(_ text: String) { texts.append(text) }
+    private(set) var results: [DictationResult] = []
+    var texts: [String] { results.map(\.text) }
+    func record(_ result: DictationResult) { results.append(result) }
 }
 
 @MainActor
@@ -276,6 +302,7 @@ private final class ErrorLog {
 @MainActor
 private final class DictationEngineDouble {
     let finalText: String
+    var finishesComplete = true
     var beforeStart: (@MainActor () async -> Void)?
     var startError: Error?
     private(set) var requestedLocales: [[String]] = []
@@ -296,7 +323,7 @@ private final class DictationEngineDouble {
             return DictationSession(
                 finish: { [self] in
                     finishes += 1
-                    return finalText
+                    return DictationResult(text: finalText, isComplete: finishesComplete)
                 },
                 cancel: { [self] in cancels += 1 }
             )
