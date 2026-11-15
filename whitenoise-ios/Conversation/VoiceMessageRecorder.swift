@@ -9,12 +9,38 @@ struct VoiceRecordingResult: Sendable {
     let waveformSamples: [CGFloat]
 }
 
-nonisolated enum VoiceRecordingGesturePolicy {
+/// The hold that records a voice message or dictates: slide up to lock it
+/// hands-free, slide left to discard it.
+nonisolated enum HoldGesturePolicy {
     static let lockTranslationY: CGFloat = -78
+    static let cancelTranslationX: CGFloat = -90
     static let holdDelayNanoseconds: UInt64 = 260_000_000
 
     static func shouldLock(translation: CGSize) -> Bool {
         translation.height <= lockTranslationY
+    }
+
+    static func shouldCancel(translation: CGSize) -> Bool {
+        translation.width <= cancelTranslationX
+    }
+
+    /// How far toward locking the finger has slid, from 0 to 1.
+    static func lockProgress(_ translation: CGSize) -> CGFloat {
+        min(1, max(0, translation.height / lockTranslationY))
+    }
+
+    /// How far toward cancelling the finger has slid, from 0 to 1.
+    static func cancelProgress(_ translation: CGSize) -> CGFloat {
+        min(1, max(0, translation.width / cancelTranslationX))
+    }
+
+    /// The bubble under the thumb follows the finger, but only left toward
+    /// cancel and up toward the lock, and no further than either.
+    static func thumbOffset(_ translation: CGSize) -> CGSize {
+        CGSize(
+            width: min(0, max(cancelTranslationX, translation.width)),
+            height: min(0, max(lockTranslationY, translation.height))
+        )
     }
 }
 
@@ -130,7 +156,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         holdTask?.cancel()
         holdTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(nanoseconds: VoiceRecordingGesturePolicy.holdDelayNanoseconds)
+                try await Task.sleep(nanoseconds: HoldGesturePolicy.holdDelayNanoseconds)
             } catch {
                 return
             }
@@ -148,7 +174,11 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
 
     func updateDrag(_ translation: CGSize) {
         currentDragTranslation = translation
-        guard VoiceRecordingGesturePolicy.shouldLock(translation: translation),
+        if HoldGesturePolicy.shouldCancel(translation: translation), state.isActive, !state.isLocked {
+            cancel()
+            return
+        }
+        guard HoldGesturePolicy.shouldLock(translation: translation),
               case .recording(false) = state
         else { return }
         Haptics.tap()
@@ -238,7 +268,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
             }
             self.take = take
             self.recordingURL = url
-            state = .recording(locked: VoiceRecordingGesturePolicy.shouldLock(translation: currentDragTranslation))
+            state = .recording(locked: HoldGesturePolicy.shouldLock(translation: currentDragTranslation))
             Haptics.tap()
             startMetering()
         } catch is CancellationError {

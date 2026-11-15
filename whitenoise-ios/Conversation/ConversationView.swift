@@ -633,9 +633,10 @@ struct ConversationView: View {
     @State private var dictation = ComposerDictationController()
     @State private var dictationPreferences = ComposerDictationPreferenceStore.shared
     @State private var dictationInstallWatch: Task<Void, Never>?
-    /// The composer when the hold began, so one changed underneath it isn't
-    /// sent unseen.
-    @State private var dictationBaseline: DictationComposerSnapshot?
+    /// The composer when a dictation or voice hold began, so one changed
+    /// underneath it isn't sent unseen.
+    @State private var dictationBaseline: ComposerHoldSnapshot?
+    @State private var voiceBaseline: ComposerHoldSnapshot?
     @State private var showCameraCapture = false
     @State private var fileProductTicket: ProductAnalyticsRecorder.Ticket?
     @State private var showPhotoLibraryPicker = false
@@ -1550,7 +1551,6 @@ struct ConversationView: View {
                     sendBlockedMessage: viewModel?.sendBlockedMessage,
                     voiceRecordingActive: voiceRecorder.isActive,
                     voiceRecordingLocked: voiceRecorder.isLocked,
-                    voiceRecordingSamples: voiceRecorder.waveformSamples,
                     voiceRecordingDurationSeconds: voiceRecorder.durationSeconds,
                     focusRequest: composerFocusRequest,
                     dismissRequest: composerDismissRequest,
@@ -3717,7 +3717,7 @@ struct ConversationView: View {
             sendsOnFinish: ComposerDictationPresentation.sendsOnFinish(
                 isEditing: editSession != nil,
                 composerAtHoldStart: dictationBaseline,
-                composerNow: dictationComposerSnapshot
+                composerNow: composerHoldSnapshot
             )
         )
     }
@@ -3731,7 +3731,7 @@ struct ConversationView: View {
             activeKeyboardLanguages: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage),
             preferredLanguages: Locale.preferredLanguages
         )
-        dictationBaseline = dictationComposerSnapshot
+        dictationBaseline = composerHoldSnapshot
         dictation.begin(
             localeIdentifiers: languages,
             locked: locked,
@@ -3742,8 +3742,8 @@ struct ConversationView: View {
 
     /// Dictation is the fast path: what was said goes out at once. Editing a
     /// sent message only fills the field, since saving is a separate decision.
-    private var dictationComposerSnapshot: DictationComposerSnapshot {
-        DictationComposerSnapshot(
+    private var composerHoldSnapshot: ComposerHoldSnapshot {
+        ComposerHoldSnapshot(
             draft: draft,
             attachmentIDs: mediaDrafts.map(\.id),
             replyTargetMessageIdHex: viewModel?.replyTargetMessageIdHex
@@ -3751,7 +3751,7 @@ struct ConversationView: View {
     }
 
     private func finishDictation(_ result: DictationResult) {
-        let composerNow = dictationComposerSnapshot
+        let composerNow = composerHoldSnapshot
         let merged = DictationTextMerge.merged(draft: draft, transcript: result.text)
         guard merged != draft else {
             if !result.isComplete {
@@ -3804,6 +3804,7 @@ struct ConversationView: View {
     private func beginVoicePress() {
         guard !dictation.isActive else { return }
         guard canBeginMediaSelection() else { return }
+        voiceBaseline = composerHoldSnapshot
         voiceRecorder.beginPress { error in
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't record audio"), error: error))
         }
@@ -3820,13 +3821,13 @@ struct ConversationView: View {
             dismissKeyboard()
         }
         guard let result else { return }
-        addVoiceRecording(result)
+        addVoiceRecording(result, sendsWhenReady: true)
     }
 
     private func stopLockedVoiceRecording() {
         guard let result = voiceRecorder.stopLockedRecording() else { return }
         dismissKeyboard()
-        addVoiceRecording(result)
+        addVoiceRecording(result, sendsWhenReady: true)
     }
 
     private func cancelVoiceRecording() {
@@ -3837,11 +3838,18 @@ struct ConversationView: View {
         }
     }
 
-    private func addVoiceRecording(_ result: VoiceRecordingResult) {
+    /// A finished hold sends its recording, like dictation, unless something
+    /// else changed the composer meanwhile; then it waits there as a draft.
+    private func addVoiceRecording(_ result: VoiceRecordingResult, sendsWhenReady: Bool = false) {
+        let baseline = voiceBaseline
         Task { @MainActor in
             do {
                 let attachment = try await MediaDraftProcessor.preparedVoiceAttachment(from: result)
-                try appendMediaDraft(attachment)
+                let composerUnchanged = composerHoldSnapshot == baseline
+                let appended = try appendMediaDraft(attachment)
+                if sendsWhenReady, appended, composerUnchanged {
+                    send()
+                }
             } catch is CancellationError {
                 return
             } catch {

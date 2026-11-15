@@ -15,13 +15,6 @@ nonisolated enum ComposerDictationSupport {
 
     /// One hold transcribes at most this much speech, then finishes.
     static let maximumDurationNanoseconds: UInt64 = 120_000_000_000
-
-    /// Releasing a hold sends, so sliding this far left discards instead.
-    static let cancelTranslationX: CGFloat = -90
-
-    static func shouldCancel(translation: CGSize) -> Bool {
-        translation.width <= cancelTranslationX
-    }
 }
 
 /// The Settings switch for hold-to-dictate, on unless the person turned it off.
@@ -63,10 +56,10 @@ nonisolated enum DictationModelStatus: Equatable {
     }
 }
 
-/// Everything a send would publish besides the dictated words. If any of it
-/// changes during a hold (a restored draft brings back text, attachments or
-/// a reply), release must not send it unseen.
-nonisolated struct DictationComposerSnapshot: Equatable {
+/// Everything a send would publish besides what the hold recorded. If any
+/// of it changes during a hold (a restored draft brings back text,
+/// attachments or a reply), release must not send it unseen.
+nonisolated struct ComposerHoldSnapshot: Equatable {
     var draft: String
     var attachmentIDs: [UUID]
     var replyTargetMessageIdHex: String?
@@ -315,12 +308,12 @@ final class ComposerDictationController {
     /// Dragging up far enough locks dictation so the finger can lift;
     /// dragging left far enough discards it.
     func updateDrag(_ translation: CGSize) {
-        if ComposerDictationSupport.shouldCancel(translation: translation), !state.isLocked,
+        if HoldGesturePolicy.shouldCancel(translation: translation), !state.isLocked,
            state != .finishing {
             cancel()
             return
         }
-        guard VoiceRecordingGesturePolicy.shouldLock(translation: translation) else { return }
+        guard HoldGesturePolicy.shouldLock(translation: translation) else { return }
         switch state {
         case .starting(false):
             state = .starting(locked: true)

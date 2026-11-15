@@ -231,8 +231,8 @@ nonisolated enum ComposerDictationPresentation {
     static func sendsOnFinish(
         isEditing: Bool,
         isComplete: Bool = true,
-        composerAtHoldStart: DictationComposerSnapshot?,
-        composerNow: DictationComposerSnapshot
+        composerAtHoldStart: ComposerHoldSnapshot?,
+        composerNow: ComposerHoldSnapshot
     ) -> Bool {
         !isEditing && isComplete && composerAtHoldStart == composerNow
     }
@@ -267,7 +267,6 @@ struct ComposerBar: View {
     var sendBlockedMessage: String?
     let voiceRecordingActive: Bool
     let voiceRecordingLocked: Bool
-    let voiceRecordingSamples: [CGFloat]
     let voiceRecordingDurationSeconds: Double
     let focusRequest: Int
     let dismissRequest: Int
@@ -311,6 +310,13 @@ struct ComposerBar: View {
     @State private var showAttachmentUnavailableTooltip = false
     @State private var showExpandedEditor = false
     @State private var localFocusRequest = 0
+    /// Where the current hold began (window coordinates) and how far the
+    /// finger has moved since; they place the lock hint and the slide prompts.
+    @State private var holdAnchor: CGPoint?
+    @State private var holdTranslation: CGSize = .zero
+    /// Each voice hold starts recording once; a slide-left cancel mustn't
+    /// restart it while the finger is still down.
+    @State private var voiceHoldStart: CGPoint?
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .body)
@@ -391,7 +397,13 @@ struct ComposerBar: View {
             .padding(.vertical, ComposerInputChrome.verticalInset)
         }
         .fixedSize(horizontal: false, vertical: true)
+        .overlay(alignment: .topLeading) { holdLockHintOverlay }
         .preservesKeyboardOnTap()
+        .onChange(of: voiceRecordingLocked) { _, locked in
+            // Locking swaps the voice icon for the send button, which ends
+            // its gesture without an end event.
+            if locked { voiceHoldStart = nil }
+        }
         .onDisappear {
             // Search, message selection and the like replace the composer;
             // dictation must not keep listening, or send, behind them.
@@ -534,9 +546,10 @@ struct ComposerBar: View {
                         )
                         .allowsHitTesting(false)
                     } else if voiceRecordingActive {
-                        ComposerVoiceRecordingInput(
-                            samples: voiceRecordingSamples,
-                            durationSeconds: voiceRecordingDurationSeconds
+                        ComposerVoiceRecordingStatus(
+                            durationSeconds: voiceRecordingDurationSeconds,
+                            isLocked: voiceRecordingLocked,
+                            dragX: holdTranslation.width
                         )
                     }
                 }
@@ -708,31 +721,45 @@ struct ComposerBar: View {
             isActive: voiceRecordingActive,
             isLocked: voiceRecordingLocked
         ) {
+            let appearance = ComposerSendButtonAppearance.colorScheme(colorScheme)
             Button(action: onStopVoiceRecording) {
-                Image(systemName: "stop.fill")
-                    .font(.system(size: inlineSendIconSize, weight: .bold))
-                    .foregroundStyle(.white)
+                Image(systemName: "arrow.up")
+                    .font(.system(size: inlineSendIconSize, weight: .semibold))
+                    .foregroundStyle(appearance.symbol.color)
                     .frame(width: inlineSendSize, height: inlineSendSize)
-                    .background(Color.red, in: Circle())
+                    .background(Circle().fill(appearance.fill.color))
                     .frame(width: controlSize, height: controlSize)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Finish recording")
+            .accessibilityLabel(submissionAccessibilityLabel)
             .accessibilityShowsLargeContentViewer()
         } else if showsSend {
             sendButton
                 .transition(.scale(scale: 0.88).combined(with: .opacity))
         } else if showsMic {
+            // One view throughout the hold so its gesture survives: at rest
+            // the icon, while recording a red bubble under the thumb that
+            // follows the slide.
+            let holding = voiceRecordingActive
             Image(systemName: "waveform")
                 .font(.system(size: sideControlIconSize, weight: .semibold))
                 .foregroundStyle(
-                    inputEnabled
-                        ? ComposerSideIconTone.primary.color
-                        : ComposerSideIconTone.disabled.color
+                    holding
+                        ? Color.white
+                        : inputEnabled
+                            ? ComposerSideIconTone.primary.color
+                            : ComposerSideIconTone.disabled.color
                 )
                 .frame(width: controlSize, height: controlSize)
-                .scaleEffect(voiceRecordingActive ? 1.08 : 1)
+                .background {
+                    Circle()
+                        .fill(Color.red)
+                        .opacity(holding ? 1 : 0)
+                }
+                .scaleEffect(holding ? 1.5 : 1)
+                .offset(holding ? HoldGesturePolicy.thumbOffset(holdTranslation) : .zero)
+                .animation(.spring(duration: 0.2), value: holding)
                 .contentShape(Rectangle())
                 .gesture(voiceGesture)
                 .accessibilityLabel("Voice message")
@@ -777,12 +804,50 @@ struct ComposerBar: View {
               ComposerDictationPresentation.admitsHold(isSending: isSending, isDictating: dictationActive)
         else { return nil }
         return ComposerDictationGesture(
-            onBegan: { language in dictation.onBegin(language, false) },
-            onChanged: dictation.onDrag,
-            onEnded: dictation.onEnd,
-            onCancelled: dictation.onCancel,
+            onBegan: { language, location in
+                holdAnchor = location
+                holdTranslation = .zero
+                dictation.onBegin(language, false)
+            },
+            onChanged: { translation in
+                holdTranslation = translation
+                dictation.onDrag(translation)
+            },
+            onEnded: {
+                holdTranslation = .zero
+                dictation.onEnd()
+            },
+            onCancelled: {
+                holdTranslation = .zero
+                dictation.onCancel()
+            },
             onAccessibilityDictate: { language in dictation.onBegin(language, true) }
         )
+    }
+
+    /// The lock hint shows while a hold is under the thumb, until it locks.
+    private var showsLockHint: Bool {
+        if voiceRecordingActive { return !voiceRecordingLocked }
+        guard let state = dictation?.state else { return false }
+        return state == .starting(locked: false) || state == .listening(locked: false)
+    }
+
+    /// Floats the lock hint above where the thumb went down, outside the
+    /// composer's own bounds.
+    private var holdLockHintOverlay: some View {
+        GeometryReader { proxy in
+            if showsLockHint, let holdAnchor {
+                HoldLockHint(progress: HoldGesturePolicy.lockProgress(holdTranslation))
+                    .fixedSize()
+                    .position(
+                        x: holdAnchor.x - proxy.frame(in: .global).minX,
+                        y: -HoldLockHint.liftAboveComposer
+                    )
+                    .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.25), value: showsLockHint)
+        .allowsHitTesting(false)
     }
 
     private var showsMic: Bool {
@@ -793,12 +858,18 @@ struct ComposerBar: View {
         DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { value in
                 guard inputEnabled else { return }
-                if !voiceRecordingActive {
+                if voiceHoldStart != value.startLocation {
+                    voiceHoldStart = value.startLocation
+                    holdAnchor = value.startLocation
+                    holdTranslation = .zero
                     onVoicePressBegan()
                 }
+                holdTranslation = value.translation
                 onVoiceDragChanged(value.translation)
             }
             .onEnded { _ in
+                voiceHoldStart = nil
+                holdTranslation = .zero
                 guard inputEnabled else { return }
                 onVoicePressEnded()
             }
@@ -901,35 +972,6 @@ private struct ComposerReplyPreviewView: View {
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .padding(.bottom, 4)
-    }
-}
-
-private struct ComposerVoiceRecordingInput: View {
-    let samples: [CGFloat]
-    let durationSeconds: Double
-
-    var body: some View {
-        HStack(spacing: 8) {
-            AudioWaveformView(
-                samples: samples,
-                progress: 0,
-                barColor: Color.red.opacity(0.78),
-                playedColor: .red,
-                mode: .liveRecording
-            )
-            .frame(maxWidth: .infinity)
-            .frame(height: 30)
-
-            Text(AudioDurationLabel.label(for: durationSeconds))
-                .font(.body.monospacedDigit())
-                .foregroundStyle(.red)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-        }
-        .padding(.leading, 14)
-        .frame(maxWidth: .infinity, minHeight: ComposerInputChrome.controlSize)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(verbatim: "Recording, \(AudioDurationLabel.label(for: durationSeconds))"))
     }
 }
 
