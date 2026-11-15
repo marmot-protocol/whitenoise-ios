@@ -89,20 +89,10 @@ nonisolated enum DictationRecognizer: Sendable {
 @MainActor
 @Observable
 final class DictationModelInstaller {
-    enum Status: Equatable {
-        case unknown
-        case checking
-        case ready
-        case notInstalled
-        case downloading
-        case unsupportedLanguage
-        case failed
-    }
-
     static let shared = DictationModelInstaller()
 
-    private(set) var status: Status = .unknown
-    @ObservationIgnored private(set) var currentInstall: Task<Bool, Never>?
+    private(set) var status: DictationModelStatus = .unknown
+    @ObservationIgnored private(set) var currentInstall: Task<DictationModelStatus, Never>?
 
     /// Reports whether the model for the best-matching language is installed.
     func refresh(localeIdentifiers: [String]) async {
@@ -116,27 +106,26 @@ final class DictationModelInstaller {
         status = Self.status(for: await AssetInventory.status(forModules: [recognizer.module]))
     }
 
-    /// Starts downloading the model unless it is installed or downloading.
+    /// Asks iOS for the model, joining a request already made from here,
+    /// and resolves to the status it settles on.
     @discardableResult
-    func install(localeIdentifiers: [String]) -> Task<Bool, Never> {
+    func install(localeIdentifiers: [String]) -> Task<DictationModelStatus, Never> {
         if let currentInstall { return currentInstall }
         status = .downloading
-        let task = Task { @MainActor [weak self] () -> Bool in
-            let succeeded = await Self.download(localeIdentifiers: localeIdentifiers)
-            guard let self else { return succeeded }
+        let task = Task { @MainActor [weak self] () -> DictationModelStatus in
+            await Self.download(localeIdentifiers: localeIdentifiers)
+            guard let self else { return .unknown }
             self.currentInstall = nil
             await self.refresh(localeIdentifiers: localeIdentifiers)
-            if !succeeded, self.status != .unsupportedLanguage {
-                self.status = .failed
-            }
-            return succeeded
+            self.status = DictationModelStatus.afterInstallAttempt(self.status)
+            return self.status
         }
         currentInstall = task
         return task
     }
 
-    private static func download(localeIdentifiers: [String]) async -> Bool {
-        guard let recognizer = await DictationRecognizer.resolve(localeIdentifiers) else { return false }
+    private static func download(localeIdentifiers: [String]) async {
+        guard let recognizer = await DictationRecognizer.resolve(localeIdentifiers) else { return }
         do {
             if let locale = recognizer.locale,
                !(await AssetInventory.reservedLocales).contains(locale) {
@@ -147,14 +136,12 @@ final class DictationModelInstaller {
             if let request = try await AssetInventory.assetInstallationRequest(supporting: [recognizer.module]) {
                 try await request.downloadAndInstall()
             }
-            return await AssetInventory.status(forModules: [recognizer.module]) == .installed
         } catch {
             DictationDiagnostics.log.error("Speech model download failed: \(String(describing: type(of: error)), privacy: .public)")
-            return false
         }
     }
 
-    private static func status(for assetStatus: AssetInventory.Status) -> Status {
+    private static func status(for assetStatus: AssetInventory.Status) -> DictationModelStatus {
         switch assetStatus {
         case .installed: .ready
         case .downloading: .downloading

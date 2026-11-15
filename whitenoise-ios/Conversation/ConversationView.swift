@@ -3105,12 +3105,14 @@ struct ConversationView: View {
         }
         if let editSession, editSubmissionEnabled, let viewModel {
             let editedContent = draft
+            // The save restores the preserved draft when it lands; dictation
+            // finishing meanwhile would be lost or mixed into it.
+            dictation.cancel()
             editSaveInFlight = true
             Task {
                 defer { editSaveInFlight = false }
                 guard await viewModel.editMessage(editSession.message, content: editedContent) else { return }
                 guard self.editSession?.id == editSession.id else { return }
-                dictation.cancel()
                 self.editSession = nil
                 viewModel.restoreComposerMentionDraftState(editSession.preservedMentionState)
                 viewModel.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
@@ -3730,13 +3732,17 @@ struct ConversationView: View {
               let install = DictationModelInstaller.shared.currentInstall
         else { return }
         dictationInstallWatch = Task { @MainActor in
-            let installed = await install.value
+            let status = await install.value
             dictationInstallWatch = nil
             guard !Task.isCancelled else { return }
-            if installed {
+            switch status {
+            case .ready:
                 appState.present(.success(L10n.string("Dictation is ready")))
-            } else {
+            case .failed:
                 appState.present(.error(L10n.string("Couldn't download the speech model")))
+            default:
+                // Still downloading in iOS: the next hold reports it again.
+                break
             }
         }
     }

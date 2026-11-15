@@ -45,6 +45,24 @@ final class ComposerDictationPreferenceStore {
     }
 }
 
+/// Where the speech model for the person's language stands.
+nonisolated enum DictationModelStatus: Equatable {
+    case unknown
+    case checking
+    case ready
+    case notInstalled
+    case downloading
+    case unsupportedLanguage
+    case failed
+
+    /// After a download attempt the inventory is the truth: only a model that
+    /// is still missing failed. One iOS is still fetching, or that just
+    /// became ready, did not.
+    static func afterInstallAttempt(_ refreshed: DictationModelStatus) -> DictationModelStatus {
+        refreshed == .notInstalled ? .failed : refreshed
+    }
+}
+
 /// Joins dictated text onto the existing draft.
 nonisolated enum DictationTextMerge {
     static func merged(draft: String, transcript: String) -> String {

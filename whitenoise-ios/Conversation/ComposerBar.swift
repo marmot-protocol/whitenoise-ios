@@ -220,6 +220,12 @@ nonisolated enum ComposerDictationPresentation {
 
     /// Dictation sends at once, except an edit (saving stays a separate
     /// decision) or text that recognition didn't finish settling.
+    /// A send or edit save in flight still owns the draft, so no new hold
+    /// starts; one already running keeps its gesture so its release lands.
+    static func admitsHold(isSending: Bool, isDictating: Bool) -> Bool {
+        isDictating || !isSending
+    }
+
     static func sendsOnFinish(isEditing: Bool, isComplete: Bool = true) -> Bool {
         !isEditing && isComplete
     }
@@ -760,7 +766,9 @@ struct ComposerBar: View {
     /// The hold stays installed while dictation runs, so the hold that
     /// started it keeps tracking.
     private var dictationGesture: ComposerDictationGesture? {
-        guard let dictation, inputEnabled, audioDraft == nil, !voiceRecordingActive else { return nil }
+        guard let dictation, inputEnabled, audioDraft == nil, !voiceRecordingActive,
+              ComposerDictationPresentation.admitsHold(isSending: isSending, isDictating: dictationActive)
+        else { return nil }
         return ComposerDictationGesture(
             onBegan: { language in dictation.onBegin(language, false) },
             onChanged: dictation.onDrag,

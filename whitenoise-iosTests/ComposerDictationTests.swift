@@ -101,6 +101,19 @@ struct ComposerDictationPresentationTests {
         #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: true))
     }
 
+    @Test func noNewHoldStartsWhileASendOwnsTheDraft() {
+        #expect(!ComposerDictationPresentation.admitsHold(isSending: true, isDictating: false))
+        #expect(ComposerDictationPresentation.admitsHold(isSending: true, isDictating: true))
+        #expect(ComposerDictationPresentation.admitsHold(isSending: false, isDictating: false))
+    }
+
+    @Test func onlyAModelStillMissingAfterADownloadFailed() {
+        #expect(DictationModelStatus.afterInstallAttempt(.notInstalled) == .failed)
+        #expect(DictationModelStatus.afterInstallAttempt(.downloading) == .downloading)
+        #expect(DictationModelStatus.afterInstallAttempt(.ready) == .ready)
+        #expect(DictationModelStatus.afterInstallAttempt(.unsupportedLanguage) == .unsupportedLanguage)
+    }
+
     @Test func textRecognitionDidNotSettleIsLeftForReviewInsteadOfSent() {
         #expect(!ComposerDictationPresentation.sendsOnFinish(isEditing: false, isComplete: false))
     }
