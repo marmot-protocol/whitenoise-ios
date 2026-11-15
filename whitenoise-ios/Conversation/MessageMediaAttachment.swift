@@ -570,17 +570,17 @@ nonisolated enum MediaDraftProcessor {
     static let maxDraftAttachmentBytes = 50 * 1024 * 1024
     static let draftThumbnailPixelSize: CGFloat = 160
 
-    /// Whether a picked file is sent as its own bytes. Images are decoded and
-    /// re-encoded, so their source size is neither the upload size nor bound
-    /// by the attachment cap.
-    static func sendsSourceBytes(typeIdentifier: String?) -> Bool {
-        typeIdentifier.flatMap(UTType.init)?.conforms(to: .image) != true
+    /// Whether a picked file of `kind` is sent as its own bytes. Images are
+    /// decoded and re-encoded, so their source size is neither the upload size
+    /// nor bound by the attachment cap.
+    static func sendsSourceBytes(_ kind: MediaAttachmentKind) -> Bool {
+        kind != .image
     }
 
     /// The size a picked file may have before it is copied: images are refused
     /// at their decode limit, everything else at the attachment cap.
-    static func maxSourceBytes(forTypeIdentifier typeIdentifier: String?) -> Int {
-        sendsSourceBytes(typeIdentifier: typeIdentifier) ? maxAttachmentBytes : maxImageSourceBytes
+    static func maxSourceBytes(for kind: MediaAttachmentKind) -> Int {
+        sendsSourceBytes(kind) ? maxAttachmentBytes : maxImageSourceBytes
     }
 
     /// The composer's attachments once one more is added: new audio replaces
@@ -696,8 +696,11 @@ nonisolated enum MediaDraftProcessor {
     static func preparedAttachment(fromFileURL url: URL) async throws -> MediaDraftAttachment {
         try await Task.detached(priority: .userInitiated) { () async throws -> MediaDraftAttachment in
             let resourceValues = try url.resourceValues(forKeys: [.contentTypeKey, .nameKey, .fileSizeKey])
-            if let size = resourceValues.fileSize,
-               size > maxSourceBytes(forTypeIdentifier: resourceValues.contentType?.identifier) {
+            let kind = kind(
+                for: resourceValues.contentType?.identifier,
+                fileName: resourceValues.name ?? url.lastPathComponent
+            )
+            if let size = resourceValues.fileSize, size > maxSourceBytes(for: kind) {
                 throw Failure.attachmentTooLarge(size)
             }
             let data = try PickedMediaFile.mappedData(from: url)
@@ -830,7 +833,7 @@ nonisolated enum MediaDraftProcessor {
         )
     }
 
-    private static func kind(for typeIdentifier: String?, fileName: String?) -> MediaAttachmentKind {
+    static func kind(for typeIdentifier: String?, fileName: String?) -> MediaAttachmentKind {
         if let typeIdentifier, let type = UTType(typeIdentifier) {
             if type.conforms(to: .image) { return .image }
             if type.conforms(to: .movie) { return .video }

@@ -1495,8 +1495,8 @@ struct PhotoLibrarySelection: Hashable {
 
     /// What a selection draws from the session budget: a file sent as its own
     /// bytes costs its size, an image the most its re-encoding can send.
-    static func budgetCost(bytes: Int, typeIdentifier: String?) -> Int {
-        MediaDraftProcessor.sendsSourceBytes(typeIdentifier: typeIdentifier)
+    static func budgetCost(bytes: Int, kind: MediaAttachmentKind) -> Int {
+        MediaDraftProcessor.sendsSourceBytes(kind)
             ? bytes
             : MediaDraftProcessor.maxImageAttachmentBytes
     }
@@ -1603,7 +1603,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                         )
                         remainingBudget -= PhotoLibrarySelection.budgetCost(
                             bytes: selection.data.count,
-                            typeIdentifier: typeIdentifier
+                            kind: MediaDraftProcessor.kind(for: typeIdentifier, fileName: fileName)
                         )
                         selectionsByPickerIndex[index] = selection
                     } catch {
@@ -1635,7 +1635,8 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
             fileName: String?,
             remainingBudget: Int
         ) async throws -> PhotoLibrarySelection {
-            try await withCheckedThrowingContinuation { continuation in
+            let kind = MediaDraftProcessor.kind(for: typeIdentifier, fileName: fileName)
+            return try await withCheckedThrowingContinuation { continuation in
                 provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
                     // The provider deletes the temp file when this handler
                     // returns, so the size gate and the read both happen here.
@@ -1651,8 +1652,8 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                     }
                     guard PhotoLibrarySelection.admitsSelection(
                         bytes: size,
-                        cap: MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: typeIdentifier),
-                        cost: PhotoLibrarySelection.budgetCost(bytes: size, typeIdentifier: typeIdentifier),
+                        cap: MediaDraftProcessor.maxSourceBytes(for: kind),
+                        cost: PhotoLibrarySelection.budgetCost(bytes: size, kind: kind),
                         remaining: remainingBudget
                     ) else {
                         continuation.resume(

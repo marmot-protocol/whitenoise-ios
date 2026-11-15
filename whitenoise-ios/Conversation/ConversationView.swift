@@ -3679,11 +3679,15 @@ struct ConversationView: View {
                         url.stopAccessingSecurityScopedResource()
                     }
                 }
-                let source = try? url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+                let source = try? url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey, .nameKey])
+                let kind = MediaDraftProcessor.kind(
+                    for: source?.contentType?.identifier,
+                    fileName: source?.name ?? url.lastPathComponent
+                )
                 if let size = source?.fileSize,
-                   MediaDraftProcessor.sendsSourceBytes(typeIdentifier: source?.contentType?.identifier),
+                   MediaDraftProcessor.sendsSourceBytes(kind),
                    !MediaFileUploadLimit.fits(size, alongside: MediaDraftProcessor.draftsKept(
-                       mediaDrafts, addingAudio: source?.contentType?.conforms(to: .audio) == true
+                       mediaDrafts, addingAudio: kind == .audio
                    ).map(\.data.count)) {
                     presentBatchLimitWarning()
                     continue

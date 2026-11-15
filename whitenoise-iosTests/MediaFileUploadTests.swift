@@ -92,18 +92,24 @@ struct MediaFileUploadTests {
         #expect(!MediaFileUploadLimit.fits(.max, alongside: [.max, .max], limit: .max))
     }
 
+    @Test func preReadChecksClassifyAFileTheWayPreparationDoes() {
+        // Files can report a size without a content type; the name decides then.
+        #expect(MediaDraftProcessor.kind(for: nil, fileName: "song.mp3") == .audio)
+        #expect(MediaDraftProcessor.kind(for: nil, fileName: "photo.jpg") == .image)
+        #expect(MediaDraftProcessor.kind(for: UTType.quickTimeMovie.identifier, fileName: "clip") == .video)
+    }
+
     @Test func onlyFilesSentAsTheirOwnBytesAreCheckedAgainstTheBatchBySourceSize() {
-        #expect(!MediaDraftProcessor.sendsSourceBytes(typeIdentifier: UTType.jpeg.identifier))
-        #expect(MediaDraftProcessor.sendsSourceBytes(typeIdentifier: UTType.quickTimeMovie.identifier))
-        #expect(MediaDraftProcessor.sendsSourceBytes(typeIdentifier: UTType.pdf.identifier))
-        #expect(MediaDraftProcessor.sendsSourceBytes(typeIdentifier: nil))
+        #expect(!MediaDraftProcessor.sendsSourceBytes(.image))
+        #expect(MediaDraftProcessor.sendsSourceBytes(.video))
+        #expect(MediaDraftProcessor.sendsSourceBytes(.audio))
+        #expect(MediaDraftProcessor.sendsSourceBytes(.document))
     }
 
     @Test func imagesAreRefusedBeforeTheyAreCopiedAtTheImageSourceLimit() {
-        #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: UTType.jpeg.identifier) == MediaDraftProcessor.maxImageSourceBytes)
-        #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: UTType.gif.identifier) == MediaDraftProcessor.maxImageSourceBytes)
-        #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: UTType.quickTimeMovie.identifier) == MediaDraftProcessor.maxAttachmentBytes)
-        #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: nil) == MediaDraftProcessor.maxAttachmentBytes)
+        #expect(MediaDraftProcessor.maxSourceBytes(for: .image) == MediaDraftProcessor.maxImageSourceBytes)
+        #expect(MediaDraftProcessor.maxSourceBytes(for: .video) == MediaDraftProcessor.maxAttachmentBytes)
+        #expect(MediaDraftProcessor.maxSourceBytes(for: .document) == MediaDraftProcessor.maxAttachmentBytes)
     }
 
     @Test func limitMessageNamesOneOrSeveralAttachments() {

@@ -1,5 +1,4 @@
 import Testing
-import UniformTypeIdentifiers
 import Foundation
 import SwiftUI
 import UIKit
@@ -41,8 +40,8 @@ struct PhotoLibrarySelectionOrderingTests {
         // where a video of the same source size does not.
         let source = 4 * MediaDraftProcessor.maxImageAttachmentBytes
         let room = 2 * MediaDraftProcessor.maxImageAttachmentBytes
-        let imageCost = PhotoLibrarySelection.budgetCost(bytes: source, typeIdentifier: UTType.jpeg.identifier)
-        let videoCost = PhotoLibrarySelection.budgetCost(bytes: source, typeIdentifier: UTType.quickTimeMovie.identifier)
+        let imageCost = PhotoLibrarySelection.budgetCost(bytes: source, kind: .image)
+        let videoCost = PhotoLibrarySelection.budgetCost(bytes: source, kind: .video)
         #expect(PhotoLibrarySelection.admitsSelection(bytes: source, cap: .max, cost: imageCost, remaining: room))
         #expect(!PhotoLibrarySelection.admitsSelection(bytes: source, cap: .max, cost: videoCost, remaining: room))
 
