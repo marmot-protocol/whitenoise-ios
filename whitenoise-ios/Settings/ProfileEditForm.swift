@@ -22,7 +22,8 @@ struct ProfileEditForm<Avatar: View>: View {
     @State private var aboutFieldHeight: CGFloat = 0
 
     var body: some View {
-        Group {
+        // Keep navigation chrome attached while loading resolves into the form.
+        ZStack {
             if isLoading {
                 ProgressView(L10n.string("Loading…"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
