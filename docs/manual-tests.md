@@ -967,8 +967,11 @@ on the White Noise relays).
       becomes available only after MDK reports ready.
 - [ ] Test all device-discovery outcomes: none found, possible other installation,
       and inconclusive. None found uses Continue; the other two use Continue
-      anyway. Every outcome requires the notice; no physical device or last-active
-      time is inferred from public package records.
+      anyway. Every outcome requires the notice. A possible other installation
+      may show when its messaging keys were last published, but no physical
+      device or last-active time is inferred from public package records. The
+      copy treats this sign-in as a separate installation with its own chats and
+      never says the device is added, linked or synced to the account.
 - [ ] Missing or unreadable follows are skipped automatically without publishing
       a list. Empty follows are valid. Skipped rows show a neutral dash.
 - [ ] A missing profile offers Update profile or Not now. Update opens the same

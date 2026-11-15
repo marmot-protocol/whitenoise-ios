@@ -118,22 +118,6 @@ nonisolated enum AccountSetupPresentation {
         return (L10n.string("Getting ready to chat"), L10n.string("We’re checking your profile and connection."))
     }
 
-    static func deviceAction(_ discovery: OnboardingDeviceDiscoveryFfi?) -> String {
-        discovery == .noneFound ? L10n.string("Continue") : L10n.string("Continue anyway")
-    }
-
-    static func deviceNotice(_ discovery: OnboardingDeviceDiscoveryFfi) -> String? {
-        switch discovery {
-        case .otherInstallationPossible:
-            L10n.string("Other sign-in records were found. They may belong to another installation or an earlier one.")
-        case .unknown:
-            L10n.string("Other sign-ins could not be checked.")
-        // Finding nothing does not prove there are no other installations, so say nothing.
-        case .noneFound:
-            nil
-        }
-    }
-
     static func issue(_ issue: OnboardingIssueFfi) -> String {
         switch issue {
         case .missing: L10n.string("No published settings were found.")

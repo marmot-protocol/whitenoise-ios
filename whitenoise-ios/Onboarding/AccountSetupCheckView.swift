@@ -49,7 +49,7 @@ struct AccountSetupCheckView: View {
                 } else if let action = recovery.primaryAction {
                     WNOnboardingButton(
                         title: action == .acknowledge
-                            ? LocalizedStringKey(AccountSetupPresentation.deviceAction(presentation.snapshot.singleDeviceNotice?.discovery))
+                            ? LocalizedStringKey(AccountSetupDeviceNoticePresentation(presentation.snapshot.singleDeviceNotice).actionTitle)
                             : "Try Again",
                         isLoading: isBusy && activeAction == action
                     ) { perform(action) }
@@ -76,13 +76,11 @@ struct AccountSetupCheckView: View {
 
     @ViewBuilder private func deviceExplanation(failures: [String]) -> some View {
         let canShowNotice = failures.isEmpty || recovery.primaryAction == .acknowledge
-        let notice = canShowNotice
-            ? presentation.snapshot.singleDeviceNotice.flatMap { AccountSetupPresentation.deviceNotice($0.discovery) }
-            : nil
+        let notice = AccountSetupDeviceNoticePresentation(canShowNotice ? presentation.snapshot.singleDeviceNotice : nil)
         ForEach(failures, id: \.self) { Text(verbatim: $0) }
-        if let notice { Text(notice) }
-        if !failures.isEmpty || notice != nil { Divider() }
-        Text("Signing in alone does not restore your existing chats or messages. If you use another device, keep its app and data until you’ve checked your chats here.")
+        if let finding = notice.finding { Text(verbatim: finding) }
+        if !failures.isEmpty || notice.finding != nil, !notice.explanation.isEmpty { Divider() }
+        ForEach(notice.explanation, id: \.self) { Text(verbatim: $0) }
     }
 
     @ViewBuilder private func secureMessagingExplanation(failures: [String]) -> some View {
