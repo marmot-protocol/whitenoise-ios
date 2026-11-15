@@ -327,12 +327,21 @@ struct SettingsView: View {
 
 struct AccountIdentitySummary: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let account: AccountSummaryFfi
     let avatarSize: CGFloat
     var spacing: CGFloat? = 12
 
+    /// At accessibility sizes the name goes under the avatar, so it gets the
+    /// row's full width instead of breaking mid-word beside it.
+    private var layout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: spacing))
+            : AnyLayout(HStackLayout(spacing: spacing))
+    }
+
     var body: some View {
-        HStack(spacing: spacing) {
+        layout {
             AvatarBubble(
                 seed: account.accountIdHex,
                 title: appState.displayName(forAccountIdHex: account.accountIdHex),
@@ -347,6 +356,9 @@ struct AccountIdentitySummary: View {
                 Text(appState.shortNpub(forAccountIdHex: account.accountIdHex))
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
+                    // Already shortened; wrapping would split it mid-key.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
             }
         }
         .accessibilityElement(children: .combine)

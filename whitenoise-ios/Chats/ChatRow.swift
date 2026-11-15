@@ -9,10 +9,15 @@ import UIKit
 struct ChatRow: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.appDensity) private var density
     let item: ChatsListViewModel.Item
 
     var body: some View {
-        HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 12) {
+        let metrics = density.metrics
+        HStack(
+            alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center,
+            spacing: metrics.chatRowAvatarSpacing
+        ) {
             GroupAvatarBubble(
                 groupIdHex: item.id,
                 imageHashHex: encryptedImageHashHex,
@@ -23,57 +28,22 @@ struct ChatRow: View {
                 nativeAsset: item.row.pendingConfirmation ? nil : item.avatarAsset,
                 usesNativeAsset: item.selectedAvatar != nil
             )
-            .frame(width: 56, height: 56)
+            .frame(width: metrics.chatRowAvatarSize, height: metrics.chatRowAvatarSize)
             .overlay(alignment: .bottomTrailing) {
                 if item.isPinned { PinnedChatAvatarBadge() }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 5) {
-                    Text(title)
-                        .font(.headline)
-                        .redacted(reason: item.isTitlePending ? .placeholder : [])
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if item.isMuted {
-                        Image(systemName: MuteBadgePresentation.systemImageName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(Text(L10n.string("Muted")))
-                    }
-                    if item.isDisbanding {
-                        Image(systemName: "hourglass")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(Text(L10n.string("Ending group…")))
-                    } else if item.isDisbanded {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(Text(L10n.string("Group ended")))
-                    } else if item.departureStatus == .leaving {
-                        Image(systemName: "hourglass")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(Text(L10n.string("Leaving…")))
-                    } else if case .membershipEnded(let membership) = item.departureStatus {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(
-                                membership == .left
-                                    ? Text("Left chat")
-                                    : Text("Removed from chat")
-                            )
-                    }
-                    Spacer(minLength: 8)
-                    if let timestamp {
-                        Text(timestamp)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                            .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: metrics.chatRowLineSpacing) {
+                if dynamicTypeSize.isAccessibilitySize {
+                    // Side by side, the title and the timestamp each get half
+                    // the row and both break mid-word; stacked, each gets all of it.
+                    titleCluster
+                    timestampText
+                } else {
+                    HStack(spacing: 5) {
+                        titleCluster
+                        Spacer(minLength: 8)
+                        timestampText
                     }
                 }
 
@@ -81,7 +51,9 @@ struct ChatRow: View {
                     previewText
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                        .lineLimit(
+                            dynamicTypeSize.isAccessibilitySize ? nil : metrics.chatRowPreviewLineLimit
+                        )
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     switch status {
@@ -98,6 +70,60 @@ struct ChatRow: View {
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
         .accessibilityValue(item.isPinned ? L10n.string("Pinned") : "")
+    }
+
+    @ViewBuilder
+    private var titleCluster: some View {
+        HStack(spacing: 5) {
+            Text(title)
+                .font(.headline)
+                .redacted(reason: item.isTitlePending ? .placeholder : [])
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                .fixedSize(horizontal: false, vertical: true)
+            if item.isMuted {
+                Image(systemName: MuteBadgePresentation.systemImageName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(Text(L10n.string("Muted")))
+            }
+            if item.isDisbanding {
+                Image(systemName: "hourglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(Text(L10n.string("Ending group…")))
+            } else if item.isDisbanded {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(Text(L10n.string("Group ended")))
+            } else if item.departureStatus == .leaving {
+                Image(systemName: "hourglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(Text(L10n.string("Leaving…")))
+            } else if case .membershipEnded(let membership) = item.departureStatus {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(
+                        membership == .left
+                            ? Text("Left chat")
+                            : Text("Removed from chat")
+                    )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var timestampText: some View {
+        if let timestamp {
+            Text(timestamp)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var status: ChatRowStatusPresentation.Status {

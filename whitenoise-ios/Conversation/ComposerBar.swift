@@ -261,16 +261,24 @@ struct ComposerBar: View {
     @State private var showExpandedEditor = false
     @State private var localFocusRequest = 0
 
-    @ScaledMetric(relativeTo: .body)
-    private var controlSize = ComposerInputChrome.controlSize
-    @ScaledMetric(relativeTo: .body)
-    private var inlineSendSize = ComposerInputChrome.sendButtonSize
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .body)
     private var fieldFontSize = BottomInputChromeLayout.fieldFontSize
-    @ScaledMetric(relativeTo: .body)
-    private var sideControlIconSize = BottomInputChromeLayout.sideControlIconSize
-    @ScaledMetric(relativeTo: .body)
-    private var inlineSendIconSize = BottomInputChromeLayout.inlineSendIconSize
+
+    // The typed text keeps growing with Dynamic Type; the buttons around it
+    // stop at the chrome cap so the field keeps its width.
+    private var controlSize: CGFloat {
+        WNChromeDynamicType.scaled(ComposerInputChrome.controlSize, at: dynamicTypeSize)
+    }
+    private var inlineSendSize: CGFloat {
+        WNChromeDynamicType.scaled(ComposerInputChrome.sendButtonSize, at: dynamicTypeSize)
+    }
+    private var sideControlIconSize: CGFloat {
+        WNChromeDynamicType.scaled(BottomInputChromeLayout.sideControlIconSize, at: dynamicTypeSize)
+    }
+    private var inlineSendIconSize: CGFloat {
+        WNChromeDynamicType.scaled(BottomInputChromeLayout.inlineSendIconSize, at: dynamicTypeSize)
+    }
 
     private var inputEnabled: Bool { disabledMessage == nil }
 
@@ -400,6 +408,7 @@ struct ComposerBar: View {
             .disabled(audioDraft != nil)
             .accessibilityLabel(L10n.string("Add attachment"))
             .accessibilityHint(attachmentAccessibilityHint)
+            .accessibilityShowsLargeContentViewer()
         case .showUnavailableTooltip:
             Button {
                 showAttachmentUnavailableTooltip = true
@@ -411,6 +420,7 @@ struct ComposerBar: View {
             .opacity(appearance.controlOpacity)
             .accessibilityLabel(L10n.string("Add attachment"))
             .accessibilityHint(attachmentAccessibilityHint)
+            .accessibilityShowsLargeContentViewer()
             .popover(
                 isPresented: $showAttachmentUnavailableTooltip,
                 attachmentAnchor: .rect(.rect(CGRect(
@@ -473,6 +483,7 @@ struct ComposerBar: View {
                     Text(L10n.string("Message"))
                         .font(.system(size: fieldFontSize))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                         .padding(.top, BottomInputChromeLayout.fieldVerticalPadding)
                 }
 
@@ -562,6 +573,7 @@ struct ComposerBar: View {
         .disabled(!canSend)
         .opacity(canSend ? 1 : 0.55)
         .accessibilityLabel(submissionAccessibilityLabel)
+        .accessibilityShowsLargeContentViewer()
     }
 
     @ViewBuilder

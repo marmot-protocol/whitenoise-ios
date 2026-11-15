@@ -34,6 +34,7 @@ struct WNIconButton: View {
                 .labelStyle(.iconOnly)
         }
         .wnIconButtonChrome(emphasis: emphasis, chrome: chrome)
+        .wnChromeDynamicType()
     }
 }
 

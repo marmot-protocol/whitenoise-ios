@@ -27,6 +27,7 @@ struct ChatsListView: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.appDensity) private var density
     @ScaledMetric(relativeTo: .title3) private var selectionIndicatorWidth = 24.0
     @ScaledMetric(relativeTo: .body) private var selectionActionDiameter = 44.0
     @Environment(AppState.self) private var appState
@@ -764,7 +765,12 @@ struct ChatsListView: View {
             Text(ChatListLeavePresentation.confirmationMessage)
         }
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowInsets(EdgeInsets(
+            top: density.metrics.chatRowVerticalInset,
+            leading: 16,
+            bottom: density.metrics.chatRowVerticalInset,
+            trailing: 16
+        ))
         .background(alignment: .trailing) {
             if let target = pendingMute, !target.fromSelection, target.groupIds == [item.id] {
                 mutePicker(target: target, item: item)

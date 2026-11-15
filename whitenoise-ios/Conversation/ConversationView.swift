@@ -603,6 +603,7 @@ struct ConversationView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.appDensity) private var density
     let chat: AppGroupRecordFfi
     let draftAccountRef: String?
     let initialTitle: String?
@@ -1922,12 +1923,12 @@ struct ConversationView: View {
                     GeometryReader { outer in
                         ScrollView {
                             VStack(spacing: 0) {
-                                LazyVStack(alignment: .leading, spacing: 4) {
+                                LazyVStack(alignment: .leading, spacing: density.metrics.timelineRowSpacing) {
                                     olderTimelineTrigger(viewModel: viewModel)
                                     ForEach(viewModel.timeline) { item in
                                         // One view per message: a lazy stack has to build every
                                         // message to count its views when one can produce several.
-                                        VStack(alignment: .leading, spacing: 8) {
+                                        VStack(alignment: .leading, spacing: density.metrics.timelineHeadingSpacing) {
                                             if let heading = dayHeaders[item.id] {
                                                 TimelineInlineDateHeader(heading: heading)
                                             }

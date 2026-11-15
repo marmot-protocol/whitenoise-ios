@@ -229,6 +229,7 @@ extension MessageBubble: Equatable {
 
 struct MessageBubble: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.appDensity) private var density
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.openURL) private var openURL
     let record: AppMessageRecordFfi
@@ -390,7 +391,7 @@ struct MessageBubble: View {
                         .padding(.leading, 12)
                 }
 
-                MessageBubbleChromeLayout(isFromMe: isFromMe) {
+                MessageBubbleChromeLayout(isFromMe: isFromMe, spacing: density.metrics.bubbleMetadataSpacing) {
                     messageSurface
                     bubbleMetadataRow
                 }
@@ -460,8 +461,8 @@ struct MessageBubble: View {
                     Label(L10n.string("This poll can’t be displayed."), systemImage: "chart.bar.xaxis")
                         .font(.subheadline)
                         .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-                        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
-                        .padding(.vertical, ChatBubbleMetrics.verticalInset)
+                        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+                        .padding(.vertical, density.metrics.bubbleVerticalInset)
                 }
             }
             .background { bubbleBackground }
@@ -547,8 +548,8 @@ struct MessageBubble: View {
         }
         .font(.subheadline)
         .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
-        .padding(.vertical, ChatBubbleMetrics.verticalInset)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+        .padding(.vertical, density.metrics.bubbleVerticalInset)
         .background { bubbleBackground }
         .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
     }
@@ -907,17 +908,17 @@ struct MessageBubble: View {
         .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : MessageBubblePalette.receivedForeground)
         .padding(
             .horizontal,
-            richContent ? 6 : MessageBubbleReplyLayout.bodyHorizontalInset
+            richContent ? 6 : density.metrics.bubbleHorizontalInset
         )
         .padding(
             .top,
             richContent
                 ? 0
-                : (hasReply ? MessageBubbleReplyLayout.bodyTopInsetAfterReply : MessageBubbleReplyLayout.bodyTopInset)
+                : (hasReply ? MessageBubbleReplyLayout.bodyTopInsetAfterReply : density.metrics.bubbleVerticalInset)
         )
         .padding(
             .bottom,
-            richContent ? 2 : MessageBubbleReplyLayout.bodyBottomInset
+            richContent ? 2 : density.metrics.bubbleVerticalInset
         )
         .frame(
             width: richContent ? MessageBubbleReplyLayout.richContentWidth : nil,
@@ -1002,7 +1003,7 @@ struct MessageBubble: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
 
     private var reactionMetadata: some View {
@@ -1048,7 +1049,7 @@ struct MessageBubble: View {
 
             messageMetadataFooter
         }
-        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
 
     private func reactionPill(_ tally: ConversationViewModel.ReactionTally) -> some View {

@@ -99,6 +99,53 @@ struct AppearanceThemeTests {
         #expect(defaults.string(forKey: AppearanceTheme.storageKey) == AppearanceTheme.dark.rawValue)
     }
 
+    @Test func densityDefaultsToStandardForMissingOrUnknownValues() {
+        #expect(AppDensity.resolved(rawValue: nil) == .standard)
+        #expect(AppDensity.resolved(rawValue: "") == .standard)
+        #expect(AppDensity.resolved(rawValue: "Compact") == .standard)
+        for density in AppDensity.allCases {
+            #expect(AppDensity.resolved(rawValue: density.rawValue) == density)
+        }
+    }
+
+    @Test func densitiesOrderEverySpacingFromCompactToComfortable() {
+        let compact = AppDensity.compact.metrics
+        let standard = AppDensity.standard.metrics
+        let comfortable = AppDensity.comfortable.metrics
+        let spacings: [KeyPath<AppDensityMetrics, CGFloat>] = [
+            \.chatRowVerticalInset, \.chatRowAvatarSize, \.chatRowAvatarSpacing,
+            \.chatRowLineSpacing, \.timelineRowSpacing, \.timelineHeadingSpacing,
+            \.bubbleHorizontalInset, \.bubbleVerticalInset, \.bubbleMetadataSpacing,
+        ]
+        for spacing in spacings {
+            #expect(compact[keyPath: spacing] < standard[keyPath: spacing])
+            #expect(standard[keyPath: spacing] < comfortable[keyPath: spacing])
+        }
+        #expect(compact.chatRowPreviewLineLimit <= standard.chatRowPreviewLineLimit)
+        #expect(standard.chatRowPreviewLineLimit <= comfortable.chatRowPreviewLineLimit)
+    }
+
+    @Test func storePersistsAndPublishesDensity() throws {
+        let suiteName = "appearance-density-tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = AppAppearanceStore(defaults: defaults, themeApplier: { _ in })
+        #expect(store.density == .standard)
+        let observation = AppearanceObservationProbe()
+
+        withObservationTracking {
+            _ = store.density
+        } onChange: {
+            observation.recordChange()
+        }
+        store.setDensity(.compact)
+
+        #expect(observation.changeCount == 1)
+        #expect(store.density == .compact)
+        let reopened = AppAppearanceStore(defaults: defaults, themeApplier: { _ in })
+        #expect(reopened.density == .compact)
+    }
+
     @Test func returningToSystemClearsForcedWindowStyle() {
         let window = UIWindow()
 
