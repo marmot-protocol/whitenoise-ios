@@ -28,6 +28,7 @@ final class AppAppearanceStore {
     private let defaults: UserDefaults
     private let themeApplier: ThemeApplier
     private(set) var theme: AppearanceTheme
+    private(set) var density: AppDensity
 
     convenience init(defaults: UserDefaults = .standard) {
         self.init(
@@ -46,6 +47,7 @@ final class AppAppearanceStore {
         self.themeApplier = themeApplier
         let storedRawValue = defaults.string(forKey: AppearanceTheme.storageKey)
         self.theme = AppearanceTheme.resolved(rawValue: storedRawValue)
+        self.density = AppDensity.resolved(rawValue: defaults.string(forKey: AppDensity.storageKey))
         if storedRawValue == AppearanceTheme.legacyTrueBlackRawValue {
             defaults.set(AppearanceTheme.dark.rawValue, forKey: AppearanceTheme.storageKey)
         }
@@ -56,6 +58,19 @@ final class AppAppearanceStore {
         self.theme = theme
         HostSettingsSaveTiming.measure { defaults.set(theme.rawValue, forKey: AppearanceTheme.storageKey) }
         themeApplier(theme)
+    }
+
+    func setDensity(_ density: AppDensity) {
+        guard self.density != density else { return }
+        self.density = density
+        HostSettingsSaveTiming.measure { defaults.set(density.rawValue, forKey: AppDensity.storageKey) }
+    }
+
+    /// Erase App Data clears the stored preferences; this brings the live
+    /// values back in line with them.
+    func resetToDefaults() {
+        setTheme(.system)
+        setDensity(.standard)
     }
 
     func applyCurrentTheme() {
@@ -78,6 +93,7 @@ private struct AppAppearanceModifier: ViewModifier {
         content
             .tint(.accentColor)
             .environment(\.locale, selection.locale)
+            .environment(\.appDensity, appearance.density)
             .onAppear {
                 languageRawValue = AppLanguage.currentRawValue
                 appearance.applyCurrentTheme()

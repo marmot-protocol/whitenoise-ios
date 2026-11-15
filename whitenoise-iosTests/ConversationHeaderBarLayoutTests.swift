@@ -10,7 +10,7 @@ final class ConversationHeaderBarLayoutTests: XCTestCase {
     /// long title truncates before it reaches either edge control.
     func testTheTitleStaysCenteredAndClearOfTheEdgeControls() async throws {
         for width: CGFloat in [390, 768] {
-            for textSize: DynamicTypeSize in [.large, .accessibility1] {
+            for textSize: DynamicTypeSize in [.large, .accessibility1, .accessibility5] {
                 for selecting in [false, true] {
                     let frames = try await render(width: width, textSize: textSize, selecting: selecting)
                     let bar = try XCTUnwrap(frames["bar"])

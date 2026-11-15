@@ -4,6 +4,22 @@ import UIKit
 @testable import whitenoise_ios
 
 struct WNButtonTests {
+    @Test func chromeControlsGrowWithTextUntilTheCapThenStop() {
+        let base = WNSecondaryButtonStyle.Metrics.circleDiameter
+        let atCap = WNChromeDynamicType.scaled(base, at: WNChromeDynamicType.maximum)
+
+        #expect(WNChromeDynamicType.scaled(base, at: .xSmall) < WNChromeDynamicType.scaled(base, at: .large))
+        #expect(WNChromeDynamicType.scaled(base, at: .large) < atCap)
+        for size in DynamicTypeSize.allCases where size > WNChromeDynamicType.maximum {
+            #expect(WNChromeDynamicType.scaled(base, at: size) == atCap)
+        }
+    }
+
+    @Test func cappedChromeStillClearsTheMinimumTapTargetAtTheDefaultSize() {
+        let diameter = WNChromeDynamicType.scaled(WNSecondaryButtonStyle.Metrics.circleDiameter, at: .large)
+        #expect(diameter >= 44)
+    }
+
     @Test func accentIsMonochromeAgainstTheColorScheme() {
         #expect(WNButton.Metrics.accent(for: .light) == .black)
         #expect(WNButton.Metrics.accent(for: .dark) == .white)
