@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UniformTypeIdentifiers
 @testable import whitenoise_ios
 @testable import MarmotKit
 
@@ -75,6 +76,19 @@ struct MediaFileUploadTests {
         #expect(result.admitted.map(\.id) == [fits.id])
         #expect(result.refused == 1)
         #expect(MediaFileUploadLimit.admitting([tooBig], alongside: [], limit: 1_000).refused == 0)
+    }
+
+    @Test func aFileIsCheckedAgainstTheBatchBeforeItIsRead() {
+        #expect(MediaFileUploadLimit.fits(500, alongside: [400], limit: 1_000))
+        #expect(!MediaFileUploadLimit.fits(600, alongside: [400], limit: 1_000))
+        #expect(!MediaFileUploadLimit.fits(.max, alongside: [.max, .max], limit: .max))
+    }
+
+    @Test func imagesAreRefusedBeforeTheyAreCopiedAtTheImageSourceLimit() {
+        #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: UTType.jpeg.identifier) == MediaDraftProcessor.maxImageSourceBytes)
+        #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: UTType.gif.identifier) == MediaDraftProcessor.maxImageSourceBytes)
+        #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: UTType.quickTimeMovie.identifier) == MediaDraftProcessor.maxAttachmentBytes)
+        #expect(MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: nil) == MediaDraftProcessor.maxAttachmentBytes)
     }
 
     @Test func limitMessageNamesOneOrSeveralAttachments() {

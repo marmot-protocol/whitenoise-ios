@@ -3678,6 +3678,11 @@ struct ConversationView: View {
                         url.stopAccessingSecurityScopedResource()
                     }
                 }
+                if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
+                   !MediaFileUploadLimit.fits(size, alongside: mediaDrafts.map(\.data.count)) {
+                    presentBatchLimitWarning()
+                    continue
+                }
                 do {
                     let attachment = try await MediaDraftProcessor.preparedAttachment(fromFileURL: url)
                     try appendMediaDraft(attachment)

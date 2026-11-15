@@ -570,6 +570,13 @@ nonisolated enum MediaDraftProcessor {
     static let maxDraftAttachmentBytes = 50 * 1024 * 1024
     static let draftThumbnailPixelSize: CGFloat = 160
 
+    /// The size a picked file may have before it is copied: images are refused
+    /// at their decode limit, everything else at the attachment cap.
+    static func maxSourceBytes(forTypeIdentifier typeIdentifier: String?) -> Int {
+        let isImage = typeIdentifier.flatMap(UTType.init)?.conforms(to: .image) == true
+        return isImage ? maxImageSourceBytes : maxAttachmentBytes
+    }
+
     static func persistsInDraft(_ attachment: MediaDraftAttachment) -> Bool {
         attachment.data.count <= maxDraftAttachmentBytes
     }
@@ -677,7 +684,8 @@ nonisolated enum MediaDraftProcessor {
     static func preparedAttachment(fromFileURL url: URL) async throws -> MediaDraftAttachment {
         try await Task.detached(priority: .userInitiated) { () async throws -> MediaDraftAttachment in
             let resourceValues = try url.resourceValues(forKeys: [.contentTypeKey, .nameKey, .fileSizeKey])
-            if let size = resourceValues.fileSize, size > maxAttachmentBytes {
+            if let size = resourceValues.fileSize,
+               size > maxSourceBytes(forTypeIdentifier: resourceValues.contentType?.identifier) {
                 throw Failure.attachmentTooLarge(size)
             }
             let data = try PickedMediaFile.mappedData(from: url)

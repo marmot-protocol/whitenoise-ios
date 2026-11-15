@@ -1625,7 +1625,11 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                         continuation.resume(throwing: PhotoLibraryPickerError.noReadableMedia)
                         return
                     }
-                    guard PhotoLibrarySelection.admitsSelection(bytes: size, remaining: remainingBudget) else {
+                    guard PhotoLibrarySelection.admitsSelection(
+                        bytes: size,
+                        cap: MediaDraftProcessor.maxSourceBytes(forTypeIdentifier: typeIdentifier),
+                        remaining: remainingBudget
+                    ) else {
                         continuation.resume(
                             throwing: MediaDraftProcessor.Failure.attachmentTooLarge(size)
                         )
