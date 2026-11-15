@@ -930,6 +930,7 @@ final class ConversationDraftStore {
                     ? MediaDraftProcessor.maxImageAttachmentBytes
                     : MediaDraftProcessor.maxAttachmentBytes
                 return attachment.data.count <= maxBytes
+                    && MediaDraftProcessor.persistsInDraft(attachment)
                     && attachmentIDs.insert(attachment.id).inserted
                     && attachment.durationSeconds?.isFinite != false
                     && attachment.waveformSamples.allSatisfy(\.isFinite)

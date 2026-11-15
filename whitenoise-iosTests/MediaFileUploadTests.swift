@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UniformTypeIdentifiers
 @testable import whitenoise_ios
 @testable import MarmotKit
 
@@ -63,6 +64,52 @@ struct MediaFileUploadTests {
         }
         #expect(OutgoingSendSizePolicy.isSizeRejection(MediaFileUploadFailure.exceedsTransferLimit(attachmentCount: 1)))
         #expect(!OutgoingSendSizePolicy.isSizeRejection(MediaFileUploadFailure.cancelled))
+    }
+
+    @Test func composerAdmitsOnlyWhatStillFitsInOneSend() {
+        let existing = [Self.attachment(bytes: 400)]
+        let tooBig = Self.attachment("big.mov", bytes: 600)
+        let fits = Self.attachment("small.mov", bytes: 100)
+
+        let result = MediaFileUploadLimit.admitting([tooBig, fits], alongside: existing, limit: 1_000)
+
+        #expect(result.admitted.map(\.id) == [fits.id])
+        #expect(result.refused == 1)
+        #expect(MediaFileUploadLimit.admitting([tooBig], alongside: [], limit: 1_000).refused == 0)
+    }
+
+    @Test func newAudioIsCheckedAgainstTheDraftsThatRemainAfterItReplacesTheOldAudio() {
+        let video = Self.attachment()
+        let voice = Self.attachment("voice.m4a", mediaType: "audio/mp4")
+
+        #expect(MediaDraftProcessor.draftsKept([video, voice], addingAudio: true).map(\.id) == [video.id])
+        #expect(MediaDraftProcessor.draftsKept([video, voice], addingAudio: false).map(\.id) == [video.id, voice.id])
+    }
+
+    @Test func aFileIsCheckedAgainstTheBatchBeforeItIsRead() {
+        #expect(MediaFileUploadLimit.fits(500, alongside: [400], limit: 1_000))
+        #expect(!MediaFileUploadLimit.fits(600, alongside: [400], limit: 1_000))
+        #expect(!MediaFileUploadLimit.fits(.max, alongside: [.max, .max], limit: .max))
+    }
+
+    @Test func preReadChecksClassifyAFileTheWayPreparationDoes() {
+        // Files can report a size without a content type; the name decides then.
+        #expect(MediaDraftProcessor.kind(for: nil, fileName: "song.mp3") == .audio)
+        #expect(MediaDraftProcessor.kind(for: nil, fileName: "photo.jpg") == .image)
+        #expect(MediaDraftProcessor.kind(for: UTType.quickTimeMovie.identifier, fileName: "clip") == .video)
+    }
+
+    @Test func onlyFilesSentAsTheirOwnBytesAreCheckedAgainstTheBatchBySourceSize() {
+        #expect(!MediaDraftProcessor.sendsSourceBytes(.image))
+        #expect(MediaDraftProcessor.sendsSourceBytes(.video))
+        #expect(MediaDraftProcessor.sendsSourceBytes(.audio))
+        #expect(MediaDraftProcessor.sendsSourceBytes(.document))
+    }
+
+    @Test func imagesAreRefusedBeforeTheyAreCopiedAtTheImageSourceLimit() {
+        #expect(MediaDraftProcessor.maxSourceBytes(for: .image) == MediaDraftProcessor.maxImageSourceBytes)
+        #expect(MediaDraftProcessor.maxSourceBytes(for: .video) == MediaDraftProcessor.maxAttachmentBytes)
+        #expect(MediaDraftProcessor.maxSourceBytes(for: .document) == MediaDraftProcessor.maxAttachmentBytes)
     }
 
     @Test func limitMessageNamesOneOrSeveralAttachments() {
@@ -181,6 +228,73 @@ struct MediaFileUploadTests {
 
         #expect(!FileManager.default.fileExists(atPath: stale.path))
         #expect(FileManager.default.fileExists(atPath: recent.path))
+    }
+
+    // MARK: Picked files
+
+    @Test func pickedFileReadsTheSourceBytesAndLeavesNoCloneBehind() throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let source = directory.appendingPathComponent("picked.mov")
+        let bytes = Data((0..<300_000).map { UInt8(truncatingIfNeeded: $0) })
+        try bytes.write(to: source)
+        let clones = directory.appendingPathComponent("clones", isDirectory: true)
+
+        let data = try PickedMediaFile.mappedData(from: source, in: clones)
+
+        #expect(data == bytes)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: clones.path).isEmpty)
+        #expect(try Data(contentsOf: source) == bytes)
+    }
+
+    @Test func pickedFileStaysReadableAfterItsSourceIsDeleted() throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let source = directory.appendingPathComponent("picked.mov")
+        let bytes = Data(repeating: 9, count: 300_000)
+        try bytes.write(to: source)
+
+        let data = try PickedMediaFile.mappedData(from: source, in: directory.appendingPathComponent("clones"))
+        try FileManager.default.removeItem(at: source)
+
+        #expect(data == bytes)
+    }
+
+    @Test func readingAPickedFileDoesNotMakeItResidentMemory() throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let source = directory.appendingPathComponent("picked.mov")
+        let size = 256 * 1024 * 1024
+        FileManager.default.createFile(atPath: source.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: source)
+        let chunk = Data(repeating: 3, count: 1024 * 1024)
+        for _ in 0..<(size / chunk.count) { try handle.write(contentsOf: chunk) }
+        try handle.close()
+
+        let before = try #require(Self.physicalFootprint())
+        let data = try PickedMediaFile.mappedData(from: source, in: directory.appendingPathComponent("clones"))
+        // Touch every page, as hashing or staging the attachment does.
+        let sum = data.withUnsafeBytes { $0.reduce(into: 0) { $0 &+= Int($1) } }
+        let after = try #require(Self.physicalFootprint())
+
+        #expect(sum == size * 3)
+        // Footprint is process-wide and other suites run alongside, so the
+        // bound leaves room for their allocations; resident bytes would be all of it.
+        #expect(Int64(after) - Int64(before) < Int64(size / 2))
+    }
+
+    private static func physicalFootprint() -> UInt64? {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? info.phys_footprint : nil
     }
 
     // MARK: Runner

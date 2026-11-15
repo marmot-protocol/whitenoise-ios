@@ -1198,6 +1198,7 @@ struct ConversationView: View {
             .sheet(isPresented: $showPhotoLibraryPicker) {
                 PhotoLibraryPickerView(
                     selectionLimit: remainingMediaDraftSlots,
+                    budget: PhotoLibrarySelection.remainingBudget(alongside: mediaDrafts),
                     onSelection: addPhotoLibrarySelections,
                     onError: { error in
                         appState.present(UserFacingError.toast(title: L10n.string("Couldn't add attachment"), error: error))
@@ -3171,7 +3172,13 @@ struct ConversationView: View {
             mediaDrafts = composerState.mediaDrafts
             return
         }
-        appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
+        // Drafts can't hold every attachment, so there is no draft revision to
+        // claim: clearing the composer deletes the saved draft, and a failed
+        // send stays in its bubble.
+        let sendsThroughDraft = MediaDraftProcessor.sendsThroughDraft(payload.attachments)
+        if sendsThroughDraft {
+            appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
+        }
         // The bubble is already in the timeline above. Everything below is
         // viewport follow-up: it never gates the local row, and when the window
         // is already on the live tail it issues no window command at all — a
@@ -3180,6 +3187,15 @@ struct ConversationView: View {
         userMovedAwayFromTimelineBottom = false
         viewModel.followConversationLatest()
         composerSendBottomScrollRequest &+= 1
+
+        guard sendsThroughDraft else {
+            viewModel.enqueueStagedSubmission {
+                if let rejection = await viewModel.submitStagedSend(staged) {
+                    recoverSizeRejectedSend(staged, rejection: rejection, tapped: tappedContents, mentionState: mentionState)
+                }
+            }
+            return
+        }
 
         // `ConversationDraftStore` admits one revision-checked submission at a
         // time, so queued sends serialize here while their bubbles are already up.
@@ -3608,14 +3624,18 @@ struct ConversationView: View {
     private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
         guard viewModel?.composerAdmitsNewAttachments != false else { return false }
         let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
-        let accepted = Array(attachments.prefix(availableSlots))
-        guard !accepted.isEmpty else {
+        let slotted = Array(attachments.prefix(availableSlots))
+        guard !slotted.isEmpty else {
             presentMaxAttachmentWarning()
             return false
         }
+        let (accepted, refused) = MediaFileUploadLimit.admitting(slotted, alongside: mediaDrafts)
         mediaDrafts.append(contentsOf: accepted)
-        if accepted.count < attachments.count {
+        if slotted.count < attachments.count {
             presentMaxAttachmentWarning()
+        }
+        if refused > 0 {
+            presentBatchLimitWarning()
         }
         requestComposerFocus()
         return accepted.count == attachments.count
@@ -3658,6 +3678,19 @@ struct ConversationView: View {
                     if isSecurityScoped {
                         url.stopAccessingSecurityScopedResource()
                     }
+                }
+                let source = try? url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey, .nameKey])
+                let kind = MediaDraftProcessor.kind(
+                    for: source?.contentType?.identifier,
+                    fileName: source?.name ?? url.lastPathComponent
+                )
+                if let size = source?.fileSize,
+                   MediaDraftProcessor.sendsSourceBytes(kind),
+                   !MediaFileUploadLimit.fits(size, alongside: MediaDraftProcessor.draftsKept(
+                       mediaDrafts, addingAudio: kind == .audio
+                   ).map(\.data.count)) {
+                    presentBatchLimitWarning()
+                    continue
                 }
                 do {
                     let attachment = try await MediaDraftProcessor.preparedAttachment(fromFileURL: url)
@@ -3838,14 +3871,16 @@ struct ConversationView: View {
     @discardableResult
     private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
         guard viewModel?.composerAdmitsNewAttachments != false else { return false }
-        if attachment.kind == .audio {
-            mediaDrafts.removeAll { $0.kind == .audio }
-        }
-        guard mediaDrafts.count < MediaDraftProcessor.maxAttachmentCount else {
+        let kept = MediaDraftProcessor.draftsKept(mediaDrafts, addingAudio: attachment.kind == .audio)
+        guard kept.count < MediaDraftProcessor.maxAttachmentCount else {
             presentMaxAttachmentWarning()
             return false
         }
-        mediaDrafts.append(attachment)
+        guard MediaFileUploadLimit.admitting([attachment], alongside: kept).refused == 0 else {
+            presentBatchLimitWarning()
+            return false
+        }
+        mediaDrafts = kept + [attachment]
         if attachment.kind == .audio {
             draft = ""
             dismissKeyboard()
@@ -3874,6 +3909,13 @@ struct ConversationView: View {
             includedItemIDs: includedItemIDs,
             to: mediaDrafts
         )
+    }
+
+    private func presentBatchLimitWarning() {
+        appState.present(UserFacingError.toast(
+            title: L10n.string("Couldn't add attachment"),
+            error: MediaFileUploadFailure.exceedsTransferLimit(attachmentCount: 2)
+        ))
     }
 
     private func presentMaxAttachmentWarning() {

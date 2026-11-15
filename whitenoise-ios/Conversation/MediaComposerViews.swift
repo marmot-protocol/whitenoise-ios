@@ -3,6 +3,7 @@ import UIKit
 import AVKit
 @preconcurrency import AVFoundation
 import Combine
+import MarmotKit
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -670,6 +671,7 @@ struct MediaApprovalView: View {
         .sheet(isPresented: $showPhotoLibraryPicker) {
             PhotoLibraryPickerView(
                 selectionLimit: remainingSelectionLimit,
+                budget: PhotoLibrarySelection.remainingBudget(alongside: attachments),
                 onSelection: onAddSelections,
                 onError: onSelectionError,
                 onDismiss: { showPhotoLibraryPicker = false }
@@ -1474,11 +1476,10 @@ struct PhotoLibrarySelection: Hashable {
         selectionsByPickerIndex.compactMap { $0 }
     }
 
-    /// All accepted selections stay resident until the composer hands them
-    /// off, so the per-item cap alone still allows count × cap in RAM. The
-    /// session budget bounds the sum; selections beyond it are rejected the
+    /// Selections are mapped, not resident, so the session budget is what one
+    /// send can carry: MDK's batch limit. Selections beyond it are rejected the
     /// same way as oversized ones.
-    static let maxTotalSelectionBytes = 3 * MediaDraftProcessor.maxAttachmentBytes
+    static let maxTotalSelectionBytes = Int(clamping: maxFileMediaCiphertextBytes())
 
     /// Size gate applied before any bytes are read into memory; the same cap
     /// the draft processor enforces, moved ahead of materialization, plus the
@@ -1486,9 +1487,24 @@ struct PhotoLibrarySelection: Hashable {
     static func admitsSelection(
         bytes: Int,
         cap: Int = MediaDraftProcessor.maxAttachmentBytes,
+        cost: Int? = nil,
         remaining: Int = maxTotalSelectionBytes
     ) -> Bool {
-        bytes > 0 && bytes <= cap && bytes <= remaining
+        bytes > 0 && bytes <= cap && (cost ?? bytes) <= remaining
+    }
+
+    /// What a selection draws from the session budget: a file sent as its own
+    /// bytes costs its size, an image the most its re-encoding can send.
+    static func budgetCost(bytes: Int, kind: MediaAttachmentKind) -> Int {
+        MediaDraftProcessor.sendsSourceBytes(kind)
+            ? bytes
+            : MediaDraftProcessor.maxImageAttachmentBytes
+    }
+
+    /// The budget a picker session starts with beside the composer's attachments.
+    static func remainingBudget(alongside existing: [MediaDraftAttachment]) -> Int {
+        let used = MediaFileUploadLimit.ciphertextBytes(plaintextByteCounts: existing.map(\.data.count))
+        return max(0, maxTotalSelectionBytes - Int(clamping: used ?? .max))
     }
 }
 
@@ -1506,13 +1522,15 @@ private enum PhotoLibraryPickerError: LocalizedError {
 struct PhotoLibraryPickerView: UIViewControllerRepresentable {
     @Environment(AppState.self) private var appState
     let selectionLimit: Int
+    var budget = PhotoLibrarySelection.maxTotalSelectionBytes
     var filter: PHPickerFilter = .any(of: [.images, .videos])
     let onSelection: ([PhotoLibrarySelection]) -> Void
     let onError: (Error) -> Void
     let onDismiss: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onSelection: onSelection, onError: onError, onDismiss: onDismiss, analytics: appState.productAnalytics)
+        Coordinator(budget: budget, onSelection: onSelection, onError: onError, onDismiss: onDismiss,
+                    analytics: appState.productAnalytics)
     }
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
@@ -1532,11 +1550,13 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
         private let analytics: ProductAnalyticsRecorder
         private let analyticsTicket: ProductAnalyticsRecorder.Ticket?
         private var didFinish = false
+        private let budget: Int
         private let onSelection: ([PhotoLibrarySelection]) -> Void
         private let onError: (Error) -> Void
         private let onDismiss: () -> Void
 
         init(
+            budget: Int,
             onSelection: @escaping ([PhotoLibrarySelection]) -> Void,
             onError: @escaping (Error) -> Void,
             onDismiss: @escaping () -> Void,
@@ -1544,6 +1564,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
         ) {
             self.analytics = analytics
             self.analyticsTicket = analytics.ticket()
+            self.budget = budget
             self.onSelection = onSelection
             self.onError = onError
             self.onDismiss = onDismiss
@@ -1564,7 +1585,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
             Task {
                 var selectionsByPickerIndex = [PhotoLibrarySelection?](repeating: nil, count: results.count)
                 var firstError: Error?
-                var remainingBudget = PhotoLibrarySelection.maxTotalSelectionBytes
+                var remainingBudget = budget
 
                 for (index, result) in results.enumerated() {
                     let provider = result.itemProvider
@@ -1580,7 +1601,10 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                             fileName: fileName,
                             remainingBudget: remainingBudget
                         )
-                        remainingBudget -= selection.data.count
+                        remainingBudget -= PhotoLibrarySelection.budgetCost(
+                            bytes: selection.data.count,
+                            kind: MediaDraftProcessor.kind(for: typeIdentifier, fileName: fileName)
+                        )
                         selectionsByPickerIndex[index] = selection
                     } catch {
                         if firstError == nil { firstError = error }
@@ -1611,7 +1635,8 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
             fileName: String?,
             remainingBudget: Int
         ) async throws -> PhotoLibrarySelection {
-            try await withCheckedThrowingContinuation { continuation in
+            let kind = MediaDraftProcessor.kind(for: typeIdentifier, fileName: fileName)
+            return try await withCheckedThrowingContinuation { continuation in
                 provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
                     // The provider deletes the temp file when this handler
                     // returns, so the size gate and the read both happen here.
@@ -1625,13 +1650,18 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                         continuation.resume(throwing: PhotoLibraryPickerError.noReadableMedia)
                         return
                     }
-                    guard PhotoLibrarySelection.admitsSelection(bytes: size, remaining: remainingBudget) else {
+                    guard PhotoLibrarySelection.admitsSelection(
+                        bytes: size,
+                        cap: MediaDraftProcessor.maxSourceBytes(for: kind),
+                        cost: PhotoLibrarySelection.budgetCost(bytes: size, kind: kind),
+                        remaining: remainingBudget
+                    ) else {
                         continuation.resume(
                             throwing: MediaDraftProcessor.Failure.attachmentTooLarge(size)
                         )
                         return
                     }
-                    guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+                    guard let data = try? PickedMediaFile.mappedData(from: url), !data.isEmpty else {
                         continuation.resume(throwing: PhotoLibraryPickerError.noReadableMedia)
                         return
                     }

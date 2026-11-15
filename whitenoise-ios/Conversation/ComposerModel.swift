@@ -157,7 +157,10 @@ final class ComposerModel {
     }
 
     func reconcileDraftMediaUploads(_ attachments: [MediaDraftAttachment]) {
-        draftMediaUploads.reconcile(attachments, accountRef: appState?.activeAccountRef)
+        // A send without a draft revision uploads everything itself, so an
+        // upload started now would be thrown away.
+        let preuploaded = MediaDraftProcessor.sendsThroughDraft(attachments) ? attachments : []
+        draftMediaUploads.reconcile(preuploaded, accountRef: appState?.activeAccountRef)
     }
 
     func cancelDraftMediaUploads() {
