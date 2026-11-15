@@ -82,6 +82,12 @@ nonisolated enum ComposerVoiceChromePresentation {
         isActive && isLocked
     }
 
+    /// The send button never replaces the mic mid-hold: the mic carries the
+    /// hold's gesture, so its release must still reach the recorder.
+    static func showsSend(hasSendableContent: Bool, isActive: Bool) -> Bool {
+        hasSendableContent && !isActive
+    }
+
     static func textEntryOpacity(isActive: Bool) -> Double {
         isActive ? 0 : 1
     }
@@ -794,7 +800,10 @@ struct ComposerBar: View {
     }
 
     private var showsSend: Bool {
-        hasSendableContent
+        ComposerVoiceChromePresentation.showsSend(
+            hasSendableContent: hasSendableContent,
+            isActive: voiceRecordingActive
+        )
     }
 
     private var dictationActive: Bool {
