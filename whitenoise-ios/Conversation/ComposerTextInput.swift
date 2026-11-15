@@ -3,8 +3,9 @@ import UIKit
 
 /// Hold-to-dictate on the message field while the keyboard is down.
 struct ComposerDictationGesture {
-    /// The hold began. Receives the language of the keyboard last used here.
-    var onBegan: (_ keyboardLanguage: String?) -> Void
+    /// The hold began. Receives the language of the keyboard last used here
+    /// and where the finger is, in window coordinates.
+    var onBegan: (_ keyboardLanguage: String?, _ location: CGPoint) -> Void
     /// The finger moved, measured from where the hold began.
     var onChanged: (CGSize) -> Void
     var onEnded: () -> Void
@@ -258,7 +259,7 @@ struct ComposerTextInput: UIViewRepresentable {
             switch ComposerDictationGesturePolicy.event(for: recognizer.state) {
             case .began:
                 dictationPressOrigin = location
-                parent.dictation?.onBegan(lastKeyboardLanguage)
+                parent.dictation?.onBegan(lastKeyboardLanguage, location)
             case .changed:
                 parent.dictation?.onChanged(CGSize(
                     width: location.x - dictationPressOrigin.x,

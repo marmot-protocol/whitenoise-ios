@@ -257,8 +257,40 @@ struct MediaAttachmentPolicyTests {
     }
 
     @Test func voiceGestureOnlyLocksAfterSlideUpThreshold() {
-        #expect(!VoiceRecordingGesturePolicy.shouldLock(translation: CGSize(width: 0, height: -40)))
-        #expect(VoiceRecordingGesturePolicy.shouldLock(translation: CGSize(width: 0, height: -90)))
+        #expect(!HoldGesturePolicy.shouldLock(translation: CGSize(width: 0, height: -40)))
+        #expect(HoldGesturePolicy.shouldLock(translation: CGSize(width: 0, height: -90)))
+    }
+
+    @Test func holdProgressRunsFromRestToTheThresholdAndNoFurther() {
+        #expect(HoldGesturePolicy.lockProgress(.zero) == 0)
+        #expect(HoldGesturePolicy.lockProgress(CGSize(width: 0, height: 30)) == 0)
+        #expect(HoldGesturePolicy.lockProgress(CGSize(width: 0, height: HoldGesturePolicy.lockTranslationY)) == 1)
+        #expect(HoldGesturePolicy.lockProgress(CGSize(width: 0, height: -500)) == 1)
+        let halfway = HoldGesturePolicy.cancelProgress(CGSize(width: HoldGesturePolicy.cancelTranslationX / 2, height: 0))
+        #expect(halfway > 0 && halfway < 1)
+        #expect(HoldGesturePolicy.cancelProgress(CGSize(width: 40, height: 0)) == 0)
+    }
+
+    /// The bubble under the thumb only travels toward the lock or cancel.
+    @Test func thumbBubbleFollowsTheSlideOnlyUpAndLeftWithinTheThresholds() {
+        let far = HoldGesturePolicy.thumbOffset(CGSize(width: -500, height: -500))
+        #expect(far.width == HoldGesturePolicy.cancelTranslationX)
+        #expect(far.height == HoldGesturePolicy.lockTranslationY)
+        #expect(HoldGesturePolicy.thumbOffset(CGSize(width: 40, height: 40)) == .zero)
+    }
+
+    /// The ring around the recording bubble swells with the voice, always
+    /// stays outside the bubble, and stops growing at full level.
+    @Test func recordingRingGrowsWithTheVoiceWithinItsBounds() {
+        let silent = VoiceRecordingBubbleMetrics.haloScale(level: 0)
+        let speaking = VoiceRecordingBubbleMetrics.haloScale(level: 0.5)
+        let loudest = VoiceRecordingBubbleMetrics.haloScale(level: 1)
+
+        #expect(silent > 1)
+        #expect(silent < speaking)
+        #expect(speaking < loudest)
+        #expect(VoiceRecordingBubbleMetrics.haloScale(level: 4) == loudest)
+        #expect(VoiceRecordingBubbleMetrics.haloScale(level: -1) == silent)
     }
 
     @Test func terminalAttachmentStatesDoNotWaitOrRetryAutomatically() {

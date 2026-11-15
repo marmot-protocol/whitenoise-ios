@@ -288,6 +288,15 @@ microphone on a Mac without one.
 - [ ] Hold and slide left: dictation is discarded and nothing is sent.
 - [ ] Hold and slide up: dictation locks. Lift the finger and keep speaking;
       the send arrow sends the text and the ✕ discards it.
+- [ ] While holding (dictation or voice message), a lock pill with an up
+      chevron floats above the thumb, nudging unless Reduce Motion is on, and
+      disappears once locked.
+- [ ] Hold the voice icon: a red bubble grows under the thumb and follows the
+      slide; the field shows a blinking red dot, the elapsed time and
+      "‹ Slide to cancel", which follows the finger left and fades. Release:
+      the voice message sends at once. Slide left past the prompt: nothing is
+      recorded or sent. Slide up to lock: the field keeps the timer, ✕
+      discards, and the send arrow sends at once.
 - [ ] While editing a sent message, releasing (or ✓ when locked) only adds the
       text to the field; Save stays a separate tap.
 - [ ] With the keyboard up, holding the field still moves the cursor (loupe);

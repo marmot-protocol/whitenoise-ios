@@ -34,6 +34,13 @@ struct ComposerInputChromeTests {
         #expect(ComposerVoiceChromePresentation.showsStop(isActive: true, isLocked: true))
     }
 
+    /// A draft that fills mid-hold must not swap out the view carrying the hold.
+    @Test func sendButtonWaitsForTheVoiceHoldToEnd() {
+        #expect(ComposerVoiceChromePresentation.showsSend(hasSendableContent: true, isActive: false))
+        #expect(!ComposerVoiceChromePresentation.showsSend(hasSendableContent: true, isActive: true))
+        #expect(!ComposerVoiceChromePresentation.showsSend(hasSendableContent: false, isActive: false))
+    }
+
     @Test func activeVoiceRecordingHidesButDoesNotReplaceTheFocusedTextEntry() {
         #expect(ComposerVoiceChromePresentation.textEntryOpacity(isActive: false) == 1)
         #expect(ComposerVoiceChromePresentation.textEntryOpacity(isActive: true) == 0)

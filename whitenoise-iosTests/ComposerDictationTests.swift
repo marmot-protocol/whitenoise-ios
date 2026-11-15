@@ -96,7 +96,7 @@ struct ComposerDictationPresentationTests {
         #expect(ComposerDictationPresentation.placeholder(offersDictation: true, isTyping: true) == message)
     }
 
-    private static let composer = DictationComposerSnapshot(
+    private static let composer = ComposerHoldSnapshot(
         draft: "On my way",
         attachmentIDs: [],
         replyTargetMessageIdHex: nil
@@ -105,7 +105,7 @@ struct ComposerDictationPresentationTests {
     private static func sends(
         isEditing: Bool = false,
         isComplete: Bool = true,
-        composerNow: DictationComposerSnapshot = composer
+        composerNow: ComposerHoldSnapshot = composer
     ) -> Bool {
         ComposerDictationPresentation.sendsOnFinish(
             isEditing: isEditing,
@@ -258,7 +258,7 @@ struct ComposerDictationControllerTests {
 
         controller.begin(localeIdentifiers: ["en-US"], onFinish: inserted.record, onError: { Issue.record($0) })
         try await eventually { controller.state == .listening(locked: false) }
-        controller.updateDrag(CGSize(width: 0, height: VoiceRecordingGesturePolicy.lockTranslationY - 1))
+        controller.updateDrag(CGSize(width: 0, height: HoldGesturePolicy.lockTranslationY - 1))
         controller.endPress()
         #expect(controller.isLocked)
         #expect(engine.finishes == 0)
@@ -274,7 +274,7 @@ struct ComposerDictationControllerTests {
 
         controller.begin(localeIdentifiers: ["en-US"], onFinish: inserted.record, onError: { Issue.record($0) })
         try await eventually { controller.state == .listening(locked: false) }
-        controller.updateDrag(CGSize(width: ComposerDictationSupport.cancelTranslationX - 1, height: 0))
+        controller.updateDrag(CGSize(width: HoldGesturePolicy.cancelTranslationX - 1, height: 0))
         controller.endPress()
 
         #expect(controller.state == .idle)
@@ -289,7 +289,7 @@ struct ComposerDictationControllerTests {
 
         controller.begin(localeIdentifiers: ["en-US"], locked: true, onFinish: { _ in }, onError: { Issue.record($0) })
         try await eventually { controller.state == .listening(locked: true) }
-        controller.updateDrag(CGSize(width: ComposerDictationSupport.cancelTranslationX - 1, height: 0))
+        controller.updateDrag(CGSize(width: HoldGesturePolicy.cancelTranslationX - 1, height: 0))
 
         #expect(controller.state == .listening(locked: true))
         #expect(engine.cancels == 0)
