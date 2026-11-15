@@ -150,7 +150,7 @@ struct ProfileEditToolbar: ToolbarContent {
                     .disabled(cancelDisabled)
             }
         }
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItem(placement: .topBarTrailing) {
             if isEditing {
                 Button {
                     guard !isPublishing else { return }
@@ -175,7 +175,6 @@ struct ProfileEditToolbar: ToolbarContent {
                 .allowsHitTesting(!isPublishing)
             } else {
                 Button("Edit", action: onEdit)
-                    .wnButtonChrome(emphasis: .secondary)
                     .disabled(editDisabled)
             }
         }
