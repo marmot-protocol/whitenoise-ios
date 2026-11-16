@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import UserNotifications
 import MarmotKit
+import Synchronization
 
 @MainActor
 final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
@@ -13,7 +14,8 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
 
     private let notificationRequestScheduler: ((UNNotificationRequest) async throws -> Void)?
     private let notificationClock: () -> TimeInterval
-    private let center: UNUserNotificationCenter
+    private let centerReference: NotificationCenterReference
+    private var center: UNUserNotificationCenter { centerReference.value }
     private let requestAuthorizationHandler: (() async throws -> Bool)?
     private let authorizationStatusProvider: (() async -> UNAuthorizationStatus)?
     private let remoteNotificationRegistrar: (() -> Void)?
@@ -54,7 +56,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         notificationRequestScheduler: ((UNNotificationRequest) async throws -> Void)? = nil,
         notificationClock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
-        self.center = center
+        self.centerReference = NotificationCenterReference(value: center)
         self.notificationRequestScheduler = notificationRequestScheduler
         self.notificationClock = notificationClock
         self.requestAuthorizationHandler = requestAuthorizationHandler
@@ -62,11 +64,12 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         self.remoteNotificationRegistrar = remoteNotificationRegistrar
         self.applicationBadgeCountSetter = applicationBadgeCountSetter
         self.deliveredNotificationDescriptorsProvider = deliveredNotificationDescriptorsProvider
+        let centerReference = self.centerReference
         self.pendingNotificationRequestsRemover = pendingNotificationRequestsRemover ?? { identifiers in
-            center.removePendingNotificationRequests(withIdentifiers: identifiers)
+            centerReference.value.removePendingNotificationRequests(withIdentifiers: identifiers)
         }
         self.deliveredNotificationIdentifiersRemover = deliveredNotificationIdentifiersRemover ?? { identifiers in
-            center.removeDeliveredNotifications(withIdentifiers: identifiers)
+            centerReference.value.removeDeliveredNotifications(withIdentifiers: identifiers)
         }
         super.init()
     }
@@ -96,10 +99,10 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func registerNotificationCategories() {
-        let center = center
-        let categories: Set<UNNotificationCategory> = [Self.messageNotificationCategory()]
+        let centerReference = centerReference
+        let categories = Mutex<Set<UNNotificationCategory>>([Self.messageNotificationCategory()])
         centerMutationQueue.async {
-            center.setNotificationCategories(categories)
+            categories.withLock { centerReference.value.setNotificationCategories($0) }
         }
     }
 
@@ -510,10 +513,10 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     /// App-data erasure: drops every pending and delivered notification.
     func removeAllNotifications() {
         _ = foregroundBatches.cancel()
-        let center = center
+        let centerReference = centerReference
         centerMutationQueue.async {
-            center.removeAllDeliveredNotifications()
-            center.removeAllPendingNotificationRequests()
+            centerReference.value.removeAllDeliveredNotifications()
+            centerReference.value.removeAllPendingNotificationRequests()
         }
     }
 
@@ -537,21 +540,24 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         centerMutationQueue.async { remover(identifiers) }
     }
 
-    private func addNotificationRequest(_ request: UNNotificationRequest) async throws {
+    private func addNotificationRequest(_ request: sending UNNotificationRequest) async throws {
         if let notificationRequestScheduler {
             await drainNotificationCenterMutations()
             try await notificationRequestScheduler(request)
             return
         }
-        let center = center
+        let centerReference = centerReference
+        let request = Mutex(request)
         let queue = centerMutationQueue
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             queue.async {
-                center.add(request) { error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume()
+                request.withLock { request in
+                    centerReference.value.add(request) { error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume()
+                        }
                     }
                 }
             }
@@ -707,4 +713,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) {
         AppNotifications.shared.recordRegistrationFailure(error)
     }
+}
+
+/// Apple documents concurrent access to the shared center as safe. Keep this
+/// exception local to the SDK handle; request/category payloads are transferred
+/// into mutexes and mutations retain their existing serial queue order.
+/// https://developer.apple.com/documentation/usernotifications/unusernotificationcenter
+// swiftlint:disable:next no_unchecked_sendable
+nonisolated private struct NotificationCenterReference: @unchecked Sendable {
+    let value: UNUserNotificationCenter
 }

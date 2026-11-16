@@ -62,7 +62,7 @@ enum CustomEmojiTextComposer {
         return Text(LocalizedStringKey(stringInterpolation: interpolation), tableName: "CustomEmojiInlineText")
     }
 
-    private static func isEmoji(_ segment: CustomEmojiText.AttributedSegment) -> Bool {
+    nonisolated private static func isEmoji(_ segment: CustomEmojiText.AttributedSegment) -> Bool {
         if case .emoji = segment { return true }
         return false
     }

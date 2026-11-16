@@ -4,7 +4,7 @@ import MarmotKit
 /// The builds behind the conversation timeline's per-row markdown, agent-event,
 /// media and group-system projection caches. The caches decide when a row needs
 /// a build; these produce it.
-struct ConversationProjectionBuilders {
+nonisolated struct ConversationProjectionBuilders: Sendable {
     var markdown: @MainActor (
         AppMessageRecordFfi, _ mentionDisplayName: @escaping MarkdownMentionResolver
     ) -> MessageMarkdownDisplayProjection

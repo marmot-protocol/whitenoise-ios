@@ -4,7 +4,7 @@ import UIKit
 @MainActor
 final class NativeAvatarImageCache {
     static let shared = NativeAvatarImageCache()
-    static let thumbnailPixelSize = 384
+    nonisolated static let thumbnailPixelSize = 384
 
     private struct Key: Hashable {
         let account: String

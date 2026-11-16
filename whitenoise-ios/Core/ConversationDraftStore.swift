@@ -80,7 +80,7 @@ nonisolated struct PendingDraftSendHandoff {
 /// Readiness changes restart the load through the view's task token.
 @MainActor
 enum ConversationDraftLoadRetry {
-    static let delays: [Duration] = [
+    nonisolated static let delays: [Duration] = [
         .milliseconds(250),
         .milliseconds(500),
         .seconds(1),
