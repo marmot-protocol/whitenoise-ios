@@ -544,8 +544,9 @@ struct MessageBubble: View {
             .accessibilityElement(children: .combine)
     }
 
-    /// The bubble shows the literal shortcode until the image loads, and
-    /// stays if it never does (auto-download off, a failed read).
+    /// The ordinary bubble, with its own inline emoji or the literal
+    /// shortcode, shows until the large image loads, and stays if it never
+    /// does (auto-download off, a failed read).
     private func standaloneCustomEmojiContent(_ shortcode: CustomEmojiShortcode) -> some View {
         StandaloneCustomEmoji(
             shortcode: shortcode,
