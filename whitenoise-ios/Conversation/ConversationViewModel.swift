@@ -1619,15 +1619,17 @@ final class ConversationViewModel {
             let client = try appState.currentMarmotClient()
             let result = try await client.discardFailedSend(
                 accountRef: accountRef, groupIdHex: group.groupIdHex, messageIdHex: messageIdHex)
-            switch DiscardFailedSendPlan(outcome: result.outcome) {
+            switch result.outcome {
             case .discarded:
+                // Gone from this device: purge its decrypted media; the row leaves on its own.
                 let hashes = Set(result.mediaCiphertextSha256.map { $0.lowercased() })
                 let references = record.map { mediaItems(for: $0).compactMap(\.reference) } ?? []
                 await MessageMediaCache.removeCachedData(forCiphertextHashes: hashes, in: references)
                 Haptics.warning()
-            case .tryAgainLater:
+            case .stillSending:
+                // The group may still publish it, so nothing changed.
                 composer.onError(L10n.string("This message is still sending. Try again in a moment."))
-            case .hideLocally:
+            case .notFailedSend:
                 // No longer a failed send (it may have been delivered since):
                 // keep the user's Delete as the local-only delete it was before.
                 if let record { await deleteMessageForMe(record) }
