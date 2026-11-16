@@ -354,6 +354,17 @@ struct MessageBubble: View {
         return SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText)
     }
 
+    private var standaloneCustomEmoji: CustomEmojiShortcode? {
+        guard debugStyle == nil,
+              !isDeleted,
+              replyPreview == nil,
+              mediaItems.isEmpty,
+              !customEmoji.isEmpty
+        else { return nil }
+
+        return SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes)
+    }
+
     private var hasExpirationTimer: Bool {
         MessageExpirationPresentation.showsIndicator(
             retentionSeconds: record.retentionSeconds,
@@ -484,6 +495,15 @@ struct MessageBubble: View {
                 standaloneEmojiContent(standaloneEmoji)
                     .opacity(status == .sending ? 0.7 : 1)
             }
+        } else if let standaloneCustomEmoji {
+            if status == .failed {
+                standaloneCustomEmojiContent(standaloneCustomEmoji)
+                    .contentShape(.rect)
+                    .onTapGesture { onFailedTap?() }
+            } else {
+                standaloneCustomEmojiContent(standaloneCustomEmoji)
+                    .opacity(status == .sending ? 0.7 : 1)
+            }
         } else {
             // The tap gesture exists only on failed rows — a recognizer on
             // every bubble steals touches from timeline scrolling.
@@ -522,6 +542,20 @@ struct MessageBubble: View {
             .fixedSize()
             .padding(.horizontal, 6)
             .accessibilityElement(children: .combine)
+    }
+
+    /// The ordinary bubble, with its own inline emoji or the literal
+    /// shortcode, shows until the large image loads, and stays if it never
+    /// does (auto-download off, a failed read).
+    private func standaloneCustomEmojiContent(_ shortcode: CustomEmojiShortcode) -> some View {
+        StandaloneCustomEmoji(
+            shortcode: shortcode,
+            side: SingleCustomEmojiMessagePresentation.side,
+            isPixelArt: CustomEmojiBuiltins.builtin(shortcode) != nil
+        ) {
+            textBubble
+        }
+        .modifier(CustomEmojiInlineLoader(resolution: customEmoji, fixedPointSize: SingleCustomEmojiMessagePresentation.side))
     }
 
     private func remoteGiphyMessageContent(_ media: RemoteGiphyMedia) -> some View {

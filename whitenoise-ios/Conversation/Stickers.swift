@@ -133,6 +133,19 @@ nonisolated enum StickerDefaultPacks {
         "30031:\(authorPubkeyHex):marmot",
     ]
 
+    /// The default packs live on White Noise's relays, which an imported
+    /// account's own relay list may not include. MDK fetches an install from
+    /// the account's relays plus the input's hints, so each default install
+    /// is a Sonar link naming those relays.
+    private static let sonarLinkBase = "https://sonarprivacy.xyz/stickers"
+
+    static func installInput(for coordinate: String) -> String {
+        guard var components = URLComponents(string: sonarLinkBase) else { return coordinate }
+        components.queryItems = [URLQueryItem(name: "a", value: coordinate)]
+            + AppContainerConfig.seedRelays.map { URLQueryItem(name: "relay", value: $0) }
+        return components.string ?? coordinate
+    }
+
     /// Default packs this account still needs, in order. A pack that was
     /// installed for it once is never offered again, so removing one sticks.
     static func toInstall(installed: Set<String>, offered: Set<String>) -> [String] {
@@ -405,7 +418,8 @@ final class StickerLibrary {
                 guard !Task.isCancelled, self?.scopeProvider() == scope else { return }
                 // Removed by the person while earlier installs ran.
                 guard !ledger.offered(accountRef: scope.accountRef).contains(coordinate) else { continue }
-                guard (try? await install(scope.accountRef, coordinate)) != nil else { continue }
+                let input = StickerDefaultPacks.installInput(for: coordinate)
+                guard (try? await install(scope.accountRef, input)) != nil else { continue }
                 ledger.record([coordinate], accountRef: scope.accountRef)
             }
         }
