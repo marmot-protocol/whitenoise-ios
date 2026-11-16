@@ -10,6 +10,9 @@ final class ControlledSleeper {
     private(set) var completedCount = 0
     private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
 
+    /// Sleeps parked right now, waiting for a release or a cancel.
+    var sleepingCount: Int { waiters.count }
+
     func sleep(_ duration: Duration) async throws {
         requestedDelays.append(duration)
         let id = UUID()

@@ -370,14 +370,13 @@ final class AppState {
     /// IPF moderation reports are configured per build flavor. Unconfigured
     /// builds hide every report-to-White-Noise affordance.
     var moderationReportingAvailable: Bool {
-#if DEBUG
-        if let moderationReportingAvailableForTesting { return moderationReportingAvailableForTesting }
-#endif
-        return client?.moderationReportingAvailable == true
+        moderationReportingAvailability(client)
     }
-#if DEBUG
-    @ObservationIgnored var moderationReportingAvailableForTesting: Bool?
-#endif
+    @ObservationIgnored private let moderationReportingAvailability: (MarmotClient?) -> Bool
+
+    static func moderationReportingAvailable(on client: MarmotClient?) -> Bool {
+        client?.moderationReportingAvailable == true
+    }
 
     /// Launch-to-root-surface timing, held until the first runtime can record it.
     @ObservationIgnored var hostWindowInitStartedAt: ContinuousClock.Instant?
@@ -447,7 +446,7 @@ final class AppState {
     /// Foreground expiration-sweep loop for disappearing messages. Started
     /// with the other `.ready` foreground maintenance and cancelled on
     /// background suspension.
-    @ObservationIgnored private let retentionSweeper = MessageRetentionSweeper()
+    @ObservationIgnored private let retentionSweeper: MessageRetentionSweeper
     /// Bumped after a sweep pruned expired records; open conversations observe
     /// it and reload their timeline window when their group is affected.
     private(set) var retentionSweepGeneration = 0
@@ -615,8 +614,12 @@ final class AppState {
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
         notificationCatchUpCalls: NotificationCatchUpCalls = .live,
         hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
-            RuntimeLifecycle.recordHostPerformanceOnClient
+            RuntimeLifecycle.recordHostPerformanceOnClient,
+        moderationReportingAvailability: @escaping (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:),
+        retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep
     ) {
+        self.moderationReportingAvailability = moderationReportingAvailability
+        self.retentionSweeper = MessageRetentionSweeper(sleep: retentionSweepSleep)
         self.notificationCoordinator = NotificationCoordinator(catchUpCalls: notificationCatchUpCalls)
         self.runtimeLifecycle = RuntimeLifecycle(
             client: client,
@@ -1665,14 +1668,7 @@ final class AppState {
     @ObservationIgnored private var attentionDrainInProgress = false
     @ObservationIgnored private var latestAccountAttention: AccountAttentionSnapshotFfi?
 
-#if DEBUG
-    @ObservationIgnored var accountAttentionEnabledForTesting = true
-#endif
-
     private func startAccountAttentionIfNeeded() {
-#if DEBUG
-        guard accountAttentionEnabledForTesting else { return }
-#endif
         guard !attentionDrainInProgress, attentionTask == nil, canUseRuntimeForForegroundWork, let client else { return }
         let id = UUID()
         attentionTaskID = id
@@ -2280,25 +2276,6 @@ final class AppState {
 
     #if DEBUG
     @ObservationIgnored var afterAccountExitClientCapturedForTesting: (() async -> Void)?
-
-    @MainActor
-    func scheduleForegroundMutationFollowupForTesting(
-        operation: @escaping @MainActor () async -> Void
-    ) {
-        scheduleForegroundMutationFollowup { _ in
-            await operation()
-        }
-    }
-
-    /// Exposes the sign-out teardown guard (#320) so tests can assert it is
-    /// raised only during `signOut()` and cleared before the function returns
-    /// (so a legitimate post-sign-out reschedule is not suppressed).
-    @MainActor
-    var isSigningOutForTesting: Bool { isSigningOut }
-
-    var retentionSweeperIsActiveForTesting: Bool { retentionSweeper.isSweeping }
-
-    var hasPendingUnreadSummaryRefreshForTesting: Bool { unreadSummaryRefreshTask != nil }
     #endif
 }
 

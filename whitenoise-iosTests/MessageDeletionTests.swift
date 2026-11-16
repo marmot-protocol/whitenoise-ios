@@ -188,8 +188,7 @@ struct MessageDeletionTests {
         let me = hex("11")
         let other = hex("22")
         let group = groupRecord(id: String(repeating: "ab", count: 16), name: "Reports", admins: [other])
-        let state = try appState(accountRef: "reports-\(UUID())", accountIdHex: me)
-        state.moderationReportingAvailableForTesting = true
+        let state = try appState(accountRef: "reports-\(UUID())", accountIdHex: me, reportingAvailable: { _ in true })
         let model = ConversationViewModel(appState: state, group: group)
         let mine = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: me, direction: "sent")
         let theirs = appRecord(id: hex("55"), groupId: group.groupIdHex, sender: other, direction: "received")
@@ -213,8 +212,10 @@ struct MessageDeletionTests {
         let me = hex("11")
         let other = hex("22")
         let group = groupRecord(id: String(repeating: "cd", count: 16), name: "")
-        let state = try appState(accountRef: "reports-\(UUID())", accountIdHex: me)
-        state.moderationReportingAvailableForTesting = true
+        var reportingAvailable = true
+        let state = try appState(
+            accountRef: "reports-\(UUID())", accountIdHex: me, reportingAvailable: { _ in reportingAvailable }
+        )
         let model = ConversationViewModel(appState: state, group: group, initialOtherMember: other, initialMemberCount: 2)
         let mine = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: me, direction: "sent")
         let theirs = appRecord(id: hex("55"), groupId: group.groupIdHex, sender: other, direction: "received")
@@ -230,11 +231,11 @@ struct MessageDeletionTests {
         // MarmotKit 0.13 accepts polls in direct conversations too.
         #expect(model.canCreatePolls == model.canSendMessages)
         // Unconfigured builds offer no report in a direct chat, but Block stays.
-        state.moderationReportingAvailableForTesting = false
+        reportingAvailable = false
         #expect(!model.canReport(theirs))
         #expect(model.canBlockAuthor(of: theirs))
         #expect(!model.canBlockAndReport)
-        state.moderationReportingAvailableForTesting = true
+        reportingAvailable = true
         state.activeAccountRef = "replacement-account"
         #expect(!model.canReport(theirs))
         #expect(!model.canBlockAuthor(of: theirs))
@@ -697,8 +698,13 @@ struct MessageDeletionTests {
         }
     }
 
-    private func appState(accountRef: String, accountIdHex: String, client: MarmotClient? = nil) throws -> AppState {
-        let state = AppState.test(client: client)
+    private func appState(
+        accountRef: String,
+        accountIdHex: String,
+        client: MarmotClient? = nil,
+        reportingAvailable: @escaping (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:)
+    ) throws -> AppState {
+        let state = AppState.test(client: client, moderationReportingAvailability: reportingAvailable)
         state.accountStore.accounts = [
             AccountSummaryFfi(
                 label: accountRef,
