@@ -371,7 +371,7 @@ struct MessageSemanticsTests {
         )
         let item = try #require(viewModel.timeline.first)
         // Row-resolved references arrive already ordered (Marmot preserves imeta order).
-        viewModel.replaceMediaReferencesForTesting([firstReference, secondReference], forMessageId: messageId)
+        viewModel.timelineStore.replaceMediaReferences([firstReference, secondReference], forMessageId: messageId)
 
         let firstRead = viewModel.mediaItems(for: item)
         let buildCountAfterProjection = counter.mediaBuilds
@@ -404,11 +404,11 @@ struct MessageSemanticsTests {
         )
         let item = try #require(viewModel.timeline.first { $0.id == "msg:\(messageId)" })
         let otherItem = try #require(viewModel.timeline.first { $0.id == "msg:\(otherMessageId)" })
-        viewModel.replaceMediaReferencesForTesting([firstReference], forMessageId: messageId)
-        viewModel.replaceMediaReferencesForTesting([otherReference], forMessageId: otherMessageId)
+        viewModel.timelineStore.replaceMediaReferences([firstReference], forMessageId: messageId)
+        viewModel.timelineStore.replaceMediaReferences([otherReference], forMessageId: otherMessageId)
         let buildCountAfterInitialProjection = counter.mediaBuilds
 
-        #expect(viewModel.replaceMediaReferencesForTesting([replacementReference], forMessageId: messageId))
+        #expect(viewModel.timelineStore.replaceMediaReferences([replacementReference], forMessageId: messageId))
         let updated = viewModel.mediaItems(for: item)
         let unchanged = viewModel.mediaItems(for: otherItem)
 
@@ -476,10 +476,10 @@ struct MessageSemanticsTests {
             placement: .window
         )
         let item = try #require(viewModel.timeline.first)
-        viewModel.replaceMediaReferencesForTesting([listedReference], forMessageId: messageId)
+        viewModel.timelineStore.replaceMediaReferences([listedReference], forMessageId: messageId)
         #expect(viewModel.mediaItems(for: item).map(\.fileName) == ["listed.jpg"])
 
-        viewModel.installPendingMediaForTesting(rowId: item.id, items: [pending])
+        viewModel.timelineStore.mediaProjections.setPending([pending], forRowId: item.id)
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window

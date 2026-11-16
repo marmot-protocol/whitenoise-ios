@@ -1484,7 +1484,7 @@ struct ConversationTimelineProjectionTests {
 
         // Mirror sendMedia's optimistic setup: stage the local attachment bytes
         // under the temp row, then add the transient bubble.
-        viewModel.installPendingMediaForTesting(rowId: tempRowId, items: [attachment])
+        viewModel.timelineStore.mediaProjections.setPending([attachment], forRowId: tempRowId)
         viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
 
         // uploadMedia succeeded but returned no message id.
@@ -1492,7 +1492,7 @@ struct ConversationTimelineProjectionTests {
 
         // The transient row is recreated under the same id (no server id), and the
         // just-sent attachment must still resolve instead of vanishing.
-        #expect(viewModel.pendingMediaForTesting(rowId: tempRowId) == [attachment])
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: tempRowId) == [attachment])
 
         let mediaRow = try #require(viewModel.timeline.first { $0.id == tempRowId })
         #expect(viewModel.mediaItems(for: mediaRow) == [attachment])
@@ -1536,10 +1536,10 @@ struct ConversationTimelineProjectionTests {
             group: group(name: "", id: groupIdHex)
         )
 
-        viewModel.installPendingMediaForTesting(rowId: tempRowId, items: [localAttachment])
+        viewModel.timelineStore.mediaProjections.setPending([localAttachment], forRowId: tempRowId)
         viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
         viewModel.confirmSent(tempId: tempId, record: pending, messageId: messageId)
-        #expect(viewModel.pendingMediaForTesting(rowId: realRowId) == [localAttachment])
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: realRowId) == [localAttachment])
 
         let authoritative = timelineRecord(
             messageIdHex: messageId,
@@ -1556,7 +1556,7 @@ struct ConversationTimelineProjectionTests {
             placement: .window
         )
 
-        #expect(viewModel.pendingMediaForTesting(rowId: realRowId) == nil)
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: realRowId) == nil)
         let mediaRow = try #require(viewModel.timeline.first { $0.id == realRowId })
         #expect(viewModel.mediaItems(for: mediaRow).map(\.fileName) == ["canonical.jpg"])
     }
@@ -1659,7 +1659,7 @@ struct ConversationTimelineProjectionTests {
             dim: "640x480",
             localData: Data([0xDE, 0xAD, 0xBE, 0xEF])
         )
-        viewModel.installPendingMediaForTesting(rowId: mediaRowId, items: [attachment])
+        viewModel.timelineStore.mediaProjections.setPending([attachment], forRowId: mediaRowId)
         viewModel.applyPendingOutgoingMessage(tempId: mediaTempId, record: mediaPending)
 
         // A plain text send with the same text, no staged media.
@@ -1705,7 +1705,7 @@ struct ConversationTimelineProjectionTests {
         // The media pending bubble survived, still pending under its temp row.
         #expect(messages.contains { $0.rowId == mediaRowId && $0.status == .sending })
         // Its staged attachment is still resolvable.
-        #expect(viewModel.pendingMediaForTesting(rowId: mediaRowId) == [attachment])
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: mediaRowId) == [attachment])
     }
 
     @MainActor
@@ -1739,7 +1739,7 @@ struct ConversationTimelineProjectionTests {
             dim: "640x480",
             localData: Data([0xDE, 0xAD, 0xBE, 0xEF])
         )
-        viewModel.installPendingMediaForTesting(rowId: mediaRowId, items: [attachment])
+        viewModel.timelineStore.mediaProjections.setPending([attachment], forRowId: mediaRowId)
         viewModel.applyPendingOutgoingMessage(tempId: mediaTempId, record: mediaPending)
 
         let textTempId = "pending-text"
@@ -1787,7 +1787,7 @@ struct ConversationTimelineProjectionTests {
         // The text pending bubble survived.
         #expect(messages.contains { $0.rowId == textRowId && $0.status == .sending })
         // The media pending row was removed (reconciled away).
-        #expect(viewModel.pendingMediaForTesting(rowId: mediaRowId) == nil)
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: mediaRowId) == nil)
     }
 
     @Test func paginationProgressRequiresWindowEdgeMovement() {
