@@ -178,6 +178,8 @@ struct StickerLibraryTests {
         var installs: [String] = []
         var uninstalls: [String] = []
         var failingInstalls: Set<String> = []
+        var holdsNextInstall = false
+        var installGate: CheckedContinuation<Void, Never>?
         private let resources = AppStateTestResources()
         lazy var ledger = StickerDefaultPackLedger(defaults: resources.makeDefaults("StickerDefaultPacks"))
 
@@ -198,6 +200,10 @@ struct StickerLibraryTests {
             install: { [weak self] _, input in
                 guard let self else { throw CancellationError() }
                 self.installs.append(input)
+                if self.holdsNextInstall {
+                    self.holdsNextInstall = false
+                    await withCheckedContinuation { self.installGate = $0 }
+                }
                 if self.failingInstalls.contains(input) { throw MarmotKitError.StickerNetwork(details: "offline") }
                 var pack = self.discovered.first { $0.coordinate == input } ?? stickerPack("linked")
                 pack.coordinate = input
@@ -305,9 +311,10 @@ struct StickerLibraryTests {
         #expect(!harness.library.isInstalled(fresh.coordinate))
     }
 
-    @Test func eachAccountGetsTheDefaultPacksOnce() async {
+    @Test func eachAccountGetsTheDefaultPacksOnce() async throws {
         let harness = Harness()
         let defaults = StickerDefaultPacks.coordinates
+        try await harness.library.sync()
         await harness.library.installDefaultPacksIfNeeded()
         #expect(harness.installs == defaults)
         #expect(defaults.allSatisfy { harness.library.isInstalled($0) })
@@ -317,12 +324,14 @@ struct StickerLibraryTests {
 
         harness.scope = StickerScope(accountRef: "bob", runtimeGeneration: 1)
         harness.installed = []
+        try await harness.library.sync()
         await harness.library.installDefaultPacksIfNeeded()
         #expect(harness.installs == defaults + defaults)
     }
 
     @Test func aRemovedDefaultPackStaysRemoved() async throws {
         let harness = Harness()
+        try await harness.library.sync()
         await harness.library.installDefaultPacksIfNeeded()
         let marmot = try #require(harness.library.installed.first { $0.coordinate == StickerDefaultPacks.coordinates[1] })
         try await harness.library.uninstall(marmot)
@@ -338,6 +347,7 @@ struct StickerLibraryTests {
         originals.coordinate = StickerDefaultPacks.coordinates[0]
         harness.installed.append(originals)
 
+        try await harness.library.sync()
         await harness.library.installDefaultPacksIfNeeded()
         #expect(harness.installs == [StickerDefaultPacks.coordinates[1]])
 
@@ -347,10 +357,11 @@ struct StickerLibraryTests {
         #expect(harness.installs == [StickerDefaultPacks.coordinates[1]])
     }
 
-    @Test func aDefaultPackThatFailedToInstallIsTriedAgain() async {
+    @Test func aDefaultPackThatFailedToInstallIsTriedAgain() async throws {
         let harness = Harness()
         let marmot = StickerDefaultPacks.coordinates[1]
         harness.failingInstalls = [marmot]
+        try await harness.library.sync()
         await harness.library.installDefaultPacksIfNeeded()
         #expect(harness.library.isInstalled(StickerDefaultPacks.coordinates[0]))
         #expect(!harness.library.isInstalled(marmot))
@@ -359,5 +370,32 @@ struct StickerLibraryTests {
         await harness.library.installDefaultPacksIfNeeded()
         #expect(harness.library.isInstalled(marmot))
         #expect(harness.installs == StickerDefaultPacks.coordinates + [marmot])
+    }
+
+    @Test func noDefaultPackIsInstalledUntilASyncSucceeds() async throws {
+        let harness = Harness()
+        harness.syncError = MarmotKitError.StickerNetwork(details: "offline")
+        try? await harness.library.sync()
+        await harness.library.installDefaultPacksIfNeeded()
+        #expect(harness.installs.isEmpty)
+
+        harness.syncError = nil
+        try await harness.library.sync()
+        await harness.library.installDefaultPacksIfNeeded()
+        #expect(harness.installs == StickerDefaultPacks.coordinates)
+    }
+
+    @Test func anAccountSwitchStopsTheRemainingDefaultInstalls() async throws {
+        let harness = Harness()
+        try await harness.library.sync()
+        harness.holdsNextInstall = true
+        let library = harness.library
+        let installing = Task { await library.installDefaultPacksIfNeeded() }
+        try await eventually { harness.installGate != nil }
+
+        harness.scope = StickerScope(accountRef: "bob", runtimeGeneration: 1)
+        harness.installGate?.resume()
+        await installing.value
+        #expect(harness.installs == [StickerDefaultPacks.coordinates[0]])
     }
 }

@@ -374,12 +374,13 @@ final class StickerLibrary {
         await reloadInstalled()
     }
 
-    /// Installs White Noise's default packs the account hasn't had yet. Run it
-    /// after `sync`, so packs already on the account's relay list count as
-    /// installed. A pack that fails to install (offline, say) is tried again
-    /// next time; one that installed is recorded and never reinstalled.
+    /// Installs White Noise's default packs the account hasn't had yet. Waits
+    /// for a successful `sync` of this account and runtime, so packs already
+    /// on its relay list count as installed. A pack that fails to install
+    /// (offline, say) is tried again next time; one that installed is
+    /// recorded and never reinstalled.
     func installDefaultPacksIfNeeded() async {
-        guard let scope = currentScope() else { return }
+        guard let scope = currentScope(), syncedScope == scope else { return }
         if let running = installingDefaults, running.scope == scope { return await running.task.value }
         await loadInstalledIfNeeded()
         guard currentScope() == scope, hasLoadedInstalled else { return }
@@ -390,8 +391,10 @@ final class StickerLibrary {
             installed: installedCoordinates, offered: ledger.offered(accountRef: scope.accountRef))
         guard !pending.isEmpty else { return }
 
-        let task = Task { [install] in
+        let task = Task { [weak self, install] in
             for coordinate in pending {
+                // An account switch or runtime restart cancels the rest.
+                guard !Task.isCancelled, self?.scopeProvider() == scope else { return }
                 guard (try? await install(scope.accountRef, coordinate)) != nil else { continue }
                 ledger.record([coordinate], accountRef: scope.accountRef)
             }
@@ -454,6 +457,7 @@ final class StickerLibrary {
             hasLoadedInstalled = false
             loadingInstalled?.cancel()
             loadingInstalled = nil
+            installingDefaults?.task.cancel()
             installingDefaults = nil
             isInstallingDefaults = false
         }
