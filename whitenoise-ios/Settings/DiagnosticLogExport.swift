@@ -195,7 +195,8 @@ nonisolated enum DiagnosticLogExport {
             }
             let archive = directory.appendingPathComponent("\(baseName).zip")
             try zipDirectory(staging, to: archive)
-            try? manager.setAttributes(protection, ofItemAtPath: archive.path)
+            // The picker exposes this file, so it must not outlive a lock unprotected.
+            try manager.setAttributes(protection, ofItemAtPath: archive.path)
             try? manager.removeItem(at: staging)
             return DiagnosticLogShareFile(url: archive)
         } catch {

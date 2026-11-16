@@ -31,6 +31,19 @@ struct GroupMemberOutcomePresentationTests {
         }
     }
 
+    @Test func anUnavailableErrorShownOnScreenNamesWhoFailed() {
+        let alex = outcome("b", .missingKeyPackage)
+        let blair = outcome("c", .missingInboxRoute)
+        let error = GroupMembersUnavailableError(skipped: [alex, blair]).naming { account in
+            account == alex.accountIdHex ? "Alex" : account == blair.accountIdHex ? "Blair" : "Unrelated"
+        }
+        #expect(error.knownNames.count == 2)
+        #expect(UserFacingError.message(for: error) == [
+            "Alex isn't on White Noise yet.",
+            "Blair’s message inbox has no relay White Noise can use.",
+        ].joined(separator: "\n"))
+    }
+
     @Test func outdatedAndIncompatibleAppsAreAskedToUpdateNotInstall() {
         for status in [MemberResolutionStatusFfi.obsoleteKeyPackage, .incompatibleKeyPackage] {
             #expect(GroupMemberOutcomePresentation.message(

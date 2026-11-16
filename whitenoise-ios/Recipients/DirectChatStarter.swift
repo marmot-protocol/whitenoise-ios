@@ -234,7 +234,10 @@ final class DirectChatStarter {
             )
             return startsSeparateChat ? .created(groupIdHex: groupIdHex) : .started(groupIdHex: groupIdHex)
         } catch {
-            return .failed(StartChatFailurePresentation.failure(for: error))
+            let named = (error as? GroupMembersUnavailableError)?.naming {
+                appState.knownDisplayName(forAccountIdHex: $0)
+            }
+            return .failed(StartChatFailurePresentation.failure(for: named ?? error))
         }
     }
 

@@ -114,7 +114,9 @@ final class GroupDetailsViewModel {
         } catch {
             await refreshAfterFailedMutation(using: appState)
             handleActionError(error, title: L10n.string("Invite failed"), using: appState)
-            throw error
+            // The sheet stays open on this error, so it must name who failed too.
+            throw (error as? GroupMembersUnavailableError)?.naming { appState.knownDisplayName(forAccountIdHex: $0) }
+                ?? error
         }
     }
 

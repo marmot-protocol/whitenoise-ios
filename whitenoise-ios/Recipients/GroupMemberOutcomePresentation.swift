@@ -5,9 +5,20 @@ import MarmotKit
 /// no group and published no commit; `skipped` says why for each account.
 nonisolated struct GroupMembersUnavailableError: LocalizedError, Equatable {
     let skipped: [MemberResolutionOutcomeFfi]
+    /// Names the app knew for the skipped accounts, so a screen that shows
+    /// this error can say who couldn't be added.
+    var knownNames: [String: String] = [:]
 
     var errorDescription: String? {
-        GroupMemberOutcomePresentation.message(for: skipped, knownName: { _ in nil })
+        GroupMemberOutcomePresentation.message(for: skipped, knownName: { knownNames[$0] })
+    }
+
+    func naming(_ knownName: (String) -> String?) -> Self {
+        var named = self
+        for outcome in skipped {
+            named.knownNames[outcome.accountIdHex] = knownName(outcome.accountIdHex)
+        }
+        return named
     }
 }
 
