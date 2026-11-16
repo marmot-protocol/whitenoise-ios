@@ -20,7 +20,17 @@ struct PrivacySecuritySettingsProjectionTests {
         #expect(row.id == "/tmp/audit-1.jsonl")
         #expect(row.fileName == "audit-1.jsonl")
         #expect(row.path == "/tmp/audit-1.jsonl")
-        #expect(row.detailText == "\(ByteCountFormatter.string(fromByteCount: 1_536, countStyle: .file)) - 12345678...abcdef")
+        #expect(row.detailText == ByteCountFormatter.string(fromByteCount: 1_536, countStyle: .file))
+    }
+
+    @Test func auditRowDetailsShowSizeAndTimeOnOneShortLine() {
+        let file = AuditLogFileFfi(
+            accountRef: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef9999",
+            path: "/tmp/a.jsonl", fileName: "a.jsonl", sizeBytes: 1_536, modifiedAtMs: 1_794_653_400_000)
+        let row = AuditFileRowProjection.rows(
+            from: [file], locale: Locale(identifier: "en_GB"), timeZone: TimeZone(identifier: "UTC")!)[0]
+        let size = ByteCountFormatter.string(fromByteCount: 1_536, countStyle: .file)
+        #expect(row.detailText == "\(size) - 14 November 2026, 10:50")
     }
 
     @Test func auditRowsKeepTheFilesModifiedTime() {

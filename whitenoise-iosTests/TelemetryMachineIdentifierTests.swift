@@ -7,7 +7,7 @@ struct TelemetryMachineIdentifierTests {
 
     @Test func decodesAsciiMachineBytesIntoIdentifier() {
         let bytes: [Int8] = Array("iPhone17,1".utf8).map(Int8.init(bitPattern:)) + [0, 0, 0]
-        #expect(TelemetryBuildConfig.machineIdentifier(fromMachineBytes: bytes) == "iPhone17,1")
+        #expect(AuditLogSourceBuildConfig.machineIdentifier(fromMachineBytes: bytes) == "iPhone17,1")
     }
 
     @Test func decodesHighBitBytesWithoutTrapping() {
@@ -15,11 +15,11 @@ struct TelemetryMachineIdentifierTests {
         // `UInt8(value)` conversion traps on negative input; `UInt8(bitPattern:)`
         // must reinterpret the bits instead of crashing.
         let bytes: [Int8] = [Int8(bitPattern: 0xC3), Int8(bitPattern: 0x80), 0]
-        #expect(TelemetryBuildConfig.machineIdentifier(fromMachineBytes: bytes) == "\u{00C3}\u{0080}")
+        #expect(AuditLogSourceBuildConfig.machineIdentifier(fromMachineBytes: bytes) == "\u{00C3}\u{0080}")
     }
 
     @Test func emptyOrAllNulBytesReturnNil() {
-        #expect(TelemetryBuildConfig.machineIdentifier(fromMachineBytes: []) == nil)
-        #expect(TelemetryBuildConfig.machineIdentifier(fromMachineBytes: [0, 0, 0]) == nil)
+        #expect(AuditLogSourceBuildConfig.machineIdentifier(fromMachineBytes: []) == nil)
+        #expect(AuditLogSourceBuildConfig.machineIdentifier(fromMachineBytes: [0, 0, 0]) == nil)
     }
 }

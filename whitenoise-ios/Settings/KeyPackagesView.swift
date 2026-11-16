@@ -136,10 +136,8 @@ struct KeyPackagesView: View {
         }
         .opacity(isDeleting ? 0.5 : 1)
         .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
+            WNSwipeActionButton(title: L10n.string("Delete"), systemImage: "trash.fill", tint: .red) {
                 Task { await model.delete(package, using: appState) }
-            } label: {
-                Label("Delete", systemImage: "trash")
             }
             .disabled(isDeleting || model.isPublishing)
         }

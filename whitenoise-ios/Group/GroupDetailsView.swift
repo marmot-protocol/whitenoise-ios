@@ -1143,11 +1143,12 @@ struct GroupDetailsView: View {
     private func swipeActions(for member: GroupMemberDetailsFfi) -> some View {
         let actions = memberActions(for: member)
         if actions.contains(.remove) {
-            Button(role: .destructive) {
+            Button {
                 model.pendingConfirmation = .remove(member)
             } label: {
                 Label("Remove", systemImage: "person.crop.circle.badge.minus")
             }
+            .tint(.red)
         }
         if actions.contains(.demote) {
             Button {

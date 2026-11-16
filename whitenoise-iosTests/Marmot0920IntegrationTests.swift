@@ -42,14 +42,15 @@ struct Marmot0920IntegrationTests {
     @Test func recoveryAreaShowsAParkedSyncEvenWithNothingElseToRecover() {
         let quiet = GroupRecoveryStatusFfi(groupIdHex: "group", automaticRecoveryFailed: false, pendingReinvites: 0,
                                            failedReinvites: 0, rejoinInvitations: [])
-        #expect(!GroupRecoveryModel.hasContent(status: nil, errorMessage: nil, syncParked: false))
-        #expect(!GroupRecoveryModel.hasContent(status: quiet, errorMessage: nil, syncParked: false))
-        #expect(GroupRecoveryModel.hasContent(status: nil, errorMessage: nil, syncParked: true))
-        #expect(GroupRecoveryModel.hasContent(status: quiet, errorMessage: nil, syncParked: true))
-        #expect(GroupRecoveryModel.hasContent(status: nil, errorMessage: "failed", syncParked: false))
+        #expect(!GroupRecoveryModel.hasContent(status: nil, errorMessage: nil, syncParked: false, hasCommitRefusal: false))
+        #expect(!GroupRecoveryModel.hasContent(status: quiet, errorMessage: nil, syncParked: false, hasCommitRefusal: false))
+        #expect(GroupRecoveryModel.hasContent(status: nil, errorMessage: nil, syncParked: true, hasCommitRefusal: false))
+        #expect(GroupRecoveryModel.hasContent(status: quiet, errorMessage: nil, syncParked: true, hasCommitRefusal: false))
+        #expect(GroupRecoveryModel.hasContent(status: nil, errorMessage: "failed", syncParked: false, hasCommitRefusal: false))
         var reinviting = quiet
         reinviting.pendingReinvites = 1
-        #expect(GroupRecoveryModel.hasContent(status: reinviting, errorMessage: nil, syncParked: false))
+        #expect(GroupRecoveryModel.hasContent(status: reinviting, errorMessage: nil, syncParked: false, hasCommitRefusal: false))
+        #expect(GroupRecoveryModel.hasContent(status: quiet, errorMessage: nil, syncParked: false, hasCommitRefusal: true))
     }
 
     @Test func visibilityTimingNeedsConsentAndLayoutAndSurvivesLocalIDReplacement() async throws {

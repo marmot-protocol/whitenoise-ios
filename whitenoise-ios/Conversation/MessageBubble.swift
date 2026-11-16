@@ -452,7 +452,10 @@ struct MessageBubble: View {
         } else if let sticker = record.sticker, showsStandardBody {
             stickerMessageContent(StickerKey(sticker))
         } else if record.kind == MessageSemantics.kindPoll, showsStandardBody {
-            Group {
+            VStack(alignment: .leading, spacing: 0) {
+                if let replyPreview {
+                    replyHeader(replyPreview)
+                }
                 if let poll {
                     PollMessageContent(poll: poll, isFromMe: isFromMe, onVote: onPollVote,
                                        onViewVotes: onViewPollVotes)

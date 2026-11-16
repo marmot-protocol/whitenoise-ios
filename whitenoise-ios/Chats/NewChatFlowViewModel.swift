@@ -42,7 +42,7 @@ final class NewChatFlowViewModel {
         _ name: String,
         _ memberRefs: [String],
         _ options: CreateGroupOptionsFfi
-    ) async throws -> CreatedGroupFfi
+    ) async throws -> DetailedGroupCreationResultFfi
 
     @ObservationIgnored private let keyPackagePrewarmer = MemberKeyPackagePrewarmer()
     @ObservationIgnored private let findExistingDirectChat: FindExistingDirectChat
@@ -75,7 +75,7 @@ final class NewChatFlowViewModel {
         name: String,
         memberRefs: [String],
         options: CreateGroupOptionsFfi
-    ) async throws -> CreatedGroupFfi {
+    ) async throws -> DetailedGroupCreationResultFfi {
         try await appState.currentMarmotClient().createGroupWithOptionsDetailed(
             accountRef: accountRef,
             name: name,
@@ -418,29 +418,38 @@ final class NewChatFlowViewModel {
                 initialImage: image?.initialImage,
                 disappearingMessageSecs: retentionSeconds
             )
-            let created = try await createGroupOperation(
+            let result = try await createGroupOperation(
                 appState,
                 accountRef,
                 normalizedName,
                 groupSelection.memberRefs,
                 options
             )
-            let groupIdHex = created.groupIdHex
-            if let image {
-                GroupAvatarImageLoader.seed(
-                    data: image.data,
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex,
-                    replacingImageHashHex: nil
-                )
-            }
-            appState.noteCreatedChatListRow(accountRef: accountRef, row: created.chatListRow)
-            HostActionPerformance.groupBecameCanonical(
-                groupIdHex: groupIdHex,
-                since: performance
+            let created = try result.requireCreated()
+            openCreatedGroup(
+                groupIdHex: created.groupIdHex, row: created.chatListRow, image: image,
+                accountRef: accountRef, performance: performance, using: appState, onOpen: onOpen
             )
-            Haptics.success()
-            onOpen(groupIdHex)
+            let skipped = GroupMemberOutcomePresentation.skipped(result.memberOutcomes)
+            if let notice = GroupMemberOutcomePresentation.notice(
+                for: skipped, knownName: { appState.knownDisplayName(forAccountIdHex: $0) }
+            ) {
+                appState.present(.warning(notice.title, message: notice.message))
+            }
+        } catch let unavailable as GroupMembersUnavailableError {
+            Haptics.error()
+            let message = GroupMemberOutcomePresentation.message(
+                for: unavailable.skipped, knownName: { appState.knownDisplayName(forAccountIdHex: $0) }
+            )
+            groupCreateError = message
+            appState.present(.error(L10n.string("Couldn't create chat"), message: message))
+        } catch MarmotKitError.CreatedGroupMemberReportUnavailable(let groupIdHex) {
+            // A retried image create found the group an earlier upload made but
+            // kept no member report for it. Open that group; never create another.
+            openCreatedGroup(
+                groupIdHex: groupIdHex, row: nil, image: image,
+                accountRef: accountRef, performance: performance, using: appState, onOpen: onOpen
+            )
         } catch let marmotError as MarmotKitError {
             Haptics.error()
             if let recipient = MissingKeyPackageInvitationPresentation.recipient(for: marmotError) {
@@ -459,6 +468,31 @@ final class NewChatFlowViewModel {
             groupCreateError = UserFacingError.message(for: error)
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't create chat"), error: error))
         }
+    }
+
+    private func openCreatedGroup(
+        groupIdHex: String,
+        row: ChatListRowFfi?,
+        image: GroupImageUploadDraft?,
+        accountRef: String,
+        performance: HostActionPerformance.Token,
+        using appState: AppState,
+        onOpen: (String) -> Void
+    ) {
+        if let image {
+            GroupAvatarImageLoader.seed(
+                data: image.data,
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                replacingImageHashHex: nil
+            )
+        }
+        if let row {
+            appState.noteCreatedChatListRow(accountRef: accountRef, row: row)
+        }
+        HostActionPerformance.groupBecameCanonical(groupIdHex: groupIdHex, since: performance)
+        Haptics.success()
+        onOpen(groupIdHex)
     }
 
 }

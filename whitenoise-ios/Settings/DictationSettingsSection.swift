@@ -33,7 +33,7 @@ struct DictationSettingsSection: View {
         } header: {
             Text("Dictation")
         } footer: {
-            Text("When the keyboard is hidden, hold the message field and speak, then let go to send. Slide up to keep listening, or slide left to cancel. iOS turns your speech into text on this device and downloads its speech model from Apple. The audio isn’t saved or sent.")
+            Text("When the keyboard is hidden, hold the message field and speak, then let go to send. Slide up to keep listening, or slide left to cancel. Your voice never leaves this device: iOS turns it into text here, and the audio isn’t saved. iOS may first need to download a speech model from Apple.")
         }
         .task(id: preferences.isEnabled) {
             guard preferences.isEnabled else { return }

@@ -30,7 +30,7 @@ struct CancellableSubscriptionAdapterTests {
             let group = try await client.createGroupWithOptionsDetailed(
                 accountRef: account.label, name: "Adapter", memberRefs: [],
                 options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)
-            )
+            ).requireCreated()
 
             // Consume the initial snapshot so the next native wait has no event pending.
             let wait: @Sendable () async throws -> Void
