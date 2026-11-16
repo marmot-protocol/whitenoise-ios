@@ -221,6 +221,19 @@ nonisolated enum SingleEmojiMessagePresentation {
     }
 }
 
+/// A message whose whole text is one resolvable `:shortcode:` shows that
+/// custom emoji at sticker size without a bubble, like a single emoji.
+nonisolated enum SingleCustomEmojiMessagePresentation {
+    static let side: CGFloat = 112
+
+    static func shortcode(in text: String, resolvable: Set<CustomEmojiShortcode>) -> CustomEmojiShortcode? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let shortcode = CustomEmojiShortcode(reactionContent: trimmed), resolvable.contains(shortcode)
+        else { return nil }
+        return shortcode
+    }
+}
+
 nonisolated enum MessageExpirationPresentation {
     enum Detail: Equatable {
         case expired
