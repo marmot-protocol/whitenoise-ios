@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import Observation
 import MarmotKit
@@ -1047,11 +1046,6 @@ final class ConversationViewModel {
 
     func confirmSent(tempId: String, record: AppMessageRecordFfi, messageId: String?) {
         timelineStore.confirmSent(tempId: tempId, record: record, messageId: messageId)
-    }
-
-    @discardableResult
-    private func replaceMediaReferences(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
-        timelineStore.replaceMediaReferences(references, forMessageId: messageIdHex)
     }
 
     private func resetOptimisticState() {
@@ -2524,21 +2518,6 @@ final class ConversationViewModel {
         }
         return current
     }
-
-#if DEBUG
-    @discardableResult
-    func replaceMediaReferencesForTesting(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
-        replaceMediaReferences(references, forMessageId: messageIdHex)
-    }
-
-    func installPendingMediaForTesting(rowId: String, items: [MessageMediaAttachment]) {
-        timelineStore.mediaProjections.setPending(items, forRowId: rowId)
-    }
-
-    func pendingMediaForTesting(rowId: String) -> [MessageMediaAttachment]? {
-        timelineStore.mediaProjections.pending(forRowId: rowId)
-    }
-#endif
 
     static func pendingOutgoingMessage(
         _ item: TimelineItem,
