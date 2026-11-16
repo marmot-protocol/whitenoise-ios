@@ -65,8 +65,8 @@ struct DeviceLinkPresentationTests {
 
     @Test func theNewestRequestNeedingAttentionPresentsItself() {
         let prompts = [
-            linkPrompt("old", .comparing(code: linkCode())),
             linkPrompt("limited", .rateLimited(retryAt: 1)),
+            linkPrompt("old", .comparing(code: linkCode())),
             linkPrompt("new", .preparing),
             linkPrompt("done", .ended(reason: .cancelled)),
         ]
@@ -74,9 +74,27 @@ struct DeviceLinkPresentationTests {
         #expect(DeviceLinkPromptPolicy.promptToPresent(
             prompts: prompts, presentedID: nil, dismissedIDs: ["new"]
         ) == "old")
+        // One MDK can't link yet still presents itself, to say why.
         #expect(DeviceLinkPromptPolicy.promptToPresent(
             prompts: prompts, presentedID: nil, dismissedIDs: ["new", "old"]
+        ) == "limited")
+        #expect(DeviceLinkPromptPolicy.promptToPresent(
+            prompts: prompts, presentedID: nil, dismissedIDs: ["new", "old", "limited"]
         ) == nil)
+    }
+
+    @Test func aRequestThatCantBeLinkedYetOffersOnlyNotNow() {
+        let waiting: [DeviceLinkPromptStateFfi] = [
+            .rateLimited(retryAt: 1), .cannotLink(missing: ["x"]), .tooManyDevices, .competingRequests,
+        ]
+        for state in waiting {
+            #expect(DeviceLinkPromptPresentation.needsAttention(state))
+            #expect(DeviceLinkPromptPresentation.canDecline(state))
+        }
+        // Once linking runs or ends there is nothing left to decline.
+        for state: DeviceLinkPromptStateFfi in [.linking, .linked, .ended(reason: .cancelled)] {
+            #expect(!DeviceLinkPromptPresentation.canDecline(state))
+        }
     }
 
     @Test func aRequestOnScreenStaysThroughItsOutcome() {

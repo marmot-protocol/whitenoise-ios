@@ -277,7 +277,9 @@ never answered, and offered as "Link a New Device?" (alert, Chats banner, Device
 Other Profiles); Review activates that profile, then presents the request there. A
 link request presents itself over any
 screen until the user acts or puts it away; it stays on the Devices screen and the
-Chats banner. Show the roster's label and settings, not the user's typed values,
+Chats banner. As on the Mac, so does one MDK can't link yet (rate limited, needs an
+update, too many devices, competing requests): it says why and offers only Not Now,
+which declines it. Show the roster's label and settings, not the user's typed values,
 once MDK reports them. Never approve, reject or start fresh on the user's behalf.
 `enableAccountDevices` is one admin commit that can't be undone. Offer it only as
 an admin nudge in chat details while `accountDevicesActivation` is `eligible` (every

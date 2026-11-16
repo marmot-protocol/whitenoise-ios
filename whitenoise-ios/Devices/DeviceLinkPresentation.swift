@@ -154,10 +154,19 @@ nonisolated enum NewDeviceLinkStep: Equatable {
 /// What the device already signed in shows for one link request.
 nonisolated enum DeviceLinkPromptPresentation {
     /// Whether the request still waits on this device, so it may present itself.
+    /// One MDK can't link yet presents itself too, saying why, as on the Mac.
     static func needsAttention(_ state: DeviceLinkPromptStateFfi) -> Bool {
         switch state {
-        case .preparing, .comparing, .competingRequests, .linking: true
-        case .rateLimited, .cannotLink, .tooManyDevices, .linked, .addedElsewhere, .ended: false
+        case .preparing, .comparing, .competingRequests, .rateLimited, .cannotLink, .tooManyDevices, .linking: true
+        case .linked, .addedElsewhere, .ended: false
+        }
+    }
+
+    /// Not Now is offered while the request still waits on this device's answer.
+    static func canDecline(_ state: DeviceLinkPromptStateFfi) -> Bool {
+        switch state {
+        case .preparing, .comparing, .competingRequests, .rateLimited, .cannotLink, .tooManyDevices: true
+        case .linking, .linked, .addedElsewhere, .ended: false
         }
     }
 

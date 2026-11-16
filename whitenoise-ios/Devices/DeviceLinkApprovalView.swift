@@ -40,7 +40,7 @@ struct DeviceLinkApprovalView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    if let prompt, canDecline(prompt.state) {
+                    if let prompt, DeviceLinkPromptPresentation.canDecline(prompt.state) {
                         Button("Not Now") {
                             run {
                                 try await store.decline(promptID: promptID, using: appState)
@@ -66,7 +66,7 @@ struct DeviceLinkApprovalView: View {
             }
         }
         // Keep the user's decision explicit while the code is up.
-        .interactiveDismissDisabled(prompt.map { canDecline($0.state) } ?? false)
+        .interactiveDismissDisabled(prompt.map { DeviceLinkPromptPresentation.canDecline($0.state) } ?? false)
     }
 
     @ViewBuilder
@@ -145,7 +145,8 @@ struct DeviceLinkApprovalView: View {
                     title: L10n.string("Checking the New Device"),
                     message: L10n.string("A device signed in to your profile wants to link. The emoji appear in a moment."),
                     showsProgress: true
-                )
+                ),
+                doneTitle: nil
             )
         case .linking:
             statusSection(
@@ -181,9 +182,19 @@ struct DeviceLinkApprovalView: View {
                     title: L10n.string("Can’t Link This Device"),
                     message: DeviceLinkPromptPresentation.summary(prompt.state)
                 ),
-                detail: missing.isEmpty ? nil : missing.joined(separator: ", ")
+                detail: missing.isEmpty ? nil : missing.joined(separator: ", "),
+                doneTitle: nil
             )
-        case .competingRequests, .rateLimited, .tooManyDevices, .ended:
+        case .competingRequests, .rateLimited, .tooManyDevices:
+            statusSection(
+                header: DeviceLinkStatusHeader(
+                    systemImage: "exclamationmark.triangle.fill", tint: .orange,
+                    title: L10n.string("Can’t Link Right Now"),
+                    message: DeviceLinkPromptPresentation.summary(prompt.state)
+                ),
+                doneTitle: nil
+            )
+        case .ended:
             statusSection(
                 header: DeviceLinkStatusHeader(
                     systemImage: "exclamationmark.triangle.fill", tint: .orange,
@@ -195,12 +206,13 @@ struct DeviceLinkApprovalView: View {
     }
 
     /// The status card, then its button in a section of its own, so the card
-    /// keeps its rounded corners and the button sits below it.
+    /// keeps its rounded corners and the button sits below it. A request still
+    /// waiting on this device has no button: Not Now is the way out.
     @ViewBuilder
     private func statusSection(
         header: DeviceLinkStatusHeader,
         detail: String? = nil,
-        doneTitle: LocalizedStringKey = "Close"
+        doneTitle: LocalizedStringKey? = "Close"
     ) -> some View {
         Section {
             header.padding(.vertical, 12)
@@ -210,25 +222,19 @@ struct DeviceLinkApprovalView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        Section {
-            WNButton(title: doneTitle, emphasis: .secondary, size: .standard) { store.sheetDismissed() }
+        if let doneTitle {
+            Section {
+                WNButton(title: doneTitle, emphasis: .secondary, size: .standard) { store.sheetDismissed() }
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
         }
-        .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets())
     }
 
     /// This device has no name yet, as before its first link: ask for one too,
     /// so the new device never lists it unnamed.
     private var needsOwnName: Bool {
         store.thisDevice?.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
-    }
-
-    /// Not Now is offered while the request still waits on this device.
-    private func canDecline(_ state: DeviceLinkPromptStateFfi) -> Bool {
-        switch state {
-        case .preparing, .comparing, .competingRequests: true
-        default: false
-        }
     }
 
     private func run(_ action: @escaping () async throws -> Void) {
