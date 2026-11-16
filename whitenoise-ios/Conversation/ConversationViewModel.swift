@@ -1049,17 +1049,9 @@ final class ConversationViewModel {
         timelineStore.confirmSent(tempId: tempId, record: record, messageId: messageId)
     }
 
-    private func markFailed(tempId: String) {
-        timelineStore.markFailed(tempId: tempId)
-    }
-
     @discardableResult
     private func replaceMediaReferences(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
         timelineStore.replaceMediaReferences(references, forMessageId: messageIdHex)
-    }
-
-    private func appendSystemEvent(_ event: SystemEvent, timestamp: UInt64) {
-        timelineStore.appendSystemEvent(event, timestamp: timestamp)
     }
 
     private func resetOptimisticState() {
@@ -1686,38 +1678,6 @@ final class ConversationViewModel {
         cancelTimelineTailRefresh()
         streamWatcher.cancelAll()
     }
-
-#if DEBUG
-    func resetOptimisticStateForTesting() {
-        resetOptimisticState()
-    }
-
-    func seedOptimisticStateForTesting(
-        deletedMessageIdHex: String,
-        reactionTargetMessageIdHex: String,
-        emoji: String,
-        sender: String
-    ) {
-        timelineStore.deletedProjections.insertOptimistic(deletedMessageIdHex)
-        let reactionId = "optimistic-\(reactionTargetMessageIdHex)-\(emoji)"
-        timelineStore.reactionProjections.setRecord(
-            AppMessageRecordFfi(
-                messageIdHex: reactionId,
-                direction: "sent",
-                groupIdHex: group.groupIdHex,
-                sender: sender,
-                plaintext: emoji,
-                kind: MessageSemantics.kindReaction,
-                tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, reactionTargetMessageIdHex])],
-                recordedAt: 1,
-                receivedAt: 1
-            ),
-            forKey: reactionId
-        )
-        _ = timelineStore.deletedProjections.rebuild()
-        _ = timelineStore.recomputeReactions()
-    }
-#endif
 
     private func startLiveTimeline(accountRef: String) {
         guard let appState, appState.canUseRuntimeForLocalForegroundWork else { return }
@@ -3000,16 +2960,6 @@ final class ConversationViewModel {
         leaveRequestPending = pending
     }
 
-#if DEBUG
-    func appendSystemEventForTesting(_ event: SystemEvent, timestamp: UInt64) {
-        appendSystemEvent(event, timestamp: timestamp)
-    }
-
-    func setManagementStateForTesting(_ state: GroupManagementStateFfi?) {
-        managementState = state
-    }
-#endif
-
     static func retainedSystemTimelineItems(
         _ current: [TimelineItem],
         appending item: TimelineItem,
@@ -3470,12 +3420,6 @@ final class ConversationViewModel {
             return false
         }
     }
-
-#if DEBUG
-    func markFailedForTesting(tempId: String) {
-        markFailed(tempId: tempId)
-    }
-#endif
 
     // MARK: - Reactions
 

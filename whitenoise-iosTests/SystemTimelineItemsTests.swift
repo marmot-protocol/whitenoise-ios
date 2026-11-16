@@ -54,13 +54,13 @@ struct SystemTimelineItemsTests {
             group: testGroup()
         )
 
-        viewModel.appendSystemEventForTesting(.rosterChanged, timestamp: 1)
+        viewModel.timelineStore.appendSystemEvent(.rosterChanged, timestamp: 1)
         #expect(viewModel.timeline.contains { item in
             if case .systemEvent(.rosterChanged) = item.kind { return true }
             return false
         })
 
-        viewModel.resetOptimisticStateForTesting()
+        viewModel.timelineStore.resetOptimisticState()
 
         #expect(!viewModel.timeline.contains { item in
             if case .systemEvent = item.kind { return true }
@@ -74,8 +74,8 @@ struct SystemTimelineItemsTests {
             group: testGroup()
         )
 
-        viewModel.appendSystemEventForTesting(.rosterChanged, timestamp: 1)
-        viewModel.appendSystemEventForTesting(.rosterChanged, timestamp: 2)
+        viewModel.timelineStore.appendSystemEvent(.rosterChanged, timestamp: 1)
+        viewModel.timelineStore.appendSystemEvent(.rosterChanged, timestamp: 2)
 
         // The two same-kind events collapse into one row, and the published
         // timeline row must carry the newer timestamp — not the stale first one.
@@ -107,7 +107,7 @@ struct SystemTimelineItemsTests {
         viewModel.applyPendingOutgoingMessage(tempId: "pending", record: pending)
         #expect(!viewModel.timeline.isEmpty)
 
-        viewModel.resetOptimisticStateForTesting()
+        viewModel.timelineStore.resetOptimisticState()
 
         #expect(viewModel.timeline.isEmpty)
     }

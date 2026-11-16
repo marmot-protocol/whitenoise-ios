@@ -66,6 +66,37 @@ struct ConversationTimelineProjectionTests {
         }.first
     }
 
+    /// Puts an optimistic delete and an optimistic reaction into the view
+    /// model's timeline store, as a local delete and react do before Marmot
+    /// confirms them.
+    private func seedOptimisticState(
+        in viewModel: ConversationViewModel,
+        deletedMessageIdHex: String,
+        reactionTargetMessageIdHex: String,
+        emoji: String,
+        sender: String
+    ) {
+        let store = viewModel.timelineStore
+        store.deletedProjections.insertOptimistic(deletedMessageIdHex)
+        let reactionId = "optimistic-\(reactionTargetMessageIdHex)-\(emoji)"
+        store.reactionProjections.setRecord(
+            AppMessageRecordFfi(
+                messageIdHex: reactionId,
+                direction: "sent",
+                groupIdHex: viewModel.group.groupIdHex,
+                sender: sender,
+                plaintext: emoji,
+                kind: MessageSemantics.kindReaction,
+                tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, reactionTargetMessageIdHex])],
+                recordedAt: 1,
+                receivedAt: 1
+            ),
+            forKey: reactionId
+        )
+        _ = store.deletedProjections.rebuild()
+        _ = store.recomputeReactions()
+    }
+
     private func unpublishedRetrySummary() -> SendSummaryFfi {
         SendSummaryFfi(
             published: 0,
@@ -446,7 +477,8 @@ struct ConversationTimelineProjectionTests {
             placement: .window
         )
 
-        viewModel.seedOptimisticStateForTesting(
+        seedOptimisticState(
+            in: viewModel,
             deletedMessageIdHex: message.messageIdHex,
             reactionTargetMessageIdHex: message.messageIdHex,
             emoji: "🔥",
@@ -457,7 +489,7 @@ struct ConversationTimelineProjectionTests {
             ConversationViewModel.ReactionTally(emoji: "🔥", count: 1, mine: false)
         ])
 
-        viewModel.resetOptimisticStateForTesting()
+        viewModel.timelineStore.resetOptimisticState()
         #expect(!viewModel.isDeleted(message.messageIdHex))
         #expect(viewModel.reactions(for: message.messageIdHex).isEmpty)
     }
@@ -1281,7 +1313,7 @@ struct ConversationTimelineProjectionTests {
             receivedAt: 10
         )
         viewModel.applyPendingOutgoingMessage(tempId: tempId, record: text)
-        viewModel.markFailedForTesting(tempId: tempId)
+        viewModel.timelineStore.markFailed(tempId: tempId)
 
         // A failed text row is retryable and discardable.
         #expect(viewModel.canRetryFailedSend(rowId: rowId))
@@ -1303,7 +1335,7 @@ struct ConversationTimelineProjectionTests {
             receivedAt: 11
         )
         viewModel.applyPendingOutgoingMessage(tempId: mediaTempId, record: media)
-        viewModel.markFailedForTesting(tempId: mediaTempId)
+        viewModel.timelineStore.markFailed(tempId: mediaTempId)
         #expect(!viewModel.canRetryFailedSend(rowId: mediaRowId))
 
         // Discard removes the failed row from the timeline.
@@ -1345,7 +1377,7 @@ struct ConversationTimelineProjectionTests {
         )
 
         viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
-        viewModel.markFailedForTesting(tempId: tempId)
+        viewModel.timelineStore.markFailed(tempId: tempId)
 
         let failedMessages = viewModel.timeline.compactMap { item -> (String, MessageStatus)? in
             guard case .message(let record, let status) = item.kind else { return nil }
