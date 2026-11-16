@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import MarmotKit
 import OSLog
@@ -105,9 +104,10 @@ enum GroupAvatarImageLoader {
     private static var inFlightImages: [String: Task<ImageLoad, Error>] = [:]
     private static var cacheDrainTask: Task<Void, Never>?
     private static var cacheGeneration: UInt64 = 0
-    #if DEBUG
-    static var beforeDecodeForTesting: (@Sendable () async -> Void)?
-    #endif
+
+    /// Decodes fetched or seeded bytes into an image no larger than
+    /// `maxPixelSize`; nil when the bytes aren't a supported image.
+    typealias Downsample = @Sendable (_ data: Data, _ maxPixelSize: Int, _ scale: CGFloat) async -> UIImage?
 
     static func seed(
         data: Data,
@@ -136,7 +136,8 @@ enum GroupAvatarImageLoader {
         request: GroupAvatarImageRequest,
         scale: CGFloat,
         priority: GroupAvatarLoadPriority,
-        client: MarmotClient
+        client: MarmotClient,
+        downsample: @escaping Downsample = RemoteImageDecoder.downsampledImage
     ) async throws -> UIImage {
         try checkCacheWorkAllowed()
         let generation = cacheGeneration
@@ -167,7 +168,8 @@ enum GroupAvatarImageLoader {
                 request: request,
                 scale: scale,
                 priority: priority,
-                client: client
+                client: client,
+                downsample: downsample
             )
         }
         inFlightImages[imageTaskKey] = task
@@ -198,14 +200,16 @@ enum GroupAvatarImageLoader {
         request: GroupAvatarImageRequest,
         scale: CGFloat,
         priority: GroupAvatarLoadPriority,
-        client: MarmotClient
+        client: MarmotClient,
+        downsample: Downsample
     ) async throws -> ImageLoad {
         if let seed = takeSeed(for: request) {
             let load = try await decode(
                 data: seed.data,
                 source: .seeded,
                 request: request,
-                scale: scale
+                scale: scale,
+                downsample: downsample
             )
             try checkCacheWorkAllowed()
             cacheRawData(seed.data, for: request)
@@ -224,7 +228,8 @@ enum GroupAvatarImageLoader {
                 data: thumbnailData,
                 source: .thumbnailDisk,
                 request: request,
-                scale: scale
+                scale: scale,
+                downsample: downsample
             )
         }
 
@@ -239,7 +244,8 @@ enum GroupAvatarImageLoader {
             request: request,
             scale: scale,
             queueWaitMilliseconds: dataLoad.queueWaitMilliseconds,
-            fetchMilliseconds: dataLoad.fetchMilliseconds
+            fetchMilliseconds: dataLoad.fetchMilliseconds,
+            downsample: downsample
         )
         try checkCacheWorkAllowed()
         persistThumbnail(load.image, for: request)
@@ -252,18 +258,12 @@ enum GroupAvatarImageLoader {
         request: GroupAvatarImageRequest,
         scale: CGFloat,
         queueWaitMilliseconds: Double = 0,
-        fetchMilliseconds: Double = 0
+        fetchMilliseconds: Double = 0,
+        downsample: Downsample
     ) async throws -> ImageLoad {
-        #if DEBUG
-        await beforeDecodeForTesting?()
-        #endif
         try checkCacheWorkAllowed()
         let decodeStartedAt = ContinuousClock.now
-        guard let image = await RemoteImageDecoder.downsampledImage(
-            from: data,
-            maxPixelSize: request.maxPixelSize,
-            scale: scale
-        ) else {
+        guard let image = await downsample(data, request.maxPixelSize, scale) else {
             throw URLError(.cannotDecodeContentData)
         }
         return ImageLoad(
@@ -478,14 +478,4 @@ enum GroupAvatarImageLoader {
         inFlightImages.values.forEach { $0.cancel() }
         inFlightImages.removeAll()
     }
-
-    #if DEBUG
-    static var isDrainingForTesting: Bool { cacheDrainTask != nil }
-    static func resetForTesting() { clearCaches() }
-
-    static func hasSeedForTesting(accountRef: String, groupIdHex: String) -> Bool {
-        pruneSeeds()
-        return seeds[GroupAvatarCacheKey.seed(accountRef: accountRef, groupIdHex: groupIdHex)] != nil
-    }
-    #endif
 }
