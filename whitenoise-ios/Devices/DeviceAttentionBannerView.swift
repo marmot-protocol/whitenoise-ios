@@ -14,24 +14,36 @@ struct DeviceAttentionBannerView: View {
         case .compromiseWarning:
             card(
                 systemImage: "exclamationmark.shield.fill", tint: .red,
-                title: "Someone else may have your private key",
-                message: "Someone published from your profile where your devices didn’t."
+                title: Text("Someone else may have your private key"),
+                message: Text("Someone published from your profile where your devices didn’t.")
             ) {
                 Button("Review", action: onOpenDevices)
             }
         case .linkRequest(let promptID):
             card(
                 systemImage: "laptopcomputer.and.iphone", tint: .accentColor,
-                title: "A device wants to link",
-                message: "Compare the emoji on both devices before linking it."
+                title: Text("A device wants to link"),
+                message: Text("Compare the emoji on both devices before linking it.")
             ) {
                 Button("Review") { store.present(.approve(promptID: promptID)) }
+            }
+        case .otherProfileLinkRequest(let request):
+            card(
+                systemImage: "laptopcomputer.and.iphone", tint: .accentColor,
+                title: Text(verbatim: L10n.formatted(
+                    "A device wants to link %@.", appState.displayName(forAccountIdHex: request.accountIdHex)
+                )),
+                message: Text("Review switches to that profile to compare the emoji.")
+            ) {
+                Button("Review") {
+                    Task { await store.reviewOtherProfileRequest(request, using: appState) }
+                }
             }
         case .linkingThisDevice:
             card(
                 systemImage: "hourglass", tint: .accentColor,
-                title: "Linking this device",
-                message: "Continue on your other device."
+                title: Text("Linking this device"),
+                message: Text("Continue on your other device.")
             ) {
                 Button("Show") { store.present(.linkThisDevice) }
             }
@@ -41,8 +53,8 @@ struct DeviceAttentionBannerView: View {
     private func card(
         systemImage: String,
         tint: Color,
-        title: LocalizedStringKey,
-        message: LocalizedStringKey,
+        title: Text,
+        message: Text,
         @ViewBuilder actions: () -> some View
     ) -> some View {
         HStack(alignment: .top, spacing: 10) {
@@ -50,9 +62,9 @@ struct DeviceAttentionBannerView: View {
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                title
                     .font(.subheadline.weight(.semibold))
-                Text(message)
+                message
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

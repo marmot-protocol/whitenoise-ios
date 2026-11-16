@@ -271,8 +271,11 @@ either device may look new to the other, so the Devices screen offers both sides
 Add a New Device (steps for the new device, waiting for its request) and Link to
 Another Device; sign-in rows open Add a New Device. "Signed in on another
 device?" is offered only on the device that finished setup in this launch
-(`NewDeviceLinkOffer`), and its Link action starts the link directly. A link
-request presents itself over any
+(`NewDeviceLinkOffer`), and its Link action starts the link directly. Requests for
+the device's other signed-in profiles are read on their own `DeviceLinkChanged`,
+never answered, and offered as "Link a New Device?" (alert, Chats banner, Devices →
+Other Profiles); Review activates that profile, then presents the request there. A
+link request presents itself over any
 screen until the user acts or puts it away; it stays on the Devices screen and the
 Chats banner. Show the roster's label and settings, not the user's typed values,
 once MDK reports them. Never approve, reject or start fresh on the user's behalf.

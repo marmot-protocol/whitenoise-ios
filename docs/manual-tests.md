@@ -944,6 +944,10 @@ and the app must otherwise behave as before.
       settles. Remove B from A: B shows Device Unlinked. Later leaves the profile;
       Remove from This Device deletes B's copy. Signing in on B again offers
       Remove Unlinked Profile?, then sets up afresh and can link again.
+- [ ] Another profile: with a second profile active on A, start a link for the
+      first profile from B. A shows "Link a New Device?" naming the profile and
+      a Chats banner; Not Now keeps it under Devices → Other Profiles; Review
+      switches profiles and shows the emoji.
 - [ ] Names: approving a first link asks for this device's name too; afterwards
       no device reads "Unnamed device" on either side. Device Linked on the new
       device offers Name This iPhone; Save renames it on every device.

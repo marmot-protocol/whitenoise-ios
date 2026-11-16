@@ -247,13 +247,13 @@ struct ChatsListView: View {
                         .padding(.top, 6)
                     }
 
-                    if let banner = appState.deviceLinks.attentionBanner {
+                    if let banner = appState.deviceLinks.attentionBanner(using: appState) {
                         DeviceAttentionBannerView(banner: banner) { showDevices = true }
                             .padding(.horizontal, 16)
                             .padding(.top, 6)
                     }
 
-                    if !appState.historyNotices.accountNotices.isEmpty || appState.deviceLinks.attentionBanner != nil {
+                    if !appState.historyNotices.accountNotices.isEmpty || appState.deviceLinks.attentionBanner(using: appState) != nil {
                         Color.clear
                             .frame(height: 6)
                     }
@@ -338,6 +338,31 @@ struct ChatsListView: View {
                 Button(LinkThisDeviceCopy.action) { appState.deviceLinks.linkFromNewDeviceOffer() }
             } message: {
                 Text(LinkThisDeviceCopy.offer)
+            }
+            // A request for another signed-in profile: comparing needs that profile active.
+            .alert(
+                "Link a New Device?",
+                isPresented: Binding(
+                    get: {
+                        appState.deviceLinks.otherProfileRequest(using: appState) != nil
+                            && appState.deviceLinks.sheet == nil && chatsVisible
+                            && !showDiagnosticsPrompt && !secondarySheetVisible
+                    },
+                    set: { presented in
+                        guard !presented, let request = appState.deviceLinks.otherProfileRequest(using: appState) else { return }
+                        appState.deviceLinks.dismissOtherProfileRequest(request)
+                    }
+                ),
+                presenting: appState.deviceLinks.otherProfileRequest(using: appState)
+            ) { request in
+                Button("Not Now", role: .cancel) { appState.deviceLinks.dismissOtherProfileRequest(request) }
+                Button("Review") {
+                    Task { await appState.deviceLinks.reviewOtherProfileRequest(request, using: appState) }
+                }
+            } message: { request in
+                Text(L10n.formatted(
+                    "A device wants to link %@.", appState.displayName(forAccountIdHex: request.accountIdHex)
+                ))
             }
             .sheet(isPresented: $showDiagnosticsPrompt) {
                 DiagnosticsConsentSheet()

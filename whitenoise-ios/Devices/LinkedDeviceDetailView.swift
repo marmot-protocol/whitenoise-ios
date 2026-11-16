@@ -11,6 +11,7 @@ struct LinkedDeviceDetailView: View {
     }
 
     @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
     @State private var nameDraft: String?
     @State private var pending: [Setting: Bool] = [:]
     @State private var busyKey: String?
@@ -43,8 +44,12 @@ struct LinkedDeviceDetailView: View {
         }
         .navigationTitle(device.map(LinkedDevicePresentation.name) ?? "")
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: device) { _, current in
-            guard let current else { return }
+        .onChange(of: device) { previous, current in
+            // A removed device leaves the roster: go back to the list.
+            guard let current else {
+                if previous != nil { dismiss() }
+                return
+            }
             // Drop a pending edit once the roster agrees with it.
             pending = pending.filter { setting, value in value != Self.value(setting, of: current) }
         }

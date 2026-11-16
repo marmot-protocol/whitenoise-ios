@@ -394,19 +394,22 @@ nonisolated enum DeviceAttentionBanner: Equatable {
     case compromiseWarning
     case linkRequest(promptID: String)
     case linkingThisDevice
+    case otherProfileLinkRequest(OtherProfileLinkRequest)
 
     static func select(
         compromiseWarningCount: Int,
         pendingPromptIDs: [String],
         presentedPromptID: String?,
         newDeviceStep: NewDeviceLinkStep,
-        newDeviceFlowVisible: Bool
+        newDeviceFlowVisible: Bool,
+        otherProfileRequest: OtherProfileLinkRequest? = nil
     ) -> DeviceAttentionBanner? {
         if compromiseWarningCount > 0 { return .compromiseWarning }
         if let promptID = pendingPromptIDs.first(where: { $0 != presentedPromptID }) {
             return .linkRequest(promptID: promptID)
         }
         if newDeviceStep.isInProgress, !newDeviceFlowVisible { return .linkingThisDevice }
+        if let otherProfileRequest { return .otherProfileLinkRequest(otherProfileRequest) }
         return nil
     }
 }
@@ -461,5 +464,32 @@ nonisolated enum ExperimentalDeviceGroupsStatus: Equatable {
         if preference != runtimeRequested { return .restartRequired }
         if runtimeRequested && !runtimeEnabled { return .unavailableInBuild }
         return runtimeEnabled ? .on : .off
+    }
+}
+
+/// A link request waiting for one of this device's other signed-in profiles.
+nonisolated struct OtherProfileLinkRequest: Identifiable, Equatable {
+    let accountIdHex: String
+    let accountRef: String
+    let promptID: String
+    var id: String { "\(accountIdHex):\(promptID)" }
+
+    /// The first request, in the account list's order, still waiting and not
+    /// put away. Comparing the emoji needs that profile active, so these are
+    /// offered as a switch rather than presented.
+    static func first(
+        accounts: [(accountIdHex: String, accountRef: String)],
+        prompts: [String: [DeviceLinkPromptFfi]],
+        dismissedPromptIDs: Set<String>
+    ) -> OtherProfileLinkRequest? {
+        for account in accounts {
+            let waiting = DeviceLinkPromptPolicy.pending(prompts[account.accountIdHex] ?? [])
+            if let prompt = waiting.first(where: { !dismissedPromptIDs.contains($0.promptId) }) {
+                return OtherProfileLinkRequest(
+                    accountIdHex: account.accountIdHex, accountRef: account.accountRef, promptID: prompt.promptId
+                )
+            }
+        }
+        return nil
     }
 }

@@ -57,6 +57,11 @@ final class DeviceLinkStore {
     private(set) var keyPackageRefreshOverdue = false
     /// Chats whose history from another device is arriving or arrived, by group id.
     private(set) var historyImports: [String: ChatHistoryImportStateFfi] = [:]
+    /// Requests waiting for this device's other signed-in profiles, by account id.
+    private(set) var otherProfilePrompts: [String: [DeviceLinkPromptFfi]] = [:]
+    private var dismissedOtherProfilePromptIDs: Set<String> = []
+    /// A request to present once its profile becomes active.
+    private var promptAfterSwitch: OtherProfileLinkRequest?
 
     /// The device sheet MainView presents.
     private(set) var sheet: Sheet?
@@ -98,15 +103,52 @@ final class DeviceLinkStore {
         devices.first { $0.slotIdHex == slotIdHex }
     }
 
-    var attentionBanner: DeviceAttentionBanner? {
+    func attentionBanner(using appState: AppState) -> DeviceAttentionBanner? {
         guard isAvailable else { return nil }
         return DeviceAttentionBanner.select(
             compromiseWarningCount: compromiseWarning.count,
             pendingPromptIDs: pendingPrompts.map(\.promptId),
             presentedPromptID: presentedPromptID,
             newDeviceStep: newDeviceStep,
-            newDeviceFlowVisible: sheet == .linkThisDevice
+            newDeviceFlowVisible: sheet == .linkThisDevice,
+            otherProfileRequest: otherProfileRequest(using: appState)
         )
+    }
+
+    /// The first request for another signed-in profile, which comparing needs
+    /// that profile active for.
+    func otherProfileRequest(using appState: AppState) -> OtherProfileLinkRequest? {
+        guard isAvailable else { return nil }
+        let accounts = appState.accounts
+            .filter { !$0.signedOut && $0.accountIdHex != scope?.accountIdHex }
+            .map { (accountIdHex: $0.accountIdHex, accountRef: $0.label) }
+        return OtherProfileLinkRequest.first(
+            accounts: accounts, prompts: otherProfilePrompts, dismissedPromptIDs: dismissedOtherProfilePromptIDs
+        )
+    }
+
+    /// Every request waiting for another profile, put away or not, for the Devices screen.
+    func otherProfileRequests(using appState: AppState) -> [OtherProfileLinkRequest] {
+        guard isAvailable else { return [] }
+        return appState.accounts
+            .filter { !$0.signedOut && $0.accountIdHex != scope?.accountIdHex }
+            .flatMap { account in
+                DeviceLinkPromptPolicy.pending(otherProfilePrompts[account.accountIdHex] ?? []).map {
+                    OtherProfileLinkRequest(accountIdHex: account.accountIdHex, accountRef: account.label, promptID: $0.promptId)
+                }
+            }
+    }
+
+    func dismissOtherProfileRequest(_ request: OtherProfileLinkRequest) {
+        dismissedOtherProfilePromptIDs.insert(request.promptID)
+    }
+
+    /// Review: switch to that profile, then present its request there.
+    func reviewOtherProfileRequest(_ request: OtherProfileLinkRequest, using appState: AppState) async {
+        dismissedOtherProfilePromptIDs.insert(request.promptID)
+        promptAfterSwitch = request
+        await appState.activateAccount(request.accountRef)
+        await refresh(using: appState)
     }
 
     var offersNewDeviceLink: Bool {
@@ -178,6 +220,23 @@ final class DeviceLinkStore {
             for part in Part.allCases {
                 group.addTask { await self.refresh(part, using: appState) }
             }
+            group.addTask { await self.refreshOtherProfiles(using: appState) }
+        }
+    }
+
+    /// Reads link requests for the other signed-in profiles; it never answers one.
+    private func refreshOtherProfiles(only accountIdHex: String? = nil, using appState: AppState) async {
+        guard isAvailable, let client = try? appState.currentMarmotClient() else { return }
+        let others = appState.accounts.filter {
+            !$0.signedOut && $0.accountIdHex != scope?.accountIdHex
+                && (accountIdHex == nil || $0.accountIdHex == accountIdHex)
+        }
+        if accountIdHex == nil {
+            otherProfilePrompts = otherProfilePrompts.filter { id, _ in others.contains { $0.accountIdHex == id } }
+        }
+        for account in others {
+            guard let snapshot = try? await client.marmot.deviceLinkSnapshot(accountRef: account.label) else { continue }
+            otherProfilePrompts[account.accountIdHex] = snapshot.prompts
         }
     }
 
@@ -202,7 +261,12 @@ final class DeviceLinkStore {
         default:
             return
         }
-        guard appState.activeAccount?.accountIdHex == accountID else { return }
+        guard appState.activeAccount?.accountIdHex == accountID else {
+            if part == .snapshot {
+                Task { await self.refreshOtherProfiles(only: accountID, using: appState) }
+            }
+            return
+        }
         Task {
             guard self.prepareScope(using: appState) else { return }
             await self.refresh(part, using: appState)
@@ -285,6 +349,12 @@ final class DeviceLinkStore {
 
     private func apply(_ next: DeviceLinkSnapshotFfi) {
         snapshot = next
+        if let request = promptAfterSwitch, request.accountIdHex == scope?.accountIdHex {
+            promptAfterSwitch = nil
+            if next.prompts.contains(where: { $0.promptId == request.promptID }) {
+                present(.approve(promptID: request.promptID))
+            }
+        }
         updatePromptPresentation()
     }
 

@@ -241,3 +241,18 @@ struct DeviceLinkPresentationTests {
         }
     }
 }
+
+extension DeviceLinkPresentationTests {
+    @Test func anotherProfilesWaitingRequestIsOfferedInAccountOrderUntilPutAway() {
+        let accounts = [(accountIdHex: hex("a1"), accountRef: "first"), (accountIdHex: hex("a2"), accountRef: "second")]
+        let prompts = [
+            hex("a1"): [linkPrompt("finished", .linked)],
+            hex("a2"): [linkPrompt("waiting", .comparing(code: linkCode()))],
+        ]
+        let offered = OtherProfileLinkRequest.first(accounts: accounts, prompts: prompts, dismissedPromptIDs: [])
+        #expect(offered?.accountRef == "second")
+        #expect(offered?.promptID == "waiting")
+        #expect(OtherProfileLinkRequest.first(accounts: accounts, prompts: prompts, dismissedPromptIDs: ["waiting"]) == nil)
+        #expect(OtherProfileLinkRequest.first(accounts: accounts, prompts: [:], dismissedPromptIDs: []) == nil)
+    }
+}

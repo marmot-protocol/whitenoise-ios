@@ -30,6 +30,8 @@ struct LinkedDevicesView: View {
             if !store.compromiseWarning.isEmpty { compromiseSection }
             if store.deviceGroupStalled { stalledSection }
             if !store.pendingPrompts.isEmpty { requestsSection }
+            let otherRequests = store.otherProfileRequests(using: appState)
+            if !otherRequests.isEmpty { otherProfilesSection(otherRequests) }
             devicesSections
             linkSection
             signInsSection
@@ -155,6 +157,27 @@ struct LinkedDevicesView: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    private func otherProfilesSection(_ requests: [OtherProfileLinkRequest]) -> some View {
+        Section {
+            ForEach(requests) { request in
+                HStack {
+                    Text(L10n.formatted(
+                        "A device wants to link %@.", appState.displayName(forAccountIdHex: request.accountIdHex)
+                    ))
+                    Spacer()
+                    Button("Review") {
+                        Task { await store.reviewOtherProfileRequest(request, using: appState) }
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        } header: {
+            Text("Other Profiles")
+        } footer: {
+            Text("Review switches to that profile to compare the emoji.")
         }
     }
 
