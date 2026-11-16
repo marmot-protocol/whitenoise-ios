@@ -1615,6 +1615,8 @@ final class ConversationViewModel {
     private func discardDurableFailedSend(messageIdHex: String) async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         let record = timelineStore.durableRecord(messageIdHex: messageIdHex)
+        // Read now: once the row leaves, its references can't be rebuilt reliably.
+        let references = record.map { mediaItems(for: $0).compactMap(\.reference) } ?? []
         do {
             let client = try appState.currentMarmotClient()
             let result = try await client.discardFailedSend(
@@ -1623,7 +1625,6 @@ final class ConversationViewModel {
             case .discarded:
                 // Gone from this device: purge its decrypted media; the row leaves on its own.
                 let hashes = Set(result.mediaCiphertextSha256.map { $0.lowercased() })
-                let references = record.map { mediaItems(for: $0).compactMap(\.reference) } ?? []
                 await MessageMediaCache.removeCachedData(forCiphertextHashes: hashes, in: references)
                 Haptics.warning()
             case .stillSending:
@@ -1632,7 +1633,8 @@ final class ConversationViewModel {
             case .notFailedSend:
                 // No longer a failed send (it may have been delivered since):
                 // keep the user's Delete as the local-only delete it was before.
-                if let record { await deleteMessageForMe(record) }
+                // That delete writes under the active account, so skip it after a switch.
+                if let record, appState.activeAccountRef == accountRef { await deleteMessageForMe(record) }
             }
         } catch is CancellationError {
             return

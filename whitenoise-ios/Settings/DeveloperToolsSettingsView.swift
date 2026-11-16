@@ -15,6 +15,7 @@ struct DeveloperToolsSettingsView: View {
     @State private var choosingArchiveWindow = false
     @State private var archiveFile: DiagnosticLogShareFile?
     @State private var savingArchive = false
+    @State private var archiveTask: Task<Void, Never>?
     @State private var showDemoConfirmation = false
     @State private var quarantinedGroupsModel = QuarantinedGroupsViewModel()
     @State private var auditDelivery = AuditDeliveryStatusModel()
@@ -260,6 +261,7 @@ struct DeveloperToolsSettingsView: View {
         } onCancellation: {
             cleanupArchiveFile()
         }
+        .onDisappear { archiveTask?.cancel() }
         .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
             ActivityShareSheet(items: [file.url], onComplete: cleanupShareFile)
         }
@@ -336,10 +338,13 @@ struct DeveloperToolsSettingsView: View {
         guard !exporting else { return }
         exporting = true
         cleanupArchiveFile()
-        Task {
+        archiveTask = Task {
             defer { exporting = false }
             do {
-                archiveFile = try await appState.diagnosticLogArchive(window: window)
+                let file = try await appState.diagnosticLogArchive(window: window)
+                // Nothing can present or clean up a zip once the screen has closed.
+                guard !Task.isCancelled else { return DiagnosticLogExport.removeShareFile(file) }
+                archiveFile = file
                 savingArchive = true
             } catch DiagnosticLogExport.ExportError.noLogs {
                 exportError = L10n.string("No audit logs changed in that time.")

@@ -305,6 +305,8 @@ final class StickerLibrary {
     @ObservationIgnored private var installingDefaults: (scope: StickerScope, task: Task<Void, Never>)?
     @ObservationIgnored private var scope: StickerScope?
     @ObservationIgnored private var loadingInstalled: Task<Void, Never>?
+    /// A reload after a change failed, so the list on screen may be stale.
+    @ObservationIgnored private var installedNeedsReload = false
     @ObservationIgnored private var syncedScope: StickerScope?
     @ObservationIgnored private var syncing: (scope: StickerScope, task: Task<Void, Error>)?
 
@@ -332,7 +334,7 @@ final class StickerLibrary {
     /// Reads the installed packs once per account and runtime.
     func loadInstalledIfNeeded() async {
         guard currentScope() != nil else { return }
-        if hasLoadedInstalled { return }
+        if hasLoadedInstalled && !installedNeedsReload { return }
         if let loadingInstalled { return await loadingInstalled.value }
         let task = Task { await reloadInstalled() }
         loadingInstalled = task
@@ -342,10 +344,16 @@ final class StickerLibrary {
 
     func reloadInstalled() async {
         guard let scope = currentScope() else { return }
-        guard let packs = try? await packs(scope.accountRef, true, nil), currentScope() == scope else { return }
+        let packs = try? await packs(scope.accountRef, true, nil)
+        guard currentScope() == scope else { return }
+        guard let packs else {
+            installedNeedsReload = true
+            return
+        }
         installed = packs
         installedCoordinates = Set(packs.map(\.coordinate))
         hasLoadedInstalled = true
+        installedNeedsReload = false
     }
 
     /// Refreshes discovery and the installed list from relays, once per
@@ -395,6 +403,8 @@ final class StickerLibrary {
             for coordinate in pending {
                 // An account switch or runtime restart cancels the rest.
                 guard !Task.isCancelled, self?.scopeProvider() == scope else { return }
+                // Removed by the person while earlier installs ran.
+                guard !ledger.offered(accountRef: scope.accountRef).contains(coordinate) else { continue }
                 guard (try? await install(scope.accountRef, coordinate)) != nil else { continue }
                 ledger.record([coordinate], accountRef: scope.accountRef)
             }
@@ -435,6 +445,10 @@ final class StickerLibrary {
     func uninstall(_ pack: StickerPackFfi) async throws {
         guard let scope = currentScope() else { throw CancellationError() }
         try await uninstall(scope.accountRef, pack.coordinate)
+        // A default removed before it was recorded must not be installed again.
+        if StickerDefaultPacks.coordinates.contains(pack.coordinate) {
+            defaultPackLedger.record([pack.coordinate], accountRef: scope.accountRef)
+        }
         guard currentScope() == scope else { return }
         await reloadInstalled()
     }
@@ -457,6 +471,7 @@ final class StickerLibrary {
             hasLoadedInstalled = false
             loadingInstalled?.cancel()
             loadingInstalled = nil
+            installedNeedsReload = false
             installingDefaults?.task.cancel()
             installingDefaults = nil
             isInstallingDefaults = false

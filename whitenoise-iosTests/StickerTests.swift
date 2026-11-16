@@ -179,6 +179,7 @@ struct StickerLibraryTests {
         var uninstalls: [String] = []
         var failingInstalls: Set<String> = []
         var holdsNextInstall = false
+        var failsReads = false
         var installGate: CheckedContinuation<Void, Never>?
         private let resources = AppStateTestResources()
         lazy var ledger = StickerDefaultPackLedger(defaults: resources.makeDefaults("StickerDefaultPacks"))
@@ -188,6 +189,7 @@ struct StickerLibraryTests {
             packs: { [weak self] _, installedOnly, _ in
                 guard let self else { return [] }
                 self.reads += 1
+                if self.failsReads { throw MarmotKitError.StickerNetwork(details: "offline") }
                 return installedOnly ? self.installed : self.installed + self.discovered
             },
             sync: { [weak self] _ in
@@ -397,5 +399,31 @@ struct StickerLibraryTests {
         harness.installGate?.resume()
         await installing.value
         #expect(harness.installs == [StickerDefaultPacks.coordinates[0]])
+    }
+
+    @Test func aDefaultPackRemovedBeforeItWasRecordedIsNotInstalledAgain() async throws {
+        let harness = Harness()
+        var originals = stickerPack("white-noise-originals", installed: true)
+        originals.coordinate = StickerDefaultPacks.coordinates[0]
+        harness.installed.append(originals)
+        await harness.library.loadInstalledIfNeeded()
+        try await harness.library.uninstall(originals)
+
+        try await harness.library.sync()
+        await harness.library.installDefaultPacksIfNeeded()
+        #expect(harness.installs == [StickerDefaultPacks.coordinates[1]])
+        #expect(!harness.library.isInstalled(originals.coordinate))
+    }
+
+    @Test func aFailedReloadAfterInstallingDefaultsIsRetriedOnTheNextOpen() async throws {
+        let harness = Harness()
+        try await harness.library.sync()
+        harness.failsReads = true
+        await harness.library.installDefaultPacksIfNeeded()
+        #expect(!harness.library.isInstalled(StickerDefaultPacks.coordinates[0]))
+
+        harness.failsReads = false
+        await harness.library.loadInstalledIfNeeded()
+        #expect(StickerDefaultPacks.coordinates.allSatisfy { harness.library.isInstalled($0) })
     }
 }
