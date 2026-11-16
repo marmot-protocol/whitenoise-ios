@@ -33,7 +33,7 @@ import re
 import sys
 from pathlib import Path
 
-LOCALES = ("de", "es", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant")
+LOCALES = ("de", "es", "fi", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant")
 SOURCE = "en"
 RUSSIAN_PLURALS = {"one", "few", "many", "other"}
 # printf/NSString specifiers: optional `n$`, then a `%#@name@` substitution token,
@@ -171,22 +171,24 @@ SHARED_NAMES = (
     "QUIC · %@", "URL", "White Noise", "White Noise · %@", "https://example.com/image.jpg", "npub", "nsec1…",
 )
 SHARED_WORDS = {
-    "%@ (IDN/punycode)": "es fr it pt ru tr", "%@ (IDN/punycode: %@)": "es it pt ru tr", "%lld images": "fr",
+    "%1$@ (HTTP %2$lld)": "fi", "Epoch": "fi", "epoch %llu → %llu": "fi", "Fanout": "fi", "Inbox": "fi",
+    "Lightning (lud16)": "fi", "NIP-05 (name@domain)": "fi",
+    "%@ (IDN/punycode)": "es fi fr it pt ru tr", "%@ (IDN/punycode: %@)": "es fi it pt ru tr", "%lld images": "fr",
     "%lld stickers": "es", "%lld videos": "es", "%lld votes": "fr", "Admin": "de", "Audio": "de es fr it",
     "Cache": "de fr it pt", "Chats": "de es", "Contact": "fr", "Conversation": "fr",
     "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Fanouts": "de es fr pt", "Filter": "de",
-    "GIF via GIPHY": "fr pt", "GIFs": "de es pt", "Hex": "de es fr it pt ru tr", "id: %@": "es it pt ru tr",
+    "GIF via GIPHY": "fr pt", "GIFs": "de es pt", "Hex": "de es fi fr it pt ru tr", "id: %@": "es fi it pt ru tr",
     "Image": "fr", "Info": "de it", "Links": "de pt", "local": "es fr pt", "Maintenance": "fr",
-    "Malware": "it", "Manual": "es pt", "Media": "it", "Mentions": "fr", "Message": "fr", "Minutes": "fr",
-    "Mode": "fr", "Moderation": "de", "Name": "de", "Notifications": "fr", "Obligations": "fr", "OK": "de fr it pt",
+    "Malware": "it", "Manual": "es pt", "Media": "fi it", "Mentions": "fr", "Message": "fr", "Minutes": "fr",
+    "Mode": "fr", "Moderation": "de", "Name": "de", "Notifications": "fr", "Obligations": "fr", "OK": "de fi fr it pt",
     "Online": "de", "Option %lld": "de fr", "Options": "fr", "Original": "de es pt", "Passphrase": "de it", "Photo": "fr",
     "Password": "it", "Photos": "fr", "Question": "fr", "Relay": "de es it pt", "Scan": "de",
     "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "Sticker": "de es it", "%@ Sticker": "de", "Sticker: %@": "de es it",
     "Stickers": "es", "stream %@": "es it pt",
-    "Streaming…": "de fr it", "System": "de", "Tokens": "es pt", "USD": "de es fr it pt ru tr", "Version": "de fr",
-    "Version %lld": "de fr", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt", "Video": "de es it tr",
+    "Streaming…": "de fr it", "System": "de", "Tokens": "es pt", "USD": "de es fi fr it pt ru tr", "Version": "de fr",
+    "Version %lld": "de fr", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt", "Video": "de es fi it tr",
     "Videos": "de es", "Votes": "fr", "White Noise Support": "de",
-    "wss://relay.example.com": "de it pt ru tr zh-Hans zh-Hant",
+    "wss://relay.example.com": "de fi it pt ru tr zh-Hans zh-Hant",
 }
 # (key, locale) pairs, or (key, "*"); an entry that no longer shows English fails the check.
 SHARED_SPELLINGS = frozenset(
@@ -197,6 +199,7 @@ SHARED_SPELLINGS = frozenset(
 SHARED_FORMS = {
     **{("%lld emoji", locale): frozenset({"%lld emoji"}) for locale in ("es", "fr", "it", "pt", "tr")},
     ("%lld stickers", "it"): frozenset({"%lld sticker"}),
+    ("%lld videos", "fi"): frozenset({"%lld video"}),
     ("%lld videos", "it"): frozenset({"%lld video"}),
     ("%lld videos", "tr"): frozenset({"%lld video"}),
 }

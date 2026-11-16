@@ -7,7 +7,7 @@ import Foundation
 /// plural variations, InfoPlist keys, no English fallback) run in the lint job
 /// through `scripts/check-localization-catalog.py`.
 struct LocalizationCatalogTests {
-    private let expectedLocales = ["de", "es", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant"]
+    private let expectedLocales = ["de", "es", "fi", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant"]
 
     @Test func formattedLocalizationUsesStaticCatalogKeys() {
         #expect(

@@ -5,6 +5,7 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     case english = "en"
     case german = "de"
     case spanish = "es"
+    case finnish = "fi"
     case french = "fr"
     case italian = "it"
     case portuguese = "pt"
@@ -28,6 +29,7 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
         .english,
         .german,
         .spanish,
+        .finnish,
         .french,
         .italian,
         .portuguese,
@@ -129,6 +131,8 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
             "Deutsch"
         case .spanish:
             "Español"
+        case .finnish:
+            "Suomi"
         case .french:
             "Français"
         case .italian:
