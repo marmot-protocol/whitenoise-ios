@@ -82,7 +82,7 @@ final class ConversationMediaLoader {
     }
 }
 
-enum MessageBubbleReplyLayout {
+nonisolated enum MessageBubbleReplyLayout {
     static let richContentWidth: CGFloat = 256
     static let richBubbleWidth = richContentWidth + (cardOuterInset * 2)
     static let bodyHorizontalInset = ChatBubbleMetrics.horizontalInset
@@ -96,13 +96,13 @@ enum MessageBubbleReplyLayout {
     static let sentCardOpacity = 0.16
     static let receivedCardOpacity = 0.09
 
-    nonisolated static func measurementWidth(proposedWidth: CGFloat?, isReplyHeader: Bool) -> CGFloat? {
+    static func measurementWidth(proposedWidth: CGFloat?, isReplyHeader: Bool) -> CGFloat? {
         guard isReplyHeader else { return proposedWidth }
         return min(proposedWidth ?? richBubbleWidth, richBubbleWidth)
     }
 }
 
-private struct MessageReplyHeaderLayoutKey: LayoutValueKey {
+nonisolated private struct MessageReplyHeaderLayoutKey: LayoutValueKey {
     static let defaultValue = false
 }
 
@@ -1168,7 +1168,7 @@ struct MessageBubble: View {
     static func timeLabel(
         recordedAt: UInt64,
         locale: Locale = .autoupdatingCurrent,
-        formatters: RelativeTimeFormatters = .shared
+        formatters: RelativeTimeFormatters? = nil
     ) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(recordedAt))
         return RelativeTime.shortTime(date, locale: locale, formatters: formatters)

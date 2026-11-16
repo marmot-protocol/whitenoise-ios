@@ -19,10 +19,25 @@ nonisolated enum MediaThumbnailCacheBudget {
     /// A suspended app holding a budget this size is the first one the system
     /// reclaims, so the cache empties when the app leaves the foreground.
     static func emptyOnBackground<Value: AnyObject>(_ cache: NSCache<NSString, Value>) {
+        let eviction = ThumbnailCacheEviction(cache)
         NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil
-        ) { [weak cache] _ in
-            cache?.removeAllObjects()
-        }
+        ) { _ in eviction.removeAllObjects() }
+    }
+}
+
+/// NSCache supports concurrent eviction. This handle only removes entries; it
+/// never transfers the cached values or keeps the cache alive.
+/// https://developer.apple.com/documentation/foundation/nscache
+// swiftlint:disable:next no_unchecked_sendable
+nonisolated private final class ThumbnailCacheEviction<Value: AnyObject>: @unchecked Sendable {
+    private weak var cache: NSCache<NSString, Value>?
+
+    init(_ cache: NSCache<NSString, Value>) {
+        self.cache = cache
+    }
+
+    func removeAllObjects() {
+        cache?.removeAllObjects()
     }
 }

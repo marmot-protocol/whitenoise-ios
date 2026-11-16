@@ -48,7 +48,7 @@ struct ConversationNavigationBarVisibility: UIViewControllerRepresentable {
 
         private static func showsConversation(_ controller: UIViewController) -> Bool {
             (controller as? Controller)?.isConversationVisible == true
-                || controller.children.contains(where: showsConversation)
+                || controller.children.contains { showsConversation($0) }
         }
     }
 }
