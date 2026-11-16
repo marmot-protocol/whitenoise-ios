@@ -248,6 +248,10 @@ final class TimelineStore {
     @ObservationIgnored let editProjections = ConversationEditProjectionCache()
     @ObservationIgnored private var timelineSignature: [TimelineItemSignature] = []
     @ObservationIgnored private var messageClusterPresentations: [String: MessageClusterPresentation] = [:]
+    /// Rows MDK imported from another device or a backup, by message id.
+    @ObservationIgnored private var historyImportOrigins: [String: HistoryImportOrigin] = [:]
+    /// Where imported history gives way to live messages, by timeline item id.
+    @ObservationIgnored private var historyImportBoundaries: [String: HistoryImportOrigin] = [:]
 
     @ObservationIgnored private weak var appState: AppState?
     @ObservationIgnored private let timings: TimelineStoreTimings
@@ -477,6 +481,11 @@ final class TimelineStore {
     func messageClusterPresentation(for item: TimelineItem) -> MessageClusterPresentation {
         _ = timelineProjectionGeneration
         return messageClusterPresentations[item.id] ?? .none
+    }
+
+    func historyImportBoundary(before item: TimelineItem) -> HistoryImportOrigin? {
+        _ = timelineProjectionGeneration
+        return historyImportBoundaries[item.id]
     }
 
     func markdownDisplayBlocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
@@ -978,6 +987,11 @@ final class TimelineStore {
         claimProjectedLocalSends(in: [record])
         var projectionChanged = false
         let appRecord = ConversationViewModel.appMessageRecord(from: record)
+        if !record.messageIdHex.isEmpty {
+            historyImportOrigins[record.messageIdHex] = HistoryImportOrigin(
+                importedFrom: record.importedFrom, provenance: record.historyImportProvenance
+            )
+        }
         guard !appRecord.messageIdHex.isEmpty else { return false }
         if record.hasReports { reportedMessageIDs.insert(record.messageIdHex) }
         else { reportedMessageIDs.remove(record.messageIdHex) }
@@ -1342,7 +1356,8 @@ final class TimelineStore {
         guard timelineSignature != nextSignature else { return false }
         timeline = next
         timelineSignature = nextSignature
-        messageClusterPresentations = MessageClusterProjection.presentations(for: next)
+        messageClusterPresentations = MessageClusterProjection.presentations(for: next, myAccountId: myAccountId)
+        historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: next, origins: historyImportOrigins)
         return true
     }
 
@@ -1369,7 +1384,8 @@ final class TimelineStore {
         } else {
             timelineSignature = timeline.map(TimelineItemSignature.init)
         }
-        messageClusterPresentations = MessageClusterProjection.presentations(for: timeline)
+        messageClusterPresentations = MessageClusterProjection.presentations(for: timeline, myAccountId: myAccountId)
+        historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: timeline, origins: historyImportOrigins)
         return true
     }
 
@@ -1705,7 +1721,13 @@ final class TimelineStore {
         for record: AppMessageRecordFfi,
         invalidated: Bool
     ) -> MessageStatus {
-        guard record.direction == "sent" else { return .received }
+        // Another of this account's devices sent it (live or imported): sent, never pending.
+        guard record.direction == "sent" else {
+            let isMine = MessageOwnership.isMine(
+                direction: record.direction, sender: record.sender, myAccountId: myAccountId
+            )
+            return isMine && !invalidated ? .sent : .received
+        }
         guard !invalidated else { return .failed }
         guard undeliveredOwnMessageIds.contains(record.messageIdHex) else { return .sent }
         return .sending

@@ -918,6 +918,57 @@ on the White Noise relays).
 - [ ] After the author publishes an update, the installed row shows Update
       available, and Update installs the new version.
 
+## Device linking (experimental)
+
+Needs a `dev-device-groups` MarmotKit build installed with
+`scripts/sync-local-bindings.sh --dev-device-groups <mdk-checkout> <sha>` on two
+devices (or a device and a simulator). Turn on Developer Tools → Link Devices on
+both, then quit and reopen; the row must say it's on, and Settings → Devices must
+appear. With the published MarmotKit, the row must say this build lacks device groups
+and the app must otherwise behave as before.
+
+- [ ] Device A: an existing profile with chats. Device B: sign in with the same
+      nsec; setup passes "Chats on this device" without asking.
+      After Open Chats (and the consent sheet), B alone asks "Signed in on
+      another device?"; Link This iPhone starts the link. A never asks this.
+      Fallbacks: Devices → Link to Another Device on B; Add a New Device, or
+      tapping B's sign-in, on A shows the steps and waits.
+- [ ] B: Start Linking shows Waiting for Your Other Device. A presents Link New
+      Device over whatever screen is open, then the same seven emoji as B.
+- [ ] Name the device on A, keep both toggles on, tap They Match — Link Device;
+      tap They Match on B. B goes through Confirm on Your Other Device and
+      Linking… to Device Linked; A shows Device Linked.
+- [ ] Both Devices screens list both devices with the right names and platform.
+      B's existing chats appear over the following minutes, with history.
+- [ ] Rename B from A and toggle a setting; both devices show the change once it
+      settles. Remove B from A: B shows Device Unlinked. Later leaves the profile;
+      Remove from This Device deletes B's copy. Signing in on B again offers
+      Remove Unlinked Profile?, then sets up afresh and can link again.
+- [ ] Names: approving a first link asks for this device's name too; afterwards
+      no device reads "Unnamed device" on either side. Device Linked on the new
+      device offers Name This iPhone; Save renames it on every device.
+- [ ] History: with Bring Chat History on, a chat still receiving shows
+      "Bringing earlier messages…" in the conversation; afterwards a divider
+      reads "Messages above came from <device>" where live messages begin, and
+      follows that device's rename.
+- [ ] Sign Out & Wipe on a linked device: the warning says the other devices
+      keep the chats; progress mentions about 30 seconds. With the other device
+      offline, the report says they couldn't be reached.
+- [ ] Mismatch: tap They Don't Match on either side. Neither links; A's alert
+      points to sign-ins, B explains the risk. Not Now on A ends B's attempt.
+- [ ] Put a request away on A by swiping the sheet down (only after it moves past
+      the emoji) or with Close on an outcome; the Chats banner and Devices →
+      Link Requests reopen a request still waiting.
+- [ ] Background B mid-link and return: the sheet stays and shows how MDK resumed
+      (usually Not Linked with Try Again).
+- [ ] Sign-ins: B's earlier sign-in appears on A under Sign-Ins to Review. Not
+      Now, This Wasn't Me (confirm; a compromise warning appears on both
+      devices' Chats and Devices) and Dismiss behave as labelled. On a fresh,
+      unlinked device, No, Start Fresh hides the link suggestion.
+- [ ] Chat details on an older chat: an admin sees "Linked Devices Are Ready"
+      only when MDK reports every member eligible; Turn On asks first, then the
+      nudge disappears. Non-admins, and chats not yet eligible, show nothing.
+
 ## Onboarding
 
 - [ ] Cold launch on a clean install lands on **Welcome** within ~1s.

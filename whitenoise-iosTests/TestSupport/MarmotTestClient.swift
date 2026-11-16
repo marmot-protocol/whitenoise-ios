@@ -10,12 +10,19 @@ extension MarmotClient {
     /// Builds a MarmotClient pointed at a unique temp directory so unit tests
     /// stay hermetic. The caller owns the runtime; prefer `withTestClient`,
     /// which closes it and removes the directory.
-    static func testClient(relayUrls: [String] = unreachableTestRelays) throws -> MarmotClient {
+    static func testClient(
+        relayUrls: [String] = unreachableTestRelays,
+        deviceGroupsRequested: Bool = false
+    ) throws -> MarmotClient {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("MarmotTests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         do {
-            return try MarmotClient(rootPath: tmp.path, relayUrls: relayUrls)
+            // Never inherit the simulator's experimental device-group toggle.
+            return try MarmotClient(
+                rootPath: tmp.path, relayUrls: relayUrls, cursorPersistence: .advance,
+                telemetryConfig: .current(), deviceGroupsRequested: deviceGroupsRequested
+            )
         } catch {
             try? FileManager.default.removeItem(at: tmp)
             throw error
@@ -28,10 +35,11 @@ extension MarmotClient {
 /// removed only after a successful shutdown.
 func withTestClient<T>(
     relayUrls: [String] = MarmotClient.unreachableTestRelays,
+    deviceGroupsRequested: Bool = false,
     isolation: isolated (any Actor)? = #isolation,
     _ body: (MarmotClient) async throws -> T
 ) async throws -> T {
-    let client = try MarmotClient.testClient(relayUrls: relayUrls)
+    let client = try MarmotClient.testClient(relayUrls: relayUrls, deviceGroupsRequested: deviceGroupsRequested)
     let result: T
     do {
         result = try await body(client)

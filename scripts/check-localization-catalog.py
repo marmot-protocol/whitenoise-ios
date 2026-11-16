@@ -172,7 +172,8 @@ SHARED_NAMES = (
 )
 SHARED_WORDS = {
     "%@ (IDN/punycode)": "es fr it pt ru tr", "%@ (IDN/punycode: %@)": "es it pt ru tr", "%lld images": "fr",
-    "%lld stickers": "es", "%lld videos": "es", "%lld votes": "fr", "Admin": "de", "Audio": "de es fr it",
+    "%lld stickers": "es", "%lld videos": "es", "%lld votes": "fr", "Actions": "fr", "Admin": "de",
+    "App": "de it zh-Hant", "Audio": "de es fr it",
     "Cache": "de fr it pt", "Chats": "de es", "Contact": "fr", "Conversation": "fr",
     "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Fanouts": "de es fr pt", "Filter": "de",
     "GIF via GIPHY": "fr pt", "GIFs": "de es pt", "Hex": "de es fr it pt ru tr", "id: %@": "es it pt ru tr",

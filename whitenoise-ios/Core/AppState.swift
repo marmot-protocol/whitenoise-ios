@@ -243,6 +243,7 @@ final class AppState {
             productOnboardingTicket = nil
             productOnboardingPath = nil
             await activateNewIdentity(summary)
+            deviceLinks.noteSetupFinished(accountIdHex: id)
         } catch {
             signInAttempts.begin(id)
             pendingAccountSetup = model
@@ -490,6 +491,8 @@ final class AppState {
     var groupMembershipUpdate: GroupRecoveryUpdate?
     var groupProjectionUpdate: GroupRecoveryUpdate?
     let historyNotices = HistoryNoticeStore()
+    /// Linked devices and device linking for the active account (experimental).
+    let deviceLinks = DeviceLinkStore()
     @ObservationIgnored private var refusedIntentAnnouncements = RefusedIntentAnnouncements()
     /// The active account's NIP-51 emoji sets, shared by every chat so typed
     /// `:shortcode:` resolves without opening a picker.
@@ -540,6 +543,7 @@ final class AppState {
         if case .historyNoticesChanged(let accountID, _) = event, activeAccount?.accountIdHex == accountID {
             Task { await historyNotices.refresh(using: self) }
         }
+        deviceLinks.observe(event, using: self)
         let noticeAccountID: String
         switch event {
         case .groupChangeSuperseded(let accountID, _, _, _, _, _, _):
@@ -1586,6 +1590,35 @@ final class AppState {
     /// the account refresh once the runtime is online. The account refresh
     /// itself stays on AppState (it is account/profile maintenance, not
     /// lifecycle).
+    /// Another of the account's devices removed this one. MDK has already
+    /// signed the account out here, but it stays listed (`unlinked`), so leave
+    /// it the way a sign-out does: to another profile's chooser, or Welcome.
+    /// Removes a profile another device unlinked from this one, so the user can
+    /// sign in again and link this device anew. MDK's wipe skips leaving chats
+    /// and deleting the KeyPackage slot, which the other devices already did.
+    @MainActor
+    func removeUnlinkedAccount(accountRef: String) async throws {
+        let account = accounts.first { $0.label == accountRef || $0.accountIdHex == accountRef }
+        if let account, account.label == activeAccountRef {
+            guard await signOutAndWipeActiveAccount() else { throw UnlinkedAccountRemovalError() }
+            return
+        }
+        let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        let outcome = try await lease.client.signOutAndWipe(accountRef: account?.label ?? accountRef)
+        try? await refreshAccounts(refreshUnreadSummaries: false)
+        guard outcome.localCleanup.completed else { throw UnlinkedAccountRemovalError() }
+    }
+
+    @MainActor
+    func leaveUnlinkedAccount(accountIdHex: String) async {
+        try? await refreshAccounts()
+        guard let active = activeAccount, active.accountIdHex == accountIdHex, active.signedOut else { return }
+        activeAccountRef = nil
+        _ = stopNotificationSubscription()
+        phase = accounts.contains(where: { !$0.signedOut }) ? .ready : .onboarding
+    }
+
     @MainActor
     func refreshAccounts(refreshUnreadSummaries: Bool = true) async throws {
 #if DEBUG
@@ -2087,6 +2120,7 @@ final class AppState {
         signInAttempts.begin(snapshot.accountIdHex)
         imported = true
         pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
+        pendingAccountSetup?.acknowledgesSingleDevice = lease.client.deviceGroupsEnabled
         pendingAccountSetup?.onProductReady = { [productAnalytics] in
             productAnalytics.record(.onboarding(.localReady, .import, .success), ticket: ticket)
             productAnalytics.record(.onboarding(.networkReady, .import, .success), ticket: ticket)

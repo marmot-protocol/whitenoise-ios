@@ -182,6 +182,8 @@ final class AccountSetupModel {
     }
 
     var onProductReady: (() -> Void)?
+    /// Device-group builds acknowledge the single-device step automatically.
+    var acknowledgesSingleDevice = false
 
     func apply(_ next: OnboardingSnapshotFfi) {
         guard next.accountIdHex == accountID, next.recoveryEpoch == snapshot.recoveryEpoch,
@@ -258,7 +260,9 @@ final class AccountSetupModel {
 
     private func advanceOptionalSteps() {
         guard !isBusy, isConnected, failure == nil,
-              let command = AccountSetupPolicy.automaticAction(snapshot) else { return }
+              let command = AccountSetupPolicy.automaticAction(
+                  snapshot, acknowledgesSingleDevice: acknowledgesSingleDevice
+              ) else { return }
         guard lastAutomaticRevision != snapshot.revision else {
             failure = .operation
             return
@@ -355,7 +359,14 @@ nonisolated enum AccountSetupPublication {
 }
 
 nonisolated enum AccountSetupPolicy {
-    static func automaticAction(_ snapshot: OnboardingSnapshotFfi) -> AccountSetupCommand? {
+    /// `acknowledgesSingleDevice` is on in device-group builds: there the user
+    /// links devices after setup, so the "Chats on this device" step is
+    /// acknowledged without a screen. MDK still requires that acknowledgement,
+    /// bound to the snapshot's revision, before it publishes the KeyPackage.
+    static func automaticAction(
+        _ snapshot: OnboardingSnapshotFfi,
+        acknowledgesSingleDevice: Bool = false
+    ) -> AccountSetupCommand? {
         guard !snapshot.cancellationPending else { return nil }
         if let proposal = snapshot.proposal {
             guard proposal.step == .follows,
@@ -363,9 +374,14 @@ nonisolated enum AccountSetupPolicy {
             else { return nil }
             return .cancelRepair
         }
-        guard let step = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }),
-              step.step == .follows, step.actions.contains(.continueWithout) else { return nil }
-        return .skip(.follows)
+        guard let step = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }) else {
+            return nil
+        }
+        if step.step == .follows, step.actions.contains(.continueWithout) { return .skip(.follows) }
+        if acknowledgesSingleDevice, step.step == .singleDevice, step.actions.contains(.continueAnyway) {
+            return .acknowledge(snapshot.revision, recoveryEpoch: snapshot.recoveryEpoch)
+        }
+        return nil
     }
 }
 

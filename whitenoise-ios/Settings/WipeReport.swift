@@ -43,10 +43,15 @@ nonisolated struct WipeStageReport: Equatable {
 nonisolated struct WipeReport: Equatable {
     let stages: [WipeStageReport]
     var didWipeData = true
+    /// Chats this device left to its other linked devices to finish removing it from.
+    var groupsLeftToSiblings = 0
+    /// The other linked devices couldn't be asked in time, so they may still
+    /// list this device until the user removes it from one of them.
+    var siblingsNotReached = false
 
     var issueCount: Int { stages.reduce(0) { $0 + $1.failures.count } }
-    var clean: Bool { issueCount == 0 }
-    var hasCleanupIssues: Bool { stages.contains { $0.hasCleanupIssues } }
+    var clean: Bool { issueCount == 0 && !siblingsNotReached }
+    var hasCleanupIssues: Bool { stages.contains { $0.hasCleanupIssues } || siblingsNotReached }
 }
 
 /// Maps the engine's `WipeOutcomeFfi` to the pure `WipeReport` UI model. Stages
@@ -86,7 +91,7 @@ nonisolated enum WipeReportProjection {
                 completedCount: nil,
                 failures: localFailures
             )
-        ])
+        ], groupsLeftToSiblings: Int(outcome.groupsLeftToSiblings), siblingsNotReached: outcome.siblingsNotReached)
     }
 
     /// Whether the app may finish the exit: MDK removed the account locally.

@@ -98,13 +98,16 @@ final class NotificationService: UNNotificationServiceExtension {
             // An NSE wake is a sub-second drain on cold sockets; it must never
             // persist cursor advancement, or a partial catch-up permanently
             // floors the durable `since` past undelivered events.
-            let marmot = try Marmot.newWithConfiguration(
+            // Same constructor as the app: an ordinary one refuses an account
+            // that holds or is joining a device group.
+            let marmot = try MarmotRuntimeOpener.open(
                 rootPath: AppContainerConfig.productionMarmotRoot().path,
                 relayUrls: AppContainerConfig.seedRelays,
                 options: MarmotOptions(cursorPersistence: .frozen, clientName: "whitenoise",
                     devicePlatform: AppContainerConfig.marmotDevicePlatform,
-                    attachmentAcquisitionMode: .hostManaged, deployment: marmotDeploymentWhiteNoise())
-            )
+                    attachmentAcquisitionMode: .hostManaged, deployment: marmotDeploymentWhiteNoise()),
+                deviceGroupsRequested: ExperimentalDeviceGroupsPreference.isEnabled()
+            ).marmot
             activeMarmot = marmot
             activeMarmotNeedsShutdown = true
             // Before `start()` opens accounts, whose recorders keep the source they open with.

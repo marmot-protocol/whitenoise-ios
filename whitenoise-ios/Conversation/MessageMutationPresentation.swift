@@ -21,12 +21,13 @@ nonisolated enum MessageEditingPolicy {
     static func canEdit(
         _ record: AppMessageRecordFfi,
         isDeleted: Bool,
-        canSendMessages: Bool
+        canSendMessages: Bool,
+        myAccountId: String?
     ) -> Bool {
         guard canSendMessages,
               !isDeleted,
               !record.messageIdHex.isEmpty,
-              record.direction == "sent"
+              MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountId)
         else { return false }
 
         switch MessageSemantics.classify(record) {

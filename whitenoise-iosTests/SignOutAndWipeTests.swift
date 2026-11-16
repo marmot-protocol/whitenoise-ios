@@ -20,7 +20,9 @@ struct SignOutAndWipeTests {
         keyPackagesDeleted: UInt32 = 0,
         keyPackageFailures: [RelayFailureFfi] = [],
         localCleanupCompleted: Bool = true,
-        localCleanupReason: String? = nil
+        localCleanupReason: String? = nil,
+        groupsLeftToSiblings: UInt32 = 0,
+        siblingsNotReached: Bool = false
     ) -> WipeOutcomeFfi {
         WipeOutcomeFfi(
             groupsLeft: groupsLeft,
@@ -28,9 +30,19 @@ struct SignOutAndWipeTests {
             keyPackagesDeleted: keyPackagesDeleted,
             keyPackageFailures: keyPackageFailures,
             localCleanup: LocalCleanupReportFfi(completed: localCleanupCompleted, reason: localCleanupReason),
-            groupsLeftToSiblings: 0,
-            siblingsNotReached: false
+            groupsLeftToSiblings: groupsLeftToSiblings,
+            siblingsNotReached: siblingsNotReached
         )
+    }
+
+    @Test func linkedDevicesNotReachedIsReportedEvenWhenEverythingElseFinished() {
+        let unreached = WipeReportProjection.report(from: outcome(siblingsNotReached: true))
+        #expect(!unreached.clean)
+        #expect(unreached.hasCleanupIssues)
+        // A hand-off to the other devices alone is not a problem to report.
+        let handedOff = WipeReportProjection.report(from: outcome(groupsLeftToSiblings: 3))
+        #expect(handedOff.clean)
+        #expect(handedOff.groupsLeftToSiblings == 3)
     }
 
     @Test func cleanWipeMapsToCleanReportWithThreeStagesInEngineOrder() {

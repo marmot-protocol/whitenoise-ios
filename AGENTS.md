@@ -79,7 +79,9 @@ accounts out of normal account activation and maintenance until `snapshot.ready`
 Render offered actions from the current snapshot; the single-device acknowledgment
 automatically continues initial KeyPackage publication without another approval.
 Use “Continue” for `noneFound` and “Continue anyway” for possible or unknown
-installations. Never publish a follow list during setup; skip that optional step
+installations; runtimes with experimental device groups acknowledge that step
+automatically (`AccountSetupPolicy.automaticAction`), bound to the offered revision,
+and offer linking after setup instead. Never publish a follow list during setup; skip that optional step
 when MDK offers it. Profile editing is optional and reuses the sign-up form in a
 sheet. Save publishes the entered profile and dismisses only after success.
 Relay recovery offers another discovery relay or the app's two seed relays,
@@ -245,6 +247,53 @@ Pending acceptance is not completed moderation. Refresh reports from projection
 updates, and use `reportedMessage` for the current deletion-masked content,
 including targets hidden by personal blocking. Keep report plaintext only in
 transient review state; MDK owns durable storage.
+
+## Device linking (experimental)
+
+Multi-device linking follows MDK's device groups: a new device asks
+(`startDeviceLink`), both devices show the same seven emoji, the user confirms on
+both, and the device already signed in adds it (`linkDevice`, whose commit is the
+approval). It works only in a runtime opened with
+`Marmot.newWithExperimentalDeviceGroups`, which needs a MarmotKit library built
+with `dev-device-groups` (`scripts/sync-local-bindings.sh --dev-device-groups`;
+published releases lack it). Developer Tools → Link Devices stores the request in
+the shared App Group suite (`ExperimentalDeviceGroupsPreference`), and every opener,
+the NSE included, goes through `MarmotRuntimeOpener`: an ordinary constructor
+refuses an account that holds or is joining a device group. Fall back to the
+ordinary constructor only on `experimental_device_groups_unavailable`.
+`DeviceLinkStore` on `AppState` mirrors the active account's link snapshot,
+devices, sign-ins and compromise warning, re-reading on MDK's
+`DeviceLinkChanged`/`LinkedDevicesChanged`/`UnrecognizedSignInsChanged`/
+`CompromiseWarningChanged`/`KeyPackageRefreshOverdueChanged` events, and routes
+user choices back; MDK owns every decision. Word `device group refused: <reason>`
+refusals through `DeviceGroupRefusal`. Only the new device can start a link, and
+either device may look new to the other, so the Devices screen offers both sides:
+Add a New Device (steps for the new device, waiting for its request) and Link to
+Another Device; sign-in rows open Add a New Device. "Signed in on another
+device?" is offered only on the device that finished setup in this launch
+(`NewDeviceLinkOffer`), and its Link action starts the link directly. A link
+request presents itself over any
+screen until the user acts or puts it away; it stays on the Devices screen and the
+Chats banner. Show the roster's label and settings, not the user's typed values,
+once MDK reports them. Never approve, reject or start fresh on the user's behalf.
+`enableAccountDevices` is one admin commit that can't be undone. Offer it only as
+an admin nudge in chat details while `accountDevicesActivation` is `eligible` (every
+leaf advertises the component); show no switch or blocked state otherwise. Confirm
+it, and run it through `GroupChangeAdvisoryRetry` like any group change.
+Imported chat history: `TimelineStore` keeps each row's `HistoryImportOrigin`
+(`importedFrom`/`historyImportProvenance` live only on the raw timeline record) and
+draws a divider above the first live row after imported ones, naming the device by
+its current roster name. While `chatHistoryImports` says a chat is receiving, the
+conversation's recovery area shows progress; MDK names no device until it arrives.
+Every device gets a name: the approving device names itself on its first link (applied
+once the roster lists it, retried on `device_group_busy`), the new device can rename
+itself on Device Linked, and an unnamed device reads as "<platform> · <client>".
+Sign Out & Wipe with linked devices says the other devices finish removing this one;
+the wipe report shows `siblingsNotReached` (never clean) and `groupsLeftToSiblings`.
+An unlinked account stays listed (`unlinked`, `signedOut`), so `DeviceUnlinked`
+offers Remove from This Device (`signOutAndWipe`) or Later, which routes away like
+a sign-out. Signing in to it fails with `AccountUnlinked`; the import flow asks
+before removing that copy and retrying the import.
 
 ## Chat presentation and invitation recovery
 

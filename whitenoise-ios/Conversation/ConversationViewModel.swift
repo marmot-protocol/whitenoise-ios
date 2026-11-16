@@ -926,6 +926,10 @@ final class ConversationViewModel {
         timelineStore.messageClusterPresentation(for: item)
     }
 
+    func historyImportBoundary(before item: TimelineItem) -> HistoryImportOrigin? {
+        timelineStore.historyImportBoundary(before: item)
+    }
+
     /// All aggregated reaction tallies (full dict). Used by reaction tests.
     var reactions: [String: [ReactionTally]] { timelineStore.reactions }
 
@@ -1647,8 +1651,7 @@ final class ConversationViewModel {
     }
 
     func isMessageMine(_ message: AppMessageRecordFfi) -> Bool {
-        guard let myAccountId, !myAccountId.isEmpty else { return false }
-        return message.sender.caseInsensitiveCompare(myAccountId) == .orderedSame
+        MessageOwnership.isMine(direction: message.direction, sender: message.sender, myAccountId: myAccountId)
     }
 
     static func nextLiveSubscriptionRetryDelay(after delay: UInt64) -> UInt64 {
@@ -3374,7 +3377,8 @@ final class ConversationViewModel {
         guard MessageEditingPolicy.canEdit(
                 message,
                 isDeleted: isDeleted(message.messageIdHex),
-                canSendMessages: canSendMessages
+                canSendMessages: canSendMessages,
+                myAccountId: myAccountId
               ),
               let outgoing = preparedComposerText(content).flatMap(MessageEditingPolicy.normalizedContent),
               let appState,

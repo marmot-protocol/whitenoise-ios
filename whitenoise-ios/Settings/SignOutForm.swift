@@ -9,6 +9,8 @@ struct SignOutForm<ProfileSummary: View>: View {
     let isBusy: Bool
     let canSignOut: Bool
     let error: String?
+    /// This device has other linked devices, which finish removing it from chats.
+    var hasLinkedDevices = false
     let onClose: () -> Void
     let onSignOut: () -> Void
     @ViewBuilder let profileSummary: () -> ProfileSummary
@@ -224,9 +226,15 @@ struct SignOutForm<ProfileSummary: View>: View {
                 .font(.headline)
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(.isHeader)
-            Text("This profile’s chats, media, and secret key will be erased from this device. You’ll leave your groups. Chats can’t be restored, and you’ll need new invitations.")
-                .font(.body)
-                .foregroundStyle(.secondary)
+            if hasLinkedDevices {
+                Text("This profile’s chats, media, and secret key will be erased from this device. Your other devices keep your chats and will finish removing this one from them.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("This profile’s chats, media, and secret key will be erased from this device. You’ll leave your groups. Chats can’t be restored, and you’ll need new invitations.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
             Text("Copies held by others or relays won’t be erased.")
                 .foregroundStyle(.secondary)
         }
@@ -272,7 +280,9 @@ struct SignOutForm<ProfileSummary: View>: View {
     @ViewBuilder
     private var wipeProgressHint: some View {
         if isBusy, isWiping {
-            Text("Leaving your chats. This can take up to a minute. Keep White Noise open until it finishes.")
+            Text(hasLinkedDevices
+                 ? "Your other devices will finish removing this one from your chats. This can take about 30 seconds. Keep White Noise open until it finishes."
+                 : "Leaving your chats. This can take up to a minute. Keep White Noise open until it finishes.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)

@@ -280,7 +280,12 @@ struct MessageBubble: View {
     @State private var pendingExternalLink: PendingMessageExternalLink?
     @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
-    private var isFromMe: Bool { !usesReviewLayout && record.direction == "sent" }
+    private var isFromMe: Bool {
+        !usesReviewLayout && MessageOwnership.isMine(
+            direction: record.direction, sender: record.sender,
+            myAccountId: appState.activeAccount?.accountIdHex
+        )
+    }
 
     private var bubbleMaxWidth: CGFloat? {
         sizeClass == .regular ? ChatBubbleMetrics.regularMaximumWidth : nil

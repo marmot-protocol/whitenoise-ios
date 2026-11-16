@@ -655,6 +655,37 @@ struct AccountSetupTests {
         await model.drain()
     }
 
+    @Test func onlyDeviceGroupBuildsAcknowledgeTheSingleDeviceStepThemselves() {
+        var value = snapshot()
+        value.steps[0].step = .singleDevice
+        value.steps[0].status = .needsInput
+        value.steps[0].actions = [.continueAnyway]
+        #expect(AccountSetupPolicy.automaticAction(value) == nil)
+        guard case .acknowledge(let revision, _) = AccountSetupPolicy.automaticAction(
+            value, acknowledgesSingleDevice: true
+        ) else {
+            Issue.record("expected an acknowledgement")
+            return
+        }
+        // Bound to the snapshot MDK offered it in.
+        #expect(revision == value.revision)
+        value.steps[0].actions = [.retry]
+        #expect(AccountSetupPolicy.automaticAction(value, acknowledgesSingleDevice: true) == nil)
+    }
+
+    @Test func deviceGroupBuildsHideTheSingleDeviceRowUnlessItNeedsTheUser() {
+        var steps = snapshot().steps
+        steps[0].step = .singleDevice
+        let shown = { (acknowledges: Bool, review: OnboardingStepFfi?) in
+            AccountSetupPresentation.visibleSteps(steps, acknowledgesSingleDevice: acknowledges, reviewStep: review)
+                .contains { $0.step == .singleDevice }
+        }
+        #expect(shown(false, nil))
+        #expect(!shown(true, nil))
+        // An acknowledgement that failed leaves the step to the user.
+        #expect(shown(true, .singleDevice))
+    }
+
     @Test func profileIsNeverAutomaticallySkippedOrPublished() {
         var value = snapshot()
         value.steps[0].step = .profile

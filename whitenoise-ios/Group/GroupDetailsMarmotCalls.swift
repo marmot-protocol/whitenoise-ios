@@ -37,6 +37,18 @@ nonisolated struct GroupDetailsMarmotCalls: Sendable {
     var cancelLeave: @MainActor (
         MarmotClient, _ accountRef: String, _ groupIdHex: String
     ) async throws -> Void
+    /// Whether an admin may let members' linked devices join (experimental device groups).
+    var accountDevicesActivation: @MainActor (
+        MarmotClient, _ accountRef: String, _ groupIdHex: String
+    ) async throws -> AccountDevicesActivationFfi = { client, accountRef, groupIdHex in
+        try await client.marmot.accountDevicesActivation(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+    /// One admin commit, never undone, that lets members' linked devices join.
+    var enableAccountDevices: @MainActor (
+        MarmotClient, _ accountRef: String, _ groupIdHex: String
+    ) async throws -> GroupMutationResultFfi = { client, accountRef, groupIdHex in
+        try await client.marmot.enableAccountDevices(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
 
     static let marmot = GroupDetailsMarmotCalls(
         updateGroupProfile: { client, accountRef, groupIdHex, name, description in

@@ -34,6 +34,7 @@ struct ChatsListView: View {
     @State private var viewModel: ChatsListViewModel?
     @State private var showNewChat = false
     @State private var showSettings = false
+    @State private var showDevices = false
     @State private var showAddProfile = false
     @State private var dismissAddProfileAfterSettingsRemoval = false
     @State private var path: [ChatNavigationTarget] = []
@@ -246,7 +247,13 @@ struct ChatsListView: View {
                         .padding(.top, 6)
                     }
 
-                    if !appState.historyNotices.accountNotices.isEmpty {
+                    if let banner = appState.deviceLinks.attentionBanner {
+                        DeviceAttentionBannerView(banner: banner) { showDevices = true }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 6)
+                    }
+
+                    if !appState.historyNotices.accountNotices.isEmpty || appState.deviceLinks.attentionBanner != nil {
                         Color.clear
                             .frame(height: 6)
                     }
@@ -315,6 +322,23 @@ struct ChatsListView: View {
                 guard appState.canUseRuntimeForLocalForegroundWork else { return }
                 await appState.diagnosticsConsent.reload(using: appState)
             }
+            // Only on the device that just finished setup. Waits for the consent
+            // sheet and other sheets, which would swallow an alert raised under them.
+            .alert(
+                "Signed in on another device?",
+                isPresented: Binding(
+                    get: {
+                        appState.deviceLinks.offersNewDeviceLink && chatsVisible
+                            && !showDiagnosticsPrompt && !secondarySheetVisible
+                    },
+                    set: { if !$0 { appState.deviceLinks.dismissNewDeviceOffer() } }
+                )
+            ) {
+                Button("Not Now", role: .cancel) {}
+                Button(LinkThisDeviceCopy.action) { appState.deviceLinks.linkFromNewDeviceOffer() }
+            } message: {
+                Text(LinkThisDeviceCopy.offer)
+            }
             .sheet(isPresented: $showDiagnosticsPrompt) {
                 DiagnosticsConsentSheet()
                     .appAppearance()
@@ -323,6 +347,9 @@ struct ChatsListView: View {
                 NewChatFlowView()
                     .onAppear { secondarySheetVisible = true }
                     .appAppearance()
+            }
+            .navigationDestination(isPresented: $showDevices) {
+                LinkedDevicesView()
             }
             .navigationDestination(isPresented: $showSettings) {
                 if let viewModel {
