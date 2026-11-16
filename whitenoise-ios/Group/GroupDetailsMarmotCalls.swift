@@ -4,7 +4,7 @@ import MarmotKit
 /// The Marmot calls `GroupDetailsViewModel` makes. Most take the runtime client
 /// their call site resolved; the ones that take `AppState` resolve it themselves,
 /// right before the call, as their call sites did.
-struct GroupDetailsMarmotCalls {
+nonisolated struct GroupDetailsMarmotCalls: Sendable {
     var updateGroupProfile: @MainActor (
         MarmotClient, _ accountRef: String, _ groupIdHex: String, _ name: String, _ description: String
     ) async throws -> SendSummaryFfi

@@ -36,7 +36,9 @@ extension AppState {
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory = RuntimeLifecycle.defaultRuntimeClientFactory,
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = { delay in try await Task.sleep(for: delay) },
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
-        notificationCatchUpCalls: NotificationCatchUpCalls = .live
+        notificationCatchUpCalls: NotificationCatchUpCalls = .live,
+        hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
+            RuntimeLifecycle.recordHostPerformanceOnClient
     ) -> AppState {
         let resources = AppStateTestResources()
         let isolatedDefaults = accountDefaults ?? resources.makeDefaults("AppStateTest")
@@ -57,7 +59,8 @@ extension AppState {
             runtimeClientFactory: runtimeClientFactory,
             runtimeRetrySleeper: runtimeRetrySleeper,
             runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy,
-            notificationCatchUpCalls: notificationCatchUpCalls
+            notificationCatchUpCalls: notificationCatchUpCalls,
+            hostPerformanceRecorder: hostPerformanceRecorder
         )
         objc_setAssociatedObject(state, &AppStateTestResources.key, resources, .OBJC_ASSOCIATION_RETAIN)
         return state

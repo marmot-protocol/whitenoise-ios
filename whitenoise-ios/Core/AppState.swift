@@ -613,7 +613,9 @@ final class AppState {
             delay in try await Task.sleep(for: delay)
         },
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
-        notificationCatchUpCalls: NotificationCatchUpCalls = .live
+        notificationCatchUpCalls: NotificationCatchUpCalls = .live,
+        hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
+            RuntimeLifecycle.recordHostPerformanceOnClient
     ) {
         self.notificationCoordinator = NotificationCoordinator(catchUpCalls: notificationCatchUpCalls)
         self.runtimeLifecycle = RuntimeLifecycle(
@@ -621,7 +623,8 @@ final class AppState {
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
             runtimeClientFactory: runtimeClientFactory,
             retrySleeper: runtimeRetrySleeper,
-            constructionRetryPolicy: runtimeConstructionRetryPolicy
+            constructionRetryPolicy: runtimeConstructionRetryPolicy,
+            hostPerformanceRecorder: hostPerformanceRecorder
         )
         self.accountStore = AccountStore(defaults: accountDefaults)
         self.notifications = notifications

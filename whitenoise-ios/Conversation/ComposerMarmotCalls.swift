@@ -4,7 +4,7 @@ import MarmotKit
 /// The Marmot calls `ComposerModel` makes to admit a text message and to read back
 /// an uncertain admission. Each resolves the runtime client from `AppState` right
 /// before its call, as the composer did.
-struct ComposerMarmotCalls {
+nonisolated struct ComposerMarmotCalls: Sendable {
     var sendDraft: @MainActor (
         AppState, _ accountRef: String, _ revision: MessageDraftRevisionFfi, _ clientToken: String
     ) async throws -> LocalSendAcceptanceFfi

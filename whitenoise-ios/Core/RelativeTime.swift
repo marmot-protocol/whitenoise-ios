@@ -10,8 +10,9 @@ enum RelativeTime {
         now: Date = Date(),
         calendar: Calendar = .current,
         locale: Locale = AppLanguage.currentLocale,
-        formatters: RelativeTimeFormatters = .shared
+        formatters: RelativeTimeFormatters? = nil
     ) -> String {
+        let formatters = formatters ?? .shared
         let seconds = now.timeIntervalSince(date)
         if seconds < 0 { return L10n.string("now") }
         if seconds < 60 { return L10n.string("now") }
@@ -38,8 +39,9 @@ enum RelativeTime {
         now: Date = Date(),
         calendar: Calendar = .current,
         locale: Locale = AppLanguage.currentLocale,
-        formatters: RelativeTimeFormatters = .shared
+        formatters: RelativeTimeFormatters? = nil
     ) -> String {
+        let formatters = formatters ?? .shared
         let seconds = now.timeIntervalSince(date)
         if seconds < 60 { return L10n.string("now") }
         if seconds < 3600 {
@@ -62,12 +64,12 @@ enum RelativeTime {
     static func shortTime(
         _ date: Date,
         locale: Locale = AppLanguage.currentLocale,
-        formatters: RelativeTimeFormatters = .shared
+        formatters: RelativeTimeFormatters? = nil
     ) -> String {
         // Bubble times always carry the 12-hour day period ("9:41 PM"),
         // regardless of the device's 24-hour setting; the localized template
         // keeps element order and the period's spelling locale-correct.
-        formatted(date, "hmm a", locale: locale, formatters: formatters)
+        formatted(date, "hmm a", locale: locale, formatters: formatters ?? .shared)
     }
 
     private static func formatted(

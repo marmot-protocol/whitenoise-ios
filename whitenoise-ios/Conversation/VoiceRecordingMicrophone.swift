@@ -3,7 +3,7 @@ import Foundation
 
 /// The microphone behind a voice recording. Production asks iOS for record
 /// permission and records AAC with `AVAudioRecorder`.
-struct VoiceRecordingMicrophone {
+nonisolated struct VoiceRecordingMicrophone: Sendable {
     var requestPermission: @MainActor () async -> Bool
     /// Starts recording into `url`. Throws when recording can't start.
     var startRecording: @MainActor (_ url: URL) throws -> VoiceRecordingTake

@@ -3,7 +3,7 @@ import MarmotKit
 
 /// The Marmot calls `ConversationViewModel` makes to decline an invitation. An
 /// admin invitee steps down first: MDK refuses the decline until it has.
-struct InviteDeclineCalls {
+nonisolated struct InviteDeclineCalls: Sendable {
     var selfDemote: @MainActor (
         AppState, GroupChangeAdvisoryPrompter, _ accountRef: String, _ groupIdHex: String
     ) async throws -> GroupMutationResultFfi
