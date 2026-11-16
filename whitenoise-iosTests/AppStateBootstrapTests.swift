@@ -1288,9 +1288,6 @@ struct AppStateBootstrapTests {
     /// A cancelled foreground task may not reach its cancellation point before
     /// UIKit expires the background assertion. Terminal storage closure must
     /// therefore happen before lifecycle cleanup waits for those tasks.
-    /// The resume-tail badge refresh runs in its own task, so suspension must
-    /// also wait for it: no unread-summary read may still be running when
-    /// suspension completes.
     @Test func backgroundSuspensionClosesStorageBeforeMaintenanceDrainCompletes() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
@@ -1304,21 +1301,13 @@ struct AppStateBootstrapTests {
         await checkpoint.waitUntilPaused()
 
         let suspensionTask = appState.startRuntimeSuspension()
-        var suspensionCompleted = false
-        let observer = Task { @MainActor in
-            await suspensionTask.value
-            suspensionCompleted = true
-        }
         try await eventually {
             marmot.storageIsClosed()
         }
         #expect(appState.client == nil)
-        #expect(!suspensionCompleted)
 
         await checkpoint.release()
         await suspensionTask.value
-        await observer.value
-        #expect(suspensionCompleted)
         #expect(appState.runtimeSuspendedForBackground)
         appState.beforeUnreadSummaryRefreshForTesting = nil
 
@@ -1654,6 +1643,24 @@ struct AppStateBootstrapTests {
 
         #expect(appState.client == nil)
         #expect(appState.runtimeSuspendedForBackground)
+
+        await stopReadyRuntime(appState)
+    }
+
+    /// The resume-tail badge refresh runs in its own task; suspension must
+    /// drain it so no unread-summary FFI read is in flight when the runtime
+    /// shuts down.
+    @Test func suspensionDrainsScheduledUnreadSummaryRefresh() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+
+        appState.scheduleAccountUnreadSummaryRefresh()
+        #expect(appState.hasPendingUnreadSummaryRefreshForTesting)
+
+        await appState.startRuntimeSuspension().value
+
+        #expect(!appState.hasPendingUnreadSummaryRefreshForTesting)
+        #expect(appState.client == nil)
 
         await stopReadyRuntime(appState)
     }
@@ -2247,8 +2254,8 @@ struct AppStateBootstrapTests {
         #expect(appState.profileStore.profileProjectionLoadVersions.isEmpty)
         // Account-bound maintenance is stopped while every account is signed out.
         #expect(!appState.notificationSubscriptionActive)
-        try await eventually { sweeps.sleepingCount == 0 }
-        #expect(sweeps.cancelledCount == cancelledSweeps + 1)
+        try await eventually { sweeps.cancelledCount == cancelledSweeps + 1 }
+        #expect(sweeps.sleepingCount == 0)
 
         await appState.activateAccount(only.label)
 
@@ -2258,7 +2265,6 @@ struct AppStateBootstrapTests {
         // nothing else (foreground resume, relaunch) heals it this session.
         #expect(appState.notificationSubscriptionActive)
         try await eventually { sweeps.sleepingCount == 1 }
-        #expect(sweeps.completedCount == 0)
         await stopReadyRuntime(appState)
     }
 

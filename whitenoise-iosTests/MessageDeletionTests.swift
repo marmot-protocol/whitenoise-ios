@@ -702,7 +702,7 @@ struct MessageDeletionTests {
         accountRef: String,
         accountIdHex: String,
         client: MarmotClient? = nil,
-        reportingAvailable: @escaping (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:)
+        reportingAvailable: @escaping @MainActor (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:)
     ) throws -> AppState {
         let state = AppState.test(client: client, moderationReportingAvailability: reportingAvailable)
         state.accountStore.accounts = [

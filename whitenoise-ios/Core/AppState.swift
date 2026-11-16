@@ -372,7 +372,7 @@ final class AppState {
     var moderationReportingAvailable: Bool {
         moderationReportingAvailability(client)
     }
-    @ObservationIgnored private let moderationReportingAvailability: (MarmotClient?) -> Bool
+    @ObservationIgnored private let moderationReportingAvailability: @MainActor (MarmotClient?) -> Bool
 
     static func moderationReportingAvailable(on client: MarmotClient?) -> Bool {
         client?.moderationReportingAvailable == true
@@ -615,7 +615,7 @@ final class AppState {
         notificationCatchUpCalls: NotificationCatchUpCalls = .live,
         hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
             RuntimeLifecycle.recordHostPerformanceOnClient,
-        moderationReportingAvailability: @escaping (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:),
+        moderationReportingAvailability: @escaping @MainActor (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:),
         retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep
     ) {
         self.moderationReportingAvailability = moderationReportingAvailability
@@ -2276,6 +2276,8 @@ final class AppState {
 
     #if DEBUG
     @ObservationIgnored var afterAccountExitClientCapturedForTesting: (() async -> Void)?
+
+    var hasPendingUnreadSummaryRefreshForTesting: Bool { unreadSummaryRefreshTask != nil }
     #endif
 }
 

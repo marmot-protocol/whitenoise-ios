@@ -39,7 +39,7 @@ extension AppState {
         notificationCatchUpCalls: NotificationCatchUpCalls = .live,
         hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
             RuntimeLifecycle.recordHostPerformanceOnClient,
-        moderationReportingAvailability: @escaping (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:),
+        moderationReportingAvailability: @escaping @MainActor (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:),
         retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep
     ) -> AppState {
         let resources = AppStateTestResources()
