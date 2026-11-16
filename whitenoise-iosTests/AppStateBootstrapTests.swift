@@ -646,7 +646,6 @@ struct AppStateBootstrapTests {
         await checkpoint.waitUntilPaused()
 
         await checkpoint.release()
-        await appState.drainRuntimeLifecycleTasksForTesting()
         await stopReadyRuntime(appState)
     }
 
@@ -688,7 +687,8 @@ struct AppStateBootstrapTests {
             await appState.bootstrap()
 
             let account = try await appState.createIdentity()
-            await appState.drainRuntimeLifecycleTasksForTesting()
+            // Enabling native push is the notification-defaults follow-up's last write.
+            try await eventually { await appState.notificationSettings(for: account.label)?.nativePushEnabled == true }
 
             let maybeSettings = await appState.notificationSettings(for: account.label)
             let settings = try #require(maybeSettings)
@@ -716,7 +716,10 @@ struct AppStateBootstrapTests {
             await appState.bootstrap()
 
             let account = try await appState.createIdentity()
-            await appState.drainRuntimeLifecycleTasksForTesting()
+            // New accounts start with local notifications on; after a denied
+            // request the follow-up writes them off and stops, with native push
+            // still off, so nothing can register.
+            try await eventually { await appState.notificationSettings(for: account.label)?.localNotificationsEnabled == false }
 
             let maybeSettings = await appState.notificationSettings(for: account.label)
             let settings = try #require(maybeSettings)
@@ -897,7 +900,10 @@ struct AppStateBootstrapTests {
         #expect(appState.client?.marmot.isStopping() == false)
         #expect(!appState.notificationSubscriptionActive)
         #expect(!appState.isRuntimeWarmingUp)
-        await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
+        // In onboarding the scheduled catch-up stops at its gate before it
+        // first suspends, so one main-actor turn lets it run to the end; a
+        // gate that wrongly opened would have called the stub by then.
+        await Task { @MainActor in }.value
         #expect(catchUpAttempts == 0)
         catchUp.onCatchUp = nil
 
@@ -910,19 +916,26 @@ struct AppStateBootstrapTests {
     /// suspension tore the runtime down even though the scene had returned to
     /// active (the resume task it cancelled returned early), stranding the app
     /// foregrounded with `client == nil` and nothing to re-trigger resume.
-    /// Driving both synchronous entry points back-to-back and draining the
-    /// lifecycle tasks must leave a running runtime.
+    /// Driving both synchronous entry points back-to-back and waiting for the
+    /// rescheduled resume must leave a running runtime.
     @Test func backgroundThenForegroundRaceLeavesRuntimeRunning() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let catchUp = NotificationCatchUpStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
         let appState = seeded.appState
         let generation = appState.runtimeGeneration
+        var catchUpAttempts = 0
+        catchUp.onCatchUp = { catchUpAttempts += 1 }
 
         // Interleave the entry points the way SwiftUI delivers a fast
         // background→foreground bounce: both run synchronously before either
         // task body executes.
-        appState.startRuntimeSuspension()
+        let suspension = appState.startRuntimeSuspension()
         appState.startForegroundActivation()
-        await appState.drainRuntimeLifecycleTasksForTesting()
+        // The suspension sees the scene active again and reschedules the resume,
+        // whose last step schedules the catch-up: one call means it finished.
+        await suspension.value
+        try await eventually { catchUpAttempts == 1 }
+        catchUp.onCatchUp = nil
 
         // Terminal state: foreground, runtime live, not suspended.
         #expect(appState.isAppSceneActive)
@@ -941,13 +954,19 @@ struct AppStateBootstrapTests {
     /// active after cancelling foreground maintenance and decline to tear the
     /// runtime down (rescheduling a resume), again leaving a live runtime.
     @Test func foregroundThenBackgroundThenForegroundRaceLeavesRuntimeRunning() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let catchUp = NotificationCatchUpStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
         let appState = seeded.appState
+        var catchUpAttempts = 0
+        catchUp.onCatchUp = { catchUpAttempts += 1 }
 
         appState.startForegroundActivation()
-        appState.startRuntimeSuspension()
+        let suspension = appState.startRuntimeSuspension()
         appState.startForegroundActivation()
-        await appState.drainRuntimeLifecycleTasksForTesting()
+        // As above: the rescheduled resume ends by scheduling the catch-up.
+        await suspension.value
+        try await eventually { catchUpAttempts == 1 }
+        catchUp.onCatchUp = nil
 
         #expect(appState.isAppSceneActive)
         #expect(!appState.runtimeSuspendedForBackground)
@@ -1043,7 +1062,7 @@ struct AppStateBootstrapTests {
         #expect(warmingUpWhenLocalReadyWasRecorded == false)
 
         await checkpoint.release()
-        await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
+        try await eventually { !appState.isConnectivityCatchUpInProgress }
         catchUp.onCatchUp = nil
         timings.onRecord = nil
 
@@ -1088,7 +1107,6 @@ struct AppStateBootstrapTests {
         #expect(stages.contains { $0.0 == .runtimeInit && $0.1 == .success })
         #expect(stages.contains { $0.0 == .accountLoad && $0.1 == .success })
 
-        await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
         await stopReadyRuntime(appState)
     }
 
@@ -1121,7 +1139,7 @@ struct AppStateBootstrapTests {
         }
 
         await appState.startForegroundActivation().value
-        await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
+        try await eventually { catchUpAttempts == 1 && !appState.isConnectivityCatchUpInProgress }
         catchUp.onCatchUp = nil
 
         #expect(catchUpAttempts == 1)
@@ -1138,15 +1156,17 @@ struct AppStateBootstrapTests {
         let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
         let appState = seeded.appState
         var operations: [String] = []
+        let caughtUp = TestLatch()
         catchUp.onConnectivityRestored = {
             operations.append("wake")
         }
         catchUp.onCatchUp = {
             operations.append("catch-up")
+            caughtUp.signal()
         }
 
         appState.scheduleConnectivityCatchUp(connectivityRestored: true)
-        await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
+        try await caughtUp.wait()
 
         #expect(operations == ["wake", "catch-up"])
         catchUp.onConnectivityRestored = nil
@@ -1184,7 +1204,6 @@ struct AppStateBootstrapTests {
         await checkpoint.release()
         await activation.value
         await suspension.value
-        await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
         appState.runtimeLifecycle.afterForegroundRuntimeCreatedForTesting = nil
         timings.onRecord = nil
         catchUp.onCatchUp = nil
@@ -1325,7 +1344,12 @@ struct AppStateBootstrapTests {
         // reserved for the `.background` entry point (`startRuntimeSuspension`).
         appState.setAppSceneActive(false)
         await appState.bootstrap()
-        await appState.drainRuntimeLifecycleTasksForTesting()
+        // A notification-action lease joins any in-flight activation or
+        // suspension first; with no suspension started it leases the live
+        // runtime instead of opening an ephemeral one.
+        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        #expect(!lease.ownsEphemeralRuntime)
+        await appState.runtimeLifecycle.suspendRuntimeAfterNotificationAction(lease)
 
         #expect(appState.phase == .onboarding)
         #expect(!appState.isAppSceneActive)
@@ -1474,7 +1498,6 @@ struct AppStateBootstrapTests {
 
         await appState.runtimeLifecycle.suspendRuntimeAfterNotificationAction(lease)
         await activation.value
-        await appState.drainRuntimeLifecycleTasksForTesting()
 
         #expect(appState.isAppSceneActive)
         #expect(!appState.runtimeSuspendedForBackground)
@@ -2151,7 +2174,6 @@ struct AppStateBootstrapTests {
         appState.scheduleNativePushRegistrationIfEnabled()
         #expect(!appState.isSigningOutForTesting)
 
-        await appState.drainRuntimeLifecycleTasksForTesting()
         await stopReadyRuntime(appState)
     }
 
@@ -2161,12 +2183,14 @@ struct AppStateBootstrapTests {
         // after the push cleanup and re-register the signed-out account.
         let permissionRequested = TestLatch()
         let permissionAnswered = TestLatch()
+        let promptCancelled = TestLatch()
         let notifications = AppNotifications(
             requestAuthorizationHandler: {
                 permissionRequested.signal()
                 try await withTaskCancellationHandler {
                     try await permissionAnswered.wait()
                 } onCancel: {
+                    promptCancelled.signal()
                     permissionAnswered.signal()
                 }
                 try Task.checkCancellation()
@@ -2187,9 +2211,11 @@ struct AppStateBootstrapTests {
         }
 
         let signedOut = await appState.signOut()
-        await appState.drainRuntimeLifecycleTasksForTesting()
 
         #expect(signedOut)
+        // The prompt is still waiting when sign-out cancels the follow-up; a
+        // sign-out that skipped the cancel would let it be answered instead.
+        #expect(promptCancelled.isSignalled)
         #expect(await appState.notificationSettings(for: account.label)?.nativePushEnabled == false)
         #expect(await appState.pushRegistration(for: account.label) == nil)
 

@@ -160,6 +160,8 @@ final class RuntimeLifecycle {
         case runtimeWork
     }
 
+    // Documented exception (AGENTS.md): these three hooks sit inside the
+    // launch, suspend and resume sequence and stay (#1241, item 19).
     @ObservationIgnored var afterBootstrapRuntimeStartForTesting: (() async -> Void)?
     @ObservationIgnored var afterForegroundRuntimeCreatedForTesting: (() async -> Void)?
     /// Called with `true` just before background suspension waits on a running
@@ -1331,20 +1333,4 @@ final class RuntimeLifecycle {
     private var phaseOwnsLiveRuntime: Bool {
         appState?.phaseOwnsLiveRuntime ?? false
     }
-
-    #if DEBUG
-    /// Drives the suspend/resume lifecycle tasks to quiescence so tests can
-    /// drive the real scene-phase entry points (`startRuntimeSuspension` /
-    /// `startForegroundActivation`) and then await the terminal state. A
-    /// suspension that re-checks the scene and reschedules a resume (#222)
-    /// chains a fresh `foregroundActivationTask`; resume never reschedules a
-    /// suspension, so awaiting suspension, then the (possibly rescheduled)
-    /// foreground activation, then native-push registration drains the chain.
-    @MainActor
-    func drainRuntimeLifecycleTasksForTesting() async {
-        await runtimeSuspensionTask?.value
-        await foregroundActivationTask?.value
-        await appState?.nativePushRegistrationTaskValueForTesting()
-    }
-    #endif
 }

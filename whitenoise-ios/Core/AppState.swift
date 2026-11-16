@@ -2290,30 +2290,6 @@ final class AppState {
         }
     }
 
-    /// Drives the suspend/resume lifecycle tasks to quiescence so tests can
-    /// drive the real scene-phase entry points (`startRuntimeSuspension` /
-    /// `startForegroundActivation`) and then await the terminal state. Forwards
-    /// to `RuntimeLifecycle` (which owns the suspension/foreground tasks) and
-    /// drains the AppState-owned native-push task last.
-    @MainActor
-    func drainRuntimeLifecycleTasksForTesting() async {
-        await runtimeLifecycle.drainRuntimeLifecycleTasksForTesting()
-        let followups = Array(foregroundMutationFollowupTasks.values)
-        for task in followups {
-            await task.value
-        }
-        await notificationCoordinator.drainNativePushRegistrationTaskForTesting()
-    }
-
-    /// Drains the in-flight native-push registration task so
-    /// `RuntimeLifecycle.drainRuntimeLifecycleTasksForTesting` can flush the
-    /// `NotificationCoordinator`-owned task as the last step of the lifecycle
-    /// chain.
-    @MainActor
-    func nativePushRegistrationTaskValueForTesting() async {
-        await notificationCoordinator.drainNativePushRegistrationTaskForTesting()
-    }
-
     /// Exposes the sign-out teardown guard (#320) so tests can assert it is
     /// raised only during `signOut()` and cleared before the function returns
     /// (so a legitimate post-sign-out reschedule is not suppressed).
