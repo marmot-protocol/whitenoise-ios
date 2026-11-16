@@ -11,6 +11,11 @@ final class GroupRecoveryModel {
     private(set) var syncParked = false
     private(set) var isRetryingSync = false
     private(set) var syncRetryError: String?
+    /// Relays that refused one of this device's confirmed group changes for
+    /// good. MDK keeps warning, across restarts, until the user dismisses it.
+    private(set) var refusedRelays: [GroupCommitRefusedRelayFfi] = []
+    private(set) var isDismissingRefusal = false
+    private(set) var refusalDismissError: String?
     private var generation = UUID()
     private var readTicket = UUID()
     private var accountRef: String?
@@ -27,6 +32,9 @@ final class GroupRecoveryModel {
         syncParked = false
         isRetryingSync = false
         syncRetryError = nil
+        refusedRelays = []
+        isDismissingRefusal = false
+        refusalDismissError = nil
     }
 
     func refresh(using appState: AppState, groupID: String) async {
@@ -48,7 +56,13 @@ final class GroupRecoveryModel {
         }
         // A failed read keeps the last answer; the next group-state event re-reads it.
         let parked = try? await client.groupMlsState(accountRef: account, groupIdHex: groupID).convergenceParked
+        // nil delivery: nothing owed and every refusal acknowledged. A failed read keeps the last answer.
+        let delivery: GroupCommitDeliveryFfi?? = try? await client.groupCommitDelivery(
+            accountRef: account, groupIdHex: groupID)
         guard !Task.isCancelled, generation == context, readTicket == ticket, matches(appState) else { return }
+        if case .some(let delivery) = delivery {
+            refusedRelays = delivery?.refusedRelays ?? []
+        }
         if let parked {
             syncParked = parked
             if !parked { syncRetryError = nil }
@@ -81,6 +95,30 @@ final class GroupRecoveryModel {
             syncRetryError = UserFacingError.message(
                 for: error, fallbackMessage: L10n.string("Couldn’t retry syncing. Try again.")
             )
+        }
+        guard generation == context, matches(appState) else { return }
+        await refresh(using: appState, groupID: groupID)
+    }
+
+    /// Dismisses the group's relay refusals for good; MDK then allows group changes again.
+    func dismissRefusal(using appState: AppState, groupID: String) async {
+        guard !isDismissingRefusal, matches(appState), let accountRef else { return }
+        let context = generation
+        isDismissingRefusal = true
+        refusalDismissError = nil
+        readTicket = UUID()
+        defer { if generation == context { isDismissingRefusal = false } }
+        do {
+            let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+            defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+            _ = try await lease.client.acknowledgeGroupChangeAdvisory(
+                .commitUndelivered, accountRef: accountRef, groupIdHex: groupID)
+        } catch {
+            guard generation == context, matches(appState) else { return }
+            refusalDismissError = UserFacingError.message(
+                for: error, fallbackMessage: L10n.string("Couldn’t dismiss this warning. Try again.")
+            )
+            return
         }
         guard generation == context, matches(appState) else { return }
         await refresh(using: appState, groupID: groupID)
@@ -124,8 +162,10 @@ final class GroupRecoveryModel {
     }
 
     /// Whether the recovery area has anything to show, so it takes no space otherwise.
-    static func hasContent(status: GroupRecoveryStatusFfi?, errorMessage: String?, syncParked: Bool) -> Bool {
-        guard errorMessage == nil, !syncParked else { return true }
+    static func hasContent(
+        status: GroupRecoveryStatusFfi?, errorMessage: String?, syncParked: Bool, hasCommitRefusal: Bool
+    ) -> Bool {
+        guard errorMessage == nil, !syncParked, !hasCommitRefusal else { return true }
         guard let status else { return false }
         return !status.rejoinInvitations.isEmpty || status.automaticRecoveryFailed || status.historyMayBeIncomplete
             || status.pendingReinvites > 0 || status.failedReinvites > 0

@@ -123,6 +123,45 @@ nonisolated enum StickerPackPresentation {
     }
 }
 
+/// White Noise's own packs, which every account starts with installed so the
+/// picker has stickers without a trip to the pack browser. They are published
+/// by the White Noise account that also publishes the `white-noise` emoji set.
+nonisolated enum StickerDefaultPacks {
+    static let authorPubkeyHex = "75d737c3472471029c44876b330d2284288a42779b591a2ed4daa1c6c07efaf7"
+    static let coordinates = [
+        "30031:\(authorPubkeyHex):white-noise-originals",
+        "30031:\(authorPubkeyHex):marmot",
+    ]
+
+    /// Default packs this account still needs, in order. A pack that was
+    /// installed for it once is never offered again, so removing one sticks.
+    static func toInstall(installed: Set<String>, offered: Set<String>) -> [String] {
+        coordinates.filter { !installed.contains($0) && !offered.contains($0) }
+    }
+}
+
+/// Which default packs each account on this device has already had installed.
+/// MDK's installed list can't tell "never had it" from "removed it", so this
+/// is what keeps a removed default pack from coming back.
+nonisolated struct StickerDefaultPackLedger {
+    private let defaults: UserDefaults
+    private static let keyPrefix = "stickers.defaultPacksOffered."
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func offered(accountRef: String) -> Set<String> {
+        Set(defaults.stringArray(forKey: Self.keyPrefix + accountRef) ?? [])
+    }
+
+    func record(_ coordinates: Set<String>, accountRef: String) {
+        guard !coordinates.isEmpty else { return }
+        let merged = offered(accountRef: accountRef).union(coordinates)
+        defaults.set(merged.sorted(), forKey: Self.keyPrefix + accountRef)
+    }
+}
+
 /// Loads and caches decoded sticker images for one account and runtime.
 ///
 /// MDK keeps no copy of a sticker image, so this keeps a bounded in-memory
@@ -247,11 +286,13 @@ final class StickerLibrary {
     typealias Sync = @MainActor (_ accountRef: String) async throws -> Void
     typealias PackAction = @MainActor (_ accountRef: String, _ input: String) async throws -> StickerPackFfi
     typealias Uninstall = @MainActor (_ accountRef: String, _ input: String) async throws -> Void
+    typealias ShareLink = @MainActor (_ accountRef: String, _ coordinate: String) async throws -> String
 
     private(set) var installed: [StickerPackFfi] = []
     private(set) var installedCoordinates: Set<String> = []
     private(set) var hasLoadedInstalled = false
     private(set) var isSyncing = false
+    private(set) var isInstallingDefaults = false
 
     @ObservationIgnored private let scopeProvider: @MainActor () -> StickerScope?
     @ObservationIgnored private let packs: Packs
@@ -259,19 +300,25 @@ final class StickerLibrary {
     @ObservationIgnored private let fetchPack: PackAction
     @ObservationIgnored private let install: PackAction
     @ObservationIgnored private let uninstall: Uninstall
+    @ObservationIgnored private let shareLink: ShareLink
+    @ObservationIgnored private let defaultPackLedger: StickerDefaultPackLedger
+    @ObservationIgnored private var installingDefaults: (scope: StickerScope, task: Task<Void, Never>)?
     @ObservationIgnored private var scope: StickerScope?
     @ObservationIgnored private var loadingInstalled: Task<Void, Never>?
     @ObservationIgnored private var syncedScope: StickerScope?
     @ObservationIgnored private var syncing: (scope: StickerScope, task: Task<Void, Error>)?
 
     init(scopeProvider: @escaping @MainActor () -> StickerScope?, packs: @escaping Packs, sync: @escaping Sync,
-         fetchPack: @escaping PackAction, install: @escaping PackAction, uninstall: @escaping Uninstall) {
+         fetchPack: @escaping PackAction, install: @escaping PackAction, uninstall: @escaping Uninstall,
+         shareLink: @escaping ShareLink, defaultPackLedger: StickerDefaultPackLedger = StickerDefaultPackLedger()) {
         self.scopeProvider = scopeProvider
         self.packs = packs
         self.syncPacks = sync
         self.fetchPack = fetchPack
         self.install = install
         self.uninstall = uninstall
+        self.shareLink = shareLink
+        self.defaultPackLedger = defaultPackLedger
     }
 
     /// Read-only, so a view body can ask without changing observed state.
@@ -327,6 +374,39 @@ final class StickerLibrary {
         await reloadInstalled()
     }
 
+    /// Installs White Noise's default packs the account hasn't had yet. Run it
+    /// after `sync`, so packs already on the account's relay list count as
+    /// installed. A pack that fails to install (offline, say) is tried again
+    /// next time; one that installed is recorded and never reinstalled.
+    func installDefaultPacksIfNeeded() async {
+        guard let scope = currentScope() else { return }
+        if let running = installingDefaults, running.scope == scope { return await running.task.value }
+        await loadInstalledIfNeeded()
+        guard currentScope() == scope, hasLoadedInstalled else { return }
+        let ledger = defaultPackLedger
+        let alreadyInstalled = Set(StickerDefaultPacks.coordinates).intersection(installedCoordinates)
+        ledger.record(alreadyInstalled, accountRef: scope.accountRef)
+        let pending = StickerDefaultPacks.toInstall(
+            installed: installedCoordinates, offered: ledger.offered(accountRef: scope.accountRef))
+        guard !pending.isEmpty else { return }
+
+        let task = Task { [install] in
+            for coordinate in pending {
+                guard (try? await install(scope.accountRef, coordinate)) != nil else { continue }
+                ledger.record([coordinate], accountRef: scope.accountRef)
+            }
+        }
+        installingDefaults = (scope, task)
+        isInstallingDefaults = true
+        await task.value
+        if installingDefaults?.task == task {
+            installingDefaults = nil
+            isInstallingDefaults = false
+        }
+        guard currentScope() == scope else { return }
+        await reloadInstalled()
+    }
+
     func discover(search: String?) async throws -> [StickerPackFfi] {
         guard let scope = currentScope() else { throw CancellationError() }
         let query = search?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -356,6 +436,15 @@ final class StickerLibrary {
         await reloadInstalled()
     }
 
+    /// MDK's Sonar link for `pack`, built offline with up to eight safe relay hints.
+    func shareURL(for pack: StickerPackFfi) async throws -> URL {
+        guard let scope = currentScope() else { throw CancellationError() }
+        let link = try await shareLink(scope.accountRef, pack.coordinate)
+        guard currentScope() == scope else { throw CancellationError() }
+        guard let url = URL(string: link) else { throw URLError(.badURL) }
+        return url
+    }
+
     private func currentScope() -> StickerScope? {
         let current = scopeProvider()
         if current != scope {
@@ -365,6 +454,8 @@ final class StickerLibrary {
             hasLoadedInstalled = false
             loadingInstalled?.cancel()
             loadingInstalled = nil
+            installingDefaults = nil
+            isInstallingDefaults = false
         }
         return current
     }

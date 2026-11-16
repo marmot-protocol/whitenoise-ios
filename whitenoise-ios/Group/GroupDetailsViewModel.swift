@@ -96,11 +96,21 @@ final class GroupDetailsViewModel {
             }
             conversation.applyGroupMutation(result)
             await refreshVisibleDebugState(using: appState)
-            Haptics.success()
-            appState.present(.success(
-                L10n.plural("Invited %lld members", Int64(refs.count)),
-                message: publishMessage(for: result.summary)
-            ))
+            // No summary: nobody requested was available and nothing was committed.
+            let summary = try result.invite.requireSummary()
+            let skipped = GroupMemberOutcomePresentation.skipped(result.invite.memberOutcomes)
+            if let notice = GroupMemberOutcomePresentation.notice(
+                for: skipped, knownName: { appState.knownDisplayName(forAccountIdHex: $0) }
+            ) {
+                Haptics.warning()
+                appState.present(.warning(notice.title, message: notice.message))
+            } else {
+                Haptics.success()
+                appState.present(.success(
+                    L10n.plural("Invited %lld members", Int64(refs.count)),
+                    message: publishMessage(for: summary)
+                ))
+            }
         } catch {
             await refreshAfterFailedMutation(using: appState)
             handleActionError(error, title: L10n.string("Invite failed"), using: appState)
@@ -820,6 +830,7 @@ final class GroupDetailsViewModel {
     }
 
     private func actionMessage(for error: Error, using appState: AppState) -> String {
+        if let message = unavailableMembersMessage(error, using: appState) { return message }
         guard let marmotError = error as? MarmotKitError else {
             return UserFacingError.message(for: error)
         }
@@ -856,6 +867,12 @@ final class GroupDetailsViewModel {
         default:
             return UserFacingError.message(for: marmotError)
         }
+    }
+
+    private func unavailableMembersMessage(_ error: Error, using appState: AppState) -> String? {
+        guard let unavailable = error as? GroupMembersUnavailableError else { return nil }
+        return GroupMemberOutcomePresentation.message(
+            for: unavailable.skipped, knownName: { appState.knownDisplayName(forAccountIdHex: $0) })
     }
 
     private func isLeaveAlreadyRequested(_ error: Error) -> Bool {

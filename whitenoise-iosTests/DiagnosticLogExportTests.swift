@@ -96,6 +96,63 @@ struct DiagnosticLogExportTests {
         }
     }
 
+    @Test func aWindowReachesBackWholeDaysFromNowAndSkipsEmptyAndUndatedLogs() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let nowMs: UInt64 = 1_800_000_000_000
+        let hour: UInt64 = 3_600_000
+        let recent = file("recent.jsonl", modified: nowMs - hour)
+        let yesterday = file("yesterday.jsonl", modified: nowMs - 25 * hour)
+        let twoDaysAgo = file("two.jsonl", modified: nowMs - 49 * hour)
+        let tooOld = file("old.jsonl", modified: nowMs - 73 * hour)
+        let empty = file("empty.jsonl", modified: nowMs, size: 0)
+        let undated = file("undated.jsonl", modified: nil)
+        let files = [tooOld, undated, twoDaysAgo, empty, recent, yesterday]
+
+        #expect(DiagnosticLogExport.files(in: files, changedWithin: .oneDay, now: now) == [recent])
+        #expect(DiagnosticLogExport.files(in: files, changedWithin: .twoDays, now: now) == [recent, yesterday])
+        #expect(DiagnosticLogExport.files(in: files, changedWithin: .threeDays, now: now)
+            == [recent, yesterday, twoDaysAgo])
+    }
+
+    @Test func archiveEntryNamesAreDistinctAndStayInsideTheArchive() {
+        let names = DiagnosticLogExport.archiveEntryNames(["a.jsonl", "a.jsonl", "../x.jsonl", "", "a.jsonl", "..", "b"])
+        #expect(names == ["a.jsonl", "a-2.jsonl", "x.jsonl", "audit.jsonl", "a-3.jsonl", "audit-2.jsonl", "b"])
+        #expect(Set(names).count == names.count)
+    }
+
+    @Test func archiveBundlesEveryLogIntoOneZipThatRemovalDeletes() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let logs = [file("audit-engine-v3.jsonl", modified: 2), file("audit-engine-v3.jsonl", modified: 1, account: "second")]
+
+        let archive = try await DiagnosticLogExport.writeArchive(files: logs, baseName: "logs", in: root) { log in
+            DiagnosticLogSnapshot(fileName: log.fileName, data: Data("{\"account\":\"\(log.accountRef)\"}\n".utf8))
+        }
+
+        #expect(archive.url.lastPathComponent == "logs.zip")
+        let data = try Data(contentsOf: archive.url)
+        #expect(data.starts(with: [0x50, 0x4B]))
+        for entry in ["audit-engine-v3.jsonl", "audit-engine-v3-2.jsonl"] {
+            #expect(data.range(of: Data(entry.utf8)) != nil)
+        }
+        let siblings = try FileManager.default.contentsOfDirectory(atPath: archive.url.deletingLastPathComponent().path)
+        #expect(siblings == ["logs.zip"])
+
+        DiagnosticLogExport.removeShareFile(archive)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty)
+    }
+
+    @Test func aFailedReadLeavesNoPartialArchiveBehind() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        await #expect(throws: DiagnosticLogExport.ExportError.self) {
+            try await DiagnosticLogExport.writeArchive(files: [file("a.jsonl", modified: 1)], baseName: "logs", in: root) { _ in
+                throw DiagnosticLogExport.ExportError.fileChangedDuringRead
+            }
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty)
+    }
+
     private func file(
         _ name: String, modified: UInt64?, size: UInt64 = 1, account: String = "first"
     ) -> AuditLogFileFfi {

@@ -147,7 +147,7 @@ Install a formal release or a dated nightly using its version:
 ./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-The app pins the formal MarmotKit 0.16.0 release. Nightlies are for testing only
+The app pins the formal MarmotKit 0.17.0 release. Nightlies are for testing only
 and are deleted after 30 days; pin a formal release before shipping. For local
 reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
@@ -170,6 +170,18 @@ step-down before leaving) can fail with the advisory `GroupCatchingUp` or
 acknowledge only after consent, then retry once. Acknowledgements admit one attempt
 and are not persisted. Choosing Wait is not an error toast. Attach
 `groupChangeAdvisoryAlert` to whichever view is on top when the change runs.
+
+Creates and invites go ahead with the members MDK can reach and report every
+requested account in `memberOutcomes`. A missing `created` or invite
+`summary` means nothing changed; read it through `requireCreated`/`requireSummary`
+and word skipped accounts with `GroupMemberOutcomePresentation`. `selected` is
+not a join or Welcome delivery. On `CreatedGroupMemberReportUnavailable`, open the
+named group; never create another. A permanent relay refusal of a confirmed group
+change (`groupCommitDelivery.refusedRelays`) shows in the conversation's recovery
+area until the user dismisses it through `acknowledgeGroupCommitUndelivered`.
+Both the app and the NSE call `setAuditLogSource` before any account opens.
+Delete on a failed own send calls `discardFailedSend`, which publishes nothing;
+polls and stickers sent while replying carry the same reply tags as text.
 
 Avatar metadata from presented rows, conversation headers and identity sidecars
 is authoritative. Request only visible `avatarAsset.target` values and read the
@@ -352,6 +364,10 @@ discloses the device's IP address. Keep `StickerLoadPolicy` as the one gate: a
 received sticker loads by itself only from an installed pack while Photos
 auto-download allows it, otherwise on tap. Discovery lists stay text-only until
 a pack is opened. Keep the egress disclosure on the picker and pack screens.
+Each account starts with White Noise's own packs (`StickerDefaultPacks`):
+opening the picker installs any it hasn't had on this device, after the first
+sync. `StickerDefaultPackLedger` records each one, so a removed default pack
+is never reinstalled.
 
 ## Emoji Sets
 
@@ -365,7 +381,7 @@ user list is read-only: suggest its sets, never publish it.
 
 ## Storage
 
-- `UserDefaults` stores app preferences such as active account, developer mode, recent reactions, and per-account diagnostics self-check group IDs.
+- `UserDefaults` stores app preferences such as active account, developer mode, and recent reactions.
 - The shared App Group container stores the Marmot root used by both app and extension. The MDK cutover root is `White Noise/Marmot`; do not migrate the legacy top-level `Marmot` root or old secure-storage entries into it. Users must re-import their nsec after this cutover.
 - Marmot stores account secrets in the Keychain.
 - Decrypted media cache files under `Caches/EncryptedMedia` must set complete file protection on both the directory and cached plaintext files.

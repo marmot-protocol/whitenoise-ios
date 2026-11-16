@@ -850,7 +850,6 @@ Calls using `message(for:)` supply inline text; their heading comes from the enc
 
 | Current title / message expression | Call site |
 | --- | --- |
-| `UserFacingError.message(for: error)` | [whitenoise-ios/Diagnostics/DiagnosticsViewModel.swift:81](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Diagnostics/DiagnosticsViewModel.swift:81) |
 
 ### Group
 

@@ -263,11 +263,12 @@ struct AddToGroupSheet: View {
                 runtimeGeneration = appState.runtimeGeneration
                 return try appState.currentMarmotClient()
             }, accountRef: accountRef, groupIdHex: group.groupIdHex) { client in
+                // One contact: no summary means they couldn't be added and nothing changed.
                 try await client.inviteMembersDetailed(
                     accountRef: accountRef,
                     groupIdHex: group.groupIdHex,
                     memberRefs: [contactNpub]
-                )
+                ).invite.requireSummary()
             }
             guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
             await onAdded()
@@ -283,7 +284,14 @@ struct AddToGroupSheet: View {
             }
             Haptics.error()
             let title = L10n.string("Invite failed")
-            if let recipient = MissingKeyPackageInvitationPresentation.recipient(for: error) {
+            if let unavailable = error as? GroupMembersUnavailableError {
+                let message = GroupMemberOutcomePresentation.message(
+                    for: unavailable.skipped,
+                    knownName: { appState.knownDisplayName(forAccountIdHex: $0) }
+                )
+                self.error = message
+                appState.present(.error(title, message: message))
+            } else if let recipient = MissingKeyPackageInvitationPresentation.recipient(for: error) {
                 let message = MissingKeyPackageInvitationPresentation.message(
                     for: recipient,
                     knownName: appState.knownDisplayName(forAccountIdHex: recipient.accountIdHex)

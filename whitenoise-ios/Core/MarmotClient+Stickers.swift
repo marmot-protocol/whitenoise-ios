@@ -36,7 +36,17 @@ extension MarmotClient {
         try await marmot.fetchStickerAsset(accountRef: accountRef, stickerRef: stickerRef)
     }
 
-    func sendSticker(accountRef: String, groupIdHex: String, stickerRef: StickerRefFfi) async throws -> SendSummaryFfi {
-        try await marmot.sendSticker(accountRef: accountRef, groupIdHex: groupIdHex, stickerRef: stickerRef)
+    /// `messageTags` carries reply (`e`/`q`) tags on the sticker event itself.
+    func sendSticker(accountRef: String, groupIdHex: String, stickerRef: StickerRefFfi,
+                     messageTags: [[String]]) async throws -> SendSummaryFfi {
+        try await marmot.sendTaggedSticker(accountRef: accountRef, groupIdHex: groupIdHex, stickerRef: stickerRef,
+                                           messageTags: messageTags)
+    }
+
+    /// A Sonar viewer link for a pack, built locally with MDK's safe relay hints.
+    func stickerPackShareLink(accountRef: String, coordinate: String) async throws -> String {
+        try await Task.detached(priority: .userInitiated) { [marmot] in
+            try marmot.stickerPackShareLink(accountRef: accountRef, coordinate: coordinate)
+        }.value
     }
 }

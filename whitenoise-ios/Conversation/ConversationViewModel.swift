@@ -389,6 +389,11 @@ final class ConversationViewModel {
         uninstall: { [weak self] accountRef, input in
             guard let self, let appState = self.appState else { throw CancellationError() }
             try await appState.currentMarmotClient().uninstallStickerPack(accountRef: accountRef, input: input)
+        },
+        shareLink: { [weak self] accountRef, coordinate in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            return try await appState.currentMarmotClient().stickerPackShareLink(
+                accountRef: accountRef, coordinate: coordinate)
         }
     )
     /// Composer progress, saved-draft cleanup and the inline error for a
@@ -1346,14 +1351,24 @@ final class ConversationViewModel {
             throw PollActionError.unavailable
         }
         let client = try appState.currentMarmotClient()
+        let replyTarget = replyTargetMessageIdHex
         _ = try await client.createPoll(
             accountRef: accountRef,
             groupIdHex: group.groupIdHex,
             question: submission.question,
             options: submission.options,
             pollType: submission.pollType,
-            endsAt: submission.endsAt
+            endsAt: submission.endsAt,
+            messageTags: ComposerModel.replyTags(to: replyTarget)
         )
+        clearReply(ifTargeting: replyTarget)
+    }
+
+    /// A poll or sticker sent as a reply consumes the reply, as a text send
+    /// does, unless the user has since picked another target.
+    private func clearReply(ifTargeting target: String?) {
+        guard let target, replyTargetMessageIdHex == target else { return }
+        replyingTo = nil
     }
 
     func votePoll(option optionId: String, on message: AppMessageRecordFfi) async {
@@ -1588,12 +1603,40 @@ final class ConversationViewModel {
     }
 
     func discardFailedSend(rowId: String) {
-        if let messageIdHex = timelineStore.undeliveredDurableMessageId(rowId: rowId),
-           let record = timelineStore.durableRecord(messageIdHex: messageIdHex) {
-            Task { await deleteMessageForMe(record) }
+        if let messageIdHex = timelineStore.undeliveredDurableMessageId(rowId: rowId) {
+            Task { await discardDurableFailedSend(messageIdHex: messageIdHex) }
             return
         }
         timelineStore.discardTransientRow(rowId: rowId)
+    }
+
+    /// MDK removes a failed own send from this device without publishing a
+    /// delete nobody needs; the timeline subscription then drops the row.
+    private func discardDurableFailedSend(messageIdHex: String) async {
+        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        let record = timelineStore.durableRecord(messageIdHex: messageIdHex)
+        do {
+            let client = try appState.currentMarmotClient()
+            let result = try await client.discardFailedSend(
+                accountRef: accountRef, groupIdHex: group.groupIdHex, messageIdHex: messageIdHex)
+            switch DiscardFailedSendPlan(outcome: result.outcome) {
+            case .discarded:
+                let hashes = Set(result.mediaCiphertextSha256.map { $0.lowercased() })
+                let references = record.map { mediaItems(for: $0).compactMap(\.reference) } ?? []
+                await MessageMediaCache.removeCachedData(forCiphertextHashes: hashes, in: references)
+                Haptics.warning()
+            case .tryAgainLater:
+                composer.onError(L10n.string("This message is still sending. Try again in a moment."))
+            case .hideLocally:
+                // No longer a failed send (it may have been delivered since):
+                // keep the user's Delete as the local-only delete it was before.
+                if let record { await deleteMessageForMe(record) }
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            appState.present(UserFacingError.toast(title: L10n.string("Couldn't delete message"), error: error))
+        }
     }
 
     func isMessageMine(_ message: AppMessageRecordFfi) -> Bool {
@@ -2431,8 +2474,11 @@ final class ConversationViewModel {
         guard canSendStickers, let appState, let scope = customEmojiSendScope else { return }
         do {
             let client = try appState.currentMarmotClient()
+            let replyTarget = replyTargetMessageIdHex
             _ = try await client.sendSticker(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
-                                             stickerRef: StickerKey(sticker).ref)
+                                             stickerRef: StickerKey(sticker).ref,
+                                             messageTags: ComposerModel.replyTags(to: replyTarget))
+            clearReply(ifTargeting: replyTarget)
         } catch is CancellationError {
             return
         } catch {
@@ -2798,7 +2844,16 @@ final class ConversationViewModel {
     }
 
     func applyGroupMutation(_ result: GroupMutationResultFfi) {
-        applyGroupDetails(result.details, managementState: result.managementState)
+        applyGroupChange(details: result.details, managementState: result.managementState)
+    }
+
+    /// An invite that reached nobody still returns the current group state.
+    func applyGroupMutation(_ result: GroupInviteResultFfi) {
+        applyGroupChange(details: result.details, managementState: result.managementState)
+    }
+
+    private func applyGroupChange(details: GroupDetailsFfi, managementState: GroupManagementStateFfi) {
+        applyGroupDetails(details, managementState: managementState)
         // Group system rows for our own commits are persisted in Marmot but
         // not yet broadcast on the timeline subscription (see whitenoise
         // remember_published_reports). Reload the tail after every mutation,
