@@ -176,6 +176,7 @@ struct StickerLibraryTests {
         var holdsSync = false
         var reads = 0
         var installs: [String] = []
+        var installInputs: [String] = []
         var uninstalls: [String] = []
         var failingInstalls: Set<String> = []
         var holdsNextInstall = false
@@ -199,8 +200,11 @@ struct StickerLibraryTests {
                 if let error = self.syncError { throw error }
             },
             fetchPack: { _, _ in stickerPack("linked") },
-            install: { [weak self] _, input in
+            install: { [weak self] _, rawInput in
                 guard let self else { throw CancellationError() }
+                self.installInputs.append(rawInput)
+                // A default install is a Sonar link; record the pack it names.
+                let input = URLComponents(string: rawInput)?.queryItems?.first { $0.name == "a" }?.value ?? rawInput
                 self.installs.append(input)
                 if self.holdsNextInstall {
                     self.holdsNextInstall = false
@@ -319,6 +323,7 @@ struct StickerLibraryTests {
         try await harness.library.sync()
         await harness.library.installDefaultPacksIfNeeded()
         #expect(harness.installs == defaults)
+        #expect(harness.installInputs == defaults.map(StickerDefaultPacks.installInput(for:)))
         #expect(defaults.allSatisfy { harness.library.isInstalled($0) })
 
         await harness.library.installDefaultPacksIfNeeded()
@@ -329,6 +334,16 @@ struct StickerLibraryTests {
         try await harness.library.sync()
         await harness.library.installDefaultPacksIfNeeded()
         #expect(harness.installs == defaults + defaults)
+    }
+
+    @Test func defaultPackInstallsAskWhiteNoiseRelaysWhateverTheAccountUses() throws {
+        for coordinate in StickerDefaultPacks.coordinates {
+            let link = try #require(URLComponents(string: StickerDefaultPacks.installInput(for: coordinate)))
+            let items = link.queryItems ?? []
+            #expect(link.scheme == "https")
+            #expect(items.filter { $0.name == "a" }.map(\.value) == [coordinate])
+            #expect(Set(items.filter { $0.name == "relay" }.compactMap(\.value)) == Set(AppContainerConfig.seedRelays))
+        }
     }
 
     @Test func aRemovedDefaultPackStaysRemoved() async throws {
