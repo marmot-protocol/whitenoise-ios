@@ -2548,8 +2548,10 @@ struct ConversationView: View {
             onExpandBody: {
                 // The reader continues from the top of the message, so the
                 // tail must not hold the bottom while the row grows below.
+                // Anchored like a scroll away, so a window update keeps the place.
                 cancelPendingBottomScroll()
                 userMovedAwayFromTimelineBottom = true
+                viewModel.reportConversationViewport(atTail: false, visibleRowID: conversationViewport.visibleAnchor())
                 viewModel.expandBody(rowID: item.id, messageID: record.messageIdHex)
             }
         )
