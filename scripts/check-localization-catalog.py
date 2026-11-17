@@ -171,7 +171,7 @@ SHARED_NAMES = (
     "QUIC · %@", "URL", "White Noise", "White Noise · %@", "https://example.com/image.jpg", "npub", "nsec1…",
 )
 SHARED_WORDS = {
-    "%1$@ (HTTP %2$lld)": "fi", "Epoch": "fi", "epoch %llu → %llu": "fi", "Fanout": "fi", "Inbox": "fi",
+    "%1$@ (HTTP %2$lld)": "fi", "Epoch": "fi", "epoch %llu → %llu": "fi", "Fanout": "fi",
     "Lightning (lud16)": "fi", "NIP-05 (name@domain)": "fi",
     "%@ (IDN/punycode)": "es fi fr it pt ru tr", "%@ (IDN/punycode: %@)": "es fi it pt ru tr", "%lld images": "fr",
     "%lld stickers": "es", "%lld videos": "es", "%lld votes": "fr", "Admin": "de", "Audio": "de es fr it",
