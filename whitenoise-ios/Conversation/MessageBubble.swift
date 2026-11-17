@@ -202,6 +202,7 @@ extension MessageBubble: Equatable {
             && lhs.reactions == rhs.reactions
             && lhs.omittedReactionKinds == rhs.omittedReactionKinds
             && lhs.projectedReactionTotal == rhs.projectedReactionTotal
+            && lhs.isBodyExpanded == rhs.isBodyExpanded
             && (lhs.onPollVote == nil) == (rhs.onPollVote == nil)
             && (lhs.onViewPollVotes == nil) == (rhs.onViewPollVotes == nil)
             && (lhs.identityName == nil) == (rhs.identityName == nil)
@@ -270,9 +271,12 @@ struct MessageBubble: View {
     /// retry/discard sheet.
     var onFailedTap: (() -> Void)? = nil
     var onSenderAvatarTap: (() -> Void)? = nil
+    /// Owned by the list, not the bubble: a lazy list rebuilds rows that
+    /// scroll away, and a "Read more" the reader chose must survive that.
+    var isBodyExpanded = false
+    var onExpandBody: () -> Void = {}
 
     @State private var mediaGallery: MessageMediaGallery?
-    @State private var isBodyExpanded = false
     @State private var pendingExternalLink: PendingMessageExternalLink?
     @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
@@ -933,7 +937,7 @@ struct MessageBubble: View {
 
             if isCollapsed {
                 Button {
-                    isBodyExpanded = true
+                    onExpandBody()
                 } label: {
                     Text(L10n.string("Read more"))
                         .font(.footnote.weight(.semibold))

@@ -99,6 +99,22 @@ nonisolated struct ConversationGroupRosterProjection: Equatable {
     }
 }
 
+/// Messages the reader opened with "Read more". A sent message's row id is
+/// its optimistic send row only while that row is in the window, so each
+/// opening is remembered under its durable message id as well.
+nonisolated struct ExpandedMessageBodies: Equatable {
+    private var ids: Set<String> = []
+
+    func contains(rowID: String, messageID: String) -> Bool {
+        ids.contains(rowID) || (!messageID.isEmpty && ids.contains(messageID))
+    }
+
+    mutating func insert(rowID: String, messageID: String) {
+        ids.insert(rowID)
+        if !messageID.isEmpty { ids.insert(messageID) }
+    }
+}
+
 /// Owns the live state of a single conversation: the merged timeline of
 /// message bubbles + system events, aggregated reactions, the group roster,
 /// the in-progress reply, and the send pipeline.
@@ -280,6 +296,7 @@ final class ConversationViewModel {
     private var startRequest = UUID()
     @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
     private(set) var viewportIntent: ConversationViewportIntent = .followingLatest
+    private(set) var expandedBodies = ExpandedMessageBodies()
     private(set) var paginationRetryToken = 0
     private var pageAdmission = ConversationPageAdmission()
     var isAwaitingPageCompletion: Bool { pageAdmission.unresolvedRevision != nil }
@@ -1877,6 +1894,10 @@ final class ConversationViewModel {
             pendingAnchorIntent: latestAnchorIntent,
             navigationFailed: navigationFailure != nil
         )
+    }
+
+    func expandBody(rowID: String, messageID: String) {
+        expandedBodies.insert(rowID: rowID, messageID: messageID)
     }
 
     func followConversationLatest() {
