@@ -32,13 +32,19 @@ struct AppStateBootstrapTests {
     }
 
     @Test func erasurePreparationDrainsMaintenanceAndReleasesRootLease() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let sweeps = ControlledSleeper()
+        let seeded = try await readyAppStateWithCreatedIdentities(sweepSleeper: sweeps)
         let appState = seeded.appState
         let client = try #require(appState.client)
         let root = URL(fileURLWithPath: client.rootPath, isDirectory: true)
+        // The retention sweep ran its first pass and waits for the next one.
+        try await eventually { sweeps.sleepingCount == 1 }
+        let cancelledSweeps = sweeps.cancelledCount
         await appState.runtimeLifecycle.prepareForAppErasure()
         #expect(!appState.notificationSubscriptionActive)
-        #expect(!appState.retentionSweeperIsActiveForTesting)
+        // Preparation awaits the sweep loop, so it has already ended.
+        #expect(sweeps.sleepingCount == 0)
+        #expect(sweeps.cancelledCount == cancelledSweeps + 1)
         for account in try await client.listAccounts() {
             try await client.marmot.removeAccount(accountRef: account.label)
         }
@@ -2145,7 +2151,7 @@ struct AppStateBootstrapTests {
         appState.afterAccountExitClientCapturedForTesting = nil
 
         #expect(!succeeded)
-        #expect(!appState.isSigningOutForTesting)
+        #expect(!appState.isAccountExitInProgress)
         #expect(marmot.storageIsClosed())
         #expect(appState.client == nil)
         #expect(appState.runtimeSuspendedForBackground)
@@ -2161,18 +2167,18 @@ struct AppStateBootstrapTests {
         let appState = seeded.appState
         appState.activeAccountRef = seeded.accounts[0].label
 
-        #expect(!appState.isSigningOutForTesting)
+        #expect(!appState.isAccountExitInProgress)
 
         var failure: Toast?
         let signedOut = await appState.signOut(onError: { failure = $0 })
 
         // The guard clears on every exit path, including a failed sign-out.
-        #expect(!appState.isSigningOutForTesting)
+        #expect(!appState.isAccountExitInProgress)
         try #require(signedOut, "Sign-out failed: \(failure?.title ?? "-") \(failure?.message ?? "")")
         #expect(appState.activeAccountRef == nil)
         // A reschedule is permitted again; it must not trap or re-raise the flag.
         appState.scheduleNativePushRegistrationIfEnabled()
-        #expect(!appState.isSigningOutForTesting)
+        #expect(!appState.isAccountExitInProgress)
 
         await stopReadyRuntime(appState)
     }
@@ -2223,7 +2229,8 @@ struct AppStateBootstrapTests {
     }
 
     @Test func signOutOfOnlyAccountKeepsItAvailableForReactivation() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let sweeps = ControlledSleeper()
+        let seeded = try await readyAppStateWithCreatedIdentities(sweepSleeper: sweeps)
         let appState = seeded.appState
         let only = seeded.accounts[0]
         appState.activeAccountRef = only.label
@@ -2232,6 +2239,8 @@ struct AppStateBootstrapTests {
         ]
         appState.profileStore.profileProjectionLoadVersions = [hex("aa"): 9]
 
+        try await eventually { sweeps.sleepingCount == 1 }
+        let cancelledSweeps = sweeps.cancelledCount
         await appState.signOut()
 
         let signedOutSettings = await appState.notificationSettings(for: only.label)
@@ -2245,7 +2254,8 @@ struct AppStateBootstrapTests {
         #expect(appState.profileStore.profileProjectionLoadVersions.isEmpty)
         // Account-bound maintenance is stopped while every account is signed out.
         #expect(!appState.notificationSubscriptionActive)
-        #expect(!appState.retentionSweeperIsActiveForTesting)
+        try await eventually { sweeps.cancelledCount == cancelledSweeps + 1 }
+        #expect(sweeps.sleepingCount == 0)
 
         await appState.activateAccount(only.label)
 
@@ -2254,7 +2264,7 @@ struct AppStateBootstrapTests {
         // Reactivation must restart the maintenance the sign-out stopped;
         // nothing else (foreground resume, relaunch) heals it this session.
         #expect(appState.notificationSubscriptionActive)
-        #expect(appState.retentionSweeperIsActiveForTesting)
+        try await eventually { sweeps.sleepingCount == 1 }
         await stopReadyRuntime(appState)
     }
 
@@ -2294,7 +2304,8 @@ struct AppStateBootstrapTests {
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig? = nil,
         relayUrls: [String] = MarmotClient.unreachableTestRelays,
         catchUp: NotificationCatchUpStub? = nil,
-        timings: HostPerformanceRecorderStub? = nil
+        timings: HostPerformanceRecorderStub? = nil,
+        sweepSleeper: ControlledSleeper? = nil
     ) throws -> AppState {
         resetPersistedActiveAccountRef()
         return try ownedAppState(
@@ -2303,7 +2314,9 @@ struct AppStateBootstrapTests {
             accountDefaults: accountDefaults,
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig ?? TelemetryBuildConfig.current(),
             notificationCatchUpCalls: catchUp?.calls ?? .live,
-            hostPerformanceRecorder: timings?.recorder ?? RuntimeLifecycle.recordHostPerformanceOnClient
+            hostPerformanceRecorder: timings?.recorder ?? RuntimeLifecycle.recordHostPerformanceOnClient,
+            retentionSweepSleep: sweepSleeper.map { sleeper in { try await sleeper.sleep(.nanoseconds($0)) } }
+                ?? MessageRetentionSweeper.taskSleep
         )
     }
 
@@ -2329,7 +2342,8 @@ struct AppStateBootstrapTests {
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
         notificationCatchUpCalls: NotificationCatchUpCalls = .live,
         hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
-            RuntimeLifecycle.recordHostPerformanceOnClient
+            RuntimeLifecycle.recordHostPerformanceOnClient,
+        retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep
     ) throws -> AppState {
         try TestRuntimeScope.own(AppState.test(
             client: client,
@@ -2339,7 +2353,8 @@ struct AppStateBootstrapTests {
             runtimeRetrySleeper: runtimeRetrySleeper,
             runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy,
             notificationCatchUpCalls: notificationCatchUpCalls,
-            hostPerformanceRecorder: hostPerformanceRecorder
+            hostPerformanceRecorder: hostPerformanceRecorder,
+            retentionSweepSleep: retentionSweepSleep
         ))
     }
 
@@ -2350,9 +2365,12 @@ struct AppStateBootstrapTests {
     private func readyAppStateWithCreatedIdentities(
         notifications: AppNotifications? = nil,
         catchUp: NotificationCatchUpStub? = nil,
-        timings: HostPerformanceRecorderStub? = nil
+        timings: HostPerformanceRecorderStub? = nil,
+        sweepSleeper: ControlledSleeper? = nil
     ) async throws -> (appState: AppState, accounts: [AccountSummaryFfi]) {
-        let appState = try testAppState(notifications: notifications, catchUp: catchUp, timings: timings)
+        let appState = try testAppState(
+            notifications: notifications, catchUp: catchUp, timings: timings, sweepSleeper: sweepSleeper
+        )
         await appState.bootstrap()
         #expect(appState.phase == .onboarding)
         let account = try await appState.createIdentity()

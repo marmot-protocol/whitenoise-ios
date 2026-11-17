@@ -349,25 +349,43 @@ struct RuntimeOwnershipTests {
     }
 
     @Test func suspensionCancelsAndDrainsOwnedMutationFollowup() async throws {
+        // A new identity asks for notification permission in a follow-up that
+        // holds the runtime; keep that prompt open across the suspension.
+        let promptStarted = TestLatch()
+        let promptAnswered = TestLatch()
+        let promptCancelled = TestLatch()
+        let notifications = AppNotifications(
+            requestAuthorizationHandler: {
+                promptStarted.signal()
+                try await withTaskCancellationHandler {
+                    try await promptAnswered.wait()
+                } onCancel: {
+                    promptCancelled.signal()
+                    promptAnswered.signal()
+                }
+                try Task.checkCancellation()
+                return true
+            },
+            authorizationStatusProvider: { .authorized },
+            remoteNotificationRegistrar: {}
+        )
         var injectedClient: MarmotClient? = try TestRuntimeScope.own(
             MarmotClient.testClient(), ownsRoot: true, retainingClient: false)
         let marmot = try #require(injectedClient?.marmot)
-        let gate = RuntimeRetryGate()
         let appState = AppState.test(
             client: injectedClient,
-            notifications: runtimeOwnershipDeniedNotifications()
+            notifications: notifications,
+            accountDefaults: IsolatedAccountDefaults.make()
         )
         injectedClient = nil
         appState.setAppSceneActive(true)
         await appState.bootstrap()
-
-        appState.scheduleForegroundMutationFollowupForTesting {
-            try? await gate.sleep(.seconds(30))
-        }
-        try await gate.waitUntilEntered()
+        _ = try await appState.createIdentity()
+        try await promptStarted.wait()
 
         await appState.startRuntimeSuspension().value
 
+        #expect(promptCancelled.isSignalled)
         #expect(appState.client == nil)
         #expect(marmot.storageIsClosed())
     }

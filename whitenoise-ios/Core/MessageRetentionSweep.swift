@@ -125,19 +125,25 @@ private final class MessageRetentionGroupSubscription {
 /// app suspends.
 @MainActor
 final class MessageRetentionSweeper {
+    /// Waits out the interval between sweep passes; throws when cancelled.
+    typealias Sleep = @MainActor (_ nanoseconds: UInt64) async throws -> Void
+    /// The production interval wait.
+    static let taskSleep: Sleep = { try await Task.sleep(nanoseconds: $0) }
+
     private var sweepTask: Task<Void, Never>?
     private var groupSubscriptionsByAccountRef: [String: MessageRetentionGroupSubscription] = [:]
     private var pendingMediaPlaintextHashes: Set<String> = []
     private var pendingFullMediaPurge = false
     private weak var appState: AppState?
+    private let sleep: Sleep
+
+    init(sleep: @escaping Sleep = MessageRetentionSweeper.taskSleep) {
+        self.sleep = sleep
+    }
 
     deinit {
         sweepTask?.cancel()
     }
-
-    /// Live only while an uncancelled sweep loop exists; `cancelWithoutAwaiting`
-    /// leaves the task reference behind, so a bare nil-check would lie.
-    var isSweeping: Bool { !(sweepTask?.isCancelled ?? true) }
 
     func start(appState: AppState) {
         self.appState = appState
@@ -173,7 +179,7 @@ final class MessageRetentionSweeper {
         while !Task.isCancelled {
             await sweepOnce()
             do {
-                try await Task.sleep(nanoseconds: MessageRetentionSweepPolicy.sweepIntervalNanoseconds)
+                try await sleep(MessageRetentionSweepPolicy.sweepIntervalNanoseconds)
             } catch {
                 return
             }
