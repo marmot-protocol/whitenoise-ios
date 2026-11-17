@@ -36,6 +36,17 @@ struct ForegroundMaintenanceTasks {
     let mutationFollowups: [Task<Void, Never>]
 }
 
+/// The reads `refreshAccounts` stages before it changes account or setup routing.
+nonisolated struct AccountRefreshReads: Sendable {
+    var listAccounts: @MainActor (MarmotClient) async throws -> [AccountSummaryFfi]
+    var onboardingSnapshot: @MainActor (MarmotClient, _ accountID: String) async throws -> OnboardingSnapshotFfi?
+
+    static let live = AccountRefreshReads(
+        listAccounts: { client in try await client.listAccounts() },
+        onboardingSnapshot: { client, accountID in try await client.onboardingSnapshot(accountID: accountID) }
+    )
+}
+
 /// Bounded, account-scoped handoff from direct-chat creation to the chat-list
 /// projection. A newly created unnamed group reaches the list before its roster
 /// details do, even though the creation path already knows the other account.
@@ -179,10 +190,7 @@ final class AppState {
     var isAccountSetupPresented = false
     private(set) var isFinishingAccountSetup = false
     private static let accountRefreshLog = Logger(subsystem: "dev.ipf.whitenoise", category: "account-refresh")
-#if DEBUG
-    @ObservationIgnored var beforeAccountRefreshForTesting: (() async throws -> Void)?
-    @ObservationIgnored var beforeOnboardingSnapshotReadForTesting: ((String) async throws -> Void)?
-#endif
+    @ObservationIgnored private let accountRefreshReads: AccountRefreshReads
 
     func cancelAccountSetup() async -> Bool {
         guard !isFinishingAccountSetup, let model = pendingAccountSetup,
@@ -616,9 +624,11 @@ final class AppState {
         hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
             RuntimeLifecycle.recordHostPerformanceOnClient,
         moderationReportingAvailability: @escaping @MainActor (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:),
-        retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep
+        retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep,
+        accountRefreshReads: AccountRefreshReads = .live
     ) {
         self.moderationReportingAvailability = moderationReportingAvailability
+        self.accountRefreshReads = accountRefreshReads
         self.retentionSweeper = MessageRetentionSweeper(sleep: retentionSweepSleep)
         self.notificationCoordinator = NotificationCoordinator(catchUpCalls: notificationCatchUpCalls)
         self.runtimeLifecycle = RuntimeLifecycle(
@@ -1588,13 +1598,10 @@ final class AppState {
     /// lifecycle).
     @MainActor
     func refreshAccounts(refreshUnreadSummaries: Bool = true) async throws {
-#if DEBUG
-        try await beforeAccountRefreshForTesting?()
-#endif
         let setupAtReadStart = pendingAccountSetup
         let attemptRevision = signInAttempts.revision
         let client = try runtimeClient()
-        let localAccounts = try await client.listAccounts()
+        let localAccounts = try await accountRefreshReads.listAccounts(client)
         try await restoreSignUpIfNeeded(accounts: localAccounts, client: client)
         var readyAccounts: [AccountSummaryFfi] = []
         var unfinished: [OnboardingSnapshotFfi] = []
@@ -1608,7 +1615,7 @@ final class AppState {
                     recoveryAccounts.append(account)
                     continue
                 }
-                snapshot = try await readOnboardingSnapshot(client: client, accountID: account.accountIdHex)
+                snapshot = try await accountRefreshReads.onboardingSnapshot(client, account.accountIdHex)
             } catch is CancellationError {
                 throw CancellationError()
             } catch let error as MarmotKitError where error.isTransientStartupReadinessFailure {
@@ -1654,13 +1661,6 @@ final class AppState {
         }
         updateProfileProjectionLocalAccountLabels()
         warmLocalAccountProfileProjections()
-    }
-
-    private func readOnboardingSnapshot(client: MarmotClient, accountID: String) async throws -> OnboardingSnapshotFfi? {
-#if DEBUG
-        try await beforeOnboardingSnapshotReadForTesting?(accountID)
-#endif
-        return try await client.onboardingSnapshot(accountID: accountID)
     }
 
     @ObservationIgnored private var attentionTask: Task<Void, Never>?
