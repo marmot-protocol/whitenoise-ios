@@ -523,12 +523,81 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
     }
 }
 
+/// Reads a picked file without making it resident memory. The file is cloned
+/// into a private directory, mapped, and unlinked at once, so the mapping is the
+/// clone's only reference: its pages stay file-backed and reclaimable, and the
+/// source (which a picker deletes or a file provider may change) is not mapped.
+nonisolated enum PickedMediaFile {
+    static let directoryName = "WhiteNoisePickedMedia"
+    static let staleAge: TimeInterval = 60 * 60
+
+    static var defaultDirectory: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(directoryName, isDirectory: true)
+    }
+
+    static func mappedData(from url: URL, in directory: URL = defaultDirectory, now: Date = Date()) throws -> Data {
+        let manager = FileManager.default
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+        MediaUploadSourceFiles.removeStale(in: directory, olderThan: staleAge, now: now)
+        let clone = directory.appendingPathComponent(UUID().uuidString, isDirectory: false)
+        try manager.copyItem(at: url, to: clone)
+        defer { try? manager.removeItem(at: clone) }
+        guard MediaUploadSourceFiles.isRegularFile(at: clone) else { throw CocoaError(.fileReadUnknown) }
+        // Not complete protection: once the device locks, a page fault in a
+        // complete-protection mapping can't be decrypted and crashes the app.
+        // The clone is unlinked before this returns, so nothing can reopen it.
+        try manager.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: clone.path
+        )
+        return try Data(contentsOf: clone, options: .alwaysMapped)
+    }
+}
+
 nonisolated enum MediaDraftProcessor {
     static let maxAttachmentCount = 10
     static let maxLongEdge: CGFloat = 2048
     static let maxImageAttachmentBytes = 10 * 1024 * 1024
-    static let maxAttachmentBytes = 50 * 1024 * 1024
+    /// Images are decoded into a resident bitmap before they are re-encoded,
+    /// so their source stays under this bound whatever the attachment cap.
+    static let maxImageSourceBytes = 50 * 1024 * 1024
+    /// MDK's largest encrypted media blob (512 MiB) less the AEAD tag that
+    /// encryption adds to it.
+    static let maxAttachmentBytes = 512 * 1024 * 1024 - Int(MediaFileUploadLimit.aeadTagBytes)
+    /// MDK's draft API copies every attachment's bytes on each save, so larger
+    /// attachments stay out of saved drafts until it can keep one by file
+    /// (marmot-protocol/mdk#3431).
+    static let maxDraftAttachmentBytes = 50 * 1024 * 1024
     static let draftThumbnailPixelSize: CGFloat = 160
+
+    /// Whether a picked file of `kind` is sent as its own bytes. Images are
+    /// decoded and re-encoded, so their source size is neither the upload size
+    /// nor bound by the attachment cap.
+    static func sendsSourceBytes(_ kind: MediaAttachmentKind) -> Bool {
+        kind != .image
+    }
+
+    /// The size a picked file may have before it is copied: images are refused
+    /// at their decode limit, everything else at the attachment cap.
+    static func maxSourceBytes(for kind: MediaAttachmentKind) -> Int {
+        sendsSourceBytes(kind) ? maxAttachmentBytes : maxImageSourceBytes
+    }
+
+    /// The composer's attachments once one more is added: new audio replaces
+    /// the previous audio attachment.
+    static func draftsKept(_ drafts: [MediaDraftAttachment], addingAudio: Bool) -> [MediaDraftAttachment] {
+        addingAudio ? drafts.filter { $0.kind != .audio } : drafts
+    }
+
+    static func persistsInDraft(_ attachment: MediaDraftAttachment) -> Bool {
+        attachment.data.count <= maxDraftAttachmentBytes
+    }
+
+    /// A message carrying an attachment that drafts can't hold is sent without
+    /// a draft revision, and nothing in it is uploaded ahead of Send.
+    static func sendsThroughDraft(_ attachments: [MediaDraftAttachment]) -> Bool {
+        attachments.allSatisfy(persistsInDraft)
+    }
 
     @MainActor
     static func restoredDraftAttachments(
@@ -626,8 +695,15 @@ nonisolated enum MediaDraftProcessor {
 
     static func preparedAttachment(fromFileURL url: URL) async throws -> MediaDraftAttachment {
         try await Task.detached(priority: .userInitiated) { () async throws -> MediaDraftAttachment in
-            let resourceValues = try url.resourceValues(forKeys: [.contentTypeKey, .nameKey])
-            let data = try Data(contentsOf: url)
+            let resourceValues = try url.resourceValues(forKeys: [.contentTypeKey, .nameKey, .fileSizeKey])
+            let kind = kind(
+                for: resourceValues.contentType?.identifier,
+                fileName: resourceValues.name ?? url.lastPathComponent
+            )
+            if let size = resourceValues.fileSize, size > maxSourceBytes(for: kind) {
+                throw Failure.attachmentTooLarge(size)
+            }
+            let data = try PickedMediaFile.mappedData(from: url)
             return try await preparedAttachmentValue(
                 from: data,
                 fileName: resourceValues.name ?? url.lastPathComponent,
@@ -708,25 +784,28 @@ nonisolated enum MediaDraftProcessor {
         typeIdentifier: String?,
         videoMetadata: MediaVideoMetadata.Metadata?
     ) throws -> MediaDraftAttachment {
-        if let gif = animatedGIFAttachment(from: data, fileName: fileName) {
+        let decodable = data.count <= maxImageSourceBytes
+        if decodable, let gif = animatedGIFAttachment(from: data, fileName: fileName) {
             return gif
         }
         if let typeIdentifier,
            let type = UTType(typeIdentifier),
            type.conforms(to: .image)
         {
+            guard decodable else { throw Failure.attachmentTooLarge(data.count) }
             guard let image = UIImage(data: data) else {
                 throw Failure.unsupportedImage
             }
             return try attachment(from: image, fileName: fileName)
         }
 
-        if typeIdentifier == nil, let image = UIImage(data: data) {
+        if typeIdentifier == nil, decodable, let image = UIImage(data: data) {
             return try attachment(from: image, fileName: fileName)
         }
 
         let kind = kind(for: typeIdentifier, fileName: fileName)
         if kind == .image {
+            guard decodable else { throw Failure.attachmentTooLarge(data.count) }
             guard let image = UIImage(data: data) else {
                 throw Failure.unsupportedImage
             }
@@ -754,7 +833,7 @@ nonisolated enum MediaDraftProcessor {
         )
     }
 
-    private static func kind(for typeIdentifier: String?, fileName: String?) -> MediaAttachmentKind {
+    static func kind(for typeIdentifier: String?, fileName: String?) -> MediaAttachmentKind {
         if let typeIdentifier, let type = UTType(typeIdentifier) {
             if type.conforms(to: .image) { return .image }
             if type.conforms(to: .movie) { return .video }
@@ -1022,7 +1101,7 @@ nonisolated enum MediaWaveformAnalyzer {
     /// Upper bound on frames decoded per streaming read. The analyzer reuses one
     /// buffer instead of sizing a buffer to the whole file, which keeps peak PCM
     /// memory bounded regardless of the decoded file length. Received audio is
-    /// peer-controlled and decodes far larger than the compressed 50 MB cap, so
+    /// peer-controlled and decodes far larger than its compressed size, so
     /// a whole-file buffer is remotely triggerable OOM (see whitenoise-ios#208).
     /// This is only a frame ceiling; the actual per-read capacity is also bounded
     /// in *bytes* by `maxChunkBytes` so a hostile channel count cannot inflate the

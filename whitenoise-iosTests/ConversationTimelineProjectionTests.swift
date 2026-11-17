@@ -66,6 +66,37 @@ struct ConversationTimelineProjectionTests {
         }.first
     }
 
+    /// Puts an optimistic delete and an optimistic reaction into the view
+    /// model's timeline store, as a local delete and react do before Marmot
+    /// confirms them.
+    private func seedOptimisticState(
+        in viewModel: ConversationViewModel,
+        deletedMessageIdHex: String,
+        reactionTargetMessageIdHex: String,
+        emoji: String,
+        sender: String
+    ) {
+        let store = viewModel.timelineStore
+        store.deletedProjections.insertOptimistic(deletedMessageIdHex)
+        let reactionId = "optimistic-\(reactionTargetMessageIdHex)-\(emoji)"
+        store.reactionProjections.setRecord(
+            AppMessageRecordFfi(
+                messageIdHex: reactionId,
+                direction: "sent",
+                groupIdHex: viewModel.group.groupIdHex,
+                sender: sender,
+                plaintext: emoji,
+                kind: MessageSemantics.kindReaction,
+                tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, reactionTargetMessageIdHex])],
+                recordedAt: 1,
+                receivedAt: 1
+            ),
+            forKey: reactionId
+        )
+        _ = store.deletedProjections.rebuild()
+        _ = store.recomputeReactions()
+    }
+
     private func unpublishedRetrySummary() -> SendSummaryFfi {
         SendSummaryFfi(
             published: 0,
@@ -446,7 +477,8 @@ struct ConversationTimelineProjectionTests {
             placement: .window
         )
 
-        viewModel.seedOptimisticStateForTesting(
+        seedOptimisticState(
+            in: viewModel,
             deletedMessageIdHex: message.messageIdHex,
             reactionTargetMessageIdHex: message.messageIdHex,
             emoji: "🔥",
@@ -457,7 +489,7 @@ struct ConversationTimelineProjectionTests {
             ConversationViewModel.ReactionTally(emoji: "🔥", count: 1, mine: false)
         ])
 
-        viewModel.resetOptimisticStateForTesting()
+        viewModel.timelineStore.resetOptimisticState()
         #expect(!viewModel.isDeleted(message.messageIdHex))
         #expect(viewModel.reactions(for: message.messageIdHex).isEmpty)
     }
@@ -1281,7 +1313,7 @@ struct ConversationTimelineProjectionTests {
             receivedAt: 10
         )
         viewModel.applyPendingOutgoingMessage(tempId: tempId, record: text)
-        viewModel.markFailedForTesting(tempId: tempId)
+        viewModel.timelineStore.markFailed(tempId: tempId)
 
         // A failed text row is retryable and discardable.
         #expect(viewModel.canRetryFailedSend(rowId: rowId))
@@ -1303,7 +1335,7 @@ struct ConversationTimelineProjectionTests {
             receivedAt: 11
         )
         viewModel.applyPendingOutgoingMessage(tempId: mediaTempId, record: media)
-        viewModel.markFailedForTesting(tempId: mediaTempId)
+        viewModel.timelineStore.markFailed(tempId: mediaTempId)
         #expect(!viewModel.canRetryFailedSend(rowId: mediaRowId))
 
         // Discard removes the failed row from the timeline.
@@ -1345,7 +1377,7 @@ struct ConversationTimelineProjectionTests {
         )
 
         viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
-        viewModel.markFailedForTesting(tempId: tempId)
+        viewModel.timelineStore.markFailed(tempId: tempId)
 
         let failedMessages = viewModel.timeline.compactMap { item -> (String, MessageStatus)? in
             guard case .message(let record, let status) = item.kind else { return nil }
@@ -1452,7 +1484,7 @@ struct ConversationTimelineProjectionTests {
 
         // Mirror sendMedia's optimistic setup: stage the local attachment bytes
         // under the temp row, then add the transient bubble.
-        viewModel.installPendingMediaForTesting(rowId: tempRowId, items: [attachment])
+        viewModel.timelineStore.mediaProjections.setPending([attachment], forRowId: tempRowId)
         viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
 
         // uploadMedia succeeded but returned no message id.
@@ -1460,7 +1492,7 @@ struct ConversationTimelineProjectionTests {
 
         // The transient row is recreated under the same id (no server id), and the
         // just-sent attachment must still resolve instead of vanishing.
-        #expect(viewModel.pendingMediaForTesting(rowId: tempRowId) == [attachment])
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: tempRowId) == [attachment])
 
         let mediaRow = try #require(viewModel.timeline.first { $0.id == tempRowId })
         #expect(viewModel.mediaItems(for: mediaRow) == [attachment])
@@ -1504,10 +1536,10 @@ struct ConversationTimelineProjectionTests {
             group: group(name: "", id: groupIdHex)
         )
 
-        viewModel.installPendingMediaForTesting(rowId: tempRowId, items: [localAttachment])
+        viewModel.timelineStore.mediaProjections.setPending([localAttachment], forRowId: tempRowId)
         viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
         viewModel.confirmSent(tempId: tempId, record: pending, messageId: messageId)
-        #expect(viewModel.pendingMediaForTesting(rowId: realRowId) == [localAttachment])
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: realRowId) == [localAttachment])
 
         let authoritative = timelineRecord(
             messageIdHex: messageId,
@@ -1524,7 +1556,7 @@ struct ConversationTimelineProjectionTests {
             placement: .window
         )
 
-        #expect(viewModel.pendingMediaForTesting(rowId: realRowId) == nil)
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: realRowId) == nil)
         let mediaRow = try #require(viewModel.timeline.first { $0.id == realRowId })
         #expect(viewModel.mediaItems(for: mediaRow).map(\.fileName) == ["canonical.jpg"])
     }
@@ -1627,7 +1659,7 @@ struct ConversationTimelineProjectionTests {
             dim: "640x480",
             localData: Data([0xDE, 0xAD, 0xBE, 0xEF])
         )
-        viewModel.installPendingMediaForTesting(rowId: mediaRowId, items: [attachment])
+        viewModel.timelineStore.mediaProjections.setPending([attachment], forRowId: mediaRowId)
         viewModel.applyPendingOutgoingMessage(tempId: mediaTempId, record: mediaPending)
 
         // A plain text send with the same text, no staged media.
@@ -1673,7 +1705,7 @@ struct ConversationTimelineProjectionTests {
         // The media pending bubble survived, still pending under its temp row.
         #expect(messages.contains { $0.rowId == mediaRowId && $0.status == .sending })
         // Its staged attachment is still resolvable.
-        #expect(viewModel.pendingMediaForTesting(rowId: mediaRowId) == [attachment])
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: mediaRowId) == [attachment])
     }
 
     @MainActor
@@ -1707,7 +1739,7 @@ struct ConversationTimelineProjectionTests {
             dim: "640x480",
             localData: Data([0xDE, 0xAD, 0xBE, 0xEF])
         )
-        viewModel.installPendingMediaForTesting(rowId: mediaRowId, items: [attachment])
+        viewModel.timelineStore.mediaProjections.setPending([attachment], forRowId: mediaRowId)
         viewModel.applyPendingOutgoingMessage(tempId: mediaTempId, record: mediaPending)
 
         let textTempId = "pending-text"
@@ -1755,7 +1787,7 @@ struct ConversationTimelineProjectionTests {
         // The text pending bubble survived.
         #expect(messages.contains { $0.rowId == textRowId && $0.status == .sending })
         // The media pending row was removed (reconciled away).
-        #expect(viewModel.pendingMediaForTesting(rowId: mediaRowId) == nil)
+        #expect(viewModel.timelineStore.mediaProjections.pending(forRowId: mediaRowId) == nil)
     }
 
     @Test func paginationProgressRequiresWindowEdgeMovement() {

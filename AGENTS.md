@@ -147,7 +147,7 @@ Install a formal release or a dated nightly using its version:
 ./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-The app pins the formal MarmotKit 0.16.0 release. Nightlies are for testing only
+The app pins the formal MarmotKit 0.17.0 release. Nightlies are for testing only
 and are deleted after 30 days; pin a formal release before shipping. For local
 reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
@@ -170,6 +170,18 @@ step-down before leaving) can fail with the advisory `GroupCatchingUp` or
 acknowledge only after consent, then retry once. Acknowledgements admit one attempt
 and are not persisted. Choosing Wait is not an error toast. Attach
 `groupChangeAdvisoryAlert` to whichever view is on top when the change runs.
+
+Creates and invites go ahead with the members MDK can reach and report every
+requested account in `memberOutcomes`. A missing `created` or invite
+`summary` means nothing changed; read it through `requireCreated`/`requireSummary`
+and word skipped accounts with `GroupMemberOutcomePresentation`. `selected` is
+not a join or Welcome delivery. On `CreatedGroupMemberReportUnavailable`, open the
+named group; never create another. A permanent relay refusal of a confirmed group
+change (`groupCommitDelivery.refusedRelays`) shows in the conversation's recovery
+area until the user dismisses it through `acknowledgeGroupCommitUndelivered`.
+Both the app and the NSE call `setAuditLogSource` before any account opens.
+Delete on a failed own send calls `discardFailedSend`, which publishes nothing;
+polls and stickers sent while replying carry the same reply tags as text.
 
 Avatar metadata from presented rows, conversation headers and identity sidecars
 is authoritative. Request only visible `avatarAsset.target` values and read the
@@ -203,6 +215,15 @@ the lease on completion and on dismissal through the live runtime (idempotent; r
 opened it). Cancel a copy only through its `MediaFileTransferControlFfi`, never by
 cancelling the awaiting task.
 Only bytes MDK has no slot for (an outgoing draft) use the host export.
+Outgoing attachments may reach MDK's 512 MiB blob limit. Read picked files through
+`PickedMediaFile` (an unlinked, mapped clone), never into resident memory. MDK's draft
+API copies every attachment on each save, so until marmot-protocol/mdk#3431 lands,
+attachments over `maxDraftAttachmentBytes` are not saved in drafts or pre-uploaded,
+and their message sends without a draft revision. Such a message has no recovery
+copy: leaving the chat before Send drops the attachment, and a failed send stays in
+its bubble. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
+draft. Images keep `maxImageSourceBytes` before decoding. The composer refuses an
+attachment that would take one send past `maxFileMediaCiphertextBytes()`.
 Conversation-open performance ends at rendered layout, uses the navigation consent
 ticket, and records unavailable/cancelled/timeout outcomes separately from success.
 
@@ -343,6 +364,10 @@ discloses the device's IP address. Keep `StickerLoadPolicy` as the one gate: a
 received sticker loads by itself only from an installed pack while Photos
 auto-download allows it, otherwise on tap. Discovery lists stay text-only until
 a pack is opened. Keep the egress disclosure on the picker and pack screens.
+Each account starts with White Noise's own packs (`StickerDefaultPacks`):
+opening the picker installs any it hasn't had on this device, after the first
+sync. `StickerDefaultPackLedger` records each one, so a removed default pack
+is never reinstalled.
 
 ## Emoji Sets
 
@@ -356,7 +381,7 @@ user list is read-only: suggest its sets, never publish it.
 
 ## Storage
 
-- `UserDefaults` stores app preferences such as active account, developer mode, recent reactions, and per-account diagnostics self-check group IDs.
+- `UserDefaults` stores app preferences such as active account, developer mode, and recent reactions.
 - The shared App Group container stores the Marmot root used by both app and extension. The MDK cutover root is `White Noise/Marmot`; do not migrate the legacy top-level `Marmot` root or old secure-storage entries into it. Users must re-import their nsec after this cutover.
 - Marmot stores account secrets in the Keychain.
 - Decrypted media cache files under `Caches/EncryptedMedia` must set complete file protection on both the directory and cached plaintext files.
@@ -467,7 +492,7 @@ Do not add a second storage path for data Marmot already owns.
   `Shared/` and `NotificationServiceExtension/`; a deliberate exception
   needs `// swiftlint:disable:next no_test_hook_in_app_code` with the reason
   above it, on every line the rule flags. The rule's limits, and the
-  policy's documented exception:
+  policy's documented exceptions:
   - It catches only names containing `ForTesting` or starting with
     `forTesting`. Review covers the rest.
   - Files that still have hooks start with
@@ -477,7 +502,7 @@ Do not add a second storage path for data Marmot already owns.
     you change a hook or the code it serves, replace that hook with an
     injected dependency, and remove the directive once its last hook is
     gone (`superfluous_disable_command` fails the lint job otherwise).
-  - One documented exception to this policy: `AppLanguage`'s
+  - A documented exception to this policy: `AppLanguage`'s
     `testCurrentOverride` (a DEBUG-only task-local language override) and
     `testDefaults` (a process-scoped preference suite, separate from the
     real App Group, used in unit-test processes) stay. The lint rule
@@ -489,6 +514,16 @@ Do not add a second storage path for data Marmot already owns.
     `AppLanguage.$testCurrentOverride.withValue` in async code; tests of
     preference writes still inject their own `UserDefaults` and
     `NotificationCenter` (see Code Style). Don't add other seams like them.
+  - A second documented exception: `RuntimeLifecycle`'s pause points
+    `afterBootstrapRuntimeStartForTesting` and
+    `afterForegroundRuntimeCreatedForTesting`, and its
+    `backgroundSuspensionWaitForTesting` observer, stay. They sit inside the
+    launch, suspend and resume sequence, and the maintainers judged
+    refactoring that sequence to inject them riskier than keeping them
+    (#1241, item 19), so they are exempt from the replace-on-change rule
+    above. Don't add more hooks there; lifecycle tests await the
+    tasks `startRuntimeSuspension()` and `startForegroundActivation()` return
+    and wait on observable state or injected calls.
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:

@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import Observation
 import MarmotKit
@@ -97,6 +96,22 @@ nonisolated struct ConversationGroupRosterProjection: Equatable {
         isUnrecoverable = roster.lifecycleState == .unrecoverable
         isDisbanded = roster.lifecycleState == .disbanded
         revision = roster.rosterRevision
+    }
+}
+
+/// Messages the reader opened with "Read more". A sent message's row id is
+/// its optimistic send row only while that row is in the window, so each
+/// opening is remembered under its durable message id as well.
+nonisolated struct ExpandedMessageBodies: Equatable {
+    private var ids: Set<String> = []
+
+    func contains(rowID: String, messageID: String) -> Bool {
+        ids.contains(rowID) || (!messageID.isEmpty && ids.contains(messageID))
+    }
+
+    mutating func insert(rowID: String, messageID: String) {
+        ids.insert(rowID)
+        if !messageID.isEmpty { ids.insert(messageID) }
     }
 }
 
@@ -281,6 +296,7 @@ final class ConversationViewModel {
     private var startRequest = UUID()
     @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
     private(set) var viewportIntent: ConversationViewportIntent = .followingLatest
+    private(set) var expandedBodies = ExpandedMessageBodies()
     private(set) var paginationRetryToken = 0
     private var pageAdmission = ConversationPageAdmission()
     var isAwaitingPageCompletion: Bool { pageAdmission.unresolvedRevision != nil }
@@ -389,6 +405,11 @@ final class ConversationViewModel {
         uninstall: { [weak self] accountRef, input in
             guard let self, let appState = self.appState else { throw CancellationError() }
             try await appState.currentMarmotClient().uninstallStickerPack(accountRef: accountRef, input: input)
+        },
+        shareLink: { [weak self] accountRef, coordinate in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            return try await appState.currentMarmotClient().stickerPackShareLink(
+                accountRef: accountRef, coordinate: coordinate)
         }
     )
     /// Composer progress, saved-draft cleanup and the inline error for a
@@ -1044,19 +1065,6 @@ final class ConversationViewModel {
         timelineStore.confirmSent(tempId: tempId, record: record, messageId: messageId)
     }
 
-    private func markFailed(tempId: String) {
-        timelineStore.markFailed(tempId: tempId)
-    }
-
-    @discardableResult
-    private func replaceMediaReferences(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
-        timelineStore.replaceMediaReferences(references, forMessageId: messageIdHex)
-    }
-
-    private func appendSystemEvent(_ event: SystemEvent, timestamp: UInt64) {
-        timelineStore.appendSystemEvent(event, timestamp: timestamp)
-    }
-
     private func resetOptimisticState() {
         timelineStore.resetOptimisticState()
     }
@@ -1346,14 +1354,24 @@ final class ConversationViewModel {
             throw PollActionError.unavailable
         }
         let client = try appState.currentMarmotClient()
+        let replyTarget = replyTargetMessageIdHex
         _ = try await client.createPoll(
             accountRef: accountRef,
             groupIdHex: group.groupIdHex,
             question: submission.question,
             options: submission.options,
             pollType: submission.pollType,
-            endsAt: submission.endsAt
+            endsAt: submission.endsAt,
+            messageTags: ComposerModel.replyTags(to: replyTarget)
         )
+        clearReply(ifTargeting: replyTarget)
+    }
+
+    /// A poll or sticker sent as a reply consumes the reply, as a text send
+    /// does, unless the user has since picked another target.
+    private func clearReply(ifTargeting target: String?) {
+        guard let target, replyTargetMessageIdHex == target else { return }
+        replyingTo = nil
     }
 
     func votePoll(option optionId: String, on message: AppMessageRecordFfi) async {
@@ -1588,12 +1606,44 @@ final class ConversationViewModel {
     }
 
     func discardFailedSend(rowId: String) {
-        if let messageIdHex = timelineStore.undeliveredDurableMessageId(rowId: rowId),
-           let record = timelineStore.durableRecord(messageIdHex: messageIdHex) {
-            Task { await deleteMessageForMe(record) }
+        if let messageIdHex = timelineStore.undeliveredDurableMessageId(rowId: rowId) {
+            Task { await discardDurableFailedSend(messageIdHex: messageIdHex) }
             return
         }
         timelineStore.discardTransientRow(rowId: rowId)
+    }
+
+    /// MDK removes a failed own send from this device without publishing a
+    /// delete nobody needs; the timeline subscription then drops the row.
+    private func discardDurableFailedSend(messageIdHex: String) async {
+        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        let record = timelineStore.durableRecord(messageIdHex: messageIdHex)
+        // Read now: once the row leaves, its references can't be rebuilt reliably.
+        let references = record.map { mediaItems(for: $0).compactMap(\.reference) } ?? []
+        do {
+            let client = try appState.currentMarmotClient()
+            let result = try await client.discardFailedSend(
+                accountRef: accountRef, groupIdHex: group.groupIdHex, messageIdHex: messageIdHex)
+            switch result.outcome {
+            case .discarded:
+                // Gone from this device: purge its decrypted media; the row leaves on its own.
+                let hashes = Set(result.mediaCiphertextSha256.map { $0.lowercased() })
+                await MessageMediaCache.removeCachedData(forCiphertextHashes: hashes, in: references)
+                Haptics.warning()
+            case .stillSending:
+                // The group may still publish it, so nothing changed.
+                composer.onError(L10n.string("This message is still sending. Try again in a moment."))
+            case .notFailedSend:
+                // No longer a failed send (it may have been delivered since):
+                // keep the user's Delete as the local-only delete it was before.
+                // That delete writes under the active account, so skip it after a switch.
+                if let record, appState.activeAccountRef == accountRef { await deleteMessageForMe(record) }
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            appState.present(UserFacingError.toast(title: L10n.string("Couldn't delete message"), error: error))
+        }
     }
 
     func isMessageMine(_ message: AppMessageRecordFfi) -> Bool {
@@ -1639,38 +1689,6 @@ final class ConversationViewModel {
         cancelTimelineTailRefresh()
         streamWatcher.cancelAll()
     }
-
-#if DEBUG
-    func resetOptimisticStateForTesting() {
-        resetOptimisticState()
-    }
-
-    func seedOptimisticStateForTesting(
-        deletedMessageIdHex: String,
-        reactionTargetMessageIdHex: String,
-        emoji: String,
-        sender: String
-    ) {
-        timelineStore.deletedProjections.insertOptimistic(deletedMessageIdHex)
-        let reactionId = "optimistic-\(reactionTargetMessageIdHex)-\(emoji)"
-        timelineStore.reactionProjections.setRecord(
-            AppMessageRecordFfi(
-                messageIdHex: reactionId,
-                direction: "sent",
-                groupIdHex: group.groupIdHex,
-                sender: sender,
-                plaintext: emoji,
-                kind: MessageSemantics.kindReaction,
-                tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, reactionTargetMessageIdHex])],
-                recordedAt: 1,
-                receivedAt: 1
-            ),
-            forKey: reactionId
-        )
-        _ = timelineStore.deletedProjections.rebuild()
-        _ = timelineStore.recomputeReactions()
-    }
-#endif
 
     private func startLiveTimeline(accountRef: String) {
         guard let appState, appState.canUseRuntimeForLocalForegroundWork else { return }
@@ -1876,6 +1894,10 @@ final class ConversationViewModel {
             pendingAnchorIntent: latestAnchorIntent,
             navigationFailed: navigationFailure != nil
         )
+    }
+
+    func expandBody(rowID: String, messageID: String) {
+        expandedBodies.insert(rowID: rowID, messageID: messageID)
     }
 
     func followConversationLatest() {
@@ -2431,8 +2453,11 @@ final class ConversationViewModel {
         guard canSendStickers, let appState, let scope = customEmojiSendScope else { return }
         do {
             let client = try appState.currentMarmotClient()
+            let replyTarget = replyTargetMessageIdHex
             _ = try await client.sendSticker(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
-                                             stickerRef: StickerKey(sticker).ref)
+                                             stickerRef: StickerKey(sticker).ref,
+                                             messageTags: ComposerModel.replyTags(to: replyTarget))
+            clearReply(ifTargeting: replyTarget)
         } catch is CancellationError {
             return
         } catch {
@@ -2514,21 +2539,6 @@ final class ConversationViewModel {
         }
         return current
     }
-
-#if DEBUG
-    @discardableResult
-    func replaceMediaReferencesForTesting(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
-        replaceMediaReferences(references, forMessageId: messageIdHex)
-    }
-
-    func installPendingMediaForTesting(rowId: String, items: [MessageMediaAttachment]) {
-        timelineStore.mediaProjections.setPending(items, forRowId: rowId)
-    }
-
-    func pendingMediaForTesting(rowId: String) -> [MessageMediaAttachment]? {
-        timelineStore.mediaProjections.pending(forRowId: rowId)
-    }
-#endif
 
     static func pendingOutgoingMessage(
         _ item: TimelineItem,
@@ -2798,7 +2808,16 @@ final class ConversationViewModel {
     }
 
     func applyGroupMutation(_ result: GroupMutationResultFfi) {
-        applyGroupDetails(result.details, managementState: result.managementState)
+        applyGroupChange(details: result.details, managementState: result.managementState)
+    }
+
+    /// An invite that reached nobody still returns the current group state.
+    func applyGroupMutation(_ result: GroupInviteResultFfi) {
+        applyGroupChange(details: result.details, managementState: result.managementState)
+    }
+
+    private func applyGroupChange(details: GroupDetailsFfi, managementState: GroupManagementStateFfi) {
+        applyGroupDetails(details, managementState: managementState)
         // Group system rows for our own commits are persisted in Marmot but
         // not yet broadcast on the timeline subscription (see whitenoise
         // remember_published_reports). Reload the tail after every mutation,
@@ -2940,16 +2959,6 @@ final class ConversationViewModel {
     private func reconcileLeaveRequest(with pending: Bool) {
         leaveRequestPending = pending
     }
-
-#if DEBUG
-    func appendSystemEventForTesting(_ event: SystemEvent, timestamp: UInt64) {
-        appendSystemEvent(event, timestamp: timestamp)
-    }
-
-    func setManagementStateForTesting(_ state: GroupManagementStateFfi?) {
-        managementState = state
-    }
-#endif
 
     static func retainedSystemTimelineItems(
         _ current: [TimelineItem],
@@ -3411,12 +3420,6 @@ final class ConversationViewModel {
             return false
         }
     }
-
-#if DEBUG
-    func markFailedForTesting(tempId: String) {
-        markFailed(tempId: tempId)
-    }
-#endif
 
     // MARK: - Reactions
 

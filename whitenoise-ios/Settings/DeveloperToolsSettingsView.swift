@@ -12,6 +12,10 @@ struct DeveloperToolsSettingsView: View {
     @State private var shareFile: DiagnosticLogShareFile?
     @State private var exporting = false
     @State private var exportError: String?
+    @State private var choosingArchiveWindow = false
+    @State private var archiveFile: DiagnosticLogShareFile?
+    @State private var savingArchive = false
+    @State private var archiveTask: Task<Void, Never>?
     @State private var showDemoConfirmation = false
     @State private var quarantinedGroupsModel = QuarantinedGroupsViewModel()
     @State private var auditDelivery = AuditDeliveryStatusModel()
@@ -106,26 +110,14 @@ struct DeveloperToolsSettingsView: View {
                     }
                 }
                 Section {
-                    WNToggle("Debug Mode", isOn: Binding(
+                    WNToggle("Chat Debug Mode", isOn: Binding(
                         get: { appState.streamingDebugMode },
                         set: { appState.streamingDebugMode = $0 }
                     ))
-
-                    NavigationLink {
-                        DiagnosticsView()
-                    } label: {
-                        Label("Debug Events", systemImage: "stethoscope")
-                    }
-
-                    NavigationLink {
-                        StartupDiagnosticsView()
-                    } label: {
-                        Label("Startup Diagnostics", systemImage: "timer")
-                    }
                 } header: {
-                    Text("Debugging")
+                    Text("Chat Debugging")
                 } footer: {
-                    Text("Debug Mode adds technical conversation details intended for development and testing.")
+                    Text("Chat Debug Mode adds technical conversation details intended for development and testing.")
                 }
 
                 Section {
@@ -133,6 +125,12 @@ struct DeveloperToolsSettingsView: View {
                         KeyPackagesView()
                     } label: {
                         Label("Key Packages", systemImage: "shippingbox")
+                    }
+
+                    NavigationLink {
+                        StartupDiagnosticsView()
+                    } label: {
+                        Label("Startup Diagnostics", systemImage: "timer")
                     }
 
                     NavigationLink {
@@ -159,12 +157,21 @@ struct DeveloperToolsSettingsView: View {
                 Section {
                     LabeledContent("Diagnostic Logging", value: model.auditSettings?.enabled == true ? L10n.string("On") : L10n.string("Off"))
                     if model.auditFileRows.contains(where: { $0.sizeBytes > 0 }) {
-                        Menu {
-                            exportActions()
+                        Button {
+                            choosingArchiveWindow = true
                         } label: {
-                            Label("Export Latest Audit Log", systemImage: "square.and.arrow.up")
+                            Label("Export Latest Audit Logs", systemImage: "square.and.arrow.up")
                         }
                         .disabled(exporting)
+                        .confirmationDialog("Export Audit Logs", isPresented: $choosingArchiveWindow,
+                                            titleVisibility: .visible) {
+                            ForEach(DiagnosticLogExport.Window.allCases) { window in
+                                Button(window.title) { exportArchive(window) }
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("Bundles the audit logs changed in that time into one .zip file.")
+                        }
                         ForEach(model.auditFileRows.filter { $0.sizeBytes > 0 }) { row in
                             Menu {
                                 exportActions(path: row.path)
@@ -185,7 +192,7 @@ struct DeveloperToolsSettingsView: View {
                         Text("There are no logs.").foregroundStyle(.secondary)
                     }
                 } header: { Text("Diagnostic Logs") } footer: {
-                    Text("Export the most recently modified audit log on this device, or tap a file to export it. Exports preserve the full original JSONL, including event details. Configure or clear logs in Privacy & Security → Diagnostics & Improvements.")
+                    Text("Export the audit logs from the last few days as one .zip file, or tap a file to export it. Exports preserve the full original JSONL, including event details. Configure or clear logs in Privacy & Security → Diagnostics & Improvements.")
                 }
 
                 auditDeliverySection
@@ -248,6 +255,13 @@ struct DeveloperToolsSettingsView: View {
             if case .failure = result { exportError = L10n.string("Couldn’t save diagnostic logs. Try again.") }
             exportDocument = DiagnosticLogDocument()
         }
+        .fileMover(isPresented: $savingArchive, file: archiveFile?.url) { result in
+            if case .failure = result { exportError = L10n.string("Couldn’t save diagnostic logs. Try again.") }
+            cleanupArchiveFile()
+        } onCancellation: {
+            cleanupArchiveFile()
+        }
+        .onDisappear { archiveTask?.cancel() }
         .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
             ActivityShareSheet(items: [file.url], onComplete: cleanupShareFile)
         }
@@ -282,12 +296,12 @@ struct DeveloperToolsSettingsView: View {
     }
 
     @ViewBuilder
-    private func exportActions(path: String? = nil) -> some View {
+    private func exportActions(path: String) -> some View {
         Button("Share", systemImage: "square.and.arrow.up") { shareLogs(path: path) }
         Button("Save to Files", systemImage: "folder") { saveLogs(path: path) }
     }
 
-    private func saveLogs(path: String?) {
+    private func saveLogs(path: String) {
         guard !exporting else { return }
         exporting = true
         Task {
@@ -303,7 +317,7 @@ struct DeveloperToolsSettingsView: View {
         }
     }
 
-    private func shareLogs(path: String?) {
+    private func shareLogs(path: String) {
         guard !exporting else { return }
         exporting = true
         cleanupShareFile()
@@ -318,6 +332,32 @@ struct DeveloperToolsSettingsView: View {
                 exportError = L10n.string("Couldn’t read diagnostic logs. Try again.")
             }
         }
+    }
+
+    private func exportArchive(_ window: DiagnosticLogExport.Window) {
+        guard !exporting else { return }
+        exporting = true
+        cleanupArchiveFile()
+        archiveTask = Task {
+            defer { exporting = false }
+            do {
+                let file = try await appState.diagnosticLogArchive(window: window)
+                // Nothing can present or clean up a zip once the screen has closed.
+                guard !Task.isCancelled else { return DiagnosticLogExport.removeShareFile(file) }
+                archiveFile = file
+                savingArchive = true
+            } catch DiagnosticLogExport.ExportError.noLogs {
+                exportError = L10n.string("No audit logs changed in that time.")
+            } catch {
+                exportError = L10n.string("Couldn’t read diagnostic logs. Try again.")
+            }
+        }
+    }
+
+    private func cleanupArchiveFile() {
+        guard let archiveFile else { return }
+        DiagnosticLogExport.removeShareFile(archiveFile)
+        self.archiveFile = nil
     }
 
     private func cleanupShareFile() {

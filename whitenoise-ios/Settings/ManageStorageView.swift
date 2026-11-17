@@ -439,9 +439,7 @@ private struct ManageStorageAttachmentRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: Text("Remove"), onRemove)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive, action: onRemove) {
-                Label("Remove", systemImage: "trash")
-            }
+            WNSwipeActionButton(title: L10n.string("Remove"), systemImage: "trash.fill", tint: .red, action: onRemove)
         }
         .contextMenu {
             Button(role: .destructive, action: onRemove) {

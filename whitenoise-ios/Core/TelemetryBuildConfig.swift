@@ -138,6 +138,12 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
         )
     }
 
+    /// The device source for v5 audit records, matching the telemetry resource.
+    func auditLogSource() -> AuditLogSourceFfi {
+        AuditLogSourceFfi(hardwareModel: deviceModelIdentifier, platform: AuditLogSourceBuildConfig.platform,
+                          appVersion: serviceVersion)
+    }
+
     nonisolated private static func stringValue(
         for key: String,
         in info: [String: Any],
@@ -171,11 +177,7 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
     }
 
     nonisolated private static func serviceVersion(from info: [String: Any]) -> String {
-        let version = stringValue(for: "CFBundleShortVersionString", in: info) ?? "unknown"
-        guard let build = stringValue(for: "CFBundleVersion", in: info) else {
-            return version
-        }
-        return "\(version)+\(build)"
+        AuditLogSourceBuildConfig.appVersion(from: info)
     }
 
     nonisolated private static func isUnresolvedBuildSetting(_ value: String) -> Bool {
@@ -183,26 +185,6 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
     }
 
     nonisolated private static func deviceModelIdentifier(environment: [String: String]) -> String? {
-        if let simulatorModelIdentifier = environment["SIMULATOR_MODEL_IDENTIFIER"].flatMap(resolvedStringValue) {
-            return simulatorModelIdentifier
-        }
-
-        var systemInfo = utsname()
-        guard uname(&systemInfo) == 0 else { return nil }
-        let bytes = Mirror(reflecting: systemInfo.machine).children.compactMap { $0.value as? Int8 }
-        return machineIdentifier(fromMachineBytes: bytes)
-    }
-
-    /// Decodes the signed `CChar` bytes of `utsname.machine` into a Swift string.
-    ///
-    /// The bytes are `Int8`, so any byte ≥ 0x80 reads back as a negative value.
-    /// `UInt8(_:)` traps on negative input, so the bits must be reinterpreted
-    /// with `UInt8(bitPattern:)` instead. Trailing NUL padding is skipped.
-    nonisolated static func machineIdentifier(fromMachineBytes bytes: [Int8]) -> String? {
-        let identifier = bytes.reduce(into: "") { result, byte in
-            guard byte != 0 else { return }
-            result.append(String(UnicodeScalar(UInt8(bitPattern: byte))))
-        }
-        return identifier.isEmpty ? nil : identifier
+        AuditLogSourceBuildConfig.deviceModelIdentifier(environment: environment)
     }
 }

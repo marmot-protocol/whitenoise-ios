@@ -23,6 +23,21 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
+                Picker("Density", selection: densitySelection) {
+                    ForEach(AppDensity.allCases) { density in
+                        Text(density.displayName)
+                            .tag(density)
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            } header: {
+                Text("Density")
+            } footer: {
+                Text("Choose how closely chats and messages are spaced. Text size follows your device’s settings.")
+            }
+
+            Section {
                 Picker("Language", selection: languageSelection) {
                     ForEach(AppLanguage.pickerChoices) { language in
                         if language == .system {
@@ -50,6 +65,10 @@ struct AppearanceSettingsView: View {
             } footer: {
                 Text("Show link titles and images in chats. Loading previews shares your IP address with the linked website and image host.")
             }
+
+            if #available(iOS 26.0, *) {
+                DictationSettingsSection()
+            }
         }
         .localizedNavigationTitle("Appearance")
         .productScreen(.settings, section: .appearance)
@@ -67,6 +86,14 @@ struct AppearanceSettingsView: View {
             appearance.theme
         } set: { theme in
             appearance.setTheme(theme)
+        }
+    }
+
+    private var densitySelection: Binding<AppDensity> {
+        Binding {
+            appearance.density
+        } set: { density in
+            appearance.setDensity(density)
         }
     }
 

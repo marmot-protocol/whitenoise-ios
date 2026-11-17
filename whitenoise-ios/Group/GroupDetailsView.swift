@@ -34,6 +34,7 @@ struct GroupDetailsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var viewModel: ConversationViewModel
     var openAddMembersOnAppear = false
     var onGroupChanged: (AppGroupRecordFfi) -> Void = { _ in }
@@ -523,7 +524,7 @@ struct GroupDetailsView: View {
                 .wnAvatarViewer(isPresented: $showsAvatarViewer) { size in
                     contactAvatar(maxPixelSize: viewerPixelSize(for: size)).frame(width: size, height: size)
                 }
-                HStack(spacing: 12) {
+                dynamicTypeSize.detailsQuickActionsLayout {
                     DetailsQuickAction(title: "About") {
                         Button { showContactProfile = true } label: {
                             Image(systemName: "person.crop.circle")
@@ -631,7 +632,7 @@ struct GroupDetailsView: View {
 
     private var actionsRowSection: some View {
         Section {
-            HStack(spacing: 12) {
+            dynamicTypeSize.detailsQuickActionsLayout {
                 if isDirectMessage {
                     DetailsActionButton(
                         title: "About",
@@ -1142,11 +1143,12 @@ struct GroupDetailsView: View {
     private func swipeActions(for member: GroupMemberDetailsFfi) -> some View {
         let actions = memberActions(for: member)
         if actions.contains(.remove) {
-            Button(role: .destructive) {
+            Button {
                 model.pendingConfirmation = .remove(member)
             } label: {
                 Label("Remove", systemImage: "person.crop.circle.badge.minus")
             }
+            .tint(.red)
         }
         if actions.contains(.demote) {
             Button {

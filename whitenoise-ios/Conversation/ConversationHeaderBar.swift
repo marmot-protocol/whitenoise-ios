@@ -4,6 +4,7 @@ enum ConversationHeaderMetrics {
     static let controlGap: CGFloat = 16
     static let horizontalPadding: CGFloat = 12
     static let verticalPadding: CGFloat = 6
+    static let titleMaximumDynamicType: DynamicTypeSize = .accessibility1
 
     /// Room the centered title gives up on *both* sides, so it stays on the
     /// bar's midline whichever single control is showing and truncates before
@@ -22,12 +23,19 @@ struct ConversationHeaderBar<Title: View>: View {
     let onClose: () -> Void
     @ViewBuilder var title: Title
 
-    @ScaledMetric(relativeTo: .body)
-    private var controlDiameter = WNSecondaryButtonStyle.Metrics.circleDiameter
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// The edge controls' diameter, capped as `WNIconButton` caps them.
+    private var controlDiameter: CGFloat {
+        WNChromeDynamicType.scaled(WNSecondaryButtonStyle.Metrics.circleDiameter, at: dynamicTypeSize)
+    }
 
     var body: some View {
         ZStack {
             title
+                // A bar title stops growing before the text below it does, so a
+                // short name stays whole beside the capped controls.
+                .dynamicTypeSize(...ConversationHeaderMetrics.titleMaximumDynamicType)
                 .padding(
                     .horizontal,
                     ConversationHeaderMetrics.titleInset(controlDiameter: controlDiameter)

@@ -192,6 +192,26 @@ struct ChatSurfacePresentationTests {
         #expect(SingleEmojiMessagePresentation.emoji(in: "\u{FE0F}") == nil)
     }
 
+    @Test func singleResolvableCustomEmojiStandsAloneAtStickerSize() throws {
+        let marmot = try #require(CustomEmojiShortcode("marmot"))
+        let wave = try #require(CustomEmojiShortcode("wave"))
+        let resolvable: Set = [marmot, wave]
+        #expect(SingleCustomEmojiMessagePresentation.shortcode(in: ":marmot:", resolvable: resolvable) == marmot)
+        #expect(SingleCustomEmojiMessagePresentation.shortcode(in: "  :wave:\n", resolvable: resolvable) == wave)
+        #expect(SingleCustomEmojiMessagePresentation.side > SingleEmojiMessagePresentation.fontSize)
+    }
+
+    @Test func customEmojiWithTextOrUnresolvedStaysInBubble() throws {
+        let marmot = try #require(CustomEmojiShortcode("marmot"))
+        let present = SingleCustomEmojiMessagePresentation.self
+        #expect(present.shortcode(in: ":marmot:", resolvable: []) == nil)
+        #expect(present.shortcode(in: ":party:", resolvable: [marmot]) == nil)
+        #expect(present.shortcode(in: ":marmot: hi", resolvable: [marmot]) == nil)
+        #expect(present.shortcode(in: ":marmot::marmot:", resolvable: [marmot]) == nil)
+        #expect(present.shortcode(in: ":marmot: :marmot:", resolvable: [marmot]) == nil)
+        #expect(present.shortcode(in: "marmot", resolvable: [marmot]) == nil)
+    }
+
     @Test func disappearingMessageIndicatorRequiresFiniteActiveExpiry() {
         #expect(MessageExpirationPresentation.showsIndicator(
             retentionSeconds: 300,
@@ -308,6 +328,10 @@ struct ChatSurfacePresentationTests {
             for: String(repeating: "a", count: ComposerExpandedEditorPresentation.minimumExpandCharacterCount)
         ))
         #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "one\ntwo\nthree\nfour"))
+        #expect(!ComposerExpandedEditorPresentation.shouldShowExpandButton(
+            for: "one\ntwo\nthree\nfour",
+            isDictating: true
+        ))
     }
 
     @Test func cappedComposerTextInputEnablesInternalScrollingForLongDrafts() {

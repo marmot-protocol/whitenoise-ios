@@ -514,6 +514,35 @@ struct TimelineBottomTests {
         ))
     }
 
+    @Test func aPinnedViewportLeftPastTheEndReturnsToTheBottom() {
+        // Measured on a long chat: a send's window update dropped a 236 pt row
+        // above a keyboard-inset viewport and left it this far past the end.
+        let strandedBelowContent = TimelineBottomViewport(
+            contentHeight: 4_850,
+            visibleBottomY: 5_533,
+            bottomContentInset: 384
+        ).overscrollPastBottom
+        func returns(overscroll: CGFloat = strandedBelowContent, settled: Bool = true, movedAway: Bool = false,
+                     userScrolling: Bool = false, hasMoreAfter: Bool = false, paging: Bool = false) -> Bool {
+            TimelineBottomScrollCoordinator.shouldReturnFromOverscroll(
+                overscrollPastBottom: overscroll, didFinishInitialPositioning: settled,
+                userMovedAwayFromBottom: movedAway, isUserScrolling: userScrolling,
+                hasMoreAfter: hasMoreAfter, isPaging: paging)
+        }
+
+        #expect(returns())
+        // At the bottom, or within rounding of it, there is nothing to undo.
+        #expect(!returns(overscroll: 0))
+        #expect(!returns(overscroll: TimelineBottomScrollCoordinator.overscrollTolerance))
+        // A finger-driven bounce, history the reader chose, an unsettled
+        // opening, unloaded newer rows and a pending page all keep their place.
+        #expect(!returns(userScrolling: true))
+        #expect(!returns(movedAway: true))
+        #expect(!returns(settled: false))
+        #expect(!returns(hasMoreAfter: true))
+        #expect(!returns(paging: true))
+    }
+
     @Test func timelineScrollRequestsSkipAlreadyHandledTarget() {
         #expect(TimelineBottomScrollCoordinator.shouldSkipTimelineChangeScroll(
             lastAutomaticTargetID: "message-a",

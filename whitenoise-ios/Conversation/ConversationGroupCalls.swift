@@ -3,7 +3,7 @@ import MarmotKit
 
 /// The Marmot calls a conversation makes about its group: accepting an
 /// invitation, and reading the group's current conversation snapshot.
-struct ConversationGroupCalls {
+nonisolated struct ConversationGroupCalls: Sendable {
     var acceptInvite: @MainActor (
         AppState, _ accountRef: String, _ groupIdHex: String
     ) async throws -> AppGroupRecordFfi

@@ -132,7 +132,7 @@ struct RuntimeOwnershipTests {
             let created = try await client.createGroupWithOptionsDetailed(
                 accountRef: account.label, name: "Selected presentation", memberRefs: [],
                 options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)
-            )
+            ).requireCreated()
             let update = try #require(try await reader.value)
             #expect(update.subscriptionGeneration == initial?.subscriptionGeneration)
             #expect(update.sequence > 0)

@@ -183,7 +183,7 @@ struct MediaAcquisitionIntentTests {
                 defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]).account
             let group = try await client.createGroupWithOptionsDetailed(accountRef: account.label,
                 name: "Attachment acquisition", memberRefs: [], options: CreateGroupOptionsFfi(
-                    description: nil, initialImage: nil, disappearingMessageSecs: 0))
+                    description: nil, initialImage: nil, disappearingMessageSecs: 0)).requireCreated()
             let target = AttachmentLocalTargetFfi(messageIdHex: String(repeating: "a", count: 64),
                 sourceMessageIdHex: String(repeating: "b", count: 64), attachmentIndex: 2)
             await #expect(throws: AttachmentReadError.unavailable) {

@@ -101,6 +101,13 @@ nonisolated final class MarmotClient: Sendable {
         if StartupDiagnosticsPreference.isEnabled() {
             try? marmot.setStartupDiagnosticsEnabled(enabled: true)
         }
+        // The audit source must be set before any account opens: an open
+        // recorder keeps the source it started with.
+        do {
+            _ = try marmot.setAuditLogSource(source: telemetryConfig.auditLogSource())
+        } catch {
+            Self.coldBootstrapLog.error("audit_log_source_rejected")
+        }
         // A rejected audit destination must not block startup; recordings stay local.
         do {
             _ = try marmot.setAuditOtlpConfigV5(config: telemetryConfig.auditOtlpConfig())
@@ -684,32 +691,15 @@ nonisolated final class MarmotClient: Sendable {
     /// forward directly — no `Task.detached` — exactly like `signOutAndWipe`.
     /// Routing them here keeps the raw handle out of feature code (the one
     /// seam).
-    func createGroup(accountRef: String, name: String, memberRefs: [String], description: String?) async throws -> String {
-        try await marmot.createGroup(accountRef: accountRef, name: name, memberRefs: memberRefs, description: description)
-    }
-
-    func createGroupWithInitialImage(
-        accountRef: String,
-        name: String,
-        memberRefs: [String],
-        description: String?,
-        initialImage: InitialGroupImageFfi?
-    ) async throws -> String {
-        try await marmot.createGroupWithInitialImage(
-            accountRef: accountRef,
-            name: name,
-            memberRefs: memberRefs,
-            description: description,
-            initialImage: initialImage
-        )
-    }
+    /// Creates and invites go ahead with the members MDK can reach; read
+    /// `memberOutcomes` for the rest. A missing group or summary means nothing changed.
 
     func createGroupWithOptionsDetailed(
         accountRef: String,
         name: String,
         memberRefs: [String],
         options: CreateGroupOptionsFfi
-    ) async throws -> CreatedGroupFfi {
+    ) async throws -> DetailedGroupCreationResultFfi {
         try await marmot.createGroupWithOptionsDetailed(
             accountRef: accountRef,
             name: name,
@@ -754,6 +744,11 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.notifyConnectivityRestored()
     }
 
+    /// Removes a failed own send from this device and publishes nothing.
+    func discardFailedSend(accountRef: String, groupIdHex: String, messageIdHex: String) async throws -> DiscardFailedSendResultFfi {
+        try await marmot.discardFailedSend(accountRef: accountRef, groupIdHex: groupIdHex, messageIdHex: messageIdHex)
+    }
+
     func replyToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, text: String) async throws -> SendSummaryFfi {
         try await marmot.replyToMessage(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId, text: text)
     }
@@ -774,7 +769,7 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.downloadMedia(accountRef: accountRef, groupIdHex: groupIdHex, reference: reference)
     }
 
-    func inviteMembersDetailed(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws -> GroupMutationResultFfi {
+    func inviteMembersDetailed(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws -> GroupInviteResultFfi {
         try await marmot.inviteMembersDetailed(accountRef: accountRef, groupIdHex: groupIdHex, memberRefs: memberRefs)
     }
 
@@ -812,6 +807,12 @@ nonisolated final class MarmotClient: Sendable {
 
     func acknowledgeDisbandFailure(accountRef: String, groupIdHex: String) async throws -> Bool {
         try await marmot.acknowledgeDisbandFailure(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    /// The group's owed and permanently refused relays for this device's
+    /// confirmed changes; nil once nothing is owed and every refusal is acknowledged.
+    func groupCommitDelivery(accountRef: String, groupIdHex: String) async throws -> GroupCommitDeliveryFfi? {
+        try await marmot.groupCommitDelivery(accountRef: accountRef, groupIdHex: groupIdHex)
     }
 
     /// Admits one group-change attempt after the user accepts an advisory refusal.
@@ -1050,10 +1051,12 @@ nonisolated final class MarmotClient: Sendable {
                                             reactionMessageIdHex: reactionMessageIdHex)
     }
 
+    /// `messageTags` carries reply (`e`/`q`) tags on the poll event itself.
     func createPoll(accountRef: String, groupIdHex: String, question: String, options: [String],
-                    pollType: PollTypeFfi, endsAt: UInt64?) async throws -> SendSummaryFfi {
-        try await marmot.createPoll(accountRef: accountRef, groupIdHex: groupIdHex, question: question,
-                                    options: options, pollType: pollType, endsAt: endsAt)
+                    pollType: PollTypeFfi, endsAt: UInt64?, messageTags: [[String]]) async throws -> SendSummaryFfi {
+        try await marmot.createTaggedPoll(accountRef: accountRef, groupIdHex: groupIdHex, question: question,
+                                          options: options, pollType: pollType, endsAt: endsAt,
+                                          messageTags: messageTags)
     }
 
     func castPollVote(accountRef: String, groupIdHex: String, pollEventId: String,

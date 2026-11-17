@@ -107,6 +107,8 @@ final class NotificationService: UNNotificationServiceExtension {
             )
             activeMarmot = marmot
             activeMarmotNeedsShutdown = true
+            // Before `start()` opens accounts, whose recorders keep the source they open with.
+            _ = try? marmot.setAuditLogSource(source: AuditLogSourceBuildConfig.current())
             diagnosticStage = .runtimeCreated
             if Task.isCancelled {
                 if let marmot = takeActiveMarmotForShutdown(marmot) {
@@ -249,14 +251,6 @@ final class NotificationService: UNNotificationServiceExtension {
         didRecordDiagnostic = true
         let elapsed = max(0, Date().timeIntervalSince(diagnosticStartedAt))
         let durationMilliseconds = Int((elapsed * 1_000).rounded())
-        let snapshot = NotificationServiceDiagnosticSnapshot(
-            recordedAt: Date(),
-            durationMilliseconds: durationMilliseconds,
-            stage: diagnosticStage,
-            outcome: outcome,
-            notificationCount: notificationCount
-        )
-        NotificationServiceDiagnostics.recordInSharedContainer(snapshot)
         Self.diagnosticLog.info(
             "wake_finished outcome=\(outcome.rawValue, privacy: .public) stage=\(self.diagnosticStage.rawValue, privacy: .public) duration_ms=\(durationMilliseconds, privacy: .public) notification_count=\(notificationCount, privacy: .public)"
         )

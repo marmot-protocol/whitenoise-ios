@@ -1,4 +1,3 @@
-// swiftlint:disable no_test_hook_in_app_code
 import Foundation
 import Observation
 import OSLog
@@ -174,7 +173,7 @@ protocol NotificationCoordinatorHost: AnyObject {
 }
 
 /// The Marmot calls behind the coordinator's best-effort catch-ups.
-struct NotificationCatchUpCalls {
+nonisolated struct NotificationCatchUpCalls: Sendable {
     var catchUpAccounts: @MainActor (NotificationCoordinatorHost) async throws -> Void
     var notifyConnectivityRestored: @MainActor (NotificationCoordinatorHost) async throws -> Void
 
@@ -773,14 +772,4 @@ final class NotificationCoordinator {
         guard let client = foregroundSettingsReadClient(host: host) else { return [] }
         return await client.nativePushEnabledAccountRefs(accountRefs: host.accounts.map(\.label))
     }
-
-    #if DEBUG
-    func drainNativePushRegistrationTaskForTesting() async {
-        await nativePushRegistrationTask?.value
-    }
-
-    func drainConnectivityCatchUpTaskForTesting() async {
-        await connectivityCatchUpTask?.value
-    }
-    #endif
 }

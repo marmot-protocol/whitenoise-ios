@@ -514,7 +514,7 @@ final class AppReviewDemoCoordinator {
                     initialImage: nil,
                     disappearingMessageSecs: 0
                 )
-            )
+            ).requireCreated()
             checkpoint.groupIdHex = created.groupIdHex
             try store.save(checkpoint)
             appState.noteCreatedChatListRow(

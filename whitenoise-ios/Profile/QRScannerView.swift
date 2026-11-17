@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import Synchronization
 
 /// Camera QR scanner. Presents a live preview, reports the first decoded
 /// payload via `onScan`, and surfaces permission / hardware problems via
@@ -172,12 +173,8 @@ struct QRScannerView: UIViewControllerRepresentable {
 final class ScannerViewController: UIViewController {
     weak var coordinator: QRScannerView.Coordinator?
     var observesEmptyFrames = false
-    private let session = AVCaptureSession()
+    private let capture = QRScannerCaptureSession()
     private var preview: AVCaptureVideoPreviewLayer?
-    /// Serializes `startRunning()` / `stopRunning()` so a stop enqueued after a
-    /// start always runs after it. Avoids the race where a fast dismiss skips
-    /// the stop because `isRunning` hasn't flipped to `true` yet.
-    private let sessionQueue = DispatchQueue(label: "dev.ipf.whitenoise.qr-scanner.session")
 
     private var permissionTask: Task<Void, Never>?
     private var frameDetector: QRScannerFrameDetector?
@@ -186,12 +183,14 @@ final class ScannerViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(captureFailed), name: AVCaptureSession.runtimeErrorNotification, object: session
-        )
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(captureInterrupted(_:)), name: AVCaptureSession.wasInterruptedNotification, object: session
-        )
+        capture.configure { session in
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(captureFailed), name: AVCaptureSession.runtimeErrorNotification, object: session
+            )
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(captureInterrupted(_:)), name: AVCaptureSession.wasInterruptedNotification, object: session
+            )
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -215,7 +214,7 @@ final class ScannerViewController: UIViewController {
                 return
             }
             if preview == nil { configureSession() }
-            else { sessionQueue.async { [session] in session.startRunning() } }
+            else { capture.start() }
         }
     }
 
@@ -236,34 +235,36 @@ final class ScannerViewController: UIViewController {
     }
 
     private func configureSession() {
-        guard let device = AVCaptureDevice.default(for: .video) else {
-            coordinator?.onError(.noCamera)
-            return
-        }
-        guard let input = try? AVCaptureDeviceInput(device: device),
-              session.canAddInput(input)
-        else {
-            coordinator?.onError(.configurationFailed)
-            return
-        }
-        session.addInput(input)
+        capture.configure { session in
+            guard let device = AVCaptureDevice.default(for: .video) else {
+                coordinator?.onError(.noCamera)
+                return
+            }
+            guard let input = try? AVCaptureDeviceInput(device: device),
+                  session.canAddInput(input)
+            else {
+                coordinator?.onError(.configurationFailed)
+                return
+            }
+            session.addInput(input)
 
-        guard configureOutput() else {
-            coordinator?.onError(.configurationFailed)
-            return
+            guard configureOutput(session) else {
+                coordinator?.onError(.configurationFailed)
+                return
+            }
+
+            let layer = AVCaptureVideoPreviewLayer(session: session)
+            layer.videoGravity = .resizeAspectFill
+            layer.frame = view.layer.bounds
+            view.layer.addSublayer(layer)
+            preview = layer
+
+            // Serialize start and stop so a fast dismiss cannot leave the camera running.
+            capture.start()
         }
-
-        let layer = AVCaptureVideoPreviewLayer(session: session)
-        layer.videoGravity = .resizeAspectFill
-        layer.frame = view.layer.bounds
-        view.layer.addSublayer(layer)
-        preview = layer
-
-        // Serialize start and stop so a fast dismiss cannot leave the camera running.
-        sessionQueue.async { [session] in session.startRunning() }
     }
 
-    private func configureOutput() -> Bool {
+    private func configureOutput(_ session: AVCaptureSession) -> Bool {
         if observesEmptyFrames {
             let output = AVCaptureVideoDataOutput()
             output.alwaysDiscardsLateVideoFrames = true
@@ -309,11 +310,7 @@ final class ScannerViewController: UIViewController {
         // queue, so the camera is always released even on a fast dismiss that
         // races the asynchronous start. By the time this runs the start has
         // completed, so `isRunning` is observed reliably.
-        sessionQueue.async { [session] in
-            if session.isRunning {
-                session.stopRunning()
-            }
-        }
+        capture.stop()
     }
 
     deinit {
@@ -321,9 +318,29 @@ final class ScannerViewController: UIViewController {
         frameTask?.cancel()
         // Backstop: ensure the capture session is torn down even if a lifecycle
         // callback is skipped, so the camera hardware never leaks.
-        sessionQueue.async { [session] in
-            if session.isRunning {
-                session.stopRunning()
+        capture.stop()
+    }
+}
+
+/// Keeps start/stop ordering on the existing serial queue. The mutex also
+/// excludes configuration from a queued stop after a fast dismiss/reappearance.
+/// Queued closures retain the session through controller teardown.
+nonisolated private final class QRScannerCaptureSession: Sendable {
+    private let session = Mutex(AVCaptureSession())
+    private let queue = DispatchQueue(label: "dev.ipf.whitenoise.qr-scanner.session")
+
+    @MainActor func configure(_ configure: (AVCaptureSession) -> Void) {
+        session.withLock { configure($0) }
+    }
+
+    func start() {
+        queue.async { [self] in session.withLock { $0.startRunning() } }
+    }
+
+    func stop() {
+        queue.async { [self] in
+            session.withLock { session in
+                if session.isRunning { session.stopRunning() }
             }
         }
     }

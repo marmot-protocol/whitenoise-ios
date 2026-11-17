@@ -93,7 +93,9 @@ struct BlockedUsersView: View {
         } label: {
             Label("Unblock", systemImage: "person.crop.circle.badge.checkmark")
         }
-        .tint(.accentColor)
+        // The app accent is black or white, which the slot would fill
+        // behind a label of the same colour.
+        .tint(.blue)
         .disabled(!model.canMutate)
     }
 

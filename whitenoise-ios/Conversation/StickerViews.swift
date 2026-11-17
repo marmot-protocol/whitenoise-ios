@@ -162,6 +162,7 @@ struct StickerPickerSheet: View {
         .task {
             await library.loadInstalledIfNeeded()
             try? await library.sync()
+            await library.installDefaultPacksIfNeeded()
         }
     }
 
@@ -171,7 +172,10 @@ struct StickerPickerSheet: View {
 
     @ViewBuilder
     private var content: some View {
-        if !library.hasLoadedInstalled {
+        // A new account's default packs land after the first sync, so wait
+        // for them rather than flashing "No Stickers".
+        if !library.hasLoadedInstalled
+            || (library.installed.isEmpty && (library.isSyncing || library.isInstallingDefaults)) {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let pack = currentPack {
@@ -450,6 +454,7 @@ struct StickerPackDetailView: View {
 
     @State private var isWorking = false
     @State private var errorMessage: String?
+    @State private var shareURL: URL?
 
     private var isInstalled: Bool { library.isInstalled(pack.coordinate) }
 
@@ -475,6 +480,13 @@ struct StickerPackDetailView: View {
         .navigationTitle(StickerPackPresentation.title(pack))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if let shareURL {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(item: shareURL) {
+                        Label(L10n.string("Share"), systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 if isWorking {
                     ProgressView()
@@ -482,6 +494,10 @@ struct StickerPackDetailView: View {
                     Button(isInstalled ? L10n.string("Remove") : L10n.string("Add"), action: toggleInstall)
                 }
             }
+        }
+        // Built locally; a pack without a usable link just offers no Share.
+        .task(id: pack.coordinate) {
+            shareURL = try? await library.shareURL(for: pack)
         }
         .alert(StickerPackPresentation.title(pack), isPresented: Binding(
             get: { errorMessage != nil },

@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import UIKit
 import MarmotKit
@@ -244,6 +245,30 @@ enum TimelineBottomScrollCoordinator {
             userMovedAwayFromBottom: userMovedAwayFromBottom,
             hasMoreAfter: hasMoreAfter, isPaging: isPaging
         ) ? .bottom : nil
+    }
+
+    /// Sub-point drift from rounding is not overscroll.
+    static let overscrollTolerance: CGFloat = 1
+
+    /// A window that drops its oldest row as a new one lands shrinks the
+    /// content above the viewport, and the size-change anchor can push a
+    /// keyboard-inset viewport further past the end. A pinned viewport resting
+    /// below the content is never what the reader chose, so return it.
+    static func shouldReturnFromOverscroll(
+        overscrollPastBottom: CGFloat,
+        didFinishInitialPositioning: Bool,
+        userMovedAwayFromBottom: Bool,
+        isUserScrolling: Bool,
+        hasMoreAfter: Bool,
+        isPaging: Bool
+    ) -> Bool {
+        overscrollPastBottom > overscrollTolerance && sizeChangeAnchor(
+            didFinishInitialPositioning: didFinishInitialPositioning,
+            userMovedAwayFromBottom: userMovedAwayFromBottom,
+            isUserScrolling: isUserScrolling,
+            hasMoreAfter: hasMoreAfter,
+            isPaging: isPaging
+        ) != nil
     }
 
     static func shouldFollowLayoutChange(
@@ -603,6 +628,7 @@ struct ConversationView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.appDensity) private var density
     let chat: AppGroupRecordFfi
     let draftAccountRef: String?
     let initialTitle: String?
@@ -629,6 +655,13 @@ struct ConversationView: View {
     @State private var composerChangedBeforeDraftRestore = false
     @State private var mediaDrafts: [MediaDraftAttachment] = []
     @StateObject private var voiceRecorder = VoiceMessageRecorder()
+    @State private var dictation = ComposerDictationController()
+    @State private var dictationPreferences = ComposerDictationPreferenceStore.shared
+    @State private var dictationInstallWatch: Task<Void, Never>?
+    /// The composer when a dictation or voice hold began, so one changed
+    /// underneath it isn't sent unseen.
+    @State private var dictationBaseline: ComposerHoldSnapshot?
+    @State private var voiceBaseline: ComposerHoldSnapshot?
     @State private var showCameraCapture = false
     @State private var fileProductTicket: ProductAnalyticsRecorder.Ticket?
     @State private var showPhotoLibraryPicker = false
@@ -1191,6 +1224,7 @@ struct ConversationView: View {
             .sheet(isPresented: $showPhotoLibraryPicker) {
                 PhotoLibraryPickerView(
                     selectionLimit: remainingMediaDraftSlots,
+                    budget: PhotoLibrarySelection.remainingBudget(alongside: mediaDrafts),
                     onSelection: addPhotoLibrarySelections,
                     onError: { error in
                         appState.present(UserFacingError.toast(title: L10n.string("Couldn't add attachment"), error: error))
@@ -1394,6 +1428,15 @@ struct ConversationView: View {
             .onChange(of: viewModel?.inactiveGroupMessage != nil) { _, composerHidden in
                 handleComposerAvailabilityChange(composerHidden: composerHidden)
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                dictation.cancel()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
+                // A call or another app took the microphone.
+                if DictationInterruptionPolicy.cancelsDictation(notification.userInfo) {
+                    dictation.cancel()
+                }
+            }
     }
 
     var body: some View {
@@ -1431,6 +1474,9 @@ struct ConversationView: View {
                     appState.endViewingChat(visibleChatRoute)
                 }
                 voiceRecorder.cancelIfActive()
+                dictation.cancel()
+                dictationInstallWatch?.cancel()
+                dictationInstallWatch = nil
                 viewModel?.search.end()
                 cancelPendingTimelineFollowUpWork()
                 dismissKeyboard()
@@ -1539,8 +1585,8 @@ struct ConversationView: View {
                     textOverage: composerTextOverage,
                     voiceRecordingActive: voiceRecorder.isActive,
                     voiceRecordingLocked: voiceRecorder.isLocked,
-                    voiceRecordingSamples: voiceRecorder.waveformSamples,
                     voiceRecordingDurationSeconds: voiceRecorder.durationSeconds,
+                    voiceRecordingLevel: voiceRecorder.waveformSamples.last ?? 0,
                     focusRequest: composerFocusRequest,
                     dismissRequest: composerDismissRequest,
                     onInputFocusChange: { isComposerInputFocused = $0 },
@@ -1550,6 +1596,7 @@ struct ConversationView: View {
                         ? L10n.string("Send")
                         : L10n.string("Save edit"),
                     voiceMessagesEnabled: editSession == nil,
+                    dictation: composerDictationBinding,
                     cameraAvailable: ComposerAttachmentCapabilities.cameraAvailable,
                     gifsAvailable: ComposerAttachmentCapabilities.gifsAvailable,
                     pollsAvailable: editSession == nil && (viewModel?.canCreatePolls ?? false),
@@ -1821,6 +1868,10 @@ struct ConversationView: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint(isSelectingMessages ? "" : L10n.string("Shows conversation details"))
+        // The bar caps the title's text size; a long press shows it at full size.
+        .accessibilityShowsLargeContentViewer {
+            Text(chrome.title)
+        }
     }
 
     @ViewBuilder
@@ -1932,12 +1983,12 @@ struct ConversationView: View {
                     GeometryReader { outer in
                         ScrollView {
                             VStack(spacing: 0) {
-                                LazyVStack(alignment: .leading, spacing: 4) {
+                                LazyVStack(alignment: .leading, spacing: density.metrics.timelineRowSpacing) {
                                     olderTimelineTrigger(viewModel: viewModel)
                                     ForEach(viewModel.timeline) { item in
                                         // One view per message: a lazy stack has to build every
                                         // message to count its views when one can produce several.
-                                        VStack(alignment: .leading, spacing: 8) {
+                                        VStack(alignment: .leading, spacing: density.metrics.timelineHeadingSpacing) {
                                             if let heading = dayHeaders[item.id] {
                                                 TimelineInlineDateHeader(heading: heading)
                                             }
@@ -2108,6 +2159,24 @@ struct ConversationView: View {
                                 isUserScrolling: isUserScrollingTimeline,
                                 hasMoreAfter: viewModel.hasMoreAfter
                             )
+                        }
+                        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                            TimelineBottom.overscrollPastBottom(
+                                contentHeight: geometry.contentSize.height,
+                                visibleBottomY: geometry.visibleRect.maxY,
+                                bottomContentInset: geometry.contentInsets.bottom
+                            )
+                        } action: { _, overscroll in
+                            guard TimelineBottomScrollCoordinator.shouldReturnFromOverscroll(
+                                overscrollPastBottom: overscroll,
+                                didFinishInitialPositioning: isInitialTimelinePositionSettled,
+                                userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
+                                isUserScrolling: isUserScrollingTimeline,
+                                hasMoreAfter: viewModel.hasMoreAfter,
+                                isPaging: viewModel.isAwaitingPageCompletion
+                            ) else { return }
+                            scheduleScrollToBottom(proxy: proxy, animated: false, reason: .layoutChange,
+                                                   targetID: viewModel.timeline.last?.id)
                         }
                         .onScrollGeometryChange(for: CGFloat.self) { geometry in
                             geometry.contentSize.height
@@ -2484,7 +2553,17 @@ struct ConversationView: View {
                 : nil,
             onSenderAvatarTap: isSelectingMessages || viewModel.search.isActive
                 ? nil
-                : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) }
+                : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) },
+            isBodyExpanded: viewModel.expandedBodies.contains(rowID: item.id, messageID: record.messageIdHex),
+            onExpandBody: {
+                // The reader continues from the top of the message, so the
+                // tail must not hold the bottom while the row grows below.
+                // Anchored like a scroll away, so a window update keeps the place.
+                cancelPendingBottomScroll()
+                userMovedAwayFromTimelineBottom = true
+                viewModel.reportConversationViewport(atTail: false, visibleRowID: conversationViewport.visibleAnchor())
+                viewModel.expandBody(rowID: item.id, messageID: record.messageIdHex)
+            }
         )
         .equatable()
         .environment(\.customEmojiStore, viewModel.customEmojiStore)
@@ -3018,6 +3097,9 @@ struct ConversationView: View {
         viewModel.replyingTo = nil
         mediaDrafts.removeAll()
         cancelVoiceRecording()
+        // Dictation belongs to the draft it started on; it must not land in,
+        // or be sent from, another one.
+        dictation.cancel()
         editSession = ComposerEditSession(
             message: message,
             preservedDraft: preservedDraft,
@@ -3046,6 +3128,7 @@ struct ConversationView: View {
 
     private func cancelEdit() {
         guard let editSession else { return }
+        dictation.cancel()
         self.editSession = nil
         viewModel?.restoreComposerMentionDraftState(editSession.preservedMentionState)
         viewModel?.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
@@ -3094,6 +3177,9 @@ struct ConversationView: View {
         }
         if let editSession, editSubmissionEnabled, let viewModel {
             let editedContent = draft
+            // The save restores the preserved draft when it lands; dictation
+            // finishing meanwhile would be lost or mixed into it.
+            dictation.cancel()
             editSaveInFlight = true
             Task {
                 defer { editSaveInFlight = false }
@@ -3156,7 +3242,13 @@ struct ConversationView: View {
             mediaDrafts = composerState.mediaDrafts
             return
         }
-        appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
+        // Drafts can't hold every attachment, so there is no draft revision to
+        // claim: clearing the composer deletes the saved draft, and a failed
+        // send stays in its bubble.
+        let sendsThroughDraft = MediaDraftProcessor.sendsThroughDraft(payload.attachments)
+        if sendsThroughDraft {
+            appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
+        }
         // The bubble is already in the timeline above. Everything below is
         // viewport follow-up: it never gates the local row, and when the window
         // is already on the live tail it issues no window command at all — a
@@ -3165,6 +3257,15 @@ struct ConversationView: View {
         userMovedAwayFromTimelineBottom = false
         viewModel.followConversationLatest()
         composerSendBottomScrollRequest &+= 1
+
+        guard sendsThroughDraft else {
+            viewModel.enqueueStagedSubmission {
+                if let rejection = await viewModel.submitStagedSend(staged) {
+                    recoverSizeRejectedSend(staged, rejection: rejection, tapped: tappedContents, mentionState: mentionState)
+                }
+            }
+            return
+        }
 
         // `ConversationDraftStore` admits one revision-checked submission at a
         // time, so queued sends serialize here while their bubbles are already up.
@@ -3304,6 +3405,7 @@ struct ConversationView: View {
     private func handleComposerAvailabilityChange(composerHidden: Bool) {
         guard composerHidden else { return }
         cancelEdit()
+        dictation.cancel()
         if let recording = voiceRecorder.finishIfActive() {
             addVoiceRecording(recording)
         }
@@ -3594,14 +3696,18 @@ struct ConversationView: View {
     private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
         guard viewModel?.composerAdmitsNewAttachments != false else { return false }
         let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
-        let accepted = Array(attachments.prefix(availableSlots))
-        guard !accepted.isEmpty else {
+        let slotted = Array(attachments.prefix(availableSlots))
+        guard !slotted.isEmpty else {
             presentMaxAttachmentWarning()
             return false
         }
+        let (accepted, refused) = MediaFileUploadLimit.admitting(slotted, alongside: mediaDrafts)
         mediaDrafts.append(contentsOf: accepted)
-        if accepted.count < attachments.count {
+        if slotted.count < attachments.count {
             presentMaxAttachmentWarning()
+        }
+        if refused > 0 {
+            presentBatchLimitWarning()
         }
         requestComposerFocus()
         return accepted.count == attachments.count
@@ -3645,6 +3751,19 @@ struct ConversationView: View {
                         url.stopAccessingSecurityScopedResource()
                     }
                 }
+                let source = try? url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey, .nameKey])
+                let kind = MediaDraftProcessor.kind(
+                    for: source?.contentType?.identifier,
+                    fileName: source?.name ?? url.lastPathComponent
+                )
+                if let size = source?.fileSize,
+                   MediaDraftProcessor.sendsSourceBytes(kind),
+                   !MediaFileUploadLimit.fits(size, alongside: MediaDraftProcessor.draftsKept(
+                       mediaDrafts, addingAudio: kind == .audio
+                   ).map(\.data.count)) {
+                    presentBatchLimitWarning()
+                    continue
+                }
                 do {
                     let attachment = try await MediaDraftProcessor.preparedAttachment(fromFileURL: url)
                     try appendMediaDraft(attachment)
@@ -3657,8 +3776,107 @@ struct ConversationView: View {
         }
     }
 
+    private var composerDictationBinding: ComposerDictationBinding? {
+        guard ComposerDictationSupport.isSupportedOS, dictationPreferences.isEnabled else { return nil }
+        return ComposerDictationBinding(
+            state: dictation.state,
+            transcript: dictation.transcript,
+            onBegin: beginDictation,
+            onDrag: { dictation.updateDrag($0) },
+            onEnd: { dictation.endPress() },
+            onCancel: { dictation.cancel() },
+            onStop: { dictation.stopLocked() },
+            sendsOnFinish: ComposerDictationPresentation.sendsOnFinish(
+                isEditing: editSession != nil,
+                composerAtHoldStart: dictationBaseline,
+                composerNow: composerHoldSnapshot
+            )
+        )
+    }
+
+    private func beginDictation(keyboardLanguage: String?, locked: Bool) {
+        // A second hold during locked dictation must not move the running
+        // session's baseline.
+        guard !voiceRecorder.isActive, !dictation.isActive else { return }
+        let languages = DictationLocalePolicy.candidateIdentifiers(
+            lastKeyboardLanguage: keyboardLanguage,
+            activeKeyboardLanguages: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage),
+            preferredLanguages: Locale.preferredLanguages
+        )
+        dictationBaseline = composerHoldSnapshot
+        dictation.begin(
+            localeIdentifiers: languages,
+            locked: locked,
+            onFinish: finishDictation,
+            onError: presentDictationError
+        )
+    }
+
+    /// Dictation is the fast path: what was said goes out at once. Editing a
+    /// sent message only fills the field, since saving is a separate decision.
+    private var composerHoldSnapshot: ComposerHoldSnapshot {
+        ComposerHoldSnapshot(
+            draft: draft,
+            attachmentIDs: mediaDrafts.map(\.id),
+            replyTargetMessageIdHex: viewModel?.replyTargetMessageIdHex
+        )
+    }
+
+    private func finishDictation(_ result: DictationResult) {
+        let composerNow = composerHoldSnapshot
+        let merged = DictationTextMerge.merged(draft: draft, transcript: result.text)
+        guard merged != draft else {
+            if !result.isComplete {
+                appState.present(.error(L10n.string("Couldn't dictate")))
+            }
+            return
+        }
+        draft = merged
+        if !result.isComplete {
+            appState.present(.warning(
+                L10n.string("Dictation stopped early"),
+                message: L10n.string("Check the message before sending.")
+            ))
+        }
+        guard ComposerDictationPresentation.sendsOnFinish(
+            isEditing: editSession != nil,
+            isComplete: result.isComplete,
+            composerAtHoldStart: dictationBaseline,
+            composerNow: composerNow
+        ) else { return }
+        send()
+    }
+
+    private func presentDictationError(_ error: Error) {
+        guard case DictationFailure.modelDownloading = error else {
+            appState.present(UserFacingError.toast(title: L10n.string("Couldn't dictate"), error: error))
+            return
+        }
+        appState.present(.warning(L10n.string("Getting dictation ready"), message: error.localizedDescription))
+        guard #available(iOS 26.0, *),
+              dictationInstallWatch == nil,
+              let install = DictationModelInstaller.shared.currentInstall
+        else { return }
+        dictationInstallWatch = Task { @MainActor in
+            let status = await install.value
+            dictationInstallWatch = nil
+            guard !Task.isCancelled else { return }
+            switch status {
+            case .ready:
+                appState.present(.success(L10n.string("Dictation is ready")))
+            case .failed:
+                appState.present(.error(L10n.string("Couldn't download the speech model")))
+            default:
+                // Still downloading in iOS: the next hold reports it again.
+                break
+            }
+        }
+    }
+
     private func beginVoicePress() {
+        guard !dictation.isActive else { return }
         guard canBeginMediaSelection() else { return }
+        voiceBaseline = composerHoldSnapshot
         voiceRecorder.beginPress { error in
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't record audio"), error: error))
         }
@@ -3675,13 +3893,13 @@ struct ConversationView: View {
             dismissKeyboard()
         }
         guard let result else { return }
-        addVoiceRecording(result)
+        addVoiceRecording(result, sendsWhenReady: true)
     }
 
     private func stopLockedVoiceRecording() {
         guard let result = voiceRecorder.stopLockedRecording() else { return }
         dismissKeyboard()
-        addVoiceRecording(result)
+        addVoiceRecording(result, sendsWhenReady: true)
     }
 
     private func cancelVoiceRecording() {
@@ -3692,11 +3910,22 @@ struct ConversationView: View {
         }
     }
 
-    private func addVoiceRecording(_ result: VoiceRecordingResult) {
+    /// A finished hold sends its recording, like dictation, unless something
+    /// else changed the composer meanwhile; then it waits there as a draft.
+    private func addVoiceRecording(_ result: VoiceRecordingResult, sendsWhenReady: Bool = false) {
+        let baseline = voiceBaseline
         Task { @MainActor in
             do {
                 let attachment = try await MediaDraftProcessor.preparedVoiceAttachment(from: result)
-                try appendMediaDraft(attachment)
+                let sends = sendsWhenReady && ComposerDictationPresentation.sendsOnFinish(
+                    isEditing: editSession != nil,
+                    composerAtHoldStart: baseline,
+                    composerNow: composerHoldSnapshot
+                )
+                let appended = try appendMediaDraft(attachment)
+                if sends, appended {
+                    send()
+                }
             } catch is CancellationError {
                 return
             } catch {
@@ -3726,14 +3955,16 @@ struct ConversationView: View {
     @discardableResult
     private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
         guard viewModel?.composerAdmitsNewAttachments != false else { return false }
-        if attachment.kind == .audio {
-            mediaDrafts.removeAll { $0.kind == .audio }
-        }
-        guard mediaDrafts.count < MediaDraftProcessor.maxAttachmentCount else {
+        let kept = MediaDraftProcessor.draftsKept(mediaDrafts, addingAudio: attachment.kind == .audio)
+        guard kept.count < MediaDraftProcessor.maxAttachmentCount else {
             presentMaxAttachmentWarning()
             return false
         }
-        mediaDrafts.append(attachment)
+        guard MediaFileUploadLimit.admitting([attachment], alongside: kept).refused == 0 else {
+            presentBatchLimitWarning()
+            return false
+        }
+        mediaDrafts = kept + [attachment]
         if attachment.kind == .audio {
             draft = ""
             dismissKeyboard()
@@ -3762,6 +3993,13 @@ struct ConversationView: View {
             includedItemIDs: includedItemIDs,
             to: mediaDrafts
         )
+    }
+
+    private func presentBatchLimitWarning() {
+        appState.present(UserFacingError.toast(
+            title: L10n.string("Couldn't add attachment"),
+            error: MediaFileUploadFailure.exceedsTransferLimit(attachmentCount: 2)
+        ))
     }
 
     private func presentMaxAttachmentWarning() {

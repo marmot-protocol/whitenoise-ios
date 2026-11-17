@@ -62,7 +62,7 @@ enum CustomEmojiTextComposer {
         return Text(LocalizedStringKey(stringInterpolation: interpolation), tableName: "CustomEmojiInlineText")
     }
 
-    private static func isEmoji(_ segment: CustomEmojiText.AttributedSegment) -> Bool {
+    nonisolated private static func isEmoji(_ segment: CustomEmojiText.AttributedSegment) -> Bool {
         if case .emoji = segment { return true }
         return false
     }
@@ -91,6 +91,8 @@ struct CustomEmojiInlineLoader: ViewModifier {
     @ScaledMetric(relativeTo: .body) private var baselineOffset = CustomEmojiInlineMetrics.bodyBaselineOffset
 
     let resolution: CustomEmojiRowResolution
+    /// A standalone emoji's fixed size; nil tracks the body text size.
+    var fixedPointSize: CGFloat? = nil
     /// Images keyed by scope, row-scoped attachment id and pixel size. Only
     /// keys for the current scope are shown, so an account switch, runtime
     /// restart or chat change withholds old images immediately.
@@ -130,7 +132,7 @@ struct CustomEmojiInlineLoader: ViewModifier {
     }
 
     private var pixelSize: Int {
-        CustomEmojiInlineMetrics.pixelSize(pointSize: pointSize, scale: displayScale)
+        CustomEmojiInlineMetrics.pixelSize(pointSize: fixedPointSize ?? pointSize, scale: displayScale)
     }
 
     private func context(scope: CustomEmojiScope?, pixelSize: Int) -> CustomEmojiInlineContext {
@@ -140,8 +142,40 @@ struct CustomEmojiInlineLoader: ViewModifier {
             images: CustomEmojiInlinePresentation.images(for: resolution, loaded: images, scope: scope, pixelSize: pixelSize) {
                 CustomEmojiBuiltinImages.image(for: $0, pixelSize: pixelSize, scale: displayScale)
             },
-            baselineOffset: baselineOffset
+            baselineOffset: fixedPointSize == nil ? baselineOffset : 0
         )
+    }
+}
+
+/// A message that is one custom emoji: its image alone at sticker size, or
+/// `fallback` (the ordinary bubble) until the image loads or if it can't.
+/// Reads the images of an enclosing `CustomEmojiInlineLoader`.
+struct StandaloneCustomEmoji<Fallback: View>: View {
+    @Environment(\.customEmojiInline) private var customEmoji
+    let shortcode: CustomEmojiShortcode
+    let side: CGFloat
+    /// Built-ins are pixel art, so they scale up without smoothing.
+    let isPixelArt: Bool
+    let fallback: Fallback
+
+    init(shortcode: CustomEmojiShortcode, side: CGFloat, isPixelArt: Bool, @ViewBuilder fallback: () -> Fallback) {
+        self.shortcode = shortcode
+        self.side = side
+        self.isPixelArt = isPixelArt
+        self.fallback = fallback()
+    }
+
+    var body: some View {
+        if let image = customEmoji.images[shortcode] {
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(isPixelArt ? .none : .high)
+                .scaledToFit()
+                .frame(width: side, height: side)
+                .accessibilityLabel(Text(verbatim: CustomEmojiBuiltins.spokenName(shortcode)))
+        } else {
+            fallback
+        }
     }
 }
 

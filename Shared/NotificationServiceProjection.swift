@@ -38,50 +38,6 @@ nonisolated enum NotificationServiceDiagnosticOutcome: String, Codable, Equatabl
     case expired
 }
 
-/// A privacy-safe breadcrumb for diagnosing NSE execution on a physical device.
-/// It deliberately excludes account, group, sender, message, and error details.
-nonisolated struct NotificationServiceDiagnosticSnapshot: Codable, Equatable {
-    let recordedAt: Date
-    let durationMilliseconds: Int
-    let stage: NotificationServiceDiagnosticStage
-    let outcome: NotificationServiceDiagnosticOutcome
-    let notificationCount: Int
-}
-
-nonisolated enum NotificationServiceDiagnostics {
-    private static let snapshotKey = "notificationService.lastDiagnosticSnapshot.v1"
-
-    static func record(
-        _ snapshot: NotificationServiceDiagnosticSnapshot,
-        defaults: UserDefaults
-    ) {
-        guard let encoded = try? JSONEncoder().encode(snapshot) else { return }
-        defaults.set(encoded, forKey: snapshotKey)
-    }
-
-    static func lastSnapshot(defaults: UserDefaults) -> NotificationServiceDiagnosticSnapshot? {
-        guard let encoded = defaults.data(forKey: snapshotKey) else { return nil }
-        return try? JSONDecoder().decode(
-            NotificationServiceDiagnosticSnapshot.self,
-            from: encoded
-        )
-    }
-
-    static func recordInSharedContainer(_ snapshot: NotificationServiceDiagnosticSnapshot) {
-        guard let defaults = UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier) else {
-            return
-        }
-        record(snapshot, defaults: defaults)
-    }
-
-    static func lastSnapshotInSharedContainer() -> NotificationServiceDiagnosticSnapshot? {
-        guard let defaults = UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier) else {
-            return nil
-        }
-        return lastSnapshot(defaults: defaults)
-    }
-}
-
 nonisolated enum NotificationServiceTimeoutPolicy {
     /// Leaves enough of the system-owned NSE window to stop workers and close
     /// SQLite before iOS is allowed to suspend the extension.

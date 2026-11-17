@@ -36,9 +36,24 @@ struct PhotoLibrarySelectionOrderingTests {
         // sum of accepted selections is bounded, not just each item.
         #expect(!PhotoLibrarySelection.admitsSelection(bytes: 80, cap: 100, remaining: 50))
         #expect(PhotoLibrarySelection.admitsSelection(bytes: 50, cap: 100, remaining: 50))
+        // An image sends at most its re-encoded size, so a large photo fits
+        // where a video of the same source size does not.
+        let source = 4 * MediaDraftProcessor.maxImageAttachmentBytes
+        let room = 2 * MediaDraftProcessor.maxImageAttachmentBytes
+        let imageCost = PhotoLibrarySelection.budgetCost(bytes: source, kind: .image)
+        let videoCost = PhotoLibrarySelection.budgetCost(bytes: source, kind: .video)
+        #expect(PhotoLibrarySelection.admitsSelection(bytes: source, cap: .max, cost: imageCost, remaining: room))
+        #expect(!PhotoLibrarySelection.admitsSelection(bytes: source, cap: .max, cost: videoCost, remaining: room))
 
         let selections = PhotoLibrarySelection.compactPreservingPickerOrder([first, nil, third])
 
         #expect(selections.map(\.fileName) == ["first.jpg", "third.jpg"])
+    }
+
+    @Test func aPickerSessionStartsWithTheRoomLeftBesideTheComposer() {
+        let video = MediaDraftAttachment(fileName: "clip.mov", mediaType: "video/quicktime", data: Data(count: 1_000), dim: nil)
+
+        #expect(PhotoLibrarySelection.remainingBudget(alongside: []) == PhotoLibrarySelection.maxTotalSelectionBytes)
+        #expect(PhotoLibrarySelection.remainingBudget(alongside: [video]) < PhotoLibrarySelection.maxTotalSelectionBytes - 1_000)
     }
 }

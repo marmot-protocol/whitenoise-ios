@@ -1,4 +1,5 @@
 import Foundation
+import MarmotKit
 import SwiftUI
 import Synchronization
 import Testing
@@ -47,72 +48,85 @@ struct RemoteImageLoaderTests {
         #expect(!RemoteImageDecoder.isAllowedRemoteImageType(nil))
     }
 
-    @Test func avatarLoaderCachesFailuresWithTTLAndPreservesError() throws {
-        let url = try #require(URL(string: "https://example.com/broken-avatar.png"))
-        let now = Date()
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+    @Test func avatarLoaderCachesAFailedFetchForItsRetryWindow() async throws {
+        let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
+        // Far from the wall clock, so ignoring the injected clock on either the
+        // store or the lookup changes the outcome.
+        let failedAt = Date(timeIntervalSinceReferenceDate: 0)
+        let fetches = Mutex(0)
+        func load(at date: Date) async -> URLError? {
+            do {
+                _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, fetch: { _ in
+                    fetches.withLock { $0 += 1 }
+                    throw URLError(.badServerResponse)
+                }, now: { date })
+                return nil
+            } catch {
+                return error as? URLError
+            }
+        }
 
-        RemoteAvatarImageLoader.cacheFailureForTesting(URLError(.badServerResponse), for: url, now: now)
-
-        let cached = try #require(
-            RemoteAvatarImageLoader.cachedFailureForTesting(
-                for: url,
-                now: now.addingTimeInterval(30)
-            ) as? URLError
-        )
-        #expect(cached.code == .badServerResponse)
-        #expect(
-            RemoteAvatarImageLoader.cachedFailureForTesting(
-                for: url,
-                now: now.addingTimeInterval(61)
-            ) == nil
-        )
-        #expect(!RemoteAvatarImageLoader.shouldCacheFailureForTesting(CancellationError()))
-        #expect(!RemoteAvatarImageLoader.shouldCacheFailureForTesting(URLError(.cancelled)))
-        #expect(!RemoteAvatarImageLoader.shouldCacheFailureForTesting(
-            NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)
-        ))
+        #expect(await load(at: failedAt)?.code == .badServerResponse)
+        // Within the 60-second window the cached failure answers without a fetch.
+        #expect(await load(at: failedAt.addingTimeInterval(30))?.code == .badServerResponse)
+        #expect(fetches.withLock { $0 } == 1)
+        // After it, the loader fetches again.
+        #expect(await load(at: failedAt.addingTimeInterval(61))?.code == .badServerResponse)
+        #expect(fetches.withLock { $0 } == 2)
     }
 
-    @Test func avatarLoaderCoalescesInFlightDataLoadsByURLKey() async throws {
-        let url = try #require(URL(string: "https://example.com/avatar.png"))
-        let data = Data([0xCA, 0xFE])
-        let probe = RemoteImageFetchProbe(data: data)
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
-
-        let first = Task { @MainActor in
-            try await RemoteAvatarImageLoader.imageDataForTesting(
-                for: url,
-                keyString: url.absoluteString
-            ) { _ in
-                await probe.fetch()
+    @Test func avatarLoaderNeverCachesACancelledFetch() async throws {
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
+        let cancellations: [@Sendable () -> any Error] = [
+            { CancellationError() },
+            { URLError(.cancelled) },
+            { NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled) },
+        ]
+        for makeCancellation in cancellations {
+            let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
+            let fetches = Mutex(0)
+            for _ in 0..<2 {
+                _ = try? await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, fetch: { _ in
+                    fetches.withLock { $0 += 1 }
+                    throw makeCancellation()
+                })
             }
+            // Nothing was cached, so the second load fetched again.
+            #expect(fetches.withLock { $0 } == 2, "\(makeCancellation())")
+        }
+    }
+
+    @Test func avatarLoaderSharesOneFetchBetweenSizesOfTheSameAvatar() async throws {
+        let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
+        let data = try #require(UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { context in
+            UIColor.green.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }.pngData())
+        let probe = RemoteImageFetchProbe(data: data)
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
+
+        let small = Task { @MainActor in
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, fetch: { _ in await probe.fetch() })
         }
         await probe.waitUntilStarted()
-
-        let second = Task { @MainActor in
-            try await RemoteAvatarImageLoader.imageDataForTesting(
-                for: url,
-                keyString: url.absoluteString
-            ) { _ in
-                await probe.fetch()
-            }
+        let large = Task { @MainActor in
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 16, scale: 1, fetch: { _ in await probe.fetch() })
         }
-
-        // Let `second` run up to its in-flight coalescing await on the MainActor
-        // before releasing the fetch. Otherwise `first` can complete and clear
-        // the in-flight slot before `second` checks it, making `second` start a
-        // second fetch and racing the single-fetch expectation.
-        for _ in 0..<10 { await Task.yield() }
+        // A different size is its own decode, so `large` looks in the disk cache
+        // before it reaches the in-flight fetch. Let it start that lookup, queue
+        // a read behind it, then let it reach the fetch before releasing it.
+        await Task { @MainActor in }.value
+        _ = await RemoteAvatarDiskCache.shared.data(for: url)
+        await Task { @MainActor in }.value
 
         await probe.release()
-        let firstData = try await first.value
-        let secondData = try await second.value
+        _ = try await small.value
+        _ = try await large.value
 
-        #expect(firstData == data)
-        #expect(secondData == data)
         #expect(await probe.callCount() == 1)
     }
 
@@ -125,8 +139,8 @@ struct RemoteImageLoaderTests {
         }
         let data = try #require(source.pngData())
         let probe = RemoteImageFetchProbe(data: data)
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
 
         let first = Task { @MainActor in
             try await RemoteAvatarImageLoader.image(
@@ -152,12 +166,12 @@ struct RemoteImageLoaderTests {
         _ = try await second.value
 
         #expect(await probe.callCount() == 1)
-        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 56) != nil)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 56) != nil)
     }
 
     @Test func avatarRemoteImageShowsTheCenterOfNonSquareImages() async throws {
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.preferredRange = .standard
@@ -213,8 +227,9 @@ struct RemoteImageLoaderTests {
             await RemoteAvatarImageLoader.clearCachesAndDrain()
             drained = true
         }
-        for _ in 0..<1_000 where !RemoteAvatarImageLoader.isDrainingForTesting { await Task.yield() }
-        #expect(RemoteAvatarImageLoader.isDrainingForTesting)
+        // The drain is in place before clearCachesAndDrain first suspends, so
+        // one main-actor turn is enough; the rejected load below proves it.
+        await Task { @MainActor in }.value
         #expect(!drained)
         let arrivingURL = try #require(URL(string: "https://example.com/\(UUID()).png"))
         await #expect(throws: CancellationError.self) {
@@ -231,7 +246,7 @@ struct RemoteImageLoaderTests {
         await cleanup.value
         await secondCleanup.value
         await #expect(throws: CancellationError.self) { _ = try await request.value }
-        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 8) == nil)
         #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
         #expect(await RemoteAvatarDiskCache.shared.data(for: arrivingURL) == nil)
         _ = try await RemoteAvatarImageLoader.image(for: arrivingURL, maxPixelSize: 8, scale: 1, fetch: { _ in data })
@@ -245,10 +260,10 @@ struct RemoteImageLoaderTests {
         let exited = PinnedFetchWaitGate<Void>()
         let slots = PinnedDNSResolutionSlots(limit: 1, onRelease: { exited.complete(.success(())) })
         let connections = Mutex(0)
-        RemoteAvatarImageLoader.resetCachesForTesting()
-        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        RemoteAvatarImageLoader.clearCaches()
+        defer { RemoteAvatarImageLoader.clearCaches() }
         let request = Task {
-            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { url in
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1, fetch: { url in
                 let result = try await PinnedHTTPSFetcher.fetch(
                     URLRequest(url: url), maximumResponseBytes: 1024,
                     resolver: fixture.resolve, slots: slots,
@@ -258,7 +273,7 @@ struct RemoteImageLoaderTests {
                     }
                 )
                 return result.0
-            }
+            })
         }
         _ = try await fixture.started.wait { _ in }
         await RemoteAvatarImageLoader.clearCachesAndDrain()
@@ -266,18 +281,18 @@ struct RemoteImageLoaderTests {
         #expect(slots.inFlight == 1)
         #expect(!fixture.didTimeOut)
         #expect(connections.withLock { $0 } == 0)
-        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 8) == nil)
         #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
         fixture.release()
         _ = try await exited.wait { _ in }
         #expect(slots.inFlight == 0)
         #expect(connections.withLock { $0 } == 0)
-        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 8) == nil)
         #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
     }
 
     @Test(.marmotRuntimeConcurrencyLimit)
-    func groupAvatarDrainBlocksNewLoadsAndSeedsUntilDecodeSettles() async throws {
+    func groupAvatarDrainBlocksNewLoadsUntilDecodeSettles() async throws {
         try await withTestClient { client in
             let request = GroupAvatarImageRequest(accountRef: "drain-\(UUID())", groupIdHex: "group",
                                                   imageHashHex: "image", maxPixelSize: 8)
@@ -286,22 +301,30 @@ struct RemoteImageLoaderTests {
                 context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
             }.pngData())
             let probe = RemoteImageFetchProbe(data: data)
-            GroupAvatarImageLoader.beforeDecodeForTesting = { _ = await probe.fetch() }
-            defer { GroupAvatarImageLoader.beforeDecodeForTesting = nil }
             GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
                                        groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
             let load = Task {
-                try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+                try await GroupAvatarImageLoader.image(
+                    request: request, scale: 1, priority: .foreground, client: client,
+                    downsample: { data, maxPixelSize, scale in
+                        _ = await probe.fetch()
+                        return await RemoteImageDecoder.downsampledImage(
+                            from: data, maxPixelSize: maxPixelSize, scale: scale
+                        )
+                    }
+                )
             }
             await probe.waitUntilStarted()
             let cleanup = Task { await GroupAvatarImageLoader.clearCachesAndDrain() }
-            for _ in 0..<1_000 where !GroupAvatarImageLoader.isDrainingForTesting { await Task.yield() }
-            #expect(GroupAvatarImageLoader.isDrainingForTesting)
-            GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
-                                       groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
-            #expect(!GroupAvatarImageLoader.hasSeedForTesting(accountRef: request.accountRef, groupIdHex: request.groupIdHex))
+            // The drain is in place before clearCachesAndDrain first suspends, so
+            // one main-actor turn is enough; the rejected load below proves it.
+            // It asks for another image so it can't join the paused load: without
+            // the drain it would reach the client and fail with a different error.
+            await Task { @MainActor in }.value
+            let arriving = GroupAvatarImageRequest(accountRef: request.accountRef, groupIdHex: request.groupIdHex,
+                                                   imageHashHex: "arriving", maxPixelSize: 8)
             await #expect(throws: CancellationError.self) {
-                try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
+                try await GroupAvatarImageLoader.image(request: arriving, scale: 1, priority: .foreground, client: client)
             }
             await probe.release()
             await cleanup.value
@@ -309,7 +332,6 @@ struct RemoteImageLoaderTests {
             #expect(GroupAvatarImageLoader.cachedImage(for: request) == nil)
             let dataKey = GroupAvatarCacheKey.rawData(accountRef: request.accountRef, imageHashHex: request.imageHashHex)
             #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: dataKey) == nil)
-            GroupAvatarImageLoader.beforeDecodeForTesting = nil
             GroupAvatarImageLoader.seed(data: data, accountRef: request.accountRef,
                                        groupIdHex: request.groupIdHex, replacingImageHashHex: nil)
             _ = try await GroupAvatarImageLoader.image(request: request, scale: 1, priority: .foreground, client: client)
@@ -433,8 +455,8 @@ struct RemoteImageLoaderTests {
             imageHashHex: imageHashHex,
             maxPixelSize: request.maxPixelSize
         )
-        GroupAvatarImageLoader.resetForTesting()
-        defer { GroupAvatarImageLoader.resetForTesting() }
+        GroupAvatarImageLoader.clearCaches()
+        defer { GroupAvatarImageLoader.clearCaches() }
 
         await RemoteAvatarDiskCache.groupThumbnailShared.store(thumbnailData, forKey: key)
         let image = try await withTestClient { client in
@@ -464,8 +486,8 @@ struct RemoteImageLoaderTests {
             accountRef: accountRef,
             imageHashHex: imageHashHex
         )
-        GroupAvatarImageLoader.resetForTesting()
-        defer { GroupAvatarImageLoader.resetForTesting() }
+        GroupAvatarImageLoader.clearCaches()
+        defer { GroupAvatarImageLoader.clearCaches() }
         await RemoteAvatarDiskCache.groupShared.store(imageData, forKey: legacyKey)
 
         _ = try await withTestClient { client in
@@ -494,8 +516,8 @@ struct RemoteImageLoaderTests {
         }.jpegData(compressionQuality: 0.8))
         let accountRef = "seed-account-\(UUID().uuidString)"
         let groupIdHex = "seed-group"
-        GroupAvatarImageLoader.resetForTesting()
-        defer { GroupAvatarImageLoader.resetForTesting() }
+        GroupAvatarImageLoader.clearCaches()
+        defer { GroupAvatarImageLoader.clearCaches() }
         GroupAvatarImageLoader.seed(
             data: imageData,
             accountRef: accountRef,
@@ -507,30 +529,33 @@ struct RemoteImageLoaderTests {
             replacingImageHashHex: "old-hash",
             requestedImageHashHex: "old-hash"
         ))
-        #expect(GroupAvatarImageLoader.hasSeedForTesting(
-            accountRef: accountRef,
-            groupIdHex: groupIdHex
-        ))
 
-        let loaded = try await withTestClient { client in
-            try await GroupAvatarImageLoader.image(
-                request: GroupAvatarImageRequest(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex,
-                    imageHashHex: "new-hash",
-                    maxPixelSize: 56
-                ),
-                scale: 1,
-                priority: .foreground,
-                client: client
-            )
+        try await withTestClient { client in
+            func load(imageHashHex: String) async throws -> UIImage {
+                try await GroupAvatarImageLoader.image(
+                    request: GroupAvatarImageRequest(
+                        accountRef: accountRef,
+                        groupIdHex: groupIdHex,
+                        imageHashHex: imageHashHex,
+                        maxPixelSize: 56
+                    ),
+                    scale: 1,
+                    priority: .foreground,
+                    client: client
+                )
+            }
+
+            // The test client has no such account or group, so a successful
+            // load can only come from the seed.
+            let loaded = try await load(imageHashHex: "new-hash")
+            #expect(loaded.cgImage?.width == 56)
+
+            // The seed was used up: the next replacement misses every cache and
+            // reaches the client, which rejects the non-hex group id locally.
+            await #expect(throws: MarmotKitError.self) {
+                _ = try await load(imageHashHex: "newer-hash")
+            }
         }
-
-        #expect(loaded.cgImage?.width == 56)
-        #expect(!GroupAvatarImageLoader.hasSeedForTesting(
-            accountRef: accountRef,
-            groupIdHex: groupIdHex
-        ))
     }
 
     @Test func groupAvatarRawCacheKeyIsContentAddressedAndAccountScoped() {

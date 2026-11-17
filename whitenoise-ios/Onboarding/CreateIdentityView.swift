@@ -35,6 +35,7 @@ struct IdentityProfileSetupView: View {
 
     let isPushed: Bool
     let accountSetup: AccountSetupModel?
+    let cancelSignIn: (() -> Void)?
     let onCompletion: (() -> Void)?
     @State private var profileFailure: AccountSetupProfilePresentation.Failure?
     @State private var profileExit: ProfileExit?
@@ -64,10 +65,12 @@ struct IdentityProfileSetupView: View {
     init(
         isPushed: Bool = false,
         accountSetup: AccountSetupModel? = nil,
+        cancelSignIn: (() -> Void)? = nil,
         onCompletion: (() -> Void)? = nil
     ) {
         self.isPushed = isPushed
         self.accountSetup = accountSetup
+        self.cancelSignIn = cancelSignIn
         self.onCompletion = onCompletion
         _isFormReady = State(initialValue: accountSetup != nil)
     }
@@ -87,6 +90,7 @@ struct IdentityProfileSetupView: View {
     private var hasFooterActions: Bool {
         guard !isSetupConnectionBlocked, let recovery else { return true }
         return recovery.primaryAction(failure: profileFailure) != nil || recovery.canSkip
+            || (cancelSignIn != nil && recovery.offersCancelSignIn)
     }
 
     private var showsRepairBack: Bool {
@@ -434,6 +438,9 @@ struct IdentityProfileSetupView: View {
                 }
                 if recovery.canSkip {
                     WNButton(title: "Not Now", emphasis: .secondary) { requestProfileExit(.skip) }
+                }
+                if recovery.offersCancelSignIn, let cancelSignIn {
+                    AccountSetupCancelSignInButton(action: cancelSignIn)
                 }
             }
             .disabled(isBusy || !accountSetup.isConnected)

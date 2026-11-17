@@ -74,13 +74,6 @@ struct GroupChangeNoticeTests {
         #expect(invitation?.message != removal?.message)
     }
 
-    @Test func diagnosticsIncludeRecoveryOutcome() {
-        let text = DiagnosticsView.diagnosticText(for: event(outcome: "conflict"))
-        #expect(text.contains("group_profile"))
-        #expect(text.contains("conflict"))
-        #expect(text.contains("superseded"))
-    }
-
     private func refusal(
         id: String = "intent",
         kind: String,
@@ -104,14 +97,6 @@ struct GroupChangeNoticeTests {
         #expect(welcome?.message == UserFacingError.eventTooLargeMessage(.welcome))
         #expect(unspecified?.message == commit?.message)
         #expect(Set([generic?.message, commit?.message, welcome?.message]).count == 3)
-    }
-
-    @Test func diagnosticsIncludeOversizedRefusalDetails() {
-        let text = DiagnosticsView.diagnosticText(
-            for: refusal(kind: "invite", reason: "event_too_large", artifact: .welcome, sizeClass: .from2To4Mib))
-        #expect(text.contains("event_too_large"))
-        #expect(text.contains("welcome"))
-        #expect(text.contains("from2To4Mib"))
     }
 
     @Test(arguments: ["invite", "remove_members", "update_group_data", "leave", "disband", "app_message", "future_kind"])

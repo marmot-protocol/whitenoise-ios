@@ -22,7 +22,7 @@ struct ConversationWindowBindingTests {
             ).account
             let group = try await client.createGroupWithOptionsDetailed(accountRef: account.label,
                 name: "Draft store", memberRefs: [], options: CreateGroupOptionsFfi(
-                    description: nil, initialImage: nil, disappearingMessageSecs: 0))
+                    description: nil, initialImage: nil, disappearingMessageSecs: 0)).requireCreated()
             let key = ConversationDraftKey(accountRef: account.label, groupIdHex: group.groupIdHex)
             func draft(_ text: String) -> ConversationDraftSnapshot {
                 ConversationDraftSnapshot(canonicalText: text, replyToMessageIdHex: nil, mediaAttachments: [])
@@ -70,7 +70,7 @@ struct ConversationWindowBindingTests {
             ).account
             let group = try await client.createGroupWithOptionsDetailed(accountRef: account.label,
                 name: "Send recovery", memberRefs: [], options: CreateGroupOptionsFfi(
-                    description: nil, initialImage: nil, disappearingMessageSecs: 0))
+                    description: nil, initialImage: nil, disappearingMessageSecs: 0)).requireCreated()
             state.activeAccountRef = account.label
             let timeline = TimelineStore(appState: state, groupIdHex: group.groupIdHex)
             var calls = ComposerMarmotCalls.live

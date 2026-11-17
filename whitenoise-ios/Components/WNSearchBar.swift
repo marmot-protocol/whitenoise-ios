@@ -97,7 +97,13 @@ struct WNSearchField: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var localFocus: Bool
-    @ScaledMetric(relativeTo: .body) private var height = WNSearchBar.Metrics.fieldHeight
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// The glyphs stop growing at the chrome cap; past it they would squeeze
+    /// the field until the prompt shrinks to fit.
+    private var height: CGFloat {
+        WNChromeDynamicType.scaled(WNSearchBar.Metrics.fieldHeight, at: dynamicTypeSize)
+    }
 
     private var activeFocus: FocusState<Bool>.Binding { focus ?? $localFocus }
 
@@ -106,6 +112,7 @@ struct WNSearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.body.weight(.medium))
                 .foregroundStyle(WNSearchBar.Palette.fieldGlyph)
+                .dynamicTypeSize(...WNChromeDynamicType.maximum)
             TextField("", text: $query, prompt: Text(prompt))
                 .textFieldStyle(.plain)
                 .font(.body)
@@ -133,6 +140,7 @@ struct WNSearchField: View {
                 .buttonStyle(.plain)
                 .fixedSize()
                 .accessibilityLabel("Clear search")
+                .wnChromeDynamicType()
             } else {
                 if let onPaste {
                     WNSearchBarGlyphButton(
@@ -165,7 +173,11 @@ private struct WNSearchBarGlyphButton: View {
     let systemImage: String
     let action: () -> Void
 
-    @ScaledMetric(relativeTo: .body) private var diameter = WNSearchBar.Metrics.fieldHeight
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var diameter: CGFloat {
+        WNChromeDynamicType.scaled(WNSearchBar.Metrics.fieldHeight, at: dynamicTypeSize)
+    }
 
     var body: some View {
         Button(action: action) {
@@ -177,6 +189,7 @@ private struct WNSearchBarGlyphButton: View {
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .wnChromeDynamicType()
     }
 }
 

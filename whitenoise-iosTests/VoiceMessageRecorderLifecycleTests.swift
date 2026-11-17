@@ -49,6 +49,31 @@ struct VoiceMessageRecorderLifecycleTests {
         #expect(session.activeCalls.last?.active == false)
     }
 
+    @Test func slidingLeftDiscardsTheRecordingSoReleasingSendsNothing() async throws {
+        let microphone = VoiceRecordingMicrophoneDouble()
+        let recorder = VoiceMessageRecorder(audioSession: AudioSessionSpy(), microphone: microphone.microphone)
+
+        recorder.beginPress { error in Issue.record(error, "recording failed to start") }
+        try await eventually { recorder.hasStartedRecording }
+        recorder.updateDrag(CGSize(width: HoldGesturePolicy.cancelTranslationX - 1, height: 0))
+
+        #expect(!recorder.isActive)
+        #expect(microphone.stops == 1)
+        #expect(recorder.endPress() == nil)
+    }
+
+    @Test func slidingLeftAfterLockingKeepsRecording() async throws {
+        let recorder = VoiceMessageRecorder(audioSession: AudioSessionSpy(), microphone: VoiceRecordingMicrophoneDouble().microphone)
+
+        recorder.beginPress { error in Issue.record(error, "recording failed to start") }
+        try await eventually { recorder.hasStartedRecording }
+        recorder.updateDrag(CGSize(width: 0, height: HoldGesturePolicy.lockTranslationY - 1))
+        recorder.updateDrag(CGSize(width: HoldGesturePolicy.cancelTranslationX - 1, height: 0))
+
+        #expect(recorder.isLocked)
+        recorder.cancel()
+    }
+
     @Test func pendingHoldTaskDoesNotRetainRecorderOwner() async {
         var recorder: VoiceMessageRecorder? = VoiceMessageRecorder()
         weak let weakRecorder = recorder

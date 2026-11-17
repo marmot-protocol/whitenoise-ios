@@ -15,6 +15,9 @@ nonisolated enum StartChatFailurePresentation {
     }
 
     static func failure(for error: Error) -> Failure {
+        if let unavailable = error as? GroupMembersUnavailableError {
+            return failure(for: unavailable)
+        }
         guard let marmotError = error as? MarmotKitError else {
             return .other(message: UserFacingError.message(for: error))
         }
@@ -25,6 +28,20 @@ nonisolated enum StartChatFailurePresentation {
             return .missingSetup
         default:
             return .other(message: UserFacingError.message(for: marmotError))
+        }
+    }
+
+    /// A separate chat's create reached nobody. Only a person with no
+    /// White Noise setup at all gets the invite prompt.
+    private static func failure(for unavailable: GroupMembersUnavailableError) -> Failure {
+        guard let outcome = unavailable.skipped.first else {
+            return .other(message: UserFacingError.message(for: unavailable))
+        }
+        switch outcome.status {
+        case .missingKeyPackage, .invalidKeyPackage:
+            return .missingSetup
+        case .selected, .obsoleteKeyPackage, .incompatibleKeyPackage, .missingInboxRoute, .incomplete:
+            return .other(message: UserFacingError.message(for: unavailable))
         }
     }
 
@@ -164,7 +181,7 @@ final class DirectChatStarter {
                 initialImage: nil,
                 disappearingMessageSecs: 0
             )
-        )
+        ).requireCreated()
     }
 
     /// Opens `existingGroupIdHex` when the person already shares an open
@@ -217,7 +234,10 @@ final class DirectChatStarter {
             )
             return startsSeparateChat ? .created(groupIdHex: groupIdHex) : .started(groupIdHex: groupIdHex)
         } catch {
-            return .failed(StartChatFailurePresentation.failure(for: error))
+            let named = (error as? GroupMembersUnavailableError)?.naming {
+                appState.knownDisplayName(forAccountIdHex: $0)
+            }
+            return .failed(StartChatFailurePresentation.failure(for: named ?? error))
         }
     }
 

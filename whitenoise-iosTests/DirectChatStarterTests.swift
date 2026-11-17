@@ -213,6 +213,23 @@ struct DirectChatStarterTests {
         )
     }
 
+    @Test func aSeparateChatThatReachedNobodyInvitesOnlyPeopleWithoutAnySetup() {
+        func unavailable(_ status: MemberResolutionStatusFfi) -> GroupMembersUnavailableError {
+            GroupMembersUnavailableError(skipped: [
+                MemberResolutionOutcomeFfi(accountIdHex: alice, status: status, selectedDeviceCount: 0)
+            ])
+        }
+        for status in [MemberResolutionStatusFfi.missingKeyPackage, .invalidKeyPackage] {
+            #expect(StartChatFailurePresentation.failure(for: unavailable(status)) == .missingSetup)
+        }
+        for status in [MemberResolutionStatusFfi.obsoleteKeyPackage, .incompatibleKeyPackage,
+                       .missingInboxRoute, .incomplete] {
+            let error = unavailable(status)
+            #expect(StartChatFailurePresentation.failure(for: error)
+                == .other(message: UserFacingError.message(for: error)))
+        }
+    }
+
     @Test func otherErrorsStayRetryableErrors() {
         let failure = StartChatFailurePresentation.failure(
             for: MarmotKitError.NotGroupAdmin(groupIdHex: "abc")

@@ -5,6 +5,7 @@ struct AccountSetupActions: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: AccountSetupModel
     let selectedStep: OnboardingStepFfi
+    let cancelSignIn: () -> Void
     @State private var activePrimaryTitle: LocalizedStringKey?
 
     private var step: OnboardingStepStateFfi? {
@@ -17,13 +18,13 @@ struct AccountSetupActions: View {
 
     var body: some View {
         if selectedStep == .profile {
-            AccountSetupProfileView(model: model)
+            AccountSetupProfileView(model: model, cancelSignIn: cancelSignIn)
         } else if selectedStep == .relays || selectedStep == .inboxRelays {
-            AccountSetupRelayStepView(model: model, selectedStep: selectedStep)
+            AccountSetupRelayStepView(model: model, selectedStep: selectedStep, cancelSignIn: cancelSignIn)
         } else if selectedStep == .singleDevice {
-            AccountSetupCheckView(model: model, check: .device)
+            AccountSetupCheckView(model: model, check: .device, cancelSignIn: cancelSignIn)
         } else if selectedStep == .keyPackage {
-            AccountSetupCheckView(model: model, check: .secureMessaging)
+            AccountSetupCheckView(model: model, check: .secureMessaging, cancelSignIn: cancelSignIn)
         } else {
             decisionContent
         }
@@ -67,7 +68,9 @@ struct AccountSetupActions: View {
     }
 
     @ViewBuilder private var explanation: some View {
-        if proposal != nil, step?.actions.contains(.approveRepair) != true,
+        if let step, AccountSetupWayForward.followsNeedsCancelSignIn(step.actions) {
+            Text(AccountSetupWayForward.cannotContinueMessage)
+        } else if proposal != nil, step?.actions.contains(.approveRepair) != true,
            step?.actions.contains(.cancelRepair) != true {
             Text("Your previous update hasn’t finished. Try again to finish publishing it.")
         } else {
@@ -87,6 +90,9 @@ struct AccountSetupActions: View {
             } else if step.actions.contains(.retry) { action("Try Again", .retry(selectedStep)) }
             if step.actions.contains(.cancelRepair) { action("Back", .cancelRepair, secondary: true) }
             if selectedStep == .follows, step.actions.contains(.continueWithout) { action("Continue", .skip(.follows)) }
+            if AccountSetupWayForward.followsNeedsCancelSignIn(step.actions) {
+                AccountSetupCancelSignInButton(action: cancelSignIn)
+            }
         }
     }
 
@@ -103,5 +109,21 @@ struct AccountSetupActions: View {
                 }
             }
         }
+    }
+}
+
+/// Cancels the whole sign-in attempt, for a setup sheet that has no other way forward.
+struct AccountSetupCancelSignInButton: View {
+    let action: () -> Void
+    @State private var confirms = false
+
+    var body: some View {
+        WNButton(title: "Cancel Sign-In", emphasis: .destructive) { confirms = true }
+            .alert("Cancel sign-in?", isPresented: $confirms) {
+                Button("Cancel Sign-In", role: .destructive, action: action)
+                Button("Keep Signing In", role: .cancel) {}
+            } message: {
+                Text("You’ll need to sign in again to continue. Changes that were already published are kept.")
+            }
     }
 }

@@ -82,7 +82,7 @@ final class ConversationMediaLoader {
     }
 }
 
-enum MessageBubbleReplyLayout {
+nonisolated enum MessageBubbleReplyLayout {
     static let richContentWidth: CGFloat = 256
     static let richBubbleWidth = richContentWidth + (cardOuterInset * 2)
     static let bodyHorizontalInset = ChatBubbleMetrics.horizontalInset
@@ -96,13 +96,13 @@ enum MessageBubbleReplyLayout {
     static let sentCardOpacity = 0.16
     static let receivedCardOpacity = 0.09
 
-    nonisolated static func measurementWidth(proposedWidth: CGFloat?, isReplyHeader: Bool) -> CGFloat? {
+    static func measurementWidth(proposedWidth: CGFloat?, isReplyHeader: Bool) -> CGFloat? {
         guard isReplyHeader else { return proposedWidth }
         return min(proposedWidth ?? richBubbleWidth, richBubbleWidth)
     }
 }
 
-private struct MessageReplyHeaderLayoutKey: LayoutValueKey {
+nonisolated private struct MessageReplyHeaderLayoutKey: LayoutValueKey {
     static let defaultValue = false
 }
 
@@ -202,6 +202,7 @@ extension MessageBubble: Equatable {
             && lhs.reactions == rhs.reactions
             && lhs.omittedReactionKinds == rhs.omittedReactionKinds
             && lhs.projectedReactionTotal == rhs.projectedReactionTotal
+            && lhs.isBodyExpanded == rhs.isBodyExpanded
             && (lhs.onPollVote == nil) == (rhs.onPollVote == nil)
             && (lhs.onViewPollVotes == nil) == (rhs.onViewPollVotes == nil)
             && (lhs.identityName == nil) == (rhs.identityName == nil)
@@ -229,6 +230,7 @@ extension MessageBubble: Equatable {
 
 struct MessageBubble: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.appDensity) private var density
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.openURL) private var openURL
     let record: AppMessageRecordFfi
@@ -269,9 +271,12 @@ struct MessageBubble: View {
     /// retry/discard sheet.
     var onFailedTap: (() -> Void)? = nil
     var onSenderAvatarTap: (() -> Void)? = nil
+    /// Owned by the list, not the bubble: a lazy list rebuilds rows that
+    /// scroll away, and a "Read more" the reader chose must survive that.
+    var isBodyExpanded = false
+    var onExpandBody: () -> Void = {}
 
     @State private var mediaGallery: MessageMediaGallery?
-    @State private var isBodyExpanded = false
     @State private var pendingExternalLink: PendingMessageExternalLink?
     @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
@@ -353,6 +358,17 @@ struct MessageBubble: View {
         return SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText)
     }
 
+    private var standaloneCustomEmoji: CustomEmojiShortcode? {
+        guard debugStyle == nil,
+              !isDeleted,
+              replyPreview == nil,
+              mediaItems.isEmpty,
+              !customEmoji.isEmpty
+        else { return nil }
+
+        return SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes)
+    }
+
     private var hasExpirationTimer: Bool {
         MessageExpirationPresentation.showsIndicator(
             retentionSeconds: record.retentionSeconds,
@@ -390,7 +406,7 @@ struct MessageBubble: View {
                         .padding(.leading, 12)
                 }
 
-                MessageBubbleChromeLayout(isFromMe: isFromMe) {
+                MessageBubbleChromeLayout(isFromMe: isFromMe, spacing: density.metrics.bubbleMetadataSpacing) {
                     messageSurface
                     bubbleMetadataRow
                 }
@@ -451,7 +467,10 @@ struct MessageBubble: View {
         } else if let sticker = record.sticker, showsStandardBody {
             stickerMessageContent(StickerKey(sticker))
         } else if record.kind == MessageSemantics.kindPoll, showsStandardBody {
-            Group {
+            VStack(alignment: .leading, spacing: 0) {
+                if let replyPreview {
+                    replyHeader(replyPreview)
+                }
                 if let poll {
                     PollMessageContent(poll: poll, isFromMe: isFromMe, onVote: onPollVote,
                                        onViewVotes: onViewPollVotes)
@@ -460,8 +479,8 @@ struct MessageBubble: View {
                     Label(L10n.string("This poll can’t be displayed."), systemImage: "chart.bar.xaxis")
                         .font(.subheadline)
                         .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-                        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
-                        .padding(.vertical, ChatBubbleMetrics.verticalInset)
+                        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+                        .padding(.vertical, density.metrics.bubbleVerticalInset)
                 }
             }
             .background { bubbleBackground }
@@ -478,6 +497,15 @@ struct MessageBubble: View {
                     .onTapGesture { onFailedTap?() }
             } else {
                 standaloneEmojiContent(standaloneEmoji)
+                    .opacity(status == .sending ? 0.7 : 1)
+            }
+        } else if let standaloneCustomEmoji {
+            if status == .failed {
+                standaloneCustomEmojiContent(standaloneCustomEmoji)
+                    .contentShape(.rect)
+                    .onTapGesture { onFailedTap?() }
+            } else {
+                standaloneCustomEmojiContent(standaloneCustomEmoji)
                     .opacity(status == .sending ? 0.7 : 1)
             }
         } else {
@@ -520,6 +548,20 @@ struct MessageBubble: View {
             .accessibilityElement(children: .combine)
     }
 
+    /// The ordinary bubble, with its own inline emoji or the literal
+    /// shortcode, shows until the large image loads, and stays if it never
+    /// does (auto-download off, a failed read).
+    private func standaloneCustomEmojiContent(_ shortcode: CustomEmojiShortcode) -> some View {
+        StandaloneCustomEmoji(
+            shortcode: shortcode,
+            side: SingleCustomEmojiMessagePresentation.side,
+            isPixelArt: CustomEmojiBuiltins.builtin(shortcode) != nil
+        ) {
+            textBubble
+        }
+        .modifier(CustomEmojiInlineLoader(resolution: customEmoji, fixedPointSize: SingleCustomEmojiMessagePresentation.side))
+    }
+
     private func remoteGiphyMessageContent(_ media: RemoteGiphyMedia) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if let replyPreview {
@@ -547,8 +589,8 @@ struct MessageBubble: View {
         }
         .font(.subheadline)
         .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
-        .padding(.vertical, ChatBubbleMetrics.verticalInset)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+        .padding(.vertical, density.metrics.bubbleVerticalInset)
         .background { bubbleBackground }
         .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
     }
@@ -895,7 +937,7 @@ struct MessageBubble: View {
 
             if isCollapsed {
                 Button {
-                    isBodyExpanded = true
+                    onExpandBody()
                 } label: {
                     Text(L10n.string("Read more"))
                         .font(.footnote.weight(.semibold))
@@ -907,17 +949,17 @@ struct MessageBubble: View {
         .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : MessageBubblePalette.receivedForeground)
         .padding(
             .horizontal,
-            richContent ? 6 : MessageBubbleReplyLayout.bodyHorizontalInset
+            richContent ? 6 : density.metrics.bubbleHorizontalInset
         )
         .padding(
             .top,
             richContent
                 ? 0
-                : (hasReply ? MessageBubbleReplyLayout.bodyTopInsetAfterReply : MessageBubbleReplyLayout.bodyTopInset)
+                : (hasReply ? MessageBubbleReplyLayout.bodyTopInsetAfterReply : density.metrics.bubbleVerticalInset)
         )
         .padding(
             .bottom,
-            richContent ? 2 : MessageBubbleReplyLayout.bodyBottomInset
+            richContent ? 2 : density.metrics.bubbleVerticalInset
         )
         .frame(
             width: richContent ? MessageBubbleReplyLayout.richContentWidth : nil,
@@ -1002,7 +1044,7 @@ struct MessageBubble: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
 
     private var reactionMetadata: some View {
@@ -1048,7 +1090,7 @@ struct MessageBubble: View {
 
             messageMetadataFooter
         }
-        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
 
     private func reactionPill(_ tally: ConversationViewModel.ReactionTally) -> some View {
@@ -1130,7 +1172,7 @@ struct MessageBubble: View {
     static func timeLabel(
         recordedAt: UInt64,
         locale: Locale = .autoupdatingCurrent,
-        formatters: RelativeTimeFormatters = .shared
+        formatters: RelativeTimeFormatters? = nil
     ) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(recordedAt))
         return RelativeTime.shortTime(date, locale: locale, formatters: formatters)

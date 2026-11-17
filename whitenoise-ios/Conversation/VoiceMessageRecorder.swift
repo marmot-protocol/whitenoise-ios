@@ -9,12 +9,38 @@ struct VoiceRecordingResult: Sendable {
     let waveformSamples: [CGFloat]
 }
 
-nonisolated enum VoiceRecordingGesturePolicy {
+/// The hold that records a voice message or dictates: slide up to lock it
+/// hands-free, slide left to discard it.
+nonisolated enum HoldGesturePolicy {
     static let lockTranslationY: CGFloat = -78
+    static let cancelTranslationX: CGFloat = -90
     static let holdDelayNanoseconds: UInt64 = 260_000_000
 
     static func shouldLock(translation: CGSize) -> Bool {
         translation.height <= lockTranslationY
+    }
+
+    static func shouldCancel(translation: CGSize) -> Bool {
+        translation.width <= cancelTranslationX
+    }
+
+    /// How far toward locking the finger has slid, from 0 to 1.
+    static func lockProgress(_ translation: CGSize) -> CGFloat {
+        min(1, max(0, translation.height / lockTranslationY))
+    }
+
+    /// How far toward cancelling the finger has slid, from 0 to 1.
+    static func cancelProgress(_ translation: CGSize) -> CGFloat {
+        min(1, max(0, translation.width / cancelTranslationX))
+    }
+
+    /// The bubble under the thumb follows the finger, but only left toward
+    /// cancel and up toward the lock, and no further than either.
+    static func thumbOffset(_ translation: CGSize) -> CGSize {
+        CGSize(
+            width: min(0, max(cancelTranslationX, translation.width)),
+            height: min(0, max(lockTranslationY, translation.height))
+        )
     }
 }
 
@@ -130,7 +156,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         holdTask?.cancel()
         holdTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(nanoseconds: VoiceRecordingGesturePolicy.holdDelayNanoseconds)
+                try await Task.sleep(nanoseconds: HoldGesturePolicy.holdDelayNanoseconds)
             } catch {
                 return
             }
@@ -148,7 +174,11 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
 
     func updateDrag(_ translation: CGSize) {
         currentDragTranslation = translation
-        guard VoiceRecordingGesturePolicy.shouldLock(translation: translation),
+        if HoldGesturePolicy.shouldCancel(translation: translation), state.isActive, !state.isLocked {
+            cancel()
+            return
+        }
+        guard HoldGesturePolicy.shouldLock(translation: translation),
               case .recording(false) = state
         else { return }
         Haptics.tap()
@@ -238,7 +268,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
             }
             self.take = take
             self.recordingURL = url
-            state = .recording(locked: VoiceRecordingGesturePolicy.shouldLock(translation: currentDragTranslation))
+            state = .recording(locked: HoldGesturePolicy.shouldLock(translation: currentDragTranslation))
             Haptics.tap()
             startMetering()
         } catch is CancellationError {
@@ -318,21 +348,8 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
     }
 }
 
-nonisolated enum AudioWaveformMode {
-    case playback
-    case liveRecording
-}
-
 nonisolated struct AudioWaveformBar: Equatable, Sendable {
-    let amplitude: CGFloat?
-
-    var isVisible: Bool {
-        amplitude != nil
-    }
-
-    static var blank: AudioWaveformBar {
-        AudioWaveformBar(amplitude: nil)
-    }
+    let amplitude: CGFloat
 
     static func visible(_ amplitude: CGFloat) -> AudioWaveformBar {
         AudioWaveformBar(amplitude: min(1, max(0.05, amplitude)))
@@ -344,24 +361,12 @@ nonisolated enum AudioWaveformPresentation {
 
     static func bars(
         for samples: [CGFloat],
-        mode: AudioWaveformMode,
         count: Int = MediaWaveformAnalyzer.sampleCount
     ) -> [AudioWaveformBar] {
-        let targetCount = max(0, count)
-        switch mode {
-        case .playback:
-            guard targetCount > 0 else { return [] }
-            return MediaWaveformAnalyzer.normalized(samples, count: targetCount)
-                .map(displayAmplitude)
-                .map(AudioWaveformBar.visible)
-        case .liveRecording:
-            guard targetCount > 0 else { return [] }
-            let visibleSamples = samples.suffix(targetCount)
-                .map(displayAmplitude)
-                .map(AudioWaveformBar.visible)
-            let blankCount = max(0, targetCount - visibleSamples.count)
-            return Array(repeating: AudioWaveformBar.blank, count: blankCount) + visibleSamples
-        }
+        guard count > 0 else { return [] }
+        return MediaWaveformAnalyzer.normalized(samples, count: count)
+            .map(displayAmplitude)
+            .map(AudioWaveformBar.visible)
     }
 
     private static func displayAmplitude(_ sample: CGFloat) -> CGFloat {
@@ -375,30 +380,23 @@ struct AudioWaveformView: View {
     let progress: CGFloat
     let barColor: Color
     let playedColor: Color
-    var mode: AudioWaveformMode = .playback
 
     var body: some View {
         GeometryReader { geometry in
-            let bars = AudioWaveformPresentation.bars(for: samples, mode: mode)
+            let bars = AudioWaveformPresentation.bars(for: samples)
             let spacing: CGFloat = 2
             let barCount = max(1, bars.count)
             let availableWidth = geometry.size.width - spacing * CGFloat(max(0, barCount - 1))
             let barWidth = max(2, availableWidth / CGFloat(barCount))
             HStack(alignment: .center, spacing: spacing) {
                 ForEach(Array(bars.enumerated()), id: \.offset) { index, bar in
-                    if let sample = bar.amplitude {
-                        let played = CGFloat(index) / CGFloat(max(1, bars.count - 1)) <= progress
-                        Capsule()
-                            .fill(played ? playedColor : barColor)
-                            .frame(
-                                width: barWidth,
-                                height: max(4, geometry.size.height * min(1, max(0.08, sample)))
-                            )
-                    } else {
-                        Capsule()
-                            .fill(Color.clear)
-                            .frame(width: barWidth, height: 4)
-                    }
+                    let played = CGFloat(index) / CGFloat(max(1, bars.count - 1)) <= progress
+                    Capsule()
+                        .fill(played ? playedColor : barColor)
+                        .frame(
+                            width: barWidth,
+                            height: max(4, geometry.size.height * min(1, max(0.08, bar.amplitude)))
+                        )
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)

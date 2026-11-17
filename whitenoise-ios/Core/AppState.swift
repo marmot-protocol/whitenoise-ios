@@ -613,7 +613,9 @@ final class AppState {
             delay in try await Task.sleep(for: delay)
         },
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
-        notificationCatchUpCalls: NotificationCatchUpCalls = .live
+        notificationCatchUpCalls: NotificationCatchUpCalls = .live,
+        hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
+            RuntimeLifecycle.recordHostPerformanceOnClient
     ) {
         self.notificationCoordinator = NotificationCoordinator(catchUpCalls: notificationCatchUpCalls)
         self.runtimeLifecycle = RuntimeLifecycle(
@@ -621,7 +623,8 @@ final class AppState {
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
             runtimeClientFactory: runtimeClientFactory,
             retrySleeper: runtimeRetrySleeper,
-            constructionRetryPolicy: runtimeConstructionRetryPolicy
+            constructionRetryPolicy: runtimeConstructionRetryPolicy,
+            hostPerformanceRecorder: hostPerformanceRecorder
         )
         self.accountStore = AccountStore(defaults: accountDefaults)
         self.notifications = notifications
@@ -1463,14 +1466,22 @@ final class AppState {
         let files = try await lease.client.auditLogFiles()
         let file = try DiagnosticLogExport.fileForExport(in: files, path: path)
         return try await Task.detached(priority: .userInitiated) {
-            for attempt in 0..<3 {
-                do {
-                    return try DiagnosticLogExport.snapshot(file: file)
-                } catch DiagnosticLogExport.ExportError.fileChangedDuringRead where attempt < 2 {
-                    try await Task.sleep(for: .milliseconds(25))
-                }
+            try await DiagnosticLogExport.snapshotRetrying(file: file)
+        }.value
+    }
+
+    /// Every audit log changed within `window`, zipped into one temporary
+    /// file. The caller removes it with `DiagnosticLogExport.removeShareFile`.
+    func diagnosticLogArchive(window: DiagnosticLogExport.Window, now: Date = Date()) async throws -> DiagnosticLogShareFile {
+        let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        let files = DiagnosticLogExport.files(in: try await lease.client.auditLogFiles(), changedWithin: window, now: now)
+        guard !files.isEmpty else { throw DiagnosticLogExport.ExportError.noLogs }
+        let baseName = DiagnosticLogExport.archiveBaseName(window: window, now: now)
+        return try await Task.detached(priority: .userInitiated) {
+            try await DiagnosticLogExport.writeArchive(files: files, baseName: baseName) { file in
+                try await DiagnosticLogExport.snapshotRetrying(file: file)
             }
-            throw DiagnosticLogExport.ExportError.fileChangedDuringRead
         }.value
     }
 
@@ -2277,30 +2288,6 @@ final class AppState {
         scheduleForegroundMutationFollowup { _ in
             await operation()
         }
-    }
-
-    /// Drives the suspend/resume lifecycle tasks to quiescence so tests can
-    /// drive the real scene-phase entry points (`startRuntimeSuspension` /
-    /// `startForegroundActivation`) and then await the terminal state. Forwards
-    /// to `RuntimeLifecycle` (which owns the suspension/foreground tasks) and
-    /// drains the AppState-owned native-push task last.
-    @MainActor
-    func drainRuntimeLifecycleTasksForTesting() async {
-        await runtimeLifecycle.drainRuntimeLifecycleTasksForTesting()
-        let followups = Array(foregroundMutationFollowupTasks.values)
-        for task in followups {
-            await task.value
-        }
-        await notificationCoordinator.drainNativePushRegistrationTaskForTesting()
-    }
-
-    /// Drains the in-flight native-push registration task so
-    /// `RuntimeLifecycle.drainRuntimeLifecycleTasksForTesting` can flush the
-    /// `NotificationCoordinator`-owned task as the last step of the lifecycle
-    /// chain.
-    @MainActor
-    func nativePushRegistrationTaskValueForTesting() async {
-        await notificationCoordinator.drainNativePushRegistrationTaskForTesting()
     }
 
     /// Exposes the sign-out teardown guard (#320) so tests can assert it is

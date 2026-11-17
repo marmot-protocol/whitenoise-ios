@@ -154,19 +154,19 @@ struct PreparedConversationLiveUpdateTests {
         model.timelineStore.discardTransientRow(rowId: "msg:failure")
         let media = MessageMediaAttachment(id: "local", reference: nil, fileName: "local.jpg",
             mediaType: "image/jpeg", dim: nil, localData: Data([1, 2, 3]))
-        model.installPendingMediaForTesting(rowId: "msg:photo", items: [media])
+        model.timelineStore.mediaProjections.setPending([media], forRowId: "msg:photo")
         model.applyPendingOutgoingMessage(tempId: "photo", record: pending)
         model.confirmSent(tempId: "photo", record: pending, messageId: "photo-id")
         install([old, second, accepted])
         // Locally picked bytes stay on the row until MDK mirrors the record.
-        #expect(model.pendingMediaForTesting(rowId: "msg:photo")?.count == 1)
+        #expect(model.timelineStore.mediaProjections.pending(forRowId: "msg:photo")?.count == 1)
         var photo = record("photo-id", 4, text: "")
         let reference = MediaAttachmentReferenceFfi(locators: [], ciphertextSha256: String(repeating: "a", count: 64),
             plaintextSha256: String(repeating: "b", count: 64), nonceHex: String(repeating: "c", count: 24),
             fileName: "canonical.jpg", mediaType: "image/jpeg", version: .v1, sourceEpoch: 1, dim: nil, thumbhash: nil)
         photo.media = [.accepted(attachmentIndex: 0, reference: reference)]
         install([old, second, accepted, photo])
-        #expect(model.pendingMediaForTesting(rowId: "msg:photo") == nil)
+        #expect(model.timelineStore.mediaProjections.pending(forRowId: "msg:photo") == nil)
         let photoRow = try #require(model.timeline.first { $0.id == "msg:photo" })
         #expect(model.mediaItems(for: photoRow).first?.fileName == "canonical.jpg")
         #expect(photo.tags.isEmpty)
@@ -183,7 +183,7 @@ struct PreparedConversationLiveUpdateTests {
         await model.returnConversationToLatest()
         model.reportConversationViewport(atTail: true, visibleRowID: "msg:two")
         #expect(model.viewportIntent == .followingLatest)
-        model.resetOptimisticStateForTesting()
+        model.timelineStore.resetOptimisticState()
         let fullWindow = (0..<200).map { record("retained-\($0)", UInt64($0)) }
         install(fullWindow)
         await model.returnConversationToLatest()
@@ -197,7 +197,7 @@ struct PreparedConversationLiveUpdateTests {
         install(Array(fullWindow.dropFirst(2)) + [record("incoming", 200), record("tail-durable", 201)])
         #expect(model.timeline.count == 200)
         #expect(model.timeline.last?.id == "msg:tail-send")
-        model.resetOptimisticStateForTesting()
+        model.timelineStore.resetOptimisticState()
         model.confirmSent(tempId: "unknown", record: pending, messageId: "late")
         #expect(!model.timeline.contains { $0.id == "msg:unknown" })
         for index in 0..<TimelineStore.maximumLocalEchoes {

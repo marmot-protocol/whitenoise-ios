@@ -68,6 +68,29 @@ nonisolated enum MediaFileUploadLimit {
         return total
     }
 
+    /// The attachments, in order, that still fit in one send beside `existing`,
+    /// and how many were refused because they would pass `limit`.
+    static func admitting(
+        _ added: [MediaDraftAttachment],
+        alongside existing: [MediaDraftAttachment],
+        limit: UInt64 = maxFileMediaCiphertextBytes()
+    ) -> (admitted: [MediaDraftAttachment], refused: Int) {
+        var counts = existing.map(\.data.count)
+        var admitted: [MediaDraftAttachment] = []
+        for attachment in added where fits(attachment.data.count, alongside: counts, limit: limit) {
+            counts.append(attachment.data.count)
+            admitted.append(attachment)
+        }
+        return (admitted, added.count - admitted.count)
+    }
+
+    /// Whether a file of `byteCount` plaintext bytes still fits in one send
+    /// beside attachments of `counts`, so a refused file is never read.
+    static func fits(_ byteCount: Int, alongside counts: [Int], limit: UInt64 = maxFileMediaCiphertextBytes()) -> Bool {
+        guard let total = ciphertextBytes(plaintextByteCounts: counts + [byteCount]) else { return false }
+        return total <= limit
+    }
+
     static func validate(plaintextByteCounts: [Int], limit: UInt64) throws {
         guard let total = ciphertextBytes(plaintextByteCounts: plaintextByteCounts), total <= limit else {
             throw MediaFileUploadFailure.exceedsTransferLimit(attachmentCount: plaintextByteCounts.count)

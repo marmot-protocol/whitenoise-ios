@@ -152,7 +152,7 @@ struct ChatListDraftHandoffBindingTests {
                 ).account
                 func group(_ name: String) async throws -> String {
                     try await client.createGroupWithOptionsDetailed(accountRef: account.label, name: name, memberRefs: [],
-                        options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)).groupIdHex
+                        options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)).requireCreated().groupIdHex
                 }
                 func row(_ groupIdHex: String) async throws -> PresentedChatRowFfi {
                     try #require(try await client.presentedChatListRow(accountRef: account.label, groupIdHex: groupIdHex))

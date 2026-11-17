@@ -265,6 +265,71 @@ before every release tag.
 - [ ] Data Usage has no Download Storage entry. Previously saved MDK download
       limits remain in effect; removing the entry does not reset those limits.
 
+## Hold to dictate
+
+Needs a physical iPhone on iOS 26 or later; the simulator has no usable
+microphone on a Mac without one.
+
+- [ ] On iOS 18–25, Settings → Appearance has no Dictation section and holding
+      the message field behaves as before.
+- [ ] On a fresh install, Settings → Appearance → Hold to Dictate is on.
+      Speech Model shows Ready, or Downloading… and then Ready, for the first
+      enabled keyboard's language. An unsupported language shows Not available
+      for your language.
+- [ ] Turn Hold to Dictate off: the resting field reads "Message" and a hold
+      does nothing. The choice survives a relaunch.
+- [ ] With the keyboard down and an empty draft, the field reads "Tap to type,
+      hold to dictate"; with the keyboard up it reads "Message".
+- [ ] With the keyboard down, hold the message field: after a short hold the
+      field shows a pulsing microphone and Listening…, the + button becomes a red
+      ✕, and words appear as you speak (the unsettled guess dimmed). Release:
+      the text is sent at once, after any existing draft text with one space.
+      Silence sends nothing.
+- [ ] Hold and slide left: dictation is discarded and nothing is sent.
+- [ ] Hold and slide up: dictation locks. Lift the finger and keep speaking;
+      the send arrow sends the text and the ✕ discards it.
+- [ ] While holding (dictation or voice message), a lock pill with an up
+      chevron floats above the thumb, nudging unless Reduce Motion is on, and
+      disappears once locked.
+- [ ] Hold the voice icon: a red bubble grows under the thumb and follows the
+      slide; the field shows a blinking red dot, the elapsed time and
+      "‹ Slide to cancel", which follows the finger left and fades. Release:
+      the voice message sends at once. Slide left past the prompt: nothing is
+      recorded or sent. Slide up to lock: the field keeps the timer, ✕
+      discards, and the send arrow sends at once.
+- [ ] While editing a sent message, releasing (or ✓ when locked) only adds the
+      text to the field; Save stays a separate tap.
+- [ ] With the keyboard up, holding the field still moves the cursor (loupe);
+      a quick tap on the resting field still opens the keyboard.
+- [ ] First use asks for microphone access only. Denying it shows "Couldn't
+      dictate" with the microphone explanation.
+- [ ] Holding while the model is downloading shows "Getting dictation ready",
+      then "Dictation is ready" when the download finishes.
+- [ ] Background the app, take a call, or leave the chat while dictating:
+      dictation stops and nothing is inserted. A voice message can't start
+      while dictating, or the reverse.
+- [ ] VoiceOver: the message field's Dictate action starts hands-free
+      dictation; Finish dictation and Cancel dictation are announced.
+- [ ] Airplane mode: dictation still works once the model is installed.
+
+## Large attachments
+
+- [ ] Pick a video of 300–500 MB from Photos and another from Files. Each
+      appears in the composer with its thumbnail, the app stays responsive, and
+      it sends with upload progress. A recipient can play it.
+- [ ] Pick a file over 512 MB, or an image over 50 MB: it is refused as too
+      large before any upload.
+- [ ] Add a video over 50 MB with a caption and leave the chat: reopening it
+      shows only the caption. A video of 50 MB or less comes back, also after
+      a relaunch.
+- [ ] Add two videos of about 450 MB each: the second is refused as too large
+      to send together.
+- [ ] Send a reply with a video over 50 MB: it sends as a reply, the saved
+      draft is gone afterwards, and reopening the chat mid-upload shows an
+      empty composer.
+- [ ] Background the app while a video over 50 MB uploads: the bubble shows a
+      failed or uncertain send, and the composer does not offer it again.
+
 ## MarmotKit 0.10.4 upgrade
 
 - [ ] Back up the app's shared data before opening an existing installation with
@@ -902,8 +967,11 @@ on the White Noise relays).
       becomes available only after MDK reports ready.
 - [ ] Test all device-discovery outcomes: none found, possible other installation,
       and inconclusive. None found uses Continue; the other two use Continue
-      anyway. Every outcome requires the notice; no physical device or last-active
-      time is inferred from public package records.
+      anyway. Every outcome requires the notice. A possible other installation
+      may show when its messaging keys were last published, but no physical
+      device or last-active time is inferred from public package records. The
+      copy treats this sign-in as a separate installation with its own chats and
+      never says the device is added, linked or synced to the account.
 - [ ] Missing or unreadable follows are skipped automatically without publishing
       a list. Empty follows are valid. Skipped rows show a neutral dash.
 - [ ] A missing profile offers Update profile or Not now. Update opens the same

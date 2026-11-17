@@ -113,6 +113,13 @@ final class RuntimeLifecycle {
         _ telemetryConfig: TelemetryBuildConfig
     ) async throws -> MarmotClient
     typealias RetrySleeper = @Sendable (_ delay: Duration) async throws -> Void
+    /// Sends one `host_*` stage timing to the runtime that measured it.
+    typealias HostPerformanceRecorder = @MainActor (
+        _ client: MarmotClient,
+        _ operation: HostPerformanceOperationFfi,
+        _ durationMs: UInt64,
+        _ outcome: HostPerformanceOutcomeFfi
+    ) -> Void
 
     /// The live FFI runtime. Released (`nil`) while the app is suspended in the
     /// background so its SQLite storage in the shared App Group container is
@@ -126,6 +133,7 @@ final class RuntimeLifecycle {
     @ObservationIgnored private let runtimeClientFactory: RuntimeClientFactory
     @ObservationIgnored private let retrySleeper: RetrySleeper
     @ObservationIgnored private let constructionRetryPolicy: RuntimeConstructionRetryPolicy
+    @ObservationIgnored private let hostPerformanceRecorder: HostPerformanceRecorder
 
     @ObservationIgnored private var bootstrapTask: Task<Void, Never>?
     @ObservationIgnored private var bootstrapTaskID = UUID()
@@ -152,17 +160,14 @@ final class RuntimeLifecycle {
         case runtimeWork
     }
 
+    // Documented exception (AGENTS.md): these three hooks sit inside the
+    // launch, suspend and resume sequence and stay (#1241, item 19).
     @ObservationIgnored var afterBootstrapRuntimeStartForTesting: (() async -> Void)?
     @ObservationIgnored var afterForegroundRuntimeCreatedForTesting: (() async -> Void)?
     /// Called with `true` just before background suspension waits on a running
     /// bootstrap or on runtime work, and with `false` once it stops waiting, so
     /// a test can tell that the wait ended only after that work released it.
     @ObservationIgnored var backgroundSuspensionWaitForTesting: ((BackgroundSuspensionWait, _ isWaiting: Bool) -> Void)?
-    @ObservationIgnored var hostPerformanceObserverForTesting: ((
-        HostPerformanceOperationFfi,
-        UInt64,
-        HostPerformanceOutcomeFfi
-    ) -> Void)?
 #endif
     /// Observed (like the original AppState stored flag) so the foreground/local
     /// runtime gates that fold it in stay reactive.
@@ -197,7 +202,8 @@ final class RuntimeLifecycle {
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeClientFactory = RuntimeLifecycle.defaultRuntimeClientFactory,
         retrySleeper: @escaping RetrySleeper = { delay in try await Task.sleep(for: delay) },
-        constructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground
+        constructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
+        hostPerformanceRecorder: @escaping HostPerformanceRecorder = RuntimeLifecycle.recordHostPerformanceOnClient
     ) {
         self.client = client
         self.runtimeRootPath = client?.rootPath
@@ -206,6 +212,16 @@ final class RuntimeLifecycle {
         self.runtimeClientFactory = runtimeClientFactory
         self.retrySleeper = retrySleeper
         self.constructionRetryPolicy = constructionRetryPolicy
+        self.hostPerformanceRecorder = hostPerformanceRecorder
+    }
+
+    static func recordHostPerformanceOnClient(
+        _ client: MarmotClient,
+        _ operation: HostPerformanceOperationFfi,
+        _ durationMs: UInt64,
+        _ outcome: HostPerformanceOutcomeFfi
+    ) {
+        client.recordHostPerformance(operation: operation, durationMs: durationMs, outcome: outcome)
     }
 
     nonisolated static func defaultRuntimeClientFactory(
@@ -1002,17 +1018,10 @@ final class RuntimeLifecycle {
         outcome: HostPerformanceOutcomeFfi
     ) {
         let durationMs = UInt64(max(0, Self.elapsedMilliseconds(since: start)).rounded())
-#if DEBUG
-        hostPerformanceObserverForTesting?(operation, durationMs, outcome)
-#endif
         if operation == .splashReady || operation == .foregroundLocalReady {
             appState?.productAnalytics.record(.ready(success: outcome == .success, milliseconds: durationMs))
         }
-        client.recordHostPerformance(
-            operation: operation,
-            durationMs: durationMs,
-            outcome: outcome
-        )
+        hostPerformanceRecorder(client, operation, durationMs, outcome)
     }
 
     private func ownsForegroundActivation(id: UUID) -> Bool {
@@ -1324,20 +1333,4 @@ final class RuntimeLifecycle {
     private var phaseOwnsLiveRuntime: Bool {
         appState?.phaseOwnsLiveRuntime ?? false
     }
-
-    #if DEBUG
-    /// Drives the suspend/resume lifecycle tasks to quiescence so tests can
-    /// drive the real scene-phase entry points (`startRuntimeSuspension` /
-    /// `startForegroundActivation`) and then await the terminal state. A
-    /// suspension that re-checks the scene and reschedules a resume (#222)
-    /// chains a fresh `foregroundActivationTask`; resume never reschedules a
-    /// suspension, so awaiting suspension, then the (possibly rescheduled)
-    /// foreground activation, then native-push registration drains the chain.
-    @MainActor
-    func drainRuntimeLifecycleTasksForTesting() async {
-        await runtimeSuspensionTask?.value
-        await foregroundActivationTask?.value
-        await appState?.nativePushRegistrationTaskValueForTesting()
-    }
-    #endif
 }

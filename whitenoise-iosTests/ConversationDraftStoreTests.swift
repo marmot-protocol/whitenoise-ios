@@ -234,6 +234,28 @@ struct ConversationDraftStoreTests {
             .plaintextSize == UInt64(attachment.data.count))
     }
 
+    @Test func attachmentsTooLargeForDraftsAreLeftOutOfTheSavedDraft() async throws {
+        let persistence = DraftPersistenceProbe()
+        let small = MediaDraftAttachment(fileName: "notes.txt", mediaType: "text/plain", data: Data("kept".utf8), dim: nil)
+        let atLimit = MediaDraftAttachment(fileName: "short.mov", mediaType: "video/quicktime",
+                                           data: Data(count: MediaDraftProcessor.maxDraftAttachmentBytes), dim: nil)
+        let large = MediaDraftAttachment(fileName: "long.mov", mediaType: "video/quicktime",
+                                         data: Data(count: MediaDraftProcessor.maxDraftAttachmentBytes + 1), dim: nil)
+        let store = ConversationDraftStore(persistence: persistence)
+
+        store.setDraft(
+            ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil,
+                                      mediaAttachments: [small, large, atLimit]),
+            accountRef: "account",
+            groupIdHex: "group"
+        )
+        await store.flush()
+
+        let saved = try #require(persistence.draft(accountRef: "account", groupIdHex: "group"))
+        #expect(saved.content == "caption")
+        #expect(saved.mediaAttachments.map(\.id) == [small.id.uuidString, atLimit.id.uuidString])
+    }
+
     @Test func mentionIdentityRoundTripsThroughCanonicalBindingText() throws {
         let npub = try #require(NostrProfileReference.npub(
             fromAccountIdHex: hex("11")

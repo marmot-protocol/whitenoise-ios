@@ -12,16 +12,19 @@ final class NewChatFlowMarmotDouble {
         return nil
     }
 
-    /// The new group's id.
+    /// The new group's id, or nil when MDK found no requested member available.
     var createGroup: @MainActor (
         _ accountRef: String,
         _ name: String,
         _ memberRefs: [String],
         _ options: CreateGroupOptionsFfi
-    ) async throws -> String = { _, _, _, _ in
+    ) async throws -> String? = { _, _, _, _ in
         Issue.record("unexpected group creation")
         return "unexpected"
     }
+
+    /// The per-account outcomes the create reports alongside its group.
+    var memberOutcomes: [MemberResolutionOutcomeFfi] = []
 }
 
 /// A flow whose Marmot lookups and group creation go to `marmot`.
@@ -38,9 +41,11 @@ func newChatFlow(
         },
         createGroup: { _, accountRef, name, memberRefs, options in
             let groupIdHex = try await marmot.createGroup(accountRef, name, memberRefs, options)
-            return CreatedGroupFfi(
-                groupIdHex: groupIdHex,
-                chatListRow: chatListRow(groupIdHex: groupIdHex, title: name)
+            return DetailedGroupCreationResultFfi(
+                created: groupIdHex.map {
+                    CreatedGroupFfi(groupIdHex: $0, chatListRow: chatListRow(groupIdHex: $0, title: name))
+                },
+                memberOutcomes: marmot.memberOutcomes
             )
         }
     )
