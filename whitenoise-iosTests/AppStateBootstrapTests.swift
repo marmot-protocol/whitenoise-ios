@@ -1647,10 +1647,10 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    /// The resume-tail badge refresh runs in its own task; suspension must
-    /// drain it so no unread-summary FFI read is in flight when the runtime
-    /// shuts down. This checks that suspension takes the task over; the drain
-    /// clears it before awaiting it, so the await itself isn't observed.
+    /// The resume-tail badge refresh runs in its own task. Suspension takes it
+    /// over and drains it after storage closes, so the task can't outlive
+    /// suspension. This checks the takeover; the drain clears the task before
+    /// awaiting it, so the await itself isn't observed.
     @Test func suspensionDrainsScheduledUnreadSummaryRefresh() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
