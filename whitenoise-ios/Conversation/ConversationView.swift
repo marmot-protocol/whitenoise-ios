@@ -2545,7 +2545,13 @@ struct ConversationView: View {
                 ? nil
                 : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) },
             isBodyExpanded: viewModel.expandedBodyRowIDs.contains(item.id),
-            onExpandBody: { viewModel.expandBody(rowID: item.id) }
+            onExpandBody: {
+                // The reader continues from the top of the message, so the
+                // tail must not hold the bottom while the row grows below.
+                cancelPendingBottomScroll()
+                userMovedAwayFromTimelineBottom = true
+                viewModel.expandBody(rowID: item.id)
+            }
         )
         .equatable()
         .environment(\.customEmojiStore, viewModel.customEmojiStore)
