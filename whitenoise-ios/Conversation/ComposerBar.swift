@@ -130,9 +130,11 @@ nonisolated enum ComposerAvailabilityPresentation {
         overage: Int?,
         disabledMessage: String?,
         hasAudioDraft: Bool,
-        voiceRecordingActive: Bool
+        voiceRecordingActive: Bool,
+        dictationActive: Bool
     ) -> Int? {
-        guard showsInput(disabledMessage: disabledMessage), !hasAudioDraft, !voiceRecordingActive else { return nil }
+        guard showsInput(disabledMessage: disabledMessage), !hasAudioDraft,
+              !voiceRecordingActive, !dictationActive else { return nil }
         return overage
     }
 
@@ -379,7 +381,8 @@ struct ComposerBar: View {
                     overage: textOverage,
                     disabledMessage: disabledMessage,
                     hasAudioDraft: audioDraft != nil,
-                    voiceRecordingActive: voiceRecordingActive
+                    voiceRecordingActive: voiceRecordingActive,
+                    dictationActive: dictationActive
                 ) {
                     ComposerTextOverageLabel(overage: textOverage, trailingInset: controlSize / 2)
                 }

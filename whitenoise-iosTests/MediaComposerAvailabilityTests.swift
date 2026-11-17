@@ -240,13 +240,15 @@ struct MediaComposerAvailabilityTests {
             overage: Int? = 100,
             disabledMessage: String? = nil,
             hasAudioDraft: Bool = false,
-            voiceRecordingActive: Bool = false
+            voiceRecordingActive: Bool = false,
+            dictationActive: Bool = false
         ) -> Int? {
             ComposerAvailabilityPresentation.textOverageNotice(
                 overage: overage,
                 disabledMessage: disabledMessage,
                 hasAudioDraft: hasAudioDraft,
-                voiceRecordingActive: voiceRecordingActive
+                voiceRecordingActive: voiceRecordingActive,
+                dictationActive: dictationActive
             )
         }
 
@@ -256,6 +258,8 @@ struct MediaComposerAvailabilityTests {
         #expect(notice(disabledMessage: "inactive") == nil)
         #expect(notice(hasAudioDraft: true) == nil)
         #expect(notice(voiceRecordingActive: true) == nil)
+        // Dictation replaces the field with its live transcript.
+        #expect(notice(dictationActive: true) == nil)
     }
 
     @Test func openingConversationWindowAwaitsLiveState() {
