@@ -2543,7 +2543,9 @@ struct ConversationView: View {
                 : nil,
             onSenderAvatarTap: isSelectingMessages || viewModel.search.isActive
                 ? nil
-                : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) }
+                : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) },
+            isBodyExpanded: viewModel.expandedBodyRowIDs.contains(item.id),
+            onExpandBody: { viewModel.expandBody(rowID: item.id) }
         )
         .equatable()
         .environment(\.customEmojiStore, viewModel.customEmojiStore)

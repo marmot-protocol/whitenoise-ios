@@ -280,6 +280,8 @@ final class ConversationViewModel {
     private var startRequest = UUID()
     @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
     private(set) var viewportIntent: ConversationViewportIntent = .followingLatest
+    /// Rows whose long body the reader opened with "Read more", by row id.
+    private(set) var expandedBodyRowIDs: Set<String> = []
     private(set) var paginationRetryToken = 0
     private var pageAdmission = ConversationPageAdmission()
     var isAwaitingPageCompletion: Bool { pageAdmission.unresolvedRevision != nil }
@@ -1877,6 +1879,10 @@ final class ConversationViewModel {
             pendingAnchorIntent: latestAnchorIntent,
             navigationFailed: navigationFailure != nil
         )
+    }
+
+    func expandBody(rowID: String) {
+        expandedBodyRowIDs.insert(rowID)
     }
 
     func followConversationLatest() {

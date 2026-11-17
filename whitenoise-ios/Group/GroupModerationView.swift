@@ -342,6 +342,7 @@ struct GroupModerationView: View {
     let conversation: ConversationViewModel
     @State private var model = GroupModerationModel()
     @State private var projectionRevision = UUID()
+    @State private var expandedEntryIDs: Set<String> = []
     @State private var projectionRoute: AppState.GroupRecoveryUpdate?
     @State private var deleteTarget: GroupModerationModel.Entry?
     @State private var operation: Task<Void, Never>?
@@ -396,7 +397,9 @@ struct GroupModerationView: View {
                                     identityName: conversation.windowDisplayName,
                                     identityAvatarAsset: { conversation.windowIdentities[$0]?.avatarAsset },
                                     onLoadMedia: ConversationMediaLoader({ try await conversation.data(for: $0) },
-                                        openHandoff: { try await conversation.openHandoff(for: $0, control: $1) })
+                                        openHandoff: { try await conversation.openHandoff(for: $0, control: $1) }),
+                                    isBodyExpanded: expandedEntryIDs.contains(entry.id),
+                                    onExpandBody: { expandedEntryIDs.insert(entry.id) }
                                 )
                                 .messageLinkCopyAccessibilityActions(for: entry.markdownBlocks, appState: appState)
                                 Text(Date(timeIntervalSince1970: TimeInterval(message.timelineAt)), format: .dateTime.day().month().year())
