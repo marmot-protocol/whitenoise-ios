@@ -2544,13 +2544,13 @@ struct ConversationView: View {
             onSenderAvatarTap: isSelectingMessages || viewModel.search.isActive
                 ? nil
                 : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) },
-            isBodyExpanded: viewModel.expandedBodyRowIDs.contains(item.id),
+            isBodyExpanded: viewModel.expandedBodies.contains(rowID: item.id, messageID: record.messageIdHex),
             onExpandBody: {
                 // The reader continues from the top of the message, so the
                 // tail must not hold the bottom while the row grows below.
                 cancelPendingBottomScroll()
                 userMovedAwayFromTimelineBottom = true
-                viewModel.expandBody(rowID: item.id)
+                viewModel.expandBody(rowID: item.id, messageID: record.messageIdHex)
             }
         )
         .equatable()
