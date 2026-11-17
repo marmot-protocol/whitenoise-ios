@@ -1269,7 +1269,7 @@ nonisolated enum ComposerExpandedEditorPresentation {
 
 private struct ComposerTextOverageLabel: View {
     let overage: Int
-    var trailingInset: CGFloat = 12
+    let trailingInset: CGFloat
 
     var body: some View {
         Text(L10n.plural("%lld characters over", Int64(overage)))
@@ -1293,6 +1293,9 @@ private struct ExpandedComposerEditor: View {
     @FocusState private var focused: Bool
 
     private let margin: CGFloat = 16
+    /// UITextView's default `lineFragmentPadding`, so the label's trailing
+    /// edge lines up with the text's rather than with `margin`.
+    private let textLineFragmentPadding: CGFloat = 5
 
     var body: some View {
         NavigationStack {
@@ -1302,7 +1305,7 @@ private struct ExpandedComposerEditor: View {
                 .focused($focused)
                 .safeAreaInset(edge: .bottom) {
                     if let textOverage {
-                        ComposerTextOverageLabel(overage: textOverage, trailingInset: 5)
+                        ComposerTextOverageLabel(overage: textOverage, trailingInset: textLineFragmentPadding)
                             .padding(.horizontal, margin)
                             .padding(.bottom, 8)
                     }
