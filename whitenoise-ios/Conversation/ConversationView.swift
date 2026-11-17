@@ -247,6 +247,30 @@ enum TimelineBottomScrollCoordinator {
         ) ? .bottom : nil
     }
 
+    /// Sub-point drift from rounding is not overscroll.
+    static let overscrollTolerance: CGFloat = 1
+
+    /// A window that drops its oldest row as a new one lands shrinks the
+    /// content above the viewport, and the size-change anchor can push a
+    /// keyboard-inset viewport further past the end. A pinned viewport resting
+    /// below the content is never what the reader chose, so return it.
+    static func shouldReturnFromOverscroll(
+        overscrollPastBottom: CGFloat,
+        didFinishInitialPositioning: Bool,
+        userMovedAwayFromBottom: Bool,
+        isUserScrolling: Bool,
+        hasMoreAfter: Bool,
+        isPaging: Bool
+    ) -> Bool {
+        overscrollPastBottom > overscrollTolerance && sizeChangeAnchor(
+            didFinishInitialPositioning: didFinishInitialPositioning,
+            userMovedAwayFromBottom: userMovedAwayFromBottom,
+            isUserScrolling: isUserScrolling,
+            hasMoreAfter: hasMoreAfter,
+            isPaging: isPaging
+        ) != nil
+    }
+
     static func shouldFollowLayoutChange(
         didFinishInitialPositioning: Bool,
         userMovedAwayFromBottom: Bool,
@@ -2125,6 +2149,24 @@ struct ConversationView: View {
                                 isUserScrolling: isUserScrollingTimeline,
                                 hasMoreAfter: viewModel.hasMoreAfter
                             )
+                        }
+                        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                            TimelineBottom.overscrollPastBottom(
+                                contentHeight: geometry.contentSize.height,
+                                visibleBottomY: geometry.visibleRect.maxY,
+                                bottomContentInset: geometry.contentInsets.bottom
+                            )
+                        } action: { _, overscroll in
+                            guard TimelineBottomScrollCoordinator.shouldReturnFromOverscroll(
+                                overscrollPastBottom: overscroll,
+                                didFinishInitialPositioning: isInitialTimelinePositionSettled,
+                                userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
+                                isUserScrolling: isUserScrollingTimeline,
+                                hasMoreAfter: viewModel.hasMoreAfter,
+                                isPaging: viewModel.isAwaitingPageCompletion
+                            ) else { return }
+                            scheduleScrollToBottom(proxy: proxy, animated: false, reason: .layoutChange,
+                                                   targetID: viewModel.timeline.last?.id)
                         }
                         .onScrollGeometryChange(for: CGFloat.self) { geometry in
                             geometry.contentSize.height
