@@ -71,9 +71,15 @@ struct OnboardingRecoveryRemovalTests {
         try await closing(client) {
             let account = try await makeBrokenAccount(client)
             try await state.refreshAccounts(refreshUnreadSummaries: false)
-            reads.beforeListAccounts = { throw URLError(.notConnectedToInternet) }
+            var failedRefreshes = 0
+            reads.beforeListAccounts = {
+                failedRefreshes += 1
+                throw URLError(.notConnectedToInternet)
+            }
 
             try await state.recoverOnboardingSetup(accountID: account.accountIdHex)
+
+            #expect(failedRefreshes == 1)
 
             #expect(state.onboardingRecoveryAccounts.isEmpty)
             #expect(try await !client.onboardingRecoveryRequired(accountRef: account.label))
