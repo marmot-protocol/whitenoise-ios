@@ -543,13 +543,10 @@ final class ConversationViewModel {
 
     func displayTitle(for groupDisplay: GroupDisplay.Resolved) -> String {
         if let selected = conversationWindow?.header.selected {
-            switch selected.title {
-            case .literal(let title):
-                return selected.peerId.flatMap { appState?.contactNickname(forAccountIdHex: $0) }
-                    ?? ContentSanitizer.groupName(title) ?? L10n.string("Unnamed group")
-            case .unnamedGroup: return L10n.string("Unnamed group")
-            case .unavailableConversation: return L10n.string("Conversation unavailable")
-            }
+            return SelectedChatPresentation.headerTitle(
+                for: selected,
+                nickname: selected.peerId.flatMap { appState?.contactNickname(forAccountIdHex: $0) }
+            )
         }
         guard let appState else {
             if let name = groupDisplay.sanitizedName { return name }
