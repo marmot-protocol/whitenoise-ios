@@ -141,6 +141,7 @@ struct WelcomeView: View {
             )
             .presentationDragIndicator(.visible)
             .presentationContentInteraction(.resizes)
+            .presentationBackground(Color(uiColor: .systemBackground))
             .presentationSizing(WelcomeSheetSizing(isSignUp: route == .signUp))
         }
         .productScreen(.onboarding)
