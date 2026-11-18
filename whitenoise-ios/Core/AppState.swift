@@ -1670,6 +1670,7 @@ final class AppState {
         }
         accountSetupSnapshots = unfinished
         onboardingRecoveryAccounts = recoveryAccounts
+        deviceLinks.remindUnlinkedProfiles(readyAccounts)
         if let current = pendingAccountSetup {
             if let currentSetupSnapshot {
                 current.apply(currentSetupSnapshot)

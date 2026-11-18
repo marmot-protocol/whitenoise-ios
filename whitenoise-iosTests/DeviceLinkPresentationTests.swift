@@ -274,3 +274,50 @@ extension DeviceLinkPresentationTests {
         #expect(OtherProfileLinkRequest.first(accounts: accounts, prompts: [:], dismissedPromptIDs: []) == nil)
     }
 }
+
+// MARK: Moving this device
+
+extension DeviceLinkPresentationTests {
+    @Test func onlyRecognizedOldDevicesAreOfferedWithTheirNames() {
+        let move = DeviceGroupMoveViewFfi(
+            moveId: "move",
+            state: .made,
+            oldSiblings: [
+                DeviceGroupMoveSiblingFfi(slotIdHex: hex("b1"), label: "Work Mac", questionSuppressed: true),
+                DeviceGroupMoveSiblingFfi(slotIdHex: hex("b2"), label: "Old Phone", questionSuppressed: false),
+                DeviceGroupMoveSiblingFfi(slotIdHex: hex("b3"), label: "  ", questionSuppressed: true),
+            ],
+            overriddenRejectionSlots: []
+        )
+        let offered = DeviceGroupMovePresentation.siblings(move)
+        #expect(offered.map(\.slotIdHex) == [hex("b1"), hex("b3")])
+        #expect(DeviceGroupMovePresentation.siblingMessage(offered[0]).contains("Work Mac"))
+        #expect(DeviceGroupMovePresentation.siblingMessage(offered[1])
+            .contains(LinkedDevicePresentation.name(label: "")))
+    }
+
+    @Test func movingWarnsOnlyWhileALinkThisDeviceApprovedIsStillJoining() {
+        let joining = [linkPrompt("p1", .linking)]
+        #expect(DeviceGroupMovePresentation.warnsAboutPendingLink(hasDeviceGroup: true, prompts: joining))
+        #expect(!DeviceGroupMovePresentation.warnsAboutPendingLink(hasDeviceGroup: false, prompts: joining))
+        let settled = [linkPrompt("p2", .comparing(code: linkCode())), linkPrompt("p3", .linked)]
+        #expect(!DeviceGroupMovePresentation.warnsAboutPendingLink(hasDeviceGroup: true, prompts: settled))
+    }
+
+    // MARK: Unlinked profiles
+
+    @Test func anUnlinkedProfileIsRaisedAgainOncePerLaunchAndOneAtATime() {
+        var unlinked = accountSummary("old", byte: "c1", signedOut: true)
+        unlinked.unlinked = true
+        var other = accountSummary("other", byte: "c2", signedOut: true)
+        other.unlinked = true
+        let signedOut = accountSummary("plain", byte: "c3", signedOut: true)
+        let accounts = [signedOut, unlinked, other]
+
+        #expect(UnlinkedProfileReminder.next(accounts: accounts, reminded: [], showing: nil) == hex("c1"))
+        #expect(UnlinkedProfileReminder.next(accounts: accounts, reminded: [hex("c1")], showing: nil) == hex("c2"))
+        #expect(UnlinkedProfileReminder.next(accounts: accounts, reminded: [], showing: hex("c2")) == nil)
+        #expect(UnlinkedProfileReminder.next(accounts: accounts, reminded: [hex("c1"), hex("c2")], showing: nil) == nil)
+        #expect(UnlinkedProfileReminder.next(accounts: [signedOut], reminded: [], showing: nil) == nil)
+    }
+}

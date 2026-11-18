@@ -279,7 +279,11 @@ link request presents itself over any
 screen until the user acts or puts it away; it stays on the Devices screen and the
 Chats banner. As on the Mac, so does one MDK can't link yet (rate limited, needs an
 update, too many devices, competing requests): it says why and offers only Not Now,
-which declines it. Show the roster's label and settings, not the user's typed values,
+which declines it. Link to Another Device stays offered on a device that already has a
+device list; linking it there moves it. Devices → Moving This Device shows each of MDK's
+`moves` and, for old devices it recognizes (`questionSuppressed`), says to link them from
+that device, with Dismiss (`dismissDeviceGroupMoveSibling`). While a link this device
+approved is still `.linking`, both places warn to finish it before moving. Show the roster's label and settings, not the user's typed values,
 once MDK reports them. Never approve, reject or start fresh on the user's behalf.
 `enableAccountDevices` is one admin commit that can't be undone. Offer it only as
 an admin nudge in chat details while `accountDevicesActivation` is `eligible` (every
@@ -297,7 +301,7 @@ Sign Out & Wipe with linked devices says the other devices finish removing this 
 the wipe report shows `siblingsNotReached` (never clean) and `groupsLeftToSiblings`.
 An unlinked account stays listed (`unlinked`, `signedOut`), so `DeviceUnlinked`
 offers Remove from This Device (`signOutAndWipe`) or Later, which routes away like
-a sign-out. Signing in to it fails with `AccountUnlinked`; the import flow asks
+a sign-out; each launch raises it again, once, for a signed-out `unlinked` profile. Signing in to it fails with `AccountUnlinked`; the import flow asks
 before removing that copy and retrying the import.
 
 ## Chat presentation and invitation recovery

@@ -169130,66 +169130,6 @@
         }
       }
     },
-    "Use Add a New Device on a device that already has your chats." : {
-      "comment" : "Devices screen footer explaining which link action to use.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verwende „Neues Gerät hinzufügen“ auf einem Gerät, das deine Chats bereits hat."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usa Añadir un dispositivo nuevo en un dispositivo que ya tenga tus chats."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Utilisez Ajouter un nouvel appareil sur un appareil qui a déjà vos discussions."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usa Aggiungi un nuovo dispositivo su un dispositivo che ha già le tue chat."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use Adicionar um novo dispositivo em um dispositivo que já tenha suas conversas."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Используйте «Добавить новое устройство» на устройстве, где уже есть ваши чаты."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sohbetlerinizin zaten bulunduğu bir cihazda Yeni Cihaz Ekle’yi kullanın."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在已有你的聊天的设备上使用“添加新设备”。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在已有你的聊天的裝置上使用「新增新裝置」。"
-          }
-        }
-      }
-    },
     "Use Add a New Device on a device that already has your chats. Use Link to Another Device on the new device, to bring your chats to it." : {
       "comment" : "Devices screen footer on an unlinked device explaining which of the two link actions to use.",
       "extractionState" : "manual",
@@ -171706,6 +171646,426 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "其他個人檔案"
+          }
+        }
+      }
+    },
+    "Waiting to join your other device’s list" : {
+      "comment" : "Progress of moving this device to another device list: waiting for the invitation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten auf Beitritt zur Liste deines anderen Geräts"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando para unirse a la lista de tu otro dispositivo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente pour rejoindre la liste de votre autre appareil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In attesa di unirsi all’elenco dell’altro dispositivo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aguardando para entrar na lista do seu outro dispositivo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ожидание входа в список другого устройства"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diğer cihazınızın listesine katılmak bekleniyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待加入你另一台设备的列表"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待加入你另一台裝置的列表"
+          }
+        }
+      }
+    },
+    "Joining your other device’s list" : {
+      "comment" : "Progress of moving this device to another device list: joining.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liste deines anderen Geräts wird beigetreten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uniéndote a la lista de tu otro dispositivo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoindre la liste de votre autre appareil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accesso all’elenco dell’altro dispositivo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrando na lista do seu outro dispositivo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Присоединение к списку другого устройства"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diğer cihazınızın listesine katılınıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在加入你另一台设备的列表"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在加入你另一台裝置的列表"
+          }
+        }
+      }
+    },
+    "Moved to your other device’s list" : {
+      "comment" : "This device finished moving to another device list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In die Liste deines anderen Geräts verschoben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movido a la lista de tu otro dispositivo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacé vers la liste de votre autre appareil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spostato nell’elenco dell’altro dispositivo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movido para a lista do seu outro dispositivo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перемещено в список другого устройства"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diğer cihazınızın listesine taşındı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已移到你另一台设备的列表"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已移到你另一台裝置的列表"
+          }
+        }
+      }
+    },
+    "Couldn’t move to your other device’s list" : {
+      "comment" : "Moving this device to another device list failed; it stays in its current list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wechsel zur Liste deines anderen Geräts nicht möglich"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo pasar a la lista de tu otro dispositivo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de passer à la liste de votre autre appareil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile passare all’elenco dell’altro dispositivo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível passar para a lista do seu outro dispositivo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось перейти в список другого устройства"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diğer cihazınızın listesine geçilemedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法移到你另一台设备的列表"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法移到你另一台裝置的列表"
+          }
+        }
+      }
+    },
+    "%@ is still in your old device list. Link it from that device." : {
+      "comment" : "After this device moved to another device list, a device left in the old list. %@ is that device's name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist noch in deiner alten Geräteliste. Verknüpfe es von diesem Gerät aus."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ sigue en tu lista de dispositivos anterior. Vincúlalo desde ese dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ figure toujours dans votre ancienne liste d’appareils. Associez-le depuis cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ è ancora nel tuo vecchio elenco di dispositivi. Collegalo da quel dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ainda está na sua lista de dispositivos antiga. Vincule-o a partir desse dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ всё ещё в вашем старом списке устройств. Привяжите его с того устройства."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hâlâ eski cihaz listenizde. Onu o cihazdan bağlayın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 仍在你的旧设备列表中。请在那台设备上关联它。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 仍在你的舊裝置列表中。請在那台裝置上連結它。"
+          }
+        }
+      }
+    },
+    "Moving This Device" : {
+      "comment" : "Devices screen section title while this device moves to another device list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät wird verschoben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moviendo este dispositivo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacement de cet appareil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spostamento di questo dispositivo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movendo este dispositivo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перемещение этого устройства"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihaz taşınıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在移动这台设备"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在移動這台裝置"
+          }
+        }
+      }
+    },
+    "Finish linking your new device before moving this device. Moving now can stop it from joining your chats." : {
+      "comment" : "Warning before moving this device to another device list while a device it approved is still joining.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schließe die Verknüpfung deines neuen Geräts ab, bevor du dieses Gerät verschiebst. Wenn du es jetzt verschiebst, kann es deinen Chats womöglich nicht beitreten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Termina de vincular tu nuevo dispositivo antes de mover este. Si lo mueves ahora, puede que no se una a tus chats."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminez l’association de votre nouvel appareil avant de déplacer celui-ci. Le déplacer maintenant peut l’empêcher de rejoindre vos discussions."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completa il collegamento del nuovo dispositivo prima di spostare questo. Spostandolo ora potrebbe non entrare nelle tue chat."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conclua a vinculação do seu novo dispositivo antes de mover este. Movê-lo agora pode impedir que ele entre nas suas conversas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершите привязку нового устройства, прежде чем перемещать это. Если переместить его сейчас, новое устройство может не попасть в ваши чаты."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazı taşımadan önce yeni cihazınızı bağlamayı tamamlayın. Şimdi taşımak, onun sohbetlerinize katılmasını engelleyebilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先完成新设备的关联，再移动这台设备。现在移动可能会让新设备无法加入你的聊天。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請先完成新裝置的連結，再移動這台裝置。現在移動可能會讓新裝置無法加入你的聊天。"
           }
         }
       }

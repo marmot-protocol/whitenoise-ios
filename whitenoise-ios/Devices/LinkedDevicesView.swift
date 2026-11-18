@@ -34,6 +34,7 @@ struct LinkedDevicesView: View {
             if !otherRequests.isEmpty { otherProfilesSection(otherRequests) }
             devicesSections
             linkSection
+            if !store.moves.isEmpty { movesSection }
             signInsSection
             if store.keyPackageRefreshOverdue { keyPackageSection }
             if let errorMessage {
@@ -265,8 +266,8 @@ struct LinkedDevicesView: View {
                 } label: {
                     Label("Linking in progress…", systemImage: "hourglass")
                 }
-            } else if !store.hasDeviceGroup {
-                // This is the new device: ask one already signed in to approve it.
+            } else {
+                // This is the new device, or one moving to another list: ask a device there to approve it.
                 Button {
                     store.present(.linkThisDevice)
                 } label: {
@@ -274,10 +275,41 @@ struct LinkedDevicesView: View {
                 }
             }
         } footer: {
-            if store.hasDeviceGroup {
-                Text("Use Add a New Device on a device that already has your chats.")
-            } else {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Use Add a New Device on a device that already has your chats. Use Link to Another Device on the new device, to bring your chats to it.")
+                if store.hasDeviceGroup, !store.deviceGroupStalled {
+                    Text("This device is already linked to other devices. Linking it to another device moves it to that device’s list.")
+                }
+                if store.warnsAboutPendingLinkBeforeMove {
+                    Text("Finish linking your new device before moving this device. Moving now can stop it from joining your chats.")
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
+    }
+
+    private var movesSection: some View {
+        Section("Moving This Device") {
+            ForEach(store.moves, id: \.moveId) { move in
+                Text(DeviceGroupMovePresentation.title(move.state))
+                ForEach(DeviceGroupMovePresentation.siblings(move), id: \.slotIdHex) { sibling in
+                    let key = "moveSibling:\(move.moveId):\(sibling.slotIdHex)"
+                    HStack {
+                        Text(DeviceGroupMovePresentation.siblingMessage(sibling))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Dismiss") {
+                            run(key) {
+                                try await store.dismissMoveSibling(
+                                    moveId: move.moveId, slotIdHex: sibling.slotIdHex, using: appState
+                                )
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(busyKey == key)
+                    }
+                }
             }
         }
     }

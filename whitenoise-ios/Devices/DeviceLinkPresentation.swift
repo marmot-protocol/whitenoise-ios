@@ -502,3 +502,48 @@ nonisolated struct OtherProfileLinkRequest: Identifiable, Equatable {
         return nil
     }
 }
+
+/// This device moving to another device list: linking it while it already has
+/// one. MDK keeps the old list until the move is Made.
+nonisolated enum DeviceGroupMovePresentation {
+    static func title(_ state: DeviceGroupMoveStateFfi) -> String {
+        switch state {
+        case .waitingForWelcome: L10n.string("Waiting to join your other device’s list")
+        case .joining: L10n.string("Joining your other device’s list")
+        case .made: L10n.string("Moved to your other device’s list")
+        case .failed: L10n.string("Couldn’t move to your other device’s list")
+        }
+    }
+
+    /// Devices left in the old list that MDK recognizes. Each one links from
+    /// its own side, as only a new device can start a link.
+    static func siblings(_ move: DeviceGroupMoveViewFfi) -> [DeviceGroupMoveSiblingFfi] {
+        move.oldSiblings.filter(\.questionSuppressed)
+    }
+
+    static func siblingMessage(_ sibling: DeviceGroupMoveSiblingFfi) -> String {
+        L10n.formatted(
+            "%@ is still in your old device list. Link it from that device.",
+            LinkedDevicePresentation.name(label: sibling.label)
+        )
+    }
+
+    /// Moving while a link this device approved is still joining can end that
+    /// link and skip its chat additions, so MDK advises finishing it first.
+    static func warnsAboutPendingLink(hasDeviceGroup: Bool, prompts: [DeviceLinkPromptFfi]) -> Bool {
+        hasDeviceGroup && prompts.contains { $0.state == .linking }
+    }
+}
+
+/// Raises the unlinked notice again after a relaunch for a profile the user
+/// put off removing, once per launch each, as the Mac does.
+nonisolated enum UnlinkedProfileReminder {
+    static func next(
+        accounts: [AccountSummaryFfi],
+        reminded: Set<String>,
+        showing: String?
+    ) -> String? {
+        guard showing == nil else { return nil }
+        return accounts.first { $0.unlinked && $0.signedOut && !reminded.contains($0.accountIdHex) }?.accountIdHex
+    }
+}

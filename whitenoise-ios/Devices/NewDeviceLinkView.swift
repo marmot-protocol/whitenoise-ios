@@ -79,6 +79,12 @@ struct NewDeviceLinkView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            if store.warnsAboutPendingLinkBeforeMove {
+                Label("Finish linking your new device before moving this device. Moving now can stop it from joining your chats.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         case .waitingForAnswer:
             DeviceLinkStatusHeader(
                 systemImage: "hourglass",

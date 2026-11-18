@@ -66,6 +66,8 @@ final class DeviceLinkStore {
     /// The device sheet MainView presents.
     private(set) var sheet: Sheet?
     var unlinkedNotice: UnlinkedNotice?
+    /// Unlinked profiles already raised in this launch.
+    private var remindedUnlinkedAccountIDs: Set<String> = []
     /// The account that finished setup on this device in this launch, which
     /// makes it the new device of a link.
     private(set) var setupFinishedAccountIdHex: String?
@@ -90,6 +92,10 @@ final class DeviceLinkStore {
     var newDeviceStep: NewDeviceLinkStep { NewDeviceLinkStep(snapshot?.newDevice) }
     var pendingPrompts: [DeviceLinkPromptFfi] { DeviceLinkPromptPolicy.pending(snapshot?.prompts ?? []) }
     var deviceGroupStalled: Bool { snapshot?.deviceGroupStalled ?? false }
+    var moves: [DeviceGroupMoveViewFfi] { snapshot?.moves ?? [] }
+    var warnsAboutPendingLinkBeforeMove: Bool {
+        DeviceGroupMovePresentation.warnsAboutPendingLink(hasDeviceGroup: hasDeviceGroup, prompts: snapshot?.prompts ?? [])
+    }
 
     var presentedPromptID: String? {
         if case .approve(let promptID) = sheet { promptID } else { nil }
@@ -253,6 +259,7 @@ final class DeviceLinkStore {
         case .keyPackageRefreshOverdueChanged(let id, _): (part, accountID) = (.keyPackage, id)
         case .chatHistoryImportsChanged(let id, _): (part, accountID) = (.historyImports, id)
         case .deviceUnlinked(let id, _):
+            remindedUnlinkedAccountIDs.insert(id)
             unlinkedNotice = UnlinkedNotice(accountIdHex: id)
             if id == scope?.accountIdHex { clear() }
             // The alert's Remove or Later routes away from it.
@@ -542,6 +549,24 @@ final class DeviceLinkStore {
             try await marmot.dismissCompromiseWarning(accountRef: account)
         }
         await refresh(.compromise, using: appState)
+    }
+
+    /// Ends one "still in your old device list" hint. It neither links nor
+    /// removes that device.
+    func dismissMoveSibling(moveId: String, slotIdHex: String, using appState: AppState) async throws {
+        try await mutateSnapshot(using: appState) { marmot, account in
+            try await marmot.dismissDeviceGroupMoveSibling(accountRef: account, moveId: moveId, slotIdHex: slotIdHex)
+        }
+    }
+
+    /// After a relaunch, raises the unlinked notice again for a profile whose
+    /// removal the user put off with Later.
+    func remindUnlinkedProfiles(_ accounts: [AccountSummaryFfi]) {
+        guard let id = UnlinkedProfileReminder.next(
+            accounts: accounts, reminded: remindedUnlinkedAccountIDs, showing: unlinkedNotice?.accountIdHex
+        ) else { return }
+        remindedUnlinkedAccountIDs.insert(id)
+        unlinkedNotice = UnlinkedNotice(accountIdHex: id)
     }
 
     /// Discards this device's stalled device-group copy and publishes a fresh
