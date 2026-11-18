@@ -1350,7 +1350,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lukitsee Kohinan, kun poistut. iPhonen pääsykoodia voi käyttää varakeinona."
+            "value" : "Lukitsee White Noisen, kun poistut. iPhonen pääsykoodia voi käyttää varakeinona."
           }
         },
         "fr" : {
@@ -1634,7 +1634,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kirjaa ulos kaikki profiilit ja poistaa pysyvästi kaikki Kohinan tiedot tästä laitteesta."
+            "value" : "Kirjaa ulos kaikki profiilit ja poistaa pysyvästi kaikki White Noisen tiedot tästä laitteesta."
           }
         },
         "fr" : {
@@ -1989,7 +1989,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jakaa automaattisesti ominaisuuksien käyttömäärät ja sovelluksen suorituskyvyn Kohinalle."
+            "value" : "Jakaa automaattisesti ominaisuuksien käyttömäärät ja sovelluksen suorituskyvyn White Noiselle."
           }
         },
         "fr" : {
@@ -4471,7 +4471,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tervetuloa Kohinaan"
+            "value" : "Tervetuloa White Noiseen"
           }
         },
         "fr" : {
@@ -6027,7 +6027,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ilmiantaminen Kohinalle ei ole käytettävissä tässä sovellusversiossa."
+            "value" : "Ilmiantaminen White Noiselle ei ole käytettävissä tässä sovellusversiossa."
           }
         },
         "fr" : {
@@ -6382,7 +6382,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tallennettu ja odottaa lähetystä Kohinan tiimille."
+            "value" : "Tallennettu ja odottaa lähetystä White Noisen tiimille."
           }
         },
         "fr" : {
@@ -6453,7 +6453,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tallennettu. Toimituksen vahvistusta Kohinan tiimille odotetaan."
+            "value" : "Tallennettu. Toimituksen vahvistusta White Noisen tiimille odotetaan."
           }
         },
         "fr" : {
@@ -6660,7 +6660,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lähetä Kohinalle"
+            "value" : "Lähetä White Noiselle"
           }
         },
         "fr" : {
@@ -6731,7 +6731,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lähetetty Kohinan tiimille."
+            "value" : "Lähetetty White Noisen tiimille."
           }
         },
         "fr" : {
@@ -7228,7 +7228,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kopiota Kohinalle ei voitu lähettää. Yritä uudelleen."
+            "value" : "Kopiota White Noiselle ei voitu lähettää. Yritä uudelleen."
           }
         },
         "fr" : {
@@ -7926,7 +7926,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Et näe hänen viestejään. Estä ja ilmianna ilmoittaa myös Kohinan tiimille."
+            "value" : "Et näe hänen viestejään. Estä ja ilmianna ilmoittaa myös White Noisen tiimille."
           }
         },
         "fr" : {
@@ -7997,7 +7997,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ilmiantosi ja lähettäjän julkinen avain lähetetään yksityisesti Kohinan tiimille. Itse viestiä ei jaeta, eikä lähettäjälle ilmoiteta."
+            "value" : "Ilmiantosi ja lähettäjän julkinen avain lähetetään yksityisesti White Noisen tiimille. Itse viestiä ei jaeta, eikä lähettäjälle ilmoiteta."
           }
         },
         "fr" : {
@@ -9505,7 +9505,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ ei vielä käytä Kohinaa."
+            "value" : "%@ ei vielä käytä White Noisea."
           }
         },
         "fr" : {
@@ -9576,7 +9576,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ ei ole vielä Kohinassa. Jaa sovellus, niin voitte keskustella turvallisesti."
+            "value" : "%@ ei ole vielä White Noisessa. Jaa sovellus, niin voitte keskustella turvallisesti."
           }
         },
         "fr" : {
@@ -12841,7 +12841,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld jäsenen on päivitettävä Kohina ennen kuin voit lopettaa tämän ryhmän."
+            "value" : "%lld jäsenen on päivitettävä White Noise ennen kuin voit lopettaa tämän ryhmän."
           }
         },
         "fr" : {
@@ -25377,7 +25377,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kuukausittaisella lahjoituksella autat IPF:ää jatkamaan Kohinan ja vapaan, yksityisen viestinnän työkalujen rakentamista."
+            "value" : "Kuukausittaisella lahjoituksella autat IPF:ää jatkamaan White Noisen ja vapaan, yksityisen viestinnän työkalujen rakentamista."
           }
         },
         "fr" : {
@@ -29880,7 +29880,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Valitse, seuraako Kohina laitteesi ulkoasua vai käyttääkö se aina vaaleaa tai tummaa teemaa. True Black on tumma teema, jossa on täysin mustat taustat OLED-näytöille."
+            "value" : "Valitse, seuraako White Noise laitteesi ulkoasua vai käyttääkö se aina vaaleaa tai tummaa teemaa. True Black on tumma teema, jossa on täysin mustat taustat OLED-näytöille."
           }
         },
         "fr" : {
@@ -30697,7 +30697,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diagnostiikkalokien tyhjentäminen poistaa lokit vain tästä laitteesta. Se ei poista Kohinan palvelimille jo lähetettyjä kopioita eikä lopeta tallennusta tai automaattisia lähetyksiä."
+            "value" : "Diagnostiikkalokien tyhjentäminen poistaa lokit vain tästä laitteesta. Se ei poista White Noisen palvelimille jo lähetettyjä kopioita eikä lopeta tallennusta tai automaattisia lähetyksiä."
           }
         },
         "fr" : {
@@ -37911,7 +37911,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Asetuksia ei voitu avata. Avaa Asetukset-sovellus ja salli kameran käyttö Kohinalle."
+            "value" : "Asetuksia ei voitu avata. Avaa Asetukset-sovellus ja salli kameran käyttö White Noiselle."
           }
         },
         "fr" : {
@@ -61548,7 +61548,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Auta parantamaan Kohinaa"
+            "value" : "Auta parantamaan White Noisea"
           }
         },
         "fr" : {
@@ -61755,7 +61755,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Auta ymmärtämään, miten Kohinaa käytetään, ja tekemään viestinnästä luotettavampaa."
+            "value" : "Auta ymmärtämään, miten White Noisea käytetään, ja tekemään viestinnästä luotettavampaa."
           }
         },
         "fr" : {
@@ -65075,7 +65075,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kutsu Kohinaan"
+            "value" : "Kutsu White Noiseen"
           }
         },
         "fr" : {
@@ -65909,7 +65909,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF on Wyomingissa rekisteröity yhdysvaltalainen 501(c)(3)-voittoa tavoittelematon järjestö, joka rakentaa työkaluja, joiden avulla ihmiset voivat viestiä yksityisesti. IPF kehittää Kohinaa ja Murmeli-protokollaa, sen taustalla olevaa avointa viestintäprotokollaa. Lahjoituksesi tukee tätä työtä ja ajatusta, että yksityisten keskustelujen pitäisi olla kaikkien ulottuvilla."
+            "value" : "IPF on Wyomingissa rekisteröity yhdysvaltalainen 501(c)(3)-voittoa tavoittelematon järjestö, joka rakentaa työkaluja, joiden avulla ihmiset voivat viestiä yksityisesti. IPF kehittää White Noisea ja Murmeli-protokollaa, sen taustalla olevaa avointa viestintäprotokollaa. Lahjoituksesi tukee tätä työtä ja ajatusta, että yksityisten keskustelujen pitäisi olla kaikkien ulottuvilla."
           }
         },
         "fr" : {
@@ -69350,7 +69350,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keskustellaan Kohinassa: yksityistä ja turvallista viestintää. Lataa se osoitteesta https://whitenoise.chat ja jaa minulle profiilisi QR-koodi."
+            "value" : "Keskustellaan White Noisessa: yksityistä ja turvallista viestintää. Lataa se osoitteesta https://whitenoise.chat ja jaa minulle profiilisi QR-koodi."
           }
         },
         "fr" : {
@@ -71960,7 +71960,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lukitsee Kohinan, kun poistut. Voit käyttää iPhonen pääsykoodia, jos biometrinen tunnistus ei ole käytettävissä."
+            "value" : "Lukitsee White Noisen, kun poistut. Voit käyttää iPhonen pääsykoodia, jos biometrinen tunnistus ei ole käytettävissä."
           }
         },
         "fr" : {
@@ -77396,7 +77396,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Push-ilmoitukset eivät ole käytettävissä tässä versiossa, ennen kuin Kohinan push-palvelimen julkinen avain on määritetty."
+            "value" : "Push-ilmoitukset eivät ole käytettävissä tässä versiossa, ennen kuin White Noisen push-palvelimen julkinen avain on määritetty."
           }
         },
         "fr" : {
@@ -77461,7 +77461,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Push-ilmoituksia varten Kohinalle rekisteröidään vain salattu APNS-token. Apple vastaanottaa yleisiä ilmoitusherätyksiä."
+            "value" : "Push-ilmoituksia varten White Noiselle rekisteröidään vain salattu APNS-token. Apple vastaanottaa yleisiä ilmoitusherätyksiä."
           }
         },
         "fr" : {
@@ -84091,7 +84091,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Käytätkö Kohinaa? Lähetä minulle viesti täällä."
+            "value" : "Käytätkö White Noisea? Lähetä minulle viesti täällä."
           }
         },
         "fr" : {
@@ -85770,7 +85770,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Avaa Kohina nähdäksesi kutsun"
+            "value" : "Avaa White Noise nähdäksesi kutsun"
           }
         },
         "fr" : {
@@ -89930,7 +89930,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Osoita kameralla Kohina-profiilin QR-koodia"
+            "value" : "Osoita kameralla White Noise -profiilin QR-koodia"
           }
         },
         "fr" : {
@@ -108823,7 +108823,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aseta iPhoneen pääsykoodi, jotta voit lukita Kohinan."
+            "value" : "Aseta iPhoneen pääsykoodi, jotta voit lukita White Noisen."
           }
         },
         "fr" : {
@@ -113436,7 +113436,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kirjaa ulos kaikki profiilit ja poistaa pysyvästi kaikki Kohinan tiedot tästä iPhonesta."
+            "value" : "Kirjaa ulos kaikki profiilit ja poistaa pysyvästi kaikki White Noisen tiedot tästä iPhonesta."
           }
         },
         "fr" : {
@@ -116594,7 +116594,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tue Kohinaa"
+            "value" : "Tue White Noisea"
           }
         },
         "fr" : {
@@ -117925,7 +117925,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kiitos, että tuet IPF:ää ja Kohinaa. Autat ihmisiä viestimään vapaasti ja yksityisesti."
+            "value" : "Kiitos, että tuet IPF:ää ja White Noisea. Autat ihmisiä viestimään vapaasti ja yksityisesti."
           }
         },
         "fr" : {
@@ -119066,7 +119066,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "QR-koodi ei ole Kohina-profiili."
+            "value" : "QR-koodi ei ole White Noise -profiili."
           }
         },
         "fr" : {
@@ -121837,7 +121837,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nämä ovat asennuskehotteita. Valitse agenttisi, kopioi sen kehote ja liitä se kyseiselle agentille, niin agentti yhdistetään Kohinaan. Kehote sisältää npubisi (julkinen avain, ei salaisuus) ja pyytää agenttia selittämään, miten connector toimii, ennen kuin se pyytää lupaasi asennukseen. Käytä vain agenttia, jota itse ajat ja johon luotat. Yksityistä avaintasi ei koskaan liitetä mukaan."
+            "value" : "Nämä ovat asennuskehotteita. Valitse agenttisi, kopioi sen kehote ja liitä se kyseiselle agentille, niin agentti yhdistetään White Noiseen. Kehote sisältää npubisi (julkinen avain, ei salaisuus) ja pyytää agenttia selittämään, miten connector toimii, ennen kuin se pyytää lupaasi asennukseen. Käytä vain agenttia, jota itse ajat ja johon luotat. Yksityistä avaintasi ei koskaan liitetä mukaan."
           }
         },
         "fr" : {
@@ -122050,7 +122050,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nämä valinnat koskevat kaikkia tämän laitteen profiileja. Analytiikka ei sisällä viestejä, mediaa, yhteystietoja, profiilin tietoja eikä avaimia. Diagnostiikkalokit peittävät tunnisteet, ja ne lähetetään Kohinalle vianmääritystä varten."
+            "value" : "Nämä valinnat koskevat kaikkia tämän laitteen profiileja. Analytiikka ei sisällä viestejä, mediaa, yhteystietoja, profiilin tietoja eikä avaimia. Diagnostiikkalokit peittävät tunnisteet, ja ne lähetetään White Noiselle vianmääritystä varten."
           }
         },
         "fr" : {
@@ -122252,7 +122252,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hän ei ole vielä Kohinassa. Jaa sovellus, niin voitte keskustella turvallisesti."
+            "value" : "Hän ei ole vielä White Noisessa. Jaa sovellus, niin voitte keskustella turvallisesti."
           }
         },
         "fr" : {
@@ -124248,7 +124248,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämä on asennuskehote, jolla tämä Claude Code -ympäristö yhdistetään Kohinaan Marmotin kautta. Lue Claude Code -harnessin virallinen opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md ja aina ajantasainen connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Varmista esivaatimukset: Claude Code on asennettu, todennettu ja käytettävissä PATH-polussa, ja tämä kone käyttää samoja julkisia releitä kuin puhelimeni. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, käytä tarkistussummalla varmennettua julkaisun asennusskriptiä install-claude-marmot.sh, alusta wn-agent tälle npubille sallitulla welcomerilla ja tarkista wn-claude --version. Vastaa sitten agenttisi npubilla ja pyydä minua kutsumaan agentti Kohinasta ja lähettämään testiviesti tältä sallitulta npubilta määritettyjen releiden kautta. Älä ilmoita käyttöönottoa valmiiksi ennen kuin wn-claude vastaa Kohinan kautta. Jos tätä edestakaista viestiä ei voida varmistaa automaattisesti, merkitse selvästi, että varmistus laitteella tarvitaan."
+            "value" : "Tämä on asennuskehote, jolla tämä Claude Code -ympäristö yhdistetään White Noiseen Marmotin kautta. Lue Claude Code -harnessin virallinen opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md ja aina ajantasainen connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Varmista esivaatimukset: Claude Code on asennettu, todennettu ja käytettävissä PATH-polussa, ja tämä kone käyttää samoja julkisia releitä kuin puhelimeni. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, käytä tarkistussummalla varmennettua julkaisun asennusskriptiä install-claude-marmot.sh, alusta wn-agent tälle npubille sallitulla welcomerilla ja tarkista wn-claude --version. Vastaa sitten agenttisi npubilla ja pyydä minua kutsumaan agentti White Noisesta ja lähettämään testiviesti tältä sallitulta npubilta määritettyjen releiden kautta. Älä ilmoita käyttöönottoa valmiiksi ennen kuin wn-claude vastaa White Noisen kautta. Jos tätä edestakaista viestiä ei voida varmistaa automaattisesti, merkitse selvästi, että varmistus laitteella tarvitaan."
           }
         },
         "fr" : {
@@ -124313,7 +124313,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämä on asennuskehote, jolla tämä Codex-ympäristö yhdistetään Kohinaan Marmotin kautta. Lue Codex-harnessin virallinen opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md ja aina ajantasainen connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Varmista esivaatimukset: Codex CLI on asennettu, todennettu ja käytettävissä PATH-polussa, ja tämä kone käyttää samoja julkisia releitä kuin puhelimeni. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, käytä tarkistussummalla varmennettua julkaisun asennusskriptiä install-codex-marmot.sh, alusta wn-agent tälle npubille sallitulla welcomerilla ja tarkista wn-codex --version. Vastaa sitten agenttisi npubilla ja pyydä minua kutsumaan agentti Kohinasta ja lähettämään testiviesti tältä sallitulta npubilta määritettyjen releiden kautta. Älä ilmoita käyttöönottoa valmiiksi ennen kuin wn-codex vastaa Kohinan kautta. Jos tätä edestakaista viestiä ei voida varmistaa automaattisesti, merkitse selvästi, että varmistus laitteella tarvitaan."
+            "value" : "Tämä on asennuskehote, jolla tämä Codex-ympäristö yhdistetään White Noiseen Marmotin kautta. Lue Codex-harnessin virallinen opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md ja aina ajantasainen connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Varmista esivaatimukset: Codex CLI on asennettu, todennettu ja käytettävissä PATH-polussa, ja tämä kone käyttää samoja julkisia releitä kuin puhelimeni. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, käytä tarkistussummalla varmennettua julkaisun asennusskriptiä install-codex-marmot.sh, alusta wn-agent tälle npubille sallitulla welcomerilla ja tarkista wn-codex --version. Vastaa sitten agenttisi npubilla ja pyydä minua kutsumaan agentti White Noisesta ja lähettämään testiviesti tältä sallitulta npubilta määritettyjen releiden kautta. Älä ilmoita käyttöönottoa valmiiksi ennen kuin wn-codex vastaa White Noisen kautta. Jos tätä edestakaista viestiä ei voida varmistaa automaattisesti, merkitse selvästi, että varmistus laitteella tarvitaan."
           }
         },
         "fr" : {
@@ -124378,7 +124378,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämä on asennuskehote, jolla tämä Hermes-asennus yhdistetään Kohinaan Marmotin kautta. Lue uusin connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, asenna connector ja varmista sen toiminta, ja vastaa sitten agenttisi npubilla."
+            "value" : "Tämä on asennuskehote, jolla tämä Hermes-asennus yhdistetään White Noiseen Marmotin kautta. Lue uusin connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, asenna connector ja varmista sen toiminta, ja vastaa sitten agenttisi npubilla."
           }
         },
         "fr" : {
@@ -124443,7 +124443,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämä on asennuskehote, jolla tämä OpenClaw-instanssi yhdistetään Kohinaan Marmotin kautta. Lue uusin connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, asenna connector ja varmista sen toiminta, ja vastaa sitten agenttisi npubilla."
+            "value" : "Tämä on asennuskehote, jolla tämä OpenClaw-instanssi yhdistetään White Noiseen Marmotin kautta. Lue uusin connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, asenna connector ja varmista sen toiminta, ja vastaa sitten agenttisi npubilla."
           }
         },
         "fr" : {
@@ -124508,7 +124508,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämä on asennuskehote, jolla tämä OpenCode-ympäristö yhdistetään Kohinaan Marmotin kautta. Lue uusin connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, asenna connector ja varmista sen toiminta, ja vastaa sitten agenttisi npubilla."
+            "value" : "Tämä on asennuskehote, jolla tämä OpenCode-ympäristö yhdistetään White Noiseen Marmotin kautta. Lue uusin connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, asenna connector ja varmista sen toiminta, ja vastaa sitten agenttisi npubilla."
           }
         },
         "fr" : {
@@ -124574,7 +124574,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämä on asennuskehote, jolla tämä Pi-ympäristö yhdistetään Kohinaan Marmotin kautta. Lue Pi-harnessin virallinen opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md ja aina ajantasainen connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Varmista esivaatimukset: Pi on asennettu, todennettu ja käytettävissä PATH-polussa, ja tämä kone käyttää samoja julkisia releitä kuin puhelimeni. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, käytä tarkistussummalla varmennettua julkaisun asennusskriptiä install-pi-marmot.sh, alusta wn-agent tälle npubille sallitulla welcomerilla ja tarkista wn-pi --version. Vastaa sitten agenttisi npubilla ja pyydä minua kutsumaan agentti Kohinasta ja lähettämään testiviesti tältä sallitulta npubilta määritettyjen releiden kautta. Älä ilmoita käyttöönottoa valmiiksi ennen kuin wn-pi vastaa Kohinan kautta. Jos tätä edestakaista viestiä ei voida varmistaa automaattisesti, merkitse selvästi, että varmistus laitteella tarvitaan."
+            "value" : "Tämä on asennuskehote, jolla tämä Pi-ympäristö yhdistetään White Noiseen Marmotin kautta. Lue Pi-harnessin virallinen opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md ja aina ajantasainen connector-opas osoitteessa https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Selitä minulle, miten connector toimii ja mitä asennus muuttaa. Varmista esivaatimukset: Pi on asennettu, todennettu ja käytettävissä PATH-polussa, ja tämä kone käyttää samoja julkisia releitä kuin puhelimeni. Ehdota sitten asennusvaiheet julkiselle npubilleni: %@, ja pyydä hyväksyntääni ennen kuin teet muutoksia. Kun hyväksyn, käytä tarkistussummalla varmennettua julkaisun asennusskriptiä install-pi-marmot.sh, alusta wn-agent tälle npubille sallitulla welcomerilla ja tarkista wn-pi --version. Vastaa sitten agenttisi npubilla ja pyydä minua kutsumaan agentti White Noisesta ja lähettämään testiviesti tältä sallitulta npubilta määritettyjen releiden kautta. Älä ilmoita käyttöönottoa valmiiksi ennen kuin wn-pi vastaa White Noisen kautta. Jos tätä edestakaista viestiä ei voida varmistaa automaattisesti, merkitse selvästi, että varmistus laitteella tarvitaan."
           }
         },
         "fr" : {
@@ -125857,7 +125857,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tällä henkilöllä ei ole yhteensopivaa kutsuavainta saatavilla. Pyydä häntä avaamaan Kohina ja yritä uudelleen."
+            "value" : "Tällä henkilöllä ei ole yhteensopivaa kutsuavainta saatavilla. Pyydä häntä avaamaan White Noise ja yritä uudelleen."
           }
         },
         "fr" : {
@@ -126742,7 +126742,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämä käyttäjä ei vielä käytä Kohinaa."
+            "value" : "Tämä käyttäjä ei vielä käytä White Noisea."
           }
         },
         "fr" : {
@@ -129454,7 +129454,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Avaa Kohinan lukitus"
+            "value" : "Avaa White Noisen lukitus"
           }
         },
         "fr" : {
@@ -131719,7 +131719,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Käytä Kohinaa koko näytön tilassa ja yritä skannausta uudelleen."
+            "value" : "Käytä White Noisea koko näytön tilassa ja yritä skannausta uudelleen."
           }
         },
         "fr" : {
@@ -131790,7 +131790,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Käytä Kohinaa yhdellä laitteella"
+            "value" : "Käytä White Noisea yhdellä laitteella"
           }
         },
         "fr" : {
@@ -134050,7 +134050,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Käyttökelpoista luetteloa ei löytynyt. Etsi releestä, jota olet käyttänyt aiemmin, tai julkaise Kohinan oletukset."
+            "value" : "Käyttökelpoista luetteloa ei löytynyt. Etsi releestä, jota olet käyttänyt aiemmin, tai julkaise White Noisen oletukset."
           }
         },
         "fr" : {
@@ -135431,7 +135431,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohinan oletukset"
+            "value" : "White Noisen oletukset"
           }
         },
         "fr" : {
@@ -135502,7 +135502,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina ei vielä synkronoi keskusteluja laitteiden välillä. Tätä tiliä kannattaa käyttää yhdellä laitteella."
+            "value" : "White Noise ei vielä synkronoi keskusteluja laitteiden välillä. Tätä tiliä kannattaa käyttää yhdellä laitteella."
           }
         },
         "fr" : {
@@ -135569,7 +135569,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina on ilmainen ja avointa lähdekoodia. Lahjoitukset auttavat kehittämään sitä ja pitämään sen kaikkien saatavilla."
+            "value" : "White Noise on ilmainen ja avointa lähdekoodia. Lahjoitukset auttavat kehittämään sitä ja pitämään sen kaikkien saatavilla."
           }
         },
         "fr" : {
@@ -135634,7 +135634,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina on ilmainen ja avointa lähdekoodia. Lahjoitukset pitävät sen sellaisena."
+            "value" : "White Noise on ilmainen ja avointa lähdekoodia. Lahjoitukset pitävät sen sellaisena."
           }
         },
         "fr" : {
@@ -135699,7 +135699,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina on lukittu"
+            "value" : "White Noise on lukittu"
           }
         },
         "fr" : {
@@ -135765,7 +135765,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohinan tuki"
+            "value" : "White Noisen tuki"
           }
         },
         "fr" : {
@@ -135830,7 +135830,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina toimii tekoälyagenttien kanssa. Agenttisi toimii omalla koneellasi tai palvelimellasi erillisenä Marmot-tilinä, ja keskustelet sen kanssa täällä kuin minkä tahansa yhteystiedon kanssa, päästä päähän salattuna."
+            "value" : "White Noise toimii tekoälyagenttien kanssa. Agenttisi toimii omalla koneellasi tai palvelimellasi erillisenä Marmot-tilinä, ja keskustelet sen kanssa täällä kuin minkä tahansa yhteystiedon kanssa, päästä päähän salattuna."
           }
         },
         "fr" : {
@@ -154900,7 +154900,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pidä tämä avain yksityisenä. Kuka tahansa, jolla se on, voi käyttää profiiliasi, eikä Kohina voi palauttaa sitä."
+            "value" : "Pidä tämä avain yksityisenä. Kuka tahansa, jolla se on, voi käyttää profiiliasi, eikä White Noise voi palauttaa sitä."
           }
         },
         "fr" : {
@@ -155042,7 +155042,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Säilytä yksityinen avaimesi turvallisessa paikassa. Jos kadotat sen, Kohina ei voi palauttaa sitä. Suosittelemme suojaamaan varmuuskopion salasanalla."
+            "value" : "Säilytä yksityinen avaimesi turvallisessa paikassa. Jos kadotat sen, White Noise ei voi palauttaa sitä. Suosittelemme suojaamaan varmuuskopion salasanalla."
           }
         },
         "fr" : {
@@ -155397,7 +155397,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Käytä pitkää, yksilöllistä salasanaa. Tarvitset sitä salatun varmuuskopion avaamiseen. Kohina ei koskaan tallenna sitä."
+            "value" : "Käytä pitkää, yksilöllistä salasanaa. Tarvitset sitä salatun varmuuskopion avaamiseen. White Noise ei koskaan tallenna sitä."
           }
         },
         "fr" : {
@@ -157844,7 +157844,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Emojisarjat ovat julkisia, eikä Kohina tarkista niitä. Sarjan avaaminen tai asentaminen lataa sen kuvat tekijän valitsemilta palvelimilta, jotka näkevät IP-osoitteesi. Asentaminen ei muuta julkista emojiluetteloasi."
+            "value" : "Emojisarjat ovat julkisia, eikä White Noise tarkista niitä. Sarjan avaaminen tai asentaminen lataa sen kuvat tekijän valitsemilta palvelimilta, jotka näkevät IP-osoitteesi. Asentaminen ei muuta julkista emojiluetteloasi."
           }
         },
         "fr" : {
@@ -160990,7 +160990,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tarrapaketit ovat julkisia, eikä Kohina tarkista niitä. Asentamasi paketit näkyvät julkisesti releilläsi."
+            "value" : "Tarrapaketit ovat julkisia, eikä White Noise tarkista niitä. Asentamasi paketit näkyvät julkisesti releilläsi."
           }
         },
         "fr" : {
@@ -161699,7 +161699,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Auttaa ilmoituksia saapumaan, kun Kohina on suljettu."
+            "value" : "Auttaa ilmoituksia saapumaan, kun White Noise on suljettu."
           }
         },
         "fr" : {
@@ -162115,7 +162115,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Poistutaan keskusteluistasi. Tämä voi kestää enintään minuutin. Pidä Kohina auki, kunnes se on valmis."
+            "value" : "Poistutaan keskusteluistasi. Tämä voi kestää enintään minuutin. Pidä White Noise auki, kunnes se on valmis."
           }
         },
         "fr" : {
@@ -162455,7 +162455,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämän profiilin tiedot ovat yhä tällä laitteella. Pidä Kohina auki ja yritä uudelleen."
+            "value" : "Tämän profiilin tiedot ovat yhä tällä laitteella. Pidä White Noise auki ja yritä uudelleen."
           }
         },
         "fr" : {
@@ -165599,7 +165599,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Käynnistä Kohina uudelleen"
+            "value" : "Käynnistä White Noise uudelleen"
           }
         },
         "fr" : {
@@ -168237,7 +168237,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saapuvien viestien relelistallasi ei ole relettä, jota Kohina voi käyttää."
+            "value" : "Saapuvien viestien relelistallasi ei ole relettä, jota White Noise voi käyttää."
           }
         },
         "fr" : {
@@ -168308,7 +168308,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Relelistallasi ei ole relettä, jota Kohina voi käyttää."
+            "value" : "Relelistallasi ei ole relettä, jota White Noise voi käyttää."
           }
         },
         "fr" : {
@@ -168379,7 +168379,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina ei löytänyt saapuvien viestien relelistaasi."
+            "value" : "White Noise ei löytänyt saapuvien viestien relelistaasi."
           }
         },
         "fr" : {
@@ -168450,7 +168450,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina ei löytänyt relelistaasi."
+            "value" : "White Noise ei löytänyt relelistaasi."
           }
         },
         "fr" : {
@@ -168947,7 +168947,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina ei saanut yhteyttä yhteenkään releeseen hakeakseen saapuvien viestien relelistaasi."
+            "value" : "White Noise ei saanut yhteyttä yhteenkään releeseen hakeakseen saapuvien viestien relelistaasi."
           }
         },
         "fr" : {
@@ -169018,7 +169018,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina ei saanut yhteyttä yhteenkään releeseen hakeakseen relelistaasi."
+            "value" : "White Noise ei saanut yhteyttä yhteenkään releeseen hakeakseen relelistaasi."
           }
         },
         "fr" : {
@@ -169515,7 +169515,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rele %@ vaatii kirjautumisen, jota Kohina ei voinut suorittaa loppuun."
+            "value" : "Rele %@ vaatii kirjautumisen, jota White Noise ei voinut suorittaa loppuun."
           }
         },
         "fr" : {
@@ -169799,7 +169799,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rele %@ hylkäsi Kohinan pyynnön."
+            "value" : "Rele %@ hylkäsi White Noisen pyynnön."
           }
         },
         "fr" : {
@@ -170012,7 +170012,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jatka lisäämällä Kohinan oletusreleet saapuvien viestien relelistaasi."
+            "value" : "Jatka lisäämällä White Noisen oletusreleet saapuvien viestien relelistaasi."
           }
         },
         "fr" : {
@@ -170083,7 +170083,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jatka lisäämällä Kohinan oletusreleet relelistaasi."
+            "value" : "Jatka lisäämällä White Noisen oletusreleet relelistaasi."
           }
         },
         "fr" : {
@@ -171694,7 +171694,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Käyttäjän %@ saapuvien viestien relelistalla ei ole relettä, jota Kohina voi käyttää."
+            "value" : "Käyttäjän %@ saapuvien viestien relelistalla ei ole relettä, jota White Noise voi käyttää."
           }
         },
         "fr" : {
@@ -171766,7 +171766,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämän henkilön saapuvien viestien relelistalla ei ole relettä, jota Kohina voi käyttää."
+            "value" : "Tämän henkilön saapuvien viestien relelistalla ei ole relettä, jota White Noise voi käyttää."
           }
         },
         "fr" : {

@@ -109,7 +109,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina käyttää kameraa profiilien QR-koodien skannaamiseen sekä kuvien ja videoiden ottamiseen salattuihin keskusteluihin."
+            "value" : "White Noise käyttää kameraa profiilien QR-koodien skannaamiseen sekä kuvien ja videoiden ottamiseen salattuihin keskusteluihin."
           }
         },
         "fr" : {
@@ -180,7 +180,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina käyttää Face ID:tä sovelluksen avaamiseen."
+            "value" : "White Noise käyttää Face ID:tä sovelluksen avaamiseen."
           }
         },
         "fr" : {
@@ -251,7 +251,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina käyttää sijaintiasi vain, kun päätät jakaa sen salatussa keskustelussa."
+            "value" : "White Noise käyttää sijaintiasi vain, kun päätät jakaa sen salatussa keskustelussa."
           }
         },
         "fr" : {
@@ -322,7 +322,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina käyttää mikrofonia salattujen ääniviestien ja keskusteluvideoiden tallentamiseen sekä viestien sanelemiseen tällä laitteella."
+            "value" : "White Noise käyttää mikrofonia salattujen ääniviestien ja keskusteluvideoiden tallentamiseen sekä viestien sanelemiseen tällä laitteella."
           }
         },
         "fr" : {
@@ -393,7 +393,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohina tallentaa kuvia ja videoita kuvakirjastoosi vain, kun päätät tallentaa ne jakovalikosta."
+            "value" : "White Noise tallentaa kuvia ja videoita kuvakirjastoosi vain, kun päätät tallentaa ne jakovalikosta."
           }
         },
         "fr" : {
