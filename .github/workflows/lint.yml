@@ -21,26 +21,28 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      pull-requests: read
     outputs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
       - name: Match changed files
         id: filter
         env:
-          GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
-          PR: ${{ github.event.pull_request.number }}
-          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          # The files API stops at 3000 entries, so a larger PR runs everything.
-          if [ "$EVENT" != pull_request ] || [ "${CHANGED_FILES:-0}" -ge 3000 ]; then
+          if [ "$EVENT" != pull_request ]; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Fetch first so an API failure fails the step instead of skipping the job.
-          files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files?per_page=100" \
-            --jq '.[] | .filename, (.previous_filename // empty)')
+          # Diff the event's own commits, not the PR's current files, so a rerun
+          # judges the revision it reports on. tree:0 fetches commits only; git
+          # pulls the two trees it compares on demand. --no-renames lists both
+          # sides of a rename. Assigning first fails the step if git fails.
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          git fetch -q --filter=tree:0 --no-tags origin "$BASE_SHA" "$HEAD_SHA"
+          files=$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")
           relevant=false
           while IFS= read -r f; do
             case "$f" in
