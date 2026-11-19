@@ -27,7 +27,7 @@ struct AppearancePreferencesTests {
         #expect(AppLanguage.resolved(rawValue: nil) == .system)
         #expect(AppLanguage.resolved(rawValue: "nope") == .system)
         #expect(AppLanguage.system.localeIdentifier == nil)
-        #expect(localeIDs == ["en", "de", "es", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant"])
+        #expect(localeIDs == ["en", "de", "es", "fi", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant"])
     }
 
     @Test func systemLanguageDisplayNameUsesSelectedAppLanguage() {
