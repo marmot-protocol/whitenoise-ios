@@ -4899,7 +4899,9 @@ struct ConversationView: View {
         dismissActions(resumingComposerFocus: true)
         switch action {
         case .read:
-            speech.read(markdown: model.copyBody(of: current), id: id)
+            speech.read(markdown: model.copyBody(of: current), id: id) {
+                appState.present(.warning(L10n.string("This message has no text to read aloud.")))
+            }
         case .stop: speech.stopReading()
         case .show, .hide: speech.setTranscriptVisible(action == .show, id: id)
         case .copy:

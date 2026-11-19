@@ -83,7 +83,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     @ObservationIgnored private var transcription: Task<Void, Never>?
     @ObservationIgnored private var requestID: UUID?
 
-    func read(markdown: String, id: String) {
+    func read(markdown: String, id: String, onEmpty: @escaping () -> Void) {
         stopReading()
         readingID = id
         readingPreparation = Task { [weak self] in
@@ -93,6 +93,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
             readingPreparation = nil
             guard prepared.length > 0 else {
                 readingID = nil
+                onEmpty()
                 return
             }
             let speaker = AVSpeechSynthesizer()

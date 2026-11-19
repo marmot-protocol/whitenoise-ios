@@ -5,6 +5,16 @@ import UIKit
 
 @MainActor
 struct ConversationSpeechNavigationTests {
+    @Test func readingMarkupWithNoSpokenTextExplainsWhyPlaybackDidNotStart() async throws {
+        let speech = ConversationSpeech()
+        let empty = TestLatch()
+        speech.read(markdown: String(repeating: "[](https://example.com)", count: 400), id: "message") {
+            empty.signal()
+        }
+        try await empty.wait()
+        #expect(speech.readingID == nil)
+    }
+
     @available(iOS 26, *)
     @Test func poppingPastAnOpenDetailClearsTheChatsSpeechSession() async throws {
         let model = SpeechStackHarness.Model()
