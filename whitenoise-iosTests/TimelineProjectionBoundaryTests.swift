@@ -6,6 +6,10 @@ import Testing
 
 @MainActor
 struct TimelineProjectionBoundaryTests {
+    @Test func aQuoteStopsAtTheFirstRenderedLine() {
+        #expect(ConversationReplyPreview.excerpt("\n  First line  \n\nNext paragraph") == "First line")
+    }
+
     @Test func rejectedSiblingsKeepTheirSlotAndCannotBecomeDownloadable() {
         let reference = mediaReference(sourceEpoch: 42)
         let outcomes: [MediaAttachmentOutcomeFfi] = [
@@ -118,6 +122,33 @@ struct TimelineProjectionBoundaryTests {
         let replyRecord = try #require(viewModel.record(for: reply.messageIdHex))
         let preview = try #require(viewModel.replyPreview(for: replyRecord))
         #expect(preview.text == "target body")
+    }
+
+    @Test func quotesOfAnUntitledPollMatchWithAndWithoutAProjectedPreview() throws {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        var poll = timelineRecord(messageIdHex: hexId(20), plaintext: "")
+        poll.kind = MessageSemantics.kindPoll
+        let fromTarget = timelineRecord(
+            messageIdHex: hexId(21), plaintext: "Reply", replyToMessageIdHex: poll.messageIdHex
+        )
+        let offscreenPollID = hexId(23)
+        let fromProjection = timelineRecord(
+            messageIdHex: hexId(22), plaintext: "Another reply", replyToMessageIdHex: offscreenPollID,
+            replyPreview: TimelineReplyPreviewFfi(
+                messageIdHex: offscreenPollID, sender: poll.sender, plaintext: "", kind: poll.kind,
+                mediaJson: nil, media: [], agentTextStreamJson: nil, deleted: false
+            )
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [poll, fromTarget, fromProjection], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        for reply in [fromTarget, fromProjection] {
+            let record = try #require(viewModel.record(for: reply.messageIdHex))
+            let quote = try #require(viewModel.replyPreview(for: record))
+            #expect(quote.isPoll)
+            #expect(quote.text == L10n.string("Poll"))
+        }
     }
 
     @Test func projectedReplyPreviewCarriesResolvedMediaWithoutAnotherLookup() throws {

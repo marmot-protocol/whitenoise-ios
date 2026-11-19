@@ -380,11 +380,13 @@ struct AudioWaveformView: View {
     let progress: CGFloat
     let barColor: Color
     let playedColor: Color
+    var fitsAvailableWidth = false
 
     var body: some View {
         GeometryReader { geometry in
-            let bars = AudioWaveformPresentation.bars(for: samples)
             let spacing: CGFloat = 2
+            let count = fitsAvailableWidth ? min(MediaWaveformAnalyzer.sampleCount, max(1, Int((geometry.size.width + spacing) / 4))) : MediaWaveformAnalyzer.sampleCount
+            let bars = AudioWaveformPresentation.bars(for: samples, count: count)
             let barCount = max(1, bars.count)
             let availableWidth = geometry.size.width - spacing * CGFloat(max(0, barCount - 1))
             let barWidth = max(2, availableWidth / CGFloat(barCount))

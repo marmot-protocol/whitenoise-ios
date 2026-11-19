@@ -1,7 +1,7 @@
 import SwiftUI
 import MarmotKit
 
-/// Subtle inline row for agent activity (1201) and operation (1202) events.
+/// Inline metadata for agent operations. Activity updates use a message bubble.
 struct AgentEventRow: View {
     let senderName: String
     let display: AgentEventPresentation.Display
@@ -12,33 +12,27 @@ struct AgentEventRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text(senderName)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
                     Image(systemName: display.iconName)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
                 }
-                .padding(.leading, 4)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
 
                 Text(display.primaryText)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .italic(display.kind == .activity)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 4)
 
                 if let secondary = display.secondaryText {
                     Text(secondary)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
-                        .padding(.leading, 4)
                 }
 
                 if let debugStyle {
                     debugDetail(debugStyle)
-                        .padding(.leading, 4)
                 }
             }
+            .padding(.leading, 4)
             .frame(maxWidth: 520, alignment: .leading)
 
             Spacer(minLength: 24)
@@ -59,5 +53,31 @@ struct AgentEventRow: View {
         }
         .foregroundStyle(style.category.accentColor.opacity(0.85))
         .padding(.top, 4)
+    }
+}
+
+struct AgentActivityContent: View {
+    let display: AgentEventPresentation.Display
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                Text(display.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                MessageActivitySymbol(systemName: display.iconName, isActive: display.reportsWorkInProgress)
+                    .accessibilityHidden(true)
+            }
+            if let status = display.secondaryText, !statusIsInIcon, status != display.primaryText {
+                Text(status)
+                    .font(.caption)
+            }
+        }
+        .font(.subheadline)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(statusIsInIcon ? display.secondaryText ?? "" : "")
+    }
+
+    private var statusIsInIcon: Bool {
+        display.reportsWorkInProgress || display.iconName == AgentEventPresentation.completedIcon
     }
 }

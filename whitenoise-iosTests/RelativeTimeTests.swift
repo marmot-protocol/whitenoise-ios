@@ -246,7 +246,7 @@ struct RelativeTimeTests {
             let counter = RelativeTimeFormatterBuildCounter()
             let expectedFormatter = DateFormatter()
             expectedFormatter.locale = AppLanguage.currentLocale
-            expectedFormatter.setLocalizedDateFormatFromTemplate("hmm a")
+            expectedFormatter.setLocalizedDateFormatFromTemplate("jmm")
 
             #expect(RelativeTime.shortTime(date, formatters: counter.formatters)
                 == expectedFormatter.string(from: date))

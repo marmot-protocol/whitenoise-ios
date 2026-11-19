@@ -321,7 +321,7 @@ final class AppState {
     private(set) var recentReactions: [String]
     private(set) var customizedQuickReactions: [String]?
 
-    nonisolated static let defaultReactions = ["❤️", "👍", "👎", "😂", "😮", "😢"]
+    nonisolated static let defaultReactions = ["❤️", "🤘", "🔥", "😂", "🦫", "🚀"]
 
     /// The six emojis to show in the quick-reaction row. Before the user
     /// customizes it, recents are topped up with defaults; a saved selection is
@@ -503,6 +503,7 @@ final class AppState {
             return try self.currentMarmotClient()
         }
     )
+    @ObservationIgnored weak var transcriptHistoryObserver: TranscriptAttachmentHistory?
     let pollVotesInvalidation = PollVotesInvalidation()
     // Review is a separate destination; timeline visibility ends when it is pushed.
     @ObservationIgnored var moderationProjectionRoute: GroupRecoveryUpdate?
@@ -515,6 +516,7 @@ final class AppState {
 
     func handleRuntimeEvent(_ event: MarmotEventFfi, generation: Int) {
         guard runtimeEventsGeneration == generation else { return }
+        transcriptHistoryObserver?.observe(event)
         pollVotesInvalidation.observe(event)
         if case .projectionUpdated(let update) = event,
            activeAccount?.accountIdHex == update.accountIdHex,
@@ -773,6 +775,7 @@ final class AppState {
 
     @MainActor
     func noteRetentionSweepCompleted(prunedGroupIds: Set<String>) {
+        transcriptHistoryObserver?.retentionChanged(groups: prunedGroupIds)
         retentionSweepPrunedGroupIds = prunedGroupIds
         retentionSweepGeneration += 1
     }

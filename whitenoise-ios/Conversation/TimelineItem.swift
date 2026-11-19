@@ -4,7 +4,7 @@ import MarmotKit
 /// Delivery state for a message bubble. Inbound messages are `.received`
 /// (no indicator shown); our own messages move .sending → .sent, or .failed.
 /// `.streaming` is a live agent-text-stream bubble still filling in.
-enum MessageStatus: Hashable {
+nonisolated enum MessageStatus: Hashable {
     case received
     case sending
     case sent
@@ -51,6 +51,26 @@ nonisolated struct MessageClusterPresentation: Equatable, Hashable {
     var reservesIdentityLane: Bool
     var showsSenderName: Bool
     var showsAvatar: Bool
+    var startsCluster = true
+    var endsCluster = true
+
+    func atUnreadBoundary(rowID: String, timeline: [TimelineItem], firstUnreadIndex: Int?) -> Self {
+        guard let index = firstUnreadIndex, timeline.indices.contains(index) else { return self }
+        var cluster = self
+        if timeline[index].id == rowID {
+            cluster.startsCluster = true
+            cluster.showsSenderName = cluster.reservesIdentityLane
+        } else if index > 0, timeline[index - 1].id == rowID {
+            cluster.endsCluster = true
+            cluster.showsAvatar = cluster.reservesIdentityLane
+        }
+        return cluster
+    }
+
+    func showsFooter(status: MessageStatus, isDeleted: Bool, isEdited: Bool, reported: Bool) -> Bool {
+        endsCluster || isDeleted || isEdited || reported
+            || status == .sending || status == .failed || status == .streaming
+    }
 
     static let none = Self(
         reservesIdentityLane: false,
@@ -70,6 +90,7 @@ nonisolated enum MessageClusterProjection {
             let itemId: String
             let sender: String
             let timestamp: UInt64
+            let outgoing: Bool
             let day: Date
         }
 
@@ -79,18 +100,19 @@ nonisolated enum MessageClusterProjection {
 
         for item in timeline {
             guard case .message(let record, _) = item.kind,
-                  record.direction != "sent",
                   isClusterable(record)
             else {
                 previous = nil
                 continue
             }
 
+            let outgoing = record.direction == "sent"
             let date = Date(timeIntervalSince1970: TimeInterval(item.timestamp))
             let day = calendar.startOfDay(for: date)
             let continuesPrevious: Bool
             if let previous {
                 continuesPrevious = previous.sender == record.sender
+                    && previous.outgoing == outgoing
                     && previous.day == day
                     && item.timestamp >= previous.timestamp
                     && item.timestamp - previous.timestamp <= maximumGap
@@ -100,16 +122,19 @@ nonisolated enum MessageClusterProjection {
 
             if continuesPrevious, let previousId = previous?.itemId {
                 result[previousId]?.showsAvatar = false
+                result[previousId]?.endsCluster = false
             }
             result[item.id] = MessageClusterPresentation(
-                reservesIdentityLane: true,
-                showsSenderName: !continuesPrevious,
-                showsAvatar: true
+                reservesIdentityLane: !outgoing,
+                showsSenderName: !outgoing && !continuesPrevious,
+                showsAvatar: !outgoing,
+                startsCluster: !continuesPrevious
             )
             previous = PreviousMessage(
                 itemId: item.id,
                 sender: record.sender,
                 timestamp: item.timestamp,
+                outgoing: outgoing,
                 day: day
             )
         }
@@ -119,10 +144,10 @@ nonisolated enum MessageClusterProjection {
 
     private static func isClusterable(_ record: AppMessageRecordFfi) -> Bool {
         switch MessageSemantics.classify(record) {
-        case .chat, .reply, .media, .streamFinal, .poll:
+        case .chat, .reply, .media, .streamFinal, .poll, .agentActivity:
             return true
         case .reaction, .delete, .edit, .agentStreamStart,
-             .agentActivity, .agentOperation, .groupSystem, .unknown:
+             .agentOperation, .groupSystem, .unknown:
             return false
         }
     }

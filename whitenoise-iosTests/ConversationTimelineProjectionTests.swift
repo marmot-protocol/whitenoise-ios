@@ -928,7 +928,7 @@ struct ConversationTimelineProjectionTests {
         // The first durable projection consumes the optimistic row but remains
         // unresolved, so it keeps the clock and convergence-retry path.
         #expect(status() == .sending)
-        #expect(MessageFooterPresentation.value(for: try #require(status()), isFromMe: true).systemImage == "clock")
+        #expect(MessageFooterPresentation.value(for: try #require(status()), isFromMe: true).accessibilityLabel == L10n.string("Sending…"))
         #expect(viewModel.canRetryFailedSend(rowId: rowId))
         #expect(viewModel.canDiscardFailedSend(rowId: rowId))
 
@@ -939,7 +939,7 @@ struct ConversationTimelineProjectionTests {
             placement: .window
         )
         #expect(status() == .sending)
-        #expect(MessageFooterPresentation.value(for: try #require(status()), isFromMe: true).systemImage == "clock")
+        #expect(MessageFooterPresentation.value(for: try #require(status()), isFromMe: true).accessibilityLabel == L10n.string("Sending…"))
 
         // Delivery upsert (same row, source id now present) flips it to sent.
         let delivered = timelineRecord(
@@ -955,7 +955,7 @@ struct ConversationTimelineProjectionTests {
             placement: .window
         )
         #expect(status() == .sent)
-        #expect(MessageFooterPresentation.value(for: try #require(status()), isFromMe: true).systemImage == "checkmark")
+        #expect(MessageFooterPresentation.value(for: try #require(status()), isFromMe: true).systemImage == "checkmark.circle.fill")
         #expect(!viewModel.canRetryFailedSend(rowId: rowId))
     }
 

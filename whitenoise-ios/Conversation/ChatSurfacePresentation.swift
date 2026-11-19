@@ -14,7 +14,7 @@ enum ConversationDateHeader {
         calendar: Calendar = .autoupdatingCurrent,
         locale: Locale = .autoupdatingCurrent
     ) -> String {
-        let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
+        let date = min(Date(timeIntervalSince1970: TimeInterval(timestamp)), now)
         if calendar.isDate(date, inSameDayAs: now) {
             return L10n.string("Today")
         }
@@ -23,10 +23,13 @@ enum ConversationDateHeader {
         {
             return L10n.string("Yesterday")
         }
-        return date.formatted(
-            Date.FormatStyle(date: .abbreviated, time: .omitted)
-                .locale(locale)
-        )
+        let monthDistance = calendar.dateComponents([.month], from: date, to: now).month ?? 0
+        if monthDistance < 6 {
+            return date.formatted(Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+                .weekday(.abbreviated).month(.abbreviated).day())
+        }
+        return date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted,
+                                               locale: locale, calendar: calendar, timeZone: calendar.timeZone))
     }
 }
 
@@ -60,7 +63,8 @@ nonisolated enum MessageSelectionPolicy {
 }
 
 nonisolated enum ChatBubbleMetrics {
-    static let regularMaximumWidth: CGFloat = 560
+    static let timelineMargin: CGFloat = 16
+    static let maximumWidth: CGFloat = 332
     static let compactOppositeInset: CGFloat = 48
     static let regularOppositeInset: CGFloat = 64
     static let horizontalInset: CGFloat = 12
@@ -118,8 +122,15 @@ nonisolated enum MessageBubbleChromeSizing {
         metadataHeight: CGFloat,
         spacing: CGFloat
     ) -> CGFloat {
-        max(0, bubbleHeight) + max(0, spacing) + max(0, metadataHeight)
+        max(0, bubbleHeight) + (metadataHeight > 0 ? max(0, spacing) + metadataHeight : 0)
     }
+}
+
+extension VerticalAlignment {
+    private enum MessageSurfaceBottom: AlignmentID {
+        static func defaultValue(in dimensions: ViewDimensions) -> CGFloat { dimensions[.bottom] }
+    }
+    static let messageSurfaceBottom = VerticalAlignment(MessageSurfaceBottom.self)
 }
 
 struct MessageBubbleChromeLayout: Layout {
@@ -130,6 +141,7 @@ struct MessageBubbleChromeLayout: Layout {
 
     let isFromMe: Bool
     var spacing: CGFloat = 3
+    var widensTextForReactions = false
 
     func makeCache(subviews: Subviews) -> Cache {
         Cache()
@@ -144,11 +156,11 @@ struct MessageBubbleChromeLayout: Layout {
         subviews: Subviews,
         cache: inout Cache
     ) -> CGSize {
-        guard subviews.count == 2 else { return .zero }
+        guard !subviews.isEmpty else { return .zero }
 
         let widthProposal = ProposedViewSize(width: proposal.width, height: nil)
         let bubbleSize = subviews[0].sizeThatFits(widthProposal)
-        let metadataIdealSize = subviews[1].sizeThatFits(.unspecified)
+        let metadataIdealSize = subviews.dropFirst().first?.sizeThatFits(.unspecified) ?? .zero
         let width = MessageBubbleChromeSizing.width(
             proposedWidth: proposal.width,
             bubbleWidth: bubbleSize.width,
@@ -156,7 +168,7 @@ struct MessageBubbleChromeLayout: Layout {
         )
         let resolvedProposal = ProposedViewSize(width: width, height: nil)
         let resolvedBubbleSize = subviews[0].sizeThatFits(resolvedProposal)
-        let resolvedMetadataSize = subviews[1].sizeThatFits(resolvedProposal)
+        let resolvedMetadataSize = subviews.dropFirst().first?.sizeThatFits(resolvedProposal) ?? .zero
         cache.resolvedWidth = width
         cache.bubbleSize = resolvedBubbleSize
 
@@ -170,13 +182,19 @@ struct MessageBubbleChromeLayout: Layout {
         )
     }
 
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
+                           subviews: Subviews, cache: inout Cache) -> CGFloat? {
+        guard guide == .messageSurfaceBottom, let bubble = subviews.first else { return nil }
+        return bounds.minY + bubble.sizeThatFits(.init(width: bounds.width, height: nil)).height
+    }
+
     func placeSubviews(
         in bounds: CGRect,
         proposal: ProposedViewSize,
         subviews: Subviews,
         cache: inout Cache
     ) {
-        guard subviews.count == 2 else { return }
+        guard !subviews.isEmpty else { return }
 
         let resolvedProposal = ProposedViewSize(width: bounds.width, height: nil)
         let bubbleSize: CGSize
@@ -187,13 +205,14 @@ struct MessageBubbleChromeLayout: Layout {
             cache.resolvedWidth = bounds.width
             cache.bubbleSize = bubbleSize
         }
-        let bubbleX = isFromMe ? bounds.maxX - bubbleSize.width : bounds.minX
+        let surfaceWidth = widensTextForReactions ? bounds.width : bubbleSize.width
+        let bubbleX = isFromMe ? bounds.maxX - surfaceWidth : bounds.minX
         subviews[0].place(
             at: CGPoint(x: bubbleX, y: bounds.minY),
             anchor: .topLeading,
-            proposal: ProposedViewSize(width: bubbleSize.width, height: bubbleSize.height)
+            proposal: ProposedViewSize(width: surfaceWidth, height: bubbleSize.height)
         )
-        subviews[1].place(
+        subviews.dropFirst().first?.place(
             at: CGPoint(x: bounds.minX, y: bounds.minY + bubbleSize.height + spacing),
             anchor: .topLeading,
             proposal: resolvedProposal
@@ -201,28 +220,32 @@ struct MessageBubbleChromeLayout: Layout {
     }
 }
 
-nonisolated enum SingleEmojiMessagePresentation {
-    static let fontSize: CGFloat = 64
+/// Chrome first measures with a width limit, then places the bubble at its
+/// final width and height. Keep the text's wrapped width in the first pass.
+struct TextBubbleSurfaceLayout: Layout {
+    let fitsQuote: Bool
+    let widensForReactions: Bool
 
-    static func emoji(in text: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count == 1, let character = trimmed.first else { return nil }
-
-        let scalars = character.unicodeScalars
-        let hasEmojiCapableScalar = scalars.contains { $0.properties.isEmoji }
-        let requestsEmojiRendering = scalars.contains {
-            $0.properties.isEmojiPresentation
-                || $0.value == 0xFE0F
-                || $0.value == 0x20E3
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let text = subviews.first else { return .zero }
+        var contentWidth = proposal.width
+        if fitsQuote, let available = contentWidth {
+            // The quote card fills the bubble. Its spacer must not set the bubble width.
+            contentWidth = min(available, text.sizeThatFits(.unspecified).width)
         }
+        let size = text.sizeThatFits(.init(width: contentWidth, height: nil))
+        guard widensForReactions, let width = proposal.width, proposal.height != nil else { return size }
+        return CGSize(width: width, height: size.height)
+    }
 
-        guard hasEmojiCapableScalar, requestsEmojiRendering else { return nil }
-        return trimmed
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading,
+                              proposal: .init(width: bounds.width, height: nil))
     }
 }
 
 /// A message whose whole text is one resolvable `:shortcode:` shows that
-/// custom emoji at sticker size without a bubble, like a single emoji.
+/// custom emoji at sticker size without a bubble.
 nonisolated enum SingleCustomEmojiMessagePresentation {
     static let side: CGFloat = 112
 
@@ -304,9 +327,9 @@ struct MessageFooterPresentation: Equatable {
         case .received:
             return Self(systemImage: nil, accessibilityLabel: nil, isFailure: false)
         case .sending:
-            return Self(systemImage: "clock", accessibilityLabel: L10n.string("Sending…"), isFailure: false)
+            return Self(systemImage: "ellipsis.message", accessibilityLabel: L10n.string("Sending…"), isFailure: false)
         case .sent:
-            return Self(systemImage: "checkmark", accessibilityLabel: L10n.string("Sent"), isFailure: false)
+            return Self(systemImage: "checkmark.circle.fill", accessibilityLabel: L10n.string("Sent"), isFailure: false)
         case .failed:
             return Self(
                 systemImage: "exclamationmark.circle.fill",
@@ -370,17 +393,15 @@ nonisolated struct ReactionSummaryPresentation: Equatable {
 }
 
 nonisolated enum ReactionPillPresentation {
-    static let maximumRenderedPills = 7
+    static let height: CGFloat = 22
+    static let minimumWidth: CGFloat = 34
+    static let maximumRenderedPills = 4
 
-    static func sorted(
-        _ reactions: [ConversationViewModel.ReactionTally]
-    ) -> [ConversationViewModel.ReactionTally] {
-        reactions.sorted {
-            if $0.mine != $1.mine { return $0.mine && !$1.mine }
-            if $0.count != $1.count { return $0.count > $1.count }
-            return $0.emoji < $1.emoji
-        }
+    static func canRemoveIndividually(_ emoji: String, from reactions: [ConversationViewModel.ReactionTally],
+                                      omittedKinds: UInt64) -> Bool {
+        omittedKinds == 0 && reactions.filter(\.mine).map(\.emoji) == [emoji]
     }
+
 }
 
 nonisolated struct ReactionMetadataFit: Equatable {
@@ -403,7 +424,7 @@ nonisolated enum ReactionMetadataFitting {
         preHiddenReactionCount: Int = 0
     ) -> ReactionMetadataFit {
         guard !reactionWidths.isEmpty else {
-            return ReactionMetadataFit(visibleReactionCount: 0, hiddenReactionCount: 0)
+            return ReactionMetadataFit(visibleReactionCount: 0, hiddenReactionCount: preHiddenReactionCount)
         }
 
         let boundedWidth = max(0, availableWidth)
@@ -427,7 +448,7 @@ nonisolated enum ReactionMetadataFitting {
         let firstVisibleCount = preHiddenReactionCount > 0
             ? reactionWidths.count
             : reactionWidths.count - 1
-        for visibleCount in stride(from: firstVisibleCount, through: 0, by: -1) {
+        for visibleCount in stride(from: firstVisibleCount, through: 1, by: -1) {
             let hiddenCount = preHiddenReactionCount + reactionWidths.count - visibleCount
             guard let overflowWidth = overflowWidthForHiddenCount[hiddenCount] else { continue }
             if requiredWidth(
@@ -444,9 +465,10 @@ nonisolated enum ReactionMetadataFitting {
             }
         }
 
+        // This is the minimum strip. Its parent must allocate its measured width.
         return ReactionMetadataFit(
-            visibleReactionCount: 0,
-            hiddenReactionCount: reactionWidths.count
+            visibleReactionCount: 1,
+            hiddenReactionCount: preHiddenReactionCount + (reactionWidths.count - 1)
         )
     }
 
@@ -480,20 +502,35 @@ nonisolated enum ReactionMetadataFitting {
     }
 }
 
-/// A tombstone keeps its timestamp — a removed message still has a place in
-/// the timeline — but drops the delivery checkmark, which says nothing once
-/// the message is gone.
-nonisolated enum MessageTombstonePresentation {
-    static func showsDeliveryStatus(isDeleted: Bool) -> Bool { !isDeleted }
+struct MessageActivitySymbol: View {
+    let systemName: String
+    let isActive: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let icon = Image(systemName: systemName)
+        if !isActive || reduceMotion {
+            icon
+        } else if systemName == "ellipsis.message" {
+            icon.symbolEffect(.variableColor.iterative, options: .repeat(.continuous))
+        } else {
+            icon.symbolEffect(.pulse, options: .repeat(.continuous))
+        }
+    }
 }
 
 struct MessageMetadataFooter: View {
-    let time: String
+    enum Caption: Equatable {
+        case timestamp(String)
+        case failureNotice
+    }
+
+    @ScaledMetric(relativeTo: .caption) private var statusSize: CGFloat = 12
+    let caption: Caption
     let isEdited: Bool
     let status: MessageStatus
     let isFromMe: Bool
     var showsDeliveryStatus: Bool = true
-    var showsExpirationTimer: Bool = false
     var hasReports: Bool = false
     var onViewEditHistory: (() -> Void)?
 
@@ -507,7 +544,17 @@ struct MessageMetadataFooter: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Text(time)
+            if showsDeliveryStatus, let symbol = presentation.systemImage {
+                MessageActivitySymbol(systemName: symbol, isActive: status == .sending)
+                    .font(.system(size: statusSize, weight: .medium))
+                    .frame(width: statusSize, height: statusSize)
+                    .accessibilityLabel(presentation.accessibilityLabel ?? "")
+                    .accessibilityHidden(caption == .failureNotice)
+            }
+            switch caption {
+            case .timestamp(let time): Text(time)
+            case .failureNotice: Text("Not delivered, hold for options")
+            }
             if hasReports {
                 Image(systemName: "exclamationmark.bubble")
                     .accessibilityLabel(L10n.string("Reported message"))
@@ -521,21 +568,9 @@ struct MessageMetadataFooter: View {
                     Text(L10n.string("Edited"))
                 }
             }
-            if showsExpirationTimer {
-                Image(systemName: MessageExpirationPresentation.systemImage)
-                    .font(.system(size: 10, weight: .semibold))
-                    .accessibilityLabel(L10n.string("Disappearing messages"))
-            }
-            if showsDeliveryStatus, let systemImage = presentation.systemImage {
-                Image(systemName: systemImage)
-                    .font(.system(size: 10, weight: .semibold))
-                    // Clock and checkmark have different intrinsic widths.
-                    .frame(width: 12, height: 12)
-                    .accessibilityLabel(presentation.accessibilityLabel ?? "")
-            }
         }
-        .font(.caption2)
+        .font(.caption.weight(.medium))
         .foregroundStyle(resolvedForeground)
-        .fixedSize(horizontal: true, vertical: true)
+        .fixedSize(horizontal: caption != .failureNotice, vertical: true)
     }
 }

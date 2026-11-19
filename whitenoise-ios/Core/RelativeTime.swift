@@ -66,10 +66,7 @@ enum RelativeTime {
         locale: Locale = AppLanguage.currentLocale,
         formatters: RelativeTimeFormatters? = nil
     ) -> String {
-        // Bubble times always carry the 12-hour day period ("9:41 PM"),
-        // regardless of the device's 24-hour setting; the localized template
-        // keeps element order and the period's spelling locale-correct.
-        formatted(date, "hmm a", locale: locale, formatters: formatters ?? .shared)
+        formatted(date, "jmm", locale: locale, formatters: formatters ?? .shared)
     }
 
     private static func formatted(

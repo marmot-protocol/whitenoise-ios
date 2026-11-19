@@ -3,6 +3,22 @@ import Observation
 import MarmotKit
 import os
 
+/// Messages the reader opened with "Read more". A sent message's row id is
+/// its optimistic send row only while that row is in the window, so each
+/// opening is remembered under its durable message id as well.
+nonisolated struct ExpandedMessageBodies: Equatable {
+    private var ids: Set<String> = []
+
+    func contains(rowID: String, messageID: String) -> Bool {
+        ids.contains(rowID) || (!messageID.isEmpty && ids.contains(messageID))
+    }
+
+    mutating func insert(rowID: String, messageID: String) {
+        ids.insert(rowID)
+        if !messageID.isEmpty { ids.insert(messageID) }
+    }
+}
+
 nonisolated enum DurableConvergenceRetryAction: Equatable {
     case retry
     case refreshBeforeRetry
@@ -96,22 +112,6 @@ nonisolated struct ConversationGroupRosterProjection: Equatable {
         isUnrecoverable = roster.lifecycleState == .unrecoverable
         isDisbanded = roster.lifecycleState == .disbanded
         revision = roster.rosterRevision
-    }
-}
-
-/// Messages the reader opened with "Read more". A sent message's row id is
-/// its optimistic send row only while that row is in the window, so each
-/// opening is remembered under its durable message id as well.
-nonisolated struct ExpandedMessageBodies: Equatable {
-    private var ids: Set<String> = []
-
-    func contains(rowID: String, messageID: String) -> Bool {
-        ids.contains(rowID) || (!messageID.isEmpty && ids.contains(messageID))
-    }
-
-    mutating func insert(rowID: String, messageID: String) {
-        ids.insert(rowID)
-        if !messageID.isEmpty { ids.insert(messageID) }
     }
 }
 
@@ -295,8 +295,8 @@ final class ConversationViewModel {
     @ObservationIgnored private var windowLifetime = UUID()
     private var startRequest = UUID()
     @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
-    private(set) var viewportIntent: ConversationViewportIntent = .followingLatest
     private(set) var expandedBodies = ExpandedMessageBodies()
+    private(set) var viewportIntent: ConversationViewportIntent = .followingLatest
     private(set) var paginationRetryToken = 0
     private var pageAdmission = ConversationPageAdmission()
     var isAwaitingPageCompletion: Bool { pageAdmission.unresolvedRevision != nil }
@@ -1036,6 +1036,36 @@ final class ConversationViewModel {
         timelineStore.editHistory(for: messageIdHex)
     }
 
+    func firstGalleryGIF(in row: TimelineItem) -> MessageMediaAttachment? {
+        mediaItems(for: row).first { $0.isGIF && $0.rejectionKind == nil }
+    }
+
+    /// Project the currently loaded transcript only while its media sheet is open.
+    /// Keep the row's original media objects so opening a page addresses its original slot.
+    func transcriptMediaGallery(opening itemID: String, initialData: Data?, includingGIFsIn gifRowID: String? = nil) -> MessageMediaGallery? {
+        var items: [MessageMediaAttachment] = []
+        var messages: [String: String] = [:]
+        var captions: [String: MessageMediaGallery.Caption] = [:]
+        for row in timeline {
+            guard case .message(let record, _) = row.kind, !isDeleted(record.messageIdHex),
+                  (record.kind != MessageSemantics.kindPoll || record.sticker != nil),
+                  !(appState?.streamingDebugEnabled == true && MessageSemantics.debugStyle(for: record).isUserVisibleBubble == false),
+                  groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row) == nil else { continue }
+            for (index, media) in mediaItems(for: row).enumerated() {
+                guard media.isTranscriptGalleryMedia || (row.id == gifRowID && media.isGIF && media.rejectionKind == nil) else { continue }
+                guard captions[media.id] == nil else { continue }
+                items.append(media)
+                if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }
+                let name = IdentityPresentation.resolve(accountIdHex: record.sender, knownName: windowIdentities[record.sender]?.displayName).text
+                captions[media.id] = .init(sender: record.direction == "sent" ? L10n.string("You") : name,
+                    date: Date(timeIntervalSince1970: TimeInterval(row.timestamp)),
+                    outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
+            }
+        }
+        return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: initialData,
+            messages: messages, captions: captions)
+    }
+
     func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
         timelineStore.mediaItems(for: item)
     }
@@ -1720,7 +1750,8 @@ final class ConversationViewModel {
                             mode: mode, messageIdHex: target)
                     } catch MarmotKitError.ConversationWindowMessageNotRetained {
                         targetUnavailable = true
-                        window = try await client.openConversationWindow(accountRef: accountRef, groupIdHex: groupIdHex, mode: .latest)
+                        window = try await client.openConversationWindow(accountRef: accountRef, groupIdHex: groupIdHex,
+                                                                            mode: .latest, messageIdHex: nil)
                     }
                     guard !Task.isCancelled, self?.windowLifetime == lifetime,
                           appState.activeAccountRef == accountRef else {
@@ -2341,12 +2372,23 @@ final class ConversationViewModel {
     /// budgeted markdown AST walk) on the typing hot path.
     private func searchableTimelineEntries() -> [ConversationSearchEntry] {
         let generation = timelineProjectionGeneration
-        if let cache = searchEntriesCache, cache.generation == generation {
-            return cache.entries
+        if searchEntriesCache?.generation != generation {
+            searchEntriesCache = (generation, computeSearchableTimelineEntries())
         }
-        let entries = computeSearchableTimelineEntries()
-        searchEntriesCache = (generation, entries)
-        return entries
+        return (searchEntriesCache?.entries ?? []).map { entry in
+            var enriched = entry
+            enriched.labels += entry.contactAttachmentIDs.compactMap { search.displayedContactName(for: $0) }
+            if let url = entry.previewURL, let metadata = searchableLinkPreview(for: url) {
+                enriched.labels += [metadata.title, metadata.summary, LinkPreviewCardContent.host(for: url)].compactMap { $0 }
+            }
+            return enriched
+        }
+    }
+
+    /// Search uses only metadata the card already has permission to display.
+    private func searchableLinkPreview(for url: URL) -> LinkPreviewMetadata? {
+        guard LinkPreviewSettingsStore.shared.showsPreviews else { return nil }
+        return LinkPreviewLoader.cachedMetadata(for: url) ?? nil
     }
 
     func timelineDaySections(
@@ -2365,9 +2407,8 @@ final class ConversationViewModel {
         timelineStore.agentEventDisplay(for: item)
     }
 
-    /// Confirmed, previewable, non-deleted message rows flattened to plain text
-    /// through the budgeted preview path (`MessagePreview.body` →
-    /// `MarkdownPlainText.flatten`).
+    /// Index only the visible timeline's bounded text, sender, and attachment labels.
+    /// A search must never fetch a profile, link preview, or attachment.
     private func computeSearchableTimelineEntries() -> [ConversationSearchEntry] {
         timeline.compactMap { item in
             guard case .message(let record, _) = item.kind,
@@ -2375,18 +2416,51 @@ final class ConversationViewModel {
                   MessagePreview.isPreviewable(record),
                   !isDeleted(record.messageIdHex)
             else { return nil }
-            let text = displayBody(of: record)
-            guard !text.isEmpty else { return nil }
-            return ConversationSearchEntry(
-                itemId: item.id,
-                messageIdHex: record.messageIdHex,
-                text: text
+            let name = record.direction == "sent" ? L10n.string("You") : IdentityPresentation.text(
+                accountIdHex: record.sender,
+                knownName: conversationWindow == nil ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender)
+                    : windowIdentities[record.sender]?.displayName
             )
+            let media = mediaItems(for: item)
+            var labels = [name]
+            let contacts = media.filter { DocumentPreviewFormat(mediaType: $0.mediaType) == .contact }
+            if !contacts.isEmpty { labels.append(L10n.string("Contact")) }
+            for attachment in media {
+                labels.append(attachment.fileName)
+                switch attachment.kind {
+                case .image: labels.append(L10n.string("Photo"))
+                case .video: labels.append(L10n.string("Video"))
+                case .audio: labels.append(L10n.string("Voice message"))
+                case .document, .unsupported: labels.append(L10n.string("File"))
+                }
+            }
+            if record.kind == MessageSemantics.kindPoll {
+                let poll = poll(for: record.messageIdHex)
+                if poll != nil { labels.append(L10n.string("Poll")) }
+                labels += poll?.options.map { ContentSanitizer.messageBody($0.label) } ?? []
+                let question = poll.map { ContentSanitizer.messageBody($0.question) } ?? L10n.string("This poll can’t be displayed.")
+                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: question, labels: labels, poll: poll)
+            }
+            let usesTextBody = record.sticker == nil && !RemoteGiphyMedia.isEnvelopeText(record.plaintext)
+            let blocks = usesTextBody ? markdownDisplayBlocks(for: item) : nil
+            let text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
+                ?? ContentSanitizer.messageBody(displayBody(of: record))
+            if usesTextBody, media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
+                labels.append(L10n.string("Location"))
+            }
+            let previewURL = media.isEmpty ? LinkPreviewMetadata.previewURL(in: blocks) : nil
+            return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex,
+                text: text, labels: labels, previewURL: previewURL,
+                contactAttachmentIDs: contacts.map(\.id))
         }
     }
 
     func data(for media: MessageMediaAttachment) async throws -> Data {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
+    }
+
+    func automaticAttachmentByteCount(for media: MessageMediaAttachment) async -> Int? {
+        await mediaDownloader.automaticAttachmentByteCount(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
     /// Requests the images in rows just beyond the viewport under the same
@@ -2474,6 +2548,21 @@ final class ConversationViewModel {
         let reactions = reactionArtworkScope == customEmojiScope
             ? CustomEmojiReactionResolution.catalogEntries(reactionArtwork) : []
         return CustomEmojiCatalog.merge(messages: timelineStore.customEmojiCatalogEntries, reactions: reactions)
+    }
+
+    /// Repeating a chip must send the same image, even when two sets use the same shortcode.
+    func canRepeatReaction(_ shortcode: CustomEmojiShortcode, reactionID: String?) -> Bool {
+        guard canSendMediaAttachments, let scope = customEmojiSendScope else { return false }
+        if let reactionID, !reactionID.isEmpty {
+            guard reactionArtworkScope == scope else { return false }
+            if !reactionArtworkMisses.contains(reactionID) {
+                guard let artwork = reactionArtwork[reactionID], artwork.shortcode == shortcode,
+                      let hash = artwork.reference?.plaintextSha256.lowercased() else { return false }
+                return customEmojiSendables.contains { $0.shortcode == shortcode && $0.plaintextSha256 == hash }
+            }
+        }
+        // An untagged reaction displays the bundled image when one exists.
+        return CustomEmojiBuiltins.shortcodes.contains(shortcode)
     }
 
     /// The artwork of one `:shortcode:` reaction event, read once per scope

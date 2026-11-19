@@ -1,12 +1,26 @@
 import Foundation
 import Observation
+import MarmotKit
 
 /// One searchable timeline row: the row's timeline id, its message id, and the
 /// budget-bounded plain-text haystack derived from the message body.
-struct ConversationSearchEntry: Equatable {
+nonisolated struct ConversationSearchEntry: Equatable {
     let itemId: String
     let messageIdHex: String
     let text: String
+    var labels: [String] = []
+    var poll: PollProjectionFfi?
+    var previewURL: URL?
+    var contactAttachmentIDs: [String] = []
+
+    func matches(_ query: String, now: Date) -> Bool {
+        if text.localizedStandardContains(query) || labels.contains(where: { $0.localizedStandardContains(query) }) {
+            return true
+        }
+        guard let poll else { return false }
+        let footer = PollPresentation.footerText(for: poll, isOpen: PollPresentation.isOpen(poll, now: now))
+        return footer.localizedStandardContains(query)
+    }
 }
 
 /// One query hit. Matches are kept in timeline order, oldest first.
@@ -28,11 +42,12 @@ nonisolated enum ConversationSearchEngine {
 
     static func matches(
         for query: String,
-        in entries: [ConversationSearchEntry]
+        in entries: [ConversationSearchEntry],
+        now: Date = .now
     ) -> [ConversationSearchMatch] {
         guard let normalized = normalizedQuery(query) else { return [] }
         return entries.compactMap { entry in
-            guard entry.text.localizedStandardContains(normalized) else { return nil }
+            guard entry.matches(normalized, now: now) else { return nil }
             return ConversationSearchMatch(itemId: entry.itemId, messageIdHex: entry.messageIdHex)
         }
     }
@@ -118,6 +133,7 @@ final class ConversationSearchModel {
     private(set) var matches: [ConversationSearchMatch] = []
     private(set) var currentIndex: Int?
     private(set) var isPagingOlder = false
+    private(set) var nextPollDeadline: Date?
     private(set) var scrollRequest: ScrollRequest?
 
     var query = "" {
@@ -185,6 +201,7 @@ final class ConversationSearchModel {
         let observation = analytics?.record(.search(outcome), ticket: analyticsTicket)
         analyticsTicket = nil
         isActive = false
+        nextPollDeadline = nil
         query = ""
         matches = []
         currentIndex = nil
@@ -196,10 +213,35 @@ final class ConversationSearchModel {
     /// Recompute matches after any timeline/projection change, keeping the
     /// cursor on the same row when it still matches. Passive refreshes never
     /// request a scroll.
+    // Names come only from vCards the conversation has already been allowed to render.
+    @ObservationIgnored private let displayedContactNames = NSCache<NSString, NSString>()
+    @ObservationIgnored private var contactRevision: Int?
+
+    private func updateContactRevision() {
+        let revision = AttachmentPresentationState.shared.revision
+        if revision != contactRevision {
+            displayedContactNames.removeAllObjects()
+            displayedContactNames.countLimit = 512
+            contactRevision = revision
+        }
+    }
+
+    func registerContactName(_ name: String, for attachmentID: String) {
+        updateContactRevision()
+        guard displayedContactNames.object(forKey: attachmentID as NSString) as String? != name else { return }
+        displayedContactNames.setObject(name as NSString, forKey: attachmentID as NSString)
+        refreshAfterTimelineChange()
+    }
+
+    func displayedContactName(for attachmentID: String) -> String? {
+        updateContactRevision()
+        return displayedContactNames.object(forKey: attachmentID as NSString) as String?
+    }
+
     func refreshAfterTimelineChange() {
         guard isActive, hasQuery else { return }
         let anchorId = currentMatch?.itemId
-        matches = ConversationSearchEngine.matches(for: query, in: entriesProvider())
+        matches = currentMatches()
         observedMatch = observedMatch || !matches.isEmpty
         currentIndex = ConversationSearchEngine.reanchoredIndex(of: anchorId, in: matches)
             ?? ConversationSearchEngine.initialIndex(matchCount: matches.count)
@@ -241,9 +283,22 @@ final class ConversationSearchModel {
 
     func notePagingFailure() { if isActive { searchFailed = true } }
 
+    private func currentMatches() -> [ConversationSearchMatch] {
+        guard hasQuery else {
+            nextPollDeadline = nil
+            return []
+        }
+        let entries = entriesProvider()
+        let now = Date.now
+        nextPollDeadline = entries.lazy.compactMap(\.poll).compactMap {
+            PollPresentation.deadlineRefresh(for: $0, now: now)
+        }.min()
+        return ConversationSearchEngine.matches(for: query, in: entries, now: now)
+    }
+
     private func recomputeForQueryChange() {
         observedQuery = observedQuery || hasQuery
-        matches = ConversationSearchEngine.matches(for: query, in: entriesProvider())
+        matches = currentMatches()
         observedMatch = observedMatch || !matches.isEmpty
         currentIndex = ConversationSearchEngine.initialIndex(matchCount: matches.count)
         requestScrollToCurrentMatch()

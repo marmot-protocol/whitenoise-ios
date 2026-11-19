@@ -213,8 +213,14 @@ enum MessagePreview {
 
     /// The question is peer-controlled poll text; keep it to one line.
     static func pollPreview(question: String) -> String {
-        let line = ContentSanitizer.compactSingleLine(question, maxLength: 1_024) ?? ""
-        return L10n.formatted("📊 Poll: %@", line)
+        "📊 \(pollTitle(question: question))"
+    }
+
+    static func pollTitle(question: String) -> String {
+        guard let line = ContentSanitizer.compactSingleLine(question, maxLength: 1_024) else {
+            return L10n.string("Poll")
+        }
+        return L10n.formatted("Poll: %@", line)
     }
 
     static func mediaFallback(_ attachments: [MediaAttachmentReferenceFfi]) -> String {

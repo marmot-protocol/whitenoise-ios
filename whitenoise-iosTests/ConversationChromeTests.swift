@@ -141,12 +141,15 @@ struct ConversationChromeTests {
         ))
     }
 
-    @Test func activeRetentionReplacesMemberSubtitleButConnectingWins() {
+    @Test func activeRetentionKeepsMemberSubtitleButConnectingWins() {
         #expect(ConversationHeaderSecondary.resolve(
             isRuntimeWarmingUp: false,
             subtitle: "4 members",
             retentionSeconds: 300
-        ) == .retention(300))
+        ) == .retention(300, subtitle: "4 members"))
+        #expect(ConversationHeaderSecondary.resolve(
+            isRuntimeWarmingUp: false, subtitle: nil, retentionSeconds: 86_400
+        ) == .retention(86_400, subtitle: nil))
         #expect(ConversationHeaderSecondary.resolve(
             isRuntimeWarmingUp: true,
             subtitle: "4 members",

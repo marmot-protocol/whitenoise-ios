@@ -5,10 +5,29 @@ import SwiftUI
 struct ConversationSearchBar: View {
     @Bindable var search: ConversationSearchModel
     let onClose: () -> Void
+    @State private var deadlineTimer: Timer?
 
     var body: some View {
         WNSearchBar(query: $search.query, prompt: "Search messages",
                     dismissesKeyboardOnSubmit: false, onClose: onClose)
+            .onChange(of: search.nextPollDeadline, initial: true) { _, deadline in
+                deadlineTimer?.invalidate()
+                deadlineTimer = nil
+                guard let deadline else { return }
+                let timer = Timer(fire: deadline, interval: 0, repeats: false) { [weak search = self.search] _ in
+                    // Installed on the main run loop, including while the transcript scrolls.
+                    MainActor.assumeIsolated {
+                        guard let search, search.nextPollDeadline == deadline else { return }
+                        search.refreshAfterTimelineChange()
+                    }
+                }
+                RunLoop.main.add(timer, forMode: .common)
+                deadlineTimer = timer
+            }
+            .onDisappear {
+                deadlineTimer?.invalidate()
+                deadlineTimer = nil
+            }
     }
 }
 
@@ -19,7 +38,7 @@ struct ConversationSearchControls: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            HStack {
+            ZStack {
                 HStack(spacing: 0) {
                     searchButton(
                         systemImage: "chevron.up",
@@ -37,14 +56,15 @@ struct ConversationSearchControls: View {
                     }
                 }
                 .compatibleInputCapsuleChrome(interactive: false)
-
-                Spacer(minLength: 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if search.hasQuery {
-                    resultCount
-                        .padding(.horizontal, 18)
-                        .frame(minHeight: controlSize)
-                        .compatibleInputCapsuleChrome(interactive: false)
+                    let buttonInset = 2 * controlSize + WNSearchBar.Metrics.rowSpacing
+                    ViewThatFits(in: .horizontal) {
+                        resultCountCapsule.fixedSize().padding(.horizontal, buttonInset)
+                        resultCountCapsule.padding(.leading, buttonInset)
+                    }
+                    .allowsHitTesting(false)
                 }
             }
 
@@ -64,6 +84,14 @@ struct ConversationSearchControls: View {
         } else {
             Text(L10n.string("No matches"))
         }
+    }
+
+    private var resultCountCapsule: some View {
+        resultCount
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 18)
+            .frame(minHeight: controlSize)
+            .compatibleInputCapsuleChrome(interactive: false)
     }
 
     private func searchButton(

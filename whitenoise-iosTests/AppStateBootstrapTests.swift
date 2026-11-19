@@ -906,10 +906,8 @@ struct AppStateBootstrapTests {
         #expect(appState.client?.marmot.isStopping() == false)
         #expect(!appState.notificationSubscriptionActive)
         #expect(!appState.isRuntimeWarmingUp)
-        // In onboarding the scheduled catch-up stops at its gate before it
-        // first suspends, so one main-actor turn lets it run to the end; a
-        // gate that wrongly opened would have called the stub by then.
-        await Task { @MainActor in }.value
+        // Exercise the foreground catch-up gate to completion while onboarding.
+        await appState.catchUpAfterForegroundActivation()
         #expect(catchUpAttempts == 0)
         catchUp.onCatchUp = nil
 

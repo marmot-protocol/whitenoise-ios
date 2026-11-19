@@ -24,6 +24,13 @@ struct ConversationSearchEngineTests {
         #expect(matches.map(\.itemId) == ["msg:a", "msg:c", "msg:d"])
     }
 
+    @Test func labelsMatchIndependentlyAndCountTheirMessageOnce() {
+        let file = ConversationSearchEntry(itemId: "row", messageIdHex: "id", text: "Plan",
+            labels: ["Maya", "Maya’s itinerary.pdf"])
+        #expect(ConversationSearchEngine.matches(for: "maya", in: [file]).map(\.itemId) == ["row"])
+        #expect(ConversationSearchEngine.matches(for: "Plan Maya", in: [file]).isEmpty)
+    }
+
     @Test func matchesAreCaseInsensitive() {
         let entries = [entry("a", "Hello World")]
 

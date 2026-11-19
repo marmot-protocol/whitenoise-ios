@@ -397,7 +397,8 @@ struct GroupModerationView: View {
                                     identityName: conversation.windowDisplayName,
                                     identityAvatarAsset: { conversation.windowIdentities[$0]?.avatarAsset },
                                     onLoadMedia: ConversationMediaLoader({ try await conversation.data(for: $0) },
-                                        openHandoff: { try await conversation.openHandoff(for: $0, control: $1) }),
+                                        openHandoff: { try await conversation.openHandoff(for: $0, control: $1) },
+                                        automaticAttachmentByteCount: conversation.automaticAttachmentByteCount(for:)),
                                     isBodyExpanded: expandedEntryIDs.contains(entry.id),
                                     onExpandBody: { expandedEntryIDs.insert(entry.id) }
                                 )

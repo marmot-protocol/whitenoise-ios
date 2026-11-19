@@ -194,6 +194,15 @@ nonisolated struct CustomEmojiRowResolution: Equatable {
 
     static let empty = Self(inline: [:], gridItems: [])
 
+    func usesBuiltinArtwork(for shortcode: CustomEmojiShortcode) -> Bool {
+        if builtin.contains(shortcode) { return true }
+        guard let item = inline[shortcode], let builtIn = CustomEmojiBuiltins.builtin(shortcode) else { return false }
+        if let reference = item.reference {
+            return reference.plaintextSha256.lowercased() == builtIn.plaintextSha256
+        }
+        return item.localData == builtIn.data
+    }
+
     var shortcodes: Set<CustomEmojiShortcode> { Set(inline.keys).union(builtin) }
     var isEmpty: Bool { inline.isEmpty && builtin.isEmpty }
 }
@@ -270,7 +279,7 @@ enum CustomEmojiDisplayText {
         func walk(_ blocks: [MarkdownDisplayBlock]) {
             for block in blocks {
                 switch block {
-                case .paragraph(let text), .heading(let text), .codeBlock(let text):
+                case .paragraph(let text), .heading(let text), .codeBlock(let text, _):
                     runs.append(String(text.characters))
                 case .blockQuote(let nested):
                     walk(nested)

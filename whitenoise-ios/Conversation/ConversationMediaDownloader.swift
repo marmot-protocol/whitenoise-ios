@@ -12,10 +12,12 @@ struct MediaDownloadInFlightKey: Hashable {
     let nonceHex: String
     let target: AttachmentLocalTargetFfi?
     let demand: AttachmentDemand
+    let previewByteLimit: Int?
     let sourceHint: AttachmentSourceHint?
     let scope: String
 
-    init(reference: MediaAttachmentReferenceFfi, target: AttachmentLocalTargetFfi? = nil, demand: AttachmentDemand = .automatic, sourceHint: AttachmentSourceHint? = nil, scope: String = "") {
+    init(reference: MediaAttachmentReferenceFfi, target: AttachmentLocalTargetFfi? = nil, demand: AttachmentDemand = .automatic, sourceHint: AttachmentSourceHint? = nil, scope: String = "", previewByteLimit: Int? = nil) {
+        self.previewByteLimit = previewByteLimit
         self.sourceHint = sourceHint
         self.scope = scope
         self.target = target
@@ -30,18 +32,18 @@ struct MediaDownloadInFlightKey: Hashable {
 /// Coalesces concurrent downloads of the same media reference so duplicate
 /// thumbnail/gallery requests share one decrypt/download task.
 @MainActor
-final class MediaDownloadInFlightStore {
+final class MediaDownloadInFlightStore<Value: Sendable> {
     private struct Entry {
         let id: UUID
-        let task: Task<Data, Error>
+        let task: Task<Value, Error>
     }
 
     private var tasks: [MediaDownloadInFlightKey: Entry] = [:]
 
-    func data(
+    func value(
         for key: MediaDownloadInFlightKey,
-        operation: @escaping @MainActor () async throws -> Data
-    ) async throws -> Data {
+        operation: @escaping @MainActor () async throws -> Value
+    ) async throws -> Value {
         if let entry = tasks[key] {
             return try await entry.task.value
         }
@@ -115,7 +117,8 @@ final class ConversationMediaDownloader {
         _ reference: MediaAttachmentReferenceFfi
     ) async throws -> MediaDownloadResultFfi
 
-    private let inFlight = MediaDownloadInFlightStore()
+    private let inFlight = MediaDownloadInFlightStore<Data>()
+    private let attachmentSizes = MediaDownloadInFlightStore<Int?>()
     private let cache: ConversationMediaCacheAccessing
     private let downloadMedia: DownloadMedia
     private let locatorResolver: HostResolutionGuard.Resolver
@@ -142,10 +145,48 @@ final class ConversationMediaDownloader {
     func stopAndDrain() async {
         isStopped = true
         handoffControls.values.forEach { $0.cancel() }
+        async let sizes: Void = attachmentSizes.cancelAndDrain()
         await inFlight.cancelAndDrain()
+        await sizes
     }
 
     func resume() { isStopped = false }
+
+    /// Reads the retained size without loading the file. A missing slot uses automatic acquisition.
+    func automaticAttachmentByteCount(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Int? {
+        guard !isStopped, !Task.isCancelled else { return nil }
+        if let data = media.localData { return data.count }
+        guard let reference = media.reference, EncryptedMediaLocatorValidation.isStaticallySafe(reference.locators),
+              let appState, let account = appState.activeAccountRef,
+              let client = try? appState.currentMarmotClient() else { return nil }
+        let generation = appState.runtimeGeneration
+        let key = MediaDownloadInFlightKey(reference: reference, target: media.localTarget, sourceHint: media.sourceHint,
+                                          scope: "\(account)/\(generation)/\(groupIdHex)")
+        @MainActor func isCurrent() -> Bool {
+            !Task.isCancelled && !self.isStopped && appState.activeAccountRef == account
+                && appState.client === client && appState.runtimeGeneration == generation
+        }
+        let size = try? await attachmentSizes.value(for: key) {
+            guard isCurrent() else { return nil }
+            let target: AttachmentLocalTargetFfi
+            if let original = media.localTarget { target = original }
+            else if let hint = media.sourceHint {
+                target = try await client.resolveAttachmentTarget(accountRef: account, groupID: groupIdHex, hint: hint)
+            } else { return nil }
+            @MainActor func retainedSize() async throws -> Int? {
+                guard isCurrent() else { throw CancellationError() }
+                let assets = try await client.marmot.attachmentLocalAssets(accountRef: account,
+                    groupIdHex: groupIdHex, targets: [target])
+                guard let asset = assets.first, asset.reference != nil else { return nil }
+                return Int(exactly: asset.byteCount)
+            }
+            if let size = try await retainedSize() { return size }
+            guard isCurrent() else { return nil }
+            try await client.fetchAttachment(accountRef: account, groupID: groupIdHex, target: target, demand: .automatic)
+            return try await retainedSize()
+        }
+        return isCurrent() ? size : nil
+    }
 
     /// Has MDK fetch an attachment ahead of its row. The bytes are not read
     /// here: the row's own load reads and verifies them. Returns false when
@@ -163,6 +204,9 @@ final class ConversationMediaDownloader {
     func data(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async throws -> Data {
         guard !isStopped else { throw CancellationError() }
         if let localData = media.localData {
+            if let limit = media.previewByteLimit, localData.count > limit {
+                throw AttachmentReadError.previewLimitExceeded(byteCount: localData.count)
+            }
             return localData
         }
         guard let reference = media.reference else {
@@ -171,9 +215,10 @@ final class ConversationMediaDownloader {
         guard EncryptedMediaLocatorValidation.isStaticallySafe(reference.locators) else {
             throw MediaDataError.unsafeLocator
         }
-        return try await inFlight.data(
+        return try await inFlight.value(
             for: MediaDownloadInFlightKey(reference: reference, target: media.localTarget, demand: media.demand,
-                sourceHint: media.sourceHint, scope: "\(appState?.activeAccountRef ?? "")/\(appState?.runtimeGeneration ?? 0)/\(groupIdHex)")
+                sourceHint: media.sourceHint, scope: "\(appState?.activeAccountRef ?? "")/\(appState?.runtimeGeneration ?? 0)/\(groupIdHex)",
+                previewByteLimit: media.previewByteLimit)
         ) {
             // host_media_load: plaintext bytes from MDK, the host cache, or download.
             let recorder = appState?.productAnalytics
@@ -195,7 +240,7 @@ final class ConversationMediaDownloader {
                     guard let appState, let account = appState.activeAccountRef else { throw MediaDataError.missingAccount }
                     let client = try appState.currentMarmotClient()
                     if let data = try await client.acquireAttachmentData(accountRef: account, groupID: groupIdHex,
-                        target: target, demand: media.demand,
+                        target: target, demand: media.demand, previewByteLimit: media.previewByteLimit,
                         onLocalHit: { [recorder, cacheTicket] milliseconds in
                             recorder?.recordPerformance(.mediaCacheRead, milliseconds: milliseconds, ticket: cacheTicket)
                         }) {
@@ -210,6 +255,8 @@ final class ConversationMediaDownloader {
                         return data
                     }
                 }
+                // Without a retained slot there is no trusted length to bound a preview read.
+                if media.previewByteLimit != nil { throw AttachmentReadError.previewLimitExceeded(byteCount: nil) }
                 // A cache miss never grants new automatic network work. Source-scoped
                 // MDK reads above own expiry, removal and acquisition history.
                 guard media.demand.isUserInitiated else { throw AttachmentReadError.unavailable }
@@ -266,6 +313,9 @@ final class ConversationMediaDownloader {
             } catch AttachmentReadError.unavailable {
                 loadOutcome = .unavailable
                 throw AttachmentReadError.unavailable
+            } catch AttachmentReadError.previewLimitExceeded(let byteCount) {
+                loadOutcome = .unavailable
+                throw AttachmentReadError.previewLimitExceeded(byteCount: byteCount)
             } catch AttachmentReadError.storageBlocked {
                 loadOutcome = .unavailable
                 // Automatic loads stay quiet; a tap explains why its Retry needs free space.

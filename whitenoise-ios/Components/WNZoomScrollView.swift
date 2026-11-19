@@ -2,6 +2,9 @@ import UIKit
 
 class WNZoomScrollView: UIScrollView, UIScrollViewDelegate {
     let zoomedView: UIView
+    var doubleTapScale: CGFloat = 2.5
+    var preservesZoomOnHeightChange = false
+    private var needsFitAfterZoom = false
     var onTap: (() -> Void)?
     var onZoomChanged: ((Bool) -> Void)?
     var naturalContentSize = CGSize.zero {
@@ -46,7 +49,20 @@ class WNZoomScrollView: UIScrollView, UIScrollViewDelegate {
         super.layoutSubviews()
         guard bounds.width > 0, bounds.height > 0,
               naturalContentSize.width > 0, naturalContentSize.height > 0 else { return }
-        if viewportSize != bounds.size {
+        if preservesZoomOnHeightChange, isZoomed, viewportSize.width == bounds.width,
+           viewportSize.height != bounds.height {
+            // Hiding the viewer bars changes the viewport, but the selected detail stays centered.
+            let centerY = contentOffset.y + viewportSize.height / 2
+            viewportSize = bounds.size
+            centerContent()
+            let minY = -contentInset.top
+            let maxY = max(minY, contentSize.height - bounds.height + contentInset.bottom)
+            contentOffset.y = min(maxY, max(minY, centerY - bounds.height / 2))
+            needsFitAfterZoom = true
+            return
+        }
+        if viewportSize != bounds.size || (needsFitAfterZoom && !isZoomed) {
+            needsFitAfterZoom = false
             viewportSize = bounds.size
             setZoomScale(1, animated: false)
             let fit = min(bounds.width / naturalContentSize.width, bounds.height / naturalContentSize.height)
@@ -79,6 +95,7 @@ class WNZoomScrollView: UIScrollView, UIScrollViewDelegate {
         centerContent()
         accessibilityValue = NumberFormatter.localizedString(from: NSNumber(value: zoomScale), number: .percent)
         let zoomed = isZoomed
+        if needsFitAfterZoom && !zoomed { setNeedsLayout() }
         guard reportedZoomed != zoomed else { return }
         reportedZoomed = zoomed
         Task { @MainActor [weak self] in
@@ -96,7 +113,7 @@ class WNZoomScrollView: UIScrollView, UIScrollViewDelegate {
         if isZoomed {
             setZoomScale(minimumZoomScale, animated: animated)
         } else {
-            let scale: CGFloat = 2.5
+            let scale = doubleTapScale
             let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
             zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
                             width: size.width, height: size.height), animated: animated)

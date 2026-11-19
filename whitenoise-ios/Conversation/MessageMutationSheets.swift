@@ -54,12 +54,16 @@ struct ForwardMessageSheet: View {
     init(
         media: MessageMediaAttachment,
         data: Data,
+        verifySource: ((MessageMediaAttachment) async -> Bool)? = nil,
         viewModel: ConversationViewModel,
         destinationProvider: @escaping () async throws -> [MessageForwardDestination]
     ) {
         self.destinationProvider = destinationProvider
         self.submit = { groupIds in
-            await viewModel.forwardMedia(media, data: data, to: groupIds)
+            if let verifySource, !(await verifySource(media)) {
+                return MessageForwardResult(successfulGroupIds: [], failedGroupIds: groupIds)
+            }
+            return await viewModel.forwardMedia(media, data: data, to: groupIds)
         }
     }
 

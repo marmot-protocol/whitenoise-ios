@@ -269,6 +269,9 @@ nonisolated enum MediaAttachmentPolicy {
 }
 
 nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
+    /// Waveform analysis and on-device transcription both need the whole encoded recording.
+    static let audioAnalysisByteLimit = 16 * 1024 * 1024
+
     let id: String
     let reference: MediaAttachmentReferenceFfi?
     let fileName: String
@@ -282,6 +285,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     var localTarget: AttachmentLocalTargetFfi?
     var sourceHint: AttachmentSourceHint?
     var demand = AttachmentDemand.automatic
+    var previewByteLimit: Int?
 
     init(
         id: String,
@@ -315,6 +319,11 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
 
     var isGIF: Bool {
         MediaAttachmentPolicy.canonicalMediaType(mediaType) == "image/gif"
+    }
+
+    /// GIFs play inline. Rejected slots retain their original unavailable row.
+    var isTranscriptGalleryMedia: Bool {
+        rejectionKind == nil && !isGIF && (isImage || isVideo)
     }
 
     var isVideo: Bool {

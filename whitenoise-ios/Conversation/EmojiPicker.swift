@@ -142,7 +142,7 @@ private enum EmojiRecents {
     static let maximumCount = 40
 
     static var values: [String] {
-        UserDefaults.standard.stringArray(forKey: key) ?? AppState.defaultReactions
+        UserDefaults.standard.stringArray(forKey: key) ?? ["❤️", "👍", "👎", "😂", "😮", "😢"]
     }
 
     static func record(_ emoji: String) {
