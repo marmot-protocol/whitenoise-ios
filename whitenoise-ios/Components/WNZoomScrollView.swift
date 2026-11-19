@@ -52,12 +52,13 @@ class WNZoomScrollView: UIScrollView, UIScrollViewDelegate {
         if preservesZoomOnHeightChange, isZoomed, viewportSize.width == bounds.width,
            viewportSize.height != bounds.height {
             // Hiding the viewer bars changes the viewport, but the selected detail stays centered.
-            let centerY = contentOffset.y + viewportSize.height / 2
+            let imageCenterY = contentOffset.y + viewportSize.height / 2 - zoomedView.frame.minY
             viewportSize = bounds.size
             centerContent()
             let minY = -contentInset.top
             let maxY = max(minY, contentSize.height - bounds.height + contentInset.bottom)
-            contentOffset.y = min(maxY, max(minY, centerY - bounds.height / 2))
+            let offset = zoomedView.frame.minY + imageCenterY - bounds.height / 2
+            contentOffset.y = min(maxY, max(minY, offset))
             needsFitAfterZoom = true
             return
         }

@@ -1053,6 +1053,7 @@ final class TimelineStore {
            let poll = record.poll, Set(poll.localSelection) == Set(pending) {
             pendingPollSelections[appRecord.messageIdHex] = nil
         }
+        let previousReplyTarget = updateTimeline ? messageById[appRecord.messageIdHex].flatMap(replyTargetId(for:)) : nil
         messageById[appRecord.messageIdHex] = appRecord
         // `sourceMessageIdHex` is the durable delivery marker. A nil-source
         // projection means committed but unresolved, except while a successful
@@ -1121,7 +1122,8 @@ final class TimelineStore {
                 for: appRecord,
                 status: messageStatusById[appRecord.messageIdHex]
             ) {
-                projectionChanged = upsertTimelineItem(item) || projectionChanged
+                let replyTargetChanged = previousReplyTarget != replyTargetId(for: appRecord)
+                projectionChanged = upsertTimelineItem(item, replyTargetChanged: replyTargetChanged) || projectionChanged
             } else {
                 projectionChanged = removeTimelineItem(id: displayID(for: appRecord.messageIdHex)) || projectionChanged
             }
@@ -1350,8 +1352,8 @@ final class TimelineStore {
     }
 
     @discardableResult
-    private func upsertTimelineItem(_ item: TimelineItem) -> Bool {
-        if let existingIndex = timeline.firstIndex(where: { $0.id == item.id }),
+    private func upsertTimelineItem(_ item: TimelineItem, replyTargetChanged: Bool = false) -> Bool {
+        if !replyTargetChanged, let existingIndex = timeline.firstIndex(where: { $0.id == item.id }),
            canReplaceTimelineItemInPlace(old: timeline[existingIndex], next: item) {
             let markdownChanged = markdownProjections.update(for: item, resolver: mentionDisplayNameResolver)
             let mediaChanged = mediaProjections.update(for: item)

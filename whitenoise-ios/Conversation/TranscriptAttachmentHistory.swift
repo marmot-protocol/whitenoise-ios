@@ -135,8 +135,8 @@ final class TranscriptAttachmentHistory {
     private(set) var scannedSlots = 0
     private(set) var revision: UInt64 = 0
     @ObservationIgnored var hasPaged = false
-    @ObservationIgnored var selectedItemID: String?
-    @ObservationIgnored var selectedFromHistory = false
+    var selectedItemID: String?
+    @ObservationIgnored var resetViewerOnDiscard = false
     private(set) var viewerGeneration = 0
     private(set) var resumeItemID: String?
     private var scope: Scope?
@@ -147,6 +147,7 @@ final class TranscriptAttachmentHistory {
     private var additionsVersion: AttachmentHistoryVersion?
     private var baseline: AttachmentHistoryVersion?
     private var generation = 0
+    @ObservationIgnored private var validationSequence: UInt64 = 0
 
     struct Scope: Equatable {
         let account: String
@@ -167,7 +168,10 @@ final class TranscriptAttachmentHistory {
     }
 
     func begin(_ newScope: Scope?) {
-        if scope != newScope { hasPaged = false }
+        if scope != newScope {
+            hasPaged = false
+            selectedItemID = nil
+        }
         scope = newScope
         discard()
     }
@@ -203,11 +207,13 @@ final class TranscriptAttachmentHistory {
     }
 
     private func discard() {
-        if selectedFromHistory { viewerGeneration &+= 1 }
-        selectedFromHistory = false
+        if resetViewerOnDiscard {
+            viewerGeneration &+= 1
+            selectedItemID = nil
+        }
+        resetViewerOnDiscard = false
         generation &+= 1
         pages = .init()
-        selectedItemID = nil
         resumeItemID = nil
         scannedSlots = 0
         pageFailed = false
@@ -339,9 +345,15 @@ final class TranscriptAttachmentHistory {
         guard !Task.isCancelled, let baseline, self.scope == scope,
               scope == Scope(appState: appState, group: scope.group), let client = appState.client else { return }
         let ticket = generation
+        validationSequence &+= 1
+        let sequence = validationSequence
+        func isCurrent() -> Bool {
+            ticket == generation && sequence == validationSequence && !Task.isCancelled
+                && scope == Scope(appState: appState, group: scope.group)
+        }
         do {
             let current = try await client.marmot.attachmentHistoryVersion(accountRef: scope.account, groupIdHex: scope.group)
-            guard ticket == generation, !Task.isCancelled, scope == Scope(appState: appState, group: scope.group) else { return }
+            guard isCurrent() else { return }
             switch current.changeSince(previous: baseline) {
             case .restartRequired: discard()
             case .additions:
@@ -356,7 +368,7 @@ final class TranscriptAttachmentHistory {
             case .unchanged: validationFailed = false
             }
         } catch {
-            if ticket == generation, !Task.isCancelled {
+            if isCurrent() {
                 resumeItemID = selectedItemID
                 validationFailed = true
             }

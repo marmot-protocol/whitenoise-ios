@@ -2770,7 +2770,7 @@ struct ConversationView: View {
         )
         .equatable()
         .padding(.leading, usesSelectionLayout ? selectionInset : 0)
-        .environment(\.timelineSearchQuery, viewModel.search.isActive && viewModel.search.matches.contains(where: { $0.itemId == item.id })
+        .environment(\.timelineSearchQuery, viewModel.search.isActive && viewModel.search.matchingItemIDs.contains(item.id)
             ? ConversationSearchEngine.normalizedQuery(viewModel.search.query) : nil)
         .environment(\.customEmojiStore, viewModel.customEmojiStore)
         .environment(\.stickerAssets, viewModel.stickerAssets)

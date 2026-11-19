@@ -20,6 +20,8 @@ struct ForwardMessageSheet: View {
     let destinationProvider: () async throws -> [MessageForwardDestination]
     let submit: (Set<String>) async -> MessageForwardResult
 
+    private var sourceIsAvailable: (() async -> Bool)?
+    @State private var sourceUnavailable = false
     @State private var destinations: [MessageForwardDestination] = []
     @State private var selectedGroupIds = Set<String>()
     @State private var isLoading = true
@@ -59,11 +61,11 @@ struct ForwardMessageSheet: View {
         destinationProvider: @escaping () async throws -> [MessageForwardDestination]
     ) {
         self.destinationProvider = destinationProvider
+        if let verifySource {
+            self.sourceIsAvailable = { await verifySource(media) }
+        }
         self.submit = { groupIds in
-            if let verifySource, !(await verifySource(media)) {
-                return MessageForwardResult(successfulGroupIds: [], failedGroupIds: groupIds)
-            }
-            return await viewModel.forwardMedia(media, data: data, to: groupIds)
+            await viewModel.forwardMedia(media, data: data, to: groupIds)
         }
     }
 
@@ -80,7 +82,7 @@ struct ForwardMessageSheet: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    forwardButton
+                    if !sourceUnavailable { forwardButton }
                 }
         }
         .presentationDetents([.large])
@@ -91,7 +93,9 @@ struct ForwardMessageSheet: View {
 
     @ViewBuilder
     private var content: some View {
-        if isLoading {
+        if sourceUnavailable {
+            ContentUnavailableView("Media unavailable", systemImage: "photo.on.rectangle")
+        } else if isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if loadFailed {
@@ -202,11 +206,15 @@ struct ForwardMessageSheet: View {
     }
 
     private func forward() async {
-        guard !selectedGroupIds.isEmpty else { return }
+        guard !isSending, !sourceUnavailable, !selectedGroupIds.isEmpty else { return }
         isSending = true
+        defer { isSending = false }
         sendFailed = false
+        if let sourceIsAvailable, !(await sourceIsAvailable()) {
+            sourceUnavailable = true
+            return
+        }
         let result = await submit(selectedGroupIds)
-        isSending = false
         if result.succeededCompletely {
             dismiss()
         } else {

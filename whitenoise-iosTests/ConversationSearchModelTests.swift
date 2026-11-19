@@ -51,6 +51,22 @@ struct ConversationSearchModelTests {
         #expect(model.scrollRequest?.itemId == "msg:c")
     }
 
+    @Test func pollDeadlineScrollsOnlyWhenTheSelectedSearchResultChanges() {
+        let stub = TimelineStub(loaded: [Self.entry("a", "Select one"), Self.entry("b", "Select one")])
+        let model = ConversationSearchModel()
+        stub.attach(to: model)
+        model.activate()
+        model.query = "Select one"
+        let originalRequest = model.scrollRequest
+
+        model.refreshAfterPollDeadline()
+        #expect(model.scrollRequest == originalRequest)
+        stub.loaded[1] = Self.entry("b", "Final results")
+        model.refreshAfterPollDeadline()
+        #expect(model.scrollRequest?.itemId == "msg:a")
+        #expect(model.matchingItemIDs == ["msg:a"])
+    }
+
     @Test func olderNavigationMovesThroughLoadedMatchesThenWraps() async {
         let stub = TimelineStub(loaded: [
             Self.entry("a", "meet at noon"),

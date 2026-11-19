@@ -32,13 +32,12 @@ nonisolated enum TimelineDatePinning {
         minY: CGFloat, height: CGFloat, viewportHeight: CGFloat = .infinity, isFirst: Bool = false
     ) -> Position {
         guard minY.isFinite, height.isFinite, height > 0 else { return .below }
+        if minY + verticalPadding >= viewportHeight { return .offscreenBelow }
         if isFirst {
             // The first label has no preceding pill to push away. Hand off only
             // when the label itself, inside the row's vertical padding, leaves view.
-            if minY + verticalPadding >= viewportHeight { return .offscreenBelow }
             return minY + height - verticalPadding <= 0 ? .passed : .below
         }
-        if minY >= viewportHeight { return .offscreenBelow }
         if minY <= 0 { return .passed }
         if minY < height { return .approaching(offset: minY - height) }
         return .below

@@ -147,6 +147,11 @@ struct TimelineDatePinningTests {
             topRowHeaderID: "first", dayForHeader: { days[$0] })?.headerID == "first")
     }
 
+    @Test func aLaterDateIsOffscreenUntilItsLabelEntersTheViewport() {
+        #expect(TimelineDatePinning.position(minY: 490, height: 56, viewportHeight: 500) == .offscreenBelow)
+        #expect(TimelineDatePinning.position(minY: 481, height: 56, viewportHeight: 500) == .below)
+    }
+
     @Test func geometryChangesOnlyMatterAtTheHeaderTransition() {
         #expect(TimelineDatePinning.position(minY: 100, height: 50) == .below)
         #expect(TimelineDatePinning.position(minY: 50, height: 50) == .below)

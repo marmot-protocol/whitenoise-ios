@@ -36,8 +36,10 @@ struct TranscriptHistoryGalleryView: View {
     var body: some View {
         let currentScope = scope
         let scoped = currentScope != nil && currentScope == activeScope
+        let selectedID = history.selectedItemID ?? gallery.initialItemID
+        let selectedFromHistory = gallery.transcriptCaptions?[selectedID] == nil
         Group {
-            if scoped && history.validationFailed && history.selectedFromHistory {
+            if scoped && history.validationFailed && selectedFromHistory {
                 ContentUnavailableView {
                     Label("Couldn't load shared media.", systemImage: "photo.on.rectangle")
                 } actions: {
@@ -51,6 +53,9 @@ struct TranscriptHistoryGalleryView: View {
                     .id(history.viewerGeneration)
                     .environment(\.transcriptHistoryControls, scoped ? controls(for: expanded) : nil)
             }
+        }
+        .onChange(of: selectedFromHistory, initial: true) { _, historyOnly in
+            history.resetViewerOnDiscard = historyOnly
         }
         .task(id: currentScope) {
             history.begin(currentScope)
@@ -91,7 +96,7 @@ struct TranscriptHistoryGalleryView: View {
             allowsOpeningDemand: !history.hasPaged, didSelect: { itemID in
                 history.hasPaged = true
                 history.selectedItemID = itemID
-                history.selectedFromHistory = gallery.transcriptCaptions?[itemID] == nil
+                history.resetViewerOnDiscard = gallery.transcriptCaptions?[itemID] == nil
             }, verify: { item in await self.verify(item) })
     }
 

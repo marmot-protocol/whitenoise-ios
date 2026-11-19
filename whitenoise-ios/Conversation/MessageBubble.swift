@@ -1272,6 +1272,13 @@ struct MessageBubble: View {
                 Button(L10n.string("Reactions")) { onShowReactionDetails(nil) }
                     .accessibilityValue(L10n.plural("%lld reactions", Int64(totalCount)))
                     .accessibilityAddTraits(mine ? .isSelected : [])
+                    .accessibilityActions {
+                        if let onTapReaction {
+                            ForEach(pills, id: \.emoji) { tally in
+                                Button(tally.emoji) { onTapReaction(tally) }
+                            }
+                        }
+                    }
             }
 
             if showsMetadataFooter {
@@ -2323,8 +2330,8 @@ private struct MessageMediaTile: View {
             if !visible { gifData = nil }
         }
         .onTapGesture {
+            let request = openIntent?.begin()
             if item.isVideo {
-                openIntent?.begin()
                 onOpenVideo(item)
                 return
             }
@@ -2334,7 +2341,6 @@ private struct MessageMediaTile: View {
                 return
             }
             guard item.isImage else { return }
-            let request = item.isGIF ? nil : openIntent?.begin()
             let demand = AttachmentDemand.userTap(afterFailure: didFail)
             Task {
                 if let data = await loadImageIfNeeded(scale: displayScale, demand: demand),

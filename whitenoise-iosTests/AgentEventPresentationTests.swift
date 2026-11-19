@@ -71,6 +71,13 @@ struct AgentEventPresentationTests {
         let finished = try #require(model.agentEventDisplay(for: row))
         #expect(finished.iconName == "checkmark.message")
         #expect(!finished.reportsWorkInProgress)
+
+        var reprojected = answer
+        reprojected.replyToMessageIdHex = nil
+        _ = model.timelineStore.applyTimelineRecord(reprojected, updateTimeline: true)
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == true)
+        _ = model.timelineStore.applyTimelineRecord(answer, updateTimeline: true)
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == false)
     }
 
     @Test func operationDisplayPrefersTextAndFallsBackToPreview() {

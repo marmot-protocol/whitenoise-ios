@@ -130,7 +130,10 @@ final class ConversationSearchModel {
     }
 
     private(set) var isActive = false
-    private(set) var matches: [ConversationSearchMatch] = []
+    private(set) var matches: [ConversationSearchMatch] = [] {
+        didSet { matchingItemIDs = Set(matches.map(\.itemId)) }
+    }
+    private(set) var matchingItemIDs: Set<String> = []
     private(set) var currentIndex: Int?
     private(set) var isPagingOlder = false
     private(set) var nextPollDeadline: Date?
@@ -245,6 +248,12 @@ final class ConversationSearchModel {
         observedMatch = observedMatch || !matches.isEmpty
         currentIndex = ConversationSearchEngine.reanchoredIndex(of: anchorId, in: matches)
             ?? ConversationSearchEngine.initialIndex(matchCount: matches.count)
+    }
+
+    func refreshAfterPollDeadline() {
+        let previousID = currentMatch?.itemId
+        refreshAfterTimelineChange()
+        if previousID != currentMatch?.itemId { requestScrollToCurrentMatch() }
     }
 
     func goToNewerMatch() {
