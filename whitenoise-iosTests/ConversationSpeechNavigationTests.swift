@@ -5,6 +5,7 @@ import UIKit
 
 @MainActor
 struct ConversationSpeechNavigationTests {
+    @available(iOS 26, *)
     @Test func poppingPastAnOpenDetailClearsTheChatsSpeechSession() async throws {
         let model = SpeechStackHarness.Model()
         let host = UIHostingController(rootView: SpeechStackHarness(model: model))
@@ -12,16 +13,20 @@ struct ConversationSpeechNavigationTests {
             model.path = [.init(groupIdHex: "chat")]
             try await settleLayout(window) { model.visible }
             #expect(model.visible == "chat")
-            let route = ConversationSpeech.Route(groupID: "chat", modelID: nil, account: nil, runtimeGeneration: 0)
-            model.speech.availableAudio = ("voice-note", .bundled(URL(fileURLWithPath: "/test/voice.m4a")),
-                                           .init(route: route, revision: 0))
+            // Keep a real transcription request pending at its data read while navigating.
+            let (input, continuation) = AsyncStream<Data>.makeStream()
+            defer { continuation.finish() }
+            model.speech.transcribe(id: "voice-note", attachmentID: "audio", data: {
+                for await bytes in input { return bytes }
+                throw CancellationError()
+            }, verifiedScope: { nil }, onError: { Issue.record("Cancelled transcription reported an error") })
             model.showsDetails = true
             try await settleLayout(window) { model.visible }
             #expect(model.visible == "details")
-            #expect(model.speech.availableAudio?.id == "voice-note")
+            #expect(model.speech.transcribingID == "voice-note")
             model.path = []
-            try await settleLayout(window) { model.speech.availableAudio == nil }
-            #expect(model.speech.availableAudio == nil)
+            try await settleLayout(window) { model.speech.transcribingID == nil }
+            #expect(model.speech.transcribingID == nil)
         }
     }
 }
