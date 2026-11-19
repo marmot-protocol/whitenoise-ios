@@ -204,7 +204,8 @@ private struct LongMessageSourceText: View {
                 let chunk = TranscriptMessagePreview.sourceChunk(text[start...])
                 let safeText = ContentSanitizer.textRun(String(chunk))
                 let display = CanonicalMentionDisplayProjection.project(safeText) { npub in
-                    appState.mentionDisplayName(for: MarkdownNostrEntityFfi(hrp: .npub, bech32: npub))
+                    guard let id = NostrProfileReference.pubkeyHex(fromBech32: npub) else { return nil }
+                    return appState.cachedKnownDisplayName(forAccountIdHex: id)
                 }
                 Text(verbatim: display.text)
                     .onAppear {
@@ -3914,7 +3915,11 @@ struct MessageMediaFullscreenGalleryView: View {
                 ForwardMessageSheet(
                     media: prepared.item,
                     data: prepared.data,
-                    verifySource: transcriptHistory?.verify,
+                    verifySource: { item in
+                        guard gallery.transcriptCaptions != nil else { return true }
+                        guard let transcriptHistory else { return false }
+                        return await transcriptHistory.verify(item)
+                    },
                     viewModel: forwardingContext.viewModel,
                     destinationProvider: forwardingContext.destinationProvider
                 )

@@ -14,18 +14,22 @@ struct ConversationSpeechNavigationTests {
             try await settleLayout(window) { model.visible }
             #expect(model.visible == "chat")
             // Keep a real transcription request pending at its data read while navigating.
-            let (input, continuation) = AsyncStream<Data>.makeStream()
-            defer { continuation.finish() }
+            let started = TestLatch()
+            let cancelled = TestLatch()
             model.speech.transcribe(id: "voice-note", attachmentID: "audio", data: {
-                for await bytes in input { return bytes }
-                throw CancellationError()
+                started.signal()
+                defer { if Task.isCancelled { cancelled.signal() } }
+                try await parkUntilCancelled()
+                return Data()
             }, verifiedScope: { nil }, onError: { Issue.record("Cancelled transcription reported an error") })
+            try await started.wait()
             model.showsDetails = true
             try await settleLayout(window) { model.visible }
             #expect(model.visible == "details")
             #expect(model.speech.transcribingID == "voice-note")
             model.path = []
             try await settleLayout(window) { model.speech.transcribingID == nil }
+            try await cancelled.wait()
             #expect(model.speech.transcribingID == nil)
         }
     }

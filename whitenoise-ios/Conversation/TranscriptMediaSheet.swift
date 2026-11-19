@@ -58,7 +58,7 @@ struct TranscriptMediaSheet<Page: View>: View {
                                     .disabled(history?.isLoading == true)
                             }
                             Button("Save", systemImage: "square.and.arrow.down") { verified(onSave) }
-                                .disabled(!controls.canSave)
+                                .disabled(history == nil || !controls.canSave)
                             if controls.canGoToMessage {
                                 Button("Go to Message", systemImage: "bubble.left", action: onGoToMessage)
                             }
@@ -84,7 +84,7 @@ struct TranscriptMediaSheet<Page: View>: View {
                                     .disabled(!controls.canShare)
                                 Spacer()
                                 MessageMediaGalleryButton(title: "Forward", systemImage: "arrowshape.turn.up.right", action: { verified(onForward) })
-                                    .disabled(!controls.canForward)
+                                    .disabled(history == nil || !controls.canForward)
                             }
                         }
                         .safeAreaPadding(.horizontal, 20)
@@ -107,7 +107,7 @@ struct TranscriptMediaSheet<Page: View>: View {
     }
 
     private func verified(_ action: @escaping () -> Void) {
-        guard let history else { action(); return }
+        guard let history else { return }
         guard let item = gallery.items.first(where: { $0.id == selection }) else { return }
         actionRead?.cancel()
         actionRead = Task {
