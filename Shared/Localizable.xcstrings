@@ -2273,7 +2273,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nämä valinnat koskevat kaikkia tämän laitteen tilejä. Voit muuttaa niitä milloin tahansa kohdassa Asetukset → Tietosuoja ja turvallisuus → Diagnostiikka ja parannukset."
+            "value" : "Nämä valinnat koskevat kaikkia tämän laitteen tilejä. Voit muuttaa niitä milloin tahansa kohdassa Asetukset → Yksityisyys ja suojaus → Diagnostiikka ja parannukset."
           }
         },
         "fr" : {
@@ -10496,7 +10496,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ poisti ylläpitäjän oikeutesi"
+            "value" : "%@ poisti sinulta ylläpitäjän oikeudet"
           }
         },
         "fr" : {
@@ -20070,7 +20070,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ylläpitäjä poistettu"
+            "value" : "Ylläpitäjän oikeudet poistettu"
           }
         },
         "fr" : {
@@ -54851,7 +54851,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vie keskustelun tallenne"
+            "value" : "Vie keskusteluhistoria"
           }
         },
         "fr" : {
@@ -65909,7 +65909,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF on Wyomingissa rekisteröity yhdysvaltalainen 501(c)(3)-voittoa tavoittelematon järjestö, joka rakentaa työkaluja, joiden avulla ihmiset voivat viestiä yksityisesti. IPF kehittää White Noisea ja Murmeli-protokollaa, sen taustalla olevaa avointa viestintäprotokollaa. Lahjoituksesi tukee tätä työtä ja ajatusta, että yksityisten keskustelujen pitäisi olla kaikkien ulottuvilla."
+            "value" : "IPF on Wyomingissa rekisteröity yhdysvaltalainen 501(c)(3)-voittoa tavoittelematon järjestö, joka rakentaa työkaluja, joiden avulla ihmiset voivat viestiä yksityisesti. IPF kehittää White Noisea ja Marmot-protokollaa, sen taustalla olevaa avointa viestintäprotokollaa. Lahjoituksesi tukee tätä työtä ja ajatusta, että yksityisten keskustelujen pitäisi olla kaikkien ulottuvilla."
           }
         },
         "fr" : {
@@ -72642,7 +72642,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tee toisesta jäsenestä ylläpitäjä ennen kuin poistat viimeisen ylläpitäjän."
+            "value" : "Tee toisesta jäsenestä ylläpitäjä ennen kuin poistat viimeisen ylläpitäjän oikeudet."
           }
         },
         "fr" : {
@@ -75120,7 +75120,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Liittymisesi aikaiset viestit voivat olla puutteellisia."
+            "value" : "Osa liittymisesi aikoihin lähetetyistä viesteistä saattaa puuttua."
           }
         },
         "fr" : {
@@ -75186,7 +75186,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Poissaolosi aikaiset viestit voivat olla puutteellisia."
+            "value" : "Osa poissaolosi aikana lähetetyistä viesteistä saattaa puuttua."
           }
         },
         "fr" : {
@@ -98105,7 +98105,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Poista ylläpitäjä"
+            "value" : "Poista ylläpitäjän oikeudet"
           }
         },
         "fr" : {
@@ -99399,7 +99399,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Poistetaan ylläpitäjää…"
+            "value" : "Poistetaan ylläpitäjän oikeuksia…"
           }
         },
         "fr" : {
@@ -125857,7 +125857,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tällä henkilöllä ei ole yhteensopivaa kutsuavainta saatavilla. Pyydä häntä avaamaan White Noise ja yritä uudelleen."
+            "value" : "Tällä henkilöllä ei ole yhteensopivaa kutsuavainta saatavilla. Pyydä häntä avaamaan White Noise ja yritä sitten uudelleen."
           }
         },
         "fr" : {
@@ -142752,7 +142752,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Allekirjoitussovelluksesi hylkäsi pyynnön."
+            "value" : "Allekirjoittajasi hylkäsi pyynnön."
           }
         },
         "fr" : {
@@ -142823,7 +142823,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Allekirjoitussovelluksesi ei ole käytettävissä."
+            "value" : "Allekirjoittajasi ei ole käytettävissä."
           }
         },
         "fr" : {
@@ -147949,7 +147949,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Säilytetäänkö media 1 vuoden?"
+            "value" : "Säilytetäänkö media 1 vuoden ajan?"
           }
         },
         "fr" : {
@@ -148014,7 +148014,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Säilytetäänkö media 6 kuukautta?"
+            "value" : "Säilytetäänkö media 6 kuukauden ajan?"
           }
         },
         "fr" : {
@@ -148079,7 +148079,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Säilytetäänkö media 30 päivää?"
+            "value" : "Säilytetäänkö media 30 päivän ajan?"
           }
         },
         "fr" : {
@@ -149036,7 +149036,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ikuisesti-valinta säilyttää tämän profiilin liitteet tällä laitteella. Lyhyempi aika poistaa vanhemmat liitteet nyt ja sitä mukaa kuin ne vanhenevat. Uudelleen ladattu liite säilytetään koko ajan latauksesta lähtien."
+            "value" : "Ikuisesti-valinta säilyttää tämän profiilin liitteet tällä laitteella. Lyhyempi aika poistaa vanhemmat liitteet nyt ja sitä mukaa kuin ne vanhenevat. Jos lataat liitteen uudelleen, sen säilytysaika alkaa alusta."
           }
         },
         "fr" : {
@@ -164471,7 +164471,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ (HTTP %lld)"
+            "value" : "%1$@ (HTTP %2$lld)"
           }
         },
         "fr" : {
@@ -165731,7 +165731,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vilkuttava murmeli"
+            "value" : "Vilkuttava marmot"
           }
         },
         "fr" : {
@@ -165797,7 +165797,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Peukuttava murmeli"
+            "value" : "Peukuttava marmot"
           }
         },
         "fr" : {
@@ -165863,7 +165863,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Naurava murmeli"
+            "value" : "Naurava marmot"
           }
         },
         "fr" : {
@@ -165929,7 +165929,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Murmeli ja sydän"
+            "value" : "Marmot ja sydän"
           }
         },
         "fr" : {
@@ -165995,7 +165995,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Juhliva murmeli"
+            "value" : "Juhliva marmot"
           }
         },
         "fr" : {
@@ -166061,7 +166061,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Liekehtivä murmeli"
+            "value" : "Liekehtivä marmot"
           }
         },
         "fr" : {
@@ -166127,7 +166127,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yllättynyt murmeli"
+            "value" : "Yllättynyt marmot"
           }
         },
         "fr" : {
@@ -166193,7 +166193,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Virnistävä murmeli"
+            "value" : "Virnistävä marmot"
           }
         },
         "fr" : {
@@ -166259,7 +166259,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Itkevä murmeli"
+            "value" : "Itkevä marmot"
           }
         },
         "fr" : {
@@ -166325,7 +166325,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vihainen murmeli"
+            "value" : "Vihainen marmot"
           }
         },
         "fr" : {
@@ -166391,7 +166391,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Klassinen murmeli"
+            "value" : "Klassinen marmot"
           }
         },
         "fr" : {
@@ -173677,7 +173677,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vie viime päivien audit-lokit yhtenä .zip-tiedostona tai vie tiedosto napauttamalla sitä. Viennit säilyttävät alkuperäisen JSONL-tiedoston kokonaan tapahtumien tietoineen. Lokeja voi määrittää tai tyhjentää kohdassa Tietosuoja ja turvallisuus → Diagnostiikka ja parannukset."
+            "value" : "Vie viime päivien audit-lokit yhtenä .zip-tiedostona tai vie tiedosto napauttamalla sitä. Viennit säilyttävät alkuperäisen JSONL-tiedoston kokonaan tapahtumien tietoineen. Lokeja voi määrittää tai tyhjentää kohdassa Yksityisyys ja suojaus → Diagnostiikka ja parannukset."
           }
         },
         "fr" : {
@@ -173804,6 +173804,34 @@
                     "stringUnit" : {
                       "state" : "translated",
                       "value" : "%lld caracteres de más"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld merkki liikaa"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld merkkiä liikaa"
                     }
                   }
                 }
