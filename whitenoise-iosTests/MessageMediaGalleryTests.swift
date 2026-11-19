@@ -30,6 +30,15 @@ struct MessageMediaGalleryTests {
             data: draft.data)) == nil)
     }
 
+    @Test func preparedTranscriptPhotoNeedsLiveSlotVerificationToExport() async throws {
+        let photo = attachment(id: "photo", mediaType: "image/png")
+        let gallery = try #require(MessageMediaGallery(transcriptItems: [photo], openingID: photo.id,
+            initialData: imageData(), messages: [:], captions: [photo.id: .init(sender: "You", date: .now)]))
+        #expect(await gallery.mayExport(photo, verify: nil) == false)
+        #expect(await gallery.mayExport(photo, verify: { _ in false }) == false)
+        #expect(await gallery.mayExport(photo, verify: { $0.id == photo.id }))
+    }
+
     @Test func galleryRejectsNonVisualInitialItem() {
         let image = attachment(id: "image", mediaType: "image/png")
         let document = attachment(id: "document", mediaType: "application/pdf")

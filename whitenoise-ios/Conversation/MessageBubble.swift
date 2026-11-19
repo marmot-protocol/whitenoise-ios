@@ -3728,6 +3728,12 @@ struct MessageMediaGallery: Identifiable {
         self.transcriptCaptions = nil
     }
 
+    func mayExport(_ item: MessageMediaAttachment, verify: ((MessageMediaAttachment) async -> Bool)?) async -> Bool {
+        guard transcriptCaptions != nil else { return true }
+        guard let verify else { return false }
+        return await verify(item)
+    }
+
     func pendingSelection(for id: String) -> PendingSelection? {
         guard let slot = transcriptCaptions?[id]?.outgoingSlot,
               let item = items.first(where: { $0.id == id }), item.reference == nil,
@@ -3916,9 +3922,7 @@ struct MessageMediaFullscreenGalleryView: View {
                     media: prepared.item,
                     data: prepared.data,
                     verifySource: { item in
-                        guard gallery.transcriptCaptions != nil else { return true }
-                        guard let transcriptHistory else { return false }
-                        return await transcriptHistory.verify(item)
+                        await gallery.mayExport(item, verify: transcriptHistory?.verify)
                     },
                     viewModel: forwardingContext.viewModel,
                     destinationProvider: forwardingContext.destinationProvider

@@ -107,11 +107,10 @@ struct TranscriptMediaSheet<Page: View>: View {
     }
 
     private func verified(_ action: @escaping () -> Void) {
-        guard let history else { return }
         guard let item = gallery.items.first(where: { $0.id == selection }) else { return }
         actionRead?.cancel()
         actionRead = Task {
-            let allowed = await history.verify(item)
+            let allowed = await gallery.mayExport(item, verify: history?.verify)
             guard !Task.isCancelled, selection == item.id else { return }
             if allowed { action() }
             else { showsActionFailure = true }
