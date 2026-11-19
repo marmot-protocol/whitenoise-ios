@@ -1195,8 +1195,8 @@ struct MessageBubble: View {
                         .multilineTextAlignment(.trailing)
                 }
                 .buttonStyle(.plain)
-                .modifier(MessageActionHold(surface: .failureNotice, isEnabled: record.messageIdHex.isEmpty || showMessageActions != nil) {
-                    if let showMessageActions { showMessageActions(.failureNotice) } else { onFailedTap() }
+                .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
+                    showMessageActions?(.failureNotice)
                 })
                 if isEdited || hasReports {
                     MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
@@ -3355,6 +3355,7 @@ private struct MessageDocumentAttachmentView: View {
         }
         .sheet(item: $preview) { document in
             MessageDocumentPreviewSheet(preview: document, item: item, loader: onLoadMedia)
+                .appAppearance()
         }
         .sheet(item: $share.file) { file in
             ActivityShareSheet(items: [file.url], onComplete: file.finish)
@@ -3745,10 +3746,10 @@ struct MessageMediaGallery: Identifiable {
         items.first { $0.reference != nil && transcriptCaptions?[$0.id]?.outgoingSlot == pending.slot }
     }
 
-    func confirmedSelection(for pending: PendingSelection) async -> String? {
+    func confirmedSelection(for pending: PendingSelection) async -> MessageMediaAttachment? {
         guard let item = confirmedItem(for: pending), let reference = item.reference,
               await MediaPlaintextHash.matches(pending.data, expectedSha256: reference.plaintextSha256) else { return nil }
-        return item.id
+        return item
     }
 
     func initialData(for item: MessageMediaAttachment) -> Data? {
@@ -3902,7 +3903,10 @@ struct MessageMediaFullscreenGalleryView: View {
             }
             let replacement = await gallery.confirmedSelection(for: pendingSelection)
             guard !Task.isCancelled, selectedItemID == pendingSelection.id else { return }
-            if let replacement { select(replacement) } else { onDismiss() }
+            guard let replacement else { onDismiss(); return }
+            preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
+                contentType: UTType(mimeType: replacement.mediaType) ?? .data)
+            select(replacement.id)
         }
         .onChange(of: selectedItemID) { _, selection in
             hasPaged = true
@@ -3974,7 +3978,7 @@ struct MessageMediaFullscreenGalleryView: View {
         MessageMediaFullscreenPage(
             item: item,
             isSelected: item.id == selectedItemID,
-            initialImageData: gallery.initialData(for: item),
+            initialImageData: preparedMedia?.id == item.id ? preparedMedia?.data : gallery.initialData(for: item),
             selectionDemand: gallery.transcriptCaptions == nil || (!hasPaged && item.id == gallery.initialItemID && transcriptHistory?.allowsOpeningDemand != false)
                 ? .explicit : .automatic,
             onLoadMedia: onLoadMedia,
@@ -4138,6 +4142,7 @@ private struct MessageMediaFullscreenPage: View {
             MessageMediaFullscreenVideoPage(
                 item: item,
                 isSelected: isSelected,
+                initialMediaData: initialImageData,
                 selectionDemand: selectionDemand,
                 onLoadMedia: onLoadMedia,
                 onData: onData,
@@ -4162,6 +4167,7 @@ private struct MessageMediaFullscreenVideoPage: View {
     @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
     let isSelected: Bool
+    let initialMediaData: Data?
     let selectionDemand: AttachmentDemand
     let onLoadMedia: ConversationMediaLoader
     let onData: (Data) -> Void
@@ -4289,7 +4295,9 @@ private struct MessageMediaFullscreenVideoPage: View {
 
     private func playbackFileURL(demand: AttachmentDemand) async throws -> URL {
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        let data = try await onLoadMedia.data(for: item, demand: demand)
+        let data: Data
+        if let initialMediaData, demand != .retry { data = initialMediaData }
+        else { data = try await onLoadMedia.data(for: item, demand: demand) }
         try Task.checkCancellation()
         onData(data)
         guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
@@ -4311,6 +4319,7 @@ private struct MessageMediaFullscreenImagePage: View {
     @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
     let isSelected: Bool
+    let initialImageData: Data?
     let selectionDemand: AttachmentDemand
     let onLoadMedia: ConversationMediaLoader
     let onData: (Data) -> Void
@@ -4346,11 +4355,7 @@ private struct MessageMediaFullscreenImagePage: View {
         self.onData = onData
         self.onToggleChrome = onToggleChrome
         self.onZoomChanged = onZoomChanged
-        // Do NOT decode here. Decoding attacker-controlled bytes is deferred to
-        // `loadImageIfNeeded`, which runs the decode off the MainActor and
-        // bounded to a screen-sized pixel budget. Stash the raw initial bytes
-        // (if any) so the first load can reuse them without re-fetching.
-        _imageData = State(initialValue: initialImageData)
+        self.initialImageData = initialImageData
     }
 
     private func fullscreenMaxPixelSize(viewSize: CGSize, scale: CGFloat) -> Int {
@@ -4402,6 +4407,7 @@ private struct MessageMediaFullscreenImagePage: View {
         let force = demand == .retry
         waitingForTap = false
         couldNotDecode = false
+        if !force, imageData == nil { imageData = initialImageData }
         if !force, let imageData { onData(imageData) }
         guard image == nil || force else { return }
         let productTicket = appState.productAnalytics.ticket()

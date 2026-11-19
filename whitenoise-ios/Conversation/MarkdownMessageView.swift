@@ -46,7 +46,7 @@ enum TimelineTextMark: TextAttribute {
                     parts.appendInterpolation(matches ? image.customAttribute(Self.search) : image)
                 }
             }
-            return Text(LocalizedStringKey(stringInterpolation: parts))
+            return Text(LocalizedStringKey(stringInterpolation: parts), tableName: "TimelineTextMark")
         }
         var parts = LocalizedStringKey.StringInterpolation(literalCapacity: 0, interpolationCount: value.runs.count)
         for (match, mention, range) in value.runs[TimelineMatchAttribute.self, MarkdownMentionAttribute.self] {
@@ -59,7 +59,7 @@ enum TimelineTextMark: TextAttribute {
                 parts.appendInterpolation(run)
             }
         }
-        return Text(LocalizedStringKey(stringInterpolation: parts))
+        return Text(LocalizedStringKey(stringInterpolation: parts), tableName: "TimelineTextMark")
     }
 }
 

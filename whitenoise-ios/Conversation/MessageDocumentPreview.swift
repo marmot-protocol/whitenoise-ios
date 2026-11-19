@@ -60,7 +60,9 @@ nonisolated struct MessageDocumentPreview: Identifiable {
             guard let document = PDFDocument(data: data), !document.isEncrypted, document.pageCount > 0 else { return nil }
             return Self(content: .pdf(document))
         case .text:
-            guard let text = String(data: data, encoding: .utf8), !text.isEmpty else { return nil }
+            guard let decoded = String(data: data, encoding: .utf8) else { return nil }
+            let text = ContentSanitizer.textRun(decoded)
+            guard !text.isEmpty else { return nil }
             return Self(content: .text(text))
         case .contact:
             guard let card = SharedContactPreview(data: data) else { return nil }

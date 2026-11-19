@@ -1087,6 +1087,7 @@ struct ConversationView: View {
                             }
                         }
                 }
+                .appAppearance()
             }
             .sheet(item: $transcriptMedia, onDismiss: { mediaOpenIntent.invalidate() }) { target in
                 if let viewModel, ObjectIdentifier(viewModel) == target.modelID,
@@ -1098,6 +1099,7 @@ struct ConversationView: View {
                         forwardingContext: forwardingContext(for: viewModel),
                         onGoToMessage: { navigateToTimelineMessage($0, viewModel: viewModel) },
                         onDismiss: { transcriptMedia = nil })
+                        .appAppearance()
                 } else {
                     Color.clear.onAppear { transcriptMedia = nil }
                 }
@@ -2146,6 +2148,7 @@ struct ConversationView: View {
                             }
                         }
                         .environment(\.timelinePreviewSearch, viewModel.search)
+                        .onChange(of: dateHeadings) { noteTopVisibleRowDay(viewModel: viewModel) }
                         .modifier(TimelinePinnedDateModifier(orderedHeaderIDs: dateHeadings.map(\.id), headingsByID: dayHeaders,
                                                              dimsForSearch: searchResultID != nil, viewport: timelineDateViewport))
                         .overlay(alignment: .bottomTrailing) {
@@ -2489,8 +2492,12 @@ struct ConversationView: View {
             viewModel: viewModel,
             showsSenderIdentity: showsSenderIdentity,
             usesSelectionLayout: isSelectingMessages,
-            showMessageActions: interactionsEnabled && !record.messageIdHex.isEmpty && !popTransition.isNavigating ? { surface in
+            showMessageActions: interactionsEnabled && (!record.messageIdHex.isEmpty || status == .failed) && !popTransition.isNavigating ? { surface in
                 Haptics.tap()
+                if record.messageIdHex.isEmpty {
+                    failedSendTarget = FailedSendTarget(rowId: item.id)
+                    return
+                }
                 beginActionsPresentation(for: record, status: status, rowId: item.id, rowFrameKey: item.rowFrameKey, pressedSurface: surface)
             } : nil
         )
@@ -4837,7 +4844,20 @@ struct ConversationView: View {
             case .chat, .reply, .media, .streamFinal:
                 guard SharedLocationText.location(from: record.plaintext) == nil,
                       RemoteGiphyMedia.parse(wireText: record.plaintext) == nil else { return [] }
-                return received ? [speech.readingID == id ? .stop : .read] : []
+                guard received else { return [] }
+                if speech.readingID == id { return [.stop] }
+                let emoji = model.customEmoji(for: row)
+                if !emoji.isEmpty, model.replyPreview(for: record) == nil, model.mediaItems(for: row).isEmpty,
+                   SingleCustomEmojiMessagePresentation.shortcode(in: record.plaintext, resolvable: emoji.shortcodes) != nil {
+                    return []
+                }
+                if !record.contentTokens.blocks.isEmpty, !TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
+                    let blocks = model.markdownDisplayBlocks(for: row) ?? []
+                    guard blocks.contains(where: { block in
+                        block.textFields(includeCodeLanguage: false).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                    }) else { return [] }
+                }
+                return [.read]
             default: return []
             }
         }

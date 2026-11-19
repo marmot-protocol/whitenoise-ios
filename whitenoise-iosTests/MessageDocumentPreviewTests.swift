@@ -17,6 +17,16 @@ struct MessageDocumentPreviewTests {
         #expect(await MessageDocumentPreview.parse(data: protected, format: .pdf) == nil)
     }
 
+    @Test func textPreviewStripsDirectionalOverridesAndPreservesLayout() async throws {
+        let bytes = Data("line one\n\tline\u{202e} two".utf8)
+        let preview = try #require(await MessageDocumentPreview.parse(data: bytes, format: .text))
+        guard case .text(let text) = preview.content else {
+            Issue.record("Expected a text preview")
+            return
+        }
+        #expect(text == "line one\n\tline two")
+    }
+
     @Test func sharesTheOriginalWhenTextCannotBeShownWithinThePreviewBudget() async {
         #expect(await MessageDocumentPreview.parse(data: Data([0xff, 0xc0]), format: .text) == nil)
         let oversized = Data(repeating: 65, count: DocumentPreviewFormat.text.byteLimit + 1)

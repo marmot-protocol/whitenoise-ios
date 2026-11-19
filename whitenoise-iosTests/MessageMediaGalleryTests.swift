@@ -24,7 +24,7 @@ struct MessageMediaGalleryTests {
         ]
         let gallery = try #require(MessageMediaGallery(transcriptItems: items, openingID: draft.id,
             initialData: nil, messages: [:], captions: captions))
-        #expect(await gallery.confirmedSelection(for: draft) == items[1].id)
+        #expect(await gallery.confirmedSelection(for: draft)?.id == items[1].id)
         #expect(await gallery.confirmedSelection(for: .init(id: "draft", slot: slot, data: Data("edited".utf8))) == nil)
         #expect(await gallery.confirmedSelection(for: .init(id: "draft", slot: .init(rowID: "my-send", index: 0),
             data: draft.data)) == nil)
