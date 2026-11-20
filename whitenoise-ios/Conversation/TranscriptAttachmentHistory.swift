@@ -96,36 +96,40 @@ struct TranscriptHistoryPages {
         byMessage.values.contains { slots in slots.contains { $0.attachment.id == attachmentID } }
     }
 
+    struct Edges {
+        var older: [TranscriptHistorySlot] = []
+        var newer: [TranscriptHistorySlot] = []
+        var includesWindow = true
+    }
+
     /// Extend each edge only once the native cursor has reached that exact slot. In particular, a
     /// recent page cannot appear adjacent to an old search result while intervening pages are missing.
     func extensions(around window: [MessageMediaAttachment],
-                    excluding windowMessages: Set<String>, atLiveTail: Bool = false, preserving selectedID: String? = nil) -> (older: [TranscriptHistorySlot], newer: [TranscriptHistorySlot]) {
+                    excluding windowMessages: Set<String>, atLiveTail: Bool = false, preserving selectedID: String? = nil) -> Edges {
         let chronological = newestFirst.reversed().flatMap { byMessage[$0] ?? [] }
         // A held GIF can anchor its own window. Other GIFs still play inline.
         func isGalleryPage(_ slot: TranscriptHistorySlot) -> Bool {
             !windowMessages.contains(slot.target.messageIdHex) && !slot.attachment.isGIF
         }
-        // The live window may evict its last photo while the viewer is on a retained page.
-        if window.isEmpty, let selectedID, chronological.contains(where: { $0.attachment.id == selectedID && isGalleryPage($0) }) {
-            return (chronological.filter(isGalleryPage), [])
-        }
-        guard let first = window.first(where: { $0.localTarget != nil }),
-              let last = window.last(where: { $0.localTarget != nil }) else {
-            // In an MDK-confirmed tail containing only local photos, every native slot
-            // outside the window precedes the pending sends. A historical jump has no such guarantee.
-            guard atLiveTail, !window.isEmpty else { return ([], []) }
-            return (chronological.filter(isGalleryPage), [])
-        }
+        let first = window.first { $0.localTarget != nil }
+        let last = window.last { $0.localTarget != nil }
         func matches(_ slot: TranscriptHistorySlot, _ item: MessageMediaAttachment) -> Bool {
             slot.target == item.localTarget && slot.attachment.reference == item.reference
         }
-        let older = chronological.firstIndex { matches($0, first) }.map { index in
-            chronological[..<index].filter(isGalleryPage)
-        } ?? []
-        let newer = chronological.lastIndex { matches($0, last) }.map { index in
-            chronological.suffix(from: index + 1).filter(isGalleryPage)
-        } ?? []
-        return (older, newer)
+        let firstOverlap = first.flatMap { item in chronological.firstIndex { matches($0, item) } }
+        let lastOverlap = last.flatMap { item in chronological.lastIndex { matches($0, item) } }
+        if first == nil, atLiveTail, !window.isEmpty {
+            // Pending sends in a confirmed live tail follow the native sequence.
+            return Edges(older: chronological.filter(isGalleryPage))
+        }
+        if firstOverlap == nil, lastOverlap == nil, let selectedID,
+           chronological.contains(where: { $0.attachment.id == selectedID && isGalleryPage($0) }) {
+            // The selected retained segment is still contiguous. A replacement window
+            // belongs in it only after one of its edges reaches a matching source slot.
+            return Edges(older: chronological.filter(isGalleryPage), includesWindow: false)
+        }
+        return Edges(older: firstOverlap.map { chronological[..<$0].filter(isGalleryPage) } ?? [],
+                     newer: lastOverlap.map { chronological.suffix(from: $0 + 1).filter(isGalleryPage) } ?? [])
     }
 }
 
@@ -293,15 +297,18 @@ final class TranscriptAttachmentHistory {
         guard self.scope == scope else { throw CancellationError() }
         let client = try scope.currentClient(in: appState)
         let originalBaseline = pager.baseline
+        let startingRevision = revision
         let ticket = generation
         let assets = try await client.marmot.attachmentLocalAssets(accountRef: scope.account,
             groupIdHex: scope.group, targets: [target])
         _ = try scope.currentClient(in: appState)
         guard ticket == generation else { throw CancellationError() }
+        guard startingRevision == revision else { throw AttachmentReadError.stale }
         guard assets.first?.reference != nil else { return false }
         if let originalBaseline {
             let current = try await scope.version(in: appState)
             guard ticket == generation else { throw CancellationError() }
+            guard startingRevision == revision else { throw AttachmentReadError.stale }
             if current.changeSince(previous: originalBaseline) == .restartRequired {
                 discard()
                 throw AttachmentReadError.stale

@@ -266,8 +266,15 @@ struct AttachmentHandoffTests {
         let presentation = DocumentSharePresentation()
         let releaser = FakeReleaser()
         var contents = Data("notes".utf8)
+        var exceedsLimit = false
         var handedOff: [AttachmentLocalTargetFfi] = []
-        let loader = ConversationMediaLoader { _ in contents } openHandoff: { requested, _ in
+        let bytesOverLimit = DocumentPreviewFormat.text.byteLimit + 1
+        let loader = ConversationMediaLoader { requested in
+            if exceedsLimit, requested.previewByteLimit != nil {
+                throw AttachmentReadError.previewLimitExceeded(byteCount: bytesOverLimit)
+            }
+            return contents
+        } openHandoff: { requested, _ in
             if let target = requested.localTarget { handedOff.append(target) }
             return AttachmentHandoffLease(lease: self.lease, path: "/tmp/handoff/Notes.txt", releaser: releaser)
         }
@@ -285,6 +292,17 @@ struct AttachmentHandoffTests {
         #expect(rejected == nil)
         #expect(handedOff == [Self.target])
         #expect(presentation.file?.url.lastPathComponent == "Notes.txt")
+        presentation.close()
+
+        handedOff.removeAll()
+        exceedsLimit = true
+        contents = Data("would otherwise preview".utf8)
+        var reportedSize: Int?
+        let oversized = try await presentation.openDocument(item, using: loader, demand: .explicit,
+            isCurrent: { true }, didReadSize: { reportedSize = $0 })
+        #expect(oversized == nil)
+        #expect(reportedSize == bytesOverLimit)
+        #expect(handedOff == [Self.target])
         presentation.close()
     }
 

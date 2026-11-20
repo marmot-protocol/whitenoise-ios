@@ -3065,7 +3065,7 @@ private struct MessageAudioAttachmentView: View {
             }
             .buttonStyle(.plain)
             .disabled(isUploading)
-            .accessibilityLabel(isUploading ? L10n.string("Sending…") : isPlaying ? "Pause audio message" : "Play audio message")
+            .accessibilityLabel(isUploading ? L10n.string("Sending…") : isPlaying ? L10n.string("Pause audio message") : L10n.string("Play audio message"))
 
             AudioWaveformView(samples: waveformSamples, progress: progress,
                               barColor: foregroundColor.opacity(0.4), playedColor: foregroundColor, fitsAvailableWidth: true)
@@ -4007,6 +4007,7 @@ struct MessageMediaFullscreenGalleryView: View {
         }
         .onChange(of: selectedItemID) { _, selection in
             hasPaged = true
+            if gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
             if preparedMedia?.id != selection { preparedMedia = nil }
             handoffControl?.cancel()
             zoomedItemID = nil
@@ -4089,6 +4090,7 @@ struct MessageMediaFullscreenGalleryView: View {
             onToggleChrome: toggleChrome,
             onSourceReplaced: {
                 if preparedMedia?.id == item.id { preparedMedia = nil }
+                if selectedItemID == item.id, gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
             },
             onZoomChanged: { zoomed in
                 if zoomed, item.id == selectedItemID { zoomedItemID = item.id }
