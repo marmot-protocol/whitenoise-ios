@@ -1718,6 +1718,8 @@ final class AppState {
     /// handle mid-`accountUnreadSummary()` while terminal storage close runs.
     @ObservationIgnored private var unreadSummaryRefreshTask: Task<Void, Never>?
 #if DEBUG
+    // Documented exception (AGENTS.md): holds a badge refresh before its client
+    // guard and attention early return, and stays (#1241, item 21).
     @ObservationIgnored var beforeUnreadSummaryRefreshForTesting: (() async -> Void)?
 #endif
 
@@ -2275,8 +2277,12 @@ final class AppState {
     }
 
     #if DEBUG
+    // Documented exception (AGENTS.md): sign-out and wipe each call this in
+    // their own copy of the push cleanup, and it stays (#1241, item 21).
     @ObservationIgnored var afterAccountExitClientCapturedForTesting: (() async -> Void)?
 
+    // Documented exception (AGENTS.md): shows that suspension took over the
+    // private badge-refresh task, and stays (#1241, item 21).
     var hasPendingUnreadSummaryRefreshForTesting: Bool { unreadSummaryRefreshTask != nil }
     #endif
 }

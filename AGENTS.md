@@ -526,6 +526,20 @@ Do not add a second storage path for data Marmot already owns.
     above. Don't add more hooks there; lifecycle tests await the
     tasks `startRuntimeSuspension()` and `startForegroundActivation()` return
     and wait on observable state or injected calls.
+  - A third documented exception: `AppState`'s
+    `afterAccountExitClientCapturedForTesting`,
+    `beforeUnreadSummaryRefreshForTesting` and
+    `hasPendingUnreadSummaryRefreshForTesting` stay (#1241, item 21). The
+    first pauses sign-out and wipe, each in its own copy of the push
+    cleanup, after they read the native-push setting and before they cancel
+    the registration task. An injected settings read could stand in for
+    it; the maintainers preferred the explicit pause. The second holds a
+    badge refresh before its client guard and account-attention early
+    return, which no injected read would reach. The third shows that
+    suspension took over the scheduled badge-refresh task, which nothing
+    else exposes. The maintainers agreed to keep all three, so they are
+    exempt from the replace-on-change rule above. Don't add more hooks
+    there.
 - No source-text assertions (see Architecture).
 - Test the app's decisions, not other code. Most suites the audit deleted
   broke one of these rules:
