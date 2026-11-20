@@ -5056,16 +5056,20 @@ struct ConversationView: View {
         } openHandoff: { media, control in
             try await viewModel.openHandoff(for: media, control: control)
         } canShareDocument: { media, leasedTarget in
-            @MainActor func isPresented() -> Bool {
+            @MainActor func isPresented(requiringOwnBytes: Bool = false) -> Bool {
                 guard opening.isCurrent(self.viewModel, appState: appState), let documentRowID,
                       let row = viewModel.timeline.first(where: { $0.id == documentRowID }),
                       case .message(let record, _) = row.kind, !viewModel.isDeleted(record.messageIdHex),
                       !viewModel.timelineStore.isHidden(record.messageIdHex), !viewModel.timelineStore.isBlockedAuthor(record.sender)
                 else { return false }
-                return viewModel.mediaItems(for: row).contains { $0.isSameDocumentSource(as: media) }
+                if requiringOwnBytes, record.direction != "sent" || media.localData == nil { return false }
+                return viewModel.mediaItems(for: row).contains {
+                    $0.isSameDocumentSource(as: media) && (!requiringOwnBytes || $0.localData == media.localData)
+                }
             }
+            // A confirmed own send can still have only the sender’s local copy.
+            guard let target = leasedTarget else { return isPresented(requiringOwnBytes: true) }
             guard isPresented() else { return false }
-            guard let target = leasedTarget ?? media.localTarget else { return media.localData != nil }
             guard let scope = AttachmentHistoryPager.Scope(appState: appState, group: viewModel.group.groupIdHex) else { return false }
             let version = try await scope.version(in: appState)
             let client = try scope.currentClient(in: appState)
