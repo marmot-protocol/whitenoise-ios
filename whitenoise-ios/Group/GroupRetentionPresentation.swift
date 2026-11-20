@@ -79,6 +79,10 @@ nonisolated enum GroupRetentionPresentation {
         return (String(seconds), .seconds)
     }
 
+    static func compactLabel(seconds: UInt64, locale: Locale = AppLanguage.currentLocale) -> String {
+        GroupSystemEventPresentation.retentionDurationText(seconds: seconds, locale: locale, unitsStyle: .abbreviated)
+    }
+
     static func label(seconds: UInt64) -> String {
         GroupSystemEventPresentation.retentionSettingLabel(seconds: seconds)
     }

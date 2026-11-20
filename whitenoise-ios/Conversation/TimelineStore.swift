@@ -247,6 +247,7 @@ final class TimelineStore {
     @ObservationIgnored let deletedProjections = ConversationDeletedMessageProjection()
     @ObservationIgnored let editProjections = ConversationEditProjectionCache()
     @ObservationIgnored private var timelineSignature: [TimelineItemSignature] = []
+    @ObservationIgnored private var clusterCalendar: Calendar?
     @ObservationIgnored private var messageClusterPresentations: [String: MessageClusterPresentation] = [:]
 
     @ObservationIgnored private weak var appState: AppState?
@@ -474,8 +475,12 @@ final class TimelineStore {
         pendingPollSelections[messageIdHex]
     }
 
-    func messageClusterPresentation(for item: TimelineItem) -> MessageClusterPresentation {
+    func messageClusterPresentation(for item: TimelineItem, calendar: Calendar = .current) -> MessageClusterPresentation {
         _ = timelineProjectionGeneration
+        if clusterCalendar != calendar {
+            messageClusterPresentations = MessageClusterProjection.presentations(for: timeline, calendar: calendar)
+            clusterCalendar = calendar
+        }
         return messageClusterPresentations[item.id] ?? .none
     }
 
@@ -1342,7 +1347,7 @@ final class TimelineStore {
         guard timelineSignature != nextSignature else { return false }
         timeline = next
         timelineSignature = nextSignature
-        messageClusterPresentations = MessageClusterProjection.presentations(for: next)
+        clusterCalendar = nil
         return true
     }
 
@@ -1369,7 +1374,7 @@ final class TimelineStore {
         } else {
             timelineSignature = timeline.map(TimelineItemSignature.init)
         }
-        messageClusterPresentations = MessageClusterProjection.presentations(for: timeline)
+        clusterCalendar = nil
         return true
     }
 

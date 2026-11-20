@@ -96,8 +96,9 @@ struct MessageClusterProjectionTests {
         let system = TimelineItem.systemEvent(id: "break", event: .rosterChanged, timestamp: 103)
         let afterSystem = item(id: "14", sender: "alice", timestamp: 104)
         let outgoing = item(id: "15", sender: "me", timestamp: 105, direction: "sent")
+        let secondOutgoing = item(id: "17", sender: "me", timestamp: 105, direction: "sent")
         let afterOutgoing = item(id: "16", sender: "alice", timestamp: 106)
-        let items = [first, otherSender, beforeSystem, system, afterSystem, outgoing, afterOutgoing]
+        let items = [first, otherSender, beforeSystem, system, afterSystem, outgoing, secondOutgoing, afterOutgoing]
 
         let result = MessageClusterProjection.presentations(for: items, calendar: calendar)
 
@@ -106,7 +107,34 @@ struct MessageClusterProjectionTests {
             #expect(presentation.showsSenderName)
             #expect(presentation.showsAvatar)
         }
-        #expect(result[outgoing.id] == nil)
+        let own = try #require(result[outgoing.id])
+        #expect(own.startsCluster)
+        #expect(result[secondOutgoing.id]?.startsCluster == false)
+        #expect(!own.endsCluster)
+        #expect(result[secondOutgoing.id]?.endsCluster == true)
+        #expect(!own.reservesIdentityLane && !own.showsAvatar && !own.showsSenderName)
+    }
+
+    @Test func visibleUnreadDividerSplitsAnOtherwiseContinuousCluster() throws {
+        let timeline = (1...3).map { item(id: "message\($0)", sender: "maya", timestamp: UInt64($0)) }
+        let clusters = MessageClusterProjection.presentations(for: timeline, calendar: calendar)
+        let preceding = try #require(clusters[timeline[0].id])
+        let unread = try #require(clusters[timeline[1].id])
+        let lastRead = preceding.atUnreadBoundary(rowID: timeline[0].id, timeline: timeline, firstUnreadIndex: 1)
+        #expect(lastRead.endsCluster && lastRead.showsAvatar)
+        #expect(unread.atUnreadBoundary(rowID: timeline[1].id, timeline: timeline, firstUnreadIndex: 1).showsSenderName)
+        #expect(preceding.atUnreadBoundary(rowID: timeline[0].id, timeline: timeline, firstUnreadIndex: nil) == preceding)
+    }
+
+    @Test func nonterminalRowsKeepActionableMetadata() {
+        var cluster = MessageClusterPresentation.none
+        cluster.endsCluster = false
+        for status: MessageStatus in [.sending, .failed, .streaming] {
+            #expect(cluster.showsFooter(status: status, isDeleted: false, isEdited: false, reported: false))
+        }
+        #expect(!cluster.showsFooter(status: .received, isDeleted: false, isEdited: false, reported: false))
+        #expect(cluster.showsFooter(status: .received, isDeleted: false, isEdited: false, reported: true))
+        #expect(!cluster.showsFooter(status: .sent, isDeleted: false, isEdited: false, reported: false))
     }
 
     @Test func calendarDayAndFiveMinuteBoundaryAreDeterministic() throws {

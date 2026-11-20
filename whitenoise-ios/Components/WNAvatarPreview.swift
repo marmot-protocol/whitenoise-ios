@@ -57,14 +57,19 @@ struct WNAvatarPreview: View {
     }
 }
 
+extension EnvironmentValues {
+    @Entry var avatarMonogramFont: Font?
+}
+
 struct WNAvatarMonogramView: View {
+    @Environment(\.avatarMonogramFont) private var monogramFont
     let name: String
 
     var body: some View {
         GeometryReader { geometry in
             let diameter = min(geometry.size.width, geometry.size.height)
             Text(WNAvatarMonogram.initial(for: name))
-                .font(.system(size: WNAvatarMonogram.fontSize(for: diameter), weight: .semibold))
+                .font(monogramFont ?? .system(size: WNAvatarMonogram.fontSize(for: diameter), weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .padding(.horizontal, diameter * 0.1)

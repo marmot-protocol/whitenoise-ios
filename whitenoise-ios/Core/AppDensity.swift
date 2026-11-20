@@ -46,6 +46,7 @@ nonisolated struct AppDensityMetrics: Equatable, Sendable {
 
     /// Gap between consecutive timeline rows.
     let timelineRowSpacing: CGFloat
+    let timelineClusterSpacing: CGFloat
     /// Gap between a day heading or unread divider and the row below it.
     let timelineHeadingSpacing: CGFloat
     let bubbleHorizontalInset: CGFloat
@@ -60,7 +61,8 @@ nonisolated struct AppDensityMetrics: Equatable, Sendable {
         chatRowAvatarSpacing: 12,
         chatRowLineSpacing: 2,
         chatRowPreviewLineLimit: 2,
-        timelineRowSpacing: 4,
+        timelineRowSpacing: 3,
+        timelineClusterSpacing: 16,
         timelineHeadingSpacing: 8,
         bubbleHorizontalInset: ChatBubbleMetrics.horizontalInset,
         bubbleVerticalInset: ChatBubbleMetrics.verticalInset,
@@ -73,7 +75,8 @@ nonisolated struct AppDensityMetrics: Equatable, Sendable {
         chatRowAvatarSpacing: 10,
         chatRowLineSpacing: 1,
         chatRowPreviewLineLimit: 1,
-        timelineRowSpacing: 0,
+        timelineRowSpacing: 1,
+        timelineClusterSpacing: 9,
         timelineHeadingSpacing: 4,
         bubbleHorizontalInset: 10,
         bubbleVerticalInset: 5,
@@ -86,7 +89,8 @@ nonisolated struct AppDensityMetrics: Equatable, Sendable {
         chatRowAvatarSpacing: 14,
         chatRowLineSpacing: 4,
         chatRowPreviewLineLimit: 2,
-        timelineRowSpacing: 10,
+        timelineRowSpacing: 8,
+        timelineClusterSpacing: 22,
         timelineHeadingSpacing: 14,
         bubbleHorizontalInset: 14,
         bubbleVerticalInset: 11,

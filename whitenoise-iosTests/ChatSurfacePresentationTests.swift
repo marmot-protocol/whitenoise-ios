@@ -23,7 +23,7 @@ struct ChatSurfacePresentationTests {
     func confirmationKeepsDeliveryFooterSizeStable(dynamicType: DynamicTypeSize) {
         func size(_ status: MessageStatus) -> CGSize {
             let host = UIHostingController(rootView: MessageMetadataFooter(
-                time: "12:34", isEdited: false, status: status, isFromMe: true
+                caption: .timestamp("12:34"), isEdited: false, status: status, isFromMe: true
             ).environment(\.dynamicTypeSize, dynamicType))
             return host.sizeThatFits(in: CGSize(width: 300, height: 100))
         }
@@ -34,8 +34,8 @@ struct ChatSurfacePresentationTests {
     }
 
     @Test func deliveryFooterUsesCompactSymbols() {
-        #expect(MessageFooterPresentation.value(for: .sent, isFromMe: true).systemImage == "checkmark")
-        #expect(MessageFooterPresentation.value(for: .sending, isFromMe: true).systemImage == "clock")
+        #expect(MessageFooterPresentation.value(for: .sent, isFromMe: true).systemImage == "checkmark.circle.fill")
+        #expect(MessageFooterPresentation.value(for: .sending, isFromMe: true).systemImage == "ellipsis.message")
         #expect(MessageFooterPresentation.value(for: .failed, isFromMe: true).isFailure)
         #expect(MessageFooterPresentation.value(for: .received, isFromMe: false).systemImage == nil)
     }
