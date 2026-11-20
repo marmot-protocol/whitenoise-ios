@@ -3655,7 +3655,10 @@ final class ConversationViewModel {
         let operation: PendingReaction = alreadyMine ? .removeAll : .add(emoji)
         let pending = pendingReactions[id] ?? []
         guard !pending.contains(.removeAll), !alreadyMine || pending.isEmpty,
-              pendingReactions[id, default: []].insert(operation).inserted else { return }
+              pendingReactions[id, default: []].insert(operation).inserted else {
+            Haptics.warning()
+            return
+        }
         defer {
             pendingReactions[id]?.remove(operation)
             if pendingReactions[id]?.isEmpty == true { pendingReactions[id] = nil }
