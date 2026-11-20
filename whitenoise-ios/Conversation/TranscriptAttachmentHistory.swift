@@ -296,23 +296,28 @@ final class TranscriptAttachmentHistory {
     func verifyRetained(_ target: AttachmentLocalTargetFfi, scope: Scope, appState: AppState) async throws -> Bool {
         guard self.scope == scope else { throw CancellationError() }
         let client = try scope.currentClient(in: appState)
-        let originalBaseline = pager.baseline
         let startingRevision = revision
         let ticket = generation
+        func checkRead() throws {
+            guard ticket == generation else { throw CancellationError() }
+            guard startingRevision == revision else { throw AttachmentReadError.stale }
+        }
+        let baseline: AttachmentHistoryVersion
+        if let loaded = pager.baseline { baseline = loaded }
+        else {
+            baseline = try await scope.version(in: appState)
+            try checkRead()
+        }
         let assets = try await client.marmot.attachmentLocalAssets(accountRef: scope.account,
             groupIdHex: scope.group, targets: [target])
         _ = try scope.currentClient(in: appState)
-        guard ticket == generation else { throw CancellationError() }
-        guard startingRevision == revision else { throw AttachmentReadError.stale }
+        try checkRead()
         guard assets.first?.reference != nil else { return false }
-        if let originalBaseline {
-            let current = try await scope.version(in: appState)
-            guard ticket == generation else { throw CancellationError() }
-            guard startingRevision == revision else { throw AttachmentReadError.stale }
-            if current.changeSince(previous: originalBaseline) == .restartRequired {
-                discard()
-                throw AttachmentReadError.stale
-            }
+        let current = try await scope.version(in: appState)
+        try checkRead()
+        if current.changeSince(previous: baseline) == .restartRequired {
+            discard()
+            throw AttachmentReadError.stale
         }
         return true
     }

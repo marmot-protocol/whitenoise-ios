@@ -103,6 +103,8 @@ final class DocumentSharePresentation {
             }
         }
         guard isCurrent() else { throw CancellationError() }
+        // The bounded read already used this tap’s retry for a missing original slot.
+        // A rejected or oversized preview hands off with ordinary open semantics.
         try await present(item, using: loader, demand: format == nil ? demand : .explicit, isCurrent: isCurrent)
         return nil
     }
