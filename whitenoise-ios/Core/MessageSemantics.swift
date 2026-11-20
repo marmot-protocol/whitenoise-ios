@@ -143,8 +143,9 @@ nonisolated enum MessageSemantics {
     }
 
     /// MDK's test for a NIP-22 comment: any `k` tag naming a numeric kind.
+    /// Swift reads "-0" as zero where MDK's parser refuses a sign.
     private static func isNIP22Comment(_ tags: [MessageTagFfi]) -> Bool {
-        allValues(of: "k", in: tags).contains { UInt64($0) != nil }
+        allValues(of: "k", in: tags).contains { !$0.hasPrefix("-") && UInt64($0) != nil }
     }
 
     static func classify(_ record: AppMessageRecordFfi) -> Kind {
@@ -156,14 +157,16 @@ nonisolated enum MessageSemantics {
     }
 
     /// A kind this app has no rendering for at all, such as another client's app-defined kind.
-    /// A reply preview carries no tags, so a comment there reads as one.
+    /// A reply preview carries no tags, so a comment there reads as one; a
+    /// quote checks its loaded target's tags (`TimelineStore.replyPreview`).
     static func isUnsupportedEventKind(_ kind: UInt64) -> Bool {
         kind != kindComment && classify(kind: kind, tags: []) == .unsupportedEvent
     }
 
-    /// Kinds a person sends as their own conversation message: chat and polls.
+    /// Kinds a person sends as their own conversation message: chat, polls,
+    /// and other clients' NIP-22 comments, each a timeline row of its own.
     static func isUserMessageKind(_ kind: UInt64) -> Bool {
-        kind == kindChat || kind == kindPoll
+        kind == kindChat || kind == kindPoll || kind == kindComment
     }
 
     static func isTypedAgentEventKind(_ kind: UInt64) -> Bool {

@@ -38,6 +38,7 @@ struct MessageSemanticsTests {
         // Without a numeric `k` it isn't a NIP-22 comment, as MDK decides.
         #expect(comment([["e", parent]]) == .unsupportedEvent)
         #expect(comment([["e", parent], ["k", "not a kind"]]) == .unsupportedEvent)
+        #expect(comment([["e", parent], ["k", "-0"]]) == .unsupportedEvent)
         #expect(comment([["e", parent], ["K", "9"]]) == .unsupportedEvent)
     }
 

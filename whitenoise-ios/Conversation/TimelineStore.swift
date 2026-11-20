@@ -405,6 +405,7 @@ final class TimelineStore {
         let messageIdHex: String
         let targetId: String
         let source: ReplyPreviewSourceSignature
+        var targetUnsupported = false
     }
 
     private struct ReplyPreviewDisplayCacheEntry {
@@ -515,6 +516,10 @@ final class TimelineStore {
         }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
             guard !isBlockedAuthor(preview.sender) else { return nil }
+            // A kind 1111 is a comment only with a numeric `k` tag, which the
+            // projected quote doesn't carry: decide from the loaded target.
+            let targetUnsupported = preview.kind == MessageSemantics.kindComment
+                && messageById[targetId].map { MessageSemantics.classify($0) == .unsupportedEvent } == true
             let key = ReplyPreviewDisplayCacheKey(
                 messageIdHex: record.messageIdHex,
                 targetId: targetId,
@@ -528,14 +533,15 @@ final class TimelineStore {
                     media: preview.media,
                     deleted: preview.deleted,
                     deletionSource: preview.deletionSource
-                )
+                ),
+                targetUnsupported: targetUnsupported
             )
             if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
                 return cached.value
             }
             let name = resolvedAccountDisplayName(preview.sender)
             let text = ContentSanitizer.compactSingleLine(
-                MessagePreview.body(
+                targetUnsupported ? MessagePreview.unsupportedEventLabel : MessagePreview.body(
                     preview,
                     mentionDisplayName: mentionDisplayNameResolver,
                     systemEventNaming: systemEventNaming

@@ -372,6 +372,7 @@ struct ConversationTimelineProjectionTests {
         #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindChat))
         #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindPoll))
         #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindGroupSystem))
+        #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindComment))
         #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindReaction))
         #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindDelete))
         #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindEdit))
