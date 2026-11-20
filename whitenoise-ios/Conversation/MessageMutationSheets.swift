@@ -20,14 +20,14 @@ struct ForwardMessageSheet: View {
     let destinationProvider: () async throws -> [MessageForwardDestination]
     let submit: (Set<String>) async -> MessageForwardResult
 
-    private var sourceIsAvailable: (() async -> Bool)?
+    private var sourceIsAvailable: (() async throws -> Bool)?
     @State private var sourceUnavailable = false
     @State private var destinations: [MessageForwardDestination] = []
     @State private var selectedGroupIds = Set<String>()
     @State private var isLoading = true
     @State private var isSending = false
     @State private var loadFailed = false
-    @State private var sendFailed = false
+    @State private var forwardError: LocalizedStringKey?
     @State private var query = ""
 
     init(
@@ -56,13 +56,13 @@ struct ForwardMessageSheet: View {
     init(
         media: MessageMediaAttachment,
         data: Data,
-        verifySource: ((MessageMediaAttachment) async -> Bool)? = nil,
+        verifySource: ((MessageMediaAttachment) async throws -> Bool)? = nil,
         viewModel: ConversationViewModel,
         destinationProvider: @escaping () async throws -> [MessageForwardDestination]
     ) {
         self.destinationProvider = destinationProvider
         if let verifySource {
-            self.sourceIsAvailable = { await verifySource(media) }
+            self.sourceIsAvailable = { try await verifySource(media) }
         }
         self.submit = { groupIds in
             await viewModel.forwardMedia(media, data: data, to: groupIds)
@@ -150,8 +150,8 @@ struct ForwardMessageSheet: View {
 
     private var forwardButton: some View {
         VStack(spacing: 8) {
-            if sendFailed {
-                Text("Send failed")
+            if let forwardError {
+                Text(forwardError)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
@@ -182,7 +182,7 @@ struct ForwardMessageSheet: View {
     }
 
     private func toggle(_ groupIdHex: String) {
-        sendFailed = false
+        forwardError = nil
         if selectedGroupIds.contains(groupIdHex) {
             selectedGroupIds.remove(groupIdHex)
         } else if selectedGroupIds.count < ForwardMessagePresentation.maximumDestinationCount {
@@ -209,10 +209,17 @@ struct ForwardMessageSheet: View {
         guard !isSending, !sourceUnavailable, !selectedGroupIds.isEmpty else { return }
         isSending = true
         defer { isSending = false }
-        sendFailed = false
-        if let sourceIsAvailable, !(await sourceIsAvailable()) {
-            sourceUnavailable = true
-            return
+        forwardError = nil
+        if let sourceIsAvailable {
+            do {
+                guard try await sourceIsAvailable() else {
+                    sourceUnavailable = true
+                    return
+                }
+            } catch {
+                forwardError = "Attachment couldn’t be read"
+                return
+            }
         }
         let result = await submit(selectedGroupIds)
         if result.succeededCompletely {
@@ -221,7 +228,7 @@ struct ForwardMessageSheet: View {
             // Successful destinations are removed so Retry cannot duplicate
             // them; only failed sends remain selected.
             selectedGroupIds = result.failedGroupIds
-            sendFailed = true
+            forwardError = "Send failed"
         }
     }
 }

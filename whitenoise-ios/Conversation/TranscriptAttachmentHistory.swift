@@ -32,20 +32,23 @@ struct TranscriptHistoryPages {
     private var newestFirst: [String] = []
     private var byMessage: [String: [TranscriptHistorySlot]] = [:]
     private var targets: Set<AttachmentLocalTargetFfi> = []
-    private var chronological: [TranscriptHistorySlot] = []
 
     mutating func append(_ entries: [AttachmentEntryFfi]) {
         for entry in entries {
             if let slot = TranscriptHistorySlot(entry) { insert(slot) }
         }
-        rebuildOrder()
     }
 
     private mutating func insert(_ slot: TranscriptHistorySlot) {
         guard targets.insert(slot.target).inserted else { return }
         let id = slot.target.messageIdHex
         if byMessage[id] == nil { newestFirst.append(id) }
-        byMessage[id, default: []].append(slot)
+        // A single album can span cursors. Only its slots need ordering when a page arrives.
+        if let index = byMessage[id]?.firstIndex(where: { $0.target.attachmentIndex > slot.target.attachmentIndex }) {
+            byMessage[id, default: []].insert(slot, at: index)
+        } else {
+            byMessage[id, default: []].append(slot)
+        }
     }
 
     var isEmpty: Bool { targets.isEmpty }
@@ -60,14 +63,7 @@ struct TranscriptHistoryPages {
         for id in retained.newestFirst {
             for slot in retained.byMessage[id] ?? [] { joined.insert(slot) }
         }
-        joined.rebuildOrder()
         return joined
-    }
-
-    private mutating func rebuildOrder() {
-        chronological = newestFirst.reversed().flatMap { id in
-            (byMessage[id] ?? []).sorted { $0.target.attachmentIndex < $1.target.attachmentIndex }
-        }
     }
 
     func conflicts(with record: TimelineMessageRecordFfi) -> Bool {
@@ -100,6 +96,7 @@ struct TranscriptHistoryPages {
     /// recent page cannot appear adjacent to an old search result while intervening pages are missing.
     func extensions(around window: [MessageMediaAttachment],
                     excluding windowMessages: Set<String>, atLiveTail: Bool = false) -> (older: [TranscriptHistorySlot], newer: [TranscriptHistorySlot]) {
+        let chronological = newestFirst.reversed().flatMap { byMessage[$0] ?? [] }
         // A held GIF can anchor its own window. Other GIFs still play inline.
         func isGalleryPage(_ slot: TranscriptHistorySlot) -> Bool {
             !windowMessages.contains(slot.target.messageIdHex) && !slot.attachment.isGIF
@@ -135,7 +132,8 @@ final class TranscriptAttachmentHistory {
     private(set) var scannedSlots = 0
     private(set) var revision: UInt64 = 0
     @ObservationIgnored var hasPaged = false
-    var selectedItemID: String?
+    // Selection belongs to the pager. Sample it when the collection or validation changes.
+    @ObservationIgnored var selectedItemID: String?
     @ObservationIgnored var resetViewerOnDiscard = false
     private(set) var viewerGeneration = 0
     private(set) var resumeItemID: String?
@@ -281,23 +279,25 @@ final class TranscriptAttachmentHistory {
 
     /// Save and Forward use already prepared bytes. Confirm that the original slot remains
     /// readable, without requesting a download, before releasing those bytes to another view.
-    func verifyRetained(_ target: AttachmentLocalTargetFfi, scope: Scope, appState: AppState) async -> Bool {
-        guard self.scope == scope, let client = try? scope.currentClient(in: appState) else { return false }
+    func verifyRetained(_ target: AttachmentLocalTargetFfi, scope: Scope, appState: AppState) async throws -> Bool {
+        guard self.scope == scope else { throw CancellationError() }
+        let client = try scope.currentClient(in: appState)
         let originalBaseline = pager.baseline
         let ticket = generation
-        do {
-            let assets = try await client.marmot.attachmentLocalAssets(accountRef: scope.account,
-                groupIdHex: scope.group, targets: [target])
-            guard assets.first?.reference != nil else { return false }
-            if let originalBaseline {
-                let current = try await scope.version(in: appState)
-                guard !Task.isCancelled, ticket == generation else { return false }
-                if current.changeSince(previous: originalBaseline) == .restartRequired { discard(); return false }
+        let assets = try await client.marmot.attachmentLocalAssets(accountRef: scope.account,
+            groupIdHex: scope.group, targets: [target])
+        _ = try scope.currentClient(in: appState)
+        guard ticket == generation else { throw CancellationError() }
+        guard assets.first?.reference != nil else { return false }
+        if let originalBaseline {
+            let current = try await scope.version(in: appState)
+            guard ticket == generation else { throw CancellationError() }
+            if current.changeSince(previous: originalBaseline) == .restartRequired {
+                discard()
+                throw AttachmentReadError.stale
             }
-            return !Task.isCancelled && ticket == generation && scope == Scope(appState: appState, group: scope.group)
-        } catch {
-            return false
         }
+        return true
     }
 
     /// The collection version invalidates removed, expired, or newly hidden entries outside the

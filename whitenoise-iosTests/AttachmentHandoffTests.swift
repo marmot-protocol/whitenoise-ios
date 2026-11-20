@@ -104,11 +104,19 @@ struct AttachmentHandoffTests {
                                           mediaType: "image/png", dim: nil, localData: nil)
         let gallery = try #require(MessageMediaGallery(transcriptItems: [item], openingID: item.id,
             initialData: nil, messages: [:], captions: [item.id: .init(sender: "Alice", date: .now)]))
-        var visible = true
+        var visible = false
+        var opened = false
         let loader = ConversationMediaLoader { _ in throw AttachmentReadError.unavailable } openHandoff: { _, _ in
+            opened = true
             visible = false
             return leased
         }
+        await #expect(throws: AttachmentReadError.unavailable) {
+            _ = try await gallery.shareFile(for: item, using: loader, control: MediaFileTransferControlFfi(),
+                                            verify: { _ in visible })
+        }
+        #expect(!opened)
+        visible = true
         await #expect(throws: AttachmentReadError.unavailable) {
             _ = try await gallery.shareFile(for: item, using: loader, control: MediaFileTransferControlFfi(),
                                             verify: { _ in visible })

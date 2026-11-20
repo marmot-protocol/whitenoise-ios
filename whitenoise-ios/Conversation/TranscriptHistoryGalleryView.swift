@@ -9,7 +9,7 @@ struct TranscriptHistoryControls {
     var pageFailed: Bool
     var allowsOpeningDemand: Bool
     var didSelect: (String) -> Void
-    var verify: (MessageMediaAttachment) async -> Bool
+    var verify: (MessageMediaAttachment) async throws -> Bool
 }
 
 extension EnvironmentValues {
@@ -102,7 +102,7 @@ struct TranscriptHistoryGalleryView: View {
                 history.hasPaged = true
                 history.selectedItemID = itemID
                 history.resetViewerOnDiscard = gallery.transcriptCaptions?[itemID] == nil
-            }, verify: { item in await self.verify(item) })
+            }, verify: { [activeScope] item in try await self.verify(item, in: activeScope) })
     }
 
     private func validate() {
@@ -118,8 +118,14 @@ struct TranscriptHistoryGalleryView: View {
         }
     }
 
-    private func verify(_ item: MessageMediaAttachment) async -> Bool {
-        guard let scope, scope == activeScope, scenePhase == .active else { return false }
+    private func verify(_ item: MessageMediaAttachment, in openingScope: TranscriptAttachmentHistory.Scope?) async throws -> Bool {
+        guard let openingScope else { throw CancellationError() }
+        func checkScope() throws {
+            try Task.checkCancellation()
+            guard self.scope == openingScope, activeScope == openingScope,
+                  appState.isAppSceneActive, scenePhase == .active else { throw CancellationError() }
+        }
+        try checkScope()
         func isPresented() -> Bool {
             if let window = conversation.transcriptMediaGallery(opening: item.id, initialData: nil, includingGIFsIn: gifRowID),
                let visible = window.items.first(where: { $0.id == item.id }) {
@@ -137,8 +143,9 @@ struct TranscriptHistoryGalleryView: View {
             guard let messageID = gallery.messageIdByItemID[item.id], item.reference != nil else { return false }
             return conversation.timelineStore.hasUnsourcedOwnMessage(messageID)
         }
-        guard await history.verifyRetained(target, scope: scope, appState: appState) else { return false }
-        return self.scope == scope && scenePhase == .active && isPresented()
+        let retained = try await history.verifyRetained(target, scope: openingScope, appState: appState)
+        try checkScope()
+        return retained && isPresented()
     }
 
     private var expandedGallery: MessageMediaGallery {

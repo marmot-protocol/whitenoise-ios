@@ -3340,6 +3340,10 @@ private struct MessageDocumentAttachmentView: View {
     @State private var didFail = false
     @State private var share = DocumentSharePresentation()
 
+    private var displayName: String? {
+        liftedDetails?.name ?? contactName ?? transcriptSearch?.displayedContactName(for: item.id)
+    }
+
     private var liftedDetails: LiftedDocumentDetails? {
         guard let details = liftedDocuments?[item.id],
               details.revision == AttachmentPresentationState.shared.revision else { return nil }
@@ -3367,7 +3371,7 @@ private struct MessageDocumentAttachmentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    let name = liftedDetails?.name ?? contactName ?? transcriptSearch?.displayedContactName(for: item.id)
+                    let name = displayName
                     TimelineSearchText(name ?? item.fileName)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
@@ -3409,7 +3413,7 @@ private struct MessageDocumentAttachmentView: View {
         .background {
             if let key = measurementKey {
                 let details = LiftedDocumentDetails(id: item.id, revision: AttachmentPresentationState.shared.revision,
-                    name: contactName, size: byteCount, isOpening: openingID != nil, didFail: didFail)
+                    name: displayName, size: byteCount, isOpening: openingID != nil, didFail: didFail)
                 Color.clear.preference(key: RowFramesKey.self, value: [.init(part: .document(details), key: key)])
             }
         }
@@ -3792,23 +3796,30 @@ struct MessageMediaGallery: Identifiable {
         self.transcriptCaptions = nil
     }
 
-    func mayExport(_ item: MessageMediaAttachment, verify: ((MessageMediaAttachment) async -> Bool)?) async -> Bool {
+    func mayExport(_ item: MessageMediaAttachment, verify: ((MessageMediaAttachment) async throws -> Bool)?) async throws -> Bool {
         guard transcriptCaptions != nil else { return true }
-        guard let verify else { return false }
-        return await verify(item)
+        guard let verify else { throw CancellationError() }
+        return try await verify(item)
     }
 
     /// A handoff can finish after its message was hidden. Validate the selected source
     /// after the lease arrives and release it before returning a failure.
     func shareFile(for item: MessageMediaAttachment, using loader: ConversationMediaLoader,
                    control: MediaFileTransferControlFfi,
-                   verify: ((MessageMediaAttachment) async -> Bool)?) async throws -> AttachmentShareFile {
-        let file = try await loader.shareFile(for: item, control: control)
-        guard !control.isCancelled(), await mayExport(item, verify: verify) else {
-            file.finish()
-            throw AttachmentReadError.unavailable
+                   verify: ((MessageMediaAttachment) async throws -> Bool)?) async throws -> AttachmentShareFile {
+        func checkAccess() async throws {
+            guard !control.isCancelled(), try await mayExport(item, verify: verify),
+                  !control.isCancelled() else { throw AttachmentReadError.unavailable }
         }
-        return file
+        try await checkAccess()
+        let file = try await loader.shareFile(for: item, control: control)
+        do {
+            try await checkAccess()
+            return file
+        } catch {
+            file.finish()
+            throw error
+        }
     }
 
     func pendingSelection(for id: String) -> PendingSelection? {
@@ -4002,7 +4013,7 @@ struct MessageMediaFullscreenGalleryView: View {
                     media: prepared.item,
                     data: prepared.data,
                     verifySource: { item in
-                        await gallery.mayExport(item, verify: transcriptHistory?.verify)
+                        try await gallery.mayExport(item, verify: transcriptHistory?.verify)
                     },
                     viewModel: forwardingContext.viewModel,
                     destinationProvider: forwardingContext.destinationProvider
