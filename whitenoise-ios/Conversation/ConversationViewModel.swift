@@ -1066,7 +1066,7 @@ final class ConversationViewModel {
             guard case .message(let record, _) = row.kind, !isDeleted(record.messageIdHex),
                   (record.kind != MessageSemantics.kindPoll || record.sticker != nil),
                   !(appState?.streamingDebugEnabled == true && MessageSemantics.debugStyle(for: record).isUserVisibleBubble == false),
-                  groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row) == nil else { continue }
+                  groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row)?.kind != .operation else { continue }
             guard !timelineStore.isHidden(record.messageIdHex), !timelineStore.isBlockedAuthor(record.sender) else { continue }
             for (index, media) in mediaItems(for: row).enumerated() {
                 guard media.isTranscriptGalleryMedia || (row.id == gifRowID && media.isGIF && media.rejectionKind == nil),

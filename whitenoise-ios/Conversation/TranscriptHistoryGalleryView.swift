@@ -130,7 +130,8 @@ struct TranscriptHistoryGalleryView: View {
 
     private func verifyForward(_ item: MessageMediaAttachment, pending: MessageMediaGallery.PendingSelection?,
                                in scope: TranscriptAttachmentHistory.Scope?) async throws -> Bool {
-        if let pending, let window = conversation.transcriptMediaGallery(opening: item.id, initialData: nil, allowsEmptyWindow: true),
+        if let pending, let window = conversation.transcriptMediaGallery(opening: item.id, initialData: nil,
+                                                                            includingGIFsIn: gifRowID, allowsEmptyWindow: true),
            window.transcriptCaptions?[item.id] == nil {
             // The chooser may outlive an optimistic UUID. Use the gallery's original
             // row, slot and plaintext match before verifying the confirmed source.
@@ -185,11 +186,13 @@ struct TranscriptHistoryGalleryView: View {
             guard case .message(let record, _) = row.kind else { return nil }
             return record.messageIdHex
         })
+        let selectedID = history.selectedItemID ?? gallery.initialItemID
         let edges = history.pages.extensions(around: gallery.items, excluding: windowMessages,
                                              atLiveTail: conversation.conversationWindow?.hasMoreAfter == false,
-                                             preserving: history.selectedItemID ?? gallery.initialItemID)
+                                             preserving: selectedID)
         guard !edges.older.isEmpty || !edges.newer.isEmpty || history.resumeItemID != nil else { return gallery }
-        var messages = gallery.messageIdByItemID
+        if !edges.includesWindow { captions.removeAll() }
+        var messages = edges.includesWindow ? gallery.messageIdByItemID : [:]
         func include(_ slot: TranscriptHistorySlot) -> MessageMediaAttachment? {
             guard slot.isVisible(in: conversation.timelineStore), captions[slot.attachment.id] == nil else { return nil }
             let knownName = conversation.windowIdentities[slot.sender]?.displayName ?? appState.cachedKnownDisplayName(forAccountIdHex: slot.sender)
@@ -200,11 +203,12 @@ struct TranscriptHistoryGalleryView: View {
             return slot.attachment
         }
         let durable = Set(conversation.conversationWindow?.messages.map { $0.timeline.messageIdHex } ?? [])
-        let items = TranscriptHistoryPages.join(older: edges.older.compactMap(include), window: gallery.items,
+        let items = TranscriptHistoryPages.join(older: edges.older.compactMap(include), window: edges.includesWindow ? gallery.items : [],
             newer: edges.newer.compactMap(include)) { item in
                 item.localTarget == nil && gallery.messageIdByItemID[item.id].map { !durable.contains($0) } != false
             }
-        let openingID = history.resumeItemID.flatMap { captions[$0] == nil ? nil : $0 } ?? gallery.initialItemID
+        let openingID = history.resumeItemID.flatMap { captions[$0] == nil ? nil : $0 }
+            ?? (edges.includesWindow ? gallery.initialItemID : selectedID)
         return MessageMediaGallery(transcriptItems: items, openingID: openingID,
             initialData: openingID == gallery.initialItemID ? gallery.initialMediaData : nil,
             messages: messages, captions: captions) ?? gallery

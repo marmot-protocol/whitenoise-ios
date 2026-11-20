@@ -213,7 +213,7 @@ extension GroupSharedMediaPresentationTests {
         #expect(viewModel.search.currentMatch?.messageIdHex == record.messageIdHex)
     }
 
-    @Test func anEmptyWindowKeepsOnlyMediaConnectedToItsSelectedRetainedPage() throws {
+    @Test func aReplacedWindowStaysSeparateUntilItReconnectsToTheSelectedPhoto() throws {
         let photo = entry("selected")
         let id = try #require(TranscriptHistorySlot(photo)).attachment.id
         var pages = TranscriptHistoryPages()
@@ -221,6 +221,18 @@ extension GroupSharedMediaPresentationTests {
         #expect(pages.extensions(around: [], excluding: [], preserving: id).older.map(\.target.messageIdHex) == ["selected", "newer"])
         #expect(pages.extensions(around: [], excluding: ["selected"], preserving: id).older.isEmpty)
         #expect(pages.extensions(around: [], excluding: [], preserving: "removed").older.isEmpty)
+
+        let replacement = entry("replacement")
+        let window = [try #require(TranscriptHistorySlot(replacement)).attachment]
+        let disconnected = pages.extensions(around: window, excluding: ["replacement"], preserving: id)
+        #expect(!disconnected.includesWindow)
+        #expect(disconnected.older.map(\.target.messageIdHex) == ["selected", "newer"])
+
+        var refreshed = TranscriptHistoryPages()
+        refreshed.append([replacement, entry("newer"), photo])
+        let connected = refreshed.extensions(around: window, excluding: ["replacement"], preserving: id)
+        #expect(connected.includesWindow)
+        #expect(connected.older.map(\.target.messageIdHex) == ["selected", "newer"])
     }
 
     @Test func refreshingNewerPhotosKeepsTheSelectedOlderPhotoAcrossPageBoundaries() throws {
