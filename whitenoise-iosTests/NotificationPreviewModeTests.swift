@@ -422,8 +422,9 @@ struct NotificationPreviewSettingsViewModelTests {
 /// are only the same string if the example is built from the shipped keys.
 struct NotificationPreviewExampleTests {
     private static let shippedLanguages: [AppLanguage] = [
-        .english, .german, .spanish, .french, .italian,
-        .portuguese, .russian, .turkish, .chineseSimplified, .chineseTraditional,
+        .english, .german, .spanish, .finnish, .french,
+        .italian, .portuguese, .russian, .turkish, .chineseSimplified,
+        .chineseTraditional,
     ]
 
     @Test func everyExampleIsTheBodyTheNotificationActuallyDelivers() {

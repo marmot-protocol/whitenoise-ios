@@ -35,6 +35,12 @@
             "value" : "whitenoise-ios"
           }
         },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "whitenoise-ios"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -98,6 +104,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise usa la cámara para escanear códigos QR de perfiles y tomar fotos y videos para chats cifrados."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise käyttää kameraa profiilien QR-koodien skannaamiseen sekä kuvien ja videoiden ottamiseen salattuihin keskusteluihin."
           }
         },
         "fr" : {
@@ -165,6 +177,12 @@
             "value" : "White Noise usa Face ID para desbloquear la app."
           }
         },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise käyttää Face ID:tä sovelluksen avaamiseen."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -228,6 +246,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise usa tu ubicación solo cuando decides compartirla en un chat cifrado."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise käyttää sijaintiasi vain, kun päätät jakaa sen salatussa keskustelussa."
           }
         },
         "fr" : {
@@ -295,6 +319,12 @@
             "value" : "White Noise usa el micrófono para grabar mensajes de voz cifrados y videos para chats, y para dictar mensajes en este dispositivo."
           }
         },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise käyttää mikrofonia salattujen ääniviestien ja keskusteluvideoiden tallentamiseen sekä viestien sanelemiseen tällä laitteella."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -358,6 +388,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise guarda fotos y videos en tu fototeca solo cuando eliges guardarlos desde el menú para compartir."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise tallentaa kuvia ja videoita kuvakirjastoosi vain, kun päätät tallentaa ne jakovalikosta."
           }
         },
         "fr" : {

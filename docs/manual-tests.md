@@ -1420,8 +1420,11 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
       unavailable and suggests checking connection/relay settings; the previous
       relationship remains unchanged. Escalate a persistent fresh-account failure
       to MDK integration rather than treating the UI error copy as a backend fix.
-- [ ] A blocked peer retains the full action card: group/follow rows are disabled,
-      Unblock remains available, and Message stays hidden until unblocked.
+- [ ] A blocked peer retains the full action card: group rows stay browsable but
+      Add to Group / Add to Another Group are disabled; Follow is disabled;
+      Unblock remains available; and Message stays hidden until unblocked. With a
+      blocked peer who shares at least one group, Groups in Common opens its list
+      and a group opens its chat.
 - [ ] Switch accounts or suspend/resume while follow state is loading or saving;
       an old completion must not change the new account's displayed relationship.
 - [ ] Leave and reopen a profile while its Nostr address is being verified; a

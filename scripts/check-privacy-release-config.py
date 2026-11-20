@@ -6,7 +6,7 @@ import json
 import plistlib
 from pathlib import Path
 
-LOCALES = ("de", "es", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant")
+LOCALES = ("de", "es", "fi", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant")
 PERMISSIONS = {
     "NSCameraUsageDescription", "NSMicrophoneUsageDescription", "NSFaceIDUsageDescription",
     "NSLocationWhenInUseUsageDescription", "NSPhotoLibraryAddUsageDescription",

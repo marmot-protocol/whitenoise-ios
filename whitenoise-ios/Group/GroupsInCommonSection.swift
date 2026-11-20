@@ -9,6 +9,7 @@ struct GroupsInCommonRow: View {
     let onRetry: () -> Void
     let onOpenChat: (String) -> Void
     var onAddToGroup: () -> Void
+    let canAddToGroup: Bool
 
     init(
         sharedGroups: [SharedGroupsProjection.SharedGroup],
@@ -16,7 +17,8 @@ struct GroupsInCommonRow: View {
         loadError: String?,
         onRetry: @escaping () -> Void,
         onOpenChat: @escaping (String) -> Void,
-        onAddToGroup: @escaping () -> Void
+        onAddToGroup: @escaping () -> Void,
+        canAddToGroup: Bool
     ) {
         groups = sharedGroups.filter { !$0.isDirectMessage }
         self.hasLoaded = hasLoaded
@@ -24,6 +26,7 @@ struct GroupsInCommonRow: View {
         self.onRetry = onRetry
         self.onOpenChat = onOpenChat
         self.onAddToGroup = onAddToGroup
+        self.canAddToGroup = canAddToGroup
     }
 
     var body: some View {
@@ -52,7 +55,8 @@ struct GroupsInCommonRow: View {
                 GroupsInCommonView(
                     groups: groups,
                     onOpenChat: onOpenChat,
-                    onAddToGroup: onAddToGroup
+                    onAddToGroup: onAddToGroup,
+                    canAddToGroup: canAddToGroup
                 )
             } label: {
                 HStack {
@@ -89,6 +93,7 @@ struct GroupsInCommonRow: View {
             }
         }
         Button("Add to Group", systemImage: "person.2.badge.plus", action: onAddToGroup)
+            .disabled(!canAddToGroup)
     }
 }
 
@@ -96,6 +101,7 @@ private struct GroupsInCommonView: View {
     let groups: [SharedGroupsProjection.SharedGroup]
     let onOpenChat: (String) -> Void
     let onAddToGroup: () -> Void
+    let canAddToGroup: Bool
 
     var body: some View {
         List {
@@ -115,6 +121,7 @@ private struct GroupsInCommonView: View {
                     .buttonStyle(.plain)
                 }
                 Button("Add to Another Group", systemImage: "person.2.badge.plus", action: onAddToGroup)
+                    .disabled(!canAddToGroup)
             }
         }
         .navigationTitle("Groups in Common")

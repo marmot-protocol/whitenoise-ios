@@ -290,6 +290,7 @@ struct AddProfileSheet: View {
         .presentationDetents(supportedDetents, selection: $selectedDetent)
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.resizes)
+        .presentationBackground(Color(uiColor: .systemBackground))
         // Sign Up pushes into this sheet, so iPad needs room for its form.
         .presentationSizing(.page)
         .onAppear { appState.diagnosticsConsent.onboardingVisible = true }
