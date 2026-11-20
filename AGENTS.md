@@ -464,8 +464,10 @@ Do not add a second storage path for data Marmot already owns.
 ## Tests
 
 - Locally and on CI, `scripts/test.sh` runs the whole suite (the Staging
-  scheme's test target); CI runs it on every pull request and master push.
-  To iterate on one suite, pass `-only-testing:` to `xcodebuild` and run the
+  scheme's test target); CI runs it on every master push and on pull requests
+  that change a test input. The required "Tests result" check also passes
+  when a PR's filter finds no test input, so add new inputs to the `case`
+  list in `tests.yml` (likewise `lint.yml`). To iterate on one suite, pass `-only-testing:` to `xcodebuild` and run the
   whole suite before pushing.
 - Tests that open or start a Marmot runtime take
   `.marmotRuntimeConcurrencyLimit`; never combine it with `.timeLimit`, which

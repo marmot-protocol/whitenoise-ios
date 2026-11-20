@@ -1,0 +1,3 @@
+# Changes to CI and the scripts it runs request a security review.
+/.github/ @erskingardner
+/scripts/ @erskingardner
