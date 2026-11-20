@@ -81,7 +81,7 @@ private struct MessageMediaGalleryControlLabel: View {
     }
 }
 
-private struct MessageMediaGalleryButton: View {
+struct MessageMediaGalleryButton: View {
     let title: LocalizedStringKey
     let systemImage: String
     let action: () -> Void

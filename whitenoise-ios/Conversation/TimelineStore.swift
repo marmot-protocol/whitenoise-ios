@@ -672,6 +672,11 @@ final class TimelineStore {
         return changed
     }
 
+    func hasUnsourcedOwnMessage(_ messageID: String) -> Bool {
+        guard let record = preparedRecords[messageID] else { return false }
+        return !record.deleted && record.direction == "sent" && record.sourceMessageIdHex == nil
+    }
+
     func isHidden(_ messageIdHex: String) -> Bool {
         _ = timelineProjectionGeneration
         guard let messageId = Hex.normalized32Bytes(messageIdHex) else { return false }

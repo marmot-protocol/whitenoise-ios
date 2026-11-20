@@ -1036,6 +1036,37 @@ final class ConversationViewModel {
         timelineStore.editHistory(for: messageIdHex)
     }
 
+    func firstGalleryGIF(in row: TimelineItem) -> MessageMediaAttachment? {
+        mediaItems(for: row).first { $0.isGIF && $0.rejectionKind == nil }
+    }
+
+    /// Project the currently loaded transcript only while its media sheet is open.
+    /// Keep the row's original media objects so opening a page addresses its original slot.
+    func transcriptMediaGallery(opening itemID: String, initialData: Data?, includingGIFsIn gifRowID: String? = nil) -> MessageMediaGallery? {
+        var items: [MessageMediaAttachment] = []
+        var messages: [String: String] = [:]
+        var captions: [String: MessageMediaGallery.Caption] = [:]
+        for row in timeline {
+            guard case .message(let record, _) = row.kind, !isDeleted(record.messageIdHex),
+                  (record.kind != MessageSemantics.kindPoll || record.sticker != nil),
+                  !(appState?.streamingDebugEnabled == true && MessageSemantics.debugStyle(for: record).isUserVisibleBubble == false),
+                  groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row) == nil else { continue }
+            guard !timelineStore.isHidden(record.messageIdHex), !timelineStore.isBlockedAuthor(record.sender) else { continue }
+            for (index, media) in mediaItems(for: row).enumerated() {
+                guard media.isTranscriptGalleryMedia || (row.id == gifRowID && media.isGIF && media.rejectionKind == nil) else { continue }
+                guard captions[media.id] == nil else { continue }
+                items.append(media)
+                if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }
+                let name = IdentityPresentation.resolve(accountIdHex: record.sender, knownName: windowIdentities[record.sender]?.displayName).text
+                captions[media.id] = .init(sender: record.direction == "sent" ? L10n.string("You") : name,
+                    date: Date(timeIntervalSince1970: TimeInterval(row.timestamp)),
+                    outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
+            }
+        }
+        return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: initialData,
+            messages: messages, captions: captions)
+    }
+
     func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
         timelineStore.mediaItems(for: item)
     }
@@ -2426,6 +2457,10 @@ final class ConversationViewModel {
 
     func data(for media: MessageMediaAttachment) async throws -> Data {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
+    }
+
+    func automaticAttachmentByteCount(for media: MessageMediaAttachment) async -> Int? {
+        await mediaDownloader.automaticAttachmentByteCount(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
     /// Requests the images in rows just beyond the viewport under the same

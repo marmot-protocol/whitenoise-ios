@@ -11,6 +11,34 @@ import Synchronization
 @MainActor
 struct MessageMediaGalleryTests {
 
+    @Test func confirmedPhotoMustMatchTheSelectedDraftsRowSlotAndBytes() async throws {
+        let slot = MessageMediaGallery.OutgoingSlot(rowID: "my-send", index: 1)
+        let draft = MessageMediaGallery.PendingSelection(id: "draft", slot: slot, data: Data("abc".utf8))
+        let reference = MediaAttachmentReferenceFfi(locators: [], ciphertextSha256: "", plaintextSha256:
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", nonceHex: "", fileName: "photo.jpg",
+            mediaType: "image/jpeg", version: .v1, sourceEpoch: 1, dim: nil, thumbhash: nil)
+        let items = MessageMediaAttachment.displayItems(from: [reference, reference], ownerId: "row")
+        let captions: [String: MessageMediaGallery.Caption] = [
+            items[0].id: .init(sender: "You", date: .now, outgoingSlot: .init(rowID: "other", index: 1)),
+            items[1].id: .init(sender: "You", date: .now, outgoingSlot: slot)
+        ]
+        let gallery = try #require(MessageMediaGallery(transcriptItems: items, openingID: draft.id,
+            initialData: nil, messages: [:], captions: captions))
+        #expect(await gallery.confirmedSelection(for: draft)?.id == items[1].id)
+        #expect(await gallery.confirmedSelection(for: .init(id: "draft", slot: slot, data: Data("edited".utf8))) == nil)
+        #expect(await gallery.confirmedSelection(for: .init(id: "draft", slot: .init(rowID: "my-send", index: 0),
+            data: draft.data)) == nil)
+    }
+
+    @Test func preparedTranscriptPhotoNeedsLiveSlotVerificationToExport() async throws {
+        let photo = attachment(id: "photo", mediaType: "image/png")
+        let gallery = try #require(MessageMediaGallery(transcriptItems: [photo], openingID: photo.id,
+            initialData: imageData(), messages: [:], captions: [photo.id: .init(sender: "You", date: .now)]))
+        #expect(await gallery.mayExport(photo, verify: nil) == false)
+        #expect(await gallery.mayExport(photo, verify: { _ in false }) == false)
+        #expect(await gallery.mayExport(photo, verify: { $0.id == photo.id }))
+    }
+
     @Test func galleryRejectsNonVisualInitialItem() {
         let image = attachment(id: "image", mediaType: "image/png")
         let document = attachment(id: "document", mediaType: "application/pdf")

@@ -701,7 +701,19 @@ struct ConversationView: View {
     private enum ActionsPhase { case source, presented, returning }
     @State private var actionsPhase: ActionsPhase = .source
     @State private var actionsCrossfadeExcerpt = false
-    @State private var actionsReturnGeometry: (row: CGRect, body: CGSize?)?
+    @State private var actionsReturnGeometry: (row: CGRect, body: CGSize?, documents: [String: LiftedDocumentDetails])?
+    private struct TranscriptMediaTarget: Identifiable {
+        let id: String
+        let modelID: ObjectIdentifier
+        let accountRef: String?
+        let runtimeGeneration: Int
+        let attachmentRevision: Int
+        let initialData: Data?
+        var gifRowID: String? = nil
+    }
+
+    @State private var mediaOpenIntent = MediaOpenIntent()
+    @State private var transcriptMedia: TranscriptMediaTarget?
     @State private var selectedMessageIds = Set<String>()
     @State private var showBatchDeleteConfirmation = false
     @State private var showStepDownDeclineConfirmation = false
@@ -1072,6 +1084,26 @@ struct ConversationView: View {
                         }
                 }
                 .appAppearance()
+            }
+            .environment(\.mediaOpenIntent, mediaOpenIntent)
+            .onDisappear { mediaOpenIntent.invalidate() }
+            .onChange(of: appState.runtimeGeneration) { _, generation in
+                if let target = transcriptMedia, target.runtimeGeneration != generation { transcriptMedia = nil }
+            }
+            .sheet(item: $transcriptMedia, onDismiss: { mediaOpenIntent.invalidate() }) { target in
+                if let viewModel, ObjectIdentifier(viewModel) == target.modelID,
+                   appState.activeAccountRef == target.accountRef,
+                   appState.runtimeGeneration == target.runtimeGeneration,
+                   AttachmentPresentationState.shared.revision == target.attachmentRevision,
+                   let gallery = viewModel.transcriptMediaGallery(opening: target.id, initialData: target.initialData, includingGIFsIn: target.gifRowID) {
+                    TranscriptHistoryGalleryView(gallery: gallery, conversation: viewModel, gifRowID: target.gifRowID, onLoadMedia: mediaLoader(for: viewModel),
+                        forwardingContext: forwardingContext(for: viewModel),
+                        onGoToMessage: { navigateToTimelineMessage($0, viewModel: viewModel) },
+                        onDismiss: { transcriptMedia = nil })
+                        .appAppearance()
+                } else {
+                    Color.clear.onAppear { transcriptMedia = nil }
+                }
             }
             .sheet(item: $emojiPickerTarget) { target in
                 if let viewModel {
@@ -2672,20 +2704,17 @@ struct ConversationView: View {
                     if replyOrigin == origin { replyOrigin = nil }
                 }
             },
-            onLoadMedia: ConversationMediaLoader { media in
-                try await viewModel.data(for: media)
-            } openHandoff: { media, control in
-                try await viewModel.openHandoff(for: media, control: control)
+            onLoadMedia: mediaLoader(for: viewModel),
+            mediaOpenScope: .init(model: ObjectIdentifier(viewModel), account: appState.activeAccountRef,
+                                 generation: appState.runtimeGeneration),
+            onOpenTranscriptMedia: { [accountRef = appState.activeAccountRef, generation = appState.runtimeGeneration,
+                                      revision = AttachmentPresentationState.shared.revision] media, data in
+                guard self.viewModel === viewModel, accountRef == appState.activeAccountRef,
+                      generation == appState.runtimeGeneration, revision == AttachmentPresentationState.shared.revision else { return }
+                transcriptMedia = TranscriptMediaTarget(id: media.id, modelID: ObjectIdentifier(viewModel),
+                    accountRef: accountRef, runtimeGeneration: generation, attachmentRevision: revision, initialData: data)
             },
-            mediaForwardingContext: MediaForwardingContext(
-                viewModel: viewModel,
-                destinationProvider: {
-                    if let forwardDestinationProvider {
-                        return try await forwardDestinationProvider()
-                    }
-                    return try await viewModel.forwardDestinations()
-                }
-            ),
+            mediaForwardingContext: forwardingContext(for: viewModel),
             onGoToMessage: { messageIdHex in
                 navigateToTimelineMessage(messageIdHex, viewModel: viewModel)
             },
@@ -4514,9 +4543,13 @@ struct ConversationView: View {
         guard let key = measuredActionRowFrameKey,
               let sourceFrame = preferences.first(where: { $0.key == key && $0.part == .row })?.frame else { return }
         let bodySize = preferences.first { $0.key == key && $0.part == .body }?.frame?.size
+        var documents: [String: LiftedDocumentDetails] = [:]
+        for value in preferences where value.key == key {
+            if case .document(let details) = value.part { documents[details.id] = details }
+        }
         // The row may move while the menu is open, for example when the keyboard closes.
         if actionsTarget != nil {
-            actionsReturnGeometry = (sourceFrame, bodySize)
+            actionsReturnGeometry = (sourceFrame, bodySize, documents)
             return
         }
         guard let pending = pendingActionsPresentation, pending.rowFrameKey == key,
@@ -4524,7 +4557,7 @@ struct ConversationView: View {
         pendingActionFrameMeasurementClearTask?.cancel()
         pendingActionFrameMeasurementClearTask = nil
         pendingActionsPresentation = nil
-        actionsReturnGeometry = (sourceFrame, bodySize)
+        actionsReturnGeometry = (sourceFrame, bodySize, documents)
         actionsPhase = .source
         actionsTarget = ActionsTarget(record: pending.record, status: pending.status, rowId: pending.rowId,
                                      sourceFrame: sourceFrame, bubbleFrame: bubbleFrame,
@@ -4579,10 +4612,26 @@ struct ConversationView: View {
                 let rowFrame = actionsPhase == .returning ? returnFrame : sourceFrame
                 let bodySize = actionsPhase == .returning ? actionsReturnGeometry?.body ?? target.bodySize : target.bodySize
                 let canInteract = viewModel.canSendMessages
+                let openGIF = viewModel.firstGalleryGIF(in: item).map { gif in
+                    let mediaTarget = TranscriptMediaTarget(id: gif.id, modelID: ObjectIdentifier(viewModel),
+                        accountRef: appState.activeAccountRef, runtimeGeneration: appState.runtimeGeneration,
+                        attachmentRevision: AttachmentPresentationState.shared.revision, initialData: nil, gifRowID: rowId)
+                    return {
+                        dismissActions()
+                        guard self.viewModel === viewModel, appState.activeAccountRef == mediaTarget.accountRef,
+                              appState.runtimeGeneration == mediaTarget.runtimeGeneration,
+                              AttachmentPresentationState.shared.revision == mediaTarget.attachmentRevision,
+                              let current = viewModel.timeline.first(where: { $0.id == rowId }),
+                              !viewModel.isDeleted(target.record.messageIdHex),
+                              viewModel.firstGalleryGIF(in: current)?.id == gif.id else { return }
+                        mediaOpenIntent.invalidate()
+                        transcriptMedia = mediaTarget
+                    }
+                }
                 let actionCount = messageActionCount(
                     for: target.record,
                     status: target.status,
-                    rowId: rowId,
+                    rowId: rowId, canOpenGIF: openGIF != nil,
                     viewModel: viewModel
                 )
                 let actionMenuHeight = MessageActionsPresentation.visibleActionHeight(
@@ -4641,6 +4690,7 @@ struct ConversationView: View {
                         showsSenderIdentity: !viewModel.groupDisplay.isDirectMessage,
                         usesSelectionLayout: actionsPhase == .returning && isSelectingMessages
                     )
+                    .environment(\.liftedDocuments, actionsReturnGeometry?.documents ?? [:])
                     .environment(\.messageActionBodySize, layout.excerptBodyHeight.flatMap { height in
                         bodySize.map { CGSize(width: $0.width, height: height) }
                     })
@@ -4669,7 +4719,7 @@ struct ConversationView: View {
                         previewHeight: layout.previewHeight, bubbleWidth: bubbleGlobalFrame.width,
                         alignsTrailing: target.record.direction == "sent",
                         surfaceWidth: surfaceWidth,
-                        maximumActionHeight: actionMenuHeight,
+                        maximumActionHeight: actionMenuHeight, onOpenGIF: openGIF,
                         viewModel: viewModel
                     )
                     .frame(
@@ -4863,6 +4913,7 @@ struct ConversationView: View {
         for record: AppMessageRecordFfi,
         status: MessageStatus,
         rowId: String,
+        canOpenGIF: Bool,
         viewModel: ConversationViewModel
     ) -> Int {
         MessageActionsPresentation.actionCount(
@@ -4883,7 +4934,7 @@ struct ConversationView: View {
             canReport: viewModel.canReport(record),
             canBlock: canBlockAuthor(of: record, viewModel: viewModel),
             canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
-            speechActionCount: speechActions(for: record, in: viewModel).count
+            canOpenGIF: canOpenGIF, speechActionCount: speechActions(for: record, in: viewModel).count
         )
     }
 
@@ -4935,6 +4986,23 @@ struct ConversationView: View {
         pollVotesTarget = PollVotesTarget(messageIdHex: record.messageIdHex, options: poll.options)
     }
 
+    private func forwardingContext(for viewModel: ConversationViewModel) -> MediaForwardingContext {
+        MediaForwardingContext(viewModel: viewModel) {
+            if let forwardDestinationProvider { return try await forwardDestinationProvider() }
+            return try await viewModel.forwardDestinations()
+        }
+    }
+
+    private func mediaLoader(for viewModel: ConversationViewModel) -> ConversationMediaLoader {
+        ConversationMediaLoader { media in
+            try await viewModel.data(for: media)
+        } openHandoff: { media, control in
+            try await viewModel.openHandoff(for: media, control: control)
+        } automaticAttachmentByteCount: { media in
+            await viewModel.automaticAttachmentByteCount(for: media)
+        }
+    }
+
     private func messageActionsAlignTrailing(record: AppMessageRecordFfi) -> Bool {
         let outgoing = record.direction == "sent"
         return layoutDirection == .leftToRight ? outgoing : !outgoing
@@ -4949,6 +5017,7 @@ struct ConversationView: View {
         alignsTrailing: Bool,
         surfaceWidth: CGFloat,
         maximumActionHeight: CGFloat,
+        onOpenGIF: (() -> Void)?,
         viewModel: ConversationViewModel
     ) -> some View {
         let selectedReaction = viewModel.reactions(for: record.messageIdHex).first(where: \.mine)
@@ -4973,6 +5042,7 @@ struct ConversationView: View {
             canReport: viewModel.canReport(record),
             canBlock: canBlockAuthor(of: record, viewModel: viewModel),
             canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
+            onOpenGIF: onOpenGIF,
             speechActions: speechActions(for: record, in: viewModel),
             onSpeechAction: { performSpeechAction($0, for: record, in: viewModel) },
             canTranscribe: canTranscribe(record, in: viewModel),
@@ -5139,7 +5209,7 @@ private struct UnreadMessagesDivider: View {
 }
 
 struct RowFramePreference: Equatable {
-    enum Part: Equatable { case row, bubble, body }
+    enum Part: Equatable { case row, bubble, body, document(LiftedDocumentDetails) }
     var part: Part = .row
     let key: String
     var frame: CGRect? = nil

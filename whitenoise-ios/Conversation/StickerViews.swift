@@ -17,8 +17,10 @@ nonisolated enum StickerMetrics {
 struct StickerImage: View {
     let sticker: StickerKey
     let loadsAutomatically: Bool
-    var placeholderLabel: String?
+    /// Set only for transcript stickers. Pack grids use their compact placeholder.
+    var messageIsFromMe: Bool?
 
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.stickerAssets) private var store
     @State private var loaded: StickerAssetStore.Loaded?
     @State private var phase = Phase.idle
@@ -52,30 +54,61 @@ struct StickerImage: View {
 
     @ViewBuilder
     private var placeholder: some View {
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        let foreground = messageIsFromMe.map { MessageBubblePalette.foreground(isFromMe: $0) }
         switch phase {
         case .waitingForTap, .failed:
             Button {
                 explicitRequests += 1
             } label: {
-                VStack(spacing: 6) {
-                    Image(systemName: phase == .failed ? "exclamationmark.triangle" : "face.dashed")
-                        .font(.title2)
-                    Text(phase == .failed ? L10n.string("Tap to retry") : (placeholderLabel ?? L10n.string("Tap to load")))
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
+                placeholderSurface {
+                    VStack(spacing: 6) {
+                        Image(systemName: phase == .failed ? "exclamationmark.triangle" : "face.dashed")
+                            .font(.title2)
+                        if messageIsFromMe != nil && phase == .waitingForTap {
+                            ViewThatFits(in: .horizontal) {
+                                Text(L10n.string("Tap to load sticker")).fixedSize()
+                                Text(L10n.string("Tap to load")).minimumScaleFactor(0.8)
+                            }
+                            .lineLimit(1)
+                        } else {
+                            Text(phase == .failed ? L10n.string("Tap to retry") : L10n.string("Tap to load"))
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(messageIsFromMe.map { MessageBubblePalette.secondaryForeground(isFromMe: $0) } ?? .secondary)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, messageIsFromMe == nil ? 8 : 4)
                 }
-                .foregroundStyle(.secondary)
-                .padding(8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(shape.fill(Color(.secondarySystemFill)))
-                .contentShape(shape)
             }
             .buttonStyle(.plain)
             .accessibilityHint(L10n.string("Loads the sticker from the server its pack uses."))
-        case .idle, .loading:
-            shape.fill(Color(.secondarySystemFill))
-                .overlay { if phase == .loading { ProgressView() } }
+        case .idle:
+            // The cache check can resolve straight to standalone artwork.
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemFill))
+        case .loading:
+            placeholderSurface { ProgressView().tint(foreground) }
+        }
+    }
+
+    @ViewBuilder
+    private func placeholderSurface(@ViewBuilder content: () -> some View) -> some View {
+        let tile = Color.clear.overlay { content() }
+        if let isFromMe = messageIsFromMe {
+            let insetFill = isFromMe ? MessageBubblePalette.sentForeground.opacity(MessageBubbleReplyLayout.sentCardOpacity)
+                : Color.white.opacity(colorScheme == .dark ? 0.12 : 0.6)
+            let shape = RoundedRectangle(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous)
+            tile
+                .background(insetFill, in: .rect(cornerRadius: MessageBubbleReplyLayout.cardCornerRadius))
+                .padding(MessageBubbleReplyLayout.cardOuterInset)
+                .background(MessageBubblePalette.background(isFromMe: isFromMe), in: shape)
+                .contentShape(shape)
+        } else {
+            let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+            tile
+                .background(Color(.secondarySystemFill), in: shape)
+                .contentShape(shape)
         }
     }
 
@@ -103,7 +136,7 @@ struct StickerImage: View {
     }
 }
 
-/// A sticker message: the image alone, without a bubble.
+/// The placeholder uses message chrome until the standalone artwork is available.
 struct StickerMessageContent: View {
     let sticker: StickerKey
     let isFromMe: Bool
@@ -118,7 +151,7 @@ struct StickerMessageContent: View {
                 packInstalled: library?.isInstalled(sticker.packCoordinate) ?? false,
                 autoDownloadImages: MediaAutoDownloadStore.shared.shouldAutoDownload(.image)
             ),
-            placeholderLabel: L10n.string("Tap to load sticker")
+            messageIsFromMe: isFromMe
         )
         .frame(width: StickerMetrics.messageSide, height: StickerMetrics.messageSide)
         .task { await library?.loadInstalledIfNeeded() }

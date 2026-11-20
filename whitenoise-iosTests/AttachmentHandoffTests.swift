@@ -97,6 +97,25 @@ struct AttachmentHandoffTests {
         #expect(await releaser.leases == [lease])
     }
 
+    @Test func hidingTheSourceDuringShareReleasesTheOpenedLease() async throws {
+        let releaser = FakeReleaser()
+        let leased = AttachmentHandoffLease(lease: lease, path: "/tmp/handoff/photo.png", releaser: releaser)
+        let item = MessageMediaAttachment(id: "photo", reference: nil, fileName: "photo.png",
+                                          mediaType: "image/png", dim: nil, localData: nil)
+        let gallery = try #require(MessageMediaGallery(transcriptItems: [item], openingID: item.id,
+            initialData: nil, messages: [:], captions: [item.id: .init(sender: "Alice", date: .now)]))
+        var visible = true
+        let loader = ConversationMediaLoader { _ in throw AttachmentReadError.unavailable } openHandoff: { _, _ in
+            visible = false
+            return leased
+        }
+        await #expect(throws: AttachmentReadError.unavailable) {
+            _ = try await gallery.shareFile(for: item, using: loader, control: MediaFileTransferControlFfi(),
+                                            verify: { _ in visible })
+        }
+        #expect(await waitForReleases(releaser, count: 1) == [lease])
+    }
+
     @Test func droppingAnUnreleasedLeaseReleasesIt() async {
         let releaser = FakeReleaser()
         do {

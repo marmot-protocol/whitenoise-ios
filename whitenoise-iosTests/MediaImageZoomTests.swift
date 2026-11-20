@@ -133,6 +133,21 @@ final class MediaImageZoomTests: XCTestCase {
         XCTAssertFalse(view.gestureRecognizerShouldBegin(view.panGestureRecognizer))
     }
 
+    func testShrinkingViewportKeepsCenteredImageDetailWhenItBecomesScrollable() {
+        let view = makeViewer(size: CGSize(width: 400, height: 800))
+        view.preservesZoomOnHeightChange = true
+        view.setZoomScale(2.5, animated: false)
+        view.layoutIfNeeded()
+        func viewedPoint() -> CGPoint {
+            view.imageView.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), from: view)
+        }
+        let before = viewedPoint()
+        view.frame.size.height = 600
+        view.layoutIfNeeded()
+        XCTAssertEqual(viewedPoint().y, before.y, accuracy: 0.5)
+        XCTAssertEqual(view.zoomScale, 2.5)
+    }
+
     func testOrdinaryUpdatesPreserveZoomAndRotationRefitsImage() {
         let view = makeViewer()
         view.setZoomScale(3, animated: false)
@@ -185,7 +200,7 @@ final class MediaImageZoomTests: XCTestCase {
             MessageMediaAttachment(id: $0, reference: nil, fileName: "image.png",
                 mediaType: "image/png", dim: nil, localData: nil)
         }
-        let gallery = try XCTUnwrap(MessageMediaGallery(items: items, initialItem: items[0], initialImageData: Data()))
+        let gallery = try XCTUnwrap(MessageMediaGallery(items: items, initialItem: items[0]))
         var requestedIDs = [String]()
         let loader = ConversationMediaLoader { item in
             requestedIDs.append(item.id)
