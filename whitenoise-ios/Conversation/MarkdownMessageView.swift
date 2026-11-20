@@ -90,15 +90,31 @@ struct TimelineSearchText: View {
     @Environment(\.timelineSearchQuery) private var query
     let value: String
 
-    init(_ value: String) { self.value = value }
+    var keepsMatchVisible = false
+
+    init(_ value: String, keepsMatchVisible: Bool = false) {
+        self.value = value
+        self.keepsMatchVisible = keepsMatchVisible
+    }
 
     var body: some View {
         if let query {
-            TimelineTextMark.text(AttributedString(value).highlightingTimelineMatches(query))
-                .textRenderer(TimelineTextRenderer())
+            if keepsMatchVisible, let excerpt = ConversationSearchEngine.excerpt(in: value, matching: query, leadingContext: 0) {
+                ViewThatFits(in: .horizontal) {
+                    marked(value, query: query).fixedSize(horizontal: true, vertical: false)
+                    marked(excerpt, query: query)
+                }
+            } else {
+                marked(value, query: query)
+            }
         } else {
             Text(verbatim: value)
         }
+    }
+
+    private func marked(_ text: String, query: String) -> some View {
+        TimelineTextMark.text(AttributedString(text).highlightingTimelineMatches(query))
+            .textRenderer(TimelineTextRenderer())
     }
 }
 

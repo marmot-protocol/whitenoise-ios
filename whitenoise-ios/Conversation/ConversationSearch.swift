@@ -13,13 +13,12 @@ nonisolated struct ConversationSearchEntry: Equatable {
     var previewURL: URL?
     var contactAttachmentIDs: [String] = []
 
-    func matches(_ query: String, now: Date) -> Bool {
-        if text.localizedStandardContains(query) || labels.contains(where: { $0.localizedStandardContains(query) }) {
-            return true
-        }
-        guard let poll else { return false }
+    func matchingText(for query: String, now: Date) -> String? {
+        if text.localizedStandardContains(query) { return text }
+        if let label = labels.first(where: { $0.localizedStandardContains(query) }) { return label }
+        guard let poll else { return nil }
         let footer = PollPresentation.footerText(for: poll, isOpen: PollPresentation.isOpen(poll, now: now))
-        return footer.localizedStandardContains(query)
+        return footer.localizedStandardContains(query) ? footer : nil
     }
 }
 
@@ -27,6 +26,7 @@ nonisolated struct ConversationSearchEntry: Equatable {
 struct ConversationSearchMatch: Equatable, Hashable {
     let itemId: String
     let messageIdHex: String
+    var matchingText: String = ""
 }
 
 /// Pure match indexing and cursor arithmetic for in-conversation search.
@@ -40,6 +40,14 @@ nonisolated enum ConversationSearchEngine {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    static func excerpt(in text: String, matching query: String, leadingContext: Int) -> String? {
+        guard let query = normalizedQuery(query), let match = text.localizedStandardRange(of: query) else { return nil }
+        let start = text.index(match.lowerBound, offsetBy: -leadingContext, limitedBy: text.startIndex) ?? text.startIndex
+        let end = text.index(match.upperBound, offsetBy: 32, limitedBy: text.endIndex) ?? text.endIndex
+        let excerpt = String(text[start..<end]).replacingOccurrences(of: "\n", with: " ")
+        return (start == text.startIndex ? "" : "…") + excerpt + (end == text.endIndex ? "" : "…")
+    }
+
     static func matches(
         for query: String,
         in entries: [ConversationSearchEntry],
@@ -47,8 +55,8 @@ nonisolated enum ConversationSearchEngine {
     ) -> [ConversationSearchMatch] {
         guard let normalized = normalizedQuery(query) else { return [] }
         return entries.compactMap { entry in
-            guard entry.matches(normalized, now: now) else { return nil }
-            return ConversationSearchMatch(itemId: entry.itemId, messageIdHex: entry.messageIdHex)
+            guard let text = entry.matchingText(for: normalized, now: now) else { return nil }
+            return ConversationSearchMatch(itemId: entry.itemId, messageIdHex: entry.messageIdHex, matchingText: text)
         }
     }
 

@@ -174,6 +174,15 @@ extension MarmotClient {
     /// Reply previews omit the original source event ID. Resolve their original slot locally.
     func resolveAttachmentTarget(accountRef: String, groupID: String,
                                  hint: AttachmentSourceHint) async throws -> AttachmentLocalTargetFfi {
+        guard let target = try await findAttachmentTarget(accountRef: accountRef, groupID: groupID, hint: hint) else {
+            throw AttachmentReadError.unavailable
+        }
+        return target
+    }
+
+    /// A completed history scan can establish absence. An interrupted lookup cannot.
+    func findAttachmentTarget(accountRef: String, groupID: String,
+                              hint: AttachmentSourceHint) async throws -> AttachmentLocalTargetFfi? {
         var cursor: AttachmentHistoryCursor?
         let deadline = ContinuousClock.now.advanced(by: .seconds(30))
         repeat {
@@ -188,9 +197,10 @@ extension MarmotClient {
                         sourceMessageIdHex: entry.sourceMessageIdHex, attachmentIndex: index)
                 }
             }
-            cursor = page.hasMore ? page.nextCursor : nil
-        } while cursor != nil
-        throw AttachmentReadError.unavailable
+            guard page.hasMore else { return nil }
+            guard let next = page.nextCursor else { throw AttachmentReadError.unavailable }
+            cursor = next
+        } while true
     }
 }
 

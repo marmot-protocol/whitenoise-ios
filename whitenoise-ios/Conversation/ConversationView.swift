@@ -688,6 +688,7 @@ struct ConversationView: View {
         let messageID: String
     }
     @State private var longMessageTarget: LongMessageTarget?
+    @State private var oversizedSearchResultID: String?
     @State private var messageInfoTarget: ActionsTarget?
     @State private var reactionDetailsTarget: ReactionDetailsTarget?
     @State private var pollVotesTarget: PollVotesTarget?
@@ -1622,7 +1623,7 @@ struct ConversationView: View {
     @ViewBuilder
     private var composerArea: some View {
         if let viewModel, viewModel.search.isActive {
-            ConversationSearchControls(search: viewModel.search)
+            ConversationSearchControls(search: viewModel.search, oversizedResultID: oversizedSearchResultID)
         } else if isSelectingMessages, let viewModel {
             messageSelectionBar(viewModel: viewModel)
         } else if let viewModel, viewModel.hasPendingInvite {
@@ -2098,6 +2099,20 @@ struct ConversationView: View {
                                                 showsSenderIdentity: showsSenderIdentity
                                             )
                                                 .opacity(searchResultID == nil || searchResultID == item.id ? 1 : 0.28)
+                                                .overlay {
+                                                    if searchResultID == item.id {
+                                                        Color.clear
+                                                            .allowsHitTesting(false)
+                                                            .onGeometryChange(for: Bool.self) { geometry in
+                                                                geometry.size.height > (geometry.bounds(of: .scrollView)?.height ?? .infinity)
+                                                            } action: { oversized in
+                                                                oversizedSearchResultID = oversized ? item.id : nil
+                                                            }
+                                                            .onDisappear {
+                                                                if oversizedSearchResultID == item.id { oversizedSearchResultID = nil }
+                                                            }
+                                                    }
+                                                }
                                                 .background {
                                                     ChatListRowAnchor(groupId: item.id,
                                                         sequence: viewModel.conversationWindow?.revision.sequence ?? 0,
@@ -4784,9 +4799,13 @@ struct ConversationView: View {
             guard let row = speechRow(id, in: model),
                   case .message(let record, _) = row.kind, hasBlankMessageText(record),
                   let media = voiceAttachment(for: record, in: model), recording.matches(media) else { return false }
-            let source = await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState)
-            guard scope == speechScope, !Task.isCancelled else { return nil }
-            return source?.target == recording.target && recording.matches(voiceAttachment(for: record, in: model))
+            do {
+                let source = try await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState)
+                guard scope == speechScope, !Task.isCancelled else { return nil }
+                return source?.target == recording.target && recording.matches(voiceAttachment(for: record, in: model))
+            } catch {
+                return nil
+            }
         }
     }
 
@@ -4804,7 +4823,7 @@ struct ConversationView: View {
     }
 
     private func visibleVoiceTranscript(for record: AppMessageRecordFfi, in model: ConversationViewModel) -> String? {
-        guard let transcript = speech.transcripts[record.messageIdHex], transcript.scope == speechScope, transcript.visible,
+        guard let transcript = speech.transcripts[record.messageIdHex], transcript.isVerified(in: speechScope), transcript.visible,
               hasBlankMessageText(record),
               transcript.recording.matches(voiceAttachment(for: record, in: model)) else { return nil }
         return transcript.text
@@ -4840,7 +4859,7 @@ struct ConversationView: View {
         }
         guard received, let audio else { return [] }
         if speech.transcribingID == id { return [.transcribing] }
-        if let transcript = speech.transcripts[id], transcript.scope == speechScope, transcript.recording.matches(audio) {
+        if let transcript = speech.transcripts[id], transcript.isVerified(in: speechScope), transcript.recording.matches(audio) {
             return transcript.visible ? [.hide, .copy] : [.show]
         }
         // Keep this slot stable while the available model and retained audio are checked.
@@ -4859,11 +4878,28 @@ struct ConversationView: View {
         speech.availableAudio = nil
         guard #available(iOS 26, *), self.viewModel === model, let row = speechRow(target.messageIdHex, in: model),
               case .message(let record, _) = row.kind, record.direction != "sent", hasBlankMessageText(record),
-              let audio = voiceAttachment(for: record, in: model),
-              await LocalVoiceRecognition.recognizer() != nil,
-              let source = await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState),
-              !Task.isCancelled, scope == speechScope, self.viewModel === model,
-              actionsPhase != .returning, actionsTarget?.record.messageIdHex == record.messageIdHex else { return }
+              let audio = voiceAttachment(for: record, in: model) else { return }
+        let request = voiceAvailabilityRequest(for: row, in: model)
+        func isCurrent() -> Bool {
+            !Task.isCancelled && self.viewModel === model && actionsPhase != .returning
+                && actionsTarget?.record.messageIdHex == record.messageIdHex && request == voiceAvailabilityRequest(for: row, in: model)
+        }
+        let source: LocalVoiceAttachment?
+        do {
+            source = try await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState)
+        } catch {
+            if isCurrent(), let transcript = speech.transcripts[record.messageIdHex] {
+                speech.updateRetention(nil, id: record.messageIdHex, recording: transcript.recording, scope: scope)
+            }
+            return
+        }
+        guard isCurrent() else { return }
+        if let transcript = speech.transcripts[record.messageIdHex] {
+            let held = transcript.recording.matches(audio) && source?.target == transcript.recording.target
+            speech.updateRetention(held, id: record.messageIdHex, recording: transcript.recording, scope: scope)
+            if held { return }
+        }
+        guard let source, await LocalVoiceRecognition.recognizer() != nil, isCurrent() else { return }
         let recording = ConversationSpeech.Recording(displayID: audio.id, target: source.target)
         guard recording.matches(voiceAttachment(for: record, in: model)) else { return }
         speech.availableAudio = (recording, source, scope)
@@ -4899,7 +4935,7 @@ struct ConversationView: View {
                 let scope = speechScope
                 guard scope.route == availableAudio.scope.route, self.viewModel === model,
                       let media = voiceAttachment(for: current, in: model), availableAudio.recording.matches(media),
-                      let source = await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState),
+                      let source = try? await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState),
                       source.target == availableAudio.recording.target, scope == speechScope,
                       availableAudio.recording.matches(voiceAttachment(for: current, in: model)) else { return nil }
                 return scope

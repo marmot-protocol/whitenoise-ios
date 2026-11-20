@@ -33,11 +33,19 @@ struct ConversationSearchBar: View {
 
 struct ConversationSearchControls: View {
     @Bindable var search: ConversationSearchModel
+    let oversizedResultID: String?
 
     @ScaledMetric(relativeTo: .body) private var controlSize = WNSearchBar.Metrics.fieldHeight
 
     var body: some View {
         VStack(spacing: 4) {
+            if let match = search.currentMatch, match.itemId == oversizedResultID,
+               let excerpt = ConversationSearchEngine.excerpt(in: match.matchingText, matching: search.query, leadingContext: 6) {
+                TimelineSearchText(excerpt)
+                    .environment(\.timelineSearchQuery, ConversationSearchEngine.normalizedQuery(search.query))
+                    .font(.footnote)
+                    .lineLimit(1)
+            }
             ZStack {
                 HStack(spacing: 0) {
                     searchButton(

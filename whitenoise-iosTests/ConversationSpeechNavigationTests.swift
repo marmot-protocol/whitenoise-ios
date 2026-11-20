@@ -16,6 +16,21 @@ struct ConversationSpeechNavigationTests {
         #expect(speech.readingID == nil)
     }
 
+    @Test func uncertainRetentionHidesTextAndOnlyConfirmedAbsenceDiscardsIt() throws {
+        let route = ConversationSpeech.Route(groupID: "chat", modelID: nil, account: "me", runtimeGeneration: 1)
+        let original = ConversationSpeech.Scope(route: route, revision: 4)
+        let revised = ConversationSpeech.Scope(route: route, revision: 5)
+        let recording = ConversationSpeech.Recording(displayID: "audio", target: .init(
+            messageIdHex: "message", sourceMessageIdHex: "original", attachmentIndex: 0))
+        let transcript = ConversationSpeech.Transcript(scope: original, recording: recording, text: "Meet at six")
+        let uncertain = try #require(transcript.revalidated(held: nil, in: revised))
+        #expect(!uncertain.isVerified(in: revised))
+        let restored = try #require(uncertain.revalidated(held: true, in: revised))
+        #expect(restored.isVerified(in: revised))
+        #expect(restored.text == transcript.text)
+        #expect(restored.revalidated(held: false, in: revised) == nil)
+    }
+
     @Test func voiceSourceHintAcceptsOnlyItsResolvedTargetWhenTheDirectTargetArrives() {
         let recording = ConversationSpeech.Recording(displayID: "audio", target: .init(
             messageIdHex: "message", sourceMessageIdHex: "original", attachmentIndex: 0))
