@@ -1967,6 +1967,7 @@ private struct MessageMediaGrid: View {
                         onOpenImage: onOpenImage,
                         onOpenVideo: onOpenVideo
                     )
+                    .id(resolvedItems[index].id)
                     .position(x: frame.midX, y: frame.midY)
                 }
             }
