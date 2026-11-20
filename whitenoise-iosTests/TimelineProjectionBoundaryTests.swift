@@ -204,6 +204,11 @@ struct TimelineProjectionBoundaryTests {
         #expect(preview.media?.reference == reference)
         #expect(preview.media?.id.contains(targetID) == true)
         #expect(counter.mediaBuilds == 0)
+
+        var target = timelineRecord(messageIdHex: targetID, plaintext: "", media: [reference])
+        target.sourceMessageIdHex = hexId(35)
+        _ = viewModel.timelineStore.applyTimelineRecord(target, updateTimeline: true)
+        #expect(viewModel.replyPreview(for: replyRecord)?.media?.localTarget?.sourceMessageIdHex == hexId(35))
     }
 
     @Test func markdownProjectionCacheSkipsUnchangedWindowRows() throws {

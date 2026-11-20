@@ -1046,6 +1046,8 @@ struct MessageBubble: View {
                     isFromMe: isFromMe,
                     onLoadMedia: onLoadMedia
                 )
+                .id(media.localTarget)
+                .id(media.sourceHint)
             }
         }
         .padding(.leading, 10)
@@ -2510,7 +2512,7 @@ private struct MessageMediaTile: View {
         VStack(spacing: 6) {
             Image(systemName: "doc")
                 .font(.title3)
-            TimelineSearchText(item.fileName)
+            TimelineSearchText(item.fileName, keepsMatchVisible: true)
                 .font(.caption2)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
@@ -3469,12 +3471,12 @@ private struct MessageDocumentAttachmentView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     let name = displayName
-                    TimelineSearchText(name ?? item.fileName)
+                    TimelineSearchText(name ?? item.fileName, keepsMatchVisible: true)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                         .multilineTextAlignment(.leading)
                     if let name, name != item.fileName, let searchQuery, item.fileName.localizedStandardContains(searchQuery) {
-                        TimelineSearchText(item.fileName)
+                        TimelineSearchText(item.fileName, keepsMatchVisible: true)
                             .font(.caption)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)

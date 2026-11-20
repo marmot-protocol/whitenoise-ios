@@ -8,6 +8,16 @@ struct ConversationSearchEngineTests {
         ConversationSearchEntry(itemId: "msg:\(id)", messageIdHex: id, text: text)
     }
 
+    @Test func excerptRevealsAMatchingSuffixOrLineInTheOriginalSpelling() throws {
+        let file = String(repeating: "meeting-", count: 30) + "Résumé.pdf"
+        #expect(ConversationSearchEngine.excerpt(in: file, matching: "resume", leadingContext: 0) == "…Résumé.pdf")
+        let body = Array(repeating: "An earlier line", count: 90).joined(separator: "\n") + "\nThe Meeting is today."
+        let excerpt = try #require(ConversationSearchEngine.excerpt(in: body, matching: "meeting", leadingContext: 6))
+        #expect(excerpt.contains("The Meeting is today."))
+        #expect(!excerpt.contains("\n"))
+        #expect(excerpt.count < 40)
+    }
+
     // MARK: - Match indexing
 
     @Test func matchesKeepTimelineOrderAndSkipNonMatchingRows() {
