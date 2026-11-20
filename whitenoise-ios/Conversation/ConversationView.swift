@@ -4622,6 +4622,7 @@ struct ConversationView: View {
             .transition(.identity)
             .allowsHitTesting(actionsPhase != .returning)
             .accessibilityElement(children: .contain)
+            .accessibilityAction(.escape) { dismissActions(resumingComposerFocus: true) }
         }
     }
 

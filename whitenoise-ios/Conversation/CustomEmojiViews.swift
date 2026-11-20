@@ -188,6 +188,7 @@ struct CustomEmojiReactionLabel: View {
     @ScaledMetric(relativeTo: .body) private var pointSize = CustomEmojiReactionLabel.defaultPointSize
 
     static let defaultPointSize: CGFloat = 18
+    private let maximumPointSize: CGFloat
 
     let emoji: String
     /// The reaction event whose image to show. Nil (an optimistic reaction
@@ -207,7 +208,9 @@ struct CustomEmojiReactionLabel: View {
         let policyRevision: String
     }
 
-    init(emoji: String, reactionMessageIdHex: String? = nil, pointSize: CGFloat = Self.defaultPointSize) {
+    init(emoji: String, reactionMessageIdHex: String? = nil, pointSize: CGFloat = Self.defaultPointSize,
+         maximumPointSize: CGFloat = .infinity) {
+        self.maximumPointSize = maximumPointSize
         _pointSize = ScaledMetric(wrappedValue: pointSize, relativeTo: .body)
         self.emoji = emoji
         self.reactionMessageIdHex = reactionMessageIdHex
@@ -215,7 +218,8 @@ struct CustomEmojiReactionLabel: View {
 
     var body: some View {
         let scope = store?.currentScope
-        let size = CustomEmojiInlineMetrics.pixelSize(pointSize: pointSize, scale: displayScale)
+        let artworkSize = min(pointSize, maximumPointSize)
+        let size = CustomEmojiInlineMetrics.pixelSize(pointSize: artworkSize, scale: displayScale)
         let loadID = LoadID(scope: scope, emoji: emoji, reactionMessageIdHex: reactionMessageIdHex, pixelSize: size,
                             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)
         Group {
@@ -223,14 +227,14 @@ struct CustomEmojiReactionLabel: View {
                 Image(uiImage: loaded.image)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: pointSize, height: pointSize)
+                    .frame(width: artworkSize, height: artworkSize)
             } else if scope == nil || noArtwork == loadID,
                       let shortcode = CustomEmojiShortcode(reactionContent: emoji),
                       let builtin = CustomEmojiBuiltinImages.image(for: shortcode, pixelSize: size, scale: displayScale) {
                 Image(uiImage: builtin)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: pointSize, height: pointSize)
+                    .frame(width: artworkSize, height: artworkSize)
             } else {
                 Text(ContentSanitizer.reactionEmoji(emoji))
             }
