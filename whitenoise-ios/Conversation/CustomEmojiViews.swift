@@ -194,7 +194,7 @@ struct CustomEmojiReactionLabel: View {
     /// with no event yet) has no image of its own.
     var reactionMessageIdHex: String?
 
-    @State private var loaded: (key: CustomEmojiImageKey, image: UIImage)?
+    @State private var loaded: (id: LoadID, image: UIImage)?
     /// The load that found no image of the reaction's own; only then may a
     /// built-in stand in, so it never paints over an image still loading.
     @State private var noArtwork: LoadID?
@@ -207,7 +207,8 @@ struct CustomEmojiReactionLabel: View {
         let policyRevision: String
     }
 
-    init(emoji: String, reactionMessageIdHex: String? = nil) {
+    init(emoji: String, reactionMessageIdHex: String? = nil, pointSize: CGFloat = Self.defaultPointSize) {
+        _pointSize = ScaledMetric(wrappedValue: pointSize, relativeTo: .body)
         self.emoji = emoji
         self.reactionMessageIdHex = reactionMessageIdHex
     }
@@ -218,7 +219,7 @@ struct CustomEmojiReactionLabel: View {
         let loadID = LoadID(scope: scope, emoji: emoji, reactionMessageIdHex: reactionMessageIdHex, pixelSize: size,
                             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)
         Group {
-            if let loaded, let scope, loaded.key.scope == scope, loaded.key.pixelSize == size {
+            if let loaded, loaded.id == loadID {
                 Image(uiImage: loaded.image)
                     .resizable()
                     .scaledToFit()
@@ -248,7 +249,7 @@ struct CustomEmojiReactionLabel: View {
             guard !Task.isCancelled else { return }
             switch result {
             case .image(let key, let image) where key.scope == store.currentScope:
-                loaded = (key, image)
+                loaded = (loadID, image)
             case .noArtwork:
                 noArtwork = loadID
             case .image, nil:

@@ -22,26 +22,25 @@ struct ReplySwipeTests {
     }
 
     @Test func verticalOrShortDragsDoNotActivateReply() {
-        #expect(!ReplySwipe.shouldActivate(translation: CGSize(width: 59, height: 4)))
+        #expect(!ReplySwipe.shouldActivate(translation: CGSize(width: 54, height: 4)))
         #expect(!ReplySwipe.shouldActivate(translation: CGSize(width: 90, height: 120)))
         #expect(!ReplySwipe.shouldActivate(translation: CGSize(width: 72, height: 65)))
         #expect(!ReplySwipe.shouldActivate(translation: CGSize(width: -90, height: 4)))
     }
 
-    @Test func feedbackOffsetFollowsHorizontalDragButIsCapped() {
-        let partialOffset = ReplySwipe.feedbackOffset(translation: CGSize(width: 50, height: 3))
-        #expect(partialOffset > 20)
-        #expect(partialOffset < ReplySwipe.maximumFeedbackOffset)
-        #expect(ReplySwipe.feedbackOffset(translation: CGSize(width: 160, height: 3)) == ReplySwipe.maximumFeedbackOffset)
+    @Test func feedbackTracksTheFingerToThresholdThenResistsOverdrag() {
+        #expect(ReplySwipe.feedbackOffset(translation: CGSize(width: 20, height: 1)) == 20)
+        #expect(ReplySwipe.shouldActivate(translation: CGSize(width: 55, height: 0)))
+        #expect(ReplySwipe.feedbackOffset(translation: CGSize(width: 115, height: 2)) == 65)
         #expect(ReplySwipe.feedbackOffset(translation: CGSize(width: 40, height: 80)) == 0)
-        #expect(ReplySwipe.feedbackOffset(translation: CGSize(width: 20, height: 1)) == 0)
     }
 
-    @Test func completionNudgeStaysBelowMaximumFeedback() {
-        #expect(ReplySwipe.minimumDistance >= 20)
-        #expect(ReplySwipe.completionOffset < ReplySwipe.maximumFeedbackOffset)
-        #expect(ReplySwipe.completionOffset <= 12)
-        #expect(ReplySwipe.completionPauseNanoseconds <= 20_000_000)
+    @Test func rightToLeftReplyBeginsLeftwardAwayFromTheRightNavigationEdge() {
+        let bounds = CGRect(x: 20, y: 0, width: 400, height: 800)
+        #expect(ReplySwipe.shouldBegin(velocity: CGPoint(x: -180, y: 25), rightToLeft: true))
+        #expect(!ReplySwipe.shouldBegin(velocity: CGPoint(x: 180, y: 25), rightToLeft: true))
+        #expect(ReplySwipe.isInLeadingEdgeNavigationRegion(startLocation: CGPoint(x: 400, y: 40), in: bounds, rightToLeft: true))
+        #expect(!ReplySwipe.isInLeadingEdgeNavigationRegion(startLocation: CGPoint(x: 200, y: 40), in: bounds, rightToLeft: true))
     }
 
     // MARK: - View identity

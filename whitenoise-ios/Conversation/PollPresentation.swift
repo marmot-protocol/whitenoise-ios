@@ -11,6 +11,26 @@ nonisolated enum PollPresentation {
         return now.timeIntervalSince1970 <= TimeInterval(endsAt)
     }
 
+    static func deadlineRefresh(for poll: PollProjectionFfi, now: Date) -> Date? {
+        guard let endsAt = poll.endsAt, isOpen(poll, now: now) else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(endsAt) + 1)
+    }
+
+    static func footerText(for poll: PollProjectionFfi, isOpen: Bool) -> String {
+        let votes = L10n.plural("%lld votes", Int64(clamping: poll.participants))
+        if !isOpen {
+            return "\(votes) · \(L10n.string("Poll closed"))"
+        }
+        let instruction = poll.pollType == .multipleChoice ? L10n.string("Select one or more") : L10n.string("Select one")
+        let summary = "\(votes) · \(instruction)"
+        if let endsAt = poll.endsAt {
+            let date = Date(timeIntervalSince1970: TimeInterval(endsAt))
+            let ends = L10n.formatted("Ends %@", date.formatted(date: .abbreviated, time: .shortened))
+            return "\(summary) · \(ends)"
+        }
+        return summary
+    }
+
     /// The selection a tap on `optionId` produces, or nil when the tap changes
     /// nothing. MDK accepts only non-empty selections, so a vote can be changed
     /// but never withdrawn.

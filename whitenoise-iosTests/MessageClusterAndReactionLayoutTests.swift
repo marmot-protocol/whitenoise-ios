@@ -4,6 +4,15 @@ import Testing
 @testable import whitenoise_ios
 
 struct ReactionMetadataFittingTests {
+    @Test func aChipCannotClearAnotherOwnedOrUnseenReactionKind() {
+        let mine = ConversationViewModel.ReactionTally(emoji: "🥾", count: 2, mine: true)
+        var other = ConversationViewModel.ReactionTally(emoji: "🎉", count: 1, mine: false)
+        #expect(ReactionPillPresentation.canRemoveIndividually("🥾", from: [mine, other], omittedKinds: 0))
+        #expect(!ReactionPillPresentation.canRemoveIndividually("🥾", from: [mine, other], omittedKinds: 1))
+        other = .init(emoji: "🎉", count: 2, mine: true)
+        #expect(!ReactionPillPresentation.canRemoveIndividually("🥾", from: [mine, other], omittedKinds: 0))
+    }
+
     @Test func keepsEveryPillWhenTheMetadataRowFits() {
         let fit = ReactionMetadataFitting.fit(
             reactionWidths: [30, 30, 30],
@@ -26,25 +35,22 @@ struct ReactionMetadataFittingTests {
         #expect(fit == ReactionMetadataFit(visibleReactionCount: 1, hiddenReactionCount: 2))
     }
 
-    @Test func canCollapseToOnlyOverflowAndFooter() {
-        let fit = ReactionMetadataFitting.fit(
-            reactionWidths: [30, 30, 30],
-            overflowWidthForHiddenCount: [1: 24, 2: 24, 3: 24],
-            footerWidth: 20,
-            availableWidth: 52
-        )
-
-        #expect(fit == ReactionMetadataFit(visibleReactionCount: 0, hiddenReactionCount: 3))
+    @Test func aCountedEmojiKeepsItsPlaceWhenTheTimestampLeavesTooLittleWidth() {
+        let fit = ReactionMetadataFitting.fit(reactionWidths: [44], overflowWidthForHiddenCount: [1: 34],
+                                              footerWidth: 35, availableWidth: 78)
+        #expect(fit == ReactionMetadataFit(visibleReactionCount: 1, hiddenReactionCount: 0))
     }
 
-    @Test func sortsOurReactionFirstThenByPopularity() {
-        let sorted = ReactionPillPresentation.sorted([
-            .init(emoji: "a", count: 5, mine: false),
-            .init(emoji: "b", count: 1, mine: true),
-            .init(emoji: "c", count: 3, mine: false),
-        ])
+    @Test func aNarrowRowKeepsTheFirstEmojiAndCountsOnlyAdditionalKindsInOverflow() {
+        let fit = ReactionMetadataFitting.fit(reactionWidths: [44, 34, 34], overflowWidthForHiddenCount: [5: 34, 6: 34],
+                                              footerWidth: 35, availableWidth: 78, preHiddenReactionCount: 3)
+        #expect(fit == ReactionMetadataFit(visibleReactionCount: 1, hiddenReactionCount: 5))
+    }
 
-        #expect(sorted.map(\.emoji) == ["b", "a", "c"])
+    @Test func aSummaryWithoutEmojiRetainsTheOmittedCount() {
+        let fit = ReactionMetadataFitting.fit(reactionWidths: [], overflowWidthForHiddenCount: [:],
+                                              footerWidth: 35, availableWidth: 20, preHiddenReactionCount: 5)
+        #expect(fit == ReactionMetadataFit(visibleReactionCount: 0, hiddenReactionCount: 5))
     }
 
     @Test func preservesAlreadyHiddenReactionTypesWhenEveryRenderedPillFits() {
@@ -57,7 +63,7 @@ struct ReactionMetadataFittingTests {
         )
 
         #expect(fit == ReactionMetadataFit(visibleReactionCount: 2, hiddenReactionCount: 3))
-        #expect(ReactionPillPresentation.maximumRenderedPills == 7)
+        #expect(ReactionPillPresentation.maximumRenderedPills == 4)
     }
 }
 

@@ -86,6 +86,12 @@ final class ChatListViewport {
     /// Whether the container currently has this row in layout.
     func isLaidOut(_ rowID: String) -> Bool { rows[rowID]?.view?.window != nil }
 
+    var visibleFrameInWindow: CGRect? {
+        guard let scrollView, let window = scrollView.window else { return nil }
+        let visible = scrollView.bounds.inset(by: scrollView.adjustedContentInset)
+        return scrollView.convert(visible, to: window).intersection(window.safeAreaLayoutGuide.layoutFrame)
+    }
+
     private func visibleRows() -> [(id: String, offset: CGFloat, height: CGFloat)] {
         guard let scrollView else { return [] }
         let top = scrollView.contentOffset.y + scrollView.adjustedContentInset.top

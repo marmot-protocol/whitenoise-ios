@@ -15180,68 +15180,68 @@
         }
       }
     },
-    "📊 Poll: %@" : {
+    "Poll: %@" : {
       "comment" : "A chat-list or reply preview for a poll; the argument is the poll question.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 Umfrage: %@"
+            "value" : "Umfrage: %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 Encuesta: %@"
+            "value" : "Encuesta: %@"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 Kysely: %@"
+            "value" : "Kysely: %@"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 Sondage : %@"
+            "value" : "Sondage : %@"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 Sondaggio: %@"
+            "value" : "Sondaggio: %@"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 Enquete: %@"
+            "value" : "Enquete: %@"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 Опрос: %@"
+            "value" : "Опрос: %@"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 Anket: %@"
+            "value" : "Anket: %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 投票：%@"
+            "value" : "投票：%@"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "📊 投票：%@"
+            "value" : "投票：%@"
           }
         }
       }
@@ -55909,68 +55909,68 @@
         }
       }
     },
-    "Final results" : {
+    "Poll closed" : {
       "comment" : "Footer on a poll whose voting has ended.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Endergebnis"
+            "value" : "Umfrage beendet"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Resultados finales"
+            "value" : "Encuesta cerrada"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lopulliset tulokset"
+            "value" : "Äänestys päättyi"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Résultats définitifs"
+            "value" : "Sondage clos"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Risultati finali"
+            "value" : "Sondaggio chiuso"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Resultado final"
+            "value" : "Enquete encerrada"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Итоговые результаты"
+            "value" : "Опрос завершён"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nihai sonuçlar"
+            "value" : "Anket kapandı"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最终结果"
+            "value" : "投票已结束"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最終結果"
+            "value" : "投票已結束"
           }
         }
       }
@@ -81988,73 +81988,72 @@
         }
       }
     },
-    "Not delivered. Tap for options." : {
-      "extractionState" : "manual",
+    "Not delivered, hold for options" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nicht zugestellt. Für Optionen tippen."
+            "value" : "Nicht zugestellt. Für Optionen gedrückt halten."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not delivered. Tap for options."
+            "value" : "Not delivered, hold for options"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No entregado. Toca para ver opciones."
+            "value" : "No entregado. Mantén pulsado para ver las opciones."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ei toimitettu. Napauta nähdäksesi vaihtoehdot."
+            "value" : "Ei toimitettu. Näytä vaihtoehdot pitämällä painettuna."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Non distribué. Touchez pour plus d'options."
+            "value" : "Non distribué. Maintenez le doigt appuyé pour voir les options."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Non recapitato. Tocca per le opzioni."
+            "value" : "Non consegnato. Tieni premuto per le opzioni."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não entregue. Toque para ver opções."
+            "value" : "Não entregue. Mantenha pressionado para ver as opções."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не доставлено. Нажмите, чтобы открыть параметры."
+            "value" : "Не доставлено. Удерживайте для выбора действия."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İletilemedi. Seçenekler için dokunun."
+            "value" : "İletilemedi. Seçenekler için basılı tutun."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未送达。点按查看选项。"
+            "value" : "未送达，长按以查看选项"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未送達。點按以查看選項。"
+            "value" : "未送達，長按以查看選項"
           }
         }
       }
@@ -90043,134 +90042,134 @@
         }
       }
     },
-    "Poll · Select one" : {
-      "comment" : "Subtitle on a single-choice poll bubble.",
+    "Select one" : {
+      "comment" : "Voting instruction in the footer of an open single-choice poll bubble.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Umfrage · Eine Antwort wählen"
+            "value" : "Eine Antwort wählen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Encuesta · Elige una"
+            "value" : "Elige una"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kysely · Valitse yksi"
+            "value" : "Valitse yksi"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sondage · Choisissez une réponse"
+            "value" : "Choisissez une réponse"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sondaggio · Scegli una risposta"
+            "value" : "Scegli una risposta"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enquete · Escolha uma"
+            "value" : "Escolha uma"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Опрос · Выберите один вариант"
+            "value" : "Выберите один вариант"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anket · Birini seçin"
+            "value" : "Birini seçin"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "投票 · 选择一项"
+            "value" : "选择一项"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "投票 · 選擇一項"
+            "value" : "選擇一項"
           }
         }
       }
     },
-    "Poll · Select one or more" : {
-      "comment" : "Subtitle on a multiple-choice poll bubble.",
+    "Select one or more" : {
+      "comment" : "Voting instruction in the footer of an open multiple-choice poll bubble.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Umfrage · Eine oder mehrere wählen"
+            "value" : "Eine oder mehrere wählen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Encuesta · Elige una o más"
+            "value" : "Elige una o más"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kysely · Valitse yksi tai useampi"
+            "value" : "Valitse yksi tai useampi"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sondage · Choisissez une ou plusieurs réponses"
+            "value" : "Choisissez une ou plusieurs réponses"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sondaggio · Scegli una o più risposte"
+            "value" : "Scegli una o più risposte"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enquete · Escolha uma ou mais"
+            "value" : "Escolha uma ou mais"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Опрос · Выберите один или несколько"
+            "value" : "Выберите один или несколько"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anket · Bir veya daha fazlasını seçin"
+            "value" : "Bir veya daha fazlasını seçin"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "投票 · 选择一项或多项"
+            "value" : "选择一项或多项"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "投票 · 選擇一項或多項"
+            "value" : "選擇一項或多項"
           }
         }
       }

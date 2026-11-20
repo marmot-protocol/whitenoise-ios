@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 @testable import whitenoise_ios
 
@@ -18,8 +19,78 @@ struct MessageActionsOverlayLayoutTests {
         let previewBottom = layout.previewCenterY + layout.previewHeight / 2
         let actionsTop = layout.groupTop + layout.groupHeight - 320
 
-        #expect(previewTop - reactionBottom == MessageActionsPresentation.surfaceGap)
-        #expect(actionsTop - previewBottom == MessageActionsPresentation.surfaceGap)
+        #expect(abs(previewTop - reactionBottom - MessageActionsPresentation.surfaceGap) < 0.001)
+        #expect(abs(actionsTop - previewBottom - MessageActionsPresentation.surfaceGap) < 0.001)
+    }
+
+    @Test func longTextPreviewKeepsTheQuoteAndFooterAndLimitsOnlyItsBody() throws {
+        let layout = MessageActionsOverlayLayout.resolve(
+            sourceFrame: CGRect(x: 0, y: -500, width: 320, height: 1240),
+            containerHeight: 844, actionMenuHeight: 320, showsReactions: true, bodyHeight: 1150
+        )
+        let body = try #require(layout.excerptBodyHeight)
+        #expect(body == MessageActionsPresentation.maximumExcerptBodyHeight)
+        #expect(layout.previewHeight == body + 90)
+    }
+
+    @Test func textPreviewLeavesSpaceForActionsWhenTheMenuIsTall() throws {
+        let layout = MessageActionsOverlayLayout.resolve(
+            sourceFrame: CGRect(x: 0, y: 0, width: 320, height: 900),
+            containerHeight: 600, actionMenuHeight: 340, showsReactions: true, bodyHeight: 860
+        )
+        let body = try #require(layout.excerptBodyHeight)
+        #expect(body > 0 && body < MessageActionsPresentation.maximumExcerptBodyHeight)
+        #expect(layout.previewHeight == body + 40)
+        #expect(layout.groupHeight <= 600 - 2 * MessageActionsPresentation.verticalMargin)
+    }
+
+    @Test func tallMediaCanStillLeaveASingleTruncatedCaption() throws {
+        let layout = MessageActionsOverlayLayout.resolve(
+            sourceFrame: CGRect(x: 0, y: 0, width: 320, height: 1230),
+            containerHeight: 728, actionMenuHeight: 340, showsReactions: true, bodyHeight: 1000
+        )
+        let caption = try #require(layout.excerptBodyHeight)
+        #expect(caption >= 44 && caption < 64)
+        #expect(layout.previewHeight == 230 + caption)
+    }
+
+    @Test func aCaptionThatFitsAtTheNormalPreviewScaleStaysComplete() {
+        let layout = MessageActionsOverlayLayout.resolve(
+            sourceFrame: CGRect(x: 0, y: 0, width: 320, height: 260),
+            containerHeight: 704, actionMenuHeight: 340, showsReactions: true, bodyHeight: 100
+        )
+        #expect(layout.excerptBodyHeight == nil)
+        #expect(!layout.previewIsTruncated)
+        #expect(layout.previewHeight == 260)
+    }
+
+    @Test func aFractionalPointOfOverflowKeepsTheWholeCaption() {
+        let layout = MessageActionsOverlayLayout.resolve(
+            sourceFrame: CGRect(x: 0, y: 0, width: 320, height: 350.2),
+            containerHeight: 794, actionMenuHeight: 340, showsReactions: true, bodyHeight: 100
+        )
+        #expect(layout.excerptBodyHeight == nil)
+        #expect(!layout.previewIsTruncated)
+        #expect(layout.previewHeight == 350.2)
+    }
+
+    @Test func aMarkdownExcerptKeepsTheWholeInlineEmojiAtItsTail() throws {
+        let emoji = try #require(CustomEmojiShortcode("party_parrot"))
+        let excerpt = MarkdownDisplayBlock.excerpt([.paragraph(AttributedString("A :party_parrot: today"))],
+                                                  characterBudget: 7, emoji: [emoji])
+        #expect(excerpt == [.paragraph(AttributedString("A :party_parrot:…"))])
+    }
+
+    @Test func aMarkdownExcerptPreservesTheQuotationAndCodeBlockAtItsTail() {
+        let source: [MarkdownDisplayBlock] = [
+            .paragraph(AttributedString("Intro")),
+            .blockQuote([.codeBlock(AttributedString("let sample = 123"))]),
+            .paragraph(AttributedString("After"))
+        ]
+        #expect(MarkdownDisplayBlock.excerpt(source, characterBudget: 15) == [
+            .paragraph(AttributedString("Intro")),
+            .blockQuote([.codeBlock(AttributedString("let sample…"))])
+        ])
     }
 
     @Test func messageActionsOverlayShiftsTheWholeCompositionOnShortScreens() {
@@ -32,7 +103,6 @@ struct MessageActionsOverlayLayoutTests {
 
         #expect(layout.groupTop >= MessageActionsPresentation.verticalMargin)
         #expect(layout.groupTop + layout.groupHeight <= 760 - MessageActionsPresentation.verticalMargin)
-        #expect(layout.previewScale < 1)
     }
 
     @Test func messageActionsOverlayClipsMessagesTallerThanTheViewportInsteadOfShrinkingThem() {
@@ -43,10 +113,8 @@ struct MessageActionsOverlayLayoutTests {
             showsReactions: true
         )
 
-        #expect(layout.previewScale >= MessageActionsPresentation.minimumPreviewScale)
         #expect(layout.previewIsTruncated)
-        #expect(layout.previewContentHeight < 2400)
-        #expect(abs(layout.previewContentHeight * layout.previewScale - layout.previewHeight) < 0.001)
+        #expect(layout.previewHeight < 2400)
         #expect(layout.groupTop >= MessageActionsPresentation.verticalMargin)
         #expect(layout.groupTop + layout.groupHeight <= 844 - MessageActionsPresentation.verticalMargin)
     }
@@ -66,13 +134,11 @@ struct MessageActionsOverlayLayoutTests {
             showsReactions: true
         )
 
-        #expect(layout.previewScale == MessageActionsPresentation.minimumPreviewScale)
         #expect(layout.previewHeight == reference.previewHeight)
-        #expect(layout.previewContentHeight == reference.previewContentHeight)
         #expect(layout.groupHeight == reference.groupHeight)
     }
 
-    @Test func messageActionsOverlayLeavesMessagesThatAlreadyFitUntouched() {
+    @Test func shortBubbleKeepsItsTranscriptHeightAndCenter() {
         let source = CGRect(x: 0, y: 220, width: 390, height: 96)
         let layout = MessageActionsOverlayLayout.resolve(
             sourceFrame: source,
@@ -81,13 +147,12 @@ struct MessageActionsOverlayLayoutTests {
             showsReactions: true
         )
 
-        #expect(layout.previewScale == 1)
+        #expect(abs(layout.previewCenterY - source.midY) < 0.001)
         #expect(!layout.previewIsTruncated)
-        #expect(layout.previewContentHeight == source.height)
         #expect(layout.previewHeight == source.height)
     }
 
-    @Test func messageActionsOverlayStillScalesModeratelyTallMessagesWithoutClipping() {
+    @Test func mediaThatExceedsTheAvailableHeightIsCroppedAtOriginalSize() {
         let layout = MessageActionsOverlayLayout.resolve(
             sourceFrame: CGRect(x: 0, y: 650, width: 390, height: 300),
             containerHeight: 760,
@@ -95,10 +160,9 @@ struct MessageActionsOverlayLayoutTests {
             showsReactions: true
         )
 
-        #expect(layout.previewScale < 1)
-        #expect(layout.previewScale > MessageActionsPresentation.minimumPreviewScale)
-        #expect(!layout.previewIsTruncated)
-        #expect(layout.previewContentHeight == 300)
+        #expect(layout.excerptBodyHeight == nil)
+        #expect(layout.previewIsTruncated)
+        #expect(layout.previewHeight == 236)
     }
 
     @Test func messageActionsOverlayKeyboardSizedContainerStillRendersAReadablePreview() {
@@ -116,9 +180,8 @@ struct MessageActionsOverlayLayoutTests {
             showsReactions: true
         )
 
-        #expect(keyboardOpen.previewScale == MessageActionsPresentation.minimumPreviewScale)
+        #expect(keyboardOpen.previewHeight >= MessageActionsPresentation.minimumPreviewHeight)
         #expect(keyboardClosed.previewHeight > keyboardOpen.previewHeight)
-        #expect(keyboardClosed.previewContentHeight > keyboardOpen.previewContentHeight)
     }
 
     @Test func messageActionsOverlayDoesNotReserveAReactionSurfaceWhenInteractionIsDisabled() {

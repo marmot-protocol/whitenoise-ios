@@ -2476,6 +2476,21 @@ final class ConversationViewModel {
         return CustomEmojiCatalog.merge(messages: timelineStore.customEmojiCatalogEntries, reactions: reactions)
     }
 
+    /// Repeating a chip must send the same image, even when two sets use the same shortcode.
+    func canRepeatReaction(_ shortcode: CustomEmojiShortcode, reactionID: String?) -> Bool {
+        guard canSendMediaAttachments, let scope = customEmojiSendScope else { return false }
+        if let reactionID, !reactionID.isEmpty {
+            guard reactionArtworkScope == scope else { return false }
+            if !reactionArtworkMisses.contains(reactionID) {
+                guard let artwork = reactionArtwork[reactionID], artwork.shortcode == shortcode,
+                      let hash = artwork.reference?.plaintextSha256.lowercased() else { return false }
+                return customEmojiSendables.contains { $0.shortcode == shortcode && $0.plaintextSha256 == hash }
+            }
+        }
+        // An untagged reaction displays the bundled image when one exists.
+        return CustomEmojiBuiltins.shortcodes.contains(shortcode)
+    }
+
     /// The artwork of one `:shortcode:` reaction event, read once per scope
     /// through MDK's bounded local `reactionAttachment` lookup. Concurrent
     /// requests share one read; a result for an old scope is dropped.
