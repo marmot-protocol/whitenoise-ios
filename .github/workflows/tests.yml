@@ -55,14 +55,14 @@ jobs:
   test:
     needs: changes
     if: needs.changes.outputs.relevant == 'true'
-    # Benchmark: does the build stall because the simulator boots alongside it,
-    # because simulator runtimes were just deleted, both, or neither?
-    name: test (boot ${{ matrix.boot }}, runtimes ${{ matrix.runtimes }})
+    # Benchmark: the simulator's first boot floods the runner for several
+    # minutes. Where does that load cost least: alongside the build (today),
+    # after it, or alongside the setup steps at the start of the job?
+    name: test (boot ${{ matrix.boot }})
     strategy:
       fail-fast: false
       matrix:
-        boot: [during-build, after-build]
-        runtimes: [deleted, kept]
+        boot: [during-build, after-build, job-start]
     runs-on: xcode-27
     # Allow runner setup and artifact upload around the bounded 50-minute test step.
     timeout-minutes: 65
@@ -89,11 +89,46 @@ jobs:
         with:
           xcode-version: "27"
 
+      # These two run before the cleanup in every arm, so the job-start arm can
+      # boot the simulator this early without the arms differing otherwise.
+      - name: Isolate simulator clipboard
+        # Host clipboard sync can stall UIPasteboard reads and block MainActor tests.
+        run: defaults write com.apple.iphonesimulator PasteboardAutomaticSync -bool false
+
+      - name: Pick simulator
+        # Test on an iPhone Air, on the newest iOS runtime that has one.
+        run: |
+          mkdir -p build/ci-timing
+          destination=$(WN_TEST_DEVICE_NAME="iPhone Air" scripts/pick-simulator.sh)
+          echo "WN_TEST_DESTINATION=$destination" >> "$GITHUB_ENV"
+          echo "$destination" | tee build/ci-timing/destination.txt
+          xcrun simctl list devices available > build/ci-timing/devices-at-pick.txt || true
+
+      # The boot request must be accepted here, or this job would boot after
+      # the build and be a mislabelled sample. The boot then carries on after
+      # the step ends; scripts/test.sh waits for it once the build is done.
+      - name: Boot simulator at job start
+        if: matrix.boot == 'job-start'
+        run: |
+          case "$WN_TEST_DESTINATION" in
+            *id=*) udid="${WN_TEST_DESTINATION##*id=}"; udid="${udid%%,*}" ;;
+            *) echo "WN_TEST_DESTINATION has no id=: $WN_TEST_DESTINATION" >&2; exit 1 ;;
+          esac
+          date -u +%FT%TZ | tee build/ci-timing/simulator-boot-requested.txt
+          xcrun simctl boot "$udid"
+          date -u +%FT%TZ | tee build/ci-timing/simulator-boot-accepted.txt
+          # Only an observer: it records the boot's progress with timestamps.
+          nohup xcrun simctl bootstatus "$udid" > build/ci-timing/simulator-boot.log 2>&1 < /dev/null &
+          echo "$!" > build/ci-timing/simulator-boot.pid
+
       # Extracting the compiler cache ran out of disk alongside the image's
       # unused Xcodes, simulator runtimes and toolchains, so drop them first.
       - name: Free runner disk
         env:
-          RUNTIMES: ${{ matrix.runtimes }}
+          # Round one showed deleting the unused simulator runtimes changes
+          # neither the stall nor the disk headroom, so every arm keeps them.
+          # Turning it back on means picking the simulator after this step again.
+          RUNTIMES: kept
         run: |
           mkdir -p build/ci-timing
           df -h / | tee build/ci-timing/disk-before-cleanup.txt
@@ -101,9 +136,8 @@ jobs:
           for x in /Applications/Xcode*.app; do
             [ "$(cd "$x" && pwd -P)" = "$(cd "$keep" && pwd -P)" ] || sudo rm -rf "$x" &
           done
-          # Both arms list the runtimes, so both touch CoreSimulator here; only
-          # one deletes. Every request's outcome is kept, because a deletion
-          # that did nothing is not a sample of the "deleted" arm.
+          # The runtimes are still listed, and any deletion's outcome recorded,
+          # so a later round can turn the deletion back on.
           xcrun simctl runtime list -j > build/ci-timing/runtimes-before.json || true
           targets=$(python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items() if not v["platformIdentifier"].endswith("iphonesimulator") or not v["version"].startswith("27")]' < build/ci-timing/runtimes-before.json || true)
           {
@@ -120,14 +154,6 @@ jobs:
           xcrun simctl runtime list -j > build/ci-timing/runtimes-after.json || true
           df -h / | tee build/ci-timing/disk-after-cleanup.txt
 
-      - name: Pick simulator
-        # Test on an iPhone Air, on the newest iOS runtime that has one.
-        run: |
-          destination=$(WN_TEST_DEVICE_NAME="iPhone Air" scripts/pick-simulator.sh)
-          echo "WN_TEST_DESTINATION=$destination" >> "$GITHUB_ENV"
-          echo "$destination" | tee build/ci-timing/destination.txt
-          xcrun simctl list devices available > build/ci-timing/devices-at-pick.txt || true
-
       - name: Verify published MarmotKit provenance
         run: python3 scripts/check-marmotkit-bindings.py
 
@@ -143,10 +169,6 @@ jobs:
           key: spm-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('Packages/MarmotKit/Package.swift') }}
           restore-keys: |
             spm-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-
-
-      - name: Isolate simulator clipboard
-        # Host clipboard sync can stall UIPasteboard reads and block MainActor tests.
-        run: defaults write com.apple.iphonesimulator PasteboardAutomaticSync -bool false
 
       # Compiler cache keys hash compiler inputs rather than file mtimes, so a
       # fresh checkout still replays cached objects. Only master writes the
@@ -180,14 +202,22 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: TestResults-${{ matrix.boot }}-${{ matrix.runtimes }}-attempt${{ github.run_attempt }}
+          name: TestResults-${{ matrix.boot }}-attempt${{ github.run_attempt }}
           path: build/TestResults.xcresult
           if-no-files-found: warn
 
       # Lowest free space matters for whether the cleanup step is needed at all.
       - name: Collect timing
         if: always()
+        env:
+          # A newer master cache between rounds changes the compile work.
+          CACHE_KEY: ${{ steps.compilation-cache.outputs.cache-matched-key }}
         run: |
+          echo "${CACHE_KEY:-none}" | tee build/ci-timing/compile-cache-key.txt
+          # Stop the boot observer so it isn't writing while the files upload.
+          if [ -f build/ci-timing/simulator-boot.pid ]; then
+            kill "$(cat build/ci-timing/simulator-boot.pid)" 2>/dev/null || true
+          fi
           df -h / | tee build/ci-timing/disk-at-end.txt
           cat build/ci-timing/probe.log || true
           gzip -f build/ci-timing/*.raw.log || true
@@ -196,7 +226,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ci-timing-${{ matrix.boot }}-${{ matrix.runtimes }}-attempt${{ github.run_attempt }}
+          name: ci-timing-${{ matrix.boot }}-attempt${{ github.run_attempt }}
           path: build/ci-timing
           if-no-files-found: warn
 

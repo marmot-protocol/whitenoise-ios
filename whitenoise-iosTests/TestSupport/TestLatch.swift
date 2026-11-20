@@ -158,3 +158,6 @@ func parkUntilCancelled(
     }
     try Task.checkCancellation()
 }
+
+// ci-stall-experiment: this comment makes the test module recompile, as it does
+// on a pull request that touches app code. The branch is never merged.

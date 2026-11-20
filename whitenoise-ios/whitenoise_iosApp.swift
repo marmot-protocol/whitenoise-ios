@@ -204,3 +204,6 @@ struct whitenoise_iosApp: App {
     }
 
 }
+
+// ci-stall-experiment: this comment makes the app and test modules recompile,
+// as they do on a pull request that touches app code. The branch is never merged.

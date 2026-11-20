@@ -81,12 +81,14 @@ if [ -n "$TIMING_DIR" ]; then
 fi
 
 # during-build overlaps the simulator boot with the build; after-build boots it
-# once the compilers are done, so the two don't compete for memory and cores.
+# once the compilers are done, so the two don't compete for memory and cores;
+# job-start means the caller already started the boot, and this script only
+# waits for it after the build.
 BOOT_SIMULATOR="${WN_TEST_BOOT_SIMULATOR:-during-build}"
 case "$BOOT_SIMULATOR" in
-  during-build | after-build) ;;
+  during-build | after-build | job-start) ;;
   *)
-    echo "WN_TEST_BOOT_SIMULATOR must be during-build or after-build, not '$BOOT_SIMULATOR'" >&2
+    echo "WN_TEST_BOOT_SIMULATOR must be during-build, after-build or job-start, not '$BOOT_SIMULATOR'" >&2
     exit 2
     ;;
 esac
@@ -247,16 +249,47 @@ boot_simulator() {
   fi
   # A boot that failed, or a device that was already booted, is not a sample
   # of boot cost, so say which this was.
-  local start=$SECONDS status=0 state
-  state=$(xcrun simctl list devices | grep -F "$udid" | sed 's/^ *//' || true)
-  note "==> simulator before boot, $(elapsed)s after start: ${state:-not listed}"
-  xcrun simctl bootstatus "$udid" -b > "$TIMING_DIR/simulator-boot.log" 2>&1 || status=$?
-  if [ "$status" -eq 0 ]; then
-    note "==> simulator-boot (${BOOT_SIMULATOR}): $((SECONDS - start))s, ready $(elapsed)s after start"
+  local start=$SECONDS status=0 log="$TIMING_DIR/simulator-boot.log" outcome state
+  local boot_flag="-b"
+  state=$(simulator_state)
+  if [ "$BOOT_SIMULATOR" = job-start ]; then
+    note "==> simulator before post-build wait, $(elapsed)s after start: ${state}"
   else
-    note "==> simulator-boot (${BOOT_SIMULATOR}): FAILED with status ${status} after $((SECONDS - start))s, see simulator-boot.log"
+    note "==> simulator before boot, $(elapsed)s after start: ${state}"
   fi
+  if [ "$BOOT_SIMULATOR" = job-start ]; then
+    # The caller's own boot log is simulator-boot.log; this is only the wait,
+    # so it must not start a boot itself.
+    log="$TIMING_DIR/simulator-wait-after-build.log"
+    case "$state" in
+      *"(Shutdown)"* | "not listed")
+        note "==> INVALID job-start sample: the simulator was not booting after the build, booting it now"
+        ;;
+      *) boot_flag="" ;;
+    esac
+  fi
+  # shellcheck disable=SC2086
+  xcrun simctl bootstatus "$udid" $boot_flag > "$log" 2>&1 || status=$?
+  # bootstatus exits 0 even when the boot ends in a failed data migration.
+  if [ "$status" -ne 0 ]; then
+    outcome="FAILED with status ${status}"
+  elif LC_ALL=C grep -a -q "Data Migration Failed" "$log" "$TIMING_DIR/simulator-boot.log" 2>/dev/null; then
+    outcome="returned, reporting Data Migration Failed"
+  else
+    outcome="ready"
+  fi
+  note "==> simulator-boot (${BOOT_SIMULATOR}): $((SECONDS - start))s, ${outcome} $(elapsed)s after start, see $(basename "$log")"
 }
+
+simulator_state() {
+  local state
+  state=$(xcrun simctl list devices | grep -F "$udid" | sed 's/^ *//; s/ *$//' || true)
+  echo "${state:-not listed}"
+}
+
+if [ -n "$TIMING_DIR" ] && [ -n "$udid" ]; then
+  note "==> simulator at script start: $(simulator_state)"
+fi
 
 # Booting the simulator is dead time on the critical path, so by default overlap
 # it with the build instead of letting `xcodebuild test` serialize the two.
