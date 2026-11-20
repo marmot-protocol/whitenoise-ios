@@ -158,11 +158,10 @@ final class ComposerModel {
 
     func reconcileDraftMediaUploads(_ attachments: [MediaDraftAttachment]) {
         let accountRef = appState?.activeAccountRef
-        var fileBacked: Set<String> = []
-        if let accountRef, let store = appState?.conversationDraftStore {
-            store.stageLargeAttachments(attachments, accountRef: accountRef, groupIdHex: groupIdHex)
-            fileBacked = store.fileBackedAttachmentIDs(accountRef: accountRef, groupIdHex: groupIdHex)
-        }
+        // The draft store copies large ones into the draft as the draft changes.
+        let fileBacked = accountRef.flatMap { accountRef in
+            appState?.conversationDraftStore.fileBackedAttachmentIDs(accountRef: accountRef, groupIdHex: groupIdHex)
+        } ?? []
         // A send without a draft revision uploads everything itself, so an
         // upload started now would be thrown away.
         let preuploaded = MediaDraftProcessor.sendsThroughDraft(attachments, fileBackedIDs: fileBacked) ? attachments : []

@@ -54,6 +54,47 @@ struct ConversationWindowBindingTests {
         }
     }
 
+    /// Typing the next message while Send writes and claims the tapped one
+    /// neither fails the claim nor takes the submission's place; the next
+    /// message is saved once the send finishes.
+    @Test func typingWhileSendClaimsItsWriteKeepsBothMessages() async throws {
+        try await withTestClient { client in
+            let defaults = try #require(UserDefaults(suiteName: "DraftClaimTests.\(UUID())"))
+            let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+            let state = AppState.test(client: client, conversationDraftStore: store,
+                accountDefaults: defaults, erasureDefaults: defaults)
+            state.setPhase(.ready)
+            let watchdog = MarmotFixtureWatchdog.start("Draft claim did not complete", breaking: client)
+            defer { watchdog.cancel() }
+            try await client.startRuntime()
+            let account = try await client.marmot.createIdentityWithProfile(
+                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
+            ).account
+            let group = try await client.createGroupWithOptionsDetailed(accountRef: account.label,
+                name: "Draft claim", memberRefs: [], options: CreateGroupOptionsFfi(
+                    description: nil, initialImage: nil, disappearingMessageSecs: 0)).requireCreated()
+            func draft(_ text: String) -> ConversationDraftSnapshot {
+                ConversationDraftSnapshot(canonicalText: text, replyToMessageIdHex: nil, mediaAttachments: [])
+            }
+            store.beginQueuedSend(accountRef: account.label, groupIdHex: group.groupIdHex)
+            store.setDraft(draft(""), accountRef: account.label, groupIdHex: group.groupIdHex)
+            let claim = Task {
+                try await store.prepareSend(draft("tapped"), accountRef: account.label, groupIdHex: group.groupIdHex)
+            }
+            // The claim is now writing the submission.
+            await Task.yield()
+            store.setDraft(draft("next message"), accountRef: account.label, groupIdHex: group.groupIdHex)
+            let revision = try await claim.value
+
+            #expect(try await client.selectedMessageDraft(accountRef: account.label, groupIdHex: group.groupIdHex).draft?.content == "tapped")
+            _ = try await client.sendDraftWithClientToken(accountRef: account.label, revision: revision,
+                attachments: [], clientToken: UUID().uuidString)
+            await store.finishSend(accountRef: account.label, groupIdHex: group.groupIdHex, accepted: true)
+            await store.flush()
+            #expect(try await client.selectedMessageDraft(accountRef: account.label, groupIdHex: group.groupIdHex).draft?.content == "next message")
+        }
+    }
+
     @Test(arguments: [false, true])
     func draftSendStatusDistinguishesAcceptedFromRejectedAdmission(accepted: Bool) async throws {
         try await withTestClient { client in

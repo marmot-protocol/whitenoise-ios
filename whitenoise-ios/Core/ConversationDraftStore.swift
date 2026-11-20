@@ -320,9 +320,12 @@ final class ConversationDraftStore {
     /// Advances when MDK finishes holding a large attachment as a file, so the
     /// composer can start its pre-upload.
     private(set) var fileBackedGeneration = 0
-    /// What was typed after a Send tap, before that submission was claimed:
-    /// the next message, kept once the claim is done.
+    /// The composer's latest text after a Send tap, until that submission is
+    /// claimed: the next message, applied once the claim is done.
     @ObservationIgnored private var typedWhileQueued: [ConversationDraftKey: ConversationDraftSnapshot?] = [:]
+    /// Chats whose Send is writing and claiming its submission. Composer edits
+    /// are only recorded meanwhile, so none can take the claimed write's place.
+    @ObservationIgnored private var claimingKeys: Set<ConversationDraftKey> = []
     /// Advances whenever a pending-send handoff starts or ends, so the chat
     /// list can re-project its rows.
     private(set) var pendingSendHandoffGeneration = 0
@@ -352,12 +355,12 @@ final class ConversationDraftStore {
         )
     }
 
-    /// Copies each large attachment the composer holds into the draft as a
-    /// file, so it survives leaving the chat and sends through the draft's
-    /// revision. Cancels the copy of one the composer no longer holds. A copy
+    /// Copies each large attachment of the draft into it as a file, so it
+    /// survives leaving the chat and sends through the draft's revision.
+    /// Cancels the copy of one the draft no longer holds. Driven by draft
+    /// edits, never by a composer that hasn't loaded the draft yet. A copy
     /// that fails leaves the attachment out of the draft, sent as before.
-    func stageLargeAttachments(_ attachments: [MediaDraftAttachment], accountRef: String, groupIdHex: String) {
-        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+    private func stageLargeAttachments(_ attachments: [MediaDraftAttachment], key: ConversationDraftKey) {
         let wanted = attachments.filter(MessageDraftAttachmentInputs.needsStaging)
         let wantedIDs = Set(wanted.map(\.id.uuidString))
         var controls = stagingControls[key] ?? [:]
@@ -391,7 +394,8 @@ final class ConversationDraftStore {
             await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
         }
         guard !control.isCancelled(), !resetPausedKeys.contains(key), !sendingKeys.contains(key),
-              !conflictedKeys.contains(key), let state = persistence as? AppState else { return }
+              !claimingKeys.contains(key), !conflictedKeys.contains(key),
+              let state = persistence as? AppState else { return }
         activeWrites[key, default: 0] += 1
         defer {
             activeWrites[key, default: 0] -= 1
@@ -464,21 +468,25 @@ final class ConversationDraftStore {
 
     func prepareSend(_ snapshot: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) async throws -> MessageDraftRevisionFfi {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
-        guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else { throw MarmotKitError.MessageDraftRevisionConflict }
-        // Wait out a running write (a large attachment's copy can take a while)
-        // before writing the submission, so nothing typed meanwhile can take
-        // its place in the write that Send claims.
+        guard !sendingKeys.contains(key), !claimingKeys.contains(key), !conflictedKeys.contains(key) else {
+            throw MarmotKitError.MessageDraftRevisionConflict
+        }
+        // From here until the claim, the composer's edits are only recorded:
+        // the write Send claims holds the tapped submission and nothing else.
+        claimingKeys.insert(key)
+        if typedWhileQueued[key] == nil { typedWhileQueued[key] = .some(nil) }
+        // Wait out a running write first (a large attachment's copy can take a while).
         while activeWrites[key, default: 0] > 0 {
             await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
         }
-        guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else { throw MarmotKitError.MessageDraftRevisionConflict }
-        // What was typed after the tap is the next message: keep it once the
-        // submission is claimed (or fails to be).
-        let typedAfterTap = typedWhileQueued.removeValue(forKey: key) ?? nil
-        setDraft(snapshot, accountRef: accountRef, groupIdHex: groupIdHex)
+        guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else {
+            endClaim(key)
+            throw MarmotKitError.MessageDraftRevisionConflict
+        }
+        applyDraft(snapshot, key: key)
         await flush(key: key, using: nil)
         guard pendingWrites[key] == nil, let selection = selections[key], selection.draft != nil else {
-            if let typedAfterTap { setDraft(typedAfterTap, accountRef: accountRef, groupIdHex: groupIdHex) }
+            endClaim(key)
             throw MarmotKitError.MessageDraftRevisionConflict
         }
         sendingKeys.insert(key)
@@ -489,8 +497,17 @@ final class ConversationDraftStore {
             PendingDraftSendHandoff(revision: selection.revision, submitted: $0)
         }, for: key)
         // Saved by `finishSend`, like anything typed while the send runs.
-        if let typedAfterTap { setDraft(typedAfterTap, accountRef: accountRef, groupIdHex: groupIdHex) }
+        endClaim(key)
         return selection.revision
+    }
+
+    /// Applies what the composer was given after the Send tap. A cleared
+    /// composer changes nothing: the submission's draft stays until it sends.
+    private func endClaim(_ key: ConversationDraftKey) {
+        claimingKeys.remove(key)
+        if case .some(.some(let typed)) = typedWhileQueued.removeValue(forKey: key) {
+            applyDraft(typed, key: key)
+        }
     }
 
     func finishSend(accountRef: String, groupIdHex: String, accepted: Bool) async {
@@ -517,7 +534,11 @@ final class ConversationDraftStore {
             }
         }
         editedWhileSending.remove(key)
-        if pendingWrites[key] != nil { scheduleSave(for: key) }
+        if let pending = pendingWrites[key] {
+            // Copies wait while a send runs; start those of the next message.
+            if case .save(let next) = pending.operation { stageLargeAttachments(next.mediaAttachments, key: key) }
+            scheduleSave(for: key)
+        }
     }
 
     struct UnrevisionedSend: Equatable {
@@ -730,12 +751,18 @@ final class ConversationDraftStore {
         groupIdHex: String
     ) {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        if typedWhileQueued[key] != nil {
+            typedWhileQueued[key] = .some(Self.normalizedSnapshot(snapshot) == nil ? nil : snapshot)
+            if claimingKeys.contains(key) { return }
+        }
+        applyDraft(snapshot, key: key)
+    }
+
+    private func applyDraft(_ snapshot: ConversationDraftSnapshot, key: ConversationDraftKey) {
+        let groupIdHex = key.groupIdHex
         guard !resetPausedKeys.contains(key) else { return }
         resetKeys.remove(key)
         let operation = Self.normalizedSnapshot(snapshot).map(PendingOperation.save) ?? .delete
-        if typedWhileQueued[key] != nil {
-            if case .save = operation { typedWhileQueued[key] = .some(snapshot) } else { typedWhileQueued[key] = .some(nil) }
-        }
         if let accepted = acceptedUnrevisionedSends[key] {
             // A composer still showing an accepted custom emoji message (for
             // example on disappear) must not save it back as a draft.
@@ -747,6 +774,11 @@ final class ConversationDraftStore {
         if sendingKeys.contains(key) {
             if case .delete = operation, !editedWhileSending.contains(key) { return }
             editedWhileSending.insert(key)
+        }
+        if case .save(let saved) = operation {
+            stageLargeAttachments(saved.mediaAttachments, key: key)
+        } else {
+            stageLargeAttachments([], key: key)
         }
         if pendingWrites[key]?.operation == operation {
             return
