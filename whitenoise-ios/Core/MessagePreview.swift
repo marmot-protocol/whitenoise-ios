@@ -168,6 +168,7 @@ enum MessagePreview {
         if preview.deleted {
             return MessageDeletionPresentation.text(source: preview.deletionSource)
         }
+        if MessageSemantics.isUnsupportedEventKind(preview.kind) { return unsupportedEventLabel }
         if preview.sticker != nil, preview.plaintext.isEmpty { return stickerLabel }
         if !preview.plaintext.isEmpty {
             if preview.kind == MessageSemantics.kindGroupSystem {

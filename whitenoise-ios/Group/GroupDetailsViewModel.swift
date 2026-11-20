@@ -463,8 +463,11 @@ final class GroupDetailsViewModel {
             return
         }
         let groupIdHex = conversation.group.groupIdHex
+        let generation = appState.runtimeGeneration
         let activation = try? await marmotCalls.accountDevicesActivation(client, accountRef, groupIdHex)
-        guard conversation.group.groupIdHex == groupIdHex else { return }
+        // A read from a replaced runtime or another profile is stale.
+        guard conversation.group.groupIdHex == groupIdHex, appState.runtimeGeneration == generation,
+              appState.activeAccountRef == accountRef else { return }
         accountDevicesActivation = activation
     }
 

@@ -189,7 +189,10 @@ While the group's own commit is pending, changes, leaves and declines fail with
 `GroupCommitPending`; no acknowledgement releases it, so word it and let the user
 retry later. A change MDK gives up after its call returned arrives as
 `GroupChangeNotDelivered`: toast it like `QueuedIntentRefused`, then acknowledge
-it (`acknowledgeChangeNotDelivered`). `NoUsableRelay` offers no retry.
+it (`acknowledgeChangeNotDelivered`). MDK keeps each record until acknowledged but
+the event only notifies, so once per launch the app also reads
+`groupChangesNotDelivered` for every chat and raises the newest one the same way.
+`NoUsableRelay` offers no retry.
 Both the app and the NSE call `setAuditLogSource` before any account opens.
 Delete on a failed own send calls `discardFailedSend`, which publishes nothing;
 polls and stickers sent while replying carry the same reply tags as text.

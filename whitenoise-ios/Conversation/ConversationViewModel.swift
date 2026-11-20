@@ -2234,7 +2234,7 @@ final class ConversationViewModel {
             retentionExpiresAt: record.retentionExpiresAt,
             recordedAt: record.timelineAt,
             receivedAt: record.receivedAt,
-            invalidated: false
+            invalidated: record.invalidationStatus != nil
         )
     }
 

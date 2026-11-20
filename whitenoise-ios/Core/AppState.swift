@@ -481,11 +481,37 @@ final class AppState {
                 handleRuntimeEvent(event, generation: generation)
             }
         }
+        await announceRetainedUndeliveredChange(client: client, generation: generation)
         for await event in events {
             guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
             handleRuntimeEvent(event, generation: generation)
         }
     }
+
+    /// A change MDK gave up while no subscription was listening (before
+    /// launch) only notifies once, so read MDK's retained records, once per
+    /// launch, and raise the newest; acknowledging it lets the next one show.
+    private func announceRetainedUndeliveredChange(client: MarmotClient, generation: Int) async {
+        guard !checkedRetainedUndeliveredChanges else { return }
+        var newest: (event: MarmotEventFfi, at: UInt64)?
+        for account in accounts where !account.signedOut {
+            guard let rows = try? await client.chatList(accountRef: account.accountIdHex, includeArchived: true) else { continue }
+            for row in rows {
+                guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
+                guard let records = try? await client.marmot.groupChangesNotDelivered(
+                          accountRef: account.accountIdHex, groupIdHex: row.groupIdHex
+                      ),
+                      let event = GroupChangeNotice.retainedNotDeliveredEvent(account: account, records: records),
+                      let at = records.map(\.at).max(), newest.map({ at > $0.at }) ?? true else { continue }
+                newest = (event, at)
+            }
+        }
+        // An interrupted scan runs again with the next runtime.
+        checkedRetainedUndeliveredChanges = true
+        if let newest { handleRuntimeEvent(newest.event, generation: generation) }
+    }
+
+    @ObservationIgnored private var checkedRetainedUndeliveredChanges = false
 
     var groupRecoveryUpdate: GroupRecoveryUpdate?
     var groupMembershipUpdate: GroupRecoveryUpdate?
@@ -1615,18 +1641,38 @@ final class AppState {
         }
         let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
-        let outcome = try await lease.client.signOutAndWipe(accountRef: account?.label ?? accountRef)
+        let ref = account?.label ?? accountRef
+        _ = try? await lease.client.marmot.clearPushRegistration(accountRef: ref)
+        let outcome = try await lease.client.signOutAndWipe(accountRef: ref)
+        // As for the active profile: leftover files after a committed removal
+        // still count as removed, so signing in again isn't blocked.
+        let presence: AccountPresence = outcome.localCleanup.completed
+            ? .removed : await accountPresence(ref, using: lease.client, storedAccounts: nil)
+        guard WipeReportProjection.removedLocalAccount(outcome, presence: presence) else {
+            try? await refreshAccounts(refreshUnreadSummaries: false)
+            throw UnlinkedAccountRemovalError()
+        }
+        // MDK's copy is gone; drop what the app keeps for the same profile.
+        conversationDraftStore.removeDrafts(accountRef: ref)
+        await conversationDraftStore.flush()
+        MessageHideStore.clearAll(accountRef: ref)
+        if let accountIdHex = account?.accountIdHex {
+            ChatMuteStore.clearAll(accountIdHex: accountIdHex)
+            profileStore.clearContactNicknames(ownerAccountIdHex: accountIdHex)
+            profileStore.clearForAccountRemoval(accountIdHex: accountIdHex)
+        }
         try? await refreshAccounts(refreshUnreadSummaries: false)
-        guard outcome.localCleanup.completed else { throw UnlinkedAccountRemovalError() }
     }
 
     @MainActor
     func leaveUnlinkedAccount(accountIdHex: String) async {
         try? await refreshAccounts()
-        guard let active = activeAccount, active.accountIdHex == accountIdHex, active.signedOut else { return }
+        // MDK reported the unlink, so leave even when the refresh failed and
+        // the list still shows the profile signed in.
+        guard let active = activeAccount, active.accountIdHex == accountIdHex else { return }
         activeAccountRef = nil
         _ = stopNotificationSubscription()
-        phase = accounts.contains(where: { !$0.signedOut }) ? .ready : .onboarding
+        phase = accounts.contains(where: { !$0.signedOut && $0.accountIdHex != accountIdHex }) ? .ready : .onboarding
     }
 
     @MainActor

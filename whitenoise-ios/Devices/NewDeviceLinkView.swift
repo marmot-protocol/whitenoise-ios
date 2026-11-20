@@ -89,7 +89,7 @@ struct NewDeviceLinkView: View {
             DeviceLinkStatusHeader(
                 systemImage: "hourglass",
                 title: L10n.string("Waiting for Your Other Device"),
-                message: L10n.string("Open White Noise on a device that’s already signed in to this profile. It needs to be online, with device linking on. The request appears there and expires after 10 minutes."),
+                message: L10n.string("Open White Noise on a device that’s already signed in to this profile. It needs to be online. The request appears there and expires after 10 minutes."),
                 showsProgress: true
             )
         case .comparing(let code):
@@ -250,7 +250,8 @@ private struct NameThisDeviceField: View {
             defer { saving = false }
             do {
                 try await appState.deviceLinks.rename(slotIdHex: device.slotIdHex, label: label, using: appState)
-                saved = true
+                // Only the name that was sent is saved; a newer edit still needs Save.
+                saved = DeviceLabelInput.validated(draft ?? Self.initialName(device.label)) == label
             } catch {
                 errorMessage = UserFacingError.message(for: error)
             }

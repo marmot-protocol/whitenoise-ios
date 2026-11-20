@@ -329,8 +329,10 @@ final class TimelineStore {
         let agentStatus: String?
         let agentOperation: String?
         let agentOperationName: String?
+        let invalidated: Bool
 
         init(_ record: AppMessageRecordFfi) {
+            invalidated = record.invalidated
             messageIdHex = record.messageIdHex
             direction = record.direction
             sender = record.sender
@@ -988,9 +990,14 @@ final class TimelineStore {
         var projectionChanged = false
         let appRecord = ConversationViewModel.appMessageRecord(from: record)
         if !record.messageIdHex.isEmpty {
-            historyImportOrigins[record.messageIdHex] = HistoryImportOrigin(
-                importedFrom: record.importedFrom, provenance: record.historyImportProvenance
-            )
+            let origin = HistoryImportOrigin(importedFrom: record.importedFrom, provenance: record.historyImportProvenance)
+            let previous = historyImportOrigins[record.messageIdHex]
+            historyImportOrigins[record.messageIdHex] = origin
+            // A row already shown can change origin without changing its
+            // signature, so move the divider here rather than on the next rebuild.
+            if previous != origin, timelineIndexByMessageId[record.messageIdHex] != nil {
+                historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: timeline, origins: historyImportOrigins)
+            }
         }
         guard !appRecord.messageIdHex.isEmpty else { return false }
         if record.hasReports { reportedMessageIDs.insert(record.messageIdHex) }
@@ -1110,6 +1117,7 @@ final class TimelineStore {
     @discardableResult
     func removeTimelineRecord(messageIdHex: String, updateTimeline: Bool = true) -> Bool {
         reportedMessageIDs.remove(messageIdHex)
+        historyImportOrigins[messageIdHex] = nil
         let existed = messageById[messageIdHex] != nil
         let affectedEditTargets = editProjections.removeRecord(messageIdHex: messageIdHex)
         messageById[messageIdHex] = nil

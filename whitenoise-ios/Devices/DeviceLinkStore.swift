@@ -49,6 +49,7 @@ final class DeviceLinkStore {
     private(set) var chatsClosedToLinkedDevices: UInt32 = 0
     private(set) var leftoverChats: UInt32 = 0
     private(set) var signIns: [UnrecognizedSignInFfi] = []
+    private(set) var signInsLoadError: String?
     private(set) var compromiseWarning: [CompromiseWarningItemFfi] = []
     private(set) var startedFresh = false
     private(set) var keyPackageRefreshOverdue = false
@@ -62,7 +63,9 @@ final class DeviceLinkStore {
 
     /// The device sheet MainView presents.
     private(set) var sheet: Sheet?
-    var unlinkedNotice: UnlinkedNotice?
+    private(set) var unlinkedNotice: UnlinkedNotice?
+    /// Further unlinked profiles, raised one at a time after the visible notice.
+    private var queuedUnlinkedAccountIDs: [String] = []
     /// Unlinked profiles already raised in this launch.
     private var remindedUnlinkedAccountIDs: Set<String> = []
     /// The account that finished setup on this device in this launch, which
@@ -152,6 +155,12 @@ final class DeviceLinkStore {
         dismissedOtherProfilePromptIDs.insert(request.promptID)
         promptAfterSwitch = request
         await appState.activateAccount(request.accountRef)
+        guard appState.activeAccount?.accountIdHex == request.accountIdHex else {
+            // The switch didn't happen; keep offering the request.
+            if promptAfterSwitch == request { promptAfterSwitch = nil }
+            dismissedOtherProfilePromptIDs.remove(request.promptID)
+            return
+        }
         await refresh(using: appState)
     }
 
@@ -198,8 +207,11 @@ final class DeviceLinkStore {
 
     /// The user closed the sheet. A request put away this way stays listed on
     /// the Devices screen and the Chats banner but no longer presents itself.
-    func sheetDismissed() {
-        if let presentedPromptID { dismissedPromptIDs.insert(presentedPromptID) }
+    /// `promptID` names the request whose sheet is closing, when answering it
+    /// may already have presented the next one, which then stays up.
+    func sheetDismissed(promptID: String? = nil) {
+        if let closing = promptID ?? presentedPromptID { dismissedPromptIDs.insert(closing) }
+        guard promptID == nil || presentedPromptID == promptID else { return }
         sheet = nil
     }
 
@@ -231,6 +243,7 @@ final class DeviceLinkStore {
     /// Reads link requests for the other signed-in profiles; it never answers one.
     private func refreshOtherProfiles(only accountIdHex: String? = nil, using appState: AppState) async {
         guard isAvailable, let client = try? appState.currentMarmotClient() else { return }
+        let scope = self.scope
         let others = appState.accounts.filter {
             !$0.signedOut && $0.accountIdHex != scope?.accountIdHex
                 && (accountIdHex == nil || $0.accountIdHex == accountIdHex)
@@ -240,6 +253,8 @@ final class DeviceLinkStore {
         }
         for account in others {
             guard let snapshot = try? await client.marmot.deviceLinkSnapshot(accountRef: account.label) else { continue }
+            // A switch or a new runtime started a newer read.
+            guard self.scope == scope, matches(appState) else { return }
             otherProfilePrompts[account.accountIdHex] = snapshot.prompts
         }
     }
@@ -258,7 +273,7 @@ final class DeviceLinkStore {
         case .chatHistoryImportsChanged(let id, _): (part, accountID) = (.historyImports, id)
         case .deviceUnlinked(let id, _):
             remindedUnlinkedAccountIDs.insert(id)
-            unlinkedNotice = UnlinkedNotice(accountIdHex: id)
+            raiseUnlinkedNotice(id)
             if id == scope?.accountIdHex { clear() }
             // The alert's Remove or Later routes away from it.
             Task { try? await appState.refreshAccounts() }
@@ -329,6 +344,7 @@ final class DeviceLinkStore {
                 let next = try await marmot.unrecognizedSignIns(accountRef: account)
                 guard current() else { return }
                 signIns = next
+                signInsLoadError = nil
             case .compromise:
                 let next = try await marmot.compromiseWarning(accountRef: account)
                 guard current() else { return }
@@ -348,6 +364,8 @@ final class DeviceLinkStore {
                 isAvailable = false
             } else if part == .devices {
                 devicesLoadError = UserFacingError.message(for: error)
+            } else if part == .signIns {
+                signInsLoadError = UserFacingError.message(for: error)
             }
         }
     }
@@ -369,13 +387,16 @@ final class DeviceLinkStore {
             dismissedPromptIDs = []
             startsLinkOnPresent = false
             pendingOwnLabel = nil
+            // A new runtime for the same account keeps the roster until it's
+            // read again, so an open device doesn't look removed.
+            devices = []
         }
         snapshot = nil
-        devices = []
         devicesLoadError = nil
         chatsClosedToLinkedDevices = 0
         leftoverChats = 0
         signIns = []
+        signInsLoadError = nil
         compromiseWarning = []
         startedFresh = false
         keyPackageRefreshOverdue = false
@@ -417,11 +438,14 @@ final class DeviceLinkStore {
     /// names this device's published KeyPackage; if there is none it publishes
     /// one first, since the user asked to link.
     func startLink(using appState: AppState) async throws {
+        let scope = self.scope
         do {
             try await mutateSnapshot(using: appState) { marmot, account in
                 try await marmot.startDeviceLink(accountRef: account)
             }
         } catch where DeviceGroupRefusal(error: error)?.reason == "key_package_not_published" {
+            // Never publish a KeyPackage for a profile the user switched to meanwhile.
+            guard self.scope == scope else { throw error }
             try await mutateSnapshot(using: appState) { marmot, account in
                 _ = try await marmot.rotateKeyPackage(accountRef: account)
                 return try await marmot.startDeviceLink(accountRef: account)
@@ -447,12 +471,18 @@ final class DeviceLinkStore {
         promptID: String, label: String, addToAllChats: Bool, bringHistory: Bool,
         thisDeviceLabel: String? = nil, using appState: AppState
     ) async throws {
+        let previousOwnLabel = pendingOwnLabel
         if let thisDeviceLabel { pendingOwnLabel = thisDeviceLabel }
-        try await mutateSnapshot(using: appState) { marmot, account in
-            try await marmot.linkDevice(
-                accountRef: account, promptId: promptID, label: label,
-                addToAllChats: addToAllChats, bringHistory: bringHistory
-            )
+        do {
+            try await mutateSnapshot(using: appState) { marmot, account in
+                try await marmot.linkDevice(
+                    accountRef: account, promptId: promptID, label: label,
+                    addToAllChats: addToAllChats, bringHistory: bringHistory
+                )
+            }
+        } catch {
+            if pendingOwnLabel == thisDeviceLabel { pendingOwnLabel = previousOwnLabel }
+            throw error
         }
     }
 
@@ -464,17 +494,20 @@ final class DeviceLinkStore {
             pendingOwnLabel = nil
             return
         }
+        let scope = self.scope
         applyingOwnLabel = true
         defer { applyingOwnLabel = false }
+        // Only the name this call applied, for this profile, is finished.
+        func finish() { if self.scope == scope, pendingOwnLabel == label { pendingOwnLabel = nil } }
         do {
             try await mutate(using: appState) { marmot, account in
                 try await marmot.renameLinkedDevice(accountRef: account, slotIdHex: me.slotIdHex, label: label)
             }
-            pendingOwnLabel = nil
+            finish()
         } catch where DeviceGroupRefusal(error: error)?.reason == "device_group_busy" {
             // Tried again on the next roster change.
         } catch {
-            pendingOwnLabel = nil
+            finish()
         }
     }
 
@@ -532,6 +565,7 @@ final class DeviceLinkStore {
         }
         guard self.scope == scope else { return }
         signIns = next
+        signInsLoadError = nil
     }
 
     func startFresh(using appState: AppState) async throws {
@@ -564,18 +598,46 @@ final class DeviceLinkStore {
             accounts: accounts, reminded: remindedUnlinkedAccountIDs, showing: unlinkedNotice?.accountIdHex
         ) else { return }
         remindedUnlinkedAccountIDs.insert(id)
-        unlinkedNotice = UnlinkedNotice(accountIdHex: id)
+        raiseUnlinkedNotice(id)
+    }
+
+    private func raiseUnlinkedNotice(_ accountIdHex: String) {
+        guard let showing = unlinkedNotice else {
+            unlinkedNotice = UnlinkedNotice(accountIdHex: accountIdHex)
+            return
+        }
+        guard showing.accountIdHex != accountIdHex, !queuedUnlinkedAccountIDs.contains(accountIdHex) else { return }
+        queuedUnlinkedAccountIDs.append(accountIdHex)
+    }
+
+    /// The user answered the unlinked notice; raise the next one, if any.
+    func unlinkedNoticeDismissed() {
+        unlinkedNotice = nil
+        guard !queuedUnlinkedAccountIDs.isEmpty else { return }
+        // Raised after the closing alert's update, so SwiftUI presents it anew.
+        Task { @MainActor in
+            guard self.unlinkedNotice == nil, !self.queuedUnlinkedAccountIDs.isEmpty else { return }
+            self.unlinkedNotice = UnlinkedNotice(accountIdHex: self.queuedUnlinkedAccountIDs.removeFirst())
+        }
     }
 
     /// Discards this device's stalled device-group copy and publishes a fresh
     /// KeyPackage, ready for a new compared-code link. Keeps chats and keys.
     func resetForRepair(using appState: AppState) async throws {
         try await mutateSnapshot(using: appState) { marmot, account in
-            let snapshot = try await marmot.resetDeviceGroupForRepair(accountRef: account)
-            _ = try await marmot.rotateKeyPackage(accountRef: account)
-            return snapshot
+            try await marmot.resetDeviceGroupForRepair(accountRef: account)
+        }
+        // The reset stands even if publishing the KeyPackage fails; show it, then report.
+        var rotationError: Error?
+        do {
+            try await mutate(using: appState) { marmot, account in
+                _ = try await marmot.rotateKeyPackage(accountRef: account)
+            }
+        } catch {
+            rotationError = error
         }
         await refresh(.devices, using: appState)
+        if let rotationError { throw rotationError }
     }
 }
 

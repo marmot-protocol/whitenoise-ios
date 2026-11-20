@@ -107,6 +107,13 @@ struct MessagePreviewBodyTests {
         #expect(MessagePreview.body(preview) == MessagePreview.unsupportedEventLabel)
     }
 
+    @Test func aChatListPreviewOfAnUnsupportedEventShowsTheLabel() {
+        let preview = chatListPreview(messageIdHex: hex("cc"), plaintext: "opaque-payload-should-not-render", kind: 9999)
+        #expect(MessagePreview.body(preview) == MessagePreview.unsupportedEventLabel)
+        #expect(MessagePreview.body(chatListPreview(messageIdHex: hex("cd"), kind: 9999, deleted: true))
+            != MessagePreview.unsupportedEventLabel)
+    }
+
     /// A known kind with malformed tags is still dropped, not shown as a card.
     @Test func aMalformedKnownKindIsNotAnUnsupportedEvent() {
         let reaction = previewRecord(kind: MessageSemantics.kindReaction, plaintext: "+", tags: [])

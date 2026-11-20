@@ -272,7 +272,7 @@ extension DeviceLinkPresentationTests {
 // MARK: Moving this device
 
 extension DeviceLinkPresentationTests {
-    @Test func onlyRecognizedOldDevicesAreOfferedWithTheirNames() {
+    @Test func onlyRecognizedOldDevicesAreOfferedWithTheirNames() throws {
         let move = DeviceGroupMoveViewFfi(
             moveId: "move",
             state: .made,
@@ -284,7 +284,7 @@ extension DeviceLinkPresentationTests {
             overriddenRejectionSlots: []
         )
         let offered = DeviceGroupMovePresentation.siblings(move)
-        #expect(offered.map(\.slotIdHex) == [hex("b1"), hex("b3")])
+        try #require(offered.map(\.slotIdHex) == [hex("b1"), hex("b3")])
         #expect(DeviceGroupMovePresentation.siblingMessage(offered[0]).contains("Work Mac"))
         #expect(DeviceGroupMovePresentation.siblingMessage(offered[1])
             .contains(LinkedDevicePresentation.name(label: "")))
@@ -313,5 +313,19 @@ extension DeviceLinkPresentationTests {
         #expect(UnlinkedProfileReminder.next(accounts: accounts, reminded: [], showing: hex("c2")) == nil)
         #expect(UnlinkedProfileReminder.next(accounts: accounts, reminded: [hex("c1"), hex("c2")], showing: nil) == nil)
         #expect(UnlinkedProfileReminder.next(accounts: [signedOut], reminded: [], showing: nil) == nil)
+    }
+
+    /// Two profiles unlinked before the user answers: neither notice is lost.
+    @MainActor @Test func unlinkedNoticesWaitTheirTurn() async throws {
+        let appState = AppState.test()
+        let store = appState.deviceLinks
+        for id in [hex("d1"), hex("d2"), hex("d1")] {
+            store.observe(.deviceUnlinked(accountIdHex: id, accountLabel: "profile"), using: appState)
+        }
+        #expect(store.unlinkedNotice?.accountIdHex == hex("d1"))
+        store.unlinkedNoticeDismissed()
+        try await eventually { store.unlinkedNotice?.accountIdHex == hex("d2") }
+        store.unlinkedNoticeDismissed()
+        #expect(store.unlinkedNotice == nil)
     }
 }

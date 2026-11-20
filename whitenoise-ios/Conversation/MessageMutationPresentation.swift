@@ -26,6 +26,7 @@ nonisolated enum MessageEditingPolicy {
     ) -> Bool {
         guard canSendMessages,
               !isDeleted,
+              !record.invalidated,
               !record.messageIdHex.isEmpty,
               MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountId)
         else { return false }

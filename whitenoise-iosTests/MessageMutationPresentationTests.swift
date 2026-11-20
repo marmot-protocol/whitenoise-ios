@@ -30,6 +30,10 @@ struct MessageMutationPolicyTests {
             tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, hex("22")])]
         )
         #expect(!MessageEditingPolicy.canEdit(editEvent, isDeleted: false, canSendMessages: true, myAccountId: nil))
+        // MDK invalidated it: there is nothing valid left to edit.
+        var invalidated = own
+        invalidated.invalidated = true
+        #expect(!MessageEditingPolicy.canEdit(invalidated, isDeleted: false, canSendMessages: true, myAccountId: nil))
         #expect(MessageEditingPolicy.normalizedContent("  replacement  ") == "replacement")
         #expect(MessageEditingPolicy.normalizedContent(" \n ") == nil)
     }

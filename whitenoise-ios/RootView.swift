@@ -82,7 +82,7 @@ struct RootView: View {
             "Device Unlinked",
             isPresented: Binding(
                 get: { appState.deviceLinks.unlinkedNotice != nil },
-                set: { if !$0 { appState.deviceLinks.unlinkedNotice = nil } }
+                set: { if !$0 { appState.deviceLinks.unlinkedNoticeDismissed() } }
             ),
             presenting: appState.deviceLinks.unlinkedNotice
         ) { notice in

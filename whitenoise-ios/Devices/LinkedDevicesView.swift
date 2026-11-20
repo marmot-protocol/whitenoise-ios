@@ -80,7 +80,7 @@ struct LinkedDevicesView: View {
             case .startFresh:
                 Text("Your earlier sign-ins won’t be asked about again, and only chats you’re invited to from now on appear here. You can still link this device to one of them later.")
             case .reset:
-                Text("This device forgets its list of your other devices so it can be linked again. Your chats, messages and keys stay on this device. Nothing is sent to your other devices.")
+                Text("This device forgets its list of your other devices and publishes a new messaging key so it can be linked again. Your chats, messages and private key stay on this device.")
             }
         }
     }
@@ -114,7 +114,7 @@ struct LinkedDevicesView: View {
             Button("Dismiss") {
                 run("compromise") { try await store.dismissCompromiseWarning(using: appState) }
             }
-            .disabled(busyKey == "compromise")
+            .disabled(busyKey != nil)
         }
     }
 
@@ -130,7 +130,7 @@ struct LinkedDevicesView: View {
             }
             .padding(.vertical, 4)
             Button("Reset and Link Again") { confirmation = .reset }
-                .disabled(busyKey == "reset")
+                .disabled(busyKey != nil)
         }
     }
 
@@ -313,7 +313,7 @@ struct LinkedDevicesView: View {
                             }
                         }
                         .buttonStyle(.borderless)
-                        .disabled(busyKey == key)
+                        .disabled(busyKey != nil)
                     }
                 }
             }
@@ -322,7 +322,10 @@ struct LinkedDevicesView: View {
 
     private var signInsSection: some View {
         Section {
-            if store.signIns.isEmpty {
+            if let error = store.signInsLoadError, store.signIns.isEmpty {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+            } else if store.signIns.isEmpty {
                 Text("No sign-ins to review.")
                     .foregroundStyle(.secondary)
             }
@@ -333,7 +336,7 @@ struct LinkedDevicesView: View {
                 signIns: store.signIns, hasDeviceGroup: store.hasDeviceGroup, startedFresh: store.startedFresh
             ) {
                 Button("No, Start Fresh") { confirmation = .startFresh }
-                    .disabled(busyKey == "startFresh")
+                    .disabled(busyKey != nil)
             }
             Button {
                 run("check") { try await store.checkSignIns(using: appState) }
@@ -346,7 +349,7 @@ struct LinkedDevicesView: View {
                     }
                 }
             }
-            .disabled(busyKey == "check")
+            .disabled(busyKey != nil)
         } header: {
             Text("Sign-Ins to Review")
         } footer: {
@@ -356,15 +359,20 @@ struct LinkedDevicesView: View {
 
     private func signInRow(_ signIn: UnrecognizedSignInFfi) -> some View {
         HStack(alignment: .top) {
-            // MDK links only from the new device's side, so a tap explains how and waits for its request.
-            Button {
-                if !UnrecognizedSignInPresentation.answeredElsewhere(signIn) { store.present(.addDevice) }
-            } label: {
+            if UnrecognizedSignInPresentation.answeredElsewhere(signIn) {
                 signInSummary(signIn)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(.rect)
+            } else {
+                // MDK links only from the new device's side, so a tap explains how and waits for its request.
+                Button {
+                    store.present(.addDevice)
+                } label: {
+                    signInSummary(signIn)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             Menu {
                 if UnrecognizedSignInPresentation.answeredElsewhere(signIn) {
                     Button("Dismiss") { answer(signIn, .dismiss) }
@@ -381,7 +389,7 @@ struct LinkedDevicesView: View {
                     .frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel(Text("Actions"))
-            .disabled(busyKey == "signIn:\(signIn.slotIdHex)")
+            .disabled(busyKey != nil)
         }
     }
 

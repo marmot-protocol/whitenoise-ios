@@ -949,23 +949,25 @@ Developer Tools setting.
       no device reads "Unnamed device" on either side. Device Linked on the new
       device offers Name This iPhone; Save renames it on every device.
 - [ ] History: with Bring Chat History on, a chat still receiving shows
-      "Bringing earlier messages…" in the conversation; afterwards a divider
+      "Bringing earlier messages from your other device…" in the conversation; afterwards a divider
       reads "Messages above came from <device>" where live messages begin, and
       follows that device's rename.
 - [ ] Sign Out & Wipe on a linked device: the warning says the other devices
-      keep the chats; progress mentions about 30 seconds. With the other device
+      keep the chats they're in; progress mentions about 30 seconds. With the other device
       offline, the report says they couldn't be reached.
 - [ ] Mismatch: tap They Don't Match on either side. Neither links; A's alert
       points to sign-ins, B explains the risk. Not Now on A ends B's attempt.
-- [ ] Put a request away on A by swiping the sheet down (only after it moves past
-      the emoji) or with Close on an outcome; the Chats banner and Devices →
+- [ ] Put a request away on A by swiping the sheet down or with Close on an
+      outcome; the Chats banner and Devices →
       Link Requests reopen a request still waiting.
 - [ ] Background B mid-link and return: the sheet stays and shows how MDK resumed
       (usually Not Linked with Try Again).
-- [ ] Sign-ins: B's earlier sign-in appears on A under Sign-Ins to Review. Not
-      Now, This Wasn't Me (confirm; a compromise warning appears on both
-      devices' Chats and Devices) and Dismiss behave as labelled. On a fresh,
-      unlinked device, No, Start Fresh hides the link suggestion.
+- [ ] Sign-ins: sign in on A, then on B before linking. B's new sign-in appears
+      on A under Sign-Ins to Review. Not Now and This Wasn't Me (confirm; a
+      compromise warning appears on both devices' Chats and Devices) behave as
+      labelled. A sign-in linked or rejected on another device shows plain text
+      with only Dismiss. On a fresh, unlinked device, No, Start Fresh hides the
+      link suggestion.
 - [ ] Chat details on an older chat: an admin sees "Linked Devices Are Ready"
       only when MDK reports every member eligible; Turn On asks first, then the
       nudge disappears. Non-admins, and chats not yet eligible, show nothing.

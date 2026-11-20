@@ -44,12 +44,12 @@ struct DeviceLinkApprovalView: View {
                         Button("Not Now") {
                             run {
                                 try await store.decline(promptID: promptID, using: appState)
-                                store.sheetDismissed()
+                                store.sheetDismissed(promptID: promptID)
                             }
                         }
                         .disabled(busy)
                     } else {
-                        Button("Close") { store.sheetDismissed() }
+                        Button("Close") { store.sheetDismissed(promptID: promptID) }
                     }
                 }
             }
@@ -58,15 +58,13 @@ struct DeviceLinkApprovalView: View {
                     Task {
                         // The request may already have ended; either way it isn't linked.
                         try? await store.decline(promptID: promptID, using: appState)
-                        store.sheetDismissed()
+                        store.sheetDismissed(promptID: promptID)
                     }
                 }
             } message: {
                 Text("If you didn’t try to link a device, someone else may have your private key. Review sign-ins in Settings → Devices.")
             }
         }
-        // Keep the user's decision explicit while the code is up.
-        .interactiveDismissDisabled(prompt.map { DeviceLinkPromptPresentation.canDecline($0.state) } ?? false)
     }
 
     @ViewBuilder
@@ -224,7 +222,7 @@ struct DeviceLinkApprovalView: View {
         }
         if let doneTitle {
             Section {
-                WNButton(title: doneTitle, emphasis: .secondary, size: .standard) { store.sheetDismissed() }
+                WNButton(title: doneTitle, emphasis: .secondary, size: .standard) { store.sheetDismissed(promptID: promptID) }
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())

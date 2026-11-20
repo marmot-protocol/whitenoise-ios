@@ -348,15 +348,15 @@ struct ChatsListView: View {
                             && appState.deviceLinks.sheet == nil && chatsVisible
                             && !showDiagnosticsPrompt && !secondarySheetVisible
                     },
-                    set: { presented in
-                        guard !presented, let request = appState.deviceLinks.otherProfileRequest(using: appState) else { return }
-                        appState.deviceLinks.dismissOtherProfileRequest(request)
-                    }
+                    // Each button puts away its own request; deriving one here
+                    // could put away the next request instead.
+                    set: { _ in }
                 ),
                 presenting: appState.deviceLinks.otherProfileRequest(using: appState)
             ) { request in
                 Button("Not Now", role: .cancel) { appState.deviceLinks.dismissOtherProfileRequest(request) }
                 Button("Review") {
+                    appState.deviceLinks.dismissOtherProfileRequest(request)
                     Task { await appState.deviceLinks.reviewOtherProfileRequest(request, using: appState) }
                 }
             } message: { request in
@@ -492,6 +492,7 @@ struct ChatsListView: View {
         showNewChat = false
         showAddProfile = false
         showSettings = false
+        showDevices = false
         exitSearch()
         scope = .active
         path = []

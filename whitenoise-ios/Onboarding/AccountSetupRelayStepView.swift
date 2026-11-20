@@ -16,6 +16,8 @@ struct AccountSetupRelayStepView: View {
     @State private var operationPrimary: PrimaryAction?
     @State private var confirmsDiscard = false
     @State private var discardAction: Action = .discard
+    /// The proposal Save Anyway was asked about; a different one needs its own review.
+    @State private var confirmedProposalKey: String?
 
     private enum Editor: String, Identifiable {
         case relays, discovery
@@ -145,7 +147,10 @@ struct AccountSetupRelayStepView: View {
             case .edit: Button(editTitle) { perform(.edit) }
             case .replaceWithDefaults:
                 Button("Replace With Default Relays", role: .destructive) { perform(.replaceWithDefaults) }
-            case .approve: Button("Save Anyway", role: .destructive) { perform(.approve) }
+            case .approve:
+                Button("Save Anyway", role: .destructive) {
+                    if confirmedProposalKey == proposalKey { perform(.approve) }
+                }
             default: Button("Discard Changes", role: .destructive) { perform(.discard) }
             }
             Button("Cancel", role: .cancel) {}
@@ -161,6 +166,10 @@ struct AccountSetupRelayStepView: View {
             }
         }
         .onChange(of: model.snapshot) { updatePresentation() }
+        .onChange(of: proposalKey) {
+            // A replaced proposal closes the warning rather than carrying it over.
+            if discardAction == .approve, confirmsDiscard, confirmedProposalKey != proposalKey { confirmsDiscard = false }
+        }
         .onChange(of: model.isBusy) { updatePresentation() }
     }
 
@@ -322,10 +331,15 @@ struct AccountSetupRelayStepView: View {
     private func request(_ action: Action) {
         if recovery.needsConfirmation(action) {
             discardAction = action
+            confirmedProposalKey = proposalKey
             confirmsDiscard = true
         } else {
             perform(action)
         }
+    }
+
+    private var proposalKey: String? {
+        proposal.map { "\($0.revision):\(String(describing: presentation.snapshot.recoveryEpoch))" }
     }
 
     private func allows(_ action: OnboardingActionFfi) -> Bool { step?.actions.contains(action) == true }

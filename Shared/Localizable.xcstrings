@@ -174823,68 +174823,68 @@
         }
       }
     },
-    "This device forgets its list of your other devices so it can be linked again. Your chats, messages and keys stay on this device. Nothing is sent to your other devices." : {
+    "This device forgets its list of your other devices and publishes a new messaging key so it can be linked again. Your chats, messages and private key stay on this device." : {
       "comment" : "Confirmation message explaining what resetting this device's links does.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dieses Gerät vergisst seine Liste deiner anderen Geräte, damit es erneut verknüpft werden kann. Deine Chats, Nachrichten und Schlüssel bleiben auf diesem Gerät. An deine anderen Geräte wird nichts gesendet."
+            "value" : "Dieses Gerät vergisst seine Liste deiner anderen Geräte und veröffentlicht einen neuen Nachrichtenschlüssel, damit es erneut verknüpft werden kann. Deine Chats, Nachrichten und dein privater Schlüssel bleiben auf diesem Gerät."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Este dispositivo olvida su lista de tus otros dispositivos para poder vincularse de nuevo. Tus chats, mensajes y claves se quedan en este dispositivo. No se envía nada a tus otros dispositivos."
+            "value" : "Este dispositivo olvida su lista de tus otros dispositivos y publica una nueva clave de mensajería para poder vincularse de nuevo. Tus chats, mensajes y clave privada se quedan en este dispositivo."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämä laite unohtaa luettelonsa muista laitteistasi, jotta sen voi yhdistää uudelleen. Keskustelusi, viestisi ja avaimesi säilyvät tällä laitteella. Muille laitteillesi ei lähetetä mitään."
+            "value" : "Tämä laite unohtaa luettelonsa muista laitteistasi ja julkaisee uuden viestiavaimen, jotta sen voi yhdistää uudelleen. Keskustelusi, viestisi ja yksityinen avaimesi säilyvät tällä laitteella."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cet appareil oublie sa liste de vos autres appareils afin de pouvoir être associé à nouveau. Vos discussions, messages et clés restent sur cet appareil. Rien n’est envoyé à vos autres appareils."
+            "value" : "Cet appareil oublie sa liste de vos autres appareils et publie une nouvelle clé de messagerie afin de pouvoir être associé à nouveau. Vos discussions, messages et votre clé privée restent sur cet appareil."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Questo dispositivo dimentica l’elenco dei tuoi altri dispositivi per poter essere collegato di nuovo. Chat, messaggi e chiavi restano su questo dispositivo. Non viene inviato nulla agli altri tuoi dispositivi."
+            "value" : "Questo dispositivo dimentica l’elenco dei tuoi altri dispositivi e pubblica una nuova chiave di messaggistica per poter essere collegato di nuovo. Chat, messaggi e chiave privata restano su questo dispositivo."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Este dispositivo esquece a lista dos seus outros dispositivos para poder ser vinculado novamente. Suas conversas, mensagens e chaves continuam neste dispositivo. Nada é enviado aos seus outros dispositivos."
+            "value" : "Este dispositivo esquece a lista dos seus outros dispositivos e publica uma nova chave de mensagens para poder ser vinculado novamente. Suas conversas, mensagens e chave privada continuam neste dispositivo."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Это устройство забудет список других ваших устройств, чтобы его можно было привязать снова. Ваши чаты, сообщения и ключи останутся на этом устройстве. На другие ваши устройства ничего не отправляется."
+            "value" : "Это устройство забудет список других ваших устройств и опубликует новый ключ для сообщений, чтобы его можно было привязать снова. Ваши чаты, сообщения и закрытый ключ останутся на этом устройстве."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu cihaz, yeniden bağlanabilmesi için diğer cihazlarınızın listesini unutur. Sohbetleriniz, mesajlarınız ve anahtarlarınız bu cihazda kalır. Diğer cihazlarınıza hiçbir şey gönderilmez."
+            "value" : "Bu cihaz, yeniden bağlanabilmesi için diğer cihazlarınızın listesini unutur ve yeni bir mesajlaşma anahtarı yayımlar. Sohbetleriniz, mesajlarınız ve özel anahtarınız bu cihazda kalır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此设备会忘记你其他设备的列表，以便可以重新关联。你的聊天、消息和密钥仍保留在此设备上。不会向你的其他设备发送任何内容。"
+            "value" : "此设备会忘记你其他设备的列表，并发布新的消息密钥，以便可以重新关联。你的聊天、消息和私钥仍保留在此设备上。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此裝置會忘記你其他裝置的列表，以便可以重新連結。你的聊天、訊息和金鑰仍保留在此裝置上。不會向你的其他裝置傳送任何內容。"
+            "value" : "此裝置會忘記你其他裝置的列表，並發布新的訊息金鑰，以便可以重新連結。你的聊天、訊息和私鑰仍保留在此裝置上。"
           }
         }
       }
@@ -184063,68 +184063,68 @@
         }
       }
     },
-    "It’s removed from your devices and from every chat it can be removed from, and it stops getting your messages. To use it again, sign in on it and link it anew." : {
+    "It’s removed from your devices and from every chat it can be removed from, and stops getting messages in those chats. A chat admin can remove it from any chat that still includes it. To use it again, sign in on it and link it anew." : {
       "comment" : "Confirmation message explaining what removing a linked device does.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Es wird aus deinen Geräten und aus allen Chats entfernt, aus denen es entfernt werden kann, und empfängt deine Nachrichten nicht mehr. Um es wieder zu verwenden, melde dich darauf an und verknüpfe es neu."
+            "value" : "Es wird aus deinen Geräten und aus allen Chats entfernt, aus denen es entfernt werden kann, und empfängt in diesen Chats keine Nachrichten mehr. Aus Chats, die es noch enthalten, kann es ein Chat-Admin entfernen. Um es wieder zu verwenden, melde dich darauf an und verknüpfe es neu."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se eliminará de tus dispositivos y de todos los chats de los que se pueda quitar, y dejará de recibir tus mensajes. Para volver a usarlo, inicia sesión en él y vincúlalo de nuevo."
+            "value" : "Se eliminará de tus dispositivos y de todos los chats de los que se pueda quitar, y dejará de recibir mensajes en esos chats. Un administrador del chat puede quitarlo de cualquier chat que todavía lo incluya. Para volver a usarlo, inicia sesión en él y vincúlalo de nuevo."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se poistetaan laitteistasi ja kaikista keskusteluista, joista sen voi poistaa, eikä se enää saa viestejäsi. Jos haluat käyttää sitä uudelleen, kirjaudu sillä sisään ja yhdistä se uudelleen."
+            "value" : "Se poistetaan laitteistasi ja kaikista keskusteluista, joista sen voi poistaa, eikä se enää saa viestejä niissä keskusteluissa. Keskustelun ylläpitäjä voi poistaa sen keskusteluista, joissa se vielä on. Jos haluat käyttää sitä uudelleen, kirjaudu sillä sisään ja yhdistä se uudelleen."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il est retiré de vos appareils et de toutes les discussions dont il peut être retiré, et ne reçoit plus vos messages. Pour l’utiliser à nouveau, connectez-vous dessus et associez-le de nouveau."
+            "value" : "Il est retiré de vos appareils et de toutes les discussions dont il peut être retiré, et ne reçoit plus de messages dans ces discussions. Un administrateur peut le retirer de toute discussion qui l’inclut encore. Pour l’utiliser à nouveau, connectez-vous dessus et associez-le de nouveau."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Viene rimosso dai tuoi dispositivi e da tutte le chat da cui può essere rimosso, e smette di ricevere i tuoi messaggi. Per usarlo di nuovo, accedi su di esso e collegalo di nuovo."
+            "value" : "Viene rimosso dai tuoi dispositivi e da tutte le chat da cui può essere rimosso, e smette di ricevere messaggi in quelle chat. Un amministratore della chat può rimuoverlo da ogni chat che lo include ancora. Per usarlo di nuovo, accedi su di esso e collegalo di nuovo."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ele é removido dos seus dispositivos e de todas as conversas das quais pode ser removido, e deixa de receber suas mensagens. Para usá-lo novamente, entre nele e vincule-o de novo."
+            "value" : "Ele é removido dos seus dispositivos e de todas as conversas das quais pode ser removido, e deixa de receber mensagens nessas conversas. Um administrador da conversa pode removê-lo de qualquer conversa que ainda o inclua. Para usá-lo novamente, entre nele e vincule-o de novo."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Оно будет удалено из ваших устройств и из всех чатов, из которых его можно удалить, и перестанет получать ваши сообщения. Чтобы снова им пользоваться, войдите на нём и привяжите его заново."
+            "value" : "Оно будет удалено из ваших устройств и из всех чатов, из которых его можно удалить, и перестанет получать сообщения в этих чатах. Из чатов, где оно ещё есть, его может удалить администратор чата. Чтобы снова им пользоваться, войдите на нём и привяжите его заново."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cihazlarınızdan ve kaldırılabildiği tüm sohbetlerden kaldırılır ve mesajlarınızı almayı bırakır. Yeniden kullanmak için cihazda oturum açın ve yeniden bağlayın."
+            "value" : "Cihazlarınızdan ve kaldırılabildiği tüm sohbetlerden kaldırılır ve bu sohbetlerde mesaj almayı bırakır. Hâlâ bulunduğu sohbetlerden bir sohbet yöneticisi kaldırabilir. Yeniden kullanmak için cihazda oturum açın ve yeniden bağlayın."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "它会从你的设备以及所有可移除它的聊天中移除，并且不再接收你的消息。要再次使用它，请在其上登录并重新关联。"
+            "value" : "它会从你的设备以及所有可移除它的聊天中移除，并且不再接收这些聊天中的消息。对于仍包含它的聊天，聊天管理员可以将其移除。要再次使用它，请在其上登录并重新关联。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "它會從你的裝置以及所有可移除它的聊天中移除，並且不再接收你的訊息。若要再次使用它，請在其上登入並重新連結。"
+            "value" : "它會從你的裝置以及所有可移除它的聊天中移除，並且不再接收這些聊天中的訊息。對於仍包含它的聊天，聊天管理員可以將其移除。若要再次使用它，請在其上登入並重新連結。"
           }
         }
       }
@@ -185845,68 +185845,68 @@
         }
       }
     },
-    "Check that both devices show the same emoji, then approve here." : {
+    "Check that both devices show the same emoji, confirm on the new device, then approve here." : {
       "comment" : "Add a New Device step 3.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Prüfe, dass beide Geräte dieselben Emojis zeigen, und bestätige dann hier."
+            "value" : "Prüfe, dass beide Geräte dieselben Emojis zeigen, bestätige auf dem neuen Gerät und dann hier."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Comprueba que ambos dispositivos muestran los mismos emojis y apruébalo aquí."
+            "value" : "Comprueba que ambos dispositivos muestran los mismos emojis, confírmalo en el nuevo dispositivo y apruébalo aquí."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tarkista, että molemmissa laitteissa näkyvät samat emojit, ja hyväksy sitten täällä."
+            "value" : "Tarkista, että molemmissa laitteissa näkyvät samat emojit, vahvista uudessa laitteessa ja hyväksy sitten täällä."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vérifiez que les deux appareils affichent les mêmes émojis, puis approuvez ici."
+            "value" : "Vérifiez que les deux appareils affichent les mêmes émojis, confirmez sur le nouvel appareil, puis approuvez ici."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Controlla che entrambi i dispositivi mostrino le stesse emoji, poi approva qui."
+            "value" : "Controlla che entrambi i dispositivi mostrino le stesse emoji, conferma sul nuovo dispositivo, poi approva qui."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Confira se os dois dispositivos mostram os mesmos emojis e aprove aqui."
+            "value" : "Confira se os dois dispositivos mostram os mesmos emojis, confirme no novo dispositivo e aprove aqui."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Убедитесь, что на обоих устройствах одинаковые эмодзи, и подтвердите здесь."
+            "value" : "Убедитесь, что на обоих устройствах одинаковые эмодзи, подтвердите на новом устройстве, а затем здесь."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İki cihazın da aynı emojileri gösterdiğini kontrol edin, ardından burada onaylayın."
+            "value" : "İki cihazın da aynı emojileri gösterdiğini kontrol edin, yeni cihazda onaylayın, ardından burada onaylayın."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "确认两台设备显示相同的表情符号，然后在这里批准。"
+            "value" : "确认两台设备显示相同的表情符号，在新设备上确认，然后在这里批准。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "確認兩台裝置顯示相同的表情符號，然後在這裡核准。"
+            "value" : "確認兩台裝置顯示相同的表情符號，在新裝置上確認，然後在這裡核准。"
           }
         }
       }
@@ -186769,68 +186769,68 @@
         }
       }
     },
-    "Open White Noise on a device that’s already signed in to this profile. It needs to be online, with device linking on. The request appears there and expires after 10 minutes." : {
+    "Open White Noise on a device that’s already signed in to this profile. It needs to be online. The request appears there and expires after 10 minutes." : {
       "comment" : "New-device waiting screen message.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Öffne White Noise auf einem Gerät, das bereits bei diesem Profil angemeldet ist. Es muss online sein und die Geräteverknüpfung aktiviert haben. Die Anfrage erscheint dort und läuft nach 10 Minuten ab."
+            "value" : "Öffne White Noise auf einem Gerät, das bereits bei diesem Profil angemeldet ist. Es muss online sein. Die Anfrage erscheint dort und läuft nach 10 Minuten ab."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Abre White Noise en un dispositivo que ya tenga la sesión iniciada en este perfil. Debe estar en línea y con la vinculación de dispositivos activada. La solicitud aparecerá allí y caduca a los 10 minutos."
+            "value" : "Abre White Noise en un dispositivo que ya tenga la sesión iniciada en este perfil. Debe estar en línea. La solicitud aparecerá allí y caduca a los 10 minutos."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Avaa White Noise laitteella, joka on jo kirjautunut tähän profiiliin. Sen on oltava verkossa ja laitteiden yhdistämisen käytössä. Pyyntö näkyy siellä ja vanhenee 10 minuutin kuluttua."
+            "value" : "Avaa White Noise laitteella, joka on jo kirjautunut tähän profiiliin. Sen on oltava verkossa. Pyyntö näkyy siellä ja vanhenee 10 minuutin kuluttua."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ouvrez White Noise sur un appareil déjà connecté à ce profil. Il doit être en ligne, avec l’association d’appareils activée. La demande y apparaît et expire après 10 minutes."
+            "value" : "Ouvrez White Noise sur un appareil déjà connecté à ce profil. Il doit être en ligne. La demande y apparaît et expire après 10 minutes."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apri White Noise su un dispositivo che ha già effettuato l’accesso a questo profilo. Deve essere online, con il collegamento dei dispositivi attivo. La richiesta apparirà lì e scade dopo 10 minuti."
+            "value" : "Apri White Noise su un dispositivo che ha già effettuato l’accesso a questo profilo. Deve essere online. La richiesta apparirà lì e scade dopo 10 minuti."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Abra o White Noise em um dispositivo que já esteja conectado a este perfil. Ele precisa estar online, com a vinculação de dispositivos ativada. A solicitação aparece lá e expira após 10 minutos."
+            "value" : "Abra o White Noise em um dispositivo que já esteja conectado a este perfil. Ele precisa estar online. A solicitação aparece lá e expira após 10 minutos."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Откройте White Noise на устройстве, где уже выполнен вход в этот профиль. Оно должно быть в сети, с включённой привязкой устройств. Запрос появится там и истечёт через 10 минут."
+            "value" : "Откройте White Noise на устройстве, где уже выполнен вход в этот профиль. Оно должно быть в сети. Запрос появится там и истечёт через 10 минут."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise’u bu profilde zaten oturum açmış bir cihazda açın. Cihazın çevrimiçi olması ve cihaz bağlamanın açık olması gerekir. İstek orada görünür ve 10 dakika sonra sona erer."
+            "value" : "White Noise’u bu profilde zaten oturum açmış bir cihazda açın. Cihazın çevrimiçi olması gerekir. İstek orada görünür ve 10 dakika sonra sona erer."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在已登录此个人资料的设备上打开 White Noise。该设备需要联网并开启设备关联。请求会显示在那里，10 分钟后过期。"
+            "value" : "在已登录此个人资料的设备上打开 White Noise。该设备需要联网。请求会显示在那里，10 分钟后过期。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在已登入此個人檔案的裝置上打開 White Noise。該裝置需要連網並開啟裝置連結。請求會顯示在那裡，10 分鐘後過期。"
+            "value" : "在已登入此個人檔案的裝置上打開 White Noise。該裝置需要連網。請求會顯示在那裡，10 分鐘後過期。"
           }
         }
       }
@@ -187759,68 +187759,68 @@
         }
       }
     },
-    "This profile’s chats, media, and secret key will be erased from this device. Your other devices keep your chats and will finish removing this one from them." : {
+    "This profile’s chats, media, and secret key will be erased from this device. Your other devices keep the chats they’re in and will finish removing this one from them. You’ll leave any other chats." : {
       "comment" : "Sign-out warning when the account has other linked devices that keep its chats.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Chats, Medien und der geheime Schlüssel dieses Profils werden von diesem Gerät gelöscht. Deine anderen Geräte behalten deine Chats und entfernen dieses Gerät daraus."
+            "value" : "Die Chats, Medien und der geheime Schlüssel dieses Profils werden von diesem Gerät gelöscht. Deine anderen Geräte behalten die Chats, in denen sie sind, und entfernen dieses Gerät daraus. Alle anderen Chats verlässt du."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los chats, archivos multimedia y la clave secreta de este perfil se borrarán de este dispositivo. Tus otros dispositivos conservan tus chats y terminarán de quitar este de ellos."
+            "value" : "Los chats, archivos multimedia y la clave secreta de este perfil se borrarán de este dispositivo. Tus otros dispositivos conservan los chats en los que están y terminarán de quitar este de ellos. Saldrás de los demás chats."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tämän profiilin keskustelut, media ja salainen avain poistetaan tästä laitteesta. Muut laitteesi säilyttävät keskustelusi ja viimeistelevät tämän laitteen poistamisen niistä."
+            "value" : "Tämän profiilin keskustelut, media ja salainen avain poistetaan tästä laitteesta. Muut laitteesi säilyttävät keskustelut, joissa ne ovat, ja viimeistelevät tämän laitteen poistamisen niistä. Poistut muista keskusteluista."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les discussions, médias et la clé secrète de ce profil seront effacés de cet appareil. Vos autres appareils conservent vos discussions et finiront d’en retirer celui-ci."
+            "value" : "Les discussions, médias et la clé secrète de ce profil seront effacés de cet appareil. Vos autres appareils conservent les discussions dont ils font partie et finiront d’en retirer celui-ci. Vous quitterez les autres discussions."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le chat, i contenuti multimediali e la chiave segreta di questo profilo verranno cancellati da questo dispositivo. Gli altri tuoi dispositivi conservano le chat e finiranno di rimuovere questo."
+            "value" : "Le chat, i contenuti multimediali e la chiave segreta di questo profilo verranno cancellati da questo dispositivo. Gli altri tuoi dispositivi conservano le chat di cui fanno parte e finiranno di rimuovere questo. Uscirai dalle altre chat."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "As conversas, mídias e a chave secreta deste perfil serão apagadas deste dispositivo. Seus outros dispositivos mantêm suas conversas e vão terminar de remover este delas."
+            "value" : "As conversas, mídias e a chave secreta deste perfil serão apagadas deste dispositivo. Seus outros dispositivos mantêm as conversas em que estão e vão terminar de remover este delas. Você sairá das demais conversas."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Чаты, медиафайлы и секретный ключ этого профиля будут удалены с этого устройства. Другие ваши устройства сохранят чаты и завершат удаление из них этого устройства."
+            "value" : "Чаты, медиафайлы и секретный ключ этого профиля будут удалены с этого устройства. Другие ваши устройства сохранят чаты, в которых они состоят, и завершат удаление из них этого устройства. Из остальных чатов вы выйдете."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu profilin sohbetleri, medyası ve gizli anahtarı bu cihazdan silinecek. Diğer cihazlarınız sohbetlerinizi korur ve bu cihazı onlardan kaldırmayı tamamlar."
+            "value" : "Bu profilin sohbetleri, medyası ve gizli anahtarı bu cihazdan silinecek. Diğer cihazlarınız içinde bulundukları sohbetleri korur ve bu cihazı onlardan kaldırmayı tamamlar. Diğer sohbetlerden ayrılırsınız."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此个人资料的聊天、媒体和密钥将从此设备中清除。你的其他设备会保留你的聊天，并完成将此设备从中移除。"
+            "value" : "此个人资料的聊天、媒体和密钥将从此设备中清除。你的其他设备会保留它们所在的聊天，并完成将此设备从中移除。你将退出其他聊天。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此個人檔案的聊天、媒體和密鑰將從此裝置中清除。你的其他裝置會保留你的聊天，並完成將此裝置從中移除。"
+            "value" : "此個人檔案的聊天、媒體和密鑰將從此裝置中清除。你的其他裝置會保留它們所在的聊天，並完成將此裝置從中移除。你將退出其他聊天。"
           }
         }
       }

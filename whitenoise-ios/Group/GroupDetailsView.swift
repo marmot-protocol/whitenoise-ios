@@ -64,6 +64,12 @@ struct GroupDetailsView: View {
         viewModel.canEditGroup && !viewModel.isGroupDisbandingOrDisbanded
     }
     private var isDirectMessage: Bool { viewModel.groupDisplay.isDirectMessage }
+    /// Membership changes can change which leaves advertise linked devices.
+    private var accountDevicesActivationKey: String {
+        "\(viewModel.group.groupIdHex)/\(appState.runtimeGeneration)/\(isAdmin)/"
+            + "\(viewModel.members.hashValue)/\(viewModel.groupMemberDetails.count)"
+    }
+
     private var memberCount: Int {
         viewModel.groupMemberDetails.isEmpty ? viewModel.members.count : viewModel.groupMemberDetails.count
     }
@@ -294,7 +300,7 @@ struct GroupDetailsView: View {
         .task(id: muteStateKey) {
             model.loadMuteState(using: appState)
         }
-        .task(id: "\(viewModel.group.groupIdHex)/\(appState.runtimeGeneration)/\(isAdmin)") {
+        .task(id: accountDevicesActivationKey) {
             await model.loadAccountDevicesActivation(using: appState)
         }
         .alert("Let Linked Devices Join?", isPresented: $model.confirmsEnableAccountDevices) {

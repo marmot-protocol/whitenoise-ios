@@ -53,6 +53,20 @@ enum GroupChangeNotice {
         }
     }
 
+    /// The newest change MDK gave up before this launch's event subscription
+    /// existed, as its event. MDK keeps each one until it is acknowledged, and a
+    /// toast shows one at a time, so one is raised per launch.
+    static func retainedNotDeliveredEvent(
+        account: AccountSummaryFfi,
+        records: [GroupChangeNotDeliveredFfi]
+    ) -> MarmotEventFfi? {
+        records.max { $0.at < $1.at }.map {
+            .groupEvent(accountIdHex: account.accountIdHex, accountLabel: account.label, groupIdHex: $0.groupIdHex,
+                        event: .groupChangeNotDelivered(commitIdHex: $0.commitIdHex, intentKind: $0.intentKind,
+                                                        reason: $0.reason))
+        }
+    }
+
     /// A send that waited for the group to settle and was then dropped unsent:
     /// the settled state refused it and nothing retries it. Also a change MDK
     /// gave up after its call returned (`not_delivered`, `refused`). `reason` is MDK's

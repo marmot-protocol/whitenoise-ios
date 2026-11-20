@@ -10,17 +10,26 @@ struct DeviceLinkCodeView: View {
     @ScaledMetric(relativeTo: .caption) private var cellWidth: CGFloat = 68
 
     var body: some View {
-        // Four over three keeps the order easy to compare line by line.
-        VStack(spacing: 16) {
-            row(Array(code.prefix(4)), offset: 0)
-            if code.count > 4 {
-                row(Array(code.dropFirst(4)), offset: 4)
-            }
+        // Four over three keeps the order easy to compare line by line; larger
+        // text puts fewer on each line so every emoji stays on screen.
+        ViewThatFits(in: .horizontal) {
+            rows(perRow: 4)
+            rows(perRow: 3)
+            rows(perRow: 2)
+            rows(perRow: 1)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Emoji to compare"))
+    }
+
+    private func rows(perRow: Int) -> some View {
+        VStack(spacing: 16) {
+            ForEach(Array(stride(from: 0, to: code.count, by: perRow)), id: \.self) { start in
+                row(Array(code[start..<min(start + perRow, code.count)]), offset: start)
+            }
+        }
     }
 
     private func row(_ items: [DeviceLinkEmojiFfi], offset: Int) -> some View {

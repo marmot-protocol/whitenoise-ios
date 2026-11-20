@@ -62,7 +62,7 @@ struct LinkedDeviceDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("It’s removed from your devices and from every chat it can be removed from, and it stops getting your messages. To use it again, sign in on it and link it anew.")
+            Text("It’s removed from your devices and from every chat it can be removed from, and stops getting messages in those chats. A chat admin can remove it from any chat that still includes it. To use it again, sign in on it and link it anew.")
         }
     }
 
@@ -119,6 +119,7 @@ struct LinkedDeviceDetailView: View {
             Button("Keep This Device") { set(.keepWhileInactive, true, device) }
             Button("Remove This Device", role: .destructive) { confirmsRemoval = true }
         }
+        .disabled(busyKey != nil)
     }
 
     private func settingsSection(_ device: LinkedDeviceFfi) -> some View {
@@ -155,6 +156,7 @@ struct LinkedDeviceDetailView: View {
     }
 
     private func set(_ setting: Setting, _ value: Bool, _ device: LinkedDeviceFfi) {
+        guard busyKey == nil else { return }
         pending[setting] = value
         run("setting") {
             do {
@@ -185,7 +187,8 @@ struct LinkedDeviceDetailView: View {
         guard !DeviceLabelInput.isTooLong(label) else { return }
         run("rename") {
             try await store.rename(slotIdHex: slotIdHex, label: label, using: appState)
-            nameDraft = nil
+            // Keep anything typed while the rename ran.
+            if nameDraft == text { nameDraft = nil }
         }
     }
 

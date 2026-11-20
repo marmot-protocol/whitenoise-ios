@@ -19,7 +19,7 @@ struct AddDeviceView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         instruction(1, L10n.string("On the new device, install White Noise and sign in with this profile’s private key."))
                         instruction(2, L10n.string("There, open Settings → Devices and tap Link to Another Device."))
-                        instruction(3, L10n.string("Check that both devices show the same emoji, then approve here."))
+                        instruction(3, L10n.string("Check that both devices show the same emoji, confirm on the new device, then approve here."))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 

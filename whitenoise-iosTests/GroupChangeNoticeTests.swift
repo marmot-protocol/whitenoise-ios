@@ -35,6 +35,25 @@ struct GroupChangeNoticeTests {
         )])
     }
 
+    /// MDK keeps given-up changes until they're acknowledged; launch raises the
+    /// newest the same way as the live event, and the rest wait their turn.
+    @Test func theNewestRetainedUndeliveredChangeIsRaisedAtLaunch() {
+        let alice = accountSummary("Alice", byte: "aa")
+        func record(_ commit: String, at: UInt64) -> GroupChangeNotDeliveredFfi {
+            GroupChangeNotDeliveredFfi(groupIdHex: "group", commitIdHex: commit, queuedIntentIdHex: nil,
+                                       intentKind: "invite", reason: "not_delivered", at: at)
+        }
+        let event = GroupChangeNotice.retainedNotDeliveredEvent(
+            account: alice, records: [record("old", at: 1), record("new", at: 5), record("mid", at: 3)]
+        )
+        #expect(event == .groupEvent(
+            accountIdHex: alice.accountIdHex, accountLabel: alice.label, groupIdHex: "group",
+            event: .groupChangeNotDelivered(commitIdHex: "new", intentKind: "invite", reason: "not_delivered")
+        ))
+        #expect(event.flatMap(GroupChangeNotice.toast(for:)) != nil)
+        #expect(GroupChangeNotice.retainedNotDeliveredEvent(account: alice, records: []) == nil)
+    }
+
     @Test func eachAccountsFailedRewindRestoreOfAGroupIsAnnouncedOnce() {
         var announcements = RefusedIntentAnnouncements()
         let admitted = [

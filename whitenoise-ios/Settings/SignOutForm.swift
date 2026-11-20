@@ -227,7 +227,7 @@ struct SignOutForm<ProfileSummary: View>: View {
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(.isHeader)
             if hasLinkedDevices {
-                Text("This profile’s chats, media, and secret key will be erased from this device. Your other devices keep your chats and will finish removing this one from them.")
+                Text("This profile’s chats, media, and secret key will be erased from this device. Your other devices keep the chats they’re in and will finish removing this one from them. You’ll leave any other chats.")
                     .font(.body)
                     .foregroundStyle(.secondary)
             } else {
