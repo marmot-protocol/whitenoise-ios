@@ -2112,26 +2112,23 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    @Test func removingAnInactiveProfileWipesItLikeSignOutAndWipe() async throws {
+    /// A Remove from an unlinked notice must not wipe a copy of that profile
+    /// that was signed in again since, active or not.
+    @Test(arguments: [true, false])
+    func aStaleUnlinkedRemovalWipesNothing(active: Bool) async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
         let account = seeded.accounts[0]
         appState.activeAccountRef = account.label
-        #expect(await appState.signOut())
-        #expect(appState.activeAccountRef == nil)
+        if !active { #expect(await appState.signOut()) }
 
-        // The push drain and clear run while account exit holds off a new registration.
-        var exitHeldDuringWipe = false
-        appState.afterAccountExitClientCapturedForTesting = {
-            exitHeldDuringWipe = appState.isAccountExitInProgress
+        await #expect(throws: ProfileNotUnlinkedError.self) {
+            try await appState.removeUnlinkedAccount(accountRef: account.accountIdHex)
         }
-        try await appState.removeUnlinkedAccount(accountRef: account.accountIdHex)
-        appState.afterAccountExitClientCapturedForTesting = nil
 
-        #expect(exitHeldDuringWipe)
         #expect(!appState.isAccountExitInProgress)
-        #expect(!appState.accounts.contains { $0.accountIdHex == account.accountIdHex })
-        #expect(try await appState.client?.listAccounts().isEmpty == true)
+        #expect(try await appState.client?.listAccounts().map(\.accountIdHex) == [account.accountIdHex])
+        #expect(appState.activeAccountRef == (active ? account.label : nil))
 
         await stopReadyRuntime(appState)
     }

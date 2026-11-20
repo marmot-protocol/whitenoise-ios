@@ -314,7 +314,8 @@ Sign Out & Wipe with linked devices says the other devices finish removing this 
 the wipe report shows `siblingsNotReached` (never clean) and `groupsLeftToSiblings`.
 An unlinked account stays listed (`unlinked`, `signedOut`), so `DeviceUnlinked`
 offers Remove from This Device (`signOutAndWipe`, through the same wipe as Sign Out &
-Wipe, which leaves another active profile open) or Later, which routes away like
+Wipe, which leaves another active profile open, and only while MDK still lists the
+profile `unlinked`) or Later, which routes away like
 a sign-out; each launch raises it again, once, for a signed-out `unlinked` profile. Signing in to it fails with `AccountUnlinked`; the import flow asks
 before removing that copy and retrying the import.
 

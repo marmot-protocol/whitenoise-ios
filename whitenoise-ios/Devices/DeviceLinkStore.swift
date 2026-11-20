@@ -414,6 +414,12 @@ final class DeviceLinkStore {
         otherProfileTickets = [:]
     }
 
+    /// After an await: the store still mirrors `scope`, and the app is still on
+    /// that profile and runtime (the store learns of a switch only on its next read).
+    private func stillIn(_ scope: Scope, using appState: AppState) -> Bool {
+        self.scope == scope && matches(appState)
+    }
+
     private func matches(_ appState: AppState) -> Bool {
         appState.canUseRuntimeForForegroundWork && appState.activeAccountRef == scope?.accountRef
             && appState.runtimeGeneration == scope?.runtimeGeneration
@@ -436,7 +442,7 @@ final class DeviceLinkStore {
         using appState: AppState,
         _ body: (Marmot, String) async throws -> Result
     ) async throws -> Result {
-        guard self.scope == scope, matches(appState) else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+        guard stillIn(scope, using: appState) else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
         let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
         defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         return try await body(lease.client.marmot, scope.accountRef)
@@ -456,7 +462,7 @@ final class DeviceLinkStore {
     ) async throws {
         let scope = try actionScope(using: appState)
         let next = try await mutate(in: scope, using: appState, body)
-        guard self.scope == scope else { return }
+        guard stillIn(scope, using: appState) else { return }
         apply(next)
     }
 
@@ -588,7 +594,7 @@ final class DeviceLinkStore {
         let next = try await mutate(in: scope, using: appState) { marmot, account in
             try await marmot.checkSignIns(accountRef: account)
         }
-        guard self.scope == scope else { return }
+        guard stillIn(scope, using: appState) else { return }
         signIns = next
         signInsLoadError = nil
     }
@@ -635,6 +641,12 @@ final class DeviceLinkStore {
         queuedUnlinkedAccountIDs.append(accountIdHex)
     }
 
+    /// The profile was removed, so a queued or showing notice for it is moot.
+    func retireUnlinkedNotice(_ accountIdHex: String) {
+        queuedUnlinkedAccountIDs.removeAll { $0 == accountIdHex }
+        if unlinkedNotice?.accountIdHex == accountIdHex { unlinkedNoticeDismissed() }
+    }
+
     /// The user answered the unlinked notice; raise the next one, if any.
     func unlinkedNoticeDismissed() {
         unlinkedNotice = nil
@@ -662,12 +674,12 @@ final class DeviceLinkStore {
                 return (next, Error?.some(error))
             }
         }
-        guard self.scope == scope else { return }
+        guard stillIn(scope, using: appState) else { return }
         // The reset stands even if publishing the KeyPackage fails; show it, then report.
         apply(next)
         await refresh(.devices, using: appState)
         if let rotationError { throw rotationError }
-        guard self.scope == scope else { return }
+        guard stillIn(scope, using: appState) else { return }
         present(.linkThisDevice)
     }
 }

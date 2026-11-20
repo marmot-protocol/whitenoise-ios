@@ -90,6 +90,8 @@ struct RootView: View {
                 Task {
                     do {
                         try await appState.removeUnlinkedAccount(accountRef: notice.accountIdHex)
+                    } catch is ProfileNotUnlinkedError {
+                        // A notice for an earlier copy; the profile was signed in again since.
                     } catch {
                         appState.present(UserFacingError.toast(title: L10n.string("Couldn't wipe profile"), error: error))
                         await appState.leaveUnlinkedAccount(accountIdHex: notice.accountIdHex)

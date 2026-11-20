@@ -164,3 +164,7 @@ struct ProfileDataRemainsError: LocalizedError {
         L10n.string("This profile’s data is still on this device. Keep White Noise open and try again.")
     }
 }
+
+/// A Remove for an unlinked profile that MDK no longer lists as unlinked: it
+/// was signed in again since, so nothing was wiped.
+struct ProfileNotUnlinkedError: Error {}

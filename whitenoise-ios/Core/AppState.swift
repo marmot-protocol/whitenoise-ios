@@ -1171,7 +1171,7 @@ final class AppState {
 
     /// Throws `runtimeUnavailable` when the wipe can't begin, or the wipe's error.
     @MainActor
-    private func wipeActiveAccount(_ wipingRef: String) async throws {
+    private func wipeActiveAccount(_ wipingRef: String, requiringUnlinked: Bool = false) async throws {
         guard DestructiveWipeGate.canBegin(
             isReady: phase == .ready,
             isAppSceneActive: isAppSceneActive,
@@ -1192,6 +1192,7 @@ final class AppState {
         notifications.cancelForegroundBatches(accountRef: wipingRef)
         defer { finishAccountExit() }
         guard let exitingClient = client else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+        if requiringUnlinked { _ = try await requireUnlinked(wipingRef, using: exitingClient) }
         await awaitCancelledForegroundMutationFollowups()
         try await wipeAccount(wipingRef, accountIdHex: wipingAccountIdHex, using: exitingClient, routesAway: true)
     }
@@ -1656,21 +1657,17 @@ final class AppState {
         )
     }
 
-    /// Internal (not `private`) so `RuntimeLifecycle.performBootstrap` can drive
-    /// the account refresh once the runtime is online. The account refresh
-    /// itself stays on AppState (it is account/profile maintenance, not
-    /// lifecycle).
-    /// Another of the account's devices removed this one. MDK has already
-    /// signed the account out here, but it stays listed (`unlinked`), so leave
-    /// it the way a sign-out does: to another profile's chooser, or Welcome.
     /// Removes a profile another device unlinked from this one, so the user can
     /// sign in again and link this device anew. MDK's wipe skips leaving chats
     /// and deleting the KeyPackage slot, which the other devices already did.
+    /// Throws `ProfileNotUnlinkedError`, wiping nothing, when MDK no longer
+    /// lists that profile as unlinked (a notice for a copy since replaced).
     @MainActor
     func removeUnlinkedAccount(accountRef: String) async throws {
         let account = accounts.first { $0.label == accountRef || $0.accountIdHex == accountRef }
         if let account, account.label == activeAccountRef {
-            try await wipeActiveAccount(account.label)
+            try await wipeActiveAccount(account.label, requiringUnlinked: true)
+            deviceLinks.retireUnlinkedNotice(account.accountIdHex)
             return
         }
         // Another profile (or none) is active: wipe this one the same way, but
@@ -1684,12 +1681,28 @@ final class AppState {
             finishAccountExit()
             scheduleNativePushRegistrationIfEnabled()
         }
-        try await wipeAccount(
-            account?.label ?? accountRef, accountIdHex: account?.accountIdHex,
-            using: lease.client, routesAway: false
-        )
+        let unlinked = try await requireUnlinked(account?.label ?? accountRef, using: lease.client)
+        // As for the active wipe: a sign-in's notification defaults must not
+        // register push again after the wipe clears it.
+        await awaitCancelledForegroundMutationFollowups()
+        try await wipeAccount(unlinked.label, accountIdHex: unlinked.accountIdHex, using: lease.client, routesAway: false)
+        deviceLinks.retireUnlinkedNotice(unlinked.accountIdHex)
     }
 
+    /// Reads MDK's current account list, so a stale notice can't wipe a copy
+    /// of the profile that was signed in again since.
+    @MainActor
+    private func requireUnlinked(_ accountRef: String, using client: MarmotClient) async throws -> AccountSummaryFfi {
+        guard let account = try await client.listAccounts()
+            .first(where: { $0.label == accountRef || $0.accountIdHex == accountRef }),
+            account.unlinked else { throw ProfileNotUnlinkedError() }
+        return account
+    }
+
+
+    /// Another of the account's devices removed this one. MDK has already
+    /// signed the account out here, but it stays listed (`unlinked`), so leave
+    /// it the way a sign-out does: to another profile's chooser, or Welcome.
     @MainActor
     func leaveUnlinkedAccount(accountIdHex: String) async {
         do {
@@ -1708,6 +1721,10 @@ final class AppState {
         phase = accounts.contains(where: { !$0.signedOut && $0.accountIdHex != accountIdHex }) ? .ready : .onboarding
     }
 
+    /// Internal (not `private`) so `RuntimeLifecycle.performBootstrap` can drive
+    /// the account refresh once the runtime is online. The account refresh
+    /// itself stays on AppState (it is account/profile maintenance, not
+    /// lifecycle).
     @MainActor
     func refreshAccounts(refreshUnreadSummaries: Bool = true) async throws {
 #if DEBUG
