@@ -603,9 +603,10 @@ Do not add a second storage path for data Marmot already owns.
     `afterAccountExitClientCapturedForTesting`,
     `beforeUnreadSummaryRefreshForTesting` and
     `hasPendingUnreadSummaryRefreshForTesting` stay (#1241, item 21). The
-    first pauses sign-out and wipe, each in its own copy of the push
-    cleanup, after they read the native-push setting and before they cancel
-    the registration task. An injected settings read could stand in for
+    first pauses sign-out and the shared wipe (Sign Out & Wipe and removing
+    an unlinked profile), each in its own copy of the push cleanup, after
+    they read the native-push setting and before they cancel the
+    registration task. An injected settings read could stand in for
     it; the maintainers preferred the explicit pause. The second holds a
     badge refresh before its client guard and account-attention early
     return, which no injected read would reach. The third shows that

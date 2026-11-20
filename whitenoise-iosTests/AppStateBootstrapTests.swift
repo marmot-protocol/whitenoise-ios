@@ -2107,14 +2107,15 @@ struct AppStateBootstrapTests {
     }
 
     @Test func laterLeavesAnUnlinkedProfileSignedOutWhenTheRefreshFails() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let reads = AccountRefreshReadsStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
         let appState = seeded.appState
         let account = seeded.accounts[0]
         appState.activeAccountRef = account.label
-        appState.beforeAccountRefreshForTesting = { throw URLError(.notConnectedToInternet) }
+        reads.beforeListAccounts = { throw URLError(.notConnectedToInternet) }
 
         await appState.leaveUnlinkedAccount(accountIdHex: account.accountIdHex)
-        appState.beforeAccountRefreshForTesting = nil
+        reads.beforeListAccounts = nil
 
         // The chooser offers only rows that aren't signed out.
         let row = try #require(appState.accounts.first { $0.accountIdHex == account.accountIdHex })
