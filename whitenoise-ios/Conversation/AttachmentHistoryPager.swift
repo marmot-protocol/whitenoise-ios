@@ -29,6 +29,17 @@ struct AttachmentHistoryPager {
             return client
         }
 
+        /// A handoff lease outlives removal of its original slot. Verify that the slot
+        /// is still readable before presenting the copy, including a removal during the lookup.
+        func stillRetains(_ target: AttachmentLocalTargetFfi, in appState: AppState) async throws -> Bool {
+            let before = try await version(in: appState)
+            let client = try currentClient(in: appState)
+            let assets = try await client.marmot.attachmentLocalAssets(accountRef: account, groupIdHex: group, targets: [target])
+            guard assets.first?.reference != nil else { return false }
+            let current = try await version(in: appState)
+            return current.changeSince(previous: before) != .restartRequired
+        }
+
         func version(in appState: AppState) async throws -> AttachmentHistoryVersion {
             let client = try currentClient(in: appState)
             let result = try await client.marmot.attachmentHistoryVersion(accountRef: account, groupIdHex: group)

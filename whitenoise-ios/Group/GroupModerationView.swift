@@ -358,6 +358,23 @@ struct GroupModerationView: View {
             : AnyLayout(HStackLayout(spacing: 12))
     }
 
+    private func documentLoader(for entry: GroupModerationModel.Entry) -> ConversationMediaLoader {
+        let scope = AttachmentHistoryPager.Scope(appState: appState, group: conversation.group.groupIdHex)
+        return ConversationMediaLoader({ try await conversation.data(for: $0) },
+            openHandoff: { try await conversation.openHandoff(for: $0, control: $1) },
+            canShareDocument: { media, target in
+                guard let scope, let target, media.localTarget == target, conversation.canModerateReports else { return false }
+                let client = try scope.currentClient(in: appState)
+                let message = try await client.reportedMessage(accountRef: scope.account, groupID: scope.group, messageID: entry.report.messageIdHex)
+                guard let message, !message.deleted,
+                      try await scope.stillRetains(target, in: appState), conversation.canModerateReports,
+                      model.entries.contains(where: { $0.id == entry.id && $0.mediaItems.contains { $0.isSameDocumentSource(as: media) } })
+                else { return false }
+                return GroupModerationModel.mediaItems(for: message, reportIdHex: entry.id).contains { $0.isSameDocumentSource(as: media) }
+            },
+            automaticAttachmentByteCount: conversation.automaticAttachmentByteCount(for:))
+    }
+
     private var refreshKey: String {
         "\(projectionRevision.uuidString):\(appState.activeAccountRef ?? ""):\(appState.runtimeGeneration):\(conversation.canModerateReports)"
     }
@@ -396,9 +413,7 @@ struct GroupModerationView: View {
                                     markdownBlocks: entry.markdownBlocks,
                                     identityName: conversation.windowDisplayName,
                                     identityAvatarAsset: { conversation.windowIdentities[$0]?.avatarAsset },
-                                    onLoadMedia: ConversationMediaLoader({ try await conversation.data(for: $0) },
-                                        openHandoff: { try await conversation.openHandoff(for: $0, control: $1) },
-                                        automaticAttachmentByteCount: conversation.automaticAttachmentByteCount(for:)),
+                                    onLoadMedia: documentLoader(for: entry),
                                     isBodyExpanded: expandedEntryIDs.contains(entry.id),
                                     onExpandBody: { expandedEntryIDs.insert(entry.id) }
                                 )

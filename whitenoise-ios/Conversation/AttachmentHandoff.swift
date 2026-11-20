@@ -29,18 +29,20 @@ nonisolated struct LiveRuntimeHandoffReleaser: AttachmentHandoffReleasing {
 /// dropping the last reference releases as a backstop.
 nonisolated final class AttachmentHandoffLease: Sendable {
     let url: URL
+    let target: AttachmentLocalTargetFfi?
     private let lease: String
     private let releaser: any AttachmentHandoffReleasing
     private let isReleased = Mutex(false)
 
-    init(lease: String, path: String, releaser: any AttachmentHandoffReleasing) {
+    init(lease: String, path: String, target: AttachmentLocalTargetFfi? = nil, releaser: any AttachmentHandoffReleasing) {
+        self.target = target
         url = URL(fileURLWithPath: path, isDirectory: false)
         self.lease = lease
         self.releaser = releaser
     }
 
-    convenience init(_ handoff: AttachmentHandoffFfi, releaser: any AttachmentHandoffReleasing) {
-        self.init(lease: handoff.lease, path: handoff.path, releaser: releaser)
+    convenience init(_ handoff: AttachmentHandoffFfi, target: AttachmentLocalTargetFfi? = nil, releaser: any AttachmentHandoffReleasing) {
+        self.init(lease: handoff.lease, path: handoff.path, target: target, releaser: releaser)
     }
 
     /// MDK writes the copy owner-only under the default Data Protection class, which

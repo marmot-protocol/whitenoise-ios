@@ -708,6 +708,19 @@ struct ConversationView: View {
         let scope: MessageBubble.MediaOpenScope
         let initialData: Data?
         var gifRowID: String? = nil
+        var pending: MessageMediaGallery.PendingSelection?
+
+        init(item: MessageMediaAttachment, scope: MessageBubble.MediaOpenScope, initialData: Data?,
+             row: TimelineItem, media: [MessageMediaAttachment], gifRowID: String? = nil) {
+            self.item = item
+            self.scope = scope
+            self.initialData = initialData
+            self.gifRowID = gifRowID
+            if case .message(let record, _) = row.kind, record.direction == "sent", item.reference == nil,
+               let data = item.localData, let index = media.firstIndex(where: { $0.id == item.id }) {
+                pending = .init(id: item.id, slot: .init(rowID: row.id, index: item.sourceHint?.slot ?? UInt32(index)), data: data)
+            }
+        }
     }
 
     @State private var mediaOpenIntent = MediaOpenIntent()
@@ -1107,7 +1120,7 @@ struct ConversationView: View {
                 if let viewModel, target.scope.isCurrent(viewModel, appState: appState),
                    let gallery = viewModel.transcriptMediaGallery(opening: target.id, initialData: target.initialData, openingItem: target.item,
                                                                 includingGIFsIn: target.gifRowID, allowsEmptyWindow: true) {
-                    TranscriptHistoryGalleryView(gallery: gallery, conversation: viewModel, gifRowID: target.gifRowID, onLoadMedia: mediaLoader(for: viewModel),
+                    TranscriptHistoryGalleryView(gallery: gallery, conversation: viewModel, openingSelection: target.pending, gifRowID: target.gifRowID, onLoadMedia: mediaLoader(for: viewModel),
                         forwardingContext: forwardingContext(for: viewModel),
                         onGoToMessage: { navigateToTimelineMessage($0, viewModel: viewModel) },
                         onDismiss: { transcriptMedia = nil })
@@ -2836,13 +2849,14 @@ struct ConversationView: View {
                     if replyOrigin == origin { replyOrigin = nil }
                 }
             },
-            onLoadMedia: mediaLoader(for: viewModel),
+            onLoadMedia: mediaLoader(for: viewModel, documentRowID: item.id),
             mediaOpenScope: mediaScope,
             onOpenTranscriptMedia: { media, data in
                 guard mediaScope.isCurrent(self.viewModel, appState: appState), !viewModel.isDeleted(record.messageIdHex),
-                      let current = viewModel.timeline.first(where: { $0.id == item.id }),
-                      viewModel.mediaItems(for: current).contains(where: { $0.canUseBytesPrepared(for: media) }) else { return }
-                transcriptMedia = TranscriptMediaTarget(item: media, scope: mediaScope, initialData: data)
+                      let current = viewModel.timeline.first(where: { $0.id == item.id }) else { return }
+                let slots = viewModel.mediaItems(for: current)
+                guard slots.contains(where: { $0.canUseBytesPrepared(for: media) }) else { return }
+                transcriptMedia = TranscriptMediaTarget(item: media, scope: mediaScope, initialData: data, row: current, media: slots)
             },
             mediaForwardingContext: forwardingContext(for: viewModel),
             onGoToMessage: { messageIdHex in
@@ -4756,7 +4770,7 @@ struct ConversationView: View {
                 let canInteract = viewModel.canSendMessages
                 let openGIF = viewModel.firstGalleryGIF(in: item).map { gif in
                     let mediaTarget = TranscriptMediaTarget(item: gif, scope: .init(viewModel, appState: appState),
-                        initialData: nil, gifRowID: rowId)
+                        initialData: nil, row: item, media: viewModel.mediaItems(for: item), gifRowID: rowId)
                     return {
                         dismissActions()
                         guard mediaTarget.scope.isCurrent(self.viewModel, appState: appState),
@@ -5164,11 +5178,34 @@ struct ConversationView: View {
         }
     }
 
-    private func mediaLoader(for viewModel: ConversationViewModel) -> ConversationMediaLoader {
+    private func mediaLoader(for viewModel: ConversationViewModel, documentRowID: String? = nil) -> ConversationMediaLoader {
+        let opening = MessageBubble.MediaOpenScope(viewModel, appState: appState)
         let loader = ConversationMediaLoader(allowsAutomaticLoad: allowsAutomaticMediaLoad) { media in
             try await viewModel.data(for: media)
         } openHandoff: { media, control in
             try await viewModel.openHandoff(for: media, control: control)
+        } canShareDocument: { media, leasedTarget in
+            @MainActor func isPresented(requiringOwnBytes: Bool = false) -> Bool {
+                guard opening.isCurrent(self.viewModel, appState: appState), let documentRowID,
+                      let row = viewModel.timeline.first(where: { $0.id == documentRowID }),
+                      case .message(let record, _) = row.kind, !viewModel.isDeleted(record.messageIdHex),
+                      !viewModel.timelineStore.isHidden(record.messageIdHex), !viewModel.timelineStore.isBlockedAuthor(record.sender)
+                else { return false }
+                if requiringOwnBytes, record.direction != "sent" || media.localData == nil { return false }
+                return viewModel.mediaItems(for: row).contains {
+                    $0.isSameDocumentSource(as: media) && (!requiringOwnBytes || $0.localData == media.localData)
+                }
+            }
+            #if DEBUG
+            if previewsTimeline {
+                return leasedTarget == nil && ChatPreviewMedia.url(media.fileName) != nil && isPresented()
+            }
+            #endif
+            // A confirmed own send can still have only the sender’s local copy.
+            guard let target = leasedTarget else { return isPresented(requiringOwnBytes: true) }
+            guard isPresented() else { return false }
+            guard let scope = AttachmentHistoryPager.Scope(appState: appState, group: viewModel.group.groupIdHex) else { return false }
+            return try await scope.stillRetains(target, in: appState) && isPresented()
         } automaticAttachmentByteCount: { media in
             await viewModel.automaticAttachmentByteCount(for: media)
         }
