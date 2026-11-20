@@ -4,6 +4,7 @@ import UIKit
 enum MessageActionSurface { case bubble, failureNotice }
 
 extension EnvironmentValues {
+    @Entry var messageActionHoldsEnabled = true
     @Entry var pressedMessageActionSurface: MessageActionSurface?
 }
 
@@ -25,6 +26,7 @@ struct MessageActionRowStacking: ViewModifier {
 struct MessageActionHold: ViewModifier {
     var surface: MessageActionSurface = .bubble
     @Environment(\.pressedMessageActionSurface) private var pressedPreview
+    @Environment(\.messageActionHoldsEnabled) private var holdsEnabled
     let isEnabled: Bool
     let open: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -36,7 +38,7 @@ struct MessageActionHold: ViewModifier {
         content
             .shadow(color: .black.opacity(highlightsPress ? 0.16 : 0), radius: 10, y: 3)
             .preference(key: MessageActionPressKey.self, value: feedback != .idle && !reduceMotion)
-            .gesture(MessageHoldGesture(isEnabled: isEnabled, feedback: setPressFeedback, open: open))
+            .gesture(MessageHoldGesture(isEnabled: isEnabled && holdsEnabled, feedback: setPressFeedback, open: open))
             .onDisappear { feedback = .idle }
     }
 

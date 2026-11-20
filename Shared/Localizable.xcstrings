@@ -81988,72 +81988,73 @@
         }
       }
     },
-    "Not delivered, hold for options" : {
+    "Not delivered. Tap for options." : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nicht zugestellt. Für Optionen gedrückt halten."
+            "value" : "Nicht zugestellt. Für Optionen tippen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not delivered, hold for options"
+            "value" : "Not delivered. Tap for options."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No entregado. Mantén pulsado para ver las opciones."
+            "value" : "No entregado. Toca para ver opciones."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ei toimitettu. Näytä vaihtoehdot pitämällä painettuna."
+            "value" : "Ei toimitettu. Napauta nähdäksesi vaihtoehdot."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Non distribué. Maintenez le doigt appuyé pour voir les options."
+            "value" : "Non distribué. Touchez pour plus d'options."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Non consegnato. Tieni premuto per le opzioni."
+            "value" : "Non recapitato. Tocca per le opzioni."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não entregue. Mantenha pressionado para ver as opções."
+            "value" : "Não entregue. Toque para ver opções."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не доставлено. Удерживайте для выбора действия."
+            "value" : "Не доставлено. Нажмите, чтобы открыть параметры."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İletilemedi. Seçenekler için basılı tutun."
+            "value" : "İletilemedi. Seçenekler için dokunun."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未送达，长按以查看选项"
+            "value" : "未送达。点按查看选项。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未送達，長按以查看選項"
+            "value" : "未送達。點按以查看選項。"
           }
         }
       }
@@ -98082,6 +98083,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移除%@"
+          }
+        }
+      }
+    },
+    "Remove reaction %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reaktion %@ entfernen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove reaction %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar la reacción %@"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poista reaktio %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer la réaction %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovi la reazione %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remover a reação %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Убрать реакцию %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ tepkisini kaldır"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除回应%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除回應%@"
           }
         }
       }

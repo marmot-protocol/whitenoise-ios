@@ -693,7 +693,6 @@ struct ConversationView: View {
     @State private var pollVotesTarget: PollVotesTarget?
     @State private var forwardTarget: ActionsTarget?
     @State private var forwardSelectionTarget: ForwardSelectionTarget?
-    @State private var pendingReactionChipMessages: Set<String> = []
     private static let selectionIndicatorSize: CGFloat = 44
     // With the 16 pt timeline margin, received bubbles begin at 56 pt in selection.
     private static let receivedSelectionInset: CGFloat = 40
@@ -1527,6 +1526,9 @@ struct ConversationView: View {
                 dictationInstallWatch = nil
                 viewModel?.search.end()
                 cancelPendingTimelineFollowUpWork()
+                actionsTarget = nil
+                actionsReturnGeometry = nil
+                composerFocusSuspendedForActions = false
                 dismissKeyboard()
                 if let editSession {
                     persistDraft(
@@ -2457,11 +2459,12 @@ struct ConversationView: View {
             viewModel: viewModel,
             showsSenderIdentity: showsSenderIdentity,
             usesSelectionLayout: isSelectingMessages,
-            showMessageActions: interactionsEnabled && (!record.messageIdHex.isEmpty || status == .failed) && !popTransition.isNavigating ? { surface in
+            showMessageActions: allowsActions && !viewModel.isDeleted(record.messageIdHex) && (!record.messageIdHex.isEmpty || status == .failed) ? { surface in
                 Haptics.tap()
                 beginActionsPresentation(for: record, status: status, rowId: item.id, rowFrameKey: item.rowFrameKey, pressedSurface: surface)
             } : nil
         )
+        .environment(\.messageActionHoldsEnabled, interactionsEnabled && !popTransition.isNavigating)
         // The live row fades underneath an excerpt. Hold its press state through that fade.
         .environment(\.pressedMessageActionSurface,
                      actionsCrossfadeExcerpt && actionsPhase == .presented && actionsTarget?.rowId == item.id
@@ -2558,7 +2561,7 @@ struct ConversationView: View {
         let id = record.messageIdHex
         let emoji = tapped.emoji
         let current = viewModel.reactions(for: id)
-        guard !pendingReactionChipMessages.contains(id), viewModel.canSendMessages, !isSelectingMessages, !viewModel.search.isActive,
+        guard viewModel.canSendMessages, !isSelectingMessages, !viewModel.search.isActive,
               current.contains(where: { $0.emoji == emoji && $0.mine == tapped.mine && $0.reactionMessageIdHex == tapped.reactionMessageIdHex }) else { return }
 
         let shortcode = CustomEmojiShortcode(reactionContent: emoji)
@@ -2578,9 +2581,6 @@ struct ConversationView: View {
             reactionDetailsTarget = ReactionDetailsTarget(record: record, initialEmoji: emoji)
             return
         }
-        // An optimistic custom reaction can appear selected while its image is still uploading.
-        pendingReactionChipMessages.insert(id)
-        defer { pendingReactionChipMessages.remove(id) }
         if !tapped.mine && shortcode == nil { appState.addRecentReaction(emoji) }
         await viewModel.toggleReaction(emoji, on: record)
     }
@@ -4702,6 +4702,7 @@ struct ConversationView: View {
             .transition(.identity)
             .allowsHitTesting(actionsPhase != .returning)
             .accessibilityElement(children: .contain)
+            .accessibilityAction(.escape) { dismissActions(resumingComposerFocus: true) }
         }
     }
 
@@ -5003,7 +5004,9 @@ struct ConversationView: View {
             },
             onReact: { emoji in
                 Task { await viewModel.toggleReaction(emoji, on: record) }
-                appState.addRecentReaction(emoji)
+                if CustomEmojiShortcode(reactionContent: emoji) == nil && selectedReaction?.emoji != emoji {
+                    appState.addRecentReaction(emoji)
+                }
                 dismissActions(resumingComposerFocus: true)
             },
             onReply: {

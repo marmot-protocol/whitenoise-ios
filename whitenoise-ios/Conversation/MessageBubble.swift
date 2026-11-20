@@ -1195,16 +1195,14 @@ struct MessageBubble: View {
                 MarkdownDisplayBlock.excerpt(blocks, characterBudget: $0.count, emoji: customEmoji.shortcodes,
                                              countingBlockSeparators: true)
             } ?? blocks
-            let formatted = MarkdownMessageView(blocks: visible, quoteBar: quoteColor)
             Group {
                 if actionBodySize != nil, visible.count == 1, let inline = visible[0].inlineText, customEmoji.isEmpty {
                     liftedInlineText(inline)
                 } else if actionBodySize != nil {
                     let length = visible.reduce(0) { $0 + $1.menuExcerptLength }
                     ViewThatFits(in: .vertical) {
-                        formatted
-                        // SwiftUI measures these in order. Keep block chrome and choose a
-                        // whole excerpt that fits instead of clipping a code or quote line.
+                        // The measured body exceeds this frame. Start with a bounded
+                        // excerpt and keep whole code or quote lines where possible.
                         ForEach(Self.excerptBudgets.filter { $0 < length }, id: \.self) { budget in
                             MarkdownMessageView(blocks: MarkdownDisplayBlock.excerpt(visible, characterBudget: budget, emoji: customEmoji.shortcodes),
                                                 quoteBar: quoteColor)
@@ -1212,7 +1210,7 @@ struct MessageBubble: View {
                         Text(verbatim: "…")
                     }
                 } else {
-                    formatted
+                    MarkdownMessageView(blocks: visible, quoteBar: quoteColor)
                 }
             }
             .tint(MessageBubblePalette.foreground(isFromMe: isFromMe))
@@ -1270,7 +1268,7 @@ struct MessageBubble: View {
     }
 
     private var showsReactionStrip: Bool {
-        !isDeleted && !(status == .failed && onFailedTap != nil) && (!reactions.isEmpty || omittedReactionKinds > 0)
+        !isDeleted && (!reactions.isEmpty || omittedReactionKinds > 0)
     }
 
     private var widensTextForReactions: Bool {
@@ -1287,31 +1285,38 @@ struct MessageBubble: View {
     @ViewBuilder
     private var bubbleMetadataRow: some View {
         if status == .failed, !isDeleted, let onFailedTap {
-            VStack(alignment: .trailing, spacing: 2) {
-                Button(action: onFailedTap) {
-                    MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: .failed, isFromMe: true)
-                        .multilineTextAlignment(.trailing)
-                }
-                .buttonStyle(.plain)
-                .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
-                    showMessageActions?(.failureNotice)
-                })
-                if isEdited || hasReports {
-                    MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
-                        showsDeliveryStatus: false, hasReports: hasReports,
-                        onViewEditHistory: onViewEditHistory)
-                }
+            VStack(alignment: .trailing, spacing: 0) {
+                if showsReactionStrip { reactionMetadata(showsTimestamp: false) }
+                failedNotice(action: onFailedTap)
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.horizontal, density.metrics.bubbleHorizontalInset)
-            .padding(.top, density.metrics.bubbleMetadataSpacing)
         } else if !showsReactionStrip {
             if showsMetadataFooter {
                 metadataWithoutReactions.padding(.top, density.metrics.bubbleMetadataSpacing)
             }
         } else {
-            reactionMetadata
+            reactionMetadata(showsTimestamp: showsMetadataFooter)
         }
+    }
+
+    private func failedNotice(action: @escaping () -> Void) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Button(action: action) {
+                MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: .failed, isFromMe: true)
+                    .multilineTextAlignment(.trailing)
+            }
+            .buttonStyle(.plain)
+            .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
+                showMessageActions?(.failureNotice)
+            })
+            if isEdited || hasReports {
+                MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
+                    showsDeliveryStatus: false, hasReports: hasReports,
+                    onViewEditHistory: onViewEditHistory)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+        .padding(.top, density.metrics.bubbleMetadataSpacing)
     }
 
     private var metadataWithoutReactions: some View {
@@ -1332,7 +1337,7 @@ struct MessageBubble: View {
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
 
-    private var reactionMetadata: some View {
+    private func reactionMetadata(showsTimestamp: Bool) -> some View {
         let allPills = reactions
         let pills = Array(allPills.prefix(ReactionPillPresentation.maximumRenderedPills))
         let preHiddenCount = allPills.count - pills.count + Int(clamping: min(omittedReactionKinds, UInt64(Int.max - allPills.count)))
@@ -1373,13 +1378,17 @@ struct MessageBubble: View {
                     .accessibilityActions {
                         if let onTapReaction {
                             ForEach(pills, id: \.emoji) { tally in
-                                Button(tally.emoji) { onTapReaction(tally) }
+                                let name = CustomEmojiShortcode.spokenReaction(tally.emoji)
+                                let removes = tally.mine && ReactionPillPresentation.canRemoveIndividually(
+                                    tally.emoji, from: allPills, omittedKinds: omittedReactionKinds
+                                )
+                                Button(removes ? L10n.formatted("Remove reaction %@", name) : name) { onTapReaction(tally) }
                             }
                         }
                     }
             }
 
-            if showsMetadataFooter {
+            if showsTimestamp {
                 messageMetadataFooter
             }
         }

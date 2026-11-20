@@ -257,7 +257,9 @@ struct MessageActionsMenu: View {
                 Button {
                     onReact(emoji)
                 } label: {
-                    CustomEmojiReactionLabel(emoji: emoji, reactionMessageIdHex: emoji == selectedReaction ? selectedReactionMessageId : nil, pointSize: 28)
+                    CustomEmojiReactionLabel(emoji: emoji,
+                        reactionMessageIdHex: emoji == selectedReaction ? selectedReactionMessageId : nil,
+                        pointSize: 28, maximumPointSize: MessageActionsPresentation.reactionHeight - 12)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .font(.system(size: 28))

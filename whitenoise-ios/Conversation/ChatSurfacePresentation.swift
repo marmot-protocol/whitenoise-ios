@@ -543,7 +543,7 @@ struct MessageMetadataFooter: View {
             }
             switch caption {
             case .timestamp(let time): Text(time)
-            case .failureNotice: Text("Not delivered, hold for options")
+            case .failureNotice: Text("Not delivered. Tap for options.")
             }
             if hasReports {
                 Image(systemName: "exclamationmark.bubble")

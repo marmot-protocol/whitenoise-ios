@@ -33,7 +33,7 @@ struct ConversationCustomEmojiSenderTests {
         var uploads: [MediaUploadAttachmentRequestFfi] = []
         var messages: [SentMessage] = []
         var reactions: [SentReaction] = []
-        var beforeUploadReturns: (() -> Void)?
+        var beforeUploadReturns: (@MainActor () async -> Void)?
         var uploadGate: CheckedContinuation<Void, Never>?
         var holdsUpload = false
         var installedBytes: [String: Data] = [:]
@@ -61,7 +61,7 @@ struct ConversationCustomEmojiSenderTests {
                 if self.holdsUpload {
                     await withCheckedContinuation { self.uploadGate = $0 }
                 }
-                self.beforeUploadReturns?()
+                await self.beforeUploadReturns?()
                 if let uploadError { throw uploadError }
                 return Self.uploadedReference(for: request, epoch: epochAtUpload, serial: serial)
             },
@@ -305,6 +305,43 @@ struct ConversationCustomEmojiSenderTests {
     }
 
     // MARK: Reactions
+
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func tappingTheSelectedChipDuringItsCustomEmojiUploadPreservesTheReaction() async throws {
+        try await withTestClient { client in
+            let state = AppState.test(client: client)
+            state.accountStore.accounts = [
+                AccountSummaryFfi(label: "alice", accountIdHex: hex("aa"), localSigning: true, signedOut: false, running: true)
+            ]
+            state.activeAccountRef = "alice"
+            let group = Self.group()
+            let model = ConversationViewModel(appState: state, group: group)
+            let row = timelineRecord(messageIdHex: F.messageID, groupIdHex: group.groupIdHex, timelineAt: 1)
+            model.applyTimelinePage(.init(messages: [row], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+            let message = try #require(model.record(for: F.messageID))
+            let harness = Harness()
+            harness.scope = model.customEmojiSendScope
+            model.customEmojiSender = harness.sender
+            let emoji = ":marmot:"
+            let otherEmoji = ":wn:"
+            harness.beforeUploadReturns = { [weak harness] in
+                harness?.beforeUploadReturns = nil
+                let selected = model.reactions(for: F.messageID)
+                guard selected.count == 1, selected.first?.mine == true else {
+                    Issue.record("The uploading reaction should already be selected")
+                    return
+                }
+                await model.toggleReaction(emoji, on: message)
+                #expect(model.reactions(for: F.messageID) == selected)
+                #expect(state.activeToast == nil)
+                await model.toggleReaction(otherEmoji, on: message)
+            }
+
+            await model.toggleReaction(emoji, on: message)
+            #expect(harness.reactions.map(\.target) == [F.messageID, F.messageID])
+            #expect(harness.reactions.map(\.emoji) == [otherEmoji, emoji])
+        }
+    }
 
     @Test func reactionSendsTheShortcodeWithItsOwnUploadAndEmojiTag() async throws {
         let harness = Harness()
