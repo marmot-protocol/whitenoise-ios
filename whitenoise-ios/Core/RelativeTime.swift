@@ -66,7 +66,9 @@ enum RelativeTime {
         locale: Locale = AppLanguage.currentLocale,
         formatters: RelativeTimeFormatters? = nil
     ) -> String {
-        formatted(date, "jmm", locale: locale, formatters: formatters ?? .shared)
+        // Capture the effective hour cycle, including preference-only changes within one region.
+        let formatter = (formatters ?? .shared).shortTimeFormatter(locale: locale)
+        return formatter.string(from: date)
     }
 
     private static func formatted(
@@ -145,6 +147,12 @@ final class RelativeTimeFormatters {
         formatter.maximumUnitCount = 1
         durationFormatterCache[key] = formatter
         return formatter
+    }
+
+    func shortTimeFormatter(locale: Locale) -> DateFormatter {
+        formatter(for: "shortTime:\(locale.hourCycle)", locale: locale) { formatter in
+            formatter.setLocalizedDateFormatFromTemplate("jmm")
+        }
     }
 
     func dateFormatter(template: String, locale: Locale) -> DateFormatter {

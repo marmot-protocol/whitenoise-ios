@@ -6,7 +6,7 @@ import UIKit
 
 @MainActor
 struct MessageDocumentPreviewTests {
-    @Test func encryptedPDFStaysOnTheOriginalFileHandoff() async throws {
+    @Test func pdfPreviewAcceptsAnUnencryptedDocumentAndRejectsAnEncryptedOne() async throws {
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 120, height: 120))
         let pdf = renderer.pdfData { context in context.beginPage() }
         #expect(await MessageDocumentPreview.parse(data: pdf, format: .pdf) != nil)
@@ -27,7 +27,7 @@ struct MessageDocumentPreviewTests {
         #expect(text == "line one\n\tline two")
     }
 
-    @Test func sharesTheOriginalWhenTextCannotBeShownWithinThePreviewBudget() async {
+    @Test func textPreviewRejectsInvalidUTF8AndOversizedInput() async {
         #expect(await MessageDocumentPreview.parse(data: Data([0xff, 0xc0]), format: .text) == nil)
         let oversized = Data(repeating: 65, count: DocumentPreviewFormat.text.byteLimit + 1)
         #expect(await MessageDocumentPreview.parse(data: oversized, format: .text) == nil)

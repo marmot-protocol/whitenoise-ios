@@ -213,9 +213,6 @@ final class ConversationSearchModel {
         return observation
     }
 
-    /// Recompute matches after any timeline/projection change, keeping the
-    /// cursor on the same row when it still matches. Passive refreshes never
-    /// request a scroll.
     // Names come only from vCards the conversation has already been allowed to render.
     @ObservationIgnored private let displayedContactNames = NSCache<NSString, NSString>()
     @ObservationIgnored private var contactRevision: Int?
@@ -233,7 +230,7 @@ final class ConversationSearchModel {
         updateContactRevision()
         guard displayedContactNames.object(forKey: attachmentID as NSString) as String? != name else { return }
         displayedContactNames.setObject(name as NSString, forKey: attachmentID as NSString)
-        refreshAfterTimelineChange()
+        refreshAfterSearchableContentChange()
     }
 
     func displayedContactName(for attachmentID: String) -> String? {
@@ -250,7 +247,7 @@ final class ConversationSearchModel {
             ?? ConversationSearchEngine.initialIndex(matchCount: matches.count)
     }
 
-    func refreshAfterPollDeadline() {
+    func refreshAfterSearchableContentChange() {
         let previousID = currentMatch?.itemId
         refreshAfterTimelineChange()
         if previousID != currentMatch?.itemId { requestScrollToCurrentMatch() }

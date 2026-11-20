@@ -57,6 +57,7 @@ struct AgentEventRow: View {
 }
 
 struct AgentActivityContent: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let display: AgentEventPresentation.Display
 
     var body: some View {
@@ -64,8 +65,16 @@ struct AgentActivityContent: View {
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 Text(display.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
-                MessageActivitySymbol(systemName: display.iconName, isActive: display.reportsWorkInProgress)
-                    .accessibilityHidden(true)
+                Group {
+                    if display.iconName == "ellipsis.message" {
+                        Image(systemName: display.iconName)
+                            .symbolEffect(.variableColor.iterative, options: .repeat(.continuous), isActive: display.reportsWorkInProgress && !reduceMotion)
+                    } else {
+                        Image(systemName: display.iconName)
+                            .symbolEffect(.pulse, options: .repeat(.continuous), isActive: display.reportsWorkInProgress && !reduceMotion)
+                    }
+                }
+                .accessibilityHidden(true)
             }
             if let status = display.secondaryText, !statusIsInIcon, status != display.primaryText {
                 Text(status)

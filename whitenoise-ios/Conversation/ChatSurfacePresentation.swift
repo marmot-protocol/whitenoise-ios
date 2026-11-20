@@ -64,7 +64,8 @@ nonisolated enum MessageSelectionPolicy {
 
 nonisolated enum ChatBubbleMetrics {
     static let timelineMargin: CGFloat = 16
-    static let maximumWidth: CGFloat = 332
+    static let textMaximumWidth: CGFloat = 332
+    static let regularMaximumWidth: CGFloat = 560
     static let compactOppositeInset: CGFloat = 48
     static let regularOppositeInset: CGFloat = 64
     static let horizontalInset: CGFloat = 12
@@ -185,7 +186,8 @@ struct MessageBubbleChromeLayout: Layout {
     func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
                            subviews: Subviews, cache: inout Cache) -> CGFloat? {
         guard guide == .messageSurfaceBottom, let bubble = subviews.first else { return nil }
-        return bounds.minY + bubble.sizeThatFits(.init(width: bounds.width, height: nil)).height
+        let height = cache.resolvedWidth == bounds.width ? cache.bubbleSize?.height : nil
+        return bounds.minY + (height ?? bubble.sizeThatFits(.init(width: bounds.width, height: nil)).height)
     }
 
     func placeSubviews(
@@ -217,30 +219,6 @@ struct MessageBubbleChromeLayout: Layout {
             anchor: .topLeading,
             proposal: resolvedProposal
         )
-    }
-}
-
-/// Chrome first measures with a width limit, then places the bubble at its
-/// final width and height. Keep the text's wrapped width in the first pass.
-struct TextBubbleSurfaceLayout: Layout {
-    let fitsQuote: Bool
-    let widensForReactions: Bool
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard let text = subviews.first else { return .zero }
-        var contentWidth = proposal.width
-        if fitsQuote, let available = contentWidth {
-            // The quote card fills the bubble. Its spacer must not set the bubble width.
-            contentWidth = min(available, text.sizeThatFits(.unspecified).width)
-        }
-        let size = text.sizeThatFits(.init(width: contentWidth, height: nil))
-        guard widensForReactions, let width = proposal.width, proposal.height != nil else { return size }
-        return CGSize(width: width, height: size.height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: bounds.origin, anchor: .topLeading,
-                              proposal: .init(width: bounds.width, height: nil))
     }
 }
 
@@ -502,21 +480,11 @@ nonisolated enum ReactionMetadataFitting {
     }
 }
 
-struct MessageActivitySymbol: View {
-    let systemName: String
-    let isActive: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        let icon = Image(systemName: systemName)
-        if !isActive || reduceMotion {
-            icon
-        } else if systemName == "ellipsis.message" {
-            icon.symbolEffect(.variableColor.iterative, options: .repeat(.continuous))
-        } else {
-            icon.symbolEffect(.pulse, options: .repeat(.continuous))
-        }
-    }
+/// A tombstone keeps its timestamp — a removed message still has a place in
+/// the timeline — but drops the delivery checkmark, which says nothing once
+/// the message is gone.
+nonisolated enum MessageTombstonePresentation {
+    static func showsDeliveryStatus(isDeleted: Bool) -> Bool { !isDeleted }
 }
 
 struct MessageMetadataFooter: View {
@@ -525,6 +493,7 @@ struct MessageMetadataFooter: View {
         case failureNotice
     }
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .caption) private var statusSize: CGFloat = 12
     let caption: Caption
     let isEdited: Bool
@@ -545,7 +514,8 @@ struct MessageMetadataFooter: View {
     var body: some View {
         HStack(spacing: 3) {
             if showsDeliveryStatus, let symbol = presentation.systemImage {
-                MessageActivitySymbol(systemName: symbol, isActive: status == .sending)
+                Image(systemName: symbol)
+                    .symbolEffect(.variableColor.iterative, options: .repeat(.continuous), isActive: status == .sending && !reduceMotion)
                     .font(.system(size: statusSize, weight: .medium))
                     .frame(width: statusSize, height: statusSize)
                     .accessibilityLabel(presentation.accessibilityLabel ?? "")
@@ -553,7 +523,7 @@ struct MessageMetadataFooter: View {
             }
             switch caption {
             case .timestamp(let time): Text(time)
-            case .failureNotice: Text("Not delivered, hold for options")
+            case .failureNotice: Text("Not delivered. Tap for options.")
             }
             if hasReports {
                 Image(systemName: "exclamationmark.bubble")

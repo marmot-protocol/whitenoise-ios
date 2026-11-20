@@ -132,7 +132,7 @@ final class ConversationMediaLoader {
     @discardableResult
     func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool) async -> (size: Int, contactName: String?)? {
         guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return nil }
-        guard DocumentPreviewFormat(mediaType: media.mediaType) == .contact else {
+        guard DocumentPreviewFormat(for: media) == .contact else {
             return await automaticAttachmentByteCount(media).map { ($0, nil) }
         }
         var requested = media
@@ -156,12 +156,36 @@ nonisolated enum MessageBubbleReplyLayout {
     static let bodyTopInsetAfterReply: CGFloat = 0
     static let bodyBottomInset = ChatBubbleMetrics.verticalInset
     static let cardOuterInset: CGFloat = 6
-    static let cardHorizontalInset: CGFloat = 10
     static let cardVerticalInset: CGFloat = 6
     static let cardCornerRadius = ChatBubbleMetrics.cornerRadius - cardOuterInset
     static let sentCardOpacity = 0.16
     static let receivedCardOpacity = 0.09
 
+    static func textWidth(proposed: CGFloat?, ideal: CGFloat?) -> CGFloat {
+        min(ChatBubbleMetrics.textMaximumWidth, proposed ?? .infinity, ideal ?? .infinity)
+    }
+}
+
+/// A quote's flexible card fills the final bubble. Measure its natural width first
+/// so that a short quote and a short reply can share a narrow bubble.
+private struct MessageTextBubbleLayout: Layout {
+    let fitsQuote: Bool
+    var widensForReactions = false
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let ideal = fitsQuote ? content.sizeThatFits(.unspecified).width : nil
+        let width = MessageBubbleReplyLayout.textWidth(proposed: proposal.width, ideal: ideal)
+        let size = content.sizeThatFits(.init(width: width, height: nil))
+        if widensForReactions, proposal.height != nil, let width = proposal.width {
+            return CGSize(width: width, height: size.height)
+        }
+        return size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: .init(width: bounds.width, height: nil))
+    }
 }
 
 nonisolated enum TranscriptMessagePreview {
@@ -241,7 +265,7 @@ nonisolated enum MessageBodyCollapsePresentation {
     }
 
     static func isCollapsed(_ text: String, isExpanded: Bool) -> Bool {
-        !isExpanded && shouldCollapse(text)
+        shouldCollapse(text) && !isExpanded
     }
 
     static func lineCount(_ text: String) -> Int {
@@ -271,12 +295,14 @@ extension MessageBubble: Equatable {
             && lhs.hasReports == rhs.hasReports
             && lhs.usesReviewLayout == rhs.usesReviewLayout
             && lhs.agentActivity == rhs.agentActivity
-            && lhs.clusterPresentation == rhs.clusterPresentation
-            && lhs.showsSenderIdentity == rhs.showsSenderIdentity
-            && lhs.replyPreview == rhs.replyPreview
             && lhs.voiceTranscript == rhs.voiceTranscript
             && lhs.transcribingVoice == rhs.transcribingVoice
             && lhs.readingSpeech === rhs.readingSpeech
+            && lhs.displaysReader == rhs.displaysReader
+            && lhs.incompleteMarkdown == rhs.incompleteMarkdown
+            && lhs.clusterPresentation == rhs.clusterPresentation
+            && lhs.showsSenderIdentity == rhs.showsSenderIdentity
+            && lhs.replyPreview == rhs.replyPreview
             && Self.sameMedia(lhs.mediaItems, rhs.mediaItems)
             && lhs.customEmoji == rhs.customEmoji
             && lhs.markdownBlocks == rhs.markdownBlocks
@@ -284,7 +310,6 @@ extension MessageBubble: Equatable {
             && lhs.reactions == rhs.reactions
             && lhs.omittedReactionKinds == rhs.omittedReactionKinds
             && lhs.projectedReactionTotal == rhs.projectedReactionTotal
-            && lhs.displaysReader == rhs.displaysReader
             && lhs.isBodyExpanded == rhs.isBodyExpanded
             && (lhs.onPollVote == nil) == (rhs.onPollVote == nil)
             && (lhs.onViewPollVotes == nil) == (rhs.onViewPollVotes == nil)
@@ -336,7 +361,7 @@ struct MessageBubble: View {
     var isEdited: Bool = false
     var hasReports: Bool = false
     var usesReviewLayout: Bool = false
-    var agentActivity: AgentEventPresentation.Display? = nil
+    var agentActivity: AgentEventPresentation.Display?
     var clusterPresentation: MessageClusterPresentation = .none
     var showsSenderIdentity = true
     var replyPreview: ConversationReplyPreview? = nil
@@ -348,6 +373,7 @@ struct MessageBubble: View {
     /// already excluded from `mediaItems`.
     var customEmoji: CustomEmojiRowResolution = .empty
     var markdownBlocks: [MarkdownDisplayBlock]? = nil
+    var incompleteMarkdown = false
     var poll: PollProjectionFfi? = nil
     var onPollVote: ((String) -> Void)? = nil
     var onViewPollVotes: (() -> Void)? = nil
@@ -375,7 +401,9 @@ struct MessageBubble: View {
     var onFailedTap: (() -> Void)? = nil
     var onSenderAvatarTap: (() -> Void)? = nil
     var displaysReader = false
-    var isBodyExpanded = true
+    /// Owned by the list, not the bubble: a lazy list rebuilds rows that
+    /// scroll away, and a "Read more" the reader chose must survive that.
+    var isBodyExpanded = false
     var onExpandBody: () -> Void = {}
 
     @Environment(\.timelineSearchQuery) private var searchQuery
@@ -390,6 +418,12 @@ struct MessageBubble: View {
 
     private var isFromMe: Bool { !usesReviewLayout && !displaysReader && record.direction == "sent" }
 
+    private var bubbleMaxWidth: CGFloat? {
+        sizeClass == .regular ? ChatBubbleMetrics.regularMaximumWidth : nil
+    }
+
+    /// Minimum gap on the opposite side. Tiny on iPhone so long bubbles run
+    /// (near) full width; larger on iPad where width is also capped above.
     private var oppositeInset: CGFloat {
         sizeClass == .regular ? ChatBubbleMetrics.regularOppositeInset : ChatBubbleMetrics.compactOppositeInset
     }
@@ -459,14 +493,16 @@ struct MessageBubble: View {
     }
 
     private var standaloneCustomEmoji: CustomEmojiShortcode? {
-        guard debugStyle == nil,
+        guard agentActivity == nil, debugStyle == nil,
               !isDeleted,
               replyPreview == nil,
               mediaItems.isEmpty,
               !customEmoji.isEmpty
         else { return nil }
 
-        return SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes)
+        guard let shortcode = SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes),
+              !offersSourceReader else { return nil }
+        return shortcode
     }
 
     /// White-on-gradient text is only appropriate for our own user-visible bubbles.
@@ -512,7 +548,7 @@ struct MessageBubble: View {
     }
 
     @ViewBuilder private var readerBody: some View {
-        if TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
+        if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
             // Beyond the formatter's budget, read the authored source in viewport-sized batches.
             LongMessageSourceText(text: record.plaintext)
                 .id(record.plaintext)
@@ -579,9 +615,8 @@ struct MessageBubble: View {
                         }
                     bubbleMetadataRow
                 }
-
             }
-            .frame(maxWidth: ChatBubbleMetrics.maximumWidth, alignment: isFromMe ? .trailing : .leading)
+            .frame(maxWidth: bubbleMaxWidth, alignment: isFromMe ? .trailing : .leading)
             .modifier(ReplySwipeContentOffset())
             .layoutPriority(1)
 
@@ -763,9 +798,40 @@ struct MessageBubble: View {
     }
 
     private var textBubble: some View {
-        let fitsTextQuote = replyPreview != nil && showsStandardBody && sharedLocation == nil && linkPreviewURL == nil
-        return TextBubbleSurfaceLayout(fitsQuote: fitsTextQuote, widensForReactions: widensTextForReactions) {
-            textBubbleContents
+        let fitsQuote = replyPreview != nil && showsStandardBody && sharedLocation == nil && linkPreviewURL == nil
+        return MessageTextBubbleLayout(fitsQuote: fitsQuote, widensForReactions: widensTextForReactions) {
+            VStack(alignment: .leading, spacing: 0) {
+                if let debugStyle {
+                    debugHeader(debugStyle)
+                }
+                if let replyPreview, showsStandardBody {
+                    replyHeader(replyPreview)
+                }
+                if let agentActivity {
+                    AgentActivityContent(display: agentActivity)
+                        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: usesSentBubbleForeground))
+                        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+                        .padding(.vertical, density.metrics.bubbleVerticalInset)
+                    if let debugStyle { debugTagsFooter(debugStyle) }
+                } else if showsStandardBody {
+                    if let sharedLocation {
+                        sharedLocationBody(sharedLocation)
+                    } else {
+                        if let linkPreviewURL {
+                            LinkPreviewCard(url: linkPreviewURL, isFromMe: isFromMe) {
+                                _ = handleMessageLink(linkPreviewURL)
+                            }
+                            .id(linkPreviewURL)
+                        }
+                        messageBodyText(hasReply: replyPreview != nil)
+                    }
+                    if let debugStyle, debugStyle.isUserVisibleBubble {
+                        debugTagsFooter(debugStyle)
+                    }
+                } else if let debugStyle {
+                    debugPayload(debugStyle)
+                }
+            }
         }
         .font(.body)
         .background { bubbleBackground }
@@ -776,41 +842,8 @@ struct MessageBubble: View {
                     .strokeBorder(debugStyle.category.accentColor.opacity(0.75), lineWidth: 2)
             }
         }
-    }
-
-    private var textBubbleContents: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let debugStyle {
-                debugHeader(debugStyle)
-            }
-            if let replyPreview, showsStandardBody {
-                replyHeader(replyPreview)
-            }
-            if let agentActivity {
-                AgentActivityContent(display: agentActivity)
-                    .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: usesSentBubbleForeground))
-                    .padding(.horizontal, density.metrics.bubbleHorizontalInset)
-                    .padding(.vertical, density.metrics.bubbleVerticalInset)
-                if let debugStyle { debugTagsFooter(debugStyle) }
-            } else if showsStandardBody {
-                if let sharedLocation {
-                    sharedLocationBody(sharedLocation)
-                } else {
-                    if let linkPreviewURL {
-                        LinkPreviewCard(url: linkPreviewURL, isFromMe: isFromMe) {
-                            _ = handleMessageLink(linkPreviewURL)
-                        }
-                        .id(linkPreviewURL)
-                    }
-                    messageBodyText(hasReply: replyPreview != nil)
-                }
-                if let debugStyle, debugStyle.isUserVisibleBubble {
-                    debugTagsFooter(debugStyle)
-                }
-            } else if let debugStyle {
-                debugPayload(debugStyle)
-            }
-        }
+        // No .textSelection here: it installs its own long-press recognizer
+        // that swallows the bubble's long-press. Copy is in the actions sheet.
     }
 
     private func sharedLocationBody(_ location: SharedLocation) -> some View {
@@ -1014,20 +1047,27 @@ struct MessageBubble: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// The complete source stays reachable for a durable row even when search expands the projected text.
+    var offersSourceReader: Bool {
+        !usesReviewLayout && !isLiveStream
+            && (incompleteMarkdown || TranscriptMessagePreview.requiresReader(record.plaintext))
+    }
+
+    private var isLiveStream: Bool {
+        status == .streaming || (record.direction == "received" && record.messageIdHex.isEmpty)
+    }
+
     private var isStreamBody: Bool {
-        if status == .streaming || (record.direction == "received" && record.messageIdHex.isEmpty) { return true }
+        if isLiveStream { return true }
         if case .streamFinal = MessageSemantics.classify(record) { return true }
         return false
     }
 
     private func messageBodyText(hasReply: Bool, richWidth: CGFloat? = nil) -> some View {
-        let richContent = richWidth != nil
         let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil && !isStreamBody {
             TranscriptMessagePreview.snippet(markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }
                 .joined(separator: "\n") ?? sanitizedBodyText)
         } else { nil }
-        let hasMoreSource = searchQuery != nil && !usesReviewLayout && !isStreamBody
-            && TranscriptMessagePreview.exceedsInlineLimit(record.plaintext)
         let isCollapsed = usesReviewLayout && MessageBodyCollapsePresentation.isCollapsed(
             sanitizedBodyText,
             isExpanded: isBodyExpanded
@@ -1058,7 +1098,7 @@ struct MessageBubble: View {
                 }
                 .padding(.horizontal, -TimelineTextRenderer.mentionHorizontalOutset)
 
-            if isCollapsed || snippet != nil || hasMoreSource {
+            if isCollapsed || snippet != nil || offersSourceReader {
                 Button {
                     onExpandBody()
                 } label: {
@@ -1076,17 +1116,17 @@ struct MessageBubble: View {
         .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : MessageBubblePalette.receivedForeground)
         .padding(
             .horizontal,
-            richContent ? 6 : density.metrics.bubbleHorizontalInset
+            richWidth != nil ? 6 : density.metrics.bubbleHorizontalInset
         )
         .padding(
             .top,
-            richContent
+            richWidth != nil
                 ? 0
                 : (hasReply ? MessageBubbleReplyLayout.bodyTopInsetAfterReply : density.metrics.bubbleVerticalInset)
         )
         .padding(
             .bottom,
-            richContent ? 2 : density.metrics.bubbleVerticalInset
+            richWidth != nil ? 2 : density.metrics.bubbleVerticalInset
         )
         .frame(
             width: richWidth,
@@ -1126,16 +1166,14 @@ struct MessageBubble: View {
                 MarkdownDisplayBlock.excerpt(blocks, characterBudget: $0.count, emoji: customEmoji.shortcodes,
                                              countingBlockSeparators: true)
             } ?? blocks
-            let formatted = MarkdownMessageView(blocks: visible, quoteBar: quoteColor)
             Group {
                 if actionBodySize != nil, visible.count == 1, let inline = visible[0].inlineText, customEmoji.isEmpty {
                     liftedInlineText(inline)
                 } else if actionBodySize != nil {
                     let length = visible.reduce(0) { $0 + $1.menuExcerptLength }
                     ViewThatFits(in: .vertical) {
-                        formatted
-                        // SwiftUI measures these in order. Keep block chrome and choose a
-                        // whole excerpt that fits instead of clipping a code or quote line.
+                        // The measured body exceeds this frame. Start with a bounded
+                        // excerpt and keep whole code or quote lines where possible.
                         ForEach(Self.excerptBudgets.filter { $0 < length }, id: \.self) { budget in
                             MarkdownMessageView(blocks: MarkdownDisplayBlock.excerpt(visible, characterBudget: budget, emoji: customEmoji.shortcodes),
                                                 quoteBar: quoteColor)
@@ -1143,7 +1181,7 @@ struct MessageBubble: View {
                         Text(verbatim: "…")
                     }
                 } else {
-                    formatted
+                    MarkdownMessageView(blocks: visible, quoteBar: quoteColor)
                 }
             }
             .tint(MessageBubblePalette.foreground(isFromMe: isFromMe))
@@ -1204,7 +1242,7 @@ struct MessageBubble: View {
     }
 
     private var showsReactionStrip: Bool {
-        !isDeleted && !(status == .failed && onFailedTap != nil) && (!reactions.isEmpty || omittedReactionKinds > 0)
+        !isDeleted && (!reactions.isEmpty || omittedReactionKinds > 0)
     }
 
     private var widensTextForReactions: Bool {
@@ -1221,31 +1259,38 @@ struct MessageBubble: View {
     @ViewBuilder
     private var bubbleMetadataRow: some View {
         if status == .failed, !isDeleted, let onFailedTap {
-            VStack(alignment: .trailing, spacing: 2) {
-                Button(action: onFailedTap) {
-                    MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: .failed, isFromMe: true)
-                        .multilineTextAlignment(.trailing)
-                }
-                .buttonStyle(.plain)
-                .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
-                    showMessageActions?(.failureNotice)
-                })
-                if isEdited || hasReports {
-                    MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
-                        showsDeliveryStatus: false, hasReports: hasReports,
-                        onViewEditHistory: onViewEditHistory)
-                }
+            VStack(alignment: .trailing, spacing: 0) {
+                if showsReactionStrip { reactionMetadata(showsTimestamp: false) }
+                failedNotice(action: onFailedTap)
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.horizontal, density.metrics.bubbleHorizontalInset)
-            .padding(.top, density.metrics.bubbleMetadataSpacing)
         } else if !showsReactionStrip {
             if showsMetadataFooter {
                 metadataWithoutReactions.padding(.top, density.metrics.bubbleMetadataSpacing)
             }
         } else {
-            reactionMetadata
+            reactionMetadata(showsTimestamp: showsMetadataFooter)
         }
+    }
+
+    private func failedNotice(action: @escaping () -> Void) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Button(action: action) {
+                MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: .failed, isFromMe: true)
+                    .multilineTextAlignment(.trailing)
+            }
+            .buttonStyle(.plain)
+            .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
+                showMessageActions?(.failureNotice)
+            })
+            if isEdited || hasReports {
+                MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
+                    showsDeliveryStatus: false, hasReports: hasReports,
+                    onViewEditHistory: onViewEditHistory)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+        .padding(.top, density.metrics.bubbleMetadataSpacing)
     }
 
     private var metadataWithoutReactions: some View {
@@ -1266,7 +1311,7 @@ struct MessageBubble: View {
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
 
-    private var reactionMetadata: some View {
+    private func reactionMetadata(showsTimestamp: Bool) -> some View {
         let allPills = reactions
         let pills = Array(allPills.prefix(ReactionPillPresentation.maximumRenderedPills))
         let preHiddenCount = allPills.count - pills.count + Int(clamping: min(omittedReactionKinds, UInt64(Int.max - allPills.count)))
@@ -1307,13 +1352,17 @@ struct MessageBubble: View {
                     .accessibilityActions {
                         if let onTapReaction {
                             ForEach(pills, id: \.emoji) { tally in
-                                Button(tally.emoji) { onTapReaction(tally) }
+                                let name = CustomEmojiShortcode.spokenReaction(tally.emoji)
+                                let removes = tally.mine && ReactionPillPresentation.canRemoveIndividually(
+                                    tally.emoji, from: allPills, omittedKinds: omittedReactionKinds
+                                )
+                                Button(removes ? L10n.formatted("Remove reaction %@", name) : name) { onTapReaction(tally) }
                             }
                         }
                     }
             }
 
-            if showsMetadataFooter {
+            if showsTimestamp {
                 messageMetadataFooter
             }
         }
@@ -1361,14 +1410,15 @@ struct MessageBubble: View {
             isEdited: isEdited && !isDeleted,
             status: status,
             isFromMe: isFromMe,
-            showsDeliveryStatus: !isDeleted || status == .sent,
+            showsDeliveryStatus: MessageTombstonePresentation.showsDeliveryStatus(isDeleted: isDeleted),
             hasReports: hasReports,
             onViewEditHistory: onViewEditHistory
         )
     }
 
     private var timeLabel: String {
-        Self.timeLabel(recordedAt: record.recordedAt)
+        _ = appState.markdownTimestampClock.formatGeneration
+        return Self.timeLabel(recordedAt: record.recordedAt)
     }
 
     @ViewBuilder
@@ -2275,6 +2325,7 @@ private struct MessageMediaTile: View {
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     @State private var image: UIImage?
     @State private var gifData: Data?
+    @State private var gifReplay = 0
     @State private var loadedImageID: String?
     @State private var isLoading = false
     @State private var didFail = false
@@ -2310,6 +2361,7 @@ private struct MessageMediaTile: View {
                         Image(uiImage: image).resizable().scaledToFill()
                     }
                 }
+                .id(gifReplay)
                 .frame(width: size.width, height: size.height)
                 .clipped()
             } else if item.isImage {
@@ -2378,6 +2430,10 @@ private struct MessageMediaTile: View {
         }
         .onTapGesture {
             let request = openIntent?.begin()
+            if item.isGIF, loadedImageID == item.id, gifData != nil {
+                gifReplay &+= 1
+                return
+            }
             if item.isVideo {
                 onOpenVideo(item)
                 return
@@ -2590,6 +2646,13 @@ private struct MessageReplyMediaThumbnail: View {
         }
         .frame(width: side, height: side)
         .clipShape(.rect(cornerRadius: 8))
+        .onReceive(NotificationCenter.default.publisher(for: MessageVideoThumbnailDecoder.playedPreviewDidChange)) { update in
+            guard isTimelineRowVisible, item.isVideo, item.thumbnail == nil,
+                  let key = update.object as? String, key == MessageVideoThumbnailPresentation.cacheKey(for: item),
+                  let poster = MessageVideoThumbnailDecoder.cachedThumbnail(for: key, maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize) else { return }
+            image = poster
+            loadedItemID = item.id
+        }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard isTimelineRowVisible else { return }
@@ -2861,7 +2924,12 @@ private struct MessageVideoAttachmentView: View {
             let needsPoster = displayThumbnail == nil && !posterDecodeFailed
             let needsDuration = showsBadges && showsDuration && !durationReadFailed && item.durationSeconds == nil
                 && localDuration == nil && MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey) == nil
-            guard needsPoster || needsDuration else { return }
+            guard needsPoster || needsDuration else {
+                // Metadata can come from identical bytes in another message. Admit this
+                // slot under the Videos preference without decoding the movie again.
+                _ = await onLoadMedia.automaticAttachmentByteCount(item)
+                return
+            }
             let epoch = MessageMediaCache.currentProducerEpoch()
             guard let data = try? await onLoadMedia.videoPreviewData(for: item),
                   !Task.isCancelled,
@@ -3320,6 +3388,7 @@ struct LiftedDocumentDetails: Equatable {
 
 private struct MessageDocumentAttachmentView: View {
     @Environment(\.liftedDocuments) private var liftedDocuments
+    @Environment(\.timelineSearchQuery) private var searchQuery
     @Environment(\.actionRowMeasurementKey) private var measurementKey
     @Environment(\.mediaOpenIntent) private var openIntent
     @Environment(\.timelinePreviewSearch) private var transcriptSearch
@@ -3340,6 +3409,10 @@ private struct MessageDocumentAttachmentView: View {
     @State private var didFail = false
     @State private var share = DocumentSharePresentation()
 
+    private var displayName: String? {
+        liftedDetails?.name ?? contactName ?? transcriptSearch?.displayedContactName(for: item.id)
+    }
+
     private var liftedDetails: LiftedDocumentDetails? {
         guard let details = liftedDocuments?[item.id],
               details.revision == AttachmentPresentationState.shared.revision else { return nil }
@@ -3354,7 +3427,7 @@ private struct MessageDocumentAttachmentView: View {
             openingTask = Task { await openDocument(request) }
         } label: {
             HStack(spacing: 8) {
-                if DocumentPreviewFormat(mediaType: item.mediaType) == .contact {
+                if DocumentPreviewFormat(for: item) == .contact {
                     Image(systemName: "person.fill")
                         .foregroundStyle(.secondary)
                         .frame(width: 38, height: 38)
@@ -3367,10 +3440,17 @@ private struct MessageDocumentAttachmentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    TimelineSearchText(liftedDetails?.name ?? contactName ?? item.fileName)
+                    let name = displayName
+                    TimelineSearchText(name ?? item.fileName)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                         .multilineTextAlignment(.leading)
+                    if let name, name != item.fileName, let searchQuery, item.fileName.localizedStandardContains(searchQuery) {
+                        TimelineSearchText(item.fileName)
+                            .font(.caption)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Text(fileDetail)
                         .font(.caption)
                         .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground.opacity(0.74) : Color.secondary)
@@ -3403,7 +3483,7 @@ private struct MessageDocumentAttachmentView: View {
         .background {
             if let key = measurementKey {
                 let details = LiftedDocumentDetails(id: item.id, revision: AttachmentPresentationState.shared.revision,
-                    name: contactName, size: byteCount, isOpening: openingID != nil, didFail: didFail)
+                    name: displayName, size: byteCount, isOpening: openingID != nil, didFail: didFail)
                 Color.clear.preference(key: RowFramesKey.self, value: [.init(part: .document(details), key: key)])
             }
         }
@@ -3490,29 +3570,10 @@ private struct MessageDocumentAttachmentView: View {
         let demand = AttachmentDemand.userTap(afterFailure: didFail)
         didFail = false
         do {
-            if let format = DocumentPreviewFormat(mediaType: item.mediaType) {
-                var requested = item
-                requested.previewByteLimit = format.byteLimit
-                do {
-                    let data = try await onLoadMedia.data(for: requested, demand: demand)
-                    guard isCurrent() else { return }
-                    byteCount = data.count
-                    let document = await MessageDocumentPreview.parse(data: data, format: format)
-                    guard isCurrent() else { return }
-                    if let document {
-                        if case .contact(let card) = document.content { contactName = card.name }
-                        preview = document
-                        return
-                    }
-                } catch AttachmentReadError.previewLimitExceeded(let size) {
-                    guard isCurrent() else { return }
-                    byteCount = size
-                    // The original can still be handed off without rendering it in memory.
-                }
-                guard isCurrent() else { return }
-                try await share.present(item, using: onLoadMedia, demand: .explicit, isCurrent: isCurrent)
-            } else {
-                try await share.present(item, using: onLoadMedia, demand: demand, isCurrent: isCurrent)
+            if let document = try await share.openDocument(item, using: onLoadMedia, demand: demand,
+                isCurrent: isCurrent, didReadSize: { byteCount = $0 }), isCurrent() {
+                if case .contact(let card) = document.content { contactName = card.name }
+                preview = document
             }
         } catch is CancellationError {
             return
@@ -3793,10 +3854,30 @@ struct MessageMediaGallery: Identifiable {
         self.transcriptCaptions = nil
     }
 
-    func mayExport(_ item: MessageMediaAttachment, verify: ((MessageMediaAttachment) async -> Bool)?) async -> Bool {
+    func mayExport(_ item: MessageMediaAttachment, verify: ((MessageMediaAttachment) async throws -> Bool)?) async throws -> Bool {
         guard transcriptCaptions != nil else { return true }
-        guard let verify else { return false }
-        return await verify(item)
+        guard let verify else { throw CancellationError() }
+        return try await verify(item)
+    }
+
+    /// A handoff can finish after its message was hidden. Validate the selected source
+    /// after the lease arrives and release it before returning a failure.
+    func shareFile(for item: MessageMediaAttachment, using loader: ConversationMediaLoader,
+                   control: MediaFileTransferControlFfi,
+                   verify: ((MessageMediaAttachment) async throws -> Bool)?) async throws -> AttachmentShareFile {
+        func checkAccess() async throws {
+            guard !control.isCancelled(), try await mayExport(item, verify: verify),
+                  !control.isCancelled() else { throw AttachmentReadError.unavailable }
+        }
+        try await checkAccess()
+        let file = try await loader.shareFile(for: item, control: control)
+        do {
+            try await checkAccess()
+            return file
+        } catch {
+            file.finish()
+            throw error
+        }
     }
 
     func pendingSelection(for id: String) -> PendingSelection? {
@@ -3993,7 +4074,7 @@ struct MessageMediaFullscreenGalleryView: View {
                     media: prepared.item,
                     data: prepared.data,
                     verifySource: { item in
-                        await gallery.mayExport(item, verify: transcriptHistory?.verify)
+                        try await gallery.mayExport(item, verify: transcriptHistory?.verify)
                     },
                     viewModel: forwardingContext.viewModel,
                     destinationProvider: forwardingContext.destinationProvider
@@ -4167,12 +4248,16 @@ struct MessageMediaFullscreenGalleryView: View {
         Task {
             defer { if handoffControl === control { handoffControl = nil } }
             do {
-                let file = try await onLoadMedia.shareFile(for: item, control: control)
+                let file = try await gallery.shareFile(for: item, using: onLoadMedia, control: control,
+                    verify: transcriptHistory?.verify)
                 guard !control.isCancelled(), selectedItemID == item.id, selectedItem != nil else {
                     file.finish()
                     return
                 }
                 mediaShare = file
+            } catch AttachmentHandoffFailure.storageFull {
+                // The downloader already explains how to free space for the handoff.
+                return
             } catch {
                 if !control.isCancelled(), selectedItemID == item.id {
                     actionError = L10n.string("Couldn't prepare media.")
@@ -4393,6 +4478,7 @@ private struct MessageMediaFullscreenVideoPage: View {
     }
 
     private func releasePlayback() {
+        isLoading = false
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         audioSession.stop()

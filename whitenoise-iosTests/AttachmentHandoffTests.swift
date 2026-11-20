@@ -97,6 +97,33 @@ struct AttachmentHandoffTests {
         #expect(await releaser.leases == [lease])
     }
 
+    @Test func hidingTheSourceDuringShareReleasesTheOpenedLease() async throws {
+        let releaser = FakeReleaser()
+        let leased = AttachmentHandoffLease(lease: lease, path: "/tmp/handoff/photo.png", releaser: releaser)
+        let item = MessageMediaAttachment(id: "photo", reference: nil, fileName: "photo.png",
+                                          mediaType: "image/png", dim: nil, localData: nil)
+        let gallery = try #require(MessageMediaGallery(transcriptItems: [item], openingID: item.id,
+            initialData: nil, messages: [:], captions: [item.id: .init(sender: "Alice", date: .now)]))
+        var visible = false
+        var opened = false
+        let loader = ConversationMediaLoader { _ in throw AttachmentReadError.unavailable } openHandoff: { _, _ in
+            opened = true
+            visible = false
+            return leased
+        }
+        await #expect(throws: AttachmentReadError.unavailable) {
+            _ = try await gallery.shareFile(for: item, using: loader, control: MediaFileTransferControlFfi(),
+                                            verify: { _ in visible })
+        }
+        #expect(!opened)
+        visible = true
+        await #expect(throws: AttachmentReadError.unavailable) {
+            _ = try await gallery.shareFile(for: item, using: loader, control: MediaFileTransferControlFfi(),
+                                            verify: { _ in visible })
+        }
+        #expect(await waitForReleases(releaser, count: 1) == [lease])
+    }
+
     @Test func droppingAnUnreleasedLeaseReleasesIt() async {
         let releaser = FakeReleaser()
         do {
@@ -231,6 +258,34 @@ struct AttachmentHandoffTests {
             mediaType: "application/pdf", dim: nil, localData: localData, localTarget: localTarget)
         item.sourceHint = sourceHint
         return item
+    }
+
+    @Test func openingTextShowsAPreviewOrHandsOffItsOriginalSlot() async throws {
+        let item = MessageMediaAttachment(id: "row:0", reference: nil, fileName: "Notes.txt",
+            mediaType: "application/octet-stream", dim: nil, localData: nil, localTarget: Self.target)
+        let presentation = DocumentSharePresentation()
+        let releaser = FakeReleaser()
+        var contents = Data("notes".utf8)
+        var handedOff: [AttachmentLocalTargetFfi] = []
+        let loader = ConversationMediaLoader { _ in contents } openHandoff: { requested, _ in
+            if let target = requested.localTarget { handedOff.append(target) }
+            return AttachmentHandoffLease(lease: self.lease, path: "/tmp/handoff/Notes.txt", releaser: releaser)
+        }
+        let preview = try await presentation.openDocument(item, using: loader, demand: .explicit,
+            isCurrent: { true }, didReadSize: { _ in })
+        guard case .text("notes") = preview?.content else {
+            Issue.record("Expected the text preview")
+            return
+        }
+        #expect(presentation.file == nil && handedOff.isEmpty)
+
+        contents = Data([0xff])
+        let rejected = try await presentation.openDocument(item, using: loader, demand: .explicit,
+            isCurrent: { true }, didReadSize: { _ in })
+        #expect(rejected == nil)
+        #expect(handedOff == [Self.target])
+        #expect(presentation.file?.url.lastPathComponent == "Notes.txt")
+        presentation.close()
     }
 
     @Test func confirmedOwnSendWithHostBytesStillUsesItsSlot() {

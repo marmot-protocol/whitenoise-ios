@@ -3,22 +3,6 @@ import Observation
 import MarmotKit
 import os
 
-/// Messages the reader opened with "Read more". A sent message's row id is
-/// its optimistic send row only while that row is in the window, so each
-/// opening is remembered under its durable message id as well.
-nonisolated struct ExpandedMessageBodies: Equatable {
-    private var ids: Set<String> = []
-
-    func contains(rowID: String, messageID: String) -> Bool {
-        ids.contains(rowID) || (!messageID.isEmpty && ids.contains(messageID))
-    }
-
-    mutating func insert(rowID: String, messageID: String) {
-        ids.insert(rowID)
-        if !messageID.isEmpty { ids.insert(messageID) }
-    }
-}
-
 nonisolated enum DurableConvergenceRetryAction: Equatable {
     case retry
     case refreshBeforeRetry
@@ -112,6 +96,22 @@ nonisolated struct ConversationGroupRosterProjection: Equatable {
         isUnrecoverable = roster.lifecycleState == .unrecoverable
         isDisbanded = roster.lifecycleState == .disbanded
         revision = roster.rosterRevision
+    }
+}
+
+/// Messages the reader opened with "Read more". A sent message's row id is
+/// its optimistic send row only while that row is in the window, so each
+/// opening is remembered under its durable message id as well.
+nonisolated struct ExpandedMessageBodies: Equatable {
+    private var ids: Set<String> = []
+
+    func contains(rowID: String, messageID: String) -> Bool {
+        ids.contains(rowID) || (!messageID.isEmpty && ids.contains(messageID))
+    }
+
+    mutating func insert(rowID: String, messageID: String) {
+        ids.insert(rowID)
+        if !messageID.isEmpty { ids.insert(messageID) }
     }
 }
 
@@ -298,8 +298,8 @@ final class ConversationViewModel {
     @ObservationIgnored private var windowLifetime = UUID()
     private var startRequest = UUID()
     @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
-    private(set) var expandedBodies = ExpandedMessageBodies()
     private(set) var viewportIntent: ConversationViewportIntent = .followingLatest
+    private(set) var expandedBodies = ExpandedMessageBodies()
     private(set) var paginationRetryToken = 0
     private var pageAdmission = ConversationPageAdmission()
     var isAwaitingPageCompletion: Bool { pageAdmission.unresolvedRevision != nil }
@@ -1065,6 +1065,7 @@ final class ConversationViewModel {
                   (record.kind != MessageSemantics.kindPoll || record.sticker != nil),
                   !(appState?.streamingDebugEnabled == true && MessageSemantics.debugStyle(for: record).isUserVisibleBubble == false),
                   groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row) == nil else { continue }
+            guard !timelineStore.isHidden(record.messageIdHex), !timelineStore.isBlockedAuthor(record.sender) else { continue }
             for (index, media) in mediaItems(for: row).enumerated() {
                 guard media.isTranscriptGalleryMedia || (row.id == gifRowID && media.isGIF && media.rejectionKind == nil),
                       isAvailableInGallery(media) else { continue }
@@ -2460,7 +2461,7 @@ final class ConversationViewModel {
             )
             let media = mediaItems(for: item)
             var labels = [name]
-            let contacts = media.filter { DocumentPreviewFormat(mediaType: $0.mediaType) == .contact }
+            let contacts = media.filter { ["text/vcard", "text/x-vcard"].contains(MediaAttachmentPolicy.canonicalMediaType($0.mediaType)) }
             if !contacts.isEmpty { labels.append(L10n.string("Contact")) }
             for attachment in media {
                 labels.append(attachment.fileName)
@@ -3756,6 +3757,10 @@ final class ConversationViewModel {
         return reference
     }
 
+    // The picker, menu, chips and details share the same optimistic reaction state.
+    private enum PendingReaction: Hashable { case add(String), removeAll }
+    @ObservationIgnored private var pendingReactions: [String: Set<PendingReaction>] = [:]
+
     func toggleReaction(_ emoji: String, on message: AppMessageRecordFfi) async {
         #if DEBUG
         if let fixtureActions { fixtureActions.react(emoji, to: message.messageIdHex); return }
@@ -3765,6 +3770,17 @@ final class ConversationViewModel {
               !message.messageIdHex.isEmpty else { return }
         let me = appState.activeAccount?.accountIdHex ?? ""
         let alreadyMine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
+        // Different additions can upload together. Unreact clears every owned reaction
+        // on this message, so it must not overlap another addition or removal.
+        let id = message.messageIdHex
+        let operation: PendingReaction = alreadyMine ? .removeAll : .add(emoji)
+        let pending = pendingReactions[id] ?? []
+        guard !pending.contains(.removeAll), !alreadyMine || pending.isEmpty,
+              pendingReactions[id, default: []].insert(operation).inserted else { return }
+        defer {
+            pendingReactions[id]?.remove(operation)
+            if pendingReactions[id]?.isEmpty == true { pendingReactions[id] = nil }
+        }
         // A `:shortcode:` reaction is sent with its image; one this chat
         // holds no image for can only be removed.
         var customEmoji: CustomEmojiSendable?

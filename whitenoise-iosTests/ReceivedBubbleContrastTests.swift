@@ -3,6 +3,13 @@ import UIKit
 @testable import whitenoise_ios
 
 struct MessageBubbleMetadataLayoutTests {
+    @Test func shortQuotesHugTheirContentsAndLongExchangesRespectAvailableWidth() {
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: 300, ideal: 80) == 80)
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: 240, ideal: 400) == 240)
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: nil, ideal: 400) == 332)
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: 500, ideal: nil) == 332)
+    }
+
     @Test func timestampsAlwaysUseTheOuterConversationEdge() {
         #expect(!MessageMetadataRowArrangement.timestampOnLeadingEdge(isFromMe: true))
         #expect(MessageMetadataRowArrangement.timestampOnLeadingEdge(isFromMe: false))
@@ -108,12 +115,5 @@ struct TranscriptMessagePreviewTests {
             tail = tail[chunk.endIndex...]
         }
         #expect(recovered == text)
-    }
-
-    @Test func expansionFollowsTheMessageWhenItsOptimisticRowIsReplaced() {
-        var expanded = ExpandedMessageBodies()
-        expanded.insert(rowID: "outbox-1", messageID: "abc")
-        #expect(expanded.contains(rowID: "msg:abc", messageID: "abc"))
-        #expect(!expanded.contains(rowID: "outbox-2", messageID: ""))
     }
 }

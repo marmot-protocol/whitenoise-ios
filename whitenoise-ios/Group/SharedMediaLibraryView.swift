@@ -19,11 +19,10 @@ final class SharedMediaLibraryViewModel {
     private(set) var linksTruncated = false
     var loadError: String?
     var linksError: String?
-    private var cursor: AttachmentHistoryCursor?
-    private var version: AttachmentHistoryVersion?
-    private(set) var hasMore = false
+    private var pager = AttachmentHistoryPager()
+    var hasMore: Bool { didLoad && pager.canLoadMore }
     private(set) var hasNewAttachments = false
-    private var scope: String?
+    private var scope: AttachmentHistoryPager.Scope?
     private var generation = 0
     private var didLoad = false
     private var didLoadLinks = false
@@ -39,16 +38,17 @@ final class SharedMediaLibraryViewModel {
     static let linkScanPageLimit: UInt32 = 200
 
     func load(groupIdHex: String, using appState: AppState, force: Bool = false, nextPage: Bool = false) async {
-        guard let accountRef = appState.activeAccountRef else {
+        guard let newScope = AttachmentHistoryPager.Scope(appState: appState, group: groupIdHex) else {
             generation += 1
             scope = nil
             resetPages()
+            loadError = L10n.string("Couldn't load shared media.")
             links = []
             isLoading = false
             isLoadingLinks = false
             return
         }
-        let newScope = "\(accountRef)/\(appState.runtimeGeneration)/\(groupIdHex)"
+
         if scope != newScope {
             generation += 1
             scope = newScope
@@ -66,58 +66,26 @@ final class SharedMediaLibraryViewModel {
         loadError = nil
         defer { if generation == requestGeneration { isLoading = false } }
         do {
-            let client = try appState.currentMarmotClient()
-            var result = try await client.marmot.attachmentHistoryPage(accountRef: accountRef,
-                groupIdHex: groupIdHex, limit: 100, cursor: cursor)
-            try Task.checkCancellation()
-            guard generation == requestGeneration, appState.activeAccountRef == accountRef,
-                  appState.client === client else { return }
-            let mustRestart: Bool
-            switch result {
-            case .restartRequired, .cursorMismatch: mustRestart = true
-            case .page(let page): mustRestart = version.map { page.version.changeSince(previous: $0) == .restartRequired } ?? false
-            case .invalidLimit: mustRestart = false
-            }
-            if mustRestart {
-                resetPages()
-                result = try await client.marmot.attachmentHistoryPage(accountRef: accountRef,
-                    groupIdHex: groupIdHex, limit: 100, cursor: nil)
-                try Task.checkCancellation()
-                guard generation == requestGeneration, appState.activeAccountRef == accountRef,
-                      appState.client === client else { return }
-            }
             var hops = 0
-            while case .page(let filtered) = result,
-                  GroupSharedMediaPresentation.shouldReadPastFilteredPage(
-                      galleryEntryCount: GroupSharedMediaPresentation.galleryEntries(filtered.entries).count,
-                      hasMore: filtered.hasMore
-                  ),
-                  hops < GroupSharedMediaPresentation.maxFilteredPageHops,
-                  let next = filtered.nextCursor {
-                if version == nil { version = filtered.version }
-                result = try await client.marmot.attachmentHistoryPage(accountRef: accountRef,
-                    groupIdHex: groupIdHex, limit: 100, cursor: next)
-                try Task.checkCancellation()
-                guard generation == requestGeneration, appState.activeAccountRef == accountRef,
-                      appState.client === client else { return }
-                hops += 1
-            }
-            switch result {
-            case .page(let page):
+            while true {
+                let (page, next) = try await pager.readNext(in: newScope, using: appState,
+                    isCurrent: { self.generation == requestGeneration }, onRestart: { self.resetPages() })
+                guard generation == requestGeneration, (try? newScope.currentClient(in: appState)) != nil else { return }
+                pager = next
+                if GroupSharedMediaPresentation.shouldReadPastFilteredPage(
+                    galleryEntryCount: GroupSharedMediaPresentation.galleryEntries(page.entries).count,
+                    hasMore: next.canLoadMore
+                ), hops < GroupSharedMediaPresentation.maxFilteredPageHops {
+                    hops += 1
+                    continue
+                }
                 var ids = Set(items.map(\.id))
                 items.append(contentsOf: GroupSharedMediaPresentation.items(entries: page.entries)
                     .filter { ids.insert($0.id).inserted })
-                if version == nil { version = page.version }
-                cursor = page.nextCursor
-                hasMore = page.hasMore
                 visualItems = GroupSharedMediaPresentation.visualItems(from: items)
                 rebuildMonthSections()
                 didLoad = true
-            case .restartRequired, .cursorMismatch:
-                resetPages()
-                throw AttachmentReadError.stale
-            case .invalidLimit:
-                throw AttachmentReadError.unavailable
+                break
             }
         } catch is CancellationError {
             return
@@ -128,11 +96,11 @@ final class SharedMediaLibraryViewModel {
     }
 
     func refreshVersion(groupIdHex: String, using appState: AppState) async {
-        guard !isLoading, let previous = version, let account = appState.activeAccountRef,
-              let client = try? appState.currentMarmotClient() else { return }
+        guard !isLoading, let previous = pager.baseline, let scope, scope.group == groupIdHex else { return }
+        let ticket = generation
         do {
-            let current = try await client.marmot.attachmentHistoryVersion(accountRef: account, groupIdHex: groupIdHex)
-            guard !Task.isCancelled, appState.activeAccountRef == account, appState.client === client else { return }
+            let current = try await scope.version(in: appState)
+            guard ticket == generation, self.scope == scope else { return }
             switch current.changeSince(previous: previous) {
             case .unchanged: break
             case .restartRequired:
@@ -144,12 +112,10 @@ final class SharedMediaLibraryViewModel {
     }
 
     private func resetPages() {
-        cursor = nil
-        version = nil
+        pager = .init()
         items = []
         visualItems = []
         visualMonthSections = []
-        hasMore = false
         hasNewAttachments = false
         didLoad = false
     }
@@ -251,6 +217,7 @@ struct SharedMediaLibraryView: View {
     }
 
     var body: some View {
+        let scope = AttachmentHistoryPager.Scope(appState: appState, group: conversation.group.groupIdHex)
         VStack(spacing: 0) {
             Picker("Shared media type", selection: $category) {
                 Text("Media").tag(SharedMediaLibraryPresentation.Category.media)
@@ -282,8 +249,10 @@ struct SharedMediaLibraryView: View {
         .navigationTitle("Shared Media")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarRole(.editor)
-        .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)") {
+        .task(id: scope) {
             await model.load(groupIdHex: conversation.group.groupIdHex, using: appState)
+            guard scope != nil else { return }
+            if category == .links { await model.loadLinks(groupIdHex: conversation.group.groupIdHex, using: appState) }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 await model.refreshVersion(groupIdHex: conversation.group.groupIdHex, using: appState)

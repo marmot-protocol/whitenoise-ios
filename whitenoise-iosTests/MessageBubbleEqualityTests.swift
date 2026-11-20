@@ -34,8 +34,8 @@ import Testing
         #expect(base != MessageBubble(record: message(id: hex("01"), plaintext: "edited"), status: .sent))
         #expect(base != MessageBubble(record: record, status: .failed))
         #expect(base != MessageBubble(record: record, status: .sent, isDeleted: true))
-        // Moderation cards still open their excerpts in place.
-        #expect(base != MessageBubble(record: record, status: .sent, isBodyExpanded: false))
+        // "Read more" lives with the list; the bubble must redraw when it opens.
+        #expect(base != MessageBubble(record: record, status: .sent, isBodyExpanded: true))
         #expect(base != MessageBubble(record: record, status: .sent, reactions: [
             ConversationViewModel.ReactionTally(emoji: "👍", count: 1, mine: false),
         ]))

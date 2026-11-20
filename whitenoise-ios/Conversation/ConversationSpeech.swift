@@ -64,9 +64,20 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         let revision: Int
     }
 
+    struct Recording: Equatable {
+        let displayID: String
+        let target: AttachmentLocalTargetFfi
+
+        func matches(_ media: MessageMediaAttachment?) -> Bool {
+            guard let media, media.id == displayID else { return false }
+            if let direct = media.localTarget { return direct == target }
+            return media.sourceHint == AttachmentSourceHint(messageID: target.messageIdHex, slot: target.attachmentIndex)
+        }
+    }
+
     struct Transcript {
         var scope: Scope
-        let attachmentID: String
+        let recording: Recording
         let text: String
         var visible = true
     }
@@ -75,8 +86,8 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     private(set) var readingProgress = 0.0
     private(set) var transcribingID: String?
     private(set) var transcripts: [String: Transcript] = [:]
-    var availableAudio: (id: String, source: LocalVoiceAttachment, scope: Scope)?
-    private var transcribingAttachmentID: String?
+    var availableAudio: (recording: Recording, source: LocalVoiceAttachment, scope: Scope)?
+    private var transcribingRecording: Recording?
     @ObservationIgnored private var readingPreparation: Task<Void, Never>?
     @ObservationIgnored private var activeUtterance: (id: ObjectIdentifier, length: Int)?
     @ObservationIgnored private var synthesizer: AVSpeechSynthesizer?
@@ -150,18 +161,18 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    func transcribe(id: String, attachmentID: String, data: @escaping () async throws -> Data,
+    func transcribe(id: String, recording: Recording, data: @escaping () async throws -> Data,
                     verifiedScope: @escaping () async -> Scope?, onError: @escaping () -> Void) {
         guard #available(iOS 26, *), transcription == nil else { return }
         let request = UUID()
         requestID = request
         transcribingID = id
-        transcribingAttachmentID = attachmentID
+        transcribingRecording = recording
         transcription = Task {
             defer {
                 if requestID == request {
                     transcribingID = nil
-                    transcribingAttachmentID = nil
+                    transcribingRecording = nil
                     transcription = nil
                     requestID = nil
                 }
@@ -172,7 +183,9 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
                 let text = try await LocalVoiceRecognition.transcript(data: bytes)
                 try Task.checkCancellation()
                 guard let scope = await verifiedScope(), !Task.isCancelled, requestID == request else { return }
-                transcripts[id] = Transcript(scope: scope, attachmentID: attachmentID, text: text)
+                transcripts[id] = Transcript(scope: scope, recording: recording, text: text)
+            } catch is CancellationError {
+                return
             } catch {
                 if !Task.isCancelled, requestID == request { onError() }
             }
@@ -181,9 +194,9 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
 
     /// A revised attachment presentation immediately hides derived text. Restore
     /// only recordings whose original slots are still held in the opening route.
-    func revalidate(in scope: Scope, isHeld: (String, String) async -> Bool?) async {
-        if let running = requestID, let transcribingID, let transcribingAttachmentID,
-           await isHeld(transcribingID, transcribingAttachmentID) == false,
+    func revalidate(in scope: Scope, isHeld: (String, Recording) async -> Bool?) async {
+        if let running = requestID, let transcribingID, let transcribingRecording,
+           await isHeld(transcribingID, transcribingRecording) == false,
            !Task.isCancelled, requestID == running {
             cancelTranscription()
         }
@@ -191,13 +204,13 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
             guard !Task.isCancelled else { return }
             let held: Bool
             if transcript.scope.route == scope.route {
-                guard let result = await isHeld(id, transcript.attachmentID) else { return }
+                guard let result = await isHeld(id, transcript.recording) else { return }
                 held = result
             } else {
                 held = false
             }
             guard !Task.isCancelled else { return }
-            guard transcripts[id]?.scope == transcript.scope, transcripts[id]?.attachmentID == transcript.attachmentID else { continue }
+            guard transcripts[id]?.scope == transcript.scope, transcripts[id]?.recording == transcript.recording else { continue }
             if held {
                 transcripts[id]?.scope = scope
             } else {
@@ -210,10 +223,10 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         transcripts[id]?.visible = visible
     }
 
-    func prune(visibleMessage: (String) -> Bool, audioID: (String) -> String?) {
+    func prune(visibleMessage: (String) -> Bool, audioMatches: (String, Recording) -> Bool) {
         if let readingID, !visibleMessage(readingID) { stopReading() }
-        if let transcribingID, audioID(transcribingID) != transcribingAttachmentID { cancelTranscription() }
-        let removed = transcripts.compactMap { id, value in audioID(id) == value.attachmentID ? nil : id }
+        if let transcribingID, let transcribingRecording, !audioMatches(transcribingID, transcribingRecording) { cancelTranscription() }
+        let removed = transcripts.compactMap { id, value in audioMatches(id, value.recording) ? nil : id }
         for id in removed { transcripts.removeValue(forKey: id) }
     }
 
@@ -222,7 +235,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         transcription?.cancel()
         transcription = nil
         transcribingID = nil
-        transcribingAttachmentID = nil
+        transcribingRecording = nil
     }
 
     func reset() {
@@ -279,14 +292,24 @@ nonisolated enum LocalVoiceRecognition {
 @MainActor
 enum LocalVoiceAttachment {
     #if DEBUG
-    case bundled(URL)
+    case bundled(URL, target: AttachmentLocalTargetFfi)
     #endif
     case retained(account: String, group: String, client: MarmotClient, target: AttachmentLocalTargetFfi)
+
+    var target: AttachmentLocalTargetFfi {
+        switch self {
+        #if DEBUG
+        case .bundled(_, let target): target
+        #endif
+        case .retained(_, _, _, let target): target
+        }
+    }
 
     static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState, fixture: Bool) async -> Self? {
         #if DEBUG
         if fixture {
-            return ChatPreviewMedia.url(media.fileName).map(Self.bundled)
+            guard let target = media.localTarget, let url = ChatPreviewMedia.url(media.fileName) else { return nil }
+            return .bundled(url, target: target)
         }
         #endif
         guard let account = app.activeAccountRef, let client = try? app.currentMarmotClient() else { return nil }
@@ -320,7 +343,7 @@ enum LocalVoiceAttachment {
     func data(in app: AppState) async throws -> Data {
         switch self {
         #if DEBUG
-        case .bundled(let url):
+        case .bundled(let url, _):
             return try Data(contentsOf: url, options: .mappedIfSafe)
         #endif
         case let .retained(account, group, client, target):

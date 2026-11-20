@@ -83,6 +83,11 @@ struct MessageDeletionTests {
         #expect(MessageDeletePresentation.supportingCopy(capability: both, isMine: false) == .moderation)
     }
 
+    @Test func tombstoneKeepsTimestampButDropsDeliveryStatus() {
+        #expect(!MessageTombstonePresentation.showsDeliveryStatus(isDeleted: true))
+        #expect(MessageTombstonePresentation.showsDeliveryStatus(isDeleted: false))
+    }
+
     @Test(.marmotRuntimeConcurrencyLimit)
     func viewModelCapabilityIsAvailableForIngestedMessages() async throws {
         // Positive regression coverage for delete availability through the

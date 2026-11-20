@@ -172,6 +172,7 @@ struct MarkdownTimestampRenderContext {
 
 struct MessageMarkdownDisplayProjection: Equatable {
     let blocks: [MarkdownDisplayBlock]?
+    var isTruncated = false
     let mentionedAccountIds: Set<String>
     var timestamps = MarkdownTimestampUsage()
 
@@ -194,6 +195,7 @@ struct MessageMarkdownDisplayProjection: Equatable {
         )
         return MessageMarkdownDisplayProjection(
             blocks: built.blocks,
+            isTruncated: built.isTruncated,
             mentionedAccountIds: mentionedAccountIds,
             timestamps: built.timestamps
         )
@@ -318,8 +320,8 @@ enum MarkdownMessageBuilder {
         mentionDisplayName: MarkdownMentionResolver? = nil,
         timestampContext: MarkdownTimestampRenderContext? = nil,
         usesStaticTimestamps: Bool = false
-    ) -> (blocks: [MarkdownDisplayBlock]?, timestamps: MarkdownTimestampUsage) {
-        guard !document.blocks.isEmpty else { return (nil, MarkdownTimestampUsage()) }
+    ) -> (blocks: [MarkdownDisplayBlock]?, timestamps: MarkdownTimestampUsage, isTruncated: Bool) {
+        guard !document.blocks.isEmpty else { return (nil, MarkdownTimestampUsage(), document.truncated) }
         var budget = Budget()
         budget.usesStaticTimestamps = usesStaticTimestamps
         budget.timestampContext = timestampContext
@@ -329,11 +331,11 @@ enum MarkdownMessageBuilder {
             depth: 0,
             mentionDisplayName: mentionDisplayName
         )
-        guard !blocks.isEmpty else { return (nil, budget.timestamps) }
+        guard !blocks.isEmpty else { return (nil, budget.timestamps, budget.truncated || document.truncated) }
         if budget.truncated {
             blocks.append(.paragraph(AttributedString("…")))
         }
-        return (blocks, budget.timestamps)
+        return (blocks, budget.timestamps, budget.truncated || document.truncated)
     }
 
     /// Inline flattening, exposed for tests.

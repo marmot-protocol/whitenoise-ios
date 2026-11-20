@@ -9,7 +9,7 @@ extension EnvironmentValues {
 struct TranscriptMediaSheet<Page: View>: View {
     @Environment(\.transcriptHistoryControls) private var history
     @State private var actionRead: Task<Void, Never>?
-    @State private var showsActionFailure = false
+    @State private var actionFailure: LocalizedStringKey?
     let gallery: MessageMediaGallery
     @Binding var selection: String
     let isZoomed: Bool
@@ -71,17 +71,17 @@ struct TranscriptMediaSheet<Page: View>: View {
                         VStack(spacing: 4) {
                             if history?.pageFailed == true {
                                 HStack {
-                                        Text("Couldn't load shared media.")
-                                        Button("Retry") { history?.loadMore?() }
-                                    }
-                                    .font(.caption)
-                                } else if let checked = history?.checkedWithoutOverlap {
-                                    Text("Attachments checked: \(checked)")
-                                        .font(.caption).foregroundStyle(.secondary)
+                                    Text("Couldn't load shared media.")
+                                    Button("Retry") { history?.loadMore?() }
                                 }
-                                HStack {
+                                .font(.caption)
+                            } else if let checked = history?.checkedWithoutOverlap {
+                                Text("Attachments checked: \(checked)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            HStack {
                                 MessageMediaGalleryButton(title: "Share", systemImage: "square.and.arrow.up", action: onShare)
-                                    .disabled(!controls.canShare)
+                                    .disabled(history == nil || !controls.canShare)
                                 Spacer()
                                 MessageMediaGalleryButton(title: "Forward", systemImage: "arrowshape.turn.up.right", action: { verified(onForward) })
                                     .disabled(history == nil || !controls.canForward)
@@ -98,7 +98,9 @@ struct TranscriptMediaSheet<Page: View>: View {
             if itemID == gallery.items.first?.id { history?.loadMore?() }
         }
         .onDisappear { actionRead?.cancel() }
-        .alert("Media unavailable", isPresented: $showsActionFailure) {
+        .alert(Text(actionFailure ?? "Media unavailable"), isPresented: Binding(
+            get: { actionFailure != nil }, set: { if !$0 { actionFailure = nil } }
+        )) {
             Button("OK", role: .cancel) {}
         }
         .environment(\.isTranscriptMediaSheet, true)
@@ -110,10 +112,15 @@ struct TranscriptMediaSheet<Page: View>: View {
         guard let item = gallery.items.first(where: { $0.id == selection }) else { return }
         actionRead?.cancel()
         actionRead = Task {
-            let allowed = await gallery.mayExport(item, verify: history?.verify)
-            guard !Task.isCancelled, selection == item.id else { return }
-            if allowed { action() }
-            else { showsActionFailure = true }
+            do {
+                let allowed = try await gallery.mayExport(item, verify: history?.verify)
+                guard !Task.isCancelled, selection == item.id else { return }
+                if allowed { action() }
+                else { actionFailure = "Media unavailable" }
+            } catch {
+                guard !Task.isCancelled, selection == item.id else { return }
+                actionFailure = "Attachment couldn’t be read"
+            }
         }
     }
 

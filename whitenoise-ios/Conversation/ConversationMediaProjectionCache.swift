@@ -190,14 +190,16 @@ final class ConversationMediaProjectionCache {
             mirroredReferences: referencesByMessageId[record.messageIdHex],
             sourceMessageID: sourceIDs[record.messageIdHex]
         )
-        guard projectionKeysByRowId[item.id] != key else { return false }
+        let previousKey = projectionKeysByRowId[item.id]
+        guard previousKey != key else { return false }
         let next = build(for: record, ownerId: item.id)
         projectionKeysByRowId[item.id] = key
         let emojiChanged = updateCustomEmoji(rowId: item.id, record: record, attachments: next)
         guard !next.isEmpty else {
             return (projectionsByRowId.removeValue(forKey: item.id) != nil) || emojiChanged
         }
-        guard projectionsByRowId[item.id] != next else { return emojiChanged }
+        // A new source can own the same displayed bytes and slot after an edit.
+        guard previousKey?.sourceMessageID != key.sourceMessageID || projectionsByRowId[item.id] != next else { return emojiChanged }
         projectionsByRowId[item.id] = next
         return true
     }

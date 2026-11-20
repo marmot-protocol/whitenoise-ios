@@ -494,6 +494,22 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.reactions(for: message.messageIdHex).isEmpty)
     }
 
+    @Test func changingTimeZoneRegroupsTheSameMessagesAroundMidnight() throws {
+        let model = ConversationViewModel(appState: AppState.test(), group: group(name: ""))
+        let records = [82_740, 82_860].enumerated().map { index, time in
+            timelineRecord(messageIdHex: hex(index == 0 ? "11" : "22"), timelineAt: UInt64(time))
+        }
+        model.applyTimelinePage(.init(messages: records, hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        let first = try #require(model.timeline.first)
+        let last = try #require(model.timeline.last)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        #expect(!model.timelineStore.messageClusterPresentation(for: first, calendar: calendar).endsCluster)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 3600))
+        #expect(model.timelineStore.messageClusterPresentation(for: first, calendar: calendar).endsCluster)
+        #expect(model.timelineStore.messageClusterPresentation(for: last, calendar: calendar).startsCluster)
+    }
+
     @Test func timelinePageHydratesReplyPreviewReactionsAndDeletedState() throws {
         let appState = AppState.test()
         let parentSender = hex("11")
@@ -926,7 +942,7 @@ struct ConversationTimelineProjectionTests {
         }
 
         // The first durable projection consumes the optimistic row but remains
-        // unresolved, so it keeps the clock and convergence-retry path.
+        // unresolved, so it keeps the sending indicator and convergence-retry path.
         #expect(status() == .sending)
         #expect(MessageFooterPresentation.value(for: try #require(status()), isFromMe: true).accessibilityLabel == L10n.string("Sending…"))
         #expect(viewModel.canRetryFailedSend(rowId: rowId))

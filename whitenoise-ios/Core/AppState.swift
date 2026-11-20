@@ -1,4 +1,5 @@
 // swiftlint:disable no_test_hook_in_app_code
+import Combine
 import Foundation
 import Observation
 import OSLog
@@ -503,7 +504,8 @@ final class AppState {
             return try self.currentMarmotClient()
         }
     )
-    @ObservationIgnored weak var transcriptHistoryObserver: TranscriptAttachmentHistory?
+    /// Visible attachment collections subscribe independently to off-window changes.
+    let attachmentProjectionUpdates = PassthroughSubject<RuntimeProjectionUpdateFfi, Never>()
     let pollVotesInvalidation = PollVotesInvalidation()
     // Review is a separate destination; timeline visibility ends when it is pushed.
     @ObservationIgnored var moderationProjectionRoute: GroupRecoveryUpdate?
@@ -516,7 +518,7 @@ final class AppState {
 
     func handleRuntimeEvent(_ event: MarmotEventFfi, generation: Int) {
         guard runtimeEventsGeneration == generation else { return }
-        transcriptHistoryObserver?.observe(event)
+        if case .projectionUpdated(let update) = event { attachmentProjectionUpdates.send(update) }
         pollVotesInvalidation.observe(event)
         if case .projectionUpdated(let update) = event,
            activeAccount?.accountIdHex == update.accountIdHex,
@@ -775,7 +777,6 @@ final class AppState {
 
     @MainActor
     func noteRetentionSweepCompleted(prunedGroupIds: Set<String>) {
-        transcriptHistoryObserver?.retentionChanged(groups: prunedGroupIds)
         retentionSweepPrunedGroupIds = prunedGroupIds
         retentionSweepGeneration += 1
     }

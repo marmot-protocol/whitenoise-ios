@@ -27,6 +27,33 @@ struct MarkdownMessageBuilderTests {
         #expect(try firstParagraphText(body) == "Body")
     }
 
+    @Test func aNodeLimitedProjectionKeepsTheSourceReaderAvailable() {
+        let source = String(repeating: "- a\n", count: 900) + "- TAIL"
+        let item = MarkdownListItemFfi(blocks: [para([.text(content: "a")])], checked: nil)
+        let tail = MarkdownListItemFfi(blocks: [para([.text(content: "TAIL")])], checked: nil)
+        let document = doc([.listBlock(kind: .bullet(marker: "-"), tight: true, items: Array(repeating: item, count: 900) + [tail])])
+        let row = record(plaintext: source, tokens: document)
+        let projection = MessageMarkdownDisplayProjection.build(for: row, mentionDisplayName: nil)
+        #expect(!TranscriptMessagePreview.exceedsInlineLimit(source))
+        #expect(projection.isTruncated)
+        #expect(MessageBubble(record: row, status: .received, incompleteMarkdown: projection.isTruncated,
+                              isBodyExpanded: true).offersSourceReader)
+    }
+
+    @Test func onlyFinalizedStreamsOfferTheUnshownSource() {
+        var row = record(plaintext: String(repeating: "🌲", count: 3000), tokens: doc([]))
+        row.tags = [
+            .init(values: ["stream", String(repeating: "ab", count: 32)]),
+            .init(values: ["stream-start", String(repeating: "cc", count: 32)]),
+            .init(values: ["stream-hash", String(repeating: "55", count: 32)]),
+            .init(values: ["stream-chunks", "2"])
+        ]
+        #expect(MessageBubble(record: row, status: .received).offersSourceReader)
+        #expect(!MessageBubble(record: row, status: .streaming).offersSourceReader)
+        row.plaintext = "Finished"
+        #expect(!MessageBubble(record: row, status: .received).offersSourceReader)
+    }
+
     private func para(_ inlines: [MarkdownInlineFfi]) -> MarkdownBlockFfi {
         .paragraph(inlines: inlines)
     }

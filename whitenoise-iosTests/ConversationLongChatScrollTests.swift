@@ -112,16 +112,16 @@ private struct LongChatStressFixture {
         rows.filter { $0.replyPreview != nil }.count
     }
 
-    var revealedLongBodyCount: Int {
+    var revealedReadMoreCount: Int {
         rows.filter {
-            $0.revealedRecord.plaintext.split(separator: "\n").count >= 18
+            MessageBodyCollapsePresentation.shouldCollapse($0.revealedRecord.plaintext)
         }.count
     }
 
     private static func body(for index: Int, isLong: Bool) -> String {
         if isLong {
             return (0..<18).map { line in
-                "Message \(index), line \(line): this deliberately long paragraph exercises the full transcript body and the timeline’s scrolling anchors."
+                "Message \(index), line \(line): this deliberately long paragraph exercises the real collapsed message body and its Read more control."
             }.joined(separator: "\n")
         }
         if index.isMultiple(of: 13) {
@@ -346,8 +346,8 @@ struct ConversationLongChatScrollTests {
         #expect(fixture.revealedImagePayloadCount == fixture.revealedImageCount)
         #expect(fixture.reactionCount >= 20)
         #expect(fixture.replyCount >= 8)
-        #expect(fixture.revealedLongBodyCount >= 12)
-        #expect((fixture.rows.last?.initialRecord.plaintext.split(separator: "\n").count ?? 0) >= 18)
+        #expect(fixture.revealedReadMoreCount >= 12)
+        #expect(MessageBodyCollapsePresentation.shouldCollapse(fixture.rows.last?.initialRecord.plaintext ?? ""))
 
         let model = LongChatStressModel()
         let appState = try TestRuntimeScope.own(AppState.test(

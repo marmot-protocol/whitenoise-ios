@@ -35,7 +35,7 @@ struct ChatSurfacePresentationTests {
 
     @Test func deliveryFooterUsesCompactSymbols() {
         #expect(MessageFooterPresentation.value(for: .sent, isFromMe: true).systemImage == "checkmark.circle.fill")
-        #expect(MessageFooterPresentation.value(for: .sending, isFromMe: true).accessibilityLabel == L10n.string("Sending…"))
+        #expect(MessageFooterPresentation.value(for: .sending, isFromMe: true).systemImage == "ellipsis.message")
         #expect(MessageFooterPresentation.value(for: .failed, isFromMe: true).isFailure)
         #expect(MessageFooterPresentation.value(for: .received, isFromMe: false).systemImage == nil)
     }
@@ -178,6 +178,7 @@ struct ChatSurfacePresentationTests {
         let resolvable: Set = [marmot, wave]
         #expect(SingleCustomEmojiMessagePresentation.shortcode(in: ":marmot:", resolvable: resolvable) == marmot)
         #expect(SingleCustomEmojiMessagePresentation.shortcode(in: "  :wave:\n", resolvable: resolvable) == wave)
+        #expect(SingleCustomEmojiMessagePresentation.shortcode(in: "😀", resolvable: resolvable) == nil)
     }
 
     @Test func customEmojiWithTextOrUnresolvedStaysInBubble() throws {

@@ -182,6 +182,9 @@ extension GroupSharedMediaPresentationTests {
         row.deleted = true
         install([row])
         #expect(!store.hasUnsourcedOwnMessage(row.messageIdHex))
+        row.deleted = false
+        install([row])
+        #expect(store.hasUnsourcedOwnMessage(row.messageIdHex))
         install([])
         #expect(!store.hasUnsourcedOwnMessage(row.messageIdHex))
     }
