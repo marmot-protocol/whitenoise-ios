@@ -2074,6 +2074,7 @@ private struct MessageMediaAttachmentContent: View {
     private func tile(_ item: MessageMediaAttachment, size: CGSize) -> some View {
         MessageMediaTile(item: item, isFromMe: isFromMe, size: size, hiddenCount: 0,
             onLoadMedia: onLoadMedia, onOpenImage: onOpenImage, onOpenVideo: onOpenVideo)
+            .id(item.id)
             .clipShape(.rect(cornerRadius: 12))
     }
 }
