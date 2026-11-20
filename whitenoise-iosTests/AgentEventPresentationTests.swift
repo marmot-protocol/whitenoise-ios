@@ -72,6 +72,9 @@ struct AgentEventPresentationTests {
         #expect(finished.iconName == "checkmark.message")
         #expect(!finished.reportsWorkInProgress)
 
+        model.timelineStore.setHiddenMessageIds([answer.messageIdHex])
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == false)
+
         var reprojected = answer
         reprojected.replyToMessageIdHex = nil
         _ = model.timelineStore.applyTimelineRecord(reprojected, updateTimeline: true)

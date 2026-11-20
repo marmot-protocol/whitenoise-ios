@@ -135,7 +135,8 @@ final class ConversationSearchModel {
     }
     private(set) var matchingItemIDs: Set<String> = []
     private(set) var currentIndex: Int?
-    private(set) var isPagingOlder = false
+    private var olderPageRequest: (id: UUID, query: String)?
+    var isPagingOlder: Bool { olderPageRequest != nil }
     private(set) var nextPollDeadline: Date?
     private(set) var scrollRequest: ScrollRequest?
 
@@ -209,7 +210,7 @@ final class ConversationSearchModel {
         matches = []
         currentIndex = nil
         scrollRequest = nil
-        isPagingOlder = false
+        olderPageRequest = nil
         return observation
     }
 
@@ -230,7 +231,7 @@ final class ConversationSearchModel {
         updateContactRevision()
         guard displayedContactNames.object(forKey: attachmentID as NSString) as String? != name else { return }
         displayedContactNames.setObject(name as NSString, forKey: attachmentID as NSString)
-        refreshAfterTimelineChange()
+        refreshAfterSearchableContentChange()
     }
 
     func displayedContactName(for attachmentID: String) -> String? {
@@ -247,10 +248,11 @@ final class ConversationSearchModel {
             ?? ConversationSearchEngine.initialIndex(matchCount: matches.count)
     }
 
-    func refreshAfterPollDeadline() {
+    func refreshAfterSearchableContentChange(allowScrollTo: (String) -> Bool = { _ in true }) {
         let previousID = currentMatch?.itemId
         refreshAfterTimelineChange()
-        if previousID != currentMatch?.itemId { requestScrollToCurrentMatch() }
+        if olderPageRequest?.query != query, let match = currentMatch, previousID != match.itemId,
+           allowScrollTo(match.messageIdHex) { requestScrollToCurrentMatch() }
     }
 
     func goToNewerMatch() {
@@ -321,8 +323,9 @@ final class ConversationSearchModel {
         guard !isPagingOlder, hasQuery else { return }
         let steppedQuery = query
         let anchorId = currentMatch?.itemId
-        isPagingOlder = true
-        defer { isPagingOlder = false }
+        let requestID = UUID()
+        olderPageRequest = (requestID, steppedQuery)
+        defer { if olderPageRequest?.id == requestID { olderPageRequest = nil } }
 
         var pagesLoaded = 0
         var foundOlderMatch = false
@@ -331,7 +334,7 @@ final class ConversationSearchModel {
             pagesLoaded: pagesLoaded
         ) {
             await loadOlderPage()
-            guard isActive, query == steppedQuery else { return }
+            guard isActive, olderPageRequest?.id == requestID, query == steppedQuery else { return }
             pagesLoaded += 1
             refreshAfterTimelineChange()
             foundOlderMatch = hasMatchOlder(thanAnchor: anchorId)

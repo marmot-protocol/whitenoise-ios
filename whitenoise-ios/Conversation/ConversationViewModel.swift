@@ -1106,8 +1106,17 @@ final class ConversationViewModel {
         timelineStore.refreshStreamingDebugPresentation()
     }
 
-    func refreshProfileDependentTimelineProjections() {
-        timelineStore.refreshProfileDependentTimelineProjections()
+    func refreshProfileDependentTimelineProjections(affectedMessageIDs: Set<String>? = nil,
+                                                    allowScrollTo: (String) -> Bool = { _ in true }) {
+        timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affectedMessageIDs)
+        guard search.isActive, search.hasQuery, affectedMessageIDs?.isEmpty != true else { return }
+        if let selected = search.currentMatch,
+           timelineStore.timelineIndex(forMessageIdHex: selected.messageIdHex) == nil || isDeleted(selected.messageIdHex) {
+            // A page, hide or deletion owns this change of viewport.
+            search.refreshAfterTimelineChange()
+        } else {
+            search.refreshAfterSearchableContentChange(allowScrollTo: allowScrollTo)
+        }
     }
 
     func applyTimestampRenderGeneration(_ generation: Int) {
@@ -1861,6 +1870,7 @@ final class ConversationViewModel {
                 viewportIntent = .history(id)
             }
         }
+        let previousWindow = conversationWindow
         conversationWindow = snapshot
         // Mutating an observed property invalidates the whole conversation view,
         // so only touch the admission when a page is actually pending.
@@ -1889,7 +1899,10 @@ final class ConversationViewModel {
                 let identities = Set(references.mentions + references.replyMentions + [references.sender, references.replyAuthor].compactMap { $0 })
                 return references.system != nil || !identities.isDisjoint(with: changedNames) ? message.timeline.messageIdHex : nil
             })
-            timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affected)
+            refreshProfileDependentTimelineProjections(affectedMessageIDs: affected) { messageID in
+                // New page rows update the count without interrupting the scroll that loaded them.
+                affected.contains(messageID) && previousWindow?.messages.contains { $0.timeline.messageIdHex == messageID } == true
+            }
         }
         error = navigationFailure
         windowDidChange?()
@@ -3718,12 +3731,30 @@ final class ConversationViewModel {
         return reference
     }
 
+    // The picker, menu, chips and details share the same optimistic reaction state.
+    private enum PendingReaction: Hashable { case add(String), removeAll }
+    @ObservationIgnored private var pendingReactions: [String: Set<PendingReaction>] = [:]
+
     func toggleReaction(_ emoji: String, on message: AppMessageRecordFfi) async {
         guard canSendMessages,
               let appState, let accountRef = appState.activeAccountRef,
               !message.messageIdHex.isEmpty else { return }
         let me = appState.activeAccount?.accountIdHex ?? ""
         let alreadyMine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
+        // Different additions can upload together. Unreact clears every owned reaction
+        // on this message, so it must not overlap another addition or removal.
+        let id = message.messageIdHex
+        let operation: PendingReaction = alreadyMine ? .removeAll : .add(emoji)
+        let pending = pendingReactions[id] ?? []
+        guard !pending.contains(.removeAll), !alreadyMine || pending.isEmpty,
+              pendingReactions[id, default: []].insert(operation).inserted else {
+            Haptics.warning()
+            return
+        }
+        defer {
+            pendingReactions[id]?.remove(operation)
+            if pendingReactions[id]?.isEmpty == true { pendingReactions[id] = nil }
+        }
         // A `:shortcode:` reaction is sent with its image; one this chat
         // holds no image for can only be removed.
         var customEmoji: CustomEmojiSendable?

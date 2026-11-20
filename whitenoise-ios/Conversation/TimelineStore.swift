@@ -1395,7 +1395,7 @@ final class TimelineStore {
         messageByRowFrameKey = Self.messageRowsByFrameKey(next)
         timelineIndexByMessageId = Self.timelineIndexesByMessageId(next)
         // MDK's projected reply target can change independently of the visible record.
-        let answered = Self.answeredActivities(in: next, replyTarget: replyTargetId(for:))
+        let answered = answeredActivities(in: next)
         let answersChanged = answered != answeredActivityRows
         answeredActivityRows = answered
         guard timelineSignature != nextSignature else { return answersChanged }
@@ -1410,7 +1410,8 @@ final class TimelineStore {
         if index < timelineSignature.count, timelineSignature[index] == signature {
             return false
         }
-        if case .message(let replaced, _) = timeline[index].kind,
+        let previous = timeline[index]
+        if case .message(let replaced, _) = previous.kind,
            timelineIndexByMessageId[replaced.messageIdHex] == index {
             timelineIndexByMessageId[replaced.messageIdHex] = nil
         }
@@ -1429,26 +1430,50 @@ final class TimelineStore {
             timelineSignature = timeline.map(TimelineItemSignature.init)
         }
         clusterCalendar = nil
-        answeredActivityRows = Self.answeredActivities(in: timeline, replyTarget: replyTargetId(for:))
+        if affectsActivityCompletion(previous) || affectsActivityCompletion(item) {
+            answeredActivityRows = answeredActivities(in: timeline)
+        }
         return true
     }
 
+    private func affectsActivityCompletion(_ item: TimelineItem) -> Bool {
+        guard case .message(let record, let status) = item.kind else { return false }
+        if record.kind == MessageSemantics.kindAgentActivity { return true }
+        return record.kind == MessageSemantics.kindChat && (status == .sent || status == .received)
+            && replyTargetId(for: record) != nil
+    }
+
     /// An answer closes progress only for the same author and the same request.
-    private static func answeredActivities(in timeline: [TimelineItem],
-                                   replyTarget: (AppMessageRecordFfi) -> String?) -> Set<String> {
+    private func answeredActivities(in visibleRows: [TimelineItem]) -> Set<String> {
+        guard visibleRows.contains(where: { item in
+            if case .message(let record, _) = item.kind { return record.kind == MessageSemantics.kindAgentActivity }
+            return false
+        }) else { return [] }
+        // Delete for me hides an answer without undoing the work. Preserve timeline
+        // ordering so an earlier answer cannot complete a later activity.
+        var rows = visibleRows
+        if !hiddenMessageIds.isEmpty {
+            let hiddenAnswers = messageById.values.compactMap { record -> TimelineItem? in
+                guard record.kind == MessageSemantics.kindChat, isHidden(record.messageIdHex),
+                      !isBlockedAuthor(record.sender), replyTargetId(for: record) != nil else { return nil }
+                let item = TimelineItem.message(record, status: messageStatusById[record.messageIdHex])
+                return TimelineItem(id: displayID(for: record.messageIdHex), kind: item.kind, timestamp: item.timestamp)
+            }
+            if !hiddenAnswers.isEmpty { rows = orderedTimeline(visibleRows + hiddenAnswers) }
+        }
         struct Request: Hashable {
             let sender: String
             let messageID: String
         }
         var pending: [Request: [String]] = [:]
         var answered: Set<String> = []
-        for item in timeline {
+        for item in rows {
             guard case let .message(record, status) = item.kind else { continue }
             if record.kind == MessageSemantics.kindAgentActivity,
                let target = MessageSemantics.firstValue(of: MessageSemantics.eventRefTag, in: record.tags), !target.isEmpty {
                 pending[Request(sender: record.sender, messageID: target), default: []].append(item.id)
             } else if !pending.isEmpty, record.kind == MessageSemantics.kindChat,
-                      status == .received || status == .sent, let target = replyTarget(record),
+                      status == .received || status == .sent, let target = replyTargetId(for: record),
                       let rows = pending.removeValue(forKey: Request(sender: record.sender, messageID: target)) {
                 answered.formUnion(rows)
             }

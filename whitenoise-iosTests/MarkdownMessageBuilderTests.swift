@@ -41,7 +41,7 @@ struct MarkdownMessageBuilderTests {
     }
 
     @Test func onlyFinalizedStreamsOfferTheUnshownSource() {
-        var row = record(plaintext: String(repeating: "a", count: ContentSanitizer.maxMessageLength + 1), tokens: doc([]))
+        var row = record(plaintext: String(repeating: "🌲", count: 3000), tokens: doc([]))
         row.tags = [
             .init(values: ["stream", String(repeating: "ab", count: 32)]),
             .init(values: ["stream-start", String(repeating: "cc", count: 32)]),

@@ -28,6 +28,24 @@ struct TimelineProjectionBoundaryTests {
         #expect(Set(items.map(\.id)).isDisjoint(with: another.map(\.id)))
     }
 
+    @Test func changingOnlyTheSourceReplacesTheCachedAttachmentTarget() throws {
+        let cache = ConversationMediaProjectionCache()
+        let record = appRecord(messageIdHex: hexId(1), plaintext: "", tags: [])
+        let item = TimelineItem(id: "row", kind: .message(record: record, status: .received), timestamp: 0)
+        let outcomes: [MediaAttachmentOutcomeFfi] = [.accepted(attachmentIndex: 0, reference: mediaReference(sourceEpoch: 42))]
+        cache.setOutcomes(outcomes, forMessageId: record.messageIdHex, sourceMessageId: hexId(2))
+        cache.update(for: item)
+        let original = try #require(cache.items(for: item).first)
+        let recording = ConversationSpeech.Recording(displayID: original.id, target: try #require(original.localTarget))
+
+        cache.setOutcomes(outcomes, forMessageId: record.messageIdHex, sourceMessageId: hexId(3))
+        #expect(cache.update(for: item))
+        let updated = try #require(cache.items(for: item).first)
+        #expect(updated.id == original.id)
+        #expect(updated.localTarget?.sourceMessageIdHex == hexId(3))
+        #expect(!recording.matches(updated))
+    }
+
     @Test func mediaCacheTreatsPresentEmptyRowProjectionAsAuthoritative() {
         let cache = ConversationMediaProjectionCache()
         let reference = mediaReference(sourceEpoch: 42)
