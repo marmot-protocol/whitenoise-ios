@@ -1081,7 +1081,7 @@ final class ConversationViewModel {
             }
         }
         let openingBytes = openingItem.flatMap { original in
-            items.contains { $0.canUseBytesPrepared(for: original) } ? initialData : nil
+            items.contains { $0.canUseBytesPrepared(for: original) && $0.localTarget == original.localTarget } ? initialData : nil
         }
         return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: openingBytes,
             messages: messages, captions: captions, allowsEmptyWindow: allowsEmptyWindow)
