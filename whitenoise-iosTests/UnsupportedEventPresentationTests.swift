@@ -30,6 +30,34 @@ struct UnsupportedEventPresentationTests {
         #expect(kinds == [MessageSemantics.kindChat, kind])
     }
 
+    /// A NIP-22 comment from another client shows as a reply to its parent,
+    /// quoting it through MDK's reply projection, not as a card.
+    @Test func aCommentShowsAsAReplyRow() throws {
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
+        let parent = hex("01")
+        store.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [
+                    timelineRecord(messageIdHex: parent, timelineAt: 1),
+                    timelineRecord(
+                        messageIdHex: hex("02"), plaintext: "agreed", kind: MessageSemantics.kindComment,
+                        tags: [tag("e", parent), tag("k", "9")], timelineAt: 2, replyToMessageIdHex: parent
+                    ),
+                ],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+
+        let comment = try #require(store.timeline.compactMap { item -> AppMessageRecordFfi? in
+            guard case .message(let record, _) = item.kind, record.kind == MessageSemantics.kindComment else { return nil }
+            return record
+        }.first)
+        #expect(MessageSemantics.classify(comment) == .reply(targetMessageId: parent))
+        #expect(store.replyTargetMessageId(for: comment) == parent)
+    }
+
     @Test func theCardUsesTheEventsOwnDescription() {
         let presentation = UnsupportedEventPresentation(kind: kind, tags: [
             tag("subject", "Signal box log"),

@@ -18,6 +18,8 @@ nonisolated enum MessageSemantics {
     static let kindReaction: UInt64 = 7
     static let kindChat: UInt64 = 9
     static let kindEdit: UInt64 = 1009
+    /// A NIP-22 comment, as other clients send thread replies.
+    static let kindComment: UInt64 = 1111
     static let kindPoll: UInt64 = 1068
     static let kindAgentStreamStart: UInt64 = 1200
     static let kindAgentActivity: UInt64 = 1201
@@ -122,9 +124,27 @@ nonisolated enum MessageSemantics {
                 return .reply(targetMessageId: target)
             }
             return .chat
+        case kindComment:
+            // Threads are shown one level deep: a comment is a reply to its
+            // parent (the first lowercase `e`), as MDK projects it. Without a
+            // numeric `k` tag it is not a NIP-22 comment, and MDK treats it as
+            // another app's kind.
+            guard isNIP22Comment(tags) else { return .unsupportedEvent }
+            if hasTag(imetaTag, in: tags), let media = mediaAttachments(from: tags) {
+                return .media(media)
+            }
+            if let parent = firstValue(of: eventRefTag, in: tags) {
+                return .reply(targetMessageId: parent)
+            }
+            return .chat
         default:
             return .unsupportedEvent
         }
+    }
+
+    /// MDK's test for a NIP-22 comment: any `k` tag naming a numeric kind.
+    private static func isNIP22Comment(_ tags: [MessageTagFfi]) -> Bool {
+        allValues(of: "k", in: tags).contains { UInt64($0) != nil }
     }
 
     static func classify(_ record: AppMessageRecordFfi) -> Kind {
@@ -136,8 +156,9 @@ nonisolated enum MessageSemantics {
     }
 
     /// A kind this app has no rendering for at all, such as another client's app-defined kind.
+    /// A reply preview carries no tags, so a comment there reads as one.
     static func isUnsupportedEventKind(_ kind: UInt64) -> Bool {
-        classify(kind: kind, tags: []) == .unsupportedEvent
+        kind != kindComment && classify(kind: kind, tags: []) == .unsupportedEvent
     }
 
     /// Kinds a person sends as their own conversation message: chat and polls.

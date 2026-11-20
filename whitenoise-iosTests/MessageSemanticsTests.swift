@@ -23,6 +23,36 @@ struct MessageSemanticsTests {
         #expect(MessagePreview.body(record) == "hello from the inner content")
     }
 
+    /// Threads show one level deep: a NIP-22 comment is a reply to its parent,
+    /// the first lowercase `e` (the uppercase `E` is the thread root).
+    @Test func aNIP22CommentIsAReplyToItsParent() {
+        let root = hex("01")
+        let parent = hex("02")
+        func comment(_ tags: [[String]]) -> MessageSemantics.Kind {
+            MessageSemantics.classify(kind: MessageSemantics.kindComment, tags: tags.map { MessageTagFfi(values: $0) })
+        }
+        #expect(comment([["E", root], ["K", "9"], ["e", parent], ["k", "1111"]]) == .reply(targetMessageId: parent))
+        #expect(comment([["e", root], ["k", "1068"]]) == .reply(targetMessageId: root))
+        // A comment on something other than an event still shows as a message.
+        #expect(comment([["k", "30023"]]) == .chat)
+        // Without a numeric `k` it isn't a NIP-22 comment, as MDK decides.
+        #expect(comment([["e", parent]]) == .unsupportedEvent)
+        #expect(comment([["e", parent], ["k", "not a kind"]]) == .unsupportedEvent)
+        #expect(comment([["e", parent], ["K", "9"]]) == .unsupportedEvent)
+    }
+
+    @Test func aCommentPreviewsAsItsText() {
+        let record = unsignedEventRecord(
+            plaintext: "agreed",
+            kind: MessageSemantics.kindComment,
+            tags: [MessageTagFfi(values: ["e", hex("02")]), MessageTagFfi(values: ["k", "9"])]
+        )
+        #expect(MessagePreview.isPreviewable(record))
+        #expect(MessagePreview.body(record) == "agreed")
+        // A reply quote has no tags to check, so a comment there reads as text too.
+        #expect(!MessageSemantics.isUnsupportedEventKind(MessageSemantics.kindComment))
+    }
+
     @Test func decodedUnsignedEventControlsDoNotPreviewAsText() {
         let target = hex("44")
         let streamId = hex("ab")

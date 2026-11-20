@@ -203,7 +203,7 @@ final class ConversationMediaProjectionCache {
     }
 
     private func updateCustomEmoji(rowId: String, record: AppMessageRecordFfi, attachments: [MessageMediaAttachment]) -> Bool {
-        let candidates = record.kind == MessageSemantics.kindChat
+        let candidates = record.kind == MessageSemantics.kindChat || record.kind == MessageSemantics.kindComment
             ? CustomEmojiResolver.candidates(tags: record.tags, attachments: attachments)
             : [:]
         guard !candidates.isEmpty else {
