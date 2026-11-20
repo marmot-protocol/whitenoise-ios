@@ -1017,16 +1017,14 @@ struct MessageBubble: View {
     private var messageBodyTextContent: some View {
         if let blocks = markdownBlocks {
             let quoteColor = isFromMe ? MessageBubblePalette.sentForeground.opacity(0.8) : Color.accentColor
-            let formatted = MarkdownMessageView(blocks: blocks, quoteBar: quoteColor)
             Group {
                 if actionBodySize != nil, blocks.count == 1, let inline = blocks[0].inlineText, customEmoji.isEmpty {
                     liftedInlineText(inline)
                 } else if actionBodySize != nil {
                     let length = blocks.reduce(0) { $0 + $1.menuExcerptLength }
                     ViewThatFits(in: .vertical) {
-                        formatted
-                        // SwiftUI measures these in order. Keep block chrome and choose a
-                        // whole excerpt that fits instead of clipping a code or quote line.
+                        // The measured body exceeds this frame. Start with a bounded
+                        // excerpt and keep whole code or quote lines where possible.
                         ForEach(Self.excerptBudgets.filter { $0 < length }, id: \.self) { budget in
                             MarkdownMessageView(blocks: MarkdownDisplayBlock.excerpt(blocks, characterBudget: budget, emoji: customEmoji.shortcodes),
                                                 quoteBar: quoteColor)
@@ -1034,7 +1032,7 @@ struct MessageBubble: View {
                         Text(verbatim: "…")
                     }
                 } else {
-                    formatted
+                    MarkdownMessageView(blocks: blocks, quoteBar: quoteColor)
                 }
             }
             .tint(isFromMe ? MessageBubblePalette.sentForeground : Color.accentColor)
@@ -1194,7 +1192,11 @@ struct MessageBubble: View {
                     .accessibilityActions {
                         if let onTapReaction {
                             ForEach(pills, id: \.emoji) { tally in
-                                Button(tally.emoji) { onTapReaction(tally) }
+                                let name = CustomEmojiShortcode.spokenReaction(tally.emoji)
+                                let removes = tally.mine && ReactionPillPresentation.canRemoveIndividually(
+                                    tally.emoji, from: allPills, omittedKinds: omittedReactionKinds
+                                )
+                                Button(removes ? L10n.formatted("Remove %@", name) : name) { onTapReaction(tally) }
                             }
                         }
                     }

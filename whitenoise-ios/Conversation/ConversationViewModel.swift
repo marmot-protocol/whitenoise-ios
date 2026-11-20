@@ -3639,12 +3639,27 @@ final class ConversationViewModel {
         return reference
     }
 
+    // The picker, menu, chips and details share the same optimistic reaction state.
+    private enum PendingReaction: Hashable { case add(String), removeAll }
+    @ObservationIgnored private var pendingReactions: [String: Set<PendingReaction>] = [:]
+
     func toggleReaction(_ emoji: String, on message: AppMessageRecordFfi) async {
         guard canSendMessages,
               let appState, let accountRef = appState.activeAccountRef,
               !message.messageIdHex.isEmpty else { return }
         let me = appState.activeAccount?.accountIdHex ?? ""
         let alreadyMine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
+        // Different additions can upload together. Unreact clears every owned reaction
+        // on this message, so it must not overlap another addition or removal.
+        let id = message.messageIdHex
+        let operation: PendingReaction = alreadyMine ? .removeAll : .add(emoji)
+        let pending = pendingReactions[id] ?? []
+        guard !pending.contains(.removeAll), !alreadyMine || pending.isEmpty,
+              pendingReactions[id, default: []].insert(operation).inserted else { return }
+        defer {
+            pendingReactions[id]?.remove(operation)
+            if pendingReactions[id]?.isEmpty == true { pendingReactions[id] = nil }
+        }
         // A `:shortcode:` reaction is sent with its image; one this chat
         // holds no image for can only be removed.
         var customEmoji: CustomEmojiSendable?
