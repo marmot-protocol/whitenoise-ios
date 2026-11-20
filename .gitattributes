@@ -1,0 +1,3 @@
+# Fixture attachment hashes cover the exact bytes, including the vCard's CRLF.
+whitenoise-ios/DebugChatPreview/ChatPreviewMedia.bundle/** -text
+whitenoise-ios/DebugChatPreview/ChatPreviewMedia.bundle/*.vcf whitespace=cr-at-eol

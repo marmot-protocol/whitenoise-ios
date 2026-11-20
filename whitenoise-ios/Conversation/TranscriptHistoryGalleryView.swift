@@ -30,6 +30,9 @@ struct TranscriptHistoryGalleryView: View {
     @State private var activeScope: TranscriptAttachmentHistory.Scope?
 
     private var scope: TranscriptAttachmentHistory.Scope? {
+        #if DEBUG
+        guard conversation.fixtureActions == nil else { return nil }
+        #endif
         return .init(appState: appState, group: conversation.group.groupIdHex)
     }
 

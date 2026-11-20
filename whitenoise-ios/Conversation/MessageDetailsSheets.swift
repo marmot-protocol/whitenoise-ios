@@ -31,6 +31,7 @@ struct MessageInfoSheet: View {
     let record: AppMessageRecordFfi
     let status: MessageStatus
     var conversation: ConversationViewModel?
+    var presentedSender: (name: String, image: UIImage?)? = nil
 
     var body: some View {
         NavigationStack {
@@ -67,7 +68,8 @@ struct MessageInfoSheet: View {
             AvatarBubble(
                 seed: record.sender,
                 title: senderName,
-                pictureURL: appState.avatarURL(forAccountIdHex: record.sender)
+                pictureURL: presentedSender == nil ? appState.avatarURL(forAccountIdHex: record.sender) : nil,
+                pictureImage: presentedSender?.image
             )
             .frame(width: 48, height: 48)
 
@@ -159,7 +161,7 @@ struct MessageInfoSheet: View {
     }
 
     private var senderName: String {
-        appState.displayName(forAccountIdHex: record.sender)
+        presentedSender?.name ?? appState.displayName(forAccountIdHex: record.sender)
     }
 
     private var isFromMe: Bool {

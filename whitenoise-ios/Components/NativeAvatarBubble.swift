@@ -4,6 +4,9 @@ import MarmotKit
 /// Pixels are transient UI state; MDK owns source selection, acquisition and storage.
 struct NativeAvatarBubble: View {
     @Environment(AppState.self) private var appState
+    #if DEBUG
+    @Environment(\.isChatFixture) private var isChatFixture
+    #endif
     let seed: String
     let title: String
     let asset: AvatarAssetFfi?
@@ -42,6 +45,9 @@ struct NativeAvatarBubble: View {
     }
 
     private func image(for current: Request) -> UIImage? {
+        #if DEBUG
+        if isChatFixture { return ChatPreviewMedia.avatar(for: seed) }
+        #endif
         guard !current.erasing else { return nil }
         if let rendered,
            rendered.request.account == current.account,

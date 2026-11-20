@@ -71,10 +71,16 @@ final class ConversationMediaLoader {
     private let load: (MessageMediaAttachment) async throws -> Data
     private let openHandoff: OpenHandoff?
     fileprivate let automaticAttachmentByteCount: (MessageMediaAttachment) async -> Int?
+    #if DEBUG
+    var bundledFile: ((MessageMediaAttachment) -> URL?)?
+    #endif
 
+    let allowsAutomaticLoad: @MainActor (MediaAutoDownloadType) -> Bool
 
-    init(_ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil,
+    init(allowsAutomaticLoad: @escaping @MainActor (MediaAutoDownloadType) -> Bool = { MediaAutoDownloadStore.shared.shouldAutoDownload($0) },
+         _ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil,
          automaticAttachmentByteCount: @escaping (MessageMediaAttachment) async -> Int? = { $0.localData?.count }) {
+        self.allowsAutomaticLoad = allowsAutomaticLoad
         self.load = load
         self.openHandoff = openHandoff
         self.automaticAttachmentByteCount = automaticAttachmentByteCount
@@ -93,6 +99,13 @@ final class ConversationMediaLoader {
         return try await data(for: preview, demand: .automatic)
     }
 
+    func playbackFileURL(for media: MessageMediaAttachment, data: Data, producerEpoch: Int) async -> URL? {
+        #if DEBUG
+        if let bundledFile { return bundledFile(media) }
+        #endif
+        return await MediaPlaybackFileStore.fileURL(for: media, data: data, producerEpoch: producerEpoch)
+    }
+
     /// A file for the share sheet. MDK's handoff lease when it has a source slot for
     /// the item; otherwise the host's own export of bytes it already holds.
     func shareFile(for media: MessageMediaAttachment, demand: AttachmentDemand = .explicit,
@@ -104,7 +117,7 @@ final class ConversationMediaLoader {
         }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
         let data = try await load(requested)
-        guard let url = await MediaPlaybackFileStore.fileURL(for: media, data: data, producerEpoch: producerEpoch) else {
+        guard let url = await playbackFileURL(for: media, data: data, producerEpoch: producerEpoch) else {
             throw AttachmentReadError.unavailable
         }
         return AttachmentShareFile(hostURL: url)
@@ -369,6 +382,10 @@ struct MessageBubble: View {
     @State private var readerProfile: String?
     @State private var mediaGallery: MessageMediaGallery?
     @State private var pendingExternalLink: PendingMessageExternalLink?
+    #if DEBUG
+    @Environment(\.isChatFixture) private var isChatFixture
+    @State private var fixtureLink: URL?
+    #endif
     @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
     private var isFromMe: Bool { !usesReviewLayout && !displaysReader && record.direction == "sent" }
@@ -416,12 +433,19 @@ struct MessageBubble: View {
     }
 
     private var remoteGiphyMedia: RemoteGiphyMedia? {
+        #if DEBUG
+        // Arbitrary text pasted into the local preview must not start a remote player.
+        if isChatFixture { return nil }
+        #endif
         guard debugStyle == nil, mediaItems.isEmpty else { return nil }
         return RemoteGiphyMedia.parse(wireText: record.plaintext)
     }
 
     private var linkPreviewURL: URL? {
         guard debugStyle == nil else { return nil }
+        #if DEBUG
+        if isChatFixture { return LinkPreviewMetadata.previewURL(in: markdownBlocks) }
+        #endif
         guard linkPreviewSettings.showsPreviews else { return nil }
         return LinkPreviewMetadata.previewURL(in: markdownBlocks)
     }
@@ -463,6 +487,11 @@ struct MessageBubble: View {
                 transcriptRow
             }
         }
+        #if DEBUG
+        .alert("Preview link", isPresented: Binding(get: { fixtureLink != nil }, set: { if !$0 { fixtureLink = nil } })) {
+            Button("Done") { fixtureLink = nil }
+        } message: { Text(fixtureLink?.absoluteString ?? "") }
+        #endif
         .sheet(item: $pendingExternalLink) { link in
             MessageLinkActionSheet(
                 url: link.url,
@@ -1148,6 +1177,9 @@ struct MessageBubble: View {
     }
 
     private func handleMessageLink(_ url: URL) -> OpenURLAction.Result {
+        #if DEBUG
+        if isChatFixture { fixtureLink = url; return .handled }
+        #endif
         switch MessageLinkPolicy.action(for: url) {
         case .openProfile(let npub):
             if displaysReader { readerProfile = npub } else { appState.presentProfile(npub: npub) }
@@ -2253,6 +2285,21 @@ private struct MessageMediaTile: View {
     }
 
     var body: some View {
+        #if DEBUG
+        if let bundledFile = onLoadMedia.bundledFile, bundledFile(item) == nil {
+            MessageMediaPlaceholderBackground(thumbhash: item.reference?.thumbhash,
+                fallbackSystemName: item.isVideo ? "video" : "photo", width: size.width, height: size.height,
+                usesSentBubbleColors: isFromMe && item.isVideo)
+                .frame(width: size.width, height: size.height)
+        } else {
+            availableTile
+        }
+        #else
+        availableTile
+        #endif
+    }
+
+    private var availableTile: some View {
         ZStack {
             if item.isImage, loadedImageID == item.id, let image {
                 AttachmentGIFPlayback(contentID: item.id, data: gifData, activity: isTimelineRowVisible ? .active : .inactive) { playback in
@@ -2319,7 +2366,7 @@ private struct MessageMediaTile: View {
             let maxPixelSize = max(1, Int(ceil(max(size.width, size.height) * displayScale)))
             if item.isImage,
                MessageMediaThumbnailDecoder.cachedThumbnail(for: thumbnailCacheKey, maxPixelSize: maxPixelSize) == nil,
-               !MediaAutoDownloadStore.shared.shouldAutoDownload(.image) {
+               !onLoadMedia.allowsAutomaticLoad(.image) {
                 awaitingManualDownload = true
                 return
             }
@@ -2572,7 +2619,7 @@ private struct MessageReplyMediaThumbnail: View {
                 loadedItemID = item.id
                 return
             }
-            guard MediaAutoDownloadStore.shared.shouldAutoDownload(.image) else { return }
+            guard onLoadMedia.allowsAutomaticLoad(.image) else { return }
             guard let data = await mediaData() else { return }
             guard let thumbnail = await MessageMediaThumbnailDecoder.image(
                 data: data,
@@ -2599,10 +2646,10 @@ private struct MessageReplyMediaThumbnail: View {
             loadedItemID = item.id
             return
         }
-        guard MediaAutoDownloadStore.shared.shouldAutoDownload(.video),
+        guard onLoadMedia.allowsAutomaticLoad(.video),
               let data = try? await onLoadMedia.videoPreviewData(for: item) else { return }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        guard let url = await MediaPlaybackFileStore.fileURL(
+        guard let url = await onLoadMedia.playbackFileURL(
             for: item,
             data: data,
             producerEpoch: producerEpoch
@@ -2810,7 +2857,7 @@ private struct MessageVideoAttachmentView: View {
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
-            guard isTimelineRowVisible, MediaAutoDownloadStore.shared.shouldAutoDownload(.video) else { return }
+            guard isTimelineRowVisible, onLoadMedia.allowsAutomaticLoad(.video) else { return }
             let needsPoster = displayThumbnail == nil && !posterDecodeFailed
             let needsDuration = showsBadges && showsDuration && !durationReadFailed && item.durationSeconds == nil
                 && localDuration == nil && MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey) == nil
@@ -2818,7 +2865,7 @@ private struct MessageVideoAttachmentView: View {
             let epoch = MessageMediaCache.currentProducerEpoch()
             guard let data = try? await onLoadMedia.videoPreviewData(for: item),
                   !Task.isCancelled,
-                  let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: epoch),
+                  let url = await onLoadMedia.playbackFileURL(for: item, data: data, producerEpoch: epoch),
                   !Task.isCancelled else { return }
             if needsDuration {
                 let time = try? await AVURLAsset(url: url).load(.duration)
@@ -3013,7 +3060,7 @@ private struct MessageAudioAttachmentView: View {
         if let metadata { applyMetadata(metadata) }
         // Metadata can come from a different message with the same audio.
         // Automatic acquisition belongs to this row’s original slot.
-        guard player == nil, !isLoading, MediaAutoDownloadStore.shared.shouldAutoDownload(.audio),
+        guard player == nil, !isLoading, onLoadMedia.allowsAutomaticLoad(.audio),
               let byteCount = await onLoadMedia.automaticAttachmentByteCount(item), !Task.isCancelled else { return }
         if metadata == nil, byteCount <= MessageMediaAttachment.audioAnalysisByteLimit {
             var preview = item
@@ -3276,6 +3323,9 @@ private struct MessageDocumentAttachmentView: View {
     @Environment(\.actionRowMeasurementKey) private var measurementKey
     @Environment(\.mediaOpenIntent) private var openIntent
     @Environment(\.timelinePreviewSearch) private var transcriptSearch
+    #if DEBUG
+    @Environment(\.isChatFixture) private var isChatFixture
+    #endif
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     let item: MessageMediaAttachment
     let isFromMe: Bool
@@ -3330,7 +3380,7 @@ private struct MessageDocumentAttachmentView: View {
                     ProgressView()
                         .controlSize(.small)
                         .tint(isFromMe ? MessageBubblePalette.sentForeground : .accentColor)
-                } else if liftedDetails?.didFail ?? didFail {
+                } else if (liftedDetails?.didFail ?? didFail) || fixtureUnavailable {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.caption.weight(.semibold))
                         .frame(width: 20, height: 24)
@@ -3349,6 +3399,7 @@ private struct MessageDocumentAttachmentView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open attachment")
+        .disabled(fixtureUnavailable)
         .background {
             if let key = measurementKey {
                 let details = LiftedDocumentDetails(id: item.id, revision: AttachmentPresentationState.shared.revision,
@@ -3379,14 +3430,21 @@ private struct MessageDocumentAttachmentView: View {
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
-            guard liftedDocuments == nil else { return }
+            guard liftedDocuments == nil, !fixtureUnavailable else { return }
             let metadata = await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
-                allowed: MediaAutoDownloadStore.shared.shouldAutoDownload(.document))
+                allowed: onLoadMedia.allowsAutomaticLoad(.document))
             if !Task.isCancelled, let metadata {
                 byteCount = metadata.size
                 contactName = metadata.contactName
             }
         }
+    }
+
+    private var fixtureUnavailable: Bool {
+        #if DEBUG
+        if isChatFixture { return ChatPreviewMedia.url(item.fileName) == nil }
+        #endif
+        return false
     }
 
     private var fileDetail: String {
@@ -3849,6 +3907,9 @@ nonisolated enum MessageMediaFullscreenGalleryPresentation {
 
 struct MessageMediaFullscreenGalleryView: View {
     @Environment(\.transcriptHistoryControls) private var transcriptHistory
+    #if DEBUG
+    @Environment(\.isChatFixture) private var isChatFixture
+    #endif
     @Environment(AppState.self) private var appState
     let gallery: MessageMediaGallery
     let onLoadMedia: ConversationMediaLoader
@@ -4043,8 +4104,20 @@ struct MessageMediaFullscreenGalleryView: View {
         return preparedMedia
     }
 
+    #if DEBUG
+    private var bundledShareURL: URL? {
+        guard isChatFixture, let selectedItem else { return nil }
+        return onLoadMedia.bundledFile?(selectedItem)
+    }
+    #endif
 
     private var controlState: MediaViewerControlState {
+        #if DEBUG
+        if isChatFixture {
+            return .init(hasPreparedMedia: false, hasForwardingContext: false, hasSourceMessage: sourceMessageIdHex != nil,
+                         hasShareFile: bundledShareURL != nil)
+        }
+        #endif
         return MediaViewerControlState(
             hasPreparedMedia: currentPreparedMedia != nil,
             hasForwardingContext: forwardingContext != nil,
@@ -4082,6 +4155,12 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func shareSelectedMedia() {
+        #if DEBUG
+        if isChatFixture {
+            if let bundledShareURL { mediaShare = AttachmentShareFile(hostURL: bundledShareURL) }
+            return
+        }
+        #endif
         guard let item = currentPreparedMedia?.item, handoffControl == nil else { return }
         let control = MediaFileTransferControlFfi()
         handoffControl = control
@@ -4306,7 +4385,7 @@ private struct MessageMediaFullscreenVideoPage: View {
         else { data = try await onLoadMedia.data(for: item, demand: demand) }
         try Task.checkCancellation()
         onData(data)
-        guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
+        guard let url = await onLoadMedia.playbackFileURL(for: item, data: data, producerEpoch: producerEpoch) else {
             throw MessageVideoAttachmentError.playbackFileUnavailable
         }
         try Task.checkCancellation()

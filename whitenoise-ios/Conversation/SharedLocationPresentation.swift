@@ -100,6 +100,9 @@ struct SharedLocationMapPreview: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.displayScale) private var displayScale
+    #if DEBUG
+    @Environment(\.isChatFixture) private var isChatFixture
+    #endif
     @State private var image: UIImage?
     @State private var didFail = false
 
@@ -141,6 +144,9 @@ struct SharedLocationMapPreview: View {
             .clipped()
             .task(id: request) {
                 image = nil
+                #if DEBUG
+                if isChatFixture { didFail = true; return }
+                #endif
                 didFail = false
                 do {
                     image = try await SharedLocationSnapshotStore.image(for: request)

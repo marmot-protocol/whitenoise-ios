@@ -277,13 +277,18 @@ nonisolated enum LocalVoiceRecognition {
 /// A reference to bytes already held for this attachment. Neither checking
 /// availability nor reading the original slot can admit a download or retry.
 @MainActor
-struct LocalVoiceAttachment {
-    private let account: String
-    private let group: String
-    private let client: MarmotClient
-    private let target: AttachmentLocalTargetFfi
+enum LocalVoiceAttachment {
+    #if DEBUG
+    case bundled(URL)
+    #endif
+    case retained(account: String, group: String, client: MarmotClient, target: AttachmentLocalTargetFfi)
 
-    static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState) async -> Self? {
+    static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState, fixture: Bool) async -> Self? {
+        #if DEBUG
+        if fixture {
+            return ChatPreviewMedia.url(media.fileName).map(Self.bundled)
+        }
+        #endif
         guard let account = app.activeAccountRef, let client = try? app.currentMarmotClient() else { return nil }
         let target: AttachmentLocalTargetFfi
         if let original = media.localTarget {
@@ -294,26 +299,39 @@ struct LocalVoiceAttachment {
         } else {
             return nil
         }
-        let source = Self(account: account, group: group, client: client, target: target)
+        let source = Self.retained(account: account, group: group, client: client, target: target)
         return await source.isAvailable(in: app) ? source : nil
     }
 
     func isAvailable(in app: AppState) async -> Bool {
-        guard app.client === client, app.activeAccountRef == account else { return false }
-        let assets = try? await client.marmot.attachmentLocalAssets(accountRef: account, groupIdHex: group, targets: [target])
-        guard let asset = assets?.first, asset.reference != nil,
-              asset.byteCount > 0, asset.byteCount <= MessageMediaAttachment.audioAnalysisByteLimit else { return false }
-        return !Task.isCancelled && app.client === client && app.activeAccountRef == account
+        switch self {
+        #if DEBUG
+        case .bundled: return true
+        #endif
+        case let .retained(account, group, client, target):
+            guard app.client === client, app.activeAccountRef == account else { return false }
+            let assets = try? await client.marmot.attachmentLocalAssets(accountRef: account, groupIdHex: group, targets: [target])
+            guard let asset = assets?.first, asset.reference != nil,
+                  asset.byteCount > 0, asset.byteCount <= MessageMediaAttachment.audioAnalysisByteLimit else { return false }
+            return !Task.isCancelled && app.client === client && app.activeAccountRef == account
+        }
     }
 
     func data(in app: AppState) async throws -> Data {
-        guard app.activeAccountRef == account, app.client === client,
-              let data = try await client.attachmentData(accountRef: account, groupID: group, target: target,
-                                                         previewByteLimit: MessageMediaAttachment.audioAnalysisByteLimit),
-              !Task.isCancelled, app.activeAccountRef == account, app.client === client else {
-            throw AttachmentReadError.unavailable
+        switch self {
+        #if DEBUG
+        case .bundled(let url):
+            return try Data(contentsOf: url, options: .mappedIfSafe)
+        #endif
+        case let .retained(account, group, client, target):
+            guard app.activeAccountRef == account, app.client === client,
+                  let data = try await client.attachmentData(accountRef: account, groupID: group, target: target,
+                                                             previewByteLimit: MessageMediaAttachment.audioAnalysisByteLimit),
+                  !Task.isCancelled, app.activeAccountRef == account, app.client === client else {
+                throw AttachmentReadError.unavailable
+            }
+            return data
         }
-        return data
     }
 }
 

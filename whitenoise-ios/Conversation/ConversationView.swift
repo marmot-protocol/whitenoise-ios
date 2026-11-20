@@ -1069,8 +1069,19 @@ struct ConversationView: View {
             }
     }
 
+    private func messageInfoSheet(for target: ActionsTarget) -> MessageInfoSheet {
+        #if DEBUG
+        if let viewModel, previewsTimeline {
+            return MessageInfoSheet(record: target.record, status: target.status,
+                presentedSender: (viewModel.windowDisplayName(for: target.record.sender),
+                                  ChatPreviewMedia.avatar(for: target.record.sender)))
+        }
+        #endif
+        return MessageInfoSheet(record: target.record, status: target.status, conversation: viewModel)
+    }
+
     private var conversationMessageSheets: some View {
-        conversationChromeView
+        messageSheetContent
             .environment(\.mediaOpenIntent, mediaOpenIntent)
             .onDisappear { mediaOpenIntent.invalidate() }
             .onChange(of: speechScope.route) { speech.reset() }
@@ -1109,8 +1120,8 @@ struct ConversationView: View {
                     EmojiPickerSheet(
                         quickReactions: appState.quickReactions,
                         onQuickReactionsSave: appState.setQuickReactions,
-                        customEmoji: viewModel.canSendMediaAttachments ? viewModel.customEmojiSendables : [],
-                        emojiSets: viewModel.canSendMediaAttachments ? appState.emojiSetLibrary : nil,
+                        customEmoji: hasLiveDestinations && viewModel.canSendMediaAttachments ? viewModel.customEmojiSendables : [],
+                        emojiSets: hasLiveDestinations && viewModel.canSendMediaAttachments ? appState.emojiSetLibrary : nil,
                         onPick: { emoji in
                             Task { await viewModel.toggleReaction(emoji, on: target.record) }
                             // Custom emoji belong to this chat, not the device-wide recents.
@@ -1124,7 +1135,7 @@ struct ConversationView: View {
                 }
             }
             .sheet(item: $messageInfoTarget) { target in
-                MessageInfoSheet(record: target.record, status: target.status, conversation: viewModel)
+                messageInfoSheet(for: target)
                     .appAppearance()
             }
             .alert("Draft changed", isPresented: Binding(
@@ -1517,8 +1528,92 @@ struct ConversationView: View {
             }
     }
 
+    #if DEBUG
+    private var fixture: ChatPreviewActions?
+    private var previewsTimeline: Bool { fixture != nil }
 
-    var body: some View {
+    init(previewItem: ChatsListViewModel.Item, model: ConversationViewModel, actions: ChatPreviewActions) {
+        self.init(chat: model.group, initialTitle: previewItem.title,
+                  initialOtherMember: previewItem.directPeerAccountIdHex)
+        _viewModel = State(initialValue: model)
+        fixture = actions
+    }
+    #endif
+
+    private var hasLiveDestinations: Bool {
+        #if DEBUG
+        return !previewsTimeline
+        #else
+        return true
+        #endif
+    }
+
+    @ViewBuilder private var messageSheetContent: some View {
+        #if DEBUG
+        if let fixture {
+            timeline
+                .compatibleTopSafeAreaBar {
+                    if viewModel?.search.isActive == true {
+                        searchBarInset
+                    } else {
+                        ConversationHeaderBar(isSelectingMessages: isSelectingMessages, onBack: navigateBack, onClose: exitMessageSelection) {
+                            conversationTitle.disabled(true)
+                        }
+                        .overlay(alignment: .trailing) {
+                            if !isSelectingMessages {
+                                Menu {
+                                    Button("Search this chat") { viewModel?.search.activate() }
+                                    if let viewModel, viewModel.timeline.isEmpty {
+                                        Button("Replay slow load") { Task { await fixture.replay(.slow, using: viewModel) } }
+                                        Button("Show load failure") { Task { await fixture.replay(.failed, using: viewModel) } }
+                                    }
+                                    Button("Receive sample message") { fixture.send("Just arrived. Are you nearby?", incoming: true) }
+                                } label: { Label("Preview controls", systemImage: "ellipsis.circle") }
+                                    .labelStyle(.iconOnly)
+                                    .padding(.trailing, 16)
+                            }
+                        }
+                    }
+                }
+                .bottomInputChromeAccessory { composerArea }
+                .toolbar(.hidden, for: .navigationBar)
+                .background { navigationGestures }
+                .overlay { messageActionsOverlay }
+        } else { conversationChromeView }
+        #else
+        conversationChromeView
+        #endif
+    }
+
+    @ViewBuilder var body: some View {
+        #if DEBUG
+        if previewsTimeline {
+            conversationMessageSheets
+                .onChange(of: viewModel?.conversationWindow?.revision) {
+                    if let target = reactionDetailsTarget, let viewModel, viewModel.reactions(for: target.messageIdHex).isEmpty {
+                        reactionDetailsTarget = nil
+                    }
+                }
+                .task {
+                    bindWindowViewport()
+                    if let viewModel, viewModel.conversationWindow == nil, viewModel.error == nil {
+                        await viewModel.start()
+                    }
+                }
+                .onDisappear {
+                    cancelPendingTimelineFollowUpWork()
+                    // A full-screen editor temporarily covers the same conversation.
+                    // The destination owns the model, which cancels its feed on deinit.
+                    viewModel?.windowWillChange = nil
+                    viewModel?.windowDidChange = nil
+                }
+        } else { liveConversation }
+        #else
+        liveConversation
+        #endif
+    }
+
+    private var liveConversation: some View {
         conversationStateObservers
             .onChange(of: draft) { _, draft in
                 if editSession == nil {
@@ -1657,7 +1752,7 @@ struct ConversationView: View {
                     replyPreview: editSession == nil
                         ? viewModel.flatMap(composerReplyPreview(viewModel:))
                         : nil,
-                    mediaEnabled: editSession == nil && (viewModel?.canAddMediaAttachments ?? false),
+                    mediaEnabled: hasLiveDestinations && editSession == nil && (viewModel?.canAddMediaAttachments ?? false),
                     disabledMessage: viewModel?.inactiveGroupMessage,
                     disabledAction: viewModel.flatMap(blockedLeaveComposerAction(viewModel:)),
                     sendBlockedMessage: viewModel?.sendBlockedMessage,
@@ -1674,8 +1769,8 @@ struct ConversationView: View {
                     submissionAccessibilityLabel: editSession == nil
                         ? L10n.string("Send")
                         : L10n.string("Save edit"),
-                    voiceMessagesEnabled: editSession == nil,
-                    dictation: composerDictationBinding,
+                    voiceMessagesEnabled: hasLiveDestinations && editSession == nil,
+                    dictation: hasLiveDestinations ? composerDictationBinding : nil,
                     cameraAvailable: ComposerAttachmentCapabilities.cameraAvailable,
                     gifsAvailable: ComposerAttachmentCapabilities.gifsAvailable,
                     pollsAvailable: editSession == nil && (viewModel?.canCreatePolls ?? false),
@@ -1690,7 +1785,7 @@ struct ConversationView: View {
                     onShareLocation: openLocationPicker,
                     onShareContact: openContactPicker,
                     onSearchGIFs: openGiphySearch,
-                    onPasteImage: pasteImage,
+                    onPasteImage: { image in if hasLiveDestinations { pasteImage(image) } },
                     onRemoveAudioDraft: removeMediaDraft,
                     onRemovePreparedAttachment: removeMediaDraft,
                     onPreviewPreparedMedia: previewPreparedMedia,
@@ -1711,7 +1806,7 @@ struct ConversationView: View {
 
     private func messageSelectionBar(viewModel: ConversationViewModel) -> some View {
         let records = selectedMessageRecords(viewModel: viewModel)
-        let canForward = MessageSelectionPolicy.canForward(
+        let canForward = hasLiveDestinations && MessageSelectionPolicy.canForward(
             selectedCount: records.count,
             anyForwardable: records.contains { MessageForwardingPolicy.forwardableText(for: $0) != nil }
         )
@@ -2378,6 +2473,12 @@ struct ConversationView: View {
                 } actions: {
                     Button("Retry") {
                         Task {
+                            #if DEBUG
+                            if let fixture {
+                                await fixture.replay(nil, using: viewModel)
+                                return
+                            }
+                            #endif
                             await viewModel.start()
                         }
                     }
@@ -2584,21 +2685,33 @@ struct ConversationView: View {
         )
     }
 
-    private func forwardingContext(for viewModel: ConversationViewModel) -> MediaForwardingContext {
-        MediaForwardingContext(viewModel: viewModel) {
+    private func allowsAutomaticMediaLoad(_ type: MediaAutoDownloadType) -> Bool {
+        #if DEBUG
+        if previewsTimeline { return true } // All fixture bytes are in the app bundle.
+        #endif
+        return MediaAutoDownloadStore.shared.shouldAutoDownload(type)
+    }
+
+    private func forwardingContext(for viewModel: ConversationViewModel) -> MediaForwardingContext? {
+        guard hasLiveDestinations else { return nil }
+        return MediaForwardingContext(viewModel: viewModel) {
             if let forwardDestinationProvider { return try await forwardDestinationProvider() }
             return try await viewModel.forwardDestinations()
         }
     }
 
     private func mediaLoader(for viewModel: ConversationViewModel) -> ConversationMediaLoader {
-        ConversationMediaLoader { media in
+        let loader = ConversationMediaLoader(allowsAutomaticLoad: allowsAutomaticMediaLoad) { media in
             try await viewModel.data(for: media)
         } openHandoff: { media, control in
             try await viewModel.openHandoff(for: media, control: control)
         } automaticAttachmentByteCount: { media in
             await viewModel.automaticAttachmentByteCount(for: media)
         }
+        #if DEBUG
+        if previewsTimeline { loader.bundledFile = { ChatPreviewMedia.url($0.fileName) } }
+        #endif
+        return loader
     }
 
     private func clusterPresentation(for item: TimelineItem, model: ConversationViewModel) -> MessageClusterPresentation {
@@ -2625,7 +2738,9 @@ struct ConversationView: View {
                 emoji, from: current, omittedKinds: viewModel.windowReactions[id]?.omittedKinds ?? 0
             )
         } else if let shortcode {
-            canToggle = viewModel.canRepeatReaction(shortcode, reactionID: tapped.reactionMessageIdHex)
+            canToggle = hasLiveDestinations
+                ? viewModel.canRepeatReaction(shortcode, reactionID: tapped.reactionMessageIdHex)
+                : CustomEmojiBuiltins.shortcodes.contains(shortcode)
         } else {
             canToggle = emoji.count == 1 && emoji == ContentSanitizer.reactionEmoji(emoji)
                 && emoji.unicodeScalars.contains { ($0.properties.isEmoji && $0.value > 127) || $0.value == 0x20E3 }
@@ -2704,7 +2819,7 @@ struct ConversationView: View {
             onPollVote: viewModel.canVoteInPolls && status != .sending && status != .failed
                 ? { optionId in Task { await viewModel.votePoll(option: optionId, on: record) } }
                 : nil,
-            onViewPollVotes: isSelectingMessages ? nil : { openPollVotes(for: record, viewModel: viewModel) },
+            onViewPollVotes: !hasLiveDestinations || isSelectingMessages ? nil : { openPollVotes(for: record, viewModel: viewModel) },
             reactions: viewModel.reactions(for: record.messageIdHex),
             omittedReactionKinds: viewModel.windowReactions[record.messageIdHex]?.omittedKinds ?? 0,
             projectedReactionTotal: viewModel.windowReactions[record.messageIdHex]?.totalCount,
@@ -2744,13 +2859,13 @@ struct ConversationView: View {
             onGoToMessage: { messageIdHex in
                 navigateToTimelineMessage(messageIdHex, viewModel: viewModel)
             },
-            onViewEditHistory: viewModel.hasEditHistory(record.messageIdHex)
+            onViewEditHistory: hasLiveDestinations && viewModel.hasEditHistory(record.messageIdHex)
                 ? { editHistoryTarget = ActionsTarget(record: record, status: status) }
                 : nil,
             onFailedTap: status == .failed
                 ? { failedSendTarget = FailedSendTarget(rowId: item.id) }
                 : nil,
-            onSenderAvatarTap: isSelectingMessages || viewModel.search.isActive
+            onSenderAvatarTap: !hasLiveDestinations || isSelectingMessages || viewModel.search.isActive
                 ? nil
                 : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) },
             displaysReader: displaysReader,
@@ -2774,7 +2889,7 @@ struct ConversationView: View {
             ? ConversationSearchEngine.normalizedQuery(viewModel.search.query) : nil)
         .environment(\.customEmojiStore, viewModel.customEmojiStore)
         .environment(\.stickerAssets, viewModel.stickerAssets)
-        .environment(\.stickerLibrary, viewModel.stickerLibrary)
+        .environment(\.stickerLibrary, hasLiveDestinations ? viewModel.stickerLibrary : nil)
         .environment(\.mediaUploadProgress, viewModel.composer.uploadProgress)
         .id(AttachmentPresentationState.shared.revision)
     }
@@ -3381,6 +3496,17 @@ struct ConversationView: View {
     }
 
     private func send() {
+        #if DEBUG
+        if let fixture {
+            let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
+            fixture.send(text, replyTo: viewModel?.replyTargetMessageIdHex)
+            draft = ""
+            viewModel?.restoreReplyTarget(messageIdHex: nil)
+            if let viewModel { followSentMessage(using: viewModel) }
+            return
+        }
+        #endif
         guard viewModel?.canSendMessages == true else { return }
         // Reject over-limit text before any snapshot, staging, edit or send so
         // the draft, reply target and attachments stay exactly as they are.
@@ -4807,7 +4933,7 @@ struct ConversationView: View {
             guard let row = speechRow(id, in: model),
                   case .message(let record, _) = row.kind, hasBlankMessageText(record),
                   let media = voiceAttachment(for: record, in: model), media.id == attachmentID else { return false }
-            let source = await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState)
+            let source = await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState, fixture: !hasLiveDestinations)
             guard scope == speechScope, !Task.isCancelled else { return nil }
             return source != nil
         }
@@ -4884,7 +5010,7 @@ struct ConversationView: View {
               case .message(let record, _) = row.kind, record.direction != "sent", hasBlankMessageText(record),
               let audio = voiceAttachment(for: record, in: model),
               await LocalVoiceRecognition.recognizer() != nil,
-              let source = await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState),
+              let source = await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState, fixture: !hasLiveDestinations),
               !Task.isCancelled, scope == speechScope, self.viewModel === model,
               actionsPhase != .returning, actionsTarget?.record.messageIdHex == record.messageIdHex else { return }
         speech.availableAudio = (audio.id, source, scope)
@@ -4946,17 +5072,17 @@ struct ConversationView: View {
             ),
             canInteract: viewModel.canSendMessages,
             canCopy: !hasBlankMessageText(record),
-            canForward: MessageForwardingPolicy.forwardableText(for: record) != nil,
-            canEdit: MessageEditingPolicy.canEdit(
+            canForward: hasLiveDestinations && MessageForwardingPolicy.forwardableText(for: record) != nil,
+            canEdit: hasLiveDestinations && MessageEditingPolicy.canEdit(
                 record,
                 isDeleted: viewModel.isDeleted(record.messageIdHex),
                 canSendMessages: viewModel.canSendMessages
             ),
-            canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
+            canViewEditHistory: hasLiveDestinations && viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
-            canReport: viewModel.canReport(record),
-            canBlock: canBlockAuthor(of: record, viewModel: viewModel),
-            canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
+            canReport: hasLiveDestinations && viewModel.canReport(record),
+            canBlock: hasLiveDestinations && canBlockAuthor(of: record, viewModel: viewModel),
+            canViewVotes: hasLiveDestinations && canViewPollVotes(for: record, viewModel: viewModel),
             canOpenGIF: canOpenGIF, speechActionCount: speechActions(for: record, in: viewModel).count
         )
     }
@@ -5037,17 +5163,17 @@ struct ConversationView: View {
             } ?? false,
             canInteract: viewModel.canSendMessages,
             canCopy: !hasBlankMessageText(record),
-            canForward: MessageForwardingPolicy.forwardableText(for: record) != nil,
-            canEdit: MessageEditingPolicy.canEdit(
+            canForward: hasLiveDestinations && MessageForwardingPolicy.forwardableText(for: record) != nil,
+            canEdit: hasLiveDestinations && MessageEditingPolicy.canEdit(
                 record,
                 isDeleted: viewModel.isDeleted(record.messageIdHex),
                 canSendMessages: viewModel.canSendMessages
             ),
-            canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
+            canViewEditHistory: hasLiveDestinations && viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
-            canReport: viewModel.canReport(record),
-            canBlock: canBlockAuthor(of: record, viewModel: viewModel),
-            canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
+            canReport: hasLiveDestinations && viewModel.canReport(record),
+            canBlock: hasLiveDestinations && canBlockAuthor(of: record, viewModel: viewModel),
+            canViewVotes: hasLiveDestinations && canViewPollVotes(for: record, viewModel: viewModel),
             onOpenGIF: onOpenGIF, speechActions: speechActions(for: record, in: viewModel),
             onSpeechAction: { performSpeechAction($0, for: record, in: viewModel) },
             canTranscribe: canTranscribe(record, in: viewModel),

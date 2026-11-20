@@ -12,6 +12,9 @@ struct LinkPreviewCard: View {
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     @Environment(\.timelinePreviewSearch) private var previewSearch
     @Environment(\.displayScale) private var displayScale
+    #if DEBUG
+    @Environment(\.isChatFixture) private var isChatFixture
+    #endif
     @State private var metadata: LinkPreviewMetadata?
     @State private var image: UIImage?
     @State private var imageFailed = false
@@ -54,6 +57,13 @@ struct LinkPreviewCard: View {
     }
 
     private func load() async {
+        #if DEBUG
+        if isChatFixture {
+            metadata = ChatPreviewThread.linkMetadata(for: url)
+            image = metadata?.imageURL.flatMap { UIImage(contentsOfFile: $0.path) }
+            return
+        }
+        #endif
         if metadata == nil {
             guard let loaded = try? await LinkPreviewLoader.metadata(for: url) else { return }
             metadata = loaded
