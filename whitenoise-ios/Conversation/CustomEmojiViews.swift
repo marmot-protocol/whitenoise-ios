@@ -158,7 +158,7 @@ struct StandaloneCustomEmoji<Fallback: View>: View {
                 .interpolation(isPixelArt ? .none : .high)
                 .scaledToFit()
                 .frame(width: side, height: side)
-                .accessibilityLabel(Text(verbatim: CustomEmojiBuiltins.spokenName(shortcode)))
+                .accessibilityLabel(Text(verbatim: isPixelArt ? CustomEmojiBuiltins.spokenName(shortcode) : shortcode.name))
         } else {
             fallback
         }

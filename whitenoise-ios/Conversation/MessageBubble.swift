@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 import MarmotKit
@@ -16,8 +17,37 @@ extension EnvironmentValues {
         set { self[TimelineRowVisibleEnvironmentKey.self] = newValue }
     }
 
+    @Entry var mediaOpenIntent: MediaOpenIntent? = nil
+
     /// The conversation's file-backed upload progress; nil outside a conversation.
     @Entry var mediaUploadProgress: MediaUploadProgressStore? = nil
+}
+
+/// Shared by tiles in one conversation so an older read cannot present over a later tap.
+@MainActor
+final class MediaOpenIntent {
+    private(set) var current: UUID?
+
+    private var cancelPendingOpen: (() -> Void)?
+
+    @discardableResult
+    func begin(cancelPendingOpen: (() -> Void)? = nil) -> UUID {
+        invalidate()
+        self.cancelPendingOpen = cancelPendingOpen
+        let id = UUID()
+        current = id
+        return id
+    }
+
+    func finish(_ id: UUID) {
+        if current == id { cancelPendingOpen = nil }
+    }
+
+    func invalidate() {
+        current = nil
+        cancelPendingOpen?()
+        cancelPendingOpen = nil
+    }
 }
 
 struct TimelineMediaTaskID: Equatable {
@@ -40,16 +70,30 @@ final class ConversationMediaLoader {
 
     private let load: (MessageMediaAttachment) async throws -> Data
     private let openHandoff: OpenHandoff?
+    let canShareDocument: @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool
+    fileprivate let automaticAttachmentByteCount: (MessageMediaAttachment) async -> Int?
 
-    init(_ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil) {
+
+    init(_ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil,
+         canShareDocument: @escaping @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool = { _, _ in true },
+         automaticAttachmentByteCount: @escaping (MessageMediaAttachment) async -> Int? = { $0.localData?.count }) {
         self.load = load
         self.openHandoff = openHandoff
+        self.canShareDocument = canShareDocument
+        self.automaticAttachmentByteCount = automaticAttachmentByteCount
     }
 
     func data(for media: MessageMediaAttachment, demand: AttachmentDemand = .explicit) async throws -> Data {
         var requested = media
         requested.demand = demand
         return try await load(requested)
+    }
+
+    func videoPreviewData(for media: MessageMediaAttachment) async throws -> Data {
+        var preview = media
+        // Larger movies can supply their poster from the file opened for playback.
+        preview.previewByteLimit = 32 * 1024 * 1024
+        return try await data(for: preview, demand: .automatic)
     }
 
     /// A file for the share sheet. MDK's handoff lease when it has a source slot for
@@ -75,10 +119,23 @@ final class ConversationMediaLoader {
         return try await data(for: media, demand: demand)
     }
 
-    func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool) async {
-        guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return }
-        // MDK retains bytes and acquisition history; a miss never becomes an explicit retry.
-        _ = try? await data(for: media, demand: .automatic)
+    @discardableResult
+    func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool, hasContactName: Bool = false) async -> (size: Int, contactName: String?)? {
+        guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return nil }
+        guard !hasContactName, DocumentPreviewFormat(for: media) == .contact else {
+            return await automaticAttachmentByteCount(media).map { ($0, nil) }
+        }
+        var requested = media
+        requested.previewByteLimit = DocumentPreviewFormat.contact.byteLimit
+        do {
+            let bytes = try await data(for: requested, demand: .automatic)
+            try Task.checkCancellation()
+            let name = await Task.detached(priority: .utility) { SharedContactPreview(data: bytes)?.name }.value
+            try Task.checkCancellation()
+            return (bytes.count, name)
+        } catch AttachmentReadError.previewLimitExceeded(let size) {
+            return size.map { ($0, nil) }
+        } catch { return nil }
     }
 }
 
@@ -118,27 +175,6 @@ private struct MessageTextBubbleLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: .init(width: bounds.width, height: nil))
-    }
-}
-
-nonisolated enum MessageRichMediaBubblePresentation {
-    static func singleVisualFillsBubbleWidth(hasCaption: Bool, hasReply: Bool) -> Bool {
-        hasCaption || hasReply
-    }
-
-    static func contentWidth(
-        maxWidth: CGFloat,
-        singleVisualWidth: CGFloat?,
-        hasCaption: Bool,
-        hasReply: Bool
-    ) -> CGFloat {
-        let boundedMaxWidth = max(1, maxWidth)
-        guard !singleVisualFillsBubbleWidth(hasCaption: hasCaption, hasReply: hasReply),
-              let singleVisualWidth,
-              singleVisualWidth.isFinite,
-              singleVisualWidth > 0
-        else { return boundedMaxWidth }
-        return min(boundedMaxWidth, singleVisualWidth)
     }
 }
 
@@ -270,6 +306,8 @@ extension MessageBubble: Equatable {
             && (lhs.identityName == nil) == (rhs.identityName == nil)
             && (lhs.identityAvatar == nil) == (rhs.identityAvatar == nil)
             && (lhs.identityAvatarAsset == nil) == (rhs.identityAvatarAsset == nil)
+            && lhs.mediaOpenScope == rhs.mediaOpenScope
+            && (lhs.onOpenTranscriptMedia == nil) == (rhs.onOpenTranscriptMedia == nil)
             && (lhs.mediaForwardingContext == nil) == (rhs.mediaForwardingContext == nil)
             && (lhs.onGoToMessage == nil) == (rhs.onGoToMessage == nil)
             && (lhs.onViewEditHistory == nil) == (rhs.onViewEditHistory == nil)
@@ -292,6 +330,24 @@ extension MessageBubble: Equatable {
 }
 
 struct MessageBubble: View {
+    struct MediaOpenScope: Equatable {
+        let model: ObjectIdentifier
+        let account: String?
+        let generation: Int
+        let attachmentRevision: Int
+
+        init(_ viewModel: ConversationViewModel, appState: AppState) {
+            model = ObjectIdentifier(viewModel)
+            account = appState.activeAccountRef
+            generation = appState.runtimeGeneration
+            attachmentRevision = AttachmentPresentationState.shared.revision
+        }
+
+        func isCurrent(_ viewModel: ConversationViewModel?, appState: AppState) -> Bool {
+            viewModel.map { Self($0, appState: appState) == self } == true
+        }
+    }
+
     @Environment(\.messageActionBodySize) private var actionBodySize
     @Environment(\.actionRowMeasurementKey) private var actionRowMeasurementKey
     @Environment(AppState.self) private var appState
@@ -333,6 +389,8 @@ struct MessageBubble: View {
     var onShowReactionDetails: (String?) -> Void = { _ in }
     var onReplyPreviewTap: () -> Void = {}
     var onLoadMedia = ConversationMediaLoader { _ in Data() }
+    var mediaOpenScope: MediaOpenScope?
+    var onOpenTranscriptMedia: ((MessageMediaAttachment, Data?) -> Void)?
     var mediaForwardingContext: MediaForwardingContext?
     /// Set when the timeline can scroll to a message; drives "Go to Message"
     /// in the fullscreen media viewer's More menu.
@@ -422,17 +480,6 @@ struct MessageBubble: View {
 
     private var showsMediaUploadProgress: Bool {
         MessageMediaUploadPresentation.showsIndicator(status: status, items: mediaItems)
-    }
-
-    var standaloneEmoji: String? {
-        guard agentActivity == nil, debugStyle == nil,
-              !isDeleted,
-              replyPreview == nil,
-              mediaItems.isEmpty
-        else { return nil }
-
-        guard let emoji = SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText), !offersSourceReader else { return nil }
-        return emoji
     }
 
     private var standaloneCustomEmoji: CustomEmojiShortcode? {
@@ -617,15 +664,6 @@ struct MessageBubble: View {
             remoteGiphyMessageContent(remoteGiphyMedia)
         } else if !mediaItems.isEmpty, showsStandardBody {
             mediaMessageContent
-        } else if let standaloneEmoji {
-            if status == .failed {
-                standaloneEmojiContent(standaloneEmoji)
-                    .contentShape(.rect)
-                    .onTapGesture { onFailedTap?() }
-            } else {
-                standaloneEmojiContent(standaloneEmoji)
-                    .opacity(status == .sending ? 0.7 : 1)
-            }
         } else if let standaloneCustomEmoji {
             if status == .failed {
                 standaloneCustomEmojiContent(standaloneCustomEmoji)
@@ -666,15 +704,6 @@ struct MessageBubble: View {
         .opacity(status == .sending ? 0.7 : 1)
     }
 
-    private func standaloneEmojiContent(_ emoji: String) -> some View {
-        Text(emoji)
-            .font(.system(size: SingleEmojiMessagePresentation.fontSize))
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, 6)
-            .accessibilityElement(children: .combine)
-    }
-
     /// The ordinary bubble, with its own inline emoji or the literal
     /// shortcode, shows until the large image loads, and stays if it never
     /// does (auto-download off, a failed read).
@@ -682,7 +711,7 @@ struct MessageBubble: View {
         StandaloneCustomEmoji(
             shortcode: shortcode,
             side: SingleCustomEmojiMessagePresentation.side,
-            isPixelArt: CustomEmojiBuiltins.builtin(shortcode) != nil
+            isPixelArt: customEmoji.usesBuiltinArtwork(for: shortcode)
         ) {
             textBubble
         }
@@ -822,12 +851,16 @@ struct MessageBubble: View {
                 } icon: {
                     Image(systemName: "mappin.and.ellipse")
                 }
-                    .font(.subheadline.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
             }
             .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : MessageBubblePalette.receivedForeground)
             .padding(.horizontal, 11)
             .padding(.vertical, 8)
         }
+        .background(replyCardBackground)
+        .clipShape(.rect(cornerRadius: MessageBubbleReplyLayout.cardCornerRadius, style: .continuous))
+        .padding([.horizontal, .bottom], MessageBubbleReplyLayout.cardOuterInset)
+        .padding(.top, replyPreview == nil ? MessageBubbleReplyLayout.cardOuterInset : 0)
     }
 
     private func debugHeader(_ style: MessageDebugStyle) -> some View {
@@ -879,17 +912,15 @@ struct MessageBubble: View {
         .padding(.bottom, MessageBubbleReplyLayout.bodyBottomInset)
     }
 
-    @ViewBuilder
-    private var mediaMessageContent: some View {
-        if mediaItems.contains(where: { $0.kind == .audio }) {
-            legacyMediaMessageContent
-        } else {
-            richMediaMessageContent
-        }
+    private var isStandaloneUnsupportedAttachment: Bool {
+        mediaItems.count == 1 && mediaItems.first?.rejectionKind == .unsupportedFormat
+            && replyPreview == nil && !hasVisibleBodyText
     }
 
-    private var richMediaMessageContent: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var mediaMessageContent: some View {
+        let compact = isStandaloneUnsupportedAttachment
+        let contentWidth = compact ? nil : MessageVisualMediaBubblePresentation.contentWidth(for: mediaItems, maxWidth: mediaGridWidth)
+        return VStack(alignment: .leading, spacing: 6) {
             if let replyPreview {
                 replyCard(replyPreview)
             }
@@ -897,41 +928,14 @@ struct MessageBubble: View {
             mediaAttachments
 
             if hasVisibleBodyText {
-                messageBodyText(hasReply: false, richContent: true)
+                messageBodyText(hasReply: false, richWidth: contentWidth)
             }
         }
-        .frame(width: richMediaContentWidth, alignment: .leading)
-        .padding(6)
+        .frame(width: contentWidth, alignment: .leading)
+        .padding(.horizontal, compact ? density.metrics.bubbleHorizontalInset : 6)
+        .padding(.vertical, compact ? density.metrics.bubbleVerticalInset : 6)
         .background { bubbleBackground }
         .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
-        .opacity(status == .sending ? 0.7 : 1)
-    }
-
-    private var legacyMediaMessageContent: some View {
-        let showsTranscript = transcribingVoice || voiceTranscript != nil
-        return VStack(alignment: isFromMe ? .trailing : .leading, spacing: 6) {
-            mediaAttachments
-                .frame(width: showsTranscript ? mediaGridWidth : nil, alignment: .leading)
-                .background {
-                    if showsTranscript { bubbleBackground.clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius)) }
-                }
-
-            if let replyPreview {
-                MessageTextBubbleLayout(fitsQuote: true) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        replyHeader(replyPreview)
-                        if hasVisibleBodyText {
-                            messageBodyText(hasReply: true)
-                        }
-                    }
-                }
-                .font(.body)
-                .background { bubbleBackground }
-                .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
-            } else if hasVisibleBodyText {
-                textBubble
-            }
-        }
         .opacity(status == .sending ? 0.7 : 1)
     }
 
@@ -958,30 +962,26 @@ struct MessageBubble: View {
         MessageMediaAttachmentContent(
             items: mediaItems,
             isFromMe: isFromMe,
+            isStandaloneUnsupportedAttachment: isStandaloneUnsupportedAttachment,
             status: status,
             maxWidth: mediaGridWidth,
-            fillsWidth: singleVisualFillsBubbleWidth,
             onLoadMedia: onLoadMedia,
-            onOpenImage: { item, data in
-                mediaGallery = MessageMediaGallery(
-                    items: mediaItems,
-                    initialItem: item,
-                    initialImageData: data,
-                    messageIdByItemID: mediaMessageIds
-                )
-            },
-            onOpenVideo: { item in
-                mediaGallery = MessageMediaGallery(
-                    items: mediaItems,
-                    initialItem: item,
-                    messageIdByItemID: mediaMessageIds
-                )
-            }
+            onOpenImage: { openMedia($0, data: $1) },
+            onOpenVideo: { openMedia($0) }
         )
         .overlay {
             if showsMediaUploadProgress {
                 MessageMediaUploadIndicator(itemIds: mediaItems.map(\.id))
             }
+        }
+    }
+
+    private func openMedia(_ item: MessageMediaAttachment, data: Data? = nil) {
+        if let onOpenTranscriptMedia {
+            onOpenTranscriptMedia(item, data)
+        } else {
+            mediaGallery = MessageMediaGallery(items: mediaItems, initialItem: item,
+                initialMediaData: data, messageIdByItemID: mediaMessageIds)
         }
     }
 
@@ -991,47 +991,7 @@ struct MessageBubble: View {
     }
 
     private var mediaGridWidth: CGFloat {
-        if mediaItems.contains(where: { $0.kind == .audio }) {
-            return sizeClass == .regular ? 340 : 276
-        }
-        return 256
-    }
-
-    private var singleVisualFillsBubbleWidth: Bool {
-        MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
-            hasCaption: hasVisibleBodyText,
-            hasReply: replyPreview != nil
-        )
-    }
-
-    private var richMediaContentWidth: CGFloat {
-        let singleVisualWidth: CGFloat?
-        if mediaItems.count == 1, let item = mediaItems.first {
-            switch item.kind {
-            case .image:
-                singleVisualWidth = MessageImageBubblePresentation.displaySize(
-                    maxWidth: mediaGridWidth,
-                    dim: item.dim,
-                    fillsWidth: singleVisualFillsBubbleWidth
-                ).width
-            case .video:
-                singleVisualWidth = MessageVideoBubblePresentation.displaySize(
-                    maxWidth: mediaGridWidth,
-                    dim: item.dim
-                ).width
-            case .audio, .document, .unsupported:
-                singleVisualWidth = nil
-            }
-        } else {
-            singleVisualWidth = nil
-        }
-
-        return MessageRichMediaBubblePresentation.contentWidth(
-            maxWidth: MessageBubbleReplyLayout.richContentWidth,
-            singleVisualWidth: singleVisualWidth,
-            hasCaption: hasVisibleBodyText,
-            hasReply: replyPreview != nil
-        )
+        MessageBubbleReplyLayout.richContentWidth
     }
 
     private func quoted(_ preview: ConversationReplyPreview) -> some View {
@@ -1094,7 +1054,7 @@ struct MessageBubble: View {
         return false
     }
 
-    private func messageBodyText(hasReply: Bool, richContent: Bool = false) -> some View {
+    private func messageBodyText(hasReply: Bool, richWidth: CGFloat? = nil) -> some View {
         let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil && !isStreamBody {
             TranscriptMessagePreview.snippet(markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }
                 .joined(separator: "\n") ?? sanitizedBodyText)
@@ -1147,20 +1107,20 @@ struct MessageBubble: View {
         .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : MessageBubblePalette.receivedForeground)
         .padding(
             .horizontal,
-            richContent ? 6 : density.metrics.bubbleHorizontalInset
+            richWidth != nil ? 6 : density.metrics.bubbleHorizontalInset
         )
         .padding(
             .top,
-            richContent
+            richWidth != nil
                 ? 0
                 : (hasReply ? MessageBubbleReplyLayout.bodyTopInsetAfterReply : density.metrics.bubbleVerticalInset)
         )
         .padding(
             .bottom,
-            richContent ? 2 : density.metrics.bubbleVerticalInset
+            richWidth != nil ? 2 : density.metrics.bubbleVerticalInset
         )
         .frame(
-            width: richContent ? MessageBubbleReplyLayout.richContentWidth : nil,
+            width: richWidth,
             alignment: .leading
         )
         // Measure a reply body on the same width as its quote so a lifted excerpt keeps both edges.
@@ -1276,7 +1236,7 @@ struct MessageBubble: View {
     private var widensTextForReactions: Bool {
         showsReactionStrip && sharedLocation == nil && linkPreviewURL == nil
             && record.sticker == nil && record.kind != MessageSemantics.kindPoll && remoteGiphyMedia == nil
-            && mediaItems.isEmpty && standaloneEmoji == nil && standaloneCustomEmoji == nil && debugStyle == nil
+            && mediaItems.isEmpty && standaloneCustomEmoji == nil && debugStyle == nil
     }
 
     private var showsMetadataFooter: Bool {
@@ -1995,35 +1955,25 @@ private struct MessageMediaGrid: View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(resolvedLayout.frames.enumerated()), id: \.offset) { index, frame in
                 if index < resolvedItems.count {
-                    tile(
+                    MessageMediaTile(
                         item: resolvedItems[index],
+                        isFromMe: isFromMe,
                         size: frame.size,
                         hiddenCount: index == resolvedItems.count - 1
                             ? resolvedLayout.overflowCount
-                            : 0
+                            : 0,
+                        showsVideoDuration: !resolvedLayout.threeAcrossTiles.contains(index),
+                        onLoadMedia: onLoadMedia,
+                        onOpenImage: onOpenImage,
+                        onOpenVideo: onOpenVideo
                     )
+                    .id(resolvedItems[index].id)
                     .position(x: frame.midX, y: frame.midY)
                 }
             }
         }
         .frame(width: resolvedLayout.size.width, height: resolvedLayout.size.height, alignment: .topLeading)
         .clipShape(.rect(cornerRadius: cornerRadius))
-    }
-
-    private func tile(
-        item: MessageMediaAttachment,
-        size: CGSize,
-        hiddenCount: Int
-    ) -> some View {
-        MessageMediaTile(
-            item: item,
-            isFromMe: isFromMe,
-            size: size,
-            hiddenCount: hiddenCount,
-            onLoadMedia: onLoadMedia,
-            onOpenImage: onOpenImage,
-            onOpenVideo: onOpenVideo
-        )
     }
 }
 
@@ -2074,164 +2024,59 @@ private struct MessageMediaRoundedTileShape: Shape {
 private struct MessageMediaAttachmentContent: View {
     let items: [MessageMediaAttachment]
     let isFromMe: Bool
+    let isStandaloneUnsupportedAttachment: Bool
     let status: MessageStatus
     let maxWidth: CGFloat
-    let fillsWidth: Bool
     let onLoadMedia: ConversationMediaLoader
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
     let onOpenVideo: (MessageMediaAttachment) -> Void
 
-    private var usesVisualGrid: Bool {
-        !items.isEmpty && items.allSatisfy { $0.isImage || $0.isVideo }
-    }
-
-    private var singleVideo: MessageMediaAttachment? {
-        items.count == 1 && items[0].isVideo ? items[0] : nil
-    }
-
-    private var singleImage: MessageMediaAttachment? {
-        items.count == 1 && items[0].isImage ? items[0] : nil
-    }
-
     var body: some View {
-        if let singleImage {
-            MessageSingleImageBubble(
-                item: singleImage,
-                isFromMe: isFromMe,
-                maxWidth: maxWidth,
-                fillsWidth: fillsWidth,
-                onLoadMedia: onLoadMedia,
-                onOpenImage: onOpenImage,
-                onOpenVideo: onOpenVideo
-            )
-        } else if let singleVideo {
-            MessageSingleVideoBubble(
-                item: singleVideo,
-                isFromMe: isFromMe,
-                maxWidth: maxWidth,
-                onLoadMedia: onLoadMedia
-            )
-        } else if usesVisualGrid {
-            MessageMediaGrid(
-                items: items,
-                isFromMe: isFromMe,
-                maxWidth: maxWidth,
-                onLoadMedia: onLoadMedia,
-                onOpenImage: onOpenImage,
-                onOpenVideo: onOpenVideo
-            )
-        } else {
-            VStack(alignment: isFromMe ? .trailing : .leading, spacing: 6) {
-                ForEach(items) { item in
-                    if let rejection = item.rejectionMessage {
-                        Label(rejection, systemImage: "exclamationmark.document")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .padding(8)
-                    } else {
-                        switch item.kind {
-                        case .image:
-                            MessageMediaTile(
-                                item: item,
-                                isFromMe: isFromMe,
-                                size: MessageImageBubblePresentation.displaySize(
-                                    maxWidth: maxWidth,
-                                    dim: item.dim,
-                                    fillsWidth: fillsWidth
-                                ),
-                                hiddenCount: 0,
-                                onLoadMedia: onLoadMedia,
-                                onOpenImage: onOpenImage,
-                                onOpenVideo: onOpenVideo
-                            )
-                            .clipShape(.rect(cornerRadius: 12))
-                        case .video:
-                            MessageSingleVideoBubble(
-                                item: item,
-                                isFromMe: isFromMe,
-                                maxWidth: maxWidth,
-                                onLoadMedia: onLoadMedia
-                            )
-                        case .audio:
-                            MessageAudioAttachmentView(
-                                item: item,
-                                isFromMe: isFromMe,
-                                isUploading: MessageMediaUploadPresentation.isUploading(item, status: status),
-                                width: maxWidth,
-                                onLoadMedia: onLoadMedia
-                            )
-                        case .document, .unsupported:
-                            MessageDocumentAttachmentView(
-                                item: item,
-                                isFromMe: isFromMe,
-                                width: maxWidth,
-                                onLoadMedia: onLoadMedia
-                            )
-                        }
+        let album = items.filter(\.isTranscriptGalleryMedia)
+        VStack(alignment: .leading, spacing: 6) {
+            if album.count == 1, let first = album.first {
+                tile(first, size: MessageVisualMediaBubblePresentation.displaySize(maxWidth: maxWidth, dim: first.dim))
+            } else if !album.isEmpty {
+                MessageMediaGrid(items: album, isFromMe: isFromMe, maxWidth: maxWidth, onLoadMedia: onLoadMedia,
+                    onOpenImage: onOpenImage, onOpenVideo: onOpenVideo)
+            }
+            ForEach(items.filter { !$0.isTranscriptGalleryMedia }) { item in
+                if item.rejectionKind == .unsupportedFormat {
+                    HStack(spacing: 6) {
+                        Image(systemName: "doc")
+                            .overlay { Image(systemName: "line.diagonal").rotationEffect(.degrees(90)) }
+                            .accessibilityHidden(true)
+                        Text(L10n.string("Unsupported attachment."))
                     }
+                    .font(.subheadline)
+                    .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
+                    .frame(maxWidth: isStandaloneUnsupportedAttachment ? nil : .infinity,
+                           minHeight: isStandaloneUnsupportedAttachment ? nil : 44, alignment: .leading)
+                    .padding(isStandaloneUnsupportedAttachment ? 0 : 8)
+                } else if let rejection = item.rejectionMessage {
+                    Label(rejection, systemImage: "exclamationmark.document")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .padding(8)
+                } else if item.isGIF {
+                    tile(item, size: CGSize(width: maxWidth, height: 188))
+                } else if item.kind == .audio {
+                    MessageAudioAttachmentView(item: item, isFromMe: isFromMe,
+                        isUploading: MessageMediaUploadPresentation.isUploading(item, status: status),
+                        width: maxWidth, onLoadMedia: onLoadMedia)
+                } else {
+                    MessageDocumentAttachmentView(item: item, isFromMe: isFromMe, onLoadMedia: onLoadMedia)
                 }
             }
-            .frame(width: maxWidth, alignment: isFromMe ? .trailing : .leading)
         }
     }
-}
 
-private struct MessageSingleImageBubble: View {
-    let item: MessageMediaAttachment
-    let isFromMe: Bool
-    let maxWidth: CGFloat
-    let fillsWidth: Bool
-    let onLoadMedia: ConversationMediaLoader
-    let onOpenImage: (MessageMediaAttachment, Data) -> Void
-    let onOpenVideo: (MessageMediaAttachment) -> Void
-
-    private let cornerRadius: CGFloat = 12
-
-    private var size: CGSize {
-        MessageImageBubblePresentation.displaySize(
-            maxWidth: maxWidth,
-            dim: item.dim,
-            fillsWidth: fillsWidth
-        )
-    }
-
-    var body: some View {
-        MessageMediaTile(
-            item: item,
-            isFromMe: isFromMe,
-            size: size,
-            hiddenCount: 0,
-            onLoadMedia: onLoadMedia,
-            onOpenImage: onOpenImage,
-            onOpenVideo: onOpenVideo
-        )
-        .clipShape(.rect(cornerRadius: cornerRadius))
-    }
-}
-
-private struct MessageSingleVideoBubble: View {
-    let item: MessageMediaAttachment
-    let isFromMe: Bool
-    let maxWidth: CGFloat
-    let onLoadMedia: ConversationMediaLoader
-
-    private let cornerRadius: CGFloat = 12
-
-    private var size: CGSize {
-        MessageVideoBubblePresentation.displaySize(maxWidth: maxWidth, dim: item.dim)
-    }
-
-    var body: some View {
-        MessageVideoAttachmentView(
-            item: item,
-            isFromMe: isFromMe,
-            width: size.width,
-            height: size.height,
-            onLoadMedia: onLoadMedia,
-            onOpenFullscreen: nil
-        )
-        .clipShape(.rect(cornerRadius: cornerRadius))
+    private func tile(_ item: MessageMediaAttachment, size: CGSize) -> some View {
+        MessageMediaTile(item: item, isFromMe: isFromMe, size: size, hiddenCount: 0,
+            onLoadMedia: onLoadMedia, onOpenImage: onOpenImage, onOpenVideo: onOpenVideo)
+            .id(item.id)
+            .clipShape(.rect(cornerRadius: 12))
     }
 }
 
@@ -2268,6 +2113,7 @@ nonisolated struct MessageMediaTileCornerRadii: Equatable, Sendable {
 nonisolated struct MessageMediaGridLayout: Equatable {
     let size: CGSize
     let frames: [CGRect]
+    let threeAcrossTiles: Range<Int>
     let overflowCount: Int
 }
 
@@ -2289,6 +2135,7 @@ enum MessageMediaGridPresentation {
         let scale = width / referenceWidth
         let referenceFrames: [CGRect]
         let referenceHeight: CGFloat
+        var threeAcrossTiles = 0..<0
 
         switch count {
         case 0:
@@ -2319,6 +2166,7 @@ enum MessageMediaGridPresentation {
                 CGRect(x: 129, y: 129, width: 127, height: 127),
             ]
         default:
+            threeAcrossTiles = 2..<5
             referenceHeight = 213
             referenceFrames = [
                 CGRect(x: 0, y: 0, width: 127, height: 127),
@@ -2339,6 +2187,7 @@ enum MessageMediaGridPresentation {
                     height: frame.height * scale
                 )
             },
+            threeAcrossTiles: threeAcrossTiles,
             overflowCount: hiddenCount(totalCount: count)
         )
     }
@@ -2374,88 +2223,36 @@ enum MessageMediaGridPresentation {
     }
 }
 
-nonisolated private enum MessageVisualMediaBubblePresentation {
-    private static let maximumHeightRatio: CGFloat = 1.35
-
-    static func aspectRatio(dim: String?, fallback: CGFloat) -> CGFloat {
-        guard let dim else { return fallback }
-        let parts = dim
-            .lowercased()
-            .split(separator: "x", maxSplits: 1)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        guard parts.count == 2,
-              let width = Double(parts[0]),
-              let height = Double(parts[1]),
-              width > 0,
-              height > 0
-        else {
-            return fallback
-        }
-        let aspectRatio = CGFloat(width / height)
-        guard aspectRatio.isFinite else { return fallback }
-        return min(4, max(0.25, aspectRatio))
-    }
-
-    static func displaySize(
-        maxWidth: CGFloat,
-        dim: String?,
-        fallback: CGFloat,
-        fillsWidth: Bool
-    ) -> CGSize {
-        let boundedMaxWidth = max(1, maxWidth)
-        let aspectRatio = aspectRatio(dim: dim, fallback: fallback)
-        if aspectRatio >= 1 {
-            return roundedSize(width: boundedMaxWidth, height: boundedMaxWidth / aspectRatio)
-        }
-
-        let maxHeight = boundedMaxWidth * maximumHeightRatio
-        let height = min(boundedMaxWidth / aspectRatio, maxHeight)
-        if fillsWidth {
-            return roundedSize(width: boundedMaxWidth, height: height)
-        }
-        return roundedSize(width: min(boundedMaxWidth, height * aspectRatio), height: height)
-    }
-
-    private static func roundedSize(width: CGFloat, height: CGFloat) -> CGSize {
-        CGSize(
-            width: max(1, width.rounded(.toNearestOrAwayFromZero)),
-            height: max(1, height.rounded(.toNearestOrAwayFromZero))
-        )
-    }
-}
-
-nonisolated enum MessageImageBubblePresentation {
-    static func aspectRatio(dim: String?) -> CGFloat {
-        MessageVisualMediaBubblePresentation.aspectRatio(dim: dim, fallback: 1)
-    }
-
-    static func displaySize(maxWidth: CGFloat, dim: String?, fillsWidth: Bool = false) -> CGSize {
-        MessageVisualMediaBubblePresentation.displaySize(
-            maxWidth: maxWidth,
-            dim: dim,
-            fallback: 1,
-            fillsWidth: fillsWidth
-        )
-    }
-}
-
-nonisolated enum MessageVideoBubblePresentation {
-    private static let fallbackAspectRatio: CGFloat = 16.0 / 9.0
-    static let fullscreenButtonSize: CGFloat = 36
-    static let fullscreenButtonIconSize: CGFloat = 15
-    static let fullscreenButtonInset: CGFloat = 8
-
-    static func aspectRatio(dim: String?) -> CGFloat {
-        MessageVisualMediaBubblePresentation.aspectRatio(dim: dim, fallback: fallbackAspectRatio)
+nonisolated enum MessageVisualMediaBubblePresentation {
+    static func contentWidth(for items: [MessageMediaAttachment], maxWidth: CGFloat) -> CGFloat {
+        // File and unavailable rows fit the enclosing bubble. Visual tiles and
+        // audio players each have a size of their own.
+        let media = items.filter { $0.rejectionKind == nil && ($0.isImage || $0.isVideo || $0.isAudio) }
+        guard media.count == 1, let visual = media.first,
+              visual.isTranscriptGalleryMedia, visual.isImage || items.count == 1 else { return maxWidth }
+        return displaySize(maxWidth: maxWidth, dim: visual.dim).width
     }
 
     static func displaySize(maxWidth: CGFloat, dim: String?) -> CGSize {
-        MessageVisualMediaBubblePresentation.displaySize(
-            maxWidth: maxWidth,
-            dim: dim,
-            fallback: fallbackAspectRatio,
-            fillsWidth: false
-        )
+        let extent = max(1, maxWidth)
+        let square = CGSize(width: extent, height: extent)
+        guard let parts = dim?.lowercased().split(separator: "x", maxSplits: 1, omittingEmptySubsequences: false),
+              parts.count == 2,
+              let width = Double(parts[0].trimmingCharacters(in: .whitespacesAndNewlines)),
+              let height = Double(parts[1].trimmingCharacters(in: .whitespacesAndNewlines)),
+              width.isFinite, height.isFinite, width > 0, height > 0 else { return square }
+
+        let ratio = min(1 / 0.35, max(0.35, width / height))
+        let minimumWidth = min(192, extent)
+        var tileWidth = max(minimumWidth, min(extent, extent * ratio))
+        var tileHeight = min(extent, extent / ratio)
+        let shortSide = min(tileWidth, tileHeight)
+        if shortSide > minimumWidth, shortSide > min(width, height) {
+            let scale = minimumWidth / shortSide
+            tileWidth *= scale
+            tileHeight *= scale
+        }
+        return CGSize(width: max(1, tileWidth.rounded()), height: max(1, tileHeight.rounded()))
     }
 }
 
@@ -2502,18 +2299,14 @@ nonisolated enum MessageAudioBubblePresentation {
     }
 }
 
-private struct MessageFullscreenVideo: Identifiable {
-    let id: String
-    let item: MessageMediaAttachment
-    let url: URL
-}
-
 private struct MessageMediaTile: View {
+    @Environment(\.mediaOpenIntent) private var openIntent
     @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
     let isFromMe: Bool
     let size: CGSize
     let hiddenCount: Int
+    var showsVideoDuration = true
     let onLoadMedia: ConversationMediaLoader
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
     let onOpenVideo: (MessageMediaAttachment) -> Void
@@ -2522,7 +2315,10 @@ private struct MessageMediaTile: View {
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     @State private var image: UIImage?
     @State private var gifData: Data?
+    @State private var gifReplay = 0
     @State private var loadedImageID: String?
+    @State private var imageRequest = UUID()
+    @State private var explicitReadInFlight = false
     @State private var isLoading = false
     @State private var didFail = false
     @State private var awaitingManualDownload = false
@@ -2542,8 +2338,21 @@ private struct MessageMediaTile: View {
                         Image(uiImage: image).resizable().scaledToFill()
                     }
                 }
+                .id(gifReplay)
                 .frame(width: size.width, height: size.height)
                 .clipped()
+                .overlay {
+                    if isLoading || didFail {
+                        Group {
+                            if isLoading { ProgressView().tint(.white) }
+                            else { Label("Retry", systemImage: "arrow.clockwise").font(.caption.weight(.semibold)) }
+                        }
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .allowsHitTesting(false)
+                    }
+                }
             } else if item.isImage {
                 imagePlaceholder
             } else if item.isVideo {
@@ -2552,23 +2361,34 @@ private struct MessageMediaTile: View {
                     isFromMe: isFromMe,
                     width: size.width,
                     height: size.height,
-                    onLoadMedia: onLoadMedia,
-                    onOpenFullscreen: {
-                        onOpenVideo(item)
-                    }
+                    showsBadges: hiddenCount == 0,
+                    showsDuration: showsVideoDuration,
+                    onLoadMedia: onLoadMedia
                 )
+                .id(item.id)
             } else {
                 filePlaceholder
             }
 
             if hiddenCount > 0 {
-                Color.black.opacity(0.48)
+                Color.black.opacity(0.5).allowsHitTesting(false)
                 Text(L10n.formatted("+%lld", Int64(hiddenCount)))
-                    .font(.title2.weight(.bold))
+                    .font(.title2.weight(.medium))
                     .foregroundStyle(.white)
+                    .allowsHitTesting(false)
+            } else if item.isGIF, loadedImageID == item.id, image != nil {
+                Text("GIF")
+                    .font(.caption)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .foregroundStyle(.white)
+                    .background(.black.opacity(0.6), in: .capsule)
+                    .padding(7)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .allowsHitTesting(false)
             }
 
-            if awaitingManualDownload {
+            if awaitingManualDownload, !(item.isGIF && loadedImageID == item.id && image != nil) {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.title)
                     .symbolRenderingMode(.palette)
@@ -2598,6 +2418,15 @@ private struct MessageMediaTile: View {
             if !visible { gifData = nil }
         }
         .onTapGesture {
+            let request = openIntent?.begin()
+            if item.isGIF, loadedImageID == item.id, gifData != nil {
+                gifReplay &+= 1
+                return
+            }
+            if item.isVideo {
+                onOpenVideo(item)
+                return
+            }
             if awaitingManualDownload {
                 awaitingManualDownload = false
                 Task { _ = await loadImageIfNeeded(scale: displayScale, demand: .explicit) }
@@ -2606,7 +2435,8 @@ private struct MessageMediaTile: View {
             guard item.isImage else { return }
             let demand = AttachmentDemand.userTap(afterFailure: didFail)
             Task {
-                if let data = await loadImageIfNeeded(scale: displayScale, demand: demand) {
+                if let data = await loadImageIfNeeded(scale: displayScale, demand: demand),
+                   !item.isGIF, openIntent?.current == request {
                     onOpenImage(item, data)
                 }
             }
@@ -2653,41 +2483,50 @@ private struct MessageMediaTile: View {
     }
 
     private func loadImageIfNeeded(scale: CGFloat, demand: AttachmentDemand = .automatic) async -> Data? {
-        guard item.isImage else { return nil }
-        let maxPixelSize = max(1, Int(ceil(max(size.width, size.height) * scale)))
-        if demand != .retry {
-            if let cachedThumbnail = MessageMediaThumbnailDecoder.cachedThumbnail(
-                for: thumbnailCacheKey,
-                maxPixelSize: maxPixelSize
-            ) {
-                image = cachedThumbnail.image
-                gifData = item.isGIF ? cachedThumbnail.sourceData : nil
-                loadedImageID = item.id
-                didFail = false
-                return cachedThumbnail.sourceData
+        guard item.isImage, demand != .automatic || (!explicitReadInFlight && !didFail) else { return nil }
+        let request = UUID()
+        imageRequest = request
+        explicitReadInFlight = demand != .automatic
+        defer {
+            if imageRequest == request {
+                isLoading = false
+                explicitReadInFlight = false
             }
+        }
+        let maxPixelSize = max(1, Int(ceil(max(size.width, size.height) * scale)))
+        let cached = demand == .retry ? nil : MessageMediaThumbnailDecoder.cachedThumbnail(for: thumbnailCacheKey, maxPixelSize: maxPixelSize)
+        // Identical photos share decoded thumbnails. An explicit open still needs
+        // the tapped slot's own bytes and acquisition state.
+        if let cached, demand == .automatic || item.reference == nil {
+            image = cached.image
+            gifData = item.isGIF ? cached.sourceData : nil
+            loadedImageID = item.id
+            didFail = false
+            return cached.sourceData
         }
         isLoading = true
         didFail = false
-        defer { isLoading = false }
         // host_media_prepare: bytes through decode, before the UI assignment.
         let analytics = appState.productAnalytics
         let prepareTiming = analytics.beginTiming()
         do {
-            let data = try await onLoadMedia.data(for: item, demand: demand)
-            guard !Task.isCancelled else {
+            let requested = demand == .automatic ? item : item.forTranscriptPage
+            let data = try await onLoadMedia.data(for: requested, demand: demand)
+            guard !Task.isCancelled, imageRequest == request else {
                 analytics.recordStage(.mediaPrepare, since: prepareTiming, outcome: .cancelled)
                 return nil
             }
-            let decodeTiming = analytics.beginTiming()
-            let decoded = await MessageMediaThumbnailDecoder.image(
-                data: data,
-                maxPixelSize: maxPixelSize,
-                scale: scale
-            )
-            analytics.recordStage(.mediaDecode, since: decodeTiming, outcome: decoded == nil ? .failure : .success)
+            let decoded: UIImage?
+            if let cached {
+                decoded = cached.image
+            } else {
+                let decodeTiming = analytics.beginTiming()
+                decoded = await MessageMediaThumbnailDecoder.image(data: data, maxPixelSize: maxPixelSize, scale: scale)
+                analytics.recordStage(.mediaDecode, since: decodeTiming, outcome: decoded == nil ? .failure : .success)
+            }
             analytics.recordStage(.mediaPrepare, since: prepareTiming,
                                   outcome: decoded == nil ? .failure : Task.isCancelled ? .cancelled : .success)
+            guard !Task.isCancelled, imageRequest == request else { return nil }
             guard let decoded else {
                 image = nil
                 gifData = nil
@@ -2695,23 +2534,22 @@ private struct MessageMediaTile: View {
                 didFail = demand.failureOffersRetry
                 return nil
             }
-            guard !Task.isCancelled else { return nil }
             image = decoded
             gifData = item.isGIF ? data : nil
             loadedImageID = item.id
-            MessageMediaThumbnailDecoder.store(
-                decoded,
-                sourceData: data,
-                for: thumbnailCacheKey,
-                maxPixelSize: maxPixelSize
-            )
+            if cached == nil {
+                MessageMediaThumbnailDecoder.store(decoded, sourceData: data, for: thumbnailCacheKey, maxPixelSize: maxPixelSize)
+            }
             return data
         } catch {
             analytics.recordStage(.mediaPrepare, since: prepareTiming,
                                   outcome: error is CancellationError ? .cancelled : .failure)
-            image = nil
-            gifData = nil
-            loadedImageID = item.id
+            guard !Task.isCancelled, imageRequest == request else { return nil }
+            if loadedImageID != item.id {
+                image = nil
+                gifData = nil
+                loadedImageID = item.id
+            }
             didFail = demand.failureOffersRetry
             return nil
         }
@@ -2723,13 +2561,16 @@ private struct MessageMediaPlaceholderBackground: View {
     let fallbackSystemName: String?
     let width: CGFloat
     let height: CGFloat
+    var usesSentBubbleColors = false
 
     @State private var image: UIImage?
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
 
     var body: some View {
         ZStack {
-            Color(.tertiarySystemFill)
+            (usesSentBubbleColors
+                ? MessageBubblePalette.sentForeground.opacity(MessageBubbleReplyLayout.sentCardOpacity)
+                : Color(.tertiarySystemFill))
             if let image {
                 Image(uiImage: image)
                     .resizable()
@@ -2739,7 +2580,9 @@ private struct MessageMediaPlaceholderBackground: View {
             } else if let fallbackSystemName {
                 Image(systemName: fallbackSystemName)
                     .font(.title3)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(usesSentBubbleColors
+                        ? AnyShapeStyle(MessageBubblePalette.sentSecondaryForeground)
+                        : AnyShapeStyle(.secondary))
             }
         }
         .frame(width: width, height: height)
@@ -2785,7 +2628,7 @@ private struct MessageReplyMediaThumbnail: View {
                     height: side
                 )
             } else {
-                Color.primary.opacity(isFromMe ? 0.10 : 0.08)
+                MessageBubblePalette.foreground(isFromMe: isFromMe).opacity(0.10)
                 Image(systemName: item.isAudio ? "waveform" : "doc.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : Color.secondary)
@@ -2800,9 +2643,12 @@ private struct MessageReplyMediaThumbnail: View {
         }
         .frame(width: side, height: side)
         .clipShape(.rect(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+        .onReceive(NotificationCenter.default.publisher(for: MessageVideoThumbnailDecoder.playedPreviewDidChange)) { update in
+            guard isTimelineRowVisible, item.isVideo, item.thumbnail == nil,
+                  let key = update.object as? String, key == MessageVideoThumbnailPresentation.cacheKey(for: item),
+                  let poster = MessageVideoThumbnailDecoder.cachedThumbnail(for: key, maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize) else { return }
+            image = poster
+            loadedItemID = item.id
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
@@ -2853,16 +2699,15 @@ private struct MessageReplyMediaThumbnail: View {
 
         guard item.isVideo else { return }
         let cacheKey = MessageVideoThumbnailPresentation.cacheKey(for: item)
-        if let cached = MessageVideoThumbnailDecoder.cachedThumbnail(
-            for: cacheKey,
-            maxPixelSize: maxPixelSize
-        ) {
+        let cached = MessageVideoThumbnailDecoder.cachedThumbnail(for: cacheKey, maxPixelSize: maxPixelSize)
+            ?? MessageVideoThumbnailDecoder.cachedThumbnail(for: cacheKey, maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize)
+        if let cached {
             image = cached
             loadedItemID = item.id
             return
         }
-        guard MediaAutoDownloadStore.shared.shouldAutoDownload(.video) else { return }
-        guard let data = await mediaData() else { return }
+        guard MediaAutoDownloadStore.shared.shouldAutoDownload(.video),
+              let data = try? await onLoadMedia.videoPreviewData(for: item) else { return }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
         guard let url = await MediaPlaybackFileStore.fileURL(
             for: item,
@@ -3001,24 +2846,16 @@ private struct MessageVideoAttachmentView: View {
     let isFromMe: Bool
     let width: CGFloat
     let height: CGFloat
+    let showsBadges: Bool
+    let showsDuration: Bool
     let onLoadMedia: ConversationMediaLoader
-    let onOpenFullscreen: (() -> Void)?
 
-    @State private var player: AVPlayer?
-    @State private var playbackURL: URL?
-    @State private var audioSession = ObservableVideoPlaybackAudioSession()
     @State private var previewThumbnail: UIImage?
-    @State private var fullscreenVideo: MessageFullscreenVideo?
-    @State private var isLoading = false
-    @State private var isLoadingFullscreen = false
-    @State private var didFail = false
-
+    @State private var localDuration: Double?
+    @State private var posterDecodeFailed = false
+    @State private var durationReadFailed = false
     @Environment(\.displayScale) private var displayScale
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
-
-    private var overlayDiameter: CGFloat {
-        VideoPreviewOverlayPresentation.diameter(for: CGSize(width: width, height: height))
-    }
 
     private func maxThumbnailPixelSize(scale: CGFloat) -> Int {
         max(1, Int(ceil(max(width, height) * scale)))
@@ -3035,199 +2872,78 @@ private struct MessageVideoAttachmentView: View {
                 for: thumbnailCacheKey,
                 maxPixelSize: maxThumbnailPixelSize(scale: displayScale)
             )
+            ?? playedPoster
+    }
+
+    private var playedPoster: UIImage? {
+        MessageVideoThumbnailDecoder.cachedThumbnail(for: thumbnailCacheKey,
+            maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize)
     }
 
     var body: some View {
         ZStack {
-            if let player {
-                VideoPlayer(player: player)
-                    .frame(width: width, height: height)
-                    .background(Color.black)
-            } else if let thumbnail = displayThumbnail {
+            if let thumbnail = displayThumbnail {
                 Image(uiImage: thumbnail)
-                    .resizable()
-                    .scaledToFill()
+                    .resizable().scaledToFill()
                     .frame(width: width, height: height)
                     .clipped()
             } else {
-                videoPlaceholder
+                MessageMediaPlaceholderBackground(thumbhash: item.reference?.thumbhash,
+                    fallbackSystemName: "play.rectangle", width: width, height: height, usesSentBubbleColors: isFromMe)
             }
-
-            if player == nil {
-                if isLoading {
-                    ProgressView()
-                        .controlSize(
-                            overlayDiameter >= VideoPreviewOverlayPresentation.regularDiameter ? .regular : .small
-                        )
-                        .tint(.white)
-                        .frame(width: overlayDiameter, height: overlayDiameter)
-                        .background(Color.black.opacity(0.5), in: Circle())
-                } else {
-                    VideoPreviewPlayOverlay(
-                        systemName: didFail ? "arrow.clockwise" : "play.fill",
-                        diameter: overlayDiameter
-                    )
+            if showsBadges {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(.black.opacity(0.4), in: Circle())
+                if showsDuration, let duration = AudioDurationLabel.optionalLabel(for: item.durationSeconds ?? localDuration ?? MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey)) {
+                    Text(duration)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(5)
+                        .background(.black.opacity(0.55), in: .capsule)
+                        .padding(6)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
             }
-
-            VStack {
-                HStack {
-                    Spacer()
-                    Button {
-                        if let onOpenFullscreen {
-                            player?.pause()
-                            audioSession.stop()
-                            onOpenFullscreen()
-                        } else {
-                            Task { await openFullscreen(scale: displayScale) }
-                        }
-                    } label: {
-                        Group {
-                            if isLoadingFullscreen && onOpenFullscreen == nil {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                    .font(.system(
-                                        size: MessageVideoBubblePresentation.fullscreenButtonIconSize,
-                                        weight: .bold
-                                    ))
-                                    .foregroundStyle(.white)
-                            }
-                        }
-                        .frame(
-                            width: MessageVideoBubblePresentation.fullscreenButtonSize,
-                            height: MessageVideoBubblePresentation.fullscreenButtonSize
-                        )
-                        .background(Color.black.opacity(0.48), in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(onOpenFullscreen == nil && isLoadingFullscreen)
-                    .accessibilityLabel(
-                        onOpenFullscreen == nil
-                            ? L10n.string("Open video fullscreen")
-                            : L10n.string("Open media gallery")
-                    )
-                }
-                Spacer()
-            }
-            .padding(MessageVideoBubblePresentation.fullscreenButtonInset)
         }
         .frame(width: width, height: height)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            Task { await loadAndPlay(scale: displayScale) }
+        .accessibilityLabel("Video attachment")
+        .onReceive(NotificationCenter.default.publisher(for: MessageVideoThumbnailDecoder.playedPreviewDidChange)) { update in
+            guard update.object as? String == thumbnailCacheKey else { return }
+            if let playedPoster { previewThumbnail = playedPoster }
+            localDuration = MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey)
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
-            guard isTimelineRowVisible else { return }
-            // Auto-download per the Videos matrix row: fetch, cache, and
-            // render the poster so the bubble shows the download happened;
-            // playback stays tap-driven.
-            guard player == nil, previewThumbnail == nil, !isLoading,
-                  MediaAutoDownloadStore.shared.shouldAutoDownload(.video),
-                  MediaPrefetchRegistry.claim(item.id)
-            else { return }
-            do {
-                let url = try await playbackFileURL(demand: .automatic)
-                await loadPreviewThumbnail(from: url, scale: displayScale)
-            } catch {
-                MediaPrefetchRegistry.release(item.id)
+            guard isTimelineRowVisible, MediaAutoDownloadStore.shared.shouldAutoDownload(.video) else { return }
+            let needsPoster = displayThumbnail == nil && !posterDecodeFailed
+            let needsDuration = showsBadges && showsDuration && !durationReadFailed && item.durationSeconds == nil
+                && localDuration == nil && MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey) == nil
+            guard needsPoster || needsDuration else {
+                // Metadata can come from identical bytes in another message. Admit this
+                // slot under the Videos preference without decoding the movie again.
+                _ = await onLoadMedia.automaticAttachmentByteCount(item)
+                return
             }
-        }
-        .onChange(of: isTimelineRowVisible) { _, isVisible in
-            guard !isVisible else { return }
-            player?.pause()
-            audioSession.stop()
-            player = nil
-        }
-        .onChange(of: item.id) { _, _ in
-            player?.pause()
-            audioSession.stop()
-            player = nil
-            playbackURL = nil
-            previewThumbnail = nil
-            fullscreenVideo = nil
-            isLoading = false
-            isLoadingFullscreen = false
-            didFail = false
-        }
-        .onDisappear {
-            player?.pause()
-            audioSession.stop()
-        }
-        .fullScreenCover(item: $fullscreenVideo) { video in
-            MessageFullscreenVideoPlayerView(video: video) {
-                fullscreenVideo = nil
+            let epoch = MessageMediaCache.currentProducerEpoch()
+            guard let data = try? await onLoadMedia.videoPreviewData(for: item),
+                  !Task.isCancelled,
+                  let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: epoch),
+                  !Task.isCancelled else { return }
+            if needsDuration {
+                let time = try? await AVURLAsset(url: url).load(.duration)
+                guard !Task.isCancelled else { return }
+                if let seconds = time?.seconds, seconds.isFinite, seconds > 0 {
+                    localDuration = seconds
+                    MessageVideoThumbnailDecoder.store(duration: seconds, for: thumbnailCacheKey)
+                } else {
+                    durationReadFailed = true
+                }
             }
+            if needsPoster { await loadPreviewThumbnail(from: url, scale: displayScale) }
         }
-        .accessibilityLabel("Video attachment")
-    }
-
-    private var videoPlaceholder: some View {
-        MessageMediaPlaceholderBackground(
-            thumbhash: item.reference?.thumbhash,
-            fallbackSystemName: "play.rectangle",
-            width: width,
-            height: height
-        )
-    }
-
-    private func loadAndPlay(scale: CGFloat) async {
-        if let player {
-            player.play()
-            audioSession.attach(to: player)
-            return
-        }
-        let demand = AttachmentDemand.userTap(afterFailure: didFail)
-        isLoading = true
-        didFail = false
-        defer { isLoading = false }
-        do {
-            let url = try await playbackFileURL(demand: demand)
-            await loadPreviewThumbnail(from: url, scale: scale)
-            let next = AVPlayer(url: url)
-            player = next
-            next.play()
-            audioSession.attach(to: next)
-        } catch {
-            didFail = true
-        }
-    }
-
-    private func openFullscreen(scale: CGFloat) async {
-        player?.pause()
-        audioSession.stop()
-        if let playbackURL {
-            fullscreenVideo = MessageFullscreenVideo(id: item.id, item: item, url: playbackURL)
-            return
-        }
-
-        let demand = AttachmentDemand.userTap(afterFailure: didFail)
-        isLoadingFullscreen = true
-        didFail = false
-        defer { isLoadingFullscreen = false }
-        do {
-            let url = try await playbackFileURL(demand: demand)
-            await loadPreviewThumbnail(from: url, scale: scale)
-            fullscreenVideo = MessageFullscreenVideo(id: item.id, item: item, url: url)
-        } catch {
-            didFail = true
-        }
-    }
-
-    private func playbackFileURL(demand: AttachmentDemand) async throws -> URL {
-        if let playbackURL {
-            return playbackURL
-        }
-        let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        let data = try await onLoadMedia.data(for: item, demand: demand)
-        guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
-            throw MessageVideoAttachmentError.playbackFileUnavailable
-        }
-        playbackURL = url
-        return url
     }
 
     private func loadPreviewThumbnail(from url: URL, scale: CGFloat) async {
@@ -3239,11 +2955,14 @@ private struct MessageVideoAttachmentView: View {
             previewThumbnail = cached
             return
         }
-        guard let thumbnail = await MessageVideoThumbnailDecoder.thumbnail(
+        let result = await MessageVideoThumbnailDecoder.thumbnail(
             url: url,
             maxPixelSize: maxThumbnailPixelSize(scale: scale),
             scale: scale
-        ) else {
+        )
+        guard !Task.isCancelled else { return }
+        guard let thumbnail = result else {
+            posterDecodeFailed = true
             return
         }
         previewThumbnail = thumbnail
@@ -3257,68 +2976,6 @@ private struct MessageVideoAttachmentView: View {
 
 private enum MessageVideoAttachmentError: Error {
     case playbackFileUnavailable
-}
-
-private struct MessageFullscreenVideoPlayerView: View {
-    let video: MessageFullscreenVideo
-    let onDismiss: () -> Void
-
-    @State private var player: AVPlayer
-    @State private var audioSession = ObservableVideoPlaybackAudioSession()
-    @State private var dismissDragOffset: CGFloat = 0
-
-    init(video: MessageFullscreenVideo, onDismiss: @escaping () -> Void) {
-        self.video = video
-        self.onDismiss = onDismiss
-        _player = State(initialValue: AVPlayer(url: video.url))
-    }
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            WNMediaSurface().ignoresSafeArea()
-
-            VideoPlayer(player: player)
-                .ignoresSafeArea()
-
-            WNIconButton(title: "Close", systemImage: "xmark", action: onDismiss)
-                .padding(.top, 14)
-                .padding(.trailing, 14)
-        }
-        .offset(y: dismissDragOffset)
-        .opacity(1 - min(dismissDragOffset / 420, 0.35))
-        .simultaneousGesture(swipeDownToDismissGesture)
-        .onAppear {
-            player.play()
-            audioSession.attach(to: player)
-        }
-        .onDisappear {
-            player.pause()
-            audioSession.stop()
-        }
-    }
-
-    private var swipeDownToDismissGesture: some Gesture {
-        DragGesture(minimumDistance: MediaFullscreenDismiss.minimumDistance, coordinateSpace: .local)
-            .onChanged { value in
-                guard MediaFullscreenDismiss.isDownwardVertical(value.translation) else { return }
-                dismissDragOffset = value.translation.height
-            }
-            .onEnded { value in
-                guard dismissDragOffset > 0
-                    || MediaFullscreenDismiss.isDownwardVertical(value.translation)
-                else { return }
-
-                if dismissDragOffset >= MediaFullscreenDismiss.dismissThreshold
-                    || value.predictedEndTranslation.height >= MediaFullscreenDismiss.predictedDismissThreshold
-                {
-                    onDismiss()
-                } else {
-                    withAnimation(.snappy(duration: 0.2, extraBounce: 0)) {
-                        dismissDragOffset = 0
-                    }
-                }
-            }
-    }
 }
 
 nonisolated enum MessageAudioPlayerPreparer {
@@ -3356,22 +3013,6 @@ nonisolated enum MessageAudioPlayerPreparer {
     }
 }
 
-/// Session-scoped memory of successful media prefetches, so a bubble that
-/// scrolls in and out doesn't re-read the decrypted cache on every
-/// appearance. Failed prefetches are released so a later appearance retries.
-@MainActor
-private enum MediaPrefetchRegistry {
-    private static var claimed: Set<String> = []
-
-    static func claim(_ key: String) -> Bool {
-        claimed.insert(key).inserted
-    }
-
-    static func release(_ key: String) {
-        claimed.remove(key)
-    }
-}
-
 private struct MessageAudioAttachmentView: View {
     let item: MessageMediaAttachment
     let isFromMe: Bool
@@ -3380,6 +3021,7 @@ private struct MessageAudioAttachmentView: View {
     let onLoadMedia: ConversationMediaLoader
 
     @State private var player: AVAudioPlayer?
+    @State private var prefetchedAudio: TimelineMediaTaskID?
     @State private var isLoading = false
     @State private var didFail = false
     @State private var isPlaying = false
@@ -3394,8 +3036,6 @@ private struct MessageAudioAttachmentView: View {
 
     @ScaledMetric(relativeTo: .subheadline)
     private var playIconSize: CGFloat = 16
-    @ScaledMetric(relativeTo: .subheadline)
-    private var controlDiameter: CGFloat = 36
     @ScaledMetric(relativeTo: .caption)
     private var speedBadgeWidth: CGFloat = 38
     @ScaledMetric(relativeTo: .caption)
@@ -3403,6 +3043,11 @@ private struct MessageAudioAttachmentView: View {
     private let speeds: [Float] = [1, 1.5, 2]
     private var metadataCacheKey: String {
         MessageAudioBubblePresentation.cacheKey(for: item)
+    }
+
+    private var prefetchID: TimelineMediaTaskID {
+        TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+                            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)
     }
 
     init(
@@ -3422,79 +3067,52 @@ private struct MessageAudioAttachmentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Button(action: togglePlayback) {
-                    Group {
-                        if isLoading || isUploading {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(foregroundColor)
-                        } else {
-                            Image(systemName: MessageAudioBubblePresentation.playbackIconName(
-                                isPlaying: isPlaying,
-                                didFail: didFail
-                            ))
+        HStack(spacing: 0) {
+            Button(action: togglePlayback) {
+                Group {
+                    if isLoading || isUploading {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: MessageAudioBubblePresentation.playbackIconName(isPlaying: isPlaying, didFail: didFail))
                             .font(.system(size: playIconSize, weight: .semibold))
-                        }
-                    }
-                    .frame(width: controlDiameter, height: controlDiameter)
-                    .background(controlFill, in: Circle())
-                    .frame(width: 44, height: 44)
-                    .foregroundStyle(foregroundColor)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .disabled(isUploading)
-                .accessibilityLabel(isUploading ? L10n.string("Sending…") : isPlaying ? "Pause audio message" : "Play audio message")
-
-                VStack(alignment: .leading, spacing: 5) {
-                    AudioWaveformView(
-                        samples: waveformSamples,
-                        progress: progress,
-                        barColor: isFromMe ? MessageBubblePalette.sentForeground.opacity(0.58) : Color.secondary.opacity(0.45),
-                        playedColor: isFromMe ? MessageBubblePalette.sentForeground : Color.accentColor
-                    )
-                    .frame(height: 28)
-                    if let durationLabel = MessageAudioBubblePresentation.durationLabel(durationSeconds ?? item.durationSeconds) {
-                        Text(durationLabel)
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground.opacity(0.75) : Color.secondary)
                     }
                 }
-
-                Button(action: cycleSpeed) {
-                    Text(speedLabel)
-                        .font(.caption.weight(.bold))
-                        .frame(width: speedBadgeWidth, height: speedBadgeHeight)
-                        .background(controlFill, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(foregroundColor)
-                .accessibilityLabel("Playback speed")
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .buttonStyle(.plain)
+            .disabled(isUploading)
+            .accessibilityLabel(isUploading ? L10n.string("Sending…") : isPlaying ? L10n.string("Pause audio message") : L10n.string("Play audio message"))
 
+            AudioWaveformView(samples: waveformSamples, progress: progress,
+                              barColor: foregroundColor.opacity(0.4), playedColor: foregroundColor, fitsAvailableWidth: true)
+                .frame(height: 32)
+
+            if let duration = durationSeconds ?? item.durationSeconds,
+               let remaining = MessageAudioBubblePresentation.durationLabel(duration * (1 - Double(progress))) {
+                Text(remaining)
+                    .font(.caption.monospacedDigit())
+                    .fixedSize()
+                    .padding(.horizontal, 6)
+            }
+            Button(action: cycleSpeed) {
+                Text(speedLabel)
+                    .font(.caption.weight(.bold))
+                    .frame(width: speedBadgeWidth, height: speedBadgeHeight)
+                    .background(controlFill, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Playback speed")
         }
+        .foregroundStyle(foregroundColor)
         .frame(width: width)
-        .frame(minHeight: 68)
-        .background(isFromMe ? MessageBubblePalette.sentBackground : MessageBubblePalette.receivedBackground, in: .rect(cornerRadius: 16))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Color.primary.opacity(isFromMe ? 0.12 : 0.08), lineWidth: 1)
-        }
         .onDisappear {
             stopPlayback()
         }
-        .task(id: TimelineMediaTaskID(
-            contentID: metadataCacheKey,
-            isVisible: isTimelineRowVisible,
-            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision
-        )) {
-            guard isTimelineRowVisible else { return }
-            await loadMetadataIfNeeded()
-            await prefetchIfNeeded()
+        .task(id: prefetchID) {
+            let request = prefetchID
+            guard request.isVisible, prefetchedAudio != request else { return }
+            await prefetchIfNeeded(request)
         }
         .onChange(of: isTimelineRowVisible) { _, isVisible in
             if !isVisible { stopPlayback() }
@@ -3502,16 +3120,22 @@ private struct MessageAudioAttachmentView: View {
     }
 
     /// Prefetches audio only when the Audio auto-download preference allows it.
-    private func prefetchIfNeeded() async {
-        guard player == nil, !isLoading else { return }
-        guard MediaAutoDownloadStore.shared.shouldAutoDownload(.audio) else { return }
-        guard MediaPrefetchRegistry.claim(metadataCacheKey) else { return }
-        guard let data = try? await onLoadMedia.data(for: item, demand: .automatic) else {
-            MediaPrefetchRegistry.release(metadataCacheKey)
-            return
+    private func prefetchIfNeeded(_ request: TimelineMediaTaskID) async {
+        let metadata = MessageAudioMetadataCache.metadata(for: metadataCacheKey) ?? embeddedMetadata
+        if let metadata { applyMetadata(metadata) }
+        // Metadata can come from a different message with the same audio.
+        // Automatic acquisition belongs to this row’s original slot.
+        guard player == nil, !isLoading, MediaAutoDownloadStore.shared.shouldAutoDownload(.audio),
+              let byteCount = await onLoadMedia.automaticAttachmentByteCount(item), !Task.isCancelled else { return }
+        if metadata == nil, byteCount <= MessageMediaAttachment.audioAnalysisByteLimit {
+            var preview = item
+            preview.previewByteLimit = MessageMediaAttachment.audioAnalysisByteLimit
+            guard let data = try? await onLoadMedia.data(for: preview, demand: .automatic), !Task.isCancelled else { return }
+            let analyzed = await audioMetadata(from: data)
+            guard !Task.isCancelled else { return }
+            applyMetadata(analyzed)
         }
-        guard AudioPlaybackLoadOutcome.resolve(isCancelled: Task.isCancelled) == .proceed else { return }
-        applyMetadata(await audioMetadata(from: data))
+        prefetchedAudio = request
     }
 
     private var foregroundColor: Color {
@@ -3587,18 +3211,6 @@ private struct MessageAudioAttachmentView: View {
         }
     }
 
-    private func loadMetadataIfNeeded() async {
-        if let cached = MessageAudioMetadataCache.metadata(for: metadataCacheKey) {
-            applyMetadata(cached)
-            return
-        }
-
-        if let embedded = embeddedMetadata {
-            MessageAudioMetadataCache.store(embedded, for: metadataCacheKey)
-            applyMetadata(embedded)
-        }
-    }
-
     private var embeddedMetadata: MessageAudioMetadata? {
         guard item.durationSeconds != nil, !item.waveformSamples.isEmpty else {
             return nil
@@ -3610,7 +3222,7 @@ private struct MessageAudioAttachmentView: View {
     }
 
     private func audioMetadata(from data: Data) async -> MessageAudioMetadata {
-        if let cached = MessageAudioMetadataCache.metadata(for: metadataCacheKey) {
+        if let cached = MessageAudioMetadataCache.metadata(for: metadataCacheKey) ?? embeddedMetadata {
             return cached
         }
 
@@ -3762,44 +3374,94 @@ private enum MessageAudioMetadataCache {
     }
 }
 
+struct LiftedDocumentDetails: Equatable {
+    let id: String
+    let revision: Int
+    let name: String?
+    let size: Int?
+    let isOpening: Bool
+    let didFail: Bool
+}
+
 private struct MessageDocumentAttachmentView: View {
+    @Environment(\.liftedDocuments) private var liftedDocuments
+    @Environment(\.timelineSearchQuery) private var searchQuery
+    @Environment(\.actionRowMeasurementKey) private var measurementKey
+    @Environment(\.mediaOpenIntent) private var openIntent
+    @Environment(\.timelinePreviewSearch) private var transcriptSearch
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     let item: MessageMediaAttachment
     let isFromMe: Bool
-    let width: CGFloat
     let onLoadMedia: ConversationMediaLoader
 
-    @State private var isLoading = false
+    @Environment(\.scenePhase) private var scenePhase
+    private struct OpenDocument: Identifiable {
+        let preview: MessageDocumentPreview
+        let item: MessageMediaAttachment
+        let loader: ConversationMediaLoader
+        var id: UUID { preview.id }
+    }
+
+    @State private var preview: OpenDocument?
+    @State private var openingID: UUID?
+    @State private var openingTask: Task<Void, Never>?
+    @State private var contactName: String?
+    @State private var byteCount: Int?
     @State private var didFail = false
-    @State private var shareFile: AttachmentShareFile?
-    @State private var handoffControl: MediaFileTransferControlFfi?
+    @State private var share = DocumentSharePresentation()
+
+    private var displayName: String? {
+        liftedDetails?.name ?? contactName ?? transcriptSearch?.displayedContactName(for: item.id)
+    }
+
+    private var liftedDetails: LiftedDocumentDetails? {
+        guard let details = liftedDocuments?[item.id],
+              details.revision == AttachmentPresentationState.shared.revision else { return nil }
+        return details
+    }
 
     var body: some View {
         Button {
-            guard !isLoading else { return }
-            Task { await openDocument() }
+            guard openingID == nil || (openIntent != nil && openingID != openIntent?.current) else { return }
+            let request = openIntent?.begin(cancelPendingOpen: cancelDocumentOpen) ?? UUID()
+            openingID = request
+            openingTask = Task { await openDocument(request) }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: item.kind.systemImageName)
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : Color.accentColor)
-                    .frame(width: 24, alignment: .leading)
+                if DocumentPreviewFormat(for: item) == .contact {
+                    Image(systemName: "person.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 38, height: 38)
+                        .background(.quaternary, in: Circle())
+                } else {
+                    Image(systemName: fileSymbol)
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : Color.accentColor)
+                        .frame(width: 24, alignment: .leading)
+                }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    TimelineSearchText(item.fileName, keepsMatchVisible: true)
+                    let name = displayName
+                    TimelineSearchText(name ?? item.fileName, keepsMatchVisible: true)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                         .multilineTextAlignment(.leading)
+                    if let name, name != item.fileName, let searchQuery, item.fileName.localizedStandardContains(searchQuery) {
+                        TimelineSearchText(item.fileName, keepsMatchVisible: true)
+                            .font(.caption)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Text(fileDetail)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground.opacity(0.74) : Color.secondary)
                 }
                 Spacer(minLength: 0)
-                if isLoading {
+                if liftedDetails?.isOpening ?? (openingID != nil) {
                     ProgressView()
                         .controlSize(.small)
                         .tint(isFromMe ? MessageBubblePalette.sentForeground : .accentColor)
-                } else if didFail {
+                } else if liftedDetails?.didFail ?? didFail {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.caption.weight(.semibold))
                         .frame(width: 20, height: 24)
@@ -3813,28 +3475,70 @@ private struct MessageDocumentAttachmentView: View {
             }
             .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : Color.primary)
             .padding(6)
-            .frame(width: width)
+            .frame(maxWidth: .infinity)
             .background(documentSurface, in: .rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open attachment")
-        .sheet(item: $shareFile) { file in
+        .background {
+            if let key = measurementKey {
+                let details = LiftedDocumentDetails(id: item.id, revision: AttachmentPresentationState.shared.revision,
+                    name: displayName, size: byteCount, isOpening: openingID != nil, didFail: didFail)
+                Color.clear.preference(key: RowFramesKey.self, value: [.init(part: .document(details), key: key)])
+            }
+        }
+        .onChange(of: contactName) { _, name in
+            if let name { transcriptSearch?.registerContactName(name, for: item.id) }
+        }
+        .sheet(item: $preview) { document in
+            MessageDocumentPreviewSheet(preview: document.preview, item: document.item, loader: document.loader)
+                .appAppearance()
+        }
+        .sheet(item: $share.file) { file in
             ActivityShareSheet(items: [file.url], onComplete: file.finish)
                 .onDisappear(perform: file.finish)
         }
-        .onDisappear { handoffControl?.cancel() }
+        .onDisappear { closeDocument() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { cancelDocumentOpen() }
+        }
+        .onChange(of: item.id) { _, _ in
+            closeDocument()
+            byteCount = nil
+            contactName = nil
+            didFail = false
+        }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
-            await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
-                allowed: MediaAutoDownloadStore.shared.shouldAutoDownload(.document))
+            guard liftedDocuments == nil else { return }
+            let metadata = await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
+                allowed: MediaAutoDownloadStore.shared.shouldAutoDownload(.document), hasContactName: displayName != nil)
+            if !Task.isCancelled, let metadata {
+                byteCount = metadata.size
+                if let name = metadata.contactName { contactName = name }
+            }
         }
     }
 
     private var fileDetail: String {
-        let ext = MediaAttachmentPolicy.fileExtension(for: item.mediaType, fileName: item.fileName)
-        return ext.isEmpty
-            ? MediaAttachmentPolicy.canonicalMediaType(item.mediaType)
-            : ext.uppercased()
+        let type = fileExtension.isEmpty ? MediaAttachmentPolicy.canonicalMediaType(item.mediaType) : fileExtension.uppercased()
+        guard let count = item.localData?.count ?? liftedDetails?.size ?? byteCount else { return type }
+        return "\(type) • \(count.formatted(.byteCount(style: .file)))"
+    }
+
+    private var fileExtension: String {
+        MediaAttachmentPolicy.fileExtension(for: item.mediaType, fileName: item.fileName).lowercased()
+    }
+
+    private var fileSymbol: String {
+        switch fileExtension {
+        case "pdf": "doc.richtext"
+        case "doc", "docx", "txt": "doc.text"
+        case "xls", "xlsx": "tablecells"
+        case "zip": "archivebox"
+        case "vcf", "vcard": "person.crop.circle"
+        default: "doc"
+        }
     }
 
     private var documentSurface: Color {
@@ -3844,31 +3548,92 @@ private struct MessageDocumentAttachmentView: View {
         return MessageBubblePalette.receivedForeground.opacity(0.09)
     }
 
-    private func openDocument() async {
-        let demand = AttachmentDemand.userTap(afterFailure: didFail)
-        let control = MediaFileTransferControlFfi()
-        handoffControl = control
-        isLoading = true
-        didFail = false
-        defer {
-            isLoading = false
-            if handoffControl === control { handoffControl = nil }
+    private func openDocument(_ request: UUID) async {
+        func isCurrent() -> Bool {
+            !Task.isCancelled && openingID == request && (openIntent == nil || openIntent?.current == request)
         }
+        defer {
+            openIntent?.finish(request)
+            if openingID == request {
+                openingTask = nil
+                openingID = nil
+            }
+        }
+        guard isCurrent() else { return }
+        let demand = AttachmentDemand.userTap(afterFailure: didFail)
+        didFail = false
         do {
-            shareFile = try await onLoadMedia.shareFile(for: item, demand: demand, control: control)
+            if let document = try await share.openDocument(item, using: onLoadMedia, demand: demand,
+                isCurrent: isCurrent, didReadSize: { byteCount = $0 }), isCurrent() {
+                if case .contact(let card) = document.content { contactName = card.name }
+                preview = OpenDocument(preview: document, item: item, loader: onLoadMedia)
+            }
         } catch is CancellationError {
             return
         } catch AttachmentHandoffFailure.storageFull {
             // The attachment is held; only the copy needs room, so a Retry would not help.
             return
         } catch {
-            didFail = true
+            if isCurrent() { didFail = true }
         }
+    }
+
+    private func cancelDocumentOpen() {
+        guard let request = openingID else { return }
+        openIntent?.finish(request)
+        // Native handoffs must finish through the transfer control so their lease is released.
+        if share.control != nil { share.close() } else { openingTask?.cancel() }
+        openingTask = nil
+        openingID = nil
+    }
+
+    private func closeDocument() {
+        cancelDocumentOpen()
+        preview = nil
+        share.close()
     }
 }
 
 enum MessageVideoThumbnailDecoder {
-    static func clear() { cache.removeAllObjects() }
+    static let playedPosterPixelSize = 768
+    static let playedPreviewDidChange = Notification.Name("MessageVideoPlayedPreviewDidChange")
+
+    /// Decode a transcript poster from the playback file the viewer already opened.
+    @MainActor static func cachePlayedPreview(for item: MessageMediaAttachment, url: URL, scale: CGFloat) async {
+        let key = MessageVideoThumbnailPresentation.cacheKey(for: item)
+        let epoch = MessageMediaCache.currentProducerEpoch()
+        let revision = AttachmentPresentationState.shared.revision
+        let size = playedPosterPixelSize
+        let needsPoster = item.thumbnail == nil && cachedThumbnail(for: key, maxPixelSize: size) == nil
+        let needsDuration = item.durationSeconds == nil && duration(for: key) == nil
+        guard needsPoster || needsDuration else { return }
+        let poster = needsPoster ? await thumbnail(url: url, maxPixelSize: size, scale: scale) : nil
+        let time = needsDuration ? try? await AVURLAsset(url: url).load(.duration) : nil
+        guard !Task.isCancelled, epoch == MessageMediaCache.currentProducerEpoch(),
+              revision == AttachmentPresentationState.shared.revision else { return }
+        if let poster { store(poster, for: key, maxPixelSize: size) }
+        if let time { store(duration: time.seconds, for: key) }
+        NotificationCenter.default.post(name: playedPreviewDidChange, object: key)
+    }
+
+    private static let durations: NSCache<NSString, NSNumber> = {
+        let cache = NSCache<NSString, NSNumber>()
+        cache.countLimit = 512
+        return cache
+    }()
+
+    static func duration(for key: String) -> Double? { durations.object(forKey: key as NSString)?.doubleValue }
+
+    static func store(duration: Double, for key: String) {
+        guard duration.isFinite, duration > 0 else { return }
+        durations.setObject(NSNumber(value: duration), forKey: key as NSString)
+    }
+
+    static func clear() {
+        cache.removeAllObjects()
+        durations.removeAllObjects()
+    }
+
     private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
         cache.totalCostLimit = MediaThumbnailCacheBudget.videoPosters
@@ -4017,23 +3782,32 @@ struct MessageMediaGallery: Identifiable {
     let initialItemID: String
     let initialMediaData: Data?
     let messageIdByItemID: [String: String]
-
-    init?(item: MessageMediaAttachment, imageData: Data) {
-        self.init(items: [item], initialItem: item, initialMediaData: imageData)
+    struct OutgoingSlot: Equatable {
+        let rowID: String
+        let index: UInt32
     }
 
-    init?(
-        items: [MessageMediaAttachment],
-        initialItem: MessageMediaAttachment,
-        initialImageData: Data,
-        messageIdByItemID: [String: String] = [:]
-    ) {
-        self.init(
-            items: items,
-            initialItem: initialItem,
-            initialMediaData: initialImageData,
-            messageIdByItemID: messageIdByItemID
-        )
+    struct PendingSelection {
+        let id: String
+        let slot: OutgoingSlot
+        let data: Data
+    }
+
+    struct Caption {
+        let sender: String
+        let date: Date
+        var outgoingSlot: OutgoingSlot? = nil
+    }
+    let transcriptCaptions: [String: Caption]?
+
+    init?(transcriptItems: [MessageMediaAttachment], openingID: String, initialData: Data?,
+          messages: [String: String], captions: [String: Caption], allowsEmptyWindow: Bool = false) {
+        guard allowsEmptyWindow || !transcriptItems.isEmpty else { return nil }
+        items = transcriptItems
+        initialItemID = openingID
+        initialMediaData = captions[openingID] == nil ? nil : initialData
+        messageIdByItemID = messages
+        transcriptCaptions = captions
     }
 
     init?(
@@ -4052,6 +3826,50 @@ struct MessageMediaGallery: Identifiable {
         self.initialItemID = initialItem.id
         self.initialMediaData = initialMediaData
         self.messageIdByItemID = messageIdByItemID
+        self.transcriptCaptions = nil
+    }
+
+    func mayExport(_ item: MessageMediaAttachment, verify: ((MessageMediaAttachment) async throws -> Bool)?) async throws -> Bool {
+        guard transcriptCaptions != nil else { return true }
+        guard let verify else { throw CancellationError() }
+        return try await verify(item)
+    }
+
+    /// A handoff can finish after its message was hidden. Validate the selected source
+    /// after the lease arrives and release it before returning a failure.
+    func shareFile(for item: MessageMediaAttachment, using loader: ConversationMediaLoader,
+                   control: MediaFileTransferControlFfi,
+                   verify: ((MessageMediaAttachment) async throws -> Bool)?) async throws -> AttachmentShareFile {
+        func checkAccess() async throws {
+            guard !control.isCancelled(), try await mayExport(item, verify: verify),
+                  !control.isCancelled() else { throw AttachmentReadError.unavailable }
+        }
+        try await checkAccess()
+        let file = try await loader.shareFile(for: item, control: control)
+        do {
+            try await checkAccess()
+            return file
+        } catch {
+            file.finish()
+            throw error
+        }
+    }
+
+    func pendingSelection(for id: String) -> PendingSelection? {
+        guard let slot = transcriptCaptions?[id]?.outgoingSlot,
+              let item = items.first(where: { $0.id == id }), item.reference == nil,
+              let data = item.localData else { return nil }
+        return PendingSelection(id: id, slot: slot, data: data)
+    }
+
+    func confirmedItem(for pending: PendingSelection) -> MessageMediaAttachment? {
+        items.first { $0.reference != nil && transcriptCaptions?[$0.id]?.outgoingSlot == pending.slot }
+    }
+
+    func confirmedSelection(for pending: PendingSelection) async -> MessageMediaAttachment? {
+        guard let item = confirmedItem(for: pending), let reference = item.reference,
+              await MediaPlaintextHash.matches(pending.data, expectedSha256: reference.plaintextSha256) else { return nil }
+        return item
     }
 
     func initialData(for item: MessageMediaAttachment) -> Data? {
@@ -4072,13 +3890,8 @@ private struct FullscreenMediaPrepared: Identifiable {
     let id: String
     let item: MessageMediaAttachment
     let data: Data
-    let url: URL
     let contentType: UTType
-}
-
-private struct FullscreenMediaShare: Identifiable {
-    let id = UUID()
-    let url: URL
+    var pendingSelection: MessageMediaGallery.PendingSelection? = nil
 }
 
 private struct DecryptedMediaExportDocument: FileDocument {
@@ -4097,10 +3910,6 @@ private struct DecryptedMediaExportDocument: FileDocument {
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: data)
     }
-}
-
-private enum FullscreenMediaPreparationError: Error {
-    case protectedFileUnavailable
 }
 
 enum MessageMediaFullscreenPresentation {
@@ -4154,6 +3963,7 @@ nonisolated enum MessageMediaFullscreenGalleryPresentation {
 }
 
 struct MessageMediaFullscreenGalleryView: View {
+    @Environment(\.transcriptHistoryControls) private var transcriptHistory
     @Environment(AppState.self) private var appState
     let gallery: MessageMediaGallery
     let onLoadMedia: ConversationMediaLoader
@@ -4161,11 +3971,14 @@ struct MessageMediaFullscreenGalleryView: View {
     var onGoToMessage: ((String) -> Void)?
     let onDismiss: () -> Void
 
+    @State private var pendingSelection: MessageMediaGallery.PendingSelection?
     @State private var selectedItemID: String
+    @State private var hasPaged = false
     @State private var zoomedItemID: String?
     @State private var dismissDragOffset: CGFloat = 0
     @State private var preparedMedia: FullscreenMediaPrepared?
-    @State private var mediaShare: FullscreenMediaShare?
+    @State private var mediaShare: AttachmentShareFile?
+    @State private var handoffControl: MediaFileTransferControlFfi?
     @State private var exportDocument: DecryptedMediaExportDocument?
     @State private var saveProductTicket: ProductAnalyticsRecorder.Ticket?
     @State private var isExporting = false
@@ -4177,6 +3990,7 @@ struct MessageMediaFullscreenGalleryView: View {
 
     init(
         gallery: MessageMediaGallery,
+        openingSelection: MessageMediaGallery.PendingSelection? = nil,
         onLoadMedia: ConversationMediaLoader,
         forwardingContext: MediaForwardingContext? = nil,
         onGoToMessage: ((String) -> Void)? = nil,
@@ -4188,62 +4002,56 @@ struct MessageMediaFullscreenGalleryView: View {
         self.onGoToMessage = onGoToMessage
         self.onDismiss = onDismiss
         _selectedItemID = State(initialValue: gallery.initialItemID)
+        _pendingSelection = State(initialValue: gallery.pendingSelection(for: gallery.initialItemID) ?? openingSelection)
     }
 
     var body: some View {
-        ZStack {
-            WNMediaSurface().ignoresSafeArea()
-
-            TabView(selection: $selectedItemID) {
-                ForEach(gallery.items) { item in
-                    MessageMediaFullscreenPage(
-                        item: item,
-                        isSelected: item.id == selectedItemID,
-                        initialImageData: gallery.initialData(for: item),
-                        onLoadMedia: onLoadMedia,
-                        onToggleChrome: toggleChrome,
-                        onZoomChanged: { zoomed in
-                            if zoomed, item.id == selectedItemID { zoomedItemID = item.id }
-                            else if zoomedItemID == item.id { zoomedItemID = nil }
-                        }
-                    )
-                    .tag(item.id)
-                }
-            }
-            .tabViewStyle(
-                .page(indexDisplayMode: .never)
-            )
-            .ignoresSafeArea()
-
-            if chrome.isVisible {
-                MessageMediaFullscreenGalleryChrome(
-                    pageCountLabel: gallery.items.count > 1 ? pageCountLabel : nil,
-                    controlState: controlState,
-                    onClose: onDismiss,
-                    onSave: saveSelectedMedia,
-                    onShare: shareSelectedMedia,
-                    onForward: { forwardMedia = preparedMedia },
-                    onGoToMessage: goToSelectedMessage
-                )
-                .transition(.opacity)
+        Group {
+            if gallery.transcriptCaptions != nil {
+                TranscriptMediaSheet(gallery: gallery, selection: Binding(get: { selectedItemID }, set: select),
+                    isZoomed: zoomedItemID != nil, showsChrome: chrome.isVisible, controls: controlState,
+                    onClose: onDismiss, onSave: saveSelectedMedia, onShare: shareSelectedMedia,
+                    onForward: { forwardMedia = currentPreparedMedia }, onGoToMessage: goToSelectedMessage,
+                    page: page)
+            } else {
+                fullscreenContent
             }
         }
-        .offset(y: dismissDragOffset)
-        .opacity(1 - min(dismissDragOffset / 420, 0.35))
-        .simultaneousGesture(swipeDownToDismissGesture, including: zoomedItemID == nil ? .all : .subviews)
-        .onChange(of: selectedItemID) { _, _ in
+        .task(id: missingSelectionReplacementID) {
+            guard gallery.transcriptCaptions != nil, selectedItem == nil else { return }
+            guard let pendingSelection, pendingSelection.id == selectedItemID else {
+                onDismiss()
+                return
+            }
+            let replacement = await gallery.confirmedSelection(for: pendingSelection)
+            guard !Task.isCancelled, selectedItemID == pendingSelection.id else { return }
+            guard let replacement else { onDismiss(); return }
+            preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
+                contentType: UTType(mimeType: replacement.mediaType) ?? .data)
+            select(replacement.id)
+        }
+        .onChange(of: selectedItemID) { _, selection in
+            hasPaged = true
+            if gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
+            if preparedMedia?.id != selection { preparedMedia = nil }
+            handoffControl?.cancel()
             zoomedItemID = nil
             dismissDragOffset = 0
         }
-        .task(id: selectedItemID) { await prepareSelectedMedia() }
         .sheet(item: $mediaShare) { share in
-            ActivityShareSheet(items: [share.url])
+            ActivityShareSheet(items: [share.url], onComplete: share.finish)
+                .onDisappear(perform: share.finish)
         }
+        .onDisappear { handoffControl?.cancel() }
         .sheet(item: $forwardMedia) { prepared in
             if let forwardingContext {
                 ForwardMessageSheet(
                     media: prepared.item,
                     data: prepared.data,
+                    verifySource: { item in
+                        if let transcriptHistory { return try await transcriptHistory.verifyForward(item, prepared.pendingSelection) }
+                        return try await gallery.mayExport(item, verify: nil)
+                    },
                     viewModel: forwardingContext.viewModel,
                     destinationProvider: forwardingContext.destinationProvider
                 )
@@ -4280,13 +4088,89 @@ struct MessageMediaFullscreenGalleryView: View {
         }
     }
 
+    private func select(_ id: String) {
+        selectedItemID = id
+        pendingSelection = gallery.pendingSelection(for: id)
+    }
+
+    private var missingSelectionReplacementID: String? {
+        guard gallery.transcriptCaptions != nil, gallery.transcriptCaptions?[selectedItemID] == nil else { return nil }
+        return pendingSelection.flatMap { gallery.confirmedItem(for: $0)?.id } ?? selectedItemID
+    }
+
+    private func page(_ item: MessageMediaAttachment) -> some View {
+        let source = gallery.transcriptCaptions == nil ? item : item.forTranscriptPage
+        return MessageMediaFullscreenPage(
+            item: source,
+            isSelected: item.id == selectedItemID,
+            initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.data : nil } ?? gallery.initialData(for: source),
+            selectionDemand: gallery.transcriptCaptions == nil || (!hasPaged && item.id == gallery.initialItemID && transcriptHistory?.allowsOpeningDemand != false)
+                ? .explicit : .automatic,
+            onLoadMedia: onLoadMedia,
+            onData: { data in
+                guard selectedItemID == item.id, selectedItem != nil else { return }
+                preparedMedia = FullscreenMediaPrepared(id: item.id, item: item, data: data,
+                    contentType: UTType(mimeType: item.mediaType) ?? .data, pendingSelection: gallery.pendingSelection(for: item.id))
+            },
+            onToggleChrome: toggleChrome,
+            onSourceReplaced: {
+                if preparedMedia?.id == item.id { preparedMedia = nil }
+                if selectedItemID == item.id, gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
+            },
+            onZoomChanged: { zoomed in
+                if zoomed, item.id == selectedItemID { zoomedItemID = item.id }
+                else if zoomedItemID == item.id { zoomedItemID = nil }
+            }
+        )
+    }
+
+    private var fullscreenContent: some View {
+        ZStack {
+            WNMediaSurface().ignoresSafeArea()
+
+            TabView(selection: $selectedItemID) {
+                ForEach(gallery.items) { item in
+                    page(item)
+                        .tag(item.id)
+                }
+            }
+            .tabViewStyle(
+                .page(indexDisplayMode: .never)
+            )
+            .ignoresSafeArea()
+
+            if chrome.isVisible {
+                MessageMediaFullscreenGalleryChrome(
+                    pageCountLabel: gallery.items.count > 1 ? pageCountLabel : nil,
+                    controlState: controlState,
+                    onClose: onDismiss,
+                    onSave: saveSelectedMedia,
+                    onShare: shareSelectedMedia,
+                    onForward: { forwardMedia = currentPreparedMedia },
+                    onGoToMessage: goToSelectedMessage
+                )
+                .transition(.opacity)
+            }
+        }
+        .offset(y: dismissDragOffset)
+        .opacity(1 - min(dismissDragOffset / 420, 0.35))
+        .simultaneousGesture(swipeDownToDismissGesture, including: zoomedItemID == nil ? .all : .subviews)
+    }
+
     private var selectedItem: MessageMediaAttachment? {
         gallery.items.first { $0.id == selectedItemID }
     }
 
+    private var currentPreparedMedia: FullscreenMediaPrepared? {
+        guard let selectedItem, let preparedMedia, selectedItem.canUseBytesPrepared(for: preparedMedia.item) else { return nil }
+        return FullscreenMediaPrepared(id: selectedItem.id, item: selectedItem, data: preparedMedia.data,
+            contentType: preparedMedia.contentType, pendingSelection: preparedMedia.pendingSelection)
+    }
+
+
     private var controlState: MediaViewerControlState {
-        MediaViewerControlState(
-            hasPreparedMedia: preparedMedia != nil,
+        return MediaViewerControlState(
+            hasPreparedMedia: currentPreparedMedia != nil,
             hasForwardingContext: forwardingContext != nil,
             hasSourceMessage: sourceMessageIdHex != nil
         )
@@ -4315,43 +4199,34 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func saveSelectedMedia() {
-        guard let preparedMedia else { return }
+        guard let preparedMedia = currentPreparedMedia else { return }
         saveProductTicket = appState.productAnalytics.ticket()
         exportDocument = DecryptedMediaExportDocument(data: preparedMedia.data)
         isExporting = true
     }
 
     private func shareSelectedMedia() {
-        guard let url = preparedMedia?.url else { return }
-        mediaShare = FullscreenMediaShare(url: url)
-    }
-
-    private func prepareSelectedMedia() async {
-        guard let selectedItem else { return }
-        preparedMedia = nil
-        do {
-            let data = try await onLoadMedia.data(for: selectedItem)
-            guard !Task.isCancelled, selectedItem.id == selectedItemID else { return }
-            let producerEpoch = MessageMediaCache.currentProducerEpoch()
-            guard let url = await MediaPlaybackFileStore.fileURL(
-                for: selectedItem,
-                data: data,
-                producerEpoch: producerEpoch
-            ) else {
-                throw FullscreenMediaPreparationError.protectedFileUnavailable
+        guard let item = currentPreparedMedia?.item, handoffControl == nil else { return }
+        let control = MediaFileTransferControlFfi()
+        handoffControl = control
+        Task {
+            defer { if handoffControl === control { handoffControl = nil } }
+            do {
+                let file = try await gallery.shareFile(for: item, using: onLoadMedia, control: control,
+                    verify: transcriptHistory?.verify)
+                guard !control.isCancelled(), selectedItemID == item.id, selectedItem != nil else {
+                    file.finish()
+                    return
+                }
+                mediaShare = file
+            } catch AttachmentHandoffFailure.storageFull {
+                // The downloader already explains how to free space for the handoff.
+                return
+            } catch {
+                if !control.isCancelled(), selectedItemID == item.id {
+                    actionError = L10n.string("Couldn't prepare media.")
+                }
             }
-            guard !Task.isCancelled, selectedItem.id == selectedItemID else { return }
-            preparedMedia = FullscreenMediaPrepared(
-                id: selectedItem.id,
-                item: selectedItem,
-                data: data,
-                url: url,
-                contentType: UTType(mimeType: selectedItem.mediaType) ?? .data
-            )
-        } catch is CancellationError {
-            return
-        } catch {
-            actionError = L10n.string("Couldn't prepare media.")
         }
     }
 
@@ -4390,23 +4265,46 @@ private struct MessageMediaFullscreenPage: View {
     let item: MessageMediaAttachment
     let isSelected: Bool
     let initialImageData: Data?
+    let selectionDemand: AttachmentDemand
     let onLoadMedia: ConversationMediaLoader
+    let onData: (Data) -> Void
     let onToggleChrome: () -> Void
+    let onSourceReplaced: () -> Void
     let onZoomChanged: (Bool) -> Void
+    @State private var sourceGeneration = 0
 
     var body: some View {
+        content
+            .id(sourceGeneration)
+            .onChange(of: item.localTarget) { previous, _ in
+                if previous != nil {
+                    onSourceReplaced()
+                    sourceGeneration &+= 1
+                    onZoomChanged(false)
+                }
+            }
+    }
+
+    @ViewBuilder private var content: some View {
+        let demand = sourceGeneration == 0 ? selectionDemand : .automatic
         if item.isVideo {
             MessageMediaFullscreenVideoPage(
                 item: item,
                 isSelected: isSelected,
-                onLoadMedia: onLoadMedia
+                initialMediaData: sourceGeneration == 0 ? initialImageData : nil,
+                selectionDemand: demand,
+                onLoadMedia: onLoadMedia,
+                onData: onData,
+                onToggleChrome: onToggleChrome
             )
         } else {
             MessageMediaFullscreenImagePage(
                 item: item,
                 isSelected: isSelected,
-                initialImageData: initialImageData,
+                initialImageData: sourceGeneration == 0 ? initialImageData : nil,
+                selectionDemand: demand,
                 onLoadMedia: onLoadMedia,
+                onData: onData,
                 onToggleChrome: onToggleChrome,
                 onZoomChanged: onZoomChanged
             )
@@ -4418,26 +4316,53 @@ private struct MessageMediaFullscreenVideoPage: View {
     @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
     let isSelected: Bool
+    let initialMediaData: Data?
+    let selectionDemand: AttachmentDemand
     let onLoadMedia: ConversationMediaLoader
+    let onData: (Data) -> Void
+    let onToggleChrome: () -> Void
+    @Environment(\.isTranscriptMediaSheet) private var isTranscriptMediaSheet
+    @Environment(\.displayScale) private var displayScale
 
+    @State private var videoAspectRatio: CGFloat?
+    @State private var playRequest = 0
+    @State private var handledPlayRequest = 0
     @State private var player: AVPlayer?
-    @State private var playbackURL: URL?
     @State private var audioSession = ObservableVideoPlaybackAudioSession()
     @State private var isLoading = false
     @State private var didFail = false
 
     var body: some View {
         ZStack {
-            WNMediaSurface().ignoresSafeArea()
+            if isTranscriptMediaSheet {
+                WNMediaSurface()
+                    .contentShape(.rect)
+                    .onTapGesture(perform: onToggleChrome)
+            } else {
+                WNMediaSurface().ignoresSafeArea()
+            }
 
             if let player {
-                VideoPlayer(player: player)
-                    .ignoresSafeArea()
+                if isTranscriptMediaSheet, let currentItem = player.currentItem {
+                    VideoPlayer(player: player)
+                        .simultaneousGesture(TapGesture().onEnded(onToggleChrome))
+                        .aspectRatio(videoAspectRatio ?? ComposerMediaDraftLayout.aspectRatio(dim: item.dim) ?? 1,
+                                     contentMode: .fit)
+                        .clipped()
+                        .onReceive(currentItem.publisher(for: \.presentationSize).receive(on: DispatchQueue.main)) { size in
+                            guard size.width > 0, size.height > 0 else { return }
+                            let ratio = size.width / size.height
+                            if ratio.isFinite { videoAspectRatio = ratio }
+                        }
+                } else {
+                    VideoPlayer(player: player).ignoresSafeArea()
+                }
             } else if let thumbnail = item.thumbnail {
                 Image(uiImage: thumbnail)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
             }
 
             if isLoading {
@@ -4446,13 +4371,14 @@ private struct MessageMediaFullscreenVideoPage: View {
                     .tint(.white)
                     .padding(12)
                     .background(Color.black.opacity(0.5), in: Circle())
+                    .allowsHitTesting(false)
             } else if didFail {
                 WNMediaRetryButton {
-                    Task { await loadAndPlay(force: true) }
+                    playRequest += 1
                 }
             } else if player == nil {
                 Button {
-                    Task { await loadAndPlay() }
+                    playRequest += 1
                 } label: {
                     VideoPreviewPlayOverlay(
                         diameter: VideoPreviewOverlayPresentation.maximumDiameter
@@ -4463,35 +4389,28 @@ private struct MessageMediaFullscreenVideoPage: View {
             }
         }
         .contentShape(Rectangle())
-        .onAppear {
-            startPlaybackIfSelected()
-        }
-        .onChange(of: isSelected) { _, selected in
-            if selected {
-                startPlaybackIfSelected()
-            } else {
+        .task(id: isSelected ? playRequest : nil) {
+            guard isSelected else {
                 releasePlayback()
+                return
             }
+            let demand = playRequest != handledPlayRequest ? .userTap(afterFailure: didFail) : selectionDemand
+            handledPlayRequest = playRequest
+            await loadAndPlay(demand: demand)
         }
-        .onDisappear {
-            releasePlayback()
+        .onDisappear { releasePlayback() }
+        .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { notification in
+            if let ended = notification.object as? AVPlayerItem, ended === player?.currentItem {
+                player?.seek(to: .zero)
+            }
         }
         .accessibilityLabel(L10n.string("Video attachment"))
     }
 
-    private func startPlaybackIfSelected() {
+    private func loadAndPlay(demand: AttachmentDemand) async {
         guard isSelected else { return }
-        Task { await loadAndPlay() }
-    }
-
-    private func loadAndPlay(force: Bool = false) async {
-        guard isSelected else { return }
-        guard force || !isLoading else { return }
-        if force {
-            // Retry should refetch the decrypted playback file, while ordinary
-            // re-selection reuses the memoized URL after releasing the player.
+        if demand == .retry {
             releasePlayback()
-            playbackURL = nil
         } else if let player {
             player.play()
             audioSession.attach(to: player)
@@ -4503,36 +4422,42 @@ private struct MessageMediaFullscreenVideoPage: View {
         defer { appState.productAnalytics.record(.attachment(.open, productOutcome), ticket: productTicket) }
         isLoading = true
         didFail = false
-        defer { isLoading = false }
+        defer { if !Task.isCancelled { isLoading = false } }
         do {
-            let url = try await playbackFileURL(demand: .userTap(afterFailure: force))
+            let url = try await playbackFileURL(demand: demand)
             guard !Task.isCancelled, isSelected else { return }
             let next = AVPlayer(url: url)
             productOutcome = .success
             player = next
             next.play()
             audioSession.attach(to: next)
+            if isTranscriptMediaSheet {
+                isLoading = false
+                await MessageVideoThumbnailDecoder.cachePlayedPreview(for: item, url: url, scale: displayScale)
+            }
         } catch {
             guard !Task.isCancelled, isSelected else { return }
             productOutcome = .failure
-            didFail = true
+            didFail = demand.failureOffersRetry
         }
     }
 
     private func playbackFileURL(demand: AttachmentDemand) async throws -> URL {
-        if let playbackURL {
-            return playbackURL
-        }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        let data = try await onLoadMedia.data(for: item, demand: demand)
+        let data: Data
+        if let initialMediaData, demand != .retry { data = initialMediaData }
+        else { data = try await onLoadMedia.data(for: item, demand: demand) }
+        try Task.checkCancellation()
+        onData(data)
         guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
             throw MessageVideoAttachmentError.playbackFileUnavailable
         }
-        playbackURL = url
+        try Task.checkCancellation()
         return url
     }
 
     private func releasePlayback() {
+        isLoading = false
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         audioSession.stop()
@@ -4544,9 +4469,16 @@ private struct MessageMediaFullscreenImagePage: View {
     @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
     let isSelected: Bool
+    let initialImageData: Data?
+    let selectionDemand: AttachmentDemand
     let onLoadMedia: ConversationMediaLoader
+    let onData: (Data) -> Void
     let onZoomChanged: (Bool) -> Void
 
+    @State private var loadRequest = 0
+    @State private var handledLoadRequest = 0
+    @State private var waitingForTap = false
+    @State private var couldNotDecode = false
     @State private var imageData: Data?
     @State private var image: UIImage?
     @State private var isLoading = false
@@ -4560,20 +4492,20 @@ private struct MessageMediaFullscreenImagePage: View {
         item: MessageMediaAttachment,
         isSelected: Bool,
         initialImageData: Data?,
+        selectionDemand: AttachmentDemand,
         onLoadMedia: ConversationMediaLoader,
+        onData: @escaping (Data) -> Void,
         onToggleChrome: @escaping () -> Void,
         onZoomChanged: @escaping (Bool) -> Void
     ) {
         self.item = item
         self.isSelected = isSelected
+        self.selectionDemand = selectionDemand
         self.onLoadMedia = onLoadMedia
+        self.onData = onData
         self.onToggleChrome = onToggleChrome
         self.onZoomChanged = onZoomChanged
-        // Do NOT decode here. Decoding attacker-controlled bytes is deferred to
-        // `loadImageIfNeeded`, which runs the decode off the MainActor and
-        // bounded to a screen-sized pixel budget. Stash the raw initial bytes
-        // (if any) so the first load can reuse them without re-fetching.
-        _imageData = State(initialValue: initialImageData)
+        self.initialImageData = initialImageData
     }
 
     private func fullscreenMaxPixelSize(viewSize: CGSize, scale: CGFloat) -> Int {
@@ -4596,24 +4528,37 @@ private struct MessageMediaFullscreenImagePage: View {
                     }
                 } else if isLoading {
                     ProgressView()
+                } else if couldNotDecode {
+                    Label("Attachment couldn’t be read", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
                 } else if didFail {
-                    WNMediaRetryButton {
-                        Task { await loadImageIfNeeded(viewSize: proxy.size, scale: displayScale, force: true) }
+                    WNMediaRetryButton { loadRequest += 1 }
+                } else if waitingForTap {
+                    Button { loadRequest += 1 } label: {
+                        Label("Tap to download", systemImage: "arrow.down.circle")
                     }
+                    .buttonStyle(.bordered)
                 } else {
                     ProgressView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isSelected)) {
+            .task(id: isSelected ? loadRequest : nil) {
                 guard isSelected else { return }
-                await loadImageIfNeeded(viewSize: proxy.size, scale: displayScale)
+                let demand = loadRequest != handledLoadRequest ? .userTap(afterFailure: didFail) : selectionDemand
+                handledLoadRequest = loadRequest
+                await loadImageIfNeeded(viewSize: proxy.size, scale: displayScale, demand: demand)
             }
         }
     }
 
-    private func loadImageIfNeeded(viewSize: CGSize, scale: CGFloat, force: Bool = false) async {
+    private func loadImageIfNeeded(viewSize: CGSize, scale: CGFloat, demand: AttachmentDemand) async {
         guard isSelected else { return }
+        let force = demand == .retry
+        waitingForTap = false
+        couldNotDecode = false
+        if !force, imageData == nil { imageData = initialImageData }
+        if !force, let imageData { onData(imageData) }
         guard image == nil || force else { return }
         let productTicket = appState.productAnalytics.ticket()
         var productOutcome: ProductOutcome = .cancelled
@@ -4633,8 +4578,11 @@ private struct MessageMediaFullscreenImagePage: View {
                 productOutcome = .success
                 image = decoded
                 didFail = false
-                return
+            } else if !Task.isCancelled {
+                productOutcome = .failure
+                couldNotDecode = true
             }
+            return
         }
 
         isLoading = true
@@ -4642,8 +4590,9 @@ private struct MessageMediaFullscreenImagePage: View {
         defer { isLoading = false }
         do {
             guard let data = try await onLoadMedia.selectedPageData(for: item, isSelected: isSelected,
-                demand: .userTap(afterFailure: force)) else { return }
+                demand: demand) else { return }
             guard !Task.isCancelled else { return }
+            onData(data)
             guard let decoded = await MessageMediaFullscreenPresentation.decodedImage(
                 from: data,
                 maxPixelSize: maxPixelSize,
@@ -4653,7 +4602,7 @@ private struct MessageMediaFullscreenImagePage: View {
                 imageData = nil
                 image = nil
                 productOutcome = .failure
-                didFail = true
+                couldNotDecode = true
                 return
             }
             guard !Task.isCancelled else { return }
@@ -4665,7 +4614,8 @@ private struct MessageMediaFullscreenImagePage: View {
             imageData = nil
             image = nil
             productOutcome = .failure
-            didFail = true
+            didFail = demand.failureOffersRetry
+            waitingForTap = !didFail
         }
     }
 }

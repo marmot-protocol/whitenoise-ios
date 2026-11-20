@@ -107,15 +107,15 @@ extension Marmot: AttachmentDemandRequesting {}
 extension MarmotClient {
     /// `onLocalHit` receives the elapsed milliseconds of a successful retained-byte read.
     func acquireAttachmentData(accountRef: String, groupID: String, target: AttachmentLocalTargetFfi,
-                               demand: AttachmentDemand,
+                               demand: AttachmentDemand, previewByteLimit: Int? = nil,
                                onLocalHit: (@Sendable (UInt64) -> Void)? = nil) async throws -> Data? {
         let localReadStartedAt = ContinuousClock.now
-        if let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target) {
+        if let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target, previewByteLimit: previewByteLimit) {
             onLocalHit?(ProductAnalyticsRecorder.elapsedMilliseconds(from: localReadStartedAt, to: .now))
             return data
         }
         try await fetchAttachment(accountRef: accountRef, groupID: groupID, target: target, demand: demand)
-        guard let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target)
+        guard let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target, previewByteLimit: previewByteLimit)
         else { throw AttachmentReadError.stale }
         return data
     }

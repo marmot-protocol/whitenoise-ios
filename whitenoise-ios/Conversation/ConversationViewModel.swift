@@ -1036,6 +1036,42 @@ final class ConversationViewModel {
         timelineStore.editHistory(for: messageIdHex)
     }
 
+    func firstGalleryGIF(in row: TimelineItem) -> MessageMediaAttachment? {
+        mediaItems(for: row).first { $0.isGIF && $0.rejectionKind == nil }
+    }
+
+    /// Project the currently loaded transcript only while its media sheet is open.
+    /// Keep the row's original media objects so opening a page addresses its original slot.
+    func transcriptMediaGallery(opening itemID: String, initialData: Data?, openingItem: MessageMediaAttachment? = nil,
+                                includingGIFsIn gifRowID: String? = nil,
+                                allowsEmptyWindow: Bool = false) -> MessageMediaGallery? {
+        var items: [MessageMediaAttachment] = []
+        var messages: [String: String] = [:]
+        var captions: [String: MessageMediaGallery.Caption] = [:]
+        for row in timeline {
+            guard case .message(let record, _) = row.kind, !isDeleted(record.messageIdHex),
+                  (record.kind != MessageSemantics.kindPoll || record.sticker != nil),
+                  !(appState?.streamingDebugEnabled == true && MessageSemantics.debugStyle(for: record).isUserVisibleBubble == false),
+                  groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row)?.kind != .operation else { continue }
+            guard !timelineStore.isHidden(record.messageIdHex), !timelineStore.isBlockedAuthor(record.sender) else { continue }
+            for (index, media) in mediaItems(for: row).enumerated() {
+                guard media.isTranscriptGalleryMedia || (row.id == gifRowID && media.isGIF && media.rejectionKind == nil) else { continue }
+                guard captions[media.id] == nil else { continue }
+                items.append(media)
+                if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }
+                let name = IdentityPresentation.resolve(accountIdHex: record.sender, knownName: windowIdentities[record.sender]?.displayName).text
+                captions[media.id] = .init(sender: record.direction == "sent" ? L10n.string("You") : name,
+                    date: Date(timeIntervalSince1970: TimeInterval(row.timestamp)),
+                    outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
+            }
+        }
+        let openingBytes = openingItem.flatMap { original in
+            items.contains { $0.canUseBytesPrepared(for: original) && $0.localTarget == original.localTarget } ? initialData : nil
+        }
+        return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: openingBytes,
+            messages: messages, captions: captions, allowsEmptyWindow: allowsEmptyWindow)
+    }
+
     func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
         timelineStore.mediaItems(for: item)
     }
@@ -2405,7 +2441,7 @@ final class ConversationViewModel {
             )
             let media = mediaItems(for: item)
             var labels = [name]
-            let contacts = media.filter { ["text/vcard", "text/x-vcard"].contains(MediaAttachmentPolicy.canonicalMediaType($0.mediaType)) }
+            let contacts = media.filter { DocumentPreviewFormat(for: $0) == .contact }
             if !contacts.isEmpty { labels.append(L10n.string("Contact")) }
             for attachment in media {
                 labels.append(attachment.fileName)
@@ -2439,6 +2475,10 @@ final class ConversationViewModel {
 
     func data(for media: MessageMediaAttachment) async throws -> Data {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
+    }
+
+    func automaticAttachmentByteCount(for media: MessageMediaAttachment) async -> Int? {
+        await mediaDownloader.automaticAttachmentByteCount(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
     /// Requests the images in rows just beyond the viewport under the same
