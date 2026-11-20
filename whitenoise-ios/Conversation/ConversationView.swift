@@ -530,7 +530,7 @@ nonisolated struct ConversationChromePresentation: Equatable {
 /// static member subtitle rather than letting the screen look frozen.
 enum ConversationHeaderSecondary: Equatable {
     case connecting
-    case retention(UInt64)
+    case retention(UInt64, subtitle: String?)
     case subtitle(String?)
 
     static func resolve(
@@ -539,7 +539,7 @@ enum ConversationHeaderSecondary: Equatable {
         retentionSeconds: UInt64 = 0
     ) -> ConversationHeaderSecondary {
         if isRuntimeWarmingUp { return .connecting }
-        if retentionSeconds > 0 { return .retention(retentionSeconds) }
+        if retentionSeconds > 0 { return .retention(retentionSeconds, subtitle: subtitle) }
         return .subtitle(subtitle)
     }
 }
@@ -745,6 +745,7 @@ struct ConversationView: View {
     /// A jump to a row that was not laid out, in flight until the row appears.
     @State private var timelineJumpAwaitingRow: TimelineJumpAwaitingRow?
     @State private var visibleChatRoute: VisibleChatRoute?
+    @ScaledMetric(relativeTo: .caption2) private var headerTimerIconSize: CGFloat = 9
     @ScaledMetric(relativeTo: .caption)
     private var replyCloseIconSize = ReplyPreviewLayout.closeIconSize
     @ScaledMetric(relativeTo: .caption)
@@ -1890,19 +1891,24 @@ struct ConversationView: View {
                     .foregroundStyle(.secondary)
             }
             .lineLimit(1)
-        case .retention(let seconds):
-            HStack(spacing: 4) {
-                Image(systemName: "timer")
-                Text(GroupRetentionPresentation.label(seconds: seconds))
+        case .retention(let seconds, let memberSubtitle):
+            HStack(spacing: 3) {
+                if let memberSubtitle {
+                    Text(memberSubtitle)
+                    Text(verbatim: "·")
+                }
+                Image(systemName: MessageExpirationPresentation.systemImage)
+                    .font(.system(size: headerTimerIconSize))
+                Text(GroupRetentionPresentation.compactLabel(seconds: seconds))
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(L10n.formatted(
+            .accessibilityLabel([memberSubtitle, L10n.formatted(
                 "Disappearing messages: %@",
                 GroupRetentionPresentation.label(seconds: seconds)
-            ))
+            )].compactMap { $0 }.joined(separator: ", "))
         case .subtitle(let value):
             // No placeholder line when there is no subtitle (direct messages):
             // reserving the space pushes the name off vertical center.
@@ -1988,16 +1994,17 @@ struct ConversationView: View {
                                     ForEach(viewModel.timeline) { item in
                                         // One view per message: a lazy stack has to build every
                                         // message to count its views when one can produce several.
+                                        let showsUnreadDivider = TimelineUnreadDivider.shouldShow(
+                                            before: item,
+                                            firstUnreadMessageIdHex: suppressesInitialUnreadDivider
+                                                ? nil
+                                                : viewModel.initialWindowUnreadMessageId
+                                        )
                                         VStack(alignment: .leading, spacing: density.metrics.timelineHeadingSpacing) {
                                             if let heading = dayHeaders[item.id] {
                                                 TimelineInlineDateHeader(heading: heading)
                                             }
-                                            if TimelineUnreadDivider.shouldShow(
-                                                before: item,
-                                                firstUnreadMessageIdHex: suppressesInitialUnreadDivider
-                                                    ? nil
-                                                    : viewModel.initialWindowUnreadMessageId
-                                            ) {
+                                            if showsUnreadDivider {
                                                 UnreadMessagesDivider()
                                                     .id(unreadDividerID(for: viewModel.initialWindowUnreadMessageId ?? ""))
                                             }
@@ -2032,8 +2039,9 @@ struct ConversationView: View {
                                                 ))
                                                 .onAppear { finishTimelineJump(reaching: item.id) }
                                         }
+                                        .padding(.top, dayHeaders[item.id] == nil && (showsUnreadDivider || viewModel.messageClusterPresentation(for: item).startsCluster)
+                                            ? density.metrics.timelineClusterSpacing - density.metrics.timelineRowSpacing : 0)
                                     }
-                                    .padding(.bottom, 4)
                                     newerTimelineTrigger(viewModel: viewModel)
                                     // Keep spacing before the target so it ends at the actual content edge.
                                     ForEach([Self.timelineBottomID], id: \.self) { _ in
@@ -2476,6 +2484,14 @@ struct ConversationView: View {
         )
     }
 
+    private func clusterPresentation(for item: TimelineItem, model: ConversationViewModel) -> MessageClusterPresentation {
+        let index = suppressesInitialUnreadDivider ? nil : model.initialWindowUnreadMessageId.flatMap {
+            model.timelineStore.timelineIndex(forMessageIdHex: $0)
+        }
+        return model.messageClusterPresentation(for: item).atUnreadBoundary(
+            rowID: item.id, timeline: model.timeline, firstUnreadIndex: index)
+    }
+
     private func messageBubble(
         for item: TimelineItem,
         record: AppMessageRecordFfi,
@@ -2494,9 +2510,8 @@ struct ConversationView: View {
             deletionSource: viewModel.timelineStore.deletedProjections.source(for: record.messageIdHex),
             isEdited: viewModel.isEdited(record.messageIdHex),
             hasReports: viewModel.hasReports(record.messageIdHex),
-            clusterPresentation: showsSenderIdentity
-                ? viewModel.messageClusterPresentation(for: item)
-                : .none,
+            clusterPresentation: clusterPresentation(for: item, model: viewModel),
+            showsSenderIdentity: showsSenderIdentity,
             replyPreview: viewModel.replyPreview(for: record),
             mediaItems: viewModel.mediaItems(for: item),
             customEmoji: viewModel.customEmoji(for: item),
@@ -2654,7 +2669,7 @@ struct ConversationView: View {
                 handleDownArrowTap(proxy: proxy, viewModel: viewModel)
             }
             .accessibilityLabel("Scroll down")
-            .padding(.trailing, 9)
+            .padding(.trailing, ChatBubbleMetrics.timelineMargin)
             .padding(.bottom, 10)
             .transition(.scale(scale: 0.9).combined(with: .opacity))
         }

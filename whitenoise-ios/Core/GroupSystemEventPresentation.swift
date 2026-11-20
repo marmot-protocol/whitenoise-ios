@@ -117,16 +117,22 @@ nonisolated enum GroupSystemEventPresentation {
     static func retentionDurationText(
         seconds: UInt64,
         locale: Locale = AppLanguage.currentLocale,
-        calendar: Calendar = .autoupdatingCurrent
+        calendar: Calendar = .autoupdatingCurrent,
+        unitsStyle: DateComponentsFormatter.UnitsStyle = .full
     ) -> String {
         let formatter = DateComponentsFormatter()
         var localizedCalendar = calendar
         localizedCalendar.locale = locale
         formatter.calendar = localizedCalendar
         formatter.allowedUnits = [.day, .hour, .minute, .second]
-        formatter.unitsStyle = .full
+        formatter.unitsStyle = unitsStyle
         formatter.maximumUnitCount = 2
         let clamped = min(seconds, UInt64(Int.max))
+        if unitsStyle == .abbreviated, clamped > 0, clamped.isMultiple(of: 604_800) {
+            formatter.allowedUnits = [.weekOfMonth]
+            return formatter.string(from: DateComponents(weekOfMonth: Int(clamped / 604_800)))
+                ?? fallbackRetentionDuration(seconds: clamped, locale: locale)
+        }
         return formatter.string(from: elapsedDurationComponents(seconds: clamped))
             ?? fallbackRetentionDuration(seconds: clamped, locale: locale)
     }

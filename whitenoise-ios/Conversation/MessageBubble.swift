@@ -84,7 +84,6 @@ final class ConversationMediaLoader {
 
 nonisolated enum MessageBubbleReplyLayout {
     static let richContentWidth: CGFloat = 256
-    static let richBubbleWidth = richContentWidth + (cardOuterInset * 2)
     static let bodyHorizontalInset = ChatBubbleMetrics.horizontalInset
     static let bodyTopInset = ChatBubbleMetrics.verticalInset
     static let bodyTopInsetAfterReply: CGFloat = 0
@@ -96,41 +95,25 @@ nonisolated enum MessageBubbleReplyLayout {
     static let sentCardOpacity = 0.16
     static let receivedCardOpacity = 0.09
 
-    static func measurementWidth(proposedWidth: CGFloat?, isReplyHeader: Bool) -> CGFloat? {
-        guard isReplyHeader else { return proposedWidth }
-        return min(proposedWidth ?? richBubbleWidth, richBubbleWidth)
+    static func textWidth(proposed: CGFloat?, ideal: CGFloat?) -> CGFloat {
+        min(ChatBubbleMetrics.textMaximumWidth, proposed ?? .infinity, ideal ?? .infinity)
     }
 }
 
-nonisolated private struct MessageReplyHeaderLayoutKey: LayoutValueKey {
-    static let defaultValue = false
-}
+/// A quote's flexible card fills the final bubble. Measure its natural width first
+/// so that a short quote and a short reply can share a narrow bubble.
+private struct MessageTextBubbleLayout: Layout {
+    let fitsQuote: Bool
 
-/// The preview prefers its compact width when measuring, then fills the width
-/// selected by the response. A flexible preview must not widen every short reply.
-private struct MessageReplyBubbleLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let preferredWidth = subviews.map { subview in
-            let width = MessageBubbleReplyLayout.measurementWidth(
-                proposedWidth: proposal.width, isReplyHeader: subview[MessageReplyHeaderLayoutKey.self]
-            )
-            return subview.sizeThatFits(ProposedViewSize(width: width, height: nil)).width
-        }.max() ?? 0
-        let width = MessageBubbleChromeSizing.width(
-            proposedWidth: proposal.width, bubbleWidth: preferredWidth, metadataWidth: 0
-        )
-        let resolved = ProposedViewSize(width: width, height: nil)
-        return CGSize(width: width, height: subviews.reduce(0) { $0 + $1.sizeThatFits(resolved).height })
+        guard let content = subviews.first else { return .zero }
+        let ideal = fitsQuote ? content.sizeThatFits(.unspecified).width : nil
+        let width = MessageBubbleReplyLayout.textWidth(proposed: proposal.width, ideal: ideal)
+        return content.sizeThatFits(.init(width: width, height: nil))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let resolved = ProposedViewSize(width: bounds.width, height: nil)
-        var y = bounds.minY
-        for subview in subviews {
-            let height = subview.sizeThatFits(resolved).height
-            subview.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading, proposal: resolved)
-            y += height
-        }
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: .init(width: bounds.width, height: nil))
     }
 }
 
@@ -194,6 +177,7 @@ extension MessageBubble: Equatable {
             && lhs.hasReports == rhs.hasReports
             && lhs.usesReviewLayout == rhs.usesReviewLayout
             && lhs.clusterPresentation == rhs.clusterPresentation
+            && lhs.showsSenderIdentity == rhs.showsSenderIdentity
             && lhs.replyPreview == rhs.replyPreview
             && Self.sameMedia(lhs.mediaItems, rhs.mediaItems)
             && lhs.customEmoji == rhs.customEmoji
@@ -242,6 +226,7 @@ struct MessageBubble: View {
     var hasReports: Bool = false
     var usesReviewLayout: Bool = false
     var clusterPresentation: MessageClusterPresentation = .none
+    var showsSenderIdentity = true
     var replyPreview: ConversationReplyPreview? = nil
     var mediaItems: [MessageMediaAttachment] = []
     /// NIP-30 custom emoji drawn inline in the body; their attachments are
@@ -369,23 +354,16 @@ struct MessageBubble: View {
         return SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes)
     }
 
-    private var hasExpirationTimer: Bool {
-        MessageExpirationPresentation.showsIndicator(
-            retentionSeconds: record.retentionSeconds,
-            expiresAt: record.retentionExpiresAt
-        )
-    }
-
     /// White-on-gradient text is only appropriate for our own user-visible bubbles.
     private var usesSentBubbleForeground: Bool {
         isFromMe && showsStandardBody
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 6) {
+        HStack(alignment: .messageSurfaceBottom, spacing: 0) {
             if isFromMe { Spacer(minLength: oppositeInset) }
 
-            if !isFromMe, clusterPresentation.reservesIdentityLane {
+            if showsSenderIdentity, !isFromMe, clusterPresentation.reservesIdentityLane {
                 GroupMessageIdentityLane(
                     accountIdHex: record.sender,
                     showsAvatar: clusterPresentation.showsAvatar,
@@ -396,32 +374,32 @@ struct MessageBubble: View {
                     usesNativeAsset: identityAvatarAsset != nil,
                     onTap: onSenderAvatarTap
                 )
+                .environment(\.avatarMonogramFont, .subheadline.weight(.semibold))
+                .padding(.trailing, 7)
+                .alignmentGuide(.messageSurfaceBottom) { $0[.bottom] }
             }
 
-            VStack(alignment: isFromMe ? .trailing : .leading, spacing: 2) {
-                if !isFromMe, clusterPresentation.showsSenderName {
-                    Text(identityName?(record.sender) ?? appState.displayName(forAccountIdHex: record.sender))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(WNIdentityPalette.color(for: record.sender))
-                        .padding(.leading, 12)
+            VStack(alignment: isFromMe ? .trailing : .leading, spacing: 4) {
+                if showsSenderIdentity, !isFromMe, clusterPresentation.showsSenderName {
+                    if let onSenderAvatarTap {
+                        Button(action: onSenderAvatarTap) { senderLabel }.buttonStyle(.plain)
+                    } else {
+                        senderLabel
+                    }
                 }
 
                 MessageBubbleChromeLayout(isFromMe: isFromMe, spacing: density.metrics.bubbleMetadataSpacing) {
                     messageSurface
+                        .background(alignment: .bottomTrailing) {
+                            if !showsMetadataFooter {
+                                Color.clear.frame(width: 1, height: 1)
+                                    .accessibilityRepresentation {
+                                        messageMetadataFooter.accessibilityElement(children: .combine)
+                                    }
+                                    .allowsHitTesting(false)
+                            }
+                        }
                     bubbleMetadataRow
-                }
-
-                // Media rows have no bubble tap for the failed dialog, and the
-                // footer's red glyph alone is easy to miss — this caption is
-                // the one affordance every failed row shares.
-                if status == .failed, let onFailedTap {
-                    Button(action: onFailedTap) {
-                        Text("Not delivered. Tap for options.")
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(isFromMe ? .trailing : .leading, 12)
                 }
             }
             .frame(maxWidth: bubbleMaxWidth, alignment: isFromMe ? .trailing : .leading)
@@ -429,8 +407,7 @@ struct MessageBubble: View {
 
             if !isFromMe { Spacer(minLength: oppositeInset) }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, mediaItems.isEmpty ? 0 : 4)
+        .padding(.horizontal, ChatBubbleMetrics.timelineMargin)
         .fullScreenCover(item: $mediaGallery) { gallery in
             MessageMediaFullscreenGalleryView(
                 gallery: gallery,
@@ -458,6 +435,13 @@ struct MessageBubble: View {
             )
             .appAppearance()
         }
+    }
+
+    private var senderLabel: some View {
+        Text(identityName?(record.sender) ?? appState.displayName(forAccountIdHex: record.sender))
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(WNIdentityPalette.color(for: record.sender))
+            .padding(.leading, 12)
     }
 
     @ViewBuilder
@@ -588,7 +572,7 @@ struct MessageBubble: View {
             )
         }
         .font(.subheadline)
-        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
+        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe).opacity(0.8))
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
         .padding(.vertical, density.metrics.bubbleVerticalInset)
         .background { bubbleBackground }
@@ -599,7 +583,6 @@ struct MessageBubble: View {
         replyCard(preview)
             .padding(.horizontal, MessageBubbleReplyLayout.cardOuterInset)
             .padding(.vertical, MessageBubbleReplyLayout.cardOuterInset)
-            .layoutValue(key: MessageReplyHeaderLayoutKey.self, value: true)
     }
 
     private func replyCard(_ preview: ConversationReplyPreview) -> some View {
@@ -631,33 +614,33 @@ struct MessageBubble: View {
     }
 
     private var textBubble: some View {
-        let layout = replyPreview != nil && showsStandardBody
-            ? AnyLayout(MessageReplyBubbleLayout())
-            : AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-        return layout {
-            if let debugStyle {
-                debugHeader(debugStyle)
-            }
-            if let replyPreview, showsStandardBody {
-                replyHeader(replyPreview)
-            }
-            if showsStandardBody {
-                if let sharedLocation {
-                    sharedLocationBody(sharedLocation)
-                } else {
-                    if let linkPreviewURL {
-                        LinkPreviewCard(url: linkPreviewURL, isFromMe: isFromMe) {
-                            _ = handleMessageLink(linkPreviewURL)
+        let fitsQuote = replyPreview != nil && showsStandardBody && sharedLocation == nil && linkPreviewURL == nil
+        return MessageTextBubbleLayout(fitsQuote: fitsQuote) {
+            VStack(alignment: .leading, spacing: 0) {
+                if let debugStyle {
+                    debugHeader(debugStyle)
+                }
+                if let replyPreview, showsStandardBody {
+                    replyHeader(replyPreview)
+                }
+                if showsStandardBody {
+                    if let sharedLocation {
+                        sharedLocationBody(sharedLocation)
+                    } else {
+                        if let linkPreviewURL {
+                            LinkPreviewCard(url: linkPreviewURL, isFromMe: isFromMe) {
+                                _ = handleMessageLink(linkPreviewURL)
+                            }
+                            .id(linkPreviewURL)
                         }
-                        .id(linkPreviewURL)
+                        messageBodyText(hasReply: replyPreview != nil)
                     }
-                    messageBodyText(hasReply: replyPreview != nil)
+                    if let debugStyle, debugStyle.isUserVisibleBubble {
+                        debugTagsFooter(debugStyle)
+                    }
+                } else if let debugStyle {
+                    debugPayload(debugStyle)
                 }
-                if let debugStyle, debugStyle.isUserVisibleBubble {
-                    debugTagsFooter(debugStyle)
-                }
-            } else if let debugStyle {
-                debugPayload(debugStyle)
             }
         }
         .font(.body)
@@ -775,10 +758,12 @@ struct MessageBubble: View {
             mediaAttachments
 
             if let replyPreview {
-                MessageReplyBubbleLayout {
-                    replyHeader(replyPreview)
-                    if hasVisibleBodyText {
-                        messageBodyText(hasReply: true)
+                MessageTextBubbleLayout(fitsQuote: true) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        replyHeader(replyPreview)
+                        if hasVisibleBodyText {
+                            messageBodyText(hasReply: true)
+                        }
                     }
                 }
                 .font(.body)
@@ -1020,13 +1005,41 @@ struct MessageBubble: View {
             .opacity(opacity)
     }
 
+    private var showsMetadataFooter: Bool {
+        clusterPresentation.showsFooter(status: status, isDeleted: isDeleted, isEdited: isEdited,
+                                        reported: hasReports)
+    }
+
     @ViewBuilder
     private var bubbleMetadataRow: some View {
-        if (reactions.isEmpty && omittedReactionKinds == 0) || isDeleted {
-            metadataWithoutReactions
+        if status == .failed, !isDeleted, let onFailedTap {
+            VStack(alignment: .trailing, spacing: 2) {
+                failedNotice(action: onFailedTap)
+                if !reactions.isEmpty || omittedReactionKinds > 0 {
+                    reactionMetadata(showsTimestamp: false)
+                }
+            }
+        } else if (reactions.isEmpty && omittedReactionKinds == 0) || isDeleted {
+            if showsMetadataFooter { metadataWithoutReactions }
         } else {
-            reactionMetadata
+            reactionMetadata(showsTimestamp: showsMetadataFooter)
         }
+    }
+
+    private func failedNotice(action: @escaping () -> Void) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Button(action: action) {
+                MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: status, isFromMe: isFromMe)
+                    .multilineTextAlignment(.trailing)
+            }
+            .buttonStyle(.plain)
+            if isEdited || hasReports {
+                MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
+                                      showsDeliveryStatus: false, hasReports: hasReports, onViewEditHistory: onViewEditHistory)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
 
     private var metadataWithoutReactions: some View {
@@ -1047,7 +1060,7 @@ struct MessageBubble: View {
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
 
-    private var reactionMetadata: some View {
+    private func reactionMetadata(showsTimestamp: Bool) -> some View {
         let allPills = ReactionPillPresentation.sorted(reactions)
         let pills = Array(allPills.prefix(ReactionPillPresentation.maximumRenderedPills))
         let preHiddenCount = allPills.count - pills.count + Int(clamping: min(omittedReactionKinds, UInt64(Int.max - allPills.count)))
@@ -1088,7 +1101,7 @@ struct MessageBubble: View {
             .accessibilityValue(L10n.plural("%lld reactions", Int64(totalCount)))
             .accessibilityAddTraits(mine ? .isSelected : [])
 
-            messageMetadataFooter
+            if showsTimestamp { messageMetadataFooter }
         }
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
@@ -1133,19 +1146,19 @@ struct MessageBubble: View {
 
     private var messageMetadataFooter: some View {
         MessageMetadataFooter(
-            time: timeLabel,
+            caption: .timestamp(timeLabel),
             isEdited: isEdited && !isDeleted,
             status: status,
             isFromMe: isFromMe,
             showsDeliveryStatus: MessageTombstonePresentation.showsDeliveryStatus(isDeleted: isDeleted),
-            showsExpirationTimer: hasExpirationTimer,
             hasReports: hasReports,
             onViewEditHistory: onViewEditHistory
         )
     }
 
     private var timeLabel: String {
-        Self.timeLabel(recordedAt: record.recordedAt)
+        _ = appState.markdownTimestampClock.formatGeneration
+        return Self.timeLabel(recordedAt: record.recordedAt)
     }
 
     @ViewBuilder
@@ -1455,16 +1468,16 @@ private struct ReactionMetadataRowLayout: Layout {
         subviews: Subviews,
         cache: inout Cache
     ) -> CGSize {
-        guard subviews.count == 2 else { return .zero }
-        let footerSize = subviews[1].sizeThatFits(.unspecified)
+        guard !subviews.isEmpty else { return .zero }
+        let footerSize = subviews.dropFirst().first?.sizeThatFits(.unspecified) ?? .zero
         let idealReactionSize = subviews[0].sizeThatFits(.unspecified)
         let idealWidth = idealReactionSize.width
-            + ReactionMetadataFitting.metadataSpacing
+            + (footerSize.width > 0 ? ReactionMetadataFitting.metadataSpacing : 0)
             + footerSize.width
         let width = proposal.width.map { max(0, $0) } ?? idealWidth
         let reactionWidth = max(
             0,
-            width - footerSize.width - ReactionMetadataFitting.metadataSpacing
+            width - footerSize.width - (footerSize.width > 0 ? ReactionMetadataFitting.metadataSpacing : 0)
         )
         let reactionSize = subviews[0].sizeThatFits(
             ProposedViewSize(width: reactionWidth, height: nil)
@@ -1481,11 +1494,11 @@ private struct ReactionMetadataRowLayout: Layout {
         subviews: Subviews,
         cache: inout Cache
     ) {
-        guard subviews.count == 2 else { return }
-        let footerSize = cache.footerSize ?? subviews[1].sizeThatFits(.unspecified)
+        guard !subviews.isEmpty else { return }
+        let footerSize = cache.footerSize ?? subviews.dropFirst().first?.sizeThatFits(.unspecified) ?? .zero
         let reactionWidth = max(
             0,
-            bounds.width - footerSize.width - ReactionMetadataFitting.metadataSpacing
+            bounds.width - footerSize.width - (footerSize.width > 0 ? ReactionMetadataFitting.metadataSpacing : 0)
         )
         let reactionSize: CGSize
         if cache.resolvedWidth == bounds.width, let cached = cache.reactionSize {
@@ -1502,7 +1515,7 @@ private struct ReactionMetadataRowLayout: Layout {
             anchor: .topLeading,
             proposal: ProposedViewSize(width: reactionWidth, height: reactionSize.height)
         )
-        subviews[1].place(
+        subviews.dropFirst().first?.place(
             at: CGPoint(x: footerX, y: bounds.midY - footerSize.height / 2),
             anchor: .topLeading,
             proposal: ProposedViewSize(footerSize)
