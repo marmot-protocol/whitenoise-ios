@@ -6,6 +6,10 @@ import Testing
 
 @MainActor
 struct TimelineProjectionBoundaryTests {
+    @Test func aQuoteStopsAtTheFirstRenderedLine() {
+        #expect(ConversationReplyPreview.excerpt("\n  First line  \n\nNext paragraph") == "First line")
+    }
+
     @Test func rejectedSiblingsKeepTheirSlotAndCannotBecomeDownloadable() {
         let reference = mediaReference(sourceEpoch: 42)
         let outcomes: [MediaAttachmentOutcomeFfi] = [

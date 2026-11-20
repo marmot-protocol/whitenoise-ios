@@ -14,7 +14,7 @@ enum ConversationDateHeader {
         calendar: Calendar = .autoupdatingCurrent,
         locale: Locale = .autoupdatingCurrent
     ) -> String {
-        let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
+        let date = min(Date(timeIntervalSince1970: TimeInterval(timestamp)), now)
         if calendar.isDate(date, inSameDayAs: now) {
             return L10n.string("Today")
         }
@@ -23,10 +23,13 @@ enum ConversationDateHeader {
         {
             return L10n.string("Yesterday")
         }
-        return date.formatted(
-            Date.FormatStyle(date: .abbreviated, time: .omitted)
-                .locale(locale)
-        )
+        let monthDistance = calendar.dateComponents([.month], from: date, to: now).month ?? 0
+        if monthDistance < 6 {
+            return date.formatted(Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+                .weekday(.abbreviated).month(.abbreviated).day())
+        }
+        return date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted,
+                                               locale: locale, calendar: calendar, timeZone: calendar.timeZone))
     }
 }
 

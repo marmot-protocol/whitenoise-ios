@@ -54,6 +54,7 @@ struct SettingsView: View {
     // Nil only for the disabled Settings background while a profile is being chosen.
     var chatsViewModel: ChatsListViewModel? = nil
 
+    @Environment(ConversationSpeech.self) private var conversationSpeech: ConversationSpeech?
     @Environment(AppState.self) private var appState
     @State private var showDeleteProfile = false
     @State private var showAccounts = false
@@ -139,6 +140,7 @@ struct SettingsView: View {
             }
         }
         .onChange(of: supportEntry.destination) { previous, _ in
+            if previous != nil { conversationSpeech?.reset() }
             previous?.chatTarget?.performance?.finish(.cancelled, recorder: appState.productAnalytics)
         }
         .alert(SupportChatPresentation.failureTitle, isPresented: $supportEntry.showsFailure) {

@@ -175,7 +175,7 @@ SHARED_WORDS = {
     "Lightning (lud16)": "fi", "NIP-05 (name@domain)": "fi",
     "%@ (IDN/punycode)": "es fi fr it pt ru tr", "%@ (IDN/punycode: %@)": "es fi it pt ru tr", "%lld images": "fr",
     "%lld stickers": "es", "%lld videos": "es", "%lld votes": "fr", "Admin": "de", "Audio": "de es fr it",
-    "Cache": "de fr it pt", "Chats": "de es", "Contact": "fr", "Conversation": "fr",
+    "Cache": "de fr it pt", "Chats": "de es", "Contact": "fr", "Conversation": "fr", "File": "it",
     "Description": "fr", "Documents": "fr", "Downloads": "de pt", "Fanouts": "de es fr pt", "Filter": "de",
     "GIF via GIPHY": "fr pt", "GIFs": "de es pt", "Hex": "de es fi fr it pt ru tr", "id: %@": "es fi it pt ru tr",
     "Image": "fr", "Info": "de it", "Links": "de pt", "local": "es fr pt", "Maintenance": "fr",

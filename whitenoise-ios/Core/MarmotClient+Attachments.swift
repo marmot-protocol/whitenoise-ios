@@ -28,11 +28,14 @@ extension MarmotClient {
 
     /// Every chunk revalidates the opaque reference against current visibility.
     func attachmentData(accountRef: String, groupID: String,
-                        target: AttachmentLocalTargetFfi) async throws -> Data? {
+                        target: AttachmentLocalTargetFfi, previewByteLimit: Int? = nil) async throws -> Data? {
         let assets = try await marmot.attachmentLocalAssets(accountRef: accountRef,
             groupIdHex: groupID, targets: [target])
         guard let asset = assets.first, let reference = asset.reference else { return nil }
         guard asset.byteCount <= 512 * 1024 * 1024 else { throw AttachmentReadError.tooLarge }
+        if let previewByteLimit, asset.byteCount > previewByteLimit {
+            throw AttachmentReadError.previewLimitExceeded(byteCount: Int(asset.byteCount))
+        }
         return try await RetainedAttachmentReader.read(byteCount: asset.byteCount) { offset, limit in
             try await self.marmot.readAttachmentAsset(accountRef: accountRef,
                 reference: reference, offset: offset, limit: limit)
@@ -40,7 +43,8 @@ extension MarmotClient {
     }
 }
 
-nonisolated enum AttachmentReadError: Error {
+nonisolated enum AttachmentReadError: Error, Equatable {
+    case previewLimitExceeded(byteCount: Int?)
     case stale
     case tooLarge
     case unavailable

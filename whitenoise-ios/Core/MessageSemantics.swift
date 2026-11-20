@@ -65,7 +65,7 @@ nonisolated enum MessageSemantics {
         case poll
         /// A kind-1200 agent-stream start (opens the live QUIC preview).
         case agentStreamStart(StreamStart)
-        /// Durable agent activity/status chrome; not a chat bubble.
+        /// A durable progress update from an agent.
         case agentActivity
         /// Durable agent operation chrome; not a chat bubble.
         case agentOperation

@@ -4,6 +4,8 @@ struct MarkdownLinkText: View {
     @Environment(\.copyMessageLink) private var copyMessageLink
     @Environment(\.customEmojiInline) private var customEmoji
 
+    @Environment(\.messageTextIsOutgoing) private var outgoing
+
     let text: AttributedString
     private let segments: [MessageLinkSegment]
 
@@ -19,6 +21,7 @@ struct MarkdownLinkText: View {
     var body: some View {
         if let copyMessageLink, hasCopyableLinks {
             Self.composedText(segments, customEmoji: customEmoji)
+                .textRenderer(renderer)
                 .overlayPreferenceValue(Text.LayoutKey.self) { layouts in
                     GeometryReader { proxy in
                         let regions = Self.hitRegions(in: layouts, proxy: proxy)
@@ -28,8 +31,13 @@ struct MarkdownLinkText: View {
                     }
                 }
         } else {
-            CustomEmojiTextComposer.text(text, context: customEmoji)
+            TimelineTextMark.text(text, emoji: customEmoji)
+                .textRenderer(renderer)
         }
+    }
+
+    private var renderer: TimelineTextRenderer {
+        TimelineTextRenderer(mentionColor: MessageBubblePalette.foreground(isFromMe: outgoing).opacity(outgoing ? 0.2 : 0.1))
     }
 
     private static func composedText(_ segments: [MessageLinkSegment], customEmoji: CustomEmojiInlineContext) -> Text {
@@ -40,11 +48,11 @@ struct MarkdownLinkText: View {
         for segment in segments {
             if let target = segment.target {
                 interpolation.appendInterpolation(
-                    CustomEmojiTextComposer.text(segment.text, context: customEmoji)
+                    TimelineTextMark.text(segment.text, emoji: customEmoji)
                         .customAttribute(MessageLinkTextAttribute(target: target))
                 )
             } else {
-                interpolation.appendInterpolation(CustomEmojiTextComposer.text(segment.text, context: customEmoji))
+                interpolation.appendInterpolation(TimelineTextMark.text(segment.text, emoji: customEmoji))
             }
         }
         return Text(LocalizedStringKey(stringInterpolation: interpolation), tableName: "MarkdownLinkText")
