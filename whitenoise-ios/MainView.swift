@@ -17,5 +17,22 @@ struct MainView: View {
                 ProfileView(npub: link.npub)
                     .appAppearance()
             }
+            // Link requests present themselves here, over any pushed screen.
+            .sheet(item: Binding(
+                get: { appState.deviceLinks.sheet },
+                set: { if $0 == nil { appState.deviceLinks.sheetDismissed() } }
+            )) { sheet in
+                Group {
+                    switch sheet {
+                    case .approve(let promptID): DeviceLinkApprovalView(promptID: promptID)
+                    case .linkThisDevice: NewDeviceLinkView()
+                    case .addDevice: AddDeviceView()
+                    }
+                }
+                .appAppearance()
+            }
+            .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)") {
+                await appState.deviceLinks.refresh(using: appState)
+            }
     }
 }

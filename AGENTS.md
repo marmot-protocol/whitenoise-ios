@@ -79,7 +79,9 @@ accounts out of normal account activation and maintenance until `snapshot.ready`
 Render offered actions from the current snapshot; the single-device acknowledgment
 automatically continues initial KeyPackage publication without another approval.
 Use “Continue” for `noneFound` and “Continue anyway” for possible or unknown
-installations. Never publish a follow list during setup; skip that optional step
+installations; the app acknowledges that step automatically
+(`AccountSetupPolicy.automaticAction`), bound to the offered revision, and offers
+linking after setup instead. Never publish a follow list during setup; skip that optional step
 when MDK offers it. Profile editing is optional and reuses the sign-up form in a
 sheet. Save publishes the entered profile and dismisses only after success.
 Relay recovery offers another discovery relay or the app's two seed relays,
@@ -128,7 +130,11 @@ Request `proposeOnboardingRelayRepair` only on explicit Suggest a Fix. On the sh
 Relay/Inbox step, `AccountSetupRelayStepPresentation` makes it the primary action
 when Use Default Relays isn't offered (a step retry and Search Default Relays then
 stay available as secondary actions). Show MDK's typed relay diff for consent and
-approve only when it accounts for every published tag. `ManualReview` never
+approve only when it accounts for every published tag. A proposal MDK marks
+`inconclusive` (built on a relay or inbox check that didn't finish) is approved
+only after an at-your-own-risk confirmation, and Use Default Relays stops at its
+review instead of approving. `removeUnusableRelays` offers Suggest a Fix, and the
+diff says why each relay goes (`removalReason`). `ManualReview` never
 approves: prefill the editor from `beforeTags` or offer the separately labeled
 default-relay replacement, which returns its own diff.
 
@@ -147,7 +153,7 @@ Install a formal release or a dated nightly using its version:
 ./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-The app pins the formal MarmotKit 0.17.0 release. Nightlies are for testing only
+The app pins the formal MarmotKit 0.18.0 release. Nightlies are for testing only
 and are deleted after 30 days; pin a formal release before shipping. For local
 reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
@@ -179,6 +185,14 @@ not a join or Welcome delivery. On `CreatedGroupMemberReportUnavailable`, open t
 named group; never create another. A permanent relay refusal of a confirmed group
 change (`groupCommitDelivery.refusedRelays`) shows in the conversation's recovery
 area until the user dismisses it through `acknowledgeGroupCommitUndelivered`.
+While the group's own commit is pending, changes, leaves and declines fail with
+`GroupCommitPending`; no acknowledgement releases it, so word it and let the user
+retry later. A change MDK gives up after its call returned arrives as
+`GroupChangeNotDelivered`: toast it like `QueuedIntentRefused`, then acknowledge
+it (`acknowledgeChangeNotDelivered`). MDK keeps each record until acknowledged but
+the event only notifies, so once per launch the app also reads
+`groupChangesNotDelivered` for every chat and raises the newest one the same way.
+`NoUsableRelay` offers no retry.
 Both the app and the NSE call `setAuditLogSource` before any account opens.
 Delete on a failed own send calls `discardFailedSend`, which publishes nothing;
 polls and stickers sent while replying carry the same reply tags as text.
@@ -217,7 +231,8 @@ cancelling the awaiting task.
 Only bytes MDK has no slot for (an outgoing draft) use the host export.
 Outgoing attachments may reach MDK's 512 MiB blob limit. Read picked files through
 `PickedMediaFile` (an unlinked, mapped clone), never into resident memory. MDK's draft
-API copies every attachment on each save, so until marmot-protocol/mdk#3431 lands,
+API copies every attachment on each save, so until the app adopts MDK 0.18.0's
+file-backed draft attachments (`stageMessageDraftAttachmentFile`),
 attachments over `maxDraftAttachmentBytes` are not saved in drafts or pre-uploaded,
 and their message sends without a draft revision. Such a message has no recovery
 copy: leaving the chat before Send drops the attachment, and a failed send stays in
@@ -245,6 +260,64 @@ Pending acceptance is not completed moderation. Refresh reports from projection
 updates, and use `reportedMessage` for the current deletion-masked content,
 including targets hidden by personal blocking. Keep report plaintext only in
 transient review state; MDK owns durable storage.
+
+## Device linking
+
+Multi-device linking follows MDK's device groups: a new device asks
+(`startDeviceLink`), both devices show the same seven emoji, the user confirms on
+both, and the device already signed in adds it (`linkDevice`, whose commit is the
+approval). Since MarmotKit 0.18.0 every constructor opens with device groups on and
+nothing turns them off, so Settings → Devices and the link and sign-in UI are
+always offered. The app and the NSE open with `Marmot.newWithConfiguration`; never
+reintroduce a toggle or a second constructor. While a link is under way, each
+device row shows MDK's `chatProgress` (chats added on the approver, joined on the
+new device) and nothing once MDK reports none.
+`DeviceLinkStore` on `AppState` mirrors the active account's link snapshot,
+devices, sign-ins and compromise warning, re-reading on MDK's
+`DeviceLinkChanged`/`LinkedDevicesChanged`/`UnrecognizedSignInsChanged`/
+`CompromiseWarningChanged`/`KeyPackageRefreshOverdueChanged` events, and routes
+user choices back; MDK owns every decision. Each action captures its account and
+runtime once and runs every MDK call (and any sheet it opens) against them, never
+the profile active by the time a later step runs. Word `device group refused: <reason>`
+refusals through `DeviceGroupRefusal`. Only the new device can start a link, and
+either device may look new to the other, so the Devices screen offers both sides:
+Add a New Device (steps for the new device, waiting for its request) and Link to
+Another Device; sign-in rows open Add a New Device. "Signed in on another
+device?" is offered only on the device that finished setup in this launch
+(`NewDeviceLinkOffer`), and its Link action starts the link directly. Requests for
+the device's other signed-in profiles are read on their own `DeviceLinkChanged`,
+never answered, and offered as "Link a New Device?" (alert, Chats banner, Devices →
+Other Profiles); Review activates that profile, then presents the request there. A
+link request presents itself over any
+screen until the user acts or puts it away; it stays on the Devices screen and the
+Chats banner. As on the Mac, so does one MDK can't link yet (rate limited, needs an
+update, too many devices, competing requests): it says why and offers only Not Now,
+which declines it. Link to Another Device stays offered on a device that already has a
+device list; linking it there moves it. Devices → Moving This Device shows each of MDK's
+`moves` and, for old devices it recognizes (`questionSuppressed`), says to link them from
+that device, with Dismiss (`dismissDeviceGroupMoveSibling`). While a link this device
+approved is still `.linking`, both places warn to finish it before moving. Show the roster's label and settings, not the user's typed values,
+once MDK reports them. Never approve, reject or start fresh on the user's behalf.
+`enableAccountDevices` is one admin commit that can't be undone. Offer it only as
+an admin nudge in chat details while `accountDevicesActivation` is `eligible` (every
+leaf advertises the component); show no switch or blocked state otherwise. Confirm
+it, and run it through `GroupChangeAdvisoryRetry` like any group change.
+Imported chat history: `TimelineStore` keeps each row's `HistoryImportOrigin`
+(`importedFrom`/`historyImportProvenance` live only on the raw timeline record) and
+draws a divider above the first live row after imported ones, naming the device by
+its current roster name. While `chatHistoryImports` says a chat is receiving, the
+conversation's recovery area shows progress; MDK names no device until it arrives.
+Every device gets a name: the approving device names itself on its first link (applied
+once the roster lists it, retried on `device_group_busy`), the new device can rename
+itself on Device Linked, and an unnamed device reads as "<platform> · <client>".
+Sign Out & Wipe with linked devices says the other devices finish removing this one;
+the wipe report shows `siblingsNotReached` (never clean) and `groupsLeftToSiblings`.
+An unlinked account stays listed (`unlinked`, `signedOut`), so `DeviceUnlinked`
+offers Remove from This Device (`signOutAndWipe`, through the same wipe as Sign Out &
+Wipe, which leaves another active profile open, and only while MDK still lists the
+profile `unlinked`) or Later, which routes away like
+a sign-out; each launch raises it again, once, for a signed-out `unlinked` profile. Signing in to it fails with `AccountUnlinked`; the import flow asks
+before removing that copy and retrying the import.
 
 ## Chat presentation and invitation recovery
 
@@ -530,9 +603,10 @@ Do not add a second storage path for data Marmot already owns.
     `afterAccountExitClientCapturedForTesting`,
     `beforeUnreadSummaryRefreshForTesting` and
     `hasPendingUnreadSummaryRefreshForTesting` stay (#1241, item 21). The
-    first pauses sign-out and wipe, each in its own copy of the push
-    cleanup, after they read the native-push setting and before they cancel
-    the registration task. An injected settings read could stand in for
+    first pauses sign-out and the shared wipe (Sign Out & Wipe and removing
+    an unlinked profile), each in its own copy of the push cleanup, after
+    they read the native-push setting and before they cancel the
+    registration task. An injected settings read could stand in for
     it; the maintainers preferred the explicit pause. The second holds a
     badge refresh before its client guard and account-attention early
     return, which no injected read would reach. The third shows that

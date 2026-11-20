@@ -83,6 +83,18 @@ nonisolated enum AccountSetupPresentation {
         }
     }
 
+    /// The checks the setup list shows. The app acknowledges
+    /// "Chats on this device" itself and offer linking after setup, so the
+    /// row stays hidden unless that step is left for the user to review.
+    static func visibleSteps(
+        _ steps: [OnboardingStepStateFfi],
+        acknowledgesSingleDevice: Bool,
+        reviewStep: OnboardingStepFfi?
+    ) -> [OnboardingStepStateFfi] {
+        guard acknowledgesSingleDevice else { return steps }
+        return steps.filter { $0.step != .singleDevice || reviewStep == .singleDevice }
+    }
+
     static func stepToReview(_ snapshot: OnboardingSnapshotFfi, isBusy: Bool, isConnected: Bool) -> OnboardingStepFfi? {
         guard isConnected, !isBusy, !snapshot.ready, !snapshot.cancellationPending,
               let step = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }),

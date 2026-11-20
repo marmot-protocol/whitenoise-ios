@@ -117,6 +117,27 @@ struct AccountSetupRelayStepPresentationTests {
         #expect(interrupted.primaryAction?.action == .retry)
     }
 
+    @Test func anInconclusiveProposalIsSavedOnlyAfterConfirmation() {
+        let actions: [OnboardingActionFfi] = [.approveRepair, .cancelRepair]
+        let checked = Presentation(step: .inboxRelays, actions: actions, proposal: proposal())
+        #expect(checked.primaryAction?.action == .approve)
+        #expect(!checked.needsConfirmation(.approve))
+        var unchecked = proposal()
+        unchecked.inconclusive = true
+        let risky = Presentation(step: .inboxRelays, actions: actions, proposal: unchecked)
+        #expect(risky.primaryAction?.action == .approve)
+        #expect(risky.needsConfirmation(.approve))
+    }
+
+    /// MDK offers `removeUnusableRelays` when its suggested fix would drop a relay
+    /// that can't serve its role, so Suggest a Fix leads.
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func unusableRelaysAreRemovedThroughASuggestedFix(_ step: OnboardingStepFfi) {
+        let presentation = Presentation(step: step, actions: [.removeUnusableRelays, .retry], proposal: nil)
+        #expect(presentation.offersSuggestion)
+        #expect(presentation.primaryAction?.action == .suggest)
+    }
+
     @Test func failedSuggestionCanBeRequestedAgain() {
         let presentation = Presentation(
             step: .relays, actions: [.retry, .editRelays], proposal: nil, hasOperationError: true, lastAction: .suggest

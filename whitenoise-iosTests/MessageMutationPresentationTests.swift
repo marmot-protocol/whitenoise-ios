@@ -19,19 +19,35 @@ struct MessageMutationPolicyTests {
 
     @Test func editingIsLimitedToOwnDurableUserMessages() {
         let own = appRecord(direction: "sent")
-        #expect(MessageEditingPolicy.canEdit(own, isDeleted: false, canSendMessages: true))
-        #expect(!MessageEditingPolicy.canEdit(own, isDeleted: true, canSendMessages: true))
-        #expect(!MessageEditingPolicy.canEdit(own, isDeleted: false, canSendMessages: false))
-        #expect(!MessageEditingPolicy.canEdit(appRecord(direction: "received"), isDeleted: false, canSendMessages: true))
+        #expect(MessageEditingPolicy.canEdit(own, isDeleted: false, canSendMessages: true, myAccountId: nil))
+        #expect(!MessageEditingPolicy.canEdit(own, isDeleted: true, canSendMessages: true, myAccountId: nil))
+        #expect(!MessageEditingPolicy.canEdit(own, isDeleted: false, canSendMessages: false, myAccountId: nil))
+        #expect(!MessageEditingPolicy.canEdit(appRecord(direction: "received"), isDeleted: false, canSendMessages: true, myAccountId: nil))
 
         let editEvent = appRecord(
             direction: "sent",
             kind: MessageSemantics.kindEdit,
             tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, hex("22")])]
         )
-        #expect(!MessageEditingPolicy.canEdit(editEvent, isDeleted: false, canSendMessages: true))
+        #expect(!MessageEditingPolicy.canEdit(editEvent, isDeleted: false, canSendMessages: true, myAccountId: nil))
+        // MDK invalidated it: there is nothing valid left to edit.
+        var invalidated = own
+        invalidated.invalidated = true
+        #expect(!MessageEditingPolicy.canEdit(invalidated, isDeleted: false, canSendMessages: true, myAccountId: nil))
         #expect(MessageEditingPolicy.normalizedContent("  replacement  ") == "replacement")
         #expect(MessageEditingPolicy.normalizedContent(" \n ") == nil)
+    }
+
+    /// MDK records what this account sent from another device, live or imported
+    /// with chat history, as received; it is still the user's own message.
+    @Test func aMessageThisAccountSentFromAnotherDeviceIsOwn() {
+        let me = hex("bb")
+        #expect(MessageOwnership.isMine(direction: "received", sender: me, myAccountId: me.uppercased()))
+        #expect(!MessageOwnership.isMine(direction: "received", sender: me, myAccountId: hex("cc")))
+        #expect(!MessageOwnership.isMine(direction: "received", sender: me, myAccountId: nil))
+        #expect(MessageOwnership.isMine(direction: "sent", sender: hex("cc"), myAccountId: me))
+        let fromOtherDevice = appRecord(direction: "received")
+        #expect(MessageEditingPolicy.canEdit(fromOtherDevice, isDeleted: false, canSendMessages: true, myAccountId: me))
     }
 
     /// #1276: `editMessage` saves only what this admits, so an oversized edit

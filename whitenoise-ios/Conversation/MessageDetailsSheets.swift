@@ -163,7 +163,10 @@ struct MessageInfoSheet: View {
     }
 
     private var isFromMe: Bool {
-        record.direction == "sent"
+        MessageOwnership.isMine(
+            direction: record.direction, sender: record.sender,
+            myAccountId: appState.activeAccount?.accountIdHex
+        )
     }
 
     private var hasExpirationTimer: Bool {

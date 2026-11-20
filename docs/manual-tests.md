@@ -918,6 +918,60 @@ on the White Noise relays).
 - [ ] After the author publishes an update, the installed row shows Update
       available, and Update installs the new version.
 
+## Device linking
+
+Needs two devices (or a device and a simulator) on MarmotKit 0.18.0 or later,
+where multi-device is always on. Settings → Devices must appear without any
+Developer Tools setting.
+
+- [ ] Device A: an existing profile with chats. Device B: sign in with the same
+      nsec; setup passes "Chats on this device" without asking.
+      After Open Chats (and the consent sheet), B alone asks "Signed in on
+      another device?"; Link This iPhone starts the link. A never asks this.
+      Fallbacks: Devices → Link to Another Device on B; Add a New Device, or
+      tapping B's sign-in, on A shows the steps and waits.
+- [ ] B: Start Linking shows Waiting for Your Other Device. A presents Link New
+      Device over whatever screen is open, then the same seven emoji as B.
+- [ ] Name the device on A, keep both toggles on, tap They Match — Link Device;
+      tap They Match on B. B goes through Confirm on Your Other Device and
+      Linking… to Device Linked; A shows Device Linked.
+- [ ] Both Devices screens list both devices with the right names and platform.
+      B's existing chats appear over the following minutes, with history.
+- [ ] Rename B from A and toggle a setting; both devices show the change once it
+      settles. Remove B from A: B shows Device Unlinked. Later leaves the profile;
+      Remove from This Device deletes B's copy. Signing in on B again offers
+      Remove Unlinked Profile?, then sets up afresh and can link again.
+- [ ] Another profile: with a second profile active on A, start a link for the
+      first profile from B. A shows "Link a New Device?" naming the profile and
+      a Chats banner; Not Now keeps it under Devices → Other Profiles; Review
+      switches profiles and shows the emoji.
+- [ ] Names: approving a first link asks for this device's name too; afterwards
+      no device reads "Unnamed device" on either side. Device Linked on the new
+      device offers Name This iPhone; Save renames it on every device.
+- [ ] History: with Bring Chat History on, a chat still receiving shows
+      "Bringing earlier messages from your other device…" in the conversation; afterwards a divider
+      reads "Messages above came from <device>" where live messages begin, and
+      follows that device's rename.
+- [ ] Sign Out & Wipe on a linked device: the warning says the other devices
+      keep the chats they're in; progress mentions about 30 seconds. With the other device
+      offline, the report says they couldn't be reached.
+- [ ] Mismatch: tap They Don't Match on either side. Neither links; A's alert
+      points to sign-ins, B explains the risk. Not Now on A ends B's attempt.
+- [ ] Put a request away on A by swiping the sheet down or with Close on an
+      outcome; the Chats banner and Devices →
+      Link Requests reopen a request still waiting.
+- [ ] Background B mid-link and return: the sheet stays and shows how MDK resumed
+      (usually Not Linked with Try Again).
+- [ ] Sign-ins: sign in on A, then on B before linking. B's new sign-in appears
+      on A under Sign-Ins to Review. Not Now and This Wasn't Me (confirm; a
+      compromise warning appears on both devices' Chats and Devices) behave as
+      labelled. A sign-in linked or rejected on another device shows plain text
+      with only Dismiss. On a fresh, unlinked device, No, Start Fresh hides the
+      link suggestion.
+- [ ] Chat details on an older chat: an admin sees "Linked Devices Are Ready"
+      only when MDK reports every member eligible; Turn On asks first, then the
+      nudge disappears. Non-admins, and chats not yet eligible, show nothing.
+
 ## Onboarding
 
 - [ ] Cold launch on a clean install lands on **Welcome** within ~1s.
@@ -1365,10 +1419,11 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
       links, promote a member, remove admin status, and remove a member.
 - [ ] Group Details: a non-admin sees the member list but no add/manage
       controls.
-- [ ] Group Details: an admin must step down before leaving; the last
-      admin cannot step down until another admin exists.
-- [ ] Blocked leave (needs experimental device groups, where MDK demotes a
-      nonlast admin itself and leaves directly): admins A and B leave at
+- [ ] Group Details: an admin who isn't the last admin leaves directly (MDK
+      steps them down); the last admin cannot leave or step down until another
+      admin exists.
+- [ ] Blocked leave (MDK demotes a nonlast admin itself and leaves
+      directly): admins A and B leave at
       nearly the same time with A offline, so A's pending leave becomes the
       last active admin's. A reconnects: the Chats row still reads Leaving,
       Group Details and the composer say "Can't leave: you're the only admin",

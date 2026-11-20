@@ -38,6 +38,10 @@ struct UserFacingError: Equatable {
             return L10n.string("Your follow list is too large to change here. No follows were changed.")
         }
         if let setupMessage = accountSetupMessage(for: error) { return capitalizingFirstLetter(setupMessage) }
+        if let refusal = DeviceGroupRefusal(error: error) { return refusal.message }
+        if let marmotError = error as? MarmotKitError, case .AccountUnlinked = marmotError {
+            return L10n.string("Another of your devices unlinked this one. Sign out of this profile here, then sign in again to link this device anew.")
+        }
         if let reportMessage = moderationReportMessage(for: error) { return reportMessage }
         if let sendMessage = sendMessage(for: error) { return capitalizingFirstLetter(sendMessage) }
         if let mediaMessage = mediaMessage(for: error) { return mediaMessage }
@@ -150,6 +154,12 @@ struct UserFacingError: Equatable {
             return L10n.string("This chat may be out of date on this device. Wait for it to sync, then try again.")
         case .GroupCommitUndelivered:
             return L10n.string("The group's last change hasn't reached all of its relays yet. Try again in a moment.")
+        case .GroupCommitPending:
+            return L10n.string("The group's last change is still being sent. Try again once it goes through.")
+        case .NoUsableRelay:
+            return L10n.string("None of this chat's relays can be used, so nothing was sent.")
+        case .ReactionNotFound:
+            return L10n.string("That reaction was already removed.")
         case .InvalidEditTarget:
             return L10n.string("This message can't be edited.")
         case .StorageFull:

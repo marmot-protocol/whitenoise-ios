@@ -2106,6 +2106,47 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func laterLeavesAnUnlinkedProfileSignedOutWhenTheRefreshFails() async throws {
+        let reads = AccountRefreshReadsStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
+        reads.beforeListAccounts = { throw URLError(.notConnectedToInternet) }
+
+        await appState.leaveUnlinkedAccount(accountIdHex: account.accountIdHex)
+        reads.beforeListAccounts = nil
+
+        // The chooser offers only rows that aren't signed out.
+        let row = try #require(appState.accounts.first { $0.accountIdHex == account.accountIdHex })
+        #expect(row.signedOut && row.unlinked)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.phase == .onboarding)
+
+        await stopReadyRuntime(appState)
+    }
+
+    /// A Remove from an unlinked notice must not wipe a copy of that profile
+    /// that was signed in again since, active or not.
+    @Test(arguments: [true, false])
+    func aStaleUnlinkedRemovalWipesNothing(active: Bool) async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
+        if !active { #expect(await appState.signOut()) }
+
+        await #expect(throws: ProfileNotUnlinkedError.self) {
+            try await appState.removeUnlinkedAccount(accountRef: account.accountIdHex)
+        }
+
+        #expect(!appState.isAccountExitInProgress)
+        #expect(try await appState.client?.listAccounts().map(\.accountIdHex) == [account.accountIdHex])
+        #expect(appState.activeAccountRef == (active ? account.label : nil))
+
+        await stopReadyRuntime(appState)
+    }
+
     @Test func explicitPushDisableSupersedesAnInterruptedExitsRestore() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState

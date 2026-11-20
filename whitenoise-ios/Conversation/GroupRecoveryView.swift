@@ -17,6 +17,9 @@ struct GroupRecoveryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let arriving = HistoryImportPresentation.arrivingNotice(appState.deviceLinks.historyImports[groupID]) {
+                HistoryImportArrivingBanner(message: arriving)
+            }
             if model.syncParked {
                 GroupSyncParkedBanner(isRetrying: model.isRetryingSync, error: model.syncRetryError) {
                     Task { await model.retrySync(using: appState, groupID: groupID) }

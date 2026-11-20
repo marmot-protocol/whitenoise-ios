@@ -26,11 +26,14 @@ struct AccountSetupRelayRepairTests {
         let retired = tag(["r", "ws://127.0.0.1"], .unmarked)
         let kept = tag(["r", "wss://kept.example.com"], .unmarked)
         let proposal = relayProposal(mode: .removalOnly, before: [retired, kept], after: [kept], changes: [
-            change(.removed, retired, before: 0, after: nil),
+            change(.removed, retired, before: 0, after: nil, removal: .retired),
             change(.retained, kept, before: 1, after: 0)
         ])
         let repair = try #require(AccountSetupRelayRepairPresentation(proposal: proposal, step: .relays))
         #expect(repair.removed.count == 1)
+        // The row says why it goes; entries that stay have no removal reason.
+        #expect(repair.removed.first?.removalReason == .retired)
+        #expect(repair.kept.allSatisfy { $0.removalReason == .none })
         #expect(repair.removed.first?.isInvalidPublishedAddress == false)
         #expect(repair.publishesOnlyValidAddresses)
         #expect(canApprove(proposal, step(.relays, [.approveRepair])))
@@ -269,10 +272,12 @@ struct AccountSetupRelayRepairTests {
 
     private func change(
         _ disposition: OnboardingRelayTagDispositionFfi, _ tag: OnboardingRelayTagFfi,
-        before: UInt64?, after: UInt64?, restores: OnboardingRelayCapabilityFfi = .none
+        before: UInt64?, after: UInt64?, restores: OnboardingRelayCapabilityFfi = .none,
+        removal: OnboardingRelayRemovalReasonFfi = .none
     ) -> OnboardingRelayTagChangeFfi {
         OnboardingRelayTagChangeFfi(disposition: disposition, beforeIndex: before, afterIndex: after,
-                                    fields: tag.fields, endpoint: tag.endpoint, role: tag.role, restores: restores)
+                                    fields: tag.fields, endpoint: tag.endpoint, role: tag.role, restores: restores,
+                                    removalReason: removal)
     }
 
     private func relayProposal(

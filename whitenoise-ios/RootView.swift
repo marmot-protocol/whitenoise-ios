@@ -78,6 +78,35 @@ struct RootView: View {
         .task(id: appState.runtimeEventsGeneration) {
             await appState.observeRuntimeEvents()
         }
+        .alert(
+            "Device Unlinked",
+            isPresented: Binding(
+                get: { appState.deviceLinks.unlinkedNotice != nil },
+                set: { if !$0 { appState.deviceLinks.unlinkedNoticeDismissed() } }
+            ),
+            presenting: appState.deviceLinks.unlinkedNotice
+        ) { notice in
+            Button("Remove from This Device", role: .destructive) {
+                Task {
+                    do {
+                        try await appState.removeUnlinkedAccount(accountRef: notice.accountIdHex)
+                    } catch is ProfileNotUnlinkedError {
+                        // A notice for an earlier copy; the profile was signed in again since.
+                    } catch {
+                        appState.present(UserFacingError.toast(title: L10n.string("Couldn't wipe profile"), error: error))
+                        await appState.leaveUnlinkedAccount(accountIdHex: notice.accountIdHex)
+                    }
+                }
+            }
+            Button("Later", role: .cancel) {
+                Task { await appState.leaveUnlinkedAccount(accountIdHex: notice.accountIdHex) }
+            }
+        } message: { notice in
+            Text(L10n.formatted(
+                "Another of your devices removed this one from %@. This device no longer gets that profile’s messages.",
+                appState.displayName(forAccountIdHex: notice.accountIdHex)
+            ))
+        }
         .sheet(isPresented: Binding(
             get: { shouldPresentErasureRecovery },
             // Recovery state belongs to the erasure operation, not sheet dismissal.
@@ -242,11 +271,9 @@ private struct BootstrapFailureView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         } actions: {
-            Button("Retry") {
+            WNButton(title: "Retry", size: .compact) {
                 Task { await appState.bootstrap() }
             }
-            .wnPrimaryButtonStyle()
-            .controlSize(.large)
         }
         .padding()
     }

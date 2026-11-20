@@ -152,14 +152,14 @@ final class ConversationMarkdownProjectionCache {
         return changed
     }
 
-    /// Group-system and agent-event rows render through their own presentations,
-    /// not the markdown bubble path, so they carry no markdown projection.
+    /// Group-system, agent-event and unsupported-event rows render through their
+    /// own presentations, not the markdown bubble path, so they carry no markdown projection.
     static func usesMessageBubbleMarkdownProjection(for record: AppMessageRecordFfi) -> Bool {
         if GroupSystemEventPresentation.isDisplayable(record) {
             return false
         }
         switch MessageSemantics.classify(record) {
-        case .agentActivity, .agentOperation:
+        case .agentActivity, .agentOperation, .unsupportedEvent:
             return false
         default:
             return true

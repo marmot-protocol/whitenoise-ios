@@ -4,6 +4,7 @@ import MarmotKit
 private enum SettingsDestination: String, CaseIterable, Hashable {
     case profile
     case profileKeys
+    case devices
     case notifications
     case appearance
     case privacyAndSecurity
@@ -19,6 +20,7 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
         switch self {
         case .profile: "Profile"
         case .profileKeys: "Profile Keys"
+        case .devices: "Devices"
         case .notifications: "Notifications"
         case .appearance: "Appearance"
         case .privacyAndSecurity: "Privacy & Security"
@@ -36,6 +38,7 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
         switch self {
         case .profile: "person.crop.circle"
         case .profileKeys: "key"
+        case .devices: "laptopcomputer.and.iphone"
         case .notifications: "bell"
         case .appearance: "circle.lefthalf.filled"
         case .privacyAndSecurity: "hand.raised"
@@ -73,6 +76,7 @@ struct SettingsView: View {
             destinationSection([
                 .profile,
                 .profileKeys,
+                .devices,
                 .notifications,
                 .appearance,
                 .privacyAndSecurity,
@@ -297,6 +301,7 @@ struct SettingsView: View {
         switch destination {
         case .profile: ProfileEditView()
         case .profileKeys: IdentityView()
+        case .devices: LinkedDevicesView()
         case .notifications: NotificationSettingsView()
         case .appearance: AppearanceSettingsView()
         case .privacyAndSecurity: PrivacySecuritySettingsView()

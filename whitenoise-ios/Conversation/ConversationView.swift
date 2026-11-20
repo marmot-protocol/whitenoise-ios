@@ -2001,6 +2001,9 @@ struct ConversationView: View {
                                                 UnreadMessagesDivider()
                                                     .id(unreadDividerID(for: viewModel.initialWindowUnreadMessageId ?? ""))
                                             }
+                                            if let origin = viewModel.historyImportBoundary(before: item) {
+                                                HistoryImportDivider(origin: origin)
+                                            }
                                             row(
                                                 for: item,
                                                 viewModel: viewModel,
@@ -3086,7 +3089,8 @@ struct ConversationView: View {
         guard MessageEditingPolicy.canEdit(
             message,
             isDeleted: viewModel.isDeleted(message.messageIdHex),
-            canSendMessages: viewModel.canSendMessages
+            canSendMessages: viewModel.canSendMessages,
+            myAccountId: viewModel.myAccountId
         ) else { return }
         let preservedDraft = editSession?.preservedDraft ?? draft
         let preservedMediaDrafts = editSession?.preservedMediaDrafts ?? mediaDrafts
@@ -4502,7 +4506,8 @@ struct ConversationView: View {
             canEdit: MessageEditingPolicy.canEdit(
                 record,
                 isDeleted: viewModel.isDeleted(record.messageIdHex),
-                canSendMessages: viewModel.canSendMessages
+                canSendMessages: viewModel.canSendMessages,
+                myAccountId: viewModel.myAccountId
             ),
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
@@ -4561,7 +4566,10 @@ struct ConversationView: View {
     }
 
     private func messageActionsAlignTrailing(record: AppMessageRecordFfi) -> Bool {
-        let outgoing = record.direction == "sent"
+        let outgoing = MessageOwnership.isMine(
+            direction: record.direction, sender: record.sender,
+            myAccountId: appState.activeAccount?.accountIdHex
+        )
         return layoutDirection == .leftToRight ? outgoing : !outgoing
     }
 
@@ -4587,7 +4595,8 @@ struct ConversationView: View {
             canEdit: MessageEditingPolicy.canEdit(
                 record,
                 isDeleted: viewModel.isDeleted(record.messageIdHex),
-                canSendMessages: viewModel.canSendMessages
+                canSendMessages: viewModel.canSendMessages,
+                myAccountId: viewModel.myAccountId
             ),
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,

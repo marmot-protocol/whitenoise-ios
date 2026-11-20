@@ -251,6 +251,7 @@ final class AppState {
             productOnboardingTicket = nil
             productOnboardingPath = nil
             await activateNewIdentity(summary)
+            deviceLinks.noteSetupFinished(accountIdHex: id)
         } catch {
             signInAttempts.begin(id)
             pendingAccountSetup = model
@@ -488,16 +489,48 @@ final class AppState {
                 handleRuntimeEvent(event, generation: generation)
             }
         }
+        // One read per chat: run it beside live events so a launch burst can't
+        // overflow the stream's buffer while it reads.
+        let retainedScan = Task { await self.announceRetainedUndeliveredChange(client: client, generation: generation) }
+        defer { retainedScan.cancel() }
         for await event in events {
             guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
             handleRuntimeEvent(event, generation: generation)
         }
     }
 
+    /// A change MDK gave up while no subscription was listening (before
+    /// launch) only notifies once, so read MDK's retained records, once per
+    /// launch, and raise the newest; acknowledging it lets the next one show.
+    private func announceRetainedUndeliveredChange(client: MarmotClient, generation: Int) async {
+        guard !checkedRetainedUndeliveredChanges else { return }
+        var newest: (event: MarmotEventFfi, at: UInt64)?
+        for account in accounts where !account.signedOut {
+            guard let rows = try? await client.chatList(accountRef: account.accountIdHex, includeArchived: true) else { continue }
+            for row in rows {
+                guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
+                guard let records = try? await client.marmot.groupChangesNotDelivered(
+                          accountRef: account.accountIdHex, groupIdHex: row.groupIdHex
+                      ),
+                      let event = GroupChangeNotice.retainedNotDeliveredEvent(account: account, records: records),
+                      let at = records.map(\.at).max(), newest.map({ at > $0.at }) ?? true else { continue }
+                newest = (event, at)
+            }
+        }
+        // An interrupted scan runs again with the next runtime.
+        guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
+        checkedRetainedUndeliveredChanges = true
+        if let newest { handleRuntimeEvent(newest.event, generation: generation) }
+    }
+
+    @ObservationIgnored private var checkedRetainedUndeliveredChanges = false
+
     var groupRecoveryUpdate: GroupRecoveryUpdate?
     var groupMembershipUpdate: GroupRecoveryUpdate?
     var groupProjectionUpdate: GroupRecoveryUpdate?
     let historyNotices = HistoryNoticeStore()
+    /// Linked devices and device linking for the active account.
+    let deviceLinks = DeviceLinkStore()
     @ObservationIgnored private var refusedIntentAnnouncements = RefusedIntentAnnouncements()
     /// The active account's NIP-51 emoji sets, shared by every chat so typed
     /// `:shortcode:` resolves without opening a picker.
@@ -548,11 +581,13 @@ final class AppState {
         if case .historyNoticesChanged(let accountID, _) = event, activeAccount?.accountIdHex == accountID {
             Task { await historyNotices.refresh(using: self) }
         }
+        deviceLinks.observe(event, using: self)
         let noticeAccountID: String
         switch event {
         case .groupChangeSuperseded(let accountID, _, _, _, _, _, _):
             noticeAccountID = accountID
         case .groupEvent(let accountID, _, _, .queuedIntentRefused),
+             .groupEvent(let accountID, _, _, .groupChangeNotDelivered),
              .groupEvent(let accountID, _, _, .groupHydrationQuarantined(.rewindRestoreFailed)):
             noticeAccountID = accountID
         default:
@@ -563,6 +598,15 @@ final class AppState {
               let notice = GroupChangeNotice.toast(for: event),
               refusedIntentAnnouncements.admit(event) else { return }
         present(notice)
+        // MDK keeps a given-up change until the user has seen it.
+        if case .groupEvent(let accountID, _, let groupID, .groupChangeNotDelivered(let commitID, _, _)) = event,
+           let client = try? currentMarmotClient() {
+            Task {
+                _ = try? await client.marmot.acknowledgeChangeNotDelivered(
+                    accountRef: accountID, groupIdHex: groupID, commitIdHex: commitID
+                )
+            }
+        }
     }
 
     /// Whether the runtime is mid-suspension. AppState-internal only: the
@@ -1009,7 +1053,8 @@ final class AppState {
     private func completeSignOut(
         removedRef: String,
         removedAccountIdHex: String?,
-        destructive: Bool
+        destructive: Bool,
+        routesAway: Bool = true
     ) async -> [WipeFailureItem] {
         var localCleanupFailures: [WipeFailureItem] = []
         if destructive {
@@ -1059,8 +1104,13 @@ final class AppState {
             ))
         }
 
-        accountStore.requestProfileSelection()
-        if !accounts.contains(where: { !$0.signedOut }) {
+        if !routesAway {
+            // Whichever profile is active stays; only this one's projections go.
+            if let removedAccountIdHex {
+                profileStore.clearForAccountRemoval(accountIdHex: removedAccountIdHex)
+            }
+        } else if !accounts.contains(where: { !$0.signedOut }) {
+            accountStore.requestProfileSelection()
             // Last account signed out: tear the profile-projection state back
             // down to empty so cached peer data (#366), the per-account version
             // map (#353), and their sibling queues do not survive a full sign-out
@@ -1077,6 +1127,7 @@ final class AppState {
             retentionSweeper.cancelWithoutAwaiting()
             phase = .onboarding
         } else {
+            accountStore.requestProfileSelection()
             if destructive, let removedAccountIdHex {
                 profileStore.clearForAccountRemoval(accountIdHex: removedAccountIdHex)
             }
@@ -1115,6 +1166,22 @@ final class AppState {
     @discardableResult
     func signOutAndWipeActiveAccount(onError: ((Toast) -> Void)? = nil) async -> Bool {
         guard let wipingRef = activeAccountRef else { return false }
+        do {
+            try await wipeActiveAccount(wipingRef)
+            return true
+        } catch ForegroundRuntimeMutationError.runtimeUnavailable {
+            (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
+        } catch let error as ProfileDataRemainsError {
+            (onError ?? present)(.error(L10n.string("Couldn't wipe profile"), message: error.errorDescription))
+        } catch {
+            (onError ?? present)(UserFacingError.toast(title: L10n.string("Couldn't wipe profile"), error: error))
+        }
+        return false
+    }
+
+    /// Throws `runtimeUnavailable` when the wipe can't begin, or the wipe's error.
+    @MainActor
+    private func wipeActiveAccount(_ wipingRef: String, requiringUnlinked: Bool = false) async throws {
         guard DestructiveWipeGate.canBegin(
             isReady: phase == .ready,
             isAppSceneActive: isAppSceneActive,
@@ -1122,8 +1189,7 @@ final class AppState {
             isRuntimeSuspending: isRuntimeSuspending,
             hasRuntimeClient: client != nil
         ), !isSigningOut else {
-            (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
-            return false
+            throw ForegroundRuntimeMutationError.runtimeUnavailable
         }
         let wipingAccountIdHex = accounts
             .first(where: { $0.label == wipingRef })?
@@ -1135,11 +1201,24 @@ final class AppState {
         isSigningOut = true
         notifications.cancelForegroundBatches(accountRef: wipingRef)
         defer { finishAccountExit() }
-        guard let exitingClient = client else {
-            (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
-            return false
-        }
+        guard let exitingClient = client else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+        if requiringUnlinked { _ = try await requireUnlinked(wipingRef, using: exitingClient) }
         await awaitCancelledForegroundMutationFollowups()
+        try await wipeAccount(wipingRef, accountIdHex: wipingAccountIdHex, using: exitingClient, routesAway: true)
+    }
+
+    /// The wipe shared by Sign Out & Wipe and removing an unlinked profile:
+    /// clears push the way sign-out does, wipes through MDK, then removes what
+    /// the app keeps for that profile and reports anything left. Only
+    /// `routesAway` leaves the active profile. The caller holds `isSigningOut`.
+    /// Throws when nothing was removed, with push restored.
+    @MainActor
+    private func wipeAccount(
+        _ wipingRef: String,
+        accountIdHex wipingAccountIdHex: String?,
+        using exitingClient: MarmotClient,
+        routesAway: Bool
+    ) async throws {
         let nativePushWasEnabled = (
             try? await exitingClient
                 .notificationSettings(accountRef: wipingRef)
@@ -1161,14 +1240,13 @@ final class AppState {
         do {
             outcome = try await exitingClient.signOutAndWipe(accountRef: wipingRef)
         } catch {
-            // Total FFI failure: nothing was wiped. Roll native push back and toast.
+            // Total FFI failure: nothing was wiped. Roll native push back.
             await restoreNativePushAfterFailedSignOut(
                 using: exitingClient,
                 accountRef: wipingRef,
                 wasEnabled: nativePushWasEnabled
             )
-            (onError ?? present)(UserFacingError.toast(title: L10n.string("Couldn't wipe profile"), error: error))
-            return false
+            throw error
         }
 
         // Incomplete cleanup can still follow a committed removal (a secret
@@ -1182,21 +1260,19 @@ final class AppState {
                 accountRef: wipingRef,
                 wasEnabled: nativePushWasEnabled
             )
-            (onError ?? present)(.error(
-                L10n.string("Couldn't wipe profile"),
-                message: L10n.string("This profile’s data is still on this device. Keep White Noise open and try again.")
-            ))
-            return false
+            throw ProfileDataRemainsError()
         }
 
         nativePushRestoreIntents.clear(wipingRef)
         // MDK removed the account: the ref is invalid now. Do the same local
-        // removal + routing the normal sign-out does — regardless of per-stage
-        // best-effort failures — then surface a report only when something remains.
+        // removal (and, for the active profile, routing) the normal sign-out
+        // does — regardless of per-stage best-effort failures — then surface a
+        // report only when something remains.
         let localCleanupFailures = await completeSignOut(
             removedRef: wipingRef,
             removedAccountIdHex: wipingAccountIdHex,
-            destructive: true
+            destructive: true,
+            routesAway: routesAway
         )
 
         let report = WipeReportProjection.report(
@@ -1206,7 +1282,6 @@ final class AppState {
         if !report.clean {
             pendingWipeReport = report
         }
-        return true
     }
 
     func eraseAppData() async throws {
@@ -1592,6 +1667,70 @@ final class AppState {
         )
     }
 
+    /// Removes a profile another device unlinked from this one, so the user can
+    /// sign in again and link this device anew. MDK's wipe skips leaving chats
+    /// and deleting the KeyPackage slot, which the other devices already did.
+    /// Throws `ProfileNotUnlinkedError`, wiping nothing, when MDK no longer
+    /// lists that profile as unlinked (a notice for a copy since replaced).
+    @MainActor
+    func removeUnlinkedAccount(accountRef: String) async throws {
+        let account = accounts.first { $0.label == accountRef || $0.accountIdHex == accountRef }
+        if let account, account.label == activeAccountRef {
+            try await wipeActiveAccount(account.label, requiringUnlinked: true)
+            deviceLinks.retireUnlinkedNotice(account.accountIdHex)
+            return
+        }
+        // Another profile (or none) is active: wipe this one the same way, but
+        // leave whichever profile is open where it is.
+        guard !isSigningOut else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+        let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        isSigningOut = true
+        notifications.cancelForegroundBatches(accountRef: account?.label ?? accountRef)
+        defer {
+            finishAccountExit()
+            scheduleNativePushRegistrationIfEnabled()
+        }
+        let unlinked = try await requireUnlinked(account?.label ?? accountRef, using: lease.client)
+        // As for the active wipe: a sign-in's notification defaults must not
+        // register push again after the wipe clears it.
+        await awaitCancelledForegroundMutationFollowups()
+        try await wipeAccount(unlinked.label, accountIdHex: unlinked.accountIdHex, using: lease.client, routesAway: false)
+        deviceLinks.retireUnlinkedNotice(unlinked.accountIdHex)
+    }
+
+    /// Reads MDK's current account list, so a stale notice can't wipe a copy
+    /// of the profile that was signed in again since.
+    @MainActor
+    private func requireUnlinked(_ accountRef: String, using client: MarmotClient) async throws -> AccountSummaryFfi {
+        guard let account = try await client.listAccounts()
+            .first(where: { $0.label == accountRef || $0.accountIdHex == accountRef }),
+            account.unlinked else { throw ProfileNotUnlinkedError() }
+        return account
+    }
+
+
+    /// Another of the account's devices removed this one. MDK has already
+    /// signed the account out here, but it stays listed (`unlinked`), so leave
+    /// it the way a sign-out does: to another profile's chooser, or Welcome.
+    @MainActor
+    func leaveUnlinkedAccount(accountIdHex: String) async {
+        do {
+            try await refreshAccounts()
+        } catch {
+            // MDK reported the unlink, so leave even when the refresh failed:
+            // mark the row the way MDK lists it, so the chooser doesn't offer it.
+            if let index = accountStore.accounts.firstIndex(where: { $0.accountIdHex == accountIdHex }) {
+                accountStore.accounts[index].signedOut = true
+                accountStore.accounts[index].unlinked = true
+            }
+        }
+        guard let active = activeAccount, active.accountIdHex == accountIdHex else { return }
+        activeAccountRef = nil
+        _ = stopNotificationSubscription()
+        phase = accounts.contains(where: { !$0.signedOut && $0.accountIdHex != accountIdHex }) ? .ready : .onboarding
+    }
+
     /// Internal (not `private`) so `RuntimeLifecycle.performBootstrap` can drive
     /// the account refresh once the runtime is online. The account refresh
     /// itself stays on AppState (it is account/profile maintenance, not
@@ -1644,6 +1783,7 @@ final class AppState {
         }
         accountSetupSnapshots = unfinished
         onboardingRecoveryAccounts = recoveryAccounts
+        deviceLinks.remindUnlinkedProfiles(readyAccounts)
         if let current = pendingAccountSetup {
             if let currentSetupSnapshot {
                 current.apply(currentSetupSnapshot)
@@ -2089,6 +2229,7 @@ final class AppState {
         signInAttempts.begin(snapshot.accountIdHex)
         imported = true
         pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
+        pendingAccountSetup?.acknowledgesSingleDevice = true
         pendingAccountSetup?.onProductReady = { [productAnalytics] in
             productAnalytics.record(.onboarding(.localReady, .import, .success), ticket: ticket)
             productAnalytics.record(.onboarding(.networkReady, .import, .success), ticket: ticket)
