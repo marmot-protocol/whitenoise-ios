@@ -40,7 +40,8 @@ extension AppState {
         hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
             RuntimeLifecycle.recordHostPerformanceOnClient,
         moderationReportingAvailability: @escaping @MainActor (MarmotClient?) -> Bool = AppState.moderationReportingAvailable(on:),
-        retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep
+        retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep,
+        accountRefreshReads: AccountRefreshReads = .live
     ) -> AppState {
         let resources = AppStateTestResources()
         let isolatedDefaults = accountDefaults ?? resources.makeDefaults("AppStateTest")
@@ -64,7 +65,8 @@ extension AppState {
             notificationCatchUpCalls: notificationCatchUpCalls,
             hostPerformanceRecorder: hostPerformanceRecorder,
             moderationReportingAvailability: moderationReportingAvailability,
-            retentionSweepSleep: retentionSweepSleep
+            retentionSweepSleep: retentionSweepSleep,
+            accountRefreshReads: accountRefreshReads
         )
         objc_setAssociatedObject(state, &AppStateTestResources.key, resources, .OBJC_ASSOCIATION_RETAIN)
         return state
