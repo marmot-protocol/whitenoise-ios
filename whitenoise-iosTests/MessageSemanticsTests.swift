@@ -500,7 +500,7 @@ struct MessageSemanticsTests {
 
     @MainActor
     @Test func inFlightMediaDownloadsShareTaskForSameReference() async throws {
-        let store = MediaDownloadInFlightStore()
+        let store = MediaDownloadInFlightStore<Data>()
         let key = MediaDownloadInFlightKey(reference: encryptedMediaReference(sourceEpoch: 0))
         let starts = MediaDownloadStartCounter()
         let firstStarted = TestLatch()
@@ -508,7 +508,7 @@ struct MessageSemanticsTests {
         let release = TestLatch()
 
         let first = Task { @MainActor in
-            try await store.data(for: key) {
+            try await store.value(for: key) {
                 starts.count += 1
                 firstStarted.signal()
                 try await release.wait()
@@ -520,7 +520,7 @@ struct MessageSemanticsTests {
             // The signal and the store's synchronous in-flight lookup run in one
             // main-actor turn, so this request has joined before the test resumes.
             secondJoining.signal()
-            return try await store.data(for: key) {
+            return try await store.value(for: key) {
                 starts.count += 1
                 return Data([2])
             }
@@ -536,15 +536,15 @@ struct MessageSemanticsTests {
 
     @MainActor
     @Test func inFlightMediaDownloadsClearCompletedTask() async throws {
-        let store = MediaDownloadInFlightStore()
+        let store = MediaDownloadInFlightStore<Data>()
         let key = MediaDownloadInFlightKey(reference: encryptedMediaReference(sourceEpoch: 0))
         var starts = 0
 
-        let first = try await store.data(for: key) {
+        let first = try await store.value(for: key) {
             starts += 1
             return Data([UInt8(starts)])
         }
-        let second = try await store.data(for: key) {
+        let second = try await store.value(for: key) {
             starts += 1
             return Data([UInt8(starts)])
         }

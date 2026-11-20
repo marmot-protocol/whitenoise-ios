@@ -468,16 +468,6 @@ struct MessageBubble: View {
         MessageMediaUploadPresentation.showsIndicator(status: status, items: mediaItems)
     }
 
-    private var standaloneEmoji: String? {
-        guard debugStyle == nil,
-              !isDeleted,
-              replyPreview == nil,
-              mediaItems.isEmpty
-        else { return nil }
-
-        return SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText)
-    }
-
     private var standaloneCustomEmoji: CustomEmojiShortcode? {
         guard debugStyle == nil,
               !isDeleted,
@@ -654,15 +644,6 @@ struct MessageBubble: View {
             remoteGiphyMessageContent(remoteGiphyMedia)
         } else if !mediaItems.isEmpty, showsStandardBody {
             mediaMessageContent
-        } else if let standaloneEmoji {
-            if status == .failed {
-                standaloneEmojiContent(standaloneEmoji)
-                    .contentShape(.rect)
-                    .onTapGesture { onFailedTap?() }
-            } else {
-                standaloneEmojiContent(standaloneEmoji)
-                    .opacity(status == .sending ? 0.7 : 1)
-            }
         } else if let standaloneCustomEmoji {
             if status == .failed {
                 standaloneCustomEmojiContent(standaloneCustomEmoji)
@@ -701,15 +682,6 @@ struct MessageBubble: View {
             StickerMessageContent(sticker: sticker, isFromMe: isFromMe)
         }
         .opacity(status == .sending ? 0.7 : 1)
-    }
-
-    private func standaloneEmojiContent(_ emoji: String) -> some View {
-        Text(emoji)
-            .font(.system(size: SingleEmojiMessagePresentation.fontSize))
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, 6)
-            .accessibilityElement(children: .combine)
     }
 
     /// The ordinary bubble, with its own inline emoji or the literal
@@ -1243,7 +1215,7 @@ struct MessageBubble: View {
     private var widensTextForReactions: Bool {
         showsReactionStrip && sharedLocation == nil && linkPreviewURL == nil
             && record.sticker == nil && record.kind != MessageSemantics.kindPoll && remoteGiphyMedia == nil
-            && mediaItems.isEmpty && standaloneEmoji == nil && standaloneCustomEmoji == nil && debugStyle == nil
+            && mediaItems.isEmpty && standaloneCustomEmoji == nil && debugStyle == nil
     }
 
     private var showsMetadataFooter: Bool {
@@ -2309,6 +2281,7 @@ private struct MessageMediaTile: View {
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     @State private var image: UIImage?
     @State private var gifData: Data?
+    @State private var gifReplay = 0
     @State private var loadedImageID: String?
     @State private var isLoading = false
     @State private var didFail = false
@@ -2329,6 +2302,7 @@ private struct MessageMediaTile: View {
                         Image(uiImage: image).resizable().scaledToFill()
                     }
                 }
+                .id(gifReplay)
                 .frame(width: size.width, height: size.height)
                 .clipped()
             } else if item.isImage {
@@ -2397,6 +2371,10 @@ private struct MessageMediaTile: View {
         }
         .onTapGesture {
             let request = openIntent?.begin()
+            if item.isGIF, loadedImageID == item.id, gifData != nil {
+                gifReplay &+= 1
+                return
+            }
             if item.isVideo {
                 onOpenVideo(item)
                 return
@@ -2880,7 +2858,12 @@ private struct MessageVideoAttachmentView: View {
             let needsPoster = displayThumbnail == nil && !posterDecodeFailed
             let needsDuration = showsBadges && showsDuration && !durationReadFailed && item.durationSeconds == nil
                 && localDuration == nil && MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey) == nil
-            guard needsPoster || needsDuration else { return }
+            guard needsPoster || needsDuration else {
+                // Metadata can come from identical bytes in another message. Admit this
+                // slot under the Videos preference without decoding the movie again.
+                _ = await onLoadMedia.automaticAttachmentByteCount(item)
+                return
+            }
             let epoch = MessageMediaCache.currentProducerEpoch()
             guard let data = try? await onLoadMedia.videoPreviewData(for: item),
                   !Task.isCancelled,
@@ -3384,7 +3367,7 @@ private struct MessageDocumentAttachmentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    let name = liftedDetails?.name ?? contactName
+                    let name = liftedDetails?.name ?? contactName ?? transcriptSearch?.displayedContactName(for: item.id)
                     TimelineSearchText(name ?? item.fileName)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
@@ -3392,8 +3375,8 @@ private struct MessageDocumentAttachmentView: View {
                     if let name, name != item.fileName, let searchQuery, item.fileName.localizedStandardContains(searchQuery) {
                         TimelineSearchText(item.fileName)
                             .font(.caption)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Text(fileDetail)
                         .font(.caption)

@@ -216,6 +216,7 @@ struct SharedMediaLibraryView: View {
     }
 
     var body: some View {
+        let scope = AttachmentHistoryPager.Scope(appState: appState, group: conversation.group.groupIdHex)
         VStack(spacing: 0) {
             Picker("Shared media type", selection: $category) {
                 Text("Media").tag(SharedMediaLibraryPresentation.Category.media)
@@ -247,8 +248,10 @@ struct SharedMediaLibraryView: View {
         .navigationTitle("Shared Media")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarRole(.editor)
-        .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)") {
+        .task(id: scope) {
             await model.load(groupIdHex: conversation.group.groupIdHex, using: appState)
+            guard scope != nil else { return }
+            if category == .links { await model.loadLinks(groupIdHex: conversation.group.groupIdHex, using: appState) }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 await model.refreshVersion(groupIdHex: conversation.group.groupIdHex, using: appState)
