@@ -650,6 +650,7 @@ struct ConversationView: View {
     @State private var viewModel: ConversationViewModel?
     @State private var isConversationOnScreen = false
     @State private var draft: String = ""
+    @State private var composerTextOverage: Int?
     @State private var didRestorePersistedDraft = false
     @State private var composerChangedBeforeDraftRestore = false
     @State private var mediaDrafts: [MediaDraftAttachment] = []
@@ -1403,6 +1404,13 @@ struct ConversationView: View {
             }
             .onChange(of: appState.profileRefreshGeneration) { _, _ in
                 viewModel?.refreshProfileDependentTimelineProjections()
+                refreshComposerTextOverage()
+            }
+            .onChange(of: viewModel?.groupMlsRefreshGeneration) { _, _ in
+                refreshComposerTextOverage()
+            }
+            .onChange(of: viewModel?.mentionRosterResolution) { _, _ in
+                refreshComposerTextOverage()
             }
             .onChange(of: timestampRenderKey, initial: true) { _, key in
                 viewModel?.applyTimestampRenderGeneration(key.generation)
@@ -1437,6 +1445,7 @@ struct ConversationView: View {
                 if editSession == nil {
                     persistComposerChange(text: draft)
                 }
+                refreshComposerTextOverage()
                 if draft.isEmpty {
                     viewModel?.dismissCustomEmojiSendError()
                 }
@@ -1573,6 +1582,7 @@ struct ConversationView: View {
                     disabledMessage: viewModel?.inactiveGroupMessage,
                     disabledAction: viewModel.flatMap(blockedLeaveComposerAction(viewModel:)),
                     sendBlockedMessage: viewModel?.sendBlockedMessage,
+                    textOverage: composerTextOverage,
                     voiceRecordingActive: voiceRecorder.isActive,
                     voiceRecordingLocked: voiceRecorder.isLocked,
                     voiceRecordingDurationSeconds: voiceRecorder.durationSeconds,
@@ -3101,6 +3111,10 @@ struct ConversationView: View {
         requestComposerFocus()
     }
 
+    private func refreshComposerTextOverage() {
+        composerTextOverage = OutgoingSendSizePolicy.textOverage(viewModel?.preparedComposerText(draft))
+    }
+
     private var editSubmissionEnabled: Bool {
         guard let editSession, let viewModel,
               let outgoing = viewModel.preparedComposerText(draft)
@@ -3119,6 +3133,7 @@ struct ConversationView: View {
         viewModel?.restoreComposerMentionDraftState(editSession.preservedMentionState)
         viewModel?.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
         draft = editSession.preservedDraft
+        refreshComposerTextOverage()
         mediaDrafts = editSession.preservedMediaDrafts
     }
 
@@ -3174,6 +3189,7 @@ struct ConversationView: View {
                 viewModel.restoreComposerMentionDraftState(editSession.preservedMentionState)
                 viewModel.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
                 draft = editSession.preservedDraft
+                refreshComposerTextOverage()
                 mediaDrafts = editSession.preservedMediaDrafts
             }
             return
@@ -3222,6 +3238,7 @@ struct ConversationView: View {
             // still the tap's own runloop turn, so no newer edit can be lost.
             viewModel.restoreComposerMentionDraftState(mentionState)
             draft = composerState.draft
+            refreshComposerTextOverage()
             mediaDrafts = composerState.mediaDrafts
             return
         }
@@ -3374,6 +3391,7 @@ struct ConversationView: View {
             viewModel.restoreReplyTarget(messageIdHex: restored.replyTargetMessageIdHex)
             mediaDrafts = restored.mediaDrafts
             draft = restored.draft
+            refreshComposerTextOverage()
         }
         viewModel.settleSizeRejectedSend(staged, rejection: rejection, restoredToComposer: restored != nil)
     }
@@ -3445,6 +3463,7 @@ struct ConversationView: View {
         viewModel.restoreReplyTarget(messageIdHex: snapshot.replyToMessageIdHex)
         mediaDrafts = snapshot.mediaAttachments
         draft = mentionState.draft
+        refreshComposerTextOverage()
         return result
     }
 

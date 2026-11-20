@@ -184,9 +184,9 @@ struct ProfileContentView: View {
                         loadError: model.directory.loadError,
                         onRetry: { Task { await model.reloadGroups(using: appState, force: true) } },
                         onOpenChat: openChat,
-                        onAddToGroup: { showAddToGroup = true }
+                        onAddToGroup: { showAddToGroup = true },
+                        canAddToGroup: !isBlockedPeer
                     )
-                    .disabled(isBlockedPeer)
                 }
                 if let hex = model.hex {
                     ContactNicknameRow(accountIdHex: hex)
@@ -332,8 +332,9 @@ struct ProfileContentView: View {
         )
     }
 
-    /// Keep relationship rows visible but disable interaction while blocked;
-    /// Message remains unavailable until the peer is unblocked.
+    /// Keep relationship rows visible but disable interaction while blocked,
+    /// except that shared groups stay browsable; Message remains unavailable
+    /// until the peer is unblocked.
     private var isBlockedPeer: Bool {
         isBlockablePeer && blockedUsers.targetIsBlocked
     }

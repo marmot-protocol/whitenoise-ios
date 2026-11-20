@@ -5,10 +5,13 @@ import UIKit
 enum KeyboardDismissTap {
     /// A tap inside a text input must not resign it, or tapping from one field
     /// straight into another would close the keyboard instead of moving focus.
+    /// Alerts manage their own text fields: resigning under a button tap moves
+    /// the alert as the keyboard hides, so the tap misses its action (#1291).
     static func resignsKeyboard(touching view: UIView?) -> Bool {
         var candidate = view
         while let current = candidate {
             if current is UIControl || current is UITextView { return false }
+            if current.next is UIAlertController { return false }
             candidate = current.superview
         }
         return true
