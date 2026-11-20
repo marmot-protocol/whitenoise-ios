@@ -178,6 +178,14 @@ nonisolated enum AttachmentHandoffSource: Equatable {
             self = .none
         }
     }
+
+    func matches(_ opened: AttachmentLocalTargetFfi) -> Bool {
+        switch self {
+        case .target(let target): target == opened
+        case .hint(let hint): hint.messageID == opened.messageIdHex && hint.slot == opened.attachmentIndex
+        case .none: false
+        }
+    }
 }
 
 nonisolated enum AttachmentHandoffOpening {

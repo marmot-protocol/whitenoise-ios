@@ -341,7 +341,7 @@ struct AttachmentHandoffTests {
         #expect(AttachmentHandoffSource(document(localTarget: Self.target, sourceHint: hint)) == .target(Self.target))
     }
 
-    @Test func reportedMessageMediaKeepsItsOriginalSlot() {
+    @Test func reportedMessageMediaKeepsItsOriginalSlot() throws {
         let messageID = String(repeating: "3", count: 64)
         let sourceID = String(repeating: "4", count: 64)
         let reference = MediaAttachmentReferenceFfi(
@@ -362,7 +362,20 @@ struct AttachmentHandoffTests {
         let slot = AttachmentLocalTargetFfi(messageIdHex: messageID, sourceMessageIdHex: sourceID,
                                             attachmentIndex: 0)
         #expect(items.first?.localTarget == slot)
-        #expect(items.first.map(AttachmentHandoffSource.init) == .target(slot))
+        let known = try #require(items.first)
+        var unresolved = message
+        unresolved.sourceMessageIdHex = ""
+        let hinted = try #require(GroupModerationModel.mediaItems(for: unresolved, reportIdHex: "r1").first)
+        #expect(hinted.localTarget == nil)
+        #expect(hinted.isSameDocumentSource(as: hinted, leasedTarget: slot))
+        #expect(known.isSameDocumentSource(as: hinted, leasedTarget: slot))
+
+        var other = slot
+        other.attachmentIndex = 1
+        #expect(!hinted.isSameDocumentSource(as: hinted, leasedTarget: other))
+        other = slot
+        other.sourceMessageIdHex = String(repeating: "7", count: 64)
+        #expect(!known.isSameDocumentSource(as: hinted, leasedTarget: other))
     }
 
     @Test func storageFullAndControlCancellationMapToUserStates() {

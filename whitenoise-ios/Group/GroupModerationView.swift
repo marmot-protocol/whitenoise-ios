@@ -363,14 +363,14 @@ struct GroupModerationView: View {
         return ConversationMediaLoader({ try await conversation.data(for: $0) },
             openHandoff: { try await conversation.openHandoff(for: $0, control: $1) },
             canShareDocument: { media, target in
-                guard let scope, let target, media.localTarget == target, conversation.canModerateReports else { return false }
+                guard let scope, let target, AttachmentHandoffSource(media).matches(target), conversation.canModerateReports else { return false }
                 let client = try scope.currentClient(in: appState)
                 let message = try await client.reportedMessage(accountRef: scope.account, groupID: scope.group, messageID: entry.report.messageIdHex)
                 guard let message, !message.deleted,
                       try await scope.stillRetains(target, in: appState), conversation.canModerateReports,
-                      model.entries.contains(where: { $0.id == entry.id && $0.mediaItems.contains { $0.isSameDocumentSource(as: media) } })
+                      model.entries.contains(where: { $0.id == entry.id && $0.mediaItems.contains { $0.isSameDocumentSource(as: media, leasedTarget: target) } })
                 else { return false }
-                return GroupModerationModel.mediaItems(for: message, reportIdHex: entry.id).contains { $0.isSameDocumentSource(as: media) }
+                return GroupModerationModel.mediaItems(for: message, reportIdHex: entry.id).contains { $0.isSameDocumentSource(as: media, leasedTarget: target) }
             },
             automaticAttachmentByteCount: conversation.automaticAttachmentByteCount(for:))
     }
