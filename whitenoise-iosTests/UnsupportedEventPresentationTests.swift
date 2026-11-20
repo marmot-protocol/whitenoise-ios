@@ -30,6 +30,104 @@ struct UnsupportedEventPresentationTests {
         #expect(kinds == [MessageSemantics.kindChat, kind])
     }
 
+    /// A NIP-22 comment from another client shows as a reply to the parent MDK
+    /// projects, quoting it, not as a card.
+    @Test func aCommentShowsAsAReplyRow() throws {
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
+        let parent = hex("01")
+        store.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [
+                    timelineRecord(messageIdHex: parent, plaintext: "the parent", timelineAt: 1),
+                    // The raw `e` differs from MDK's projection, which the timeline follows.
+                    timelineRecord(
+                        messageIdHex: hex("02"), plaintext: "agreed", kind: MessageSemantics.kindComment,
+                        tags: [tag("e", hex("03")), tag("k", "9")], timelineAt: 2, replyToMessageIdHex: parent
+                    ),
+                ],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+
+        let comment = try #require(record(kind: MessageSemantics.kindComment, in: store))
+        #expect(store.replyTargetMessageId(for: comment) == parent)
+        #expect(store.replyPreview(for: comment)?.text == "the parent")
+    }
+
+    /// A quoted kind 1111 that isn't a comment stays an unsupported event in
+    /// the quote, as its own row does, rather than showing its payload.
+    @Test func aQuotedKind1111WithoutANumericKStaysUnsupported() throws {
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
+        let target = hex("01")
+        store.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [
+                    timelineRecord(
+                        messageIdHex: target, plaintext: "{\"raw\":true}", kind: MessageSemantics.kindComment,
+                        tags: [tag("k", "custom")], timelineAt: 1
+                    ),
+                    timelineRecord(
+                        messageIdHex: hex("02"), plaintext: "what is this?", timelineAt: 2,
+                        replyToMessageIdHex: target,
+                        replyPreview: TimelineReplyPreviewFfi(
+                            messageIdHex: target, sender: hex("11"), plaintext: "{\"raw\":true}",
+                            kind: MessageSemantics.kindComment, mediaJson: nil, media: [],
+                            agentTextStreamJson: nil, deleted: false
+                        )
+                    ),
+                ],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+
+        let reply = try #require(record(kind: MessageSemantics.kindChat, in: store))
+        #expect(store.replyPreview(for: reply)?.text == MessagePreview.unsupportedEventLabel)
+    }
+
+    /// MDK clears a deleted row's tags, so a deleted comment can't be told
+    /// from another kind 1111: its quote reads as deleted, as any quote does.
+    @Test func aQuotedDeletedCommentReadsAsDeleted() throws {
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
+        let target = hex("01")
+        let quote = TimelineReplyPreviewFfi(
+            messageIdHex: target, sender: hex("11"), plaintext: "",
+            kind: MessageSemantics.kindComment, mediaJson: nil, media: [],
+            agentTextStreamJson: nil, deleted: true
+        )
+        store.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [
+                    timelineRecord(
+                        messageIdHex: target, plaintext: "", kind: MessageSemantics.kindComment,
+                        timelineAt: 1, deleted: true
+                    ),
+                    timelineRecord(
+                        messageIdHex: hex("02"), plaintext: "it's gone", timelineAt: 2,
+                        replyToMessageIdHex: target, replyPreview: quote
+                    ),
+                ],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+
+        let reply = try #require(record(kind: MessageSemantics.kindChat, in: store))
+        #expect(store.replyPreview(for: reply)?.text == MessagePreview.body(quote))
+        #expect(store.replyPreview(for: reply)?.text != MessagePreview.unsupportedEventLabel)
+    }
+
+    private func record(kind: UInt64, in store: TimelineStore) -> AppMessageRecordFfi? {
+        store.timeline.compactMap { item -> AppMessageRecordFfi? in
+            guard case .message(let record, _) = item.kind, record.kind == kind else { return nil }
+            return record
+        }.first
+    }
+
     @Test func theCardUsesTheEventsOwnDescription() {
         let presentation = UnsupportedEventPresentation(kind: kind, tags: [
             tag("subject", "Signal box log"),
