@@ -134,6 +134,7 @@ final class TranscriptAttachmentHistory {
     @ObservationIgnored var hasPaged = false
     // Selection belongs to the pager. Sample it when the collection or validation changes.
     @ObservationIgnored var selectedItemID: String?
+    @ObservationIgnored var lastWindowItemID: String?
     @ObservationIgnored var resetViewerOnDiscard = false
     private(set) var viewerGeneration = 0
     private(set) var resumeItemID: String?
@@ -152,6 +153,7 @@ final class TranscriptAttachmentHistory {
         if scope != newScope {
             hasPaged = false
             selectedItemID = nil
+            lastWindowItemID = nil
         }
         scope = newScope
         discard()
@@ -188,6 +190,7 @@ final class TranscriptAttachmentHistory {
     }
 
     private func discard() {
+        resumeItemID = resetViewerOnDiscard ? lastWindowItemID : nil
         if resetViewerOnDiscard {
             viewerGeneration &+= 1
             selectedItemID = nil
@@ -195,7 +198,6 @@ final class TranscriptAttachmentHistory {
         resetViewerOnDiscard = false
         generation &+= 1
         pages = .init()
-        resumeItemID = nil
         scannedSlots = 0
         pageFailed = false
         validationFailed = false

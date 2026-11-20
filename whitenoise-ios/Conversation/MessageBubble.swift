@@ -119,7 +119,7 @@ final class ConversationMediaLoader {
     @discardableResult
     func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool) async -> (size: Int, contactName: String?)? {
         guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return nil }
-        guard DocumentPreviewFormat(mediaType: media.mediaType) == .contact else {
+        guard DocumentPreviewFormat(for: media) == .contact else {
             return await automaticAttachmentByteCount(media).map { ($0, nil) }
         }
         var requested = media
@@ -2587,6 +2587,13 @@ private struct MessageReplyMediaThumbnail: View {
         }
         .frame(width: side, height: side)
         .clipShape(.rect(cornerRadius: 8))
+        .onReceive(NotificationCenter.default.publisher(for: MessageVideoThumbnailDecoder.playedPreviewDidChange)) { update in
+            guard isTimelineRowVisible, item.isVideo, item.thumbnail == nil,
+                  let key = update.object as? String, key == MessageVideoThumbnailPresentation.cacheKey(for: item),
+                  let poster = MessageVideoThumbnailDecoder.cachedThumbnail(for: key, maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize) else { return }
+            image = poster
+            loadedItemID = item.id
+        }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard isTimelineRowVisible else { return }
@@ -3358,7 +3365,7 @@ private struct MessageDocumentAttachmentView: View {
             openingTask = Task { await openDocument(request) }
         } label: {
             HStack(spacing: 8) {
-                if DocumentPreviewFormat(mediaType: item.mediaType) == .contact {
+                if DocumentPreviewFormat(for: item) == .contact {
                     Image(systemName: "person.fill")
                         .foregroundStyle(.secondary)
                         .frame(width: 38, height: 38)
@@ -3493,29 +3500,10 @@ private struct MessageDocumentAttachmentView: View {
         let demand = AttachmentDemand.userTap(afterFailure: didFail)
         didFail = false
         do {
-            if let format = DocumentPreviewFormat(mediaType: item.mediaType) {
-                var requested = item
-                requested.previewByteLimit = format.byteLimit
-                do {
-                    let data = try await onLoadMedia.data(for: requested, demand: demand)
-                    guard isCurrent() else { return }
-                    byteCount = data.count
-                    let document = await MessageDocumentPreview.parse(data: data, format: format)
-                    guard isCurrent() else { return }
-                    if let document {
-                        if case .contact(let card) = document.content { contactName = card.name }
-                        preview = document
-                        return
-                    }
-                } catch AttachmentReadError.previewLimitExceeded(let size) {
-                    guard isCurrent() else { return }
-                    byteCount = size
-                    // The original can still be handed off without rendering it in memory.
-                }
-                guard isCurrent() else { return }
-                try await share.present(item, using: onLoadMedia, demand: .explicit, isCurrent: isCurrent)
-            } else {
-                try await share.present(item, using: onLoadMedia, demand: demand, isCurrent: isCurrent)
+            if let document = try await share.openDocument(item, using: onLoadMedia, demand: demand,
+                isCurrent: isCurrent, didReadSize: { byteCount = $0 }), isCurrent() {
+                if case .contact(let card) = document.content { contactName = card.name }
+                preview = document
             }
         } catch is CancellationError {
             return
@@ -4176,6 +4164,9 @@ struct MessageMediaFullscreenGalleryView: View {
                     return
                 }
                 mediaShare = file
+            } catch AttachmentHandoffFailure.storageFull {
+                // The downloader already explains how to free space for the handoff.
+                return
             } catch {
                 if !control.isCancelled(), selectedItemID == item.id {
                     actionError = L10n.string("Couldn't prepare media.")
@@ -4396,6 +4387,7 @@ private struct MessageMediaFullscreenVideoPage: View {
     }
 
     private func releasePlayback() {
+        isLoading = false
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         audioSession.stop()

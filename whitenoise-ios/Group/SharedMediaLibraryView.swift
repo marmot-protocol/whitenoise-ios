@@ -42,6 +42,7 @@ final class SharedMediaLibraryViewModel {
             generation += 1
             scope = nil
             resetPages()
+            loadError = L10n.string("Couldn't load shared media.")
             links = []
             isLoading = false
             isLoadingLinks = false

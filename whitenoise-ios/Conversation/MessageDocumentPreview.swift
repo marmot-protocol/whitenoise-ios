@@ -6,8 +6,14 @@ import SwiftUI
 nonisolated enum DocumentPreviewFormat {
     case pdf, text, contact
 
-    init?(mediaType: String) {
-        switch MediaAttachmentPolicy.canonicalMediaType(mediaType) {
+    init?(for item: MessageMediaAttachment) {
+        var type = MediaAttachmentPolicy.canonicalMediaType(item.mediaType)
+        if type.isEmpty || type == "application/octet-stream",
+           let ext = MediaAttachmentPolicy.safeFileExtension(from: item.fileName),
+           MediaAttachmentPolicy.supportedDocumentExtensions.contains(ext) {
+            type = MediaAttachmentPolicy.mediaType(forFileExtension: ext) ?? type
+        }
+        switch type {
         case "application/pdf": self = .pdf
         case "text/plain": self = .text
         case "text/vcard", "text/x-vcard": self = .contact
@@ -75,6 +81,31 @@ nonisolated struct MessageDocumentPreview: Identifiable {
 final class DocumentSharePresentation {
     var file: AttachmentShareFile?
     private(set) var control: MediaFileTransferControlFfi?
+
+    /// Prefer an in-app preview and hand off the original slot when it cannot be displayed.
+    func openDocument(_ item: MessageMediaAttachment, using loader: ConversationMediaLoader, demand: AttachmentDemand,
+                      isCurrent: () -> Bool, didReadSize: (Int?) -> Void) async throws -> MessageDocumentPreview? {
+        let format = DocumentPreviewFormat(for: item)
+        if let format {
+            var requested = item
+            requested.previewByteLimit = format.byteLimit
+            do {
+                let data = try await loader.data(for: requested, demand: demand)
+                guard isCurrent() else { throw CancellationError() }
+                didReadSize(data.count)
+                if let preview = await MessageDocumentPreview.parse(data: data, format: format) {
+                    guard isCurrent() else { throw CancellationError() }
+                    return preview
+                }
+            } catch AttachmentReadError.previewLimitExceeded(let size) {
+                guard isCurrent() else { throw CancellationError() }
+                didReadSize(size)
+            }
+        }
+        guard isCurrent() else { throw CancellationError() }
+        try await present(item, using: loader, demand: format == nil ? demand : .explicit, isCurrent: isCurrent)
+        return nil
+    }
 
     func present(_ item: MessageMediaAttachment, using loader: ConversationMediaLoader, demand: AttachmentDemand,
                  isCurrent: () -> Bool = { true }) async throws {
