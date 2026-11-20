@@ -2332,6 +2332,18 @@ private struct MessageMediaTile: View {
                 .id(gifReplay)
                 .frame(width: size.width, height: size.height)
                 .clipped()
+                .overlay {
+                    if isLoading || didFail {
+                        Group {
+                            if isLoading { ProgressView().tint(.white) }
+                            else { Label("Retry", systemImage: "arrow.clockwise").font(.caption.weight(.semibold)) }
+                        }
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .allowsHitTesting(false)
+                    }
+                }
             } else if item.isImage {
                 imagePlaceholder
             } else if item.isVideo {
@@ -2515,9 +2527,12 @@ private struct MessageMediaTile: View {
         } catch {
             analytics.recordStage(.mediaPrepare, since: prepareTiming,
                                   outcome: error is CancellationError ? .cancelled : .failure)
-            image = nil
-            gifData = nil
-            loadedImageID = item.id
+            guard !Task.isCancelled else { return nil }
+            if loadedImageID != item.id {
+                image = nil
+                gifData = nil
+                loadedImageID = item.id
+            }
             didFail = demand.failureOffersRetry
             return nil
         }
@@ -4072,6 +4087,9 @@ struct MessageMediaFullscreenGalleryView: View {
                     contentType: UTType(mimeType: item.mediaType) ?? .data, pendingSelection: gallery.pendingSelection(for: item.id))
             },
             onToggleChrome: toggleChrome,
+            onSourceReplaced: {
+                if preparedMedia?.id == item.id { preparedMedia = nil }
+            },
             onZoomChanged: { zoomed in
                 if zoomed, item.id == selectedItemID { zoomedItemID = item.id }
                 else if zoomedItemID == item.id { zoomedItemID = nil }
@@ -4224,6 +4242,7 @@ private struct MessageMediaFullscreenPage: View {
     let onLoadMedia: ConversationMediaLoader
     let onData: (Data) -> Void
     let onToggleChrome: () -> Void
+    let onSourceReplaced: () -> Void
     let onZoomChanged: (Bool) -> Void
     @State private var sourceGeneration = 0
 
@@ -4232,6 +4251,7 @@ private struct MessageMediaFullscreenPage: View {
             .id(sourceGeneration)
             .onChange(of: item.localTarget) { previous, _ in
                 if previous != nil {
+                    onSourceReplaced()
                     sourceGeneration &+= 1
                     onZoomChanged(false)
                 }
