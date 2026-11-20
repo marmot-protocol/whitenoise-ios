@@ -1,0 +1,112 @@
+import Foundation
+import Testing
+@testable import whitenoise_ios
+@testable import MarmotKit
+
+@MainActor
+struct UnsupportedEventPresentationTests {
+    private let kind: UInt64 = 4242
+
+    /// Something landed even though this app can't draw it: the row stays in
+    /// the timeline instead of vanishing.
+    @Test func anUnsupportedEventKeepsItsTimelineRow() {
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
+        store.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [
+                    timelineRecord(messageIdHex: hex("01"), timelineAt: 1),
+                    timelineRecord(messageIdHex: hex("02"), plaintext: "{}", kind: kind, timelineAt: 2),
+                ],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+
+        let kinds = store.timeline.compactMap { item -> UInt64? in
+            guard case .message(let record, _) = item.kind else { return nil }
+            return record.kind
+        }
+        #expect(kinds == [MessageSemantics.kindChat, kind])
+    }
+
+    @Test func theCardUsesTheEventsOwnDescription() {
+        let presentation = UnsupportedEventPresentation(kind: kind, tags: [
+            tag("subject", "Signal box log"),
+            tag("alt", "The evening crew logged a delay."),
+        ])
+
+        #expect(presentation.title == "Signal box log")
+        #expect(presentation.summary == "The evening crew logged a delay.")
+    }
+
+    @Test func aTitleTagStandsInForAMissingSubject() {
+        let presentation = UnsupportedEventPresentation(kind: kind, tags: [tag("title", "Release notes")])
+
+        #expect(presentation.title == "Release notes")
+        #expect(presentation.summary == nil)
+    }
+
+    /// Tags are peer-controlled: the card shows one bounded line, without
+    /// control or bidi characters.
+    @Test func peerTextIsSanitizedAndBounded() throws {
+        let presentation = UnsupportedEventPresentation(kind: kind, tags: [
+            tag("subject", "Line\u{202E}one\nline two"),
+            tag("alt", String(repeating: "a", count: 10_000)),
+        ])
+
+        let title = try #require(presentation.title)
+        #expect(!title.contains("\n"))
+        #expect(!title.unicodeScalars.contains("\u{202E}"))
+        #expect((presentation.summary?.count ?? 0) <= UnsupportedEventPresentation.maxSummaryLength)
+    }
+
+    @Test func anEventWithoutDescriptiveTagsShowsOnlyItsKind() {
+        let presentation = UnsupportedEventPresentation(kind: kind, tags: [tag("e", hex("01"))])
+
+        #expect(presentation.title == nil)
+        #expect(presentation.summary == nil)
+    }
+
+    /// The event data is valid JSON that reproduces the event exactly, including
+    /// content that needs escaping.
+    @Test func theEventJSONRoundTripsTheEvent() throws {
+        let content = "line one\n\"quoted\" / \\ tab\t✓"
+        let tags = [tag("subject", "Signal box log"), MessageTagFfi(values: ["imeta", "url https://x.invalid/a.mp4", "m video/mp4"])]
+        let record = AppMessageRecordFfi(
+            messageIdHex: hex("dd"),
+            direction: "received",
+            groupIdHex: hex("aa"),
+            sender: hex("11"),
+            plaintext: content,
+            contentTokens: .emptyDocument,
+            kind: kind,
+            tags: tags,
+            recordedAt: 1_763_000_000,
+            receivedAt: 1_763_000_001
+        )
+
+        let json = UnsupportedEventPresentation.eventJSON(for: record)
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+        )
+
+        #expect(object["id"] as? String == record.messageIdHex)
+        #expect(object["pubkey"] as? String == record.sender)
+        #expect((object["created_at"] as? NSNumber)?.uint64Value == record.recordedAt)
+        #expect((object["kind"] as? NSNumber)?.uint64Value == kind)
+        #expect(object["tags"] as? [[String]] == tags.map(\.values))
+        #expect(object["content"] as? String == content)
+        #expect(object["sig"] == nil)
+    }
+
+    @Test func copyingAnUnsupportedEventCopiesItsJSON() {
+        let record = unsignedEventRecord(plaintext: "payload", kind: kind, tags: [])
+
+        #expect(MessagePreview.copyBody(record) == UnsupportedEventPresentation.eventJSON(for: record))
+    }
+
+    private func tag(_ name: String, _ value: String) -> MessageTagFfi {
+        MessageTagFfi(values: [name, value])
+    }
+}

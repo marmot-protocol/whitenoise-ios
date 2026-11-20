@@ -1304,6 +1304,9 @@ final class TimelineStore {
         case .poll:
             // A malformed poll has no projection; the bubble shows the unsupported state.
             return row(record)
+        case .unsupportedEvent:
+            // Another client's kind: a card says something arrived and shows its raw event.
+            return row(record)
         case .groupSystem:
             if preparedOrder != nil,
                groupSystemByMessageId[record.messageIdHex]?.provenance != .authenticatedGroupState {

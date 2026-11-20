@@ -78,17 +78,41 @@ struct MessagePreviewBodyTests {
         #expect(MessagePreview.copyBody(record) == "")
     }
 
-    @Test func unknownRecordHasNoBodyAndIsNotPreviewable() {
+    /// Another client's kind previews as a label, never as its raw content.
+    @Test func unsupportedEventPreviewsAsALabelNotItsContent() {
         let record = previewRecord(
             kind: 9999,
             plaintext: "opaque-payload-should-not-render",
             tags: []
         )
 
-        #expect(MessageSemantics.classify(record) == .unknown)
-        #expect(MessagePreview.isPreviewable(record) == false)
-        #expect(MessagePreview.body(record) == "")
-        #expect(MessagePreview.copyBody(record) == "")
+        #expect(MessageSemantics.classify(record) == .unsupportedEvent)
+        #expect(MessagePreview.isPreviewable(record))
+        #expect(MessagePreview.body(record) == MessagePreview.unsupportedEventLabel)
+        #expect(!MessagePreview.body(record).contains("opaque-payload"))
+    }
+
+    @Test func aReplyToAnUnsupportedEventQuotesTheLabel() {
+        let preview = TimelineReplyPreviewFfi(
+            messageIdHex: hex("bb"),
+            sender: hex("11"),
+            plaintext: "opaque-payload-should-not-render",
+            kind: 9999,
+            mediaJson: nil,
+            media: [],
+            agentTextStreamJson: nil,
+            deleted: false
+        )
+
+        #expect(MessagePreview.body(preview) == MessagePreview.unsupportedEventLabel)
+    }
+
+    /// A known kind with malformed tags is still dropped, not shown as a card.
+    @Test func aMalformedKnownKindIsNotAnUnsupportedEvent() {
+        let reaction = previewRecord(kind: MessageSemantics.kindReaction, plaintext: "+", tags: [])
+
+        #expect(MessageSemantics.classify(reaction) == .unknown)
+        #expect(!MessagePreview.isPreviewable(reaction))
     }
 
     @Test func plainChatRecordStillReturnsItsPlaintextBody() {

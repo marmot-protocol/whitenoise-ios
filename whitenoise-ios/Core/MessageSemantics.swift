@@ -71,7 +71,10 @@ nonisolated enum MessageSemantics {
         case agentOperation
         /// Durable group-system chrome; not a chat bubble.
         case groupSystem
-        /// Anything we don't render as a bubble or index.
+        /// An event of a kind this app doesn't know, such as another client's
+        /// app-defined kind. Shown as a card so the reader knows something arrived.
+        case unsupportedEvent
+        /// A known kind whose tags are malformed; never rendered as a bubble.
         case unknown
     }
 
@@ -120,7 +123,7 @@ nonisolated enum MessageSemantics {
             }
             return .chat
         default:
-            return .unknown
+            return .unsupportedEvent
         }
     }
 
@@ -130,6 +133,11 @@ nonisolated enum MessageSemantics {
 
     static func classify(_ message: ReceivedMessageFfi) -> Kind {
         classify(kind: message.kind, tags: message.tags)
+    }
+
+    /// A kind this app has no rendering for at all, such as another client's app-defined kind.
+    static func isUnsupportedEventKind(_ kind: UInt64) -> Bool {
+        classify(kind: kind, tags: []) == .unsupportedEvent
     }
 
     /// Kinds a person sends as their own conversation message: chat and polls.

@@ -11,7 +11,7 @@ nonisolated enum MessageForwardingPolicy {
                 ? nil
                 : record.plaintext
         case .streamFinal, .reaction, .delete, .edit, .poll, .agentStreamStart,
-             .agentActivity, .agentOperation, .groupSystem, .unknown:
+             .agentActivity, .agentOperation, .groupSystem, .unsupportedEvent, .unknown:
             return nil
         }
     }
@@ -34,7 +34,7 @@ nonisolated enum MessageEditingPolicy {
         case .chat, .reply, .media:
             return true
         case .streamFinal, .reaction, .delete, .edit, .poll, .agentStreamStart,
-             .agentActivity, .agentOperation, .groupSystem, .unknown:
+             .agentActivity, .agentOperation, .groupSystem, .unsupportedEvent, .unknown:
             return false
         }
     }

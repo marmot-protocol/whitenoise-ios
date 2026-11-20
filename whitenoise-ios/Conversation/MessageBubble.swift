@@ -278,6 +278,7 @@ struct MessageBubble: View {
 
     @State private var mediaGallery: MessageMediaGallery?
     @State private var pendingExternalLink: PendingMessageExternalLink?
+    @State private var showsUnsupportedEventData = false
     @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
     private var isFromMe: Bool {
@@ -446,6 +447,10 @@ struct MessageBubble: View {
                 mediaGallery = nil
             }
         }
+        .sheet(isPresented: $showsUnsupportedEventData) {
+            UnsupportedEventSheet(record: record, senderName: identityName?(record.sender))
+                .appAppearance()
+        }
         .sheet(item: $pendingExternalLink) { link in
             MessageLinkActionSheet(
                 url: link.url,
@@ -486,6 +491,21 @@ struct MessageBubble: View {
                         .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
                         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
                         .padding(.vertical, density.metrics.bubbleVerticalInset)
+                }
+            }
+            .background { bubbleBackground }
+            .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
+            .opacity(status == .sending ? 0.7 : 1)
+        } else if case .unsupportedEvent = MessageSemantics.classify(record), showsStandardBody {
+            VStack(alignment: .leading, spacing: 0) {
+                if let replyPreview {
+                    replyHeader(replyPreview)
+                }
+                UnsupportedEventCard(
+                    presentation: UnsupportedEventPresentation(record: record),
+                    isFromMe: isFromMe
+                ) {
+                    showsUnsupportedEventData = true
                 }
             }
             .background { bubbleBackground }
