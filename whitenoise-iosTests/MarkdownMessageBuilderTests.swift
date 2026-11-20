@@ -27,6 +27,41 @@ struct MarkdownMessageBuilderTests {
         #expect(try firstParagraphText(body) == "Body")
     }
 
+    @Test func aNodeLimitedProjectionKeepsTheSourceReaderAvailable() {
+        let source = String(repeating: "*x* ", count: 750) + "TAIL"
+        let word: [MarkdownInlineFfi] = [.emph(children: [.text(content: "x")]), .text(content: " ")]
+        let inlines = Array(repeating: word, count: 750).flatMap { $0 } + [.text(content: "TAIL")]
+        let document = doc([para(inlines)])
+        let row = record(plaintext: source, tokens: document)
+        let projection = MessageMarkdownDisplayProjection.build(for: row, mentionDisplayName: nil)
+        #expect(!TranscriptMessagePreview.requiresReader(source))
+        #expect(projection.isTruncated)
+        #expect(MessageBubble(record: row, status: .received, incompleteMarkdown: projection.isTruncated,
+                              isBodyExpanded: true).offersSourceReader)
+    }
+
+    @Test func anEmojiAtTheStartOfATruncatedDocumentKeepsTheTextBubble() {
+        let document = MarkdownDocumentFfi(blocks: [para([.text(content: "🐿️")])], truncated: true)
+        let row = record(plaintext: "🐿️ followed by omitted text", tokens: document)
+        let projection = MessageMarkdownDisplayProjection.build(for: row, mentionDisplayName: nil)
+        #expect(projection.isTruncated)
+        #expect(MessageBubble(record: row, status: .received, incompleteMarkdown: projection.isTruncated).standaloneEmoji == nil)
+    }
+
+    @Test func onlyFinalizedStreamsOfferTheUnshownSource() {
+        var row = record(plaintext: String(repeating: "🌲", count: 3000), tokens: doc([]))
+        row.tags = [
+            .init(values: ["stream", String(repeating: "ab", count: 32)]),
+            .init(values: ["stream-start", String(repeating: "cc", count: 32)]),
+            .init(values: ["stream-hash", String(repeating: "55", count: 32)]),
+            .init(values: ["stream-chunks", "2"])
+        ]
+        #expect(MessageBubble(record: row, status: .received).offersSourceReader)
+        #expect(!MessageBubble(record: row, status: .streaming).offersSourceReader)
+        row.plaintext = "Finished"
+        #expect(!MessageBubble(record: row, status: .received).offersSourceReader)
+    }
+
     private func para(_ inlines: [MarkdownInlineFfi]) -> MarkdownBlockFfi {
         .paragraph(inlines: inlines)
     }
@@ -199,7 +234,9 @@ struct MarkdownMessageBuilderTests {
         let run = try #require(attributed.runs.first)
         #expect(String(attributed.characters) == "@Jeff")
         #expect(run.link == URL(string: "nostr:\(bech32)"))
-        #expect(run.font == Font.body.bold())
+        #expect(run.font == Font.body.weight(.semibold))
+        #expect(run.underlineStyle == nil)
+        #expect(run[MarkdownMentionAttribute.self] == true)
     }
 
     @Test func inlineNostrUriResolvesToDisplayNameWithoutMentionStyling() throws {
@@ -365,7 +402,7 @@ struct MarkdownMessageBuilderTests {
         let blocks = try #require(MarkdownMessageBuilder.displayBlocks(for: doc([
             .codeBlock(kind: .fenced, info: "", content: "safe()\u{202E}\u{0007}\n")
         ])))
-        guard case .codeBlock(let code) = try #require(blocks.first) else {
+        guard case .codeBlock(let code, _) = try #require(blocks.first) else {
             throw TestFailure("expected code block")
         }
         #expect(String(code.characters) == "safe()")
@@ -547,7 +584,7 @@ struct MarkdownMessageBuilderTests {
         let blocks = try #require(MarkdownMessageBuilder.displayBlocks(for: doc([
             .mathBlock(content: "\\int_0^1 x dx")
         ])))
-        guard case .codeBlock(let math) = try #require(blocks.first) else {
+        guard case .codeBlock(let math, _) = try #require(blocks.first) else {
             throw TestFailure("expected math to degrade to code block")
         }
         #expect(String(math.characters) == "\\int_0^1 x dx")
@@ -628,12 +665,13 @@ struct MarkdownMessageBuilderTests {
         #expect(blocks.count == 5)
         guard case .heading(let heading) = blocks[0],
               case .paragraph(let body) = blocks[1],
-              case .codeBlock(let code) = blocks[2],
+              case .codeBlock(let code, let language) = blocks[2],
               case .thematicBreak = blocks[3],
               case .list(let items, _) = blocks[4]
         else {
             throw TestFailure("unexpected block shapes: \(blocks)")
         }
+        #expect(language == "swift")
         #expect(String(heading.characters) == "Title")
         #expect(String(body.characters) == "Hello world, see this")
         #expect(String(code.characters) == "print(1)")

@@ -1070,8 +1070,17 @@ final class ConversationViewModel {
         timelineStore.refreshStreamingDebugPresentation()
     }
 
-    func refreshProfileDependentTimelineProjections() {
-        timelineStore.refreshProfileDependentTimelineProjections()
+    func refreshProfileDependentTimelineProjections(affectedMessageIDs: Set<String>? = nil,
+                                                    allowScrollTo: (String) -> Bool = { _ in true }) {
+        timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affectedMessageIDs)
+        guard search.isActive, search.hasQuery, affectedMessageIDs?.isEmpty != true else { return }
+        if let selected = search.currentMatch,
+           timelineStore.timelineIndex(forMessageIdHex: selected.messageIdHex) == nil || isDeleted(selected.messageIdHex) {
+            // A page, hide or deletion owns this change of viewport.
+            search.refreshAfterTimelineChange()
+        } else {
+            search.refreshAfterSearchableContentChange(allowScrollTo: allowScrollTo)
+        }
     }
 
     func applyTimestampRenderGeneration(_ generation: Int) {
@@ -1825,6 +1834,7 @@ final class ConversationViewModel {
                 viewportIntent = .history(id)
             }
         }
+        let previousWindow = conversationWindow
         conversationWindow = snapshot
         // Mutating an observed property invalidates the whole conversation view,
         // so only touch the admission when a page is actually pending.
@@ -1853,7 +1863,10 @@ final class ConversationViewModel {
                 let identities = Set(references.mentions + references.replyMentions + [references.sender, references.replyAuthor].compactMap { $0 })
                 return references.system != nil || !identities.isDisjoint(with: changedNames) ? message.timeline.messageIdHex : nil
             })
-            timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affected)
+            refreshProfileDependentTimelineProjections(affectedMessageIDs: affected) { messageID in
+                // New page rows update the count without interrupting the scroll that loaded them.
+                affected.contains(messageID) && previousWindow?.messages.contains { $0.timeline.messageIdHex == messageID } == true
+            }
         }
         error = navigationFailure
         windowDidChange?()
@@ -2341,12 +2354,23 @@ final class ConversationViewModel {
     /// budgeted markdown AST walk) on the typing hot path.
     private func searchableTimelineEntries() -> [ConversationSearchEntry] {
         let generation = timelineProjectionGeneration
-        if let cache = searchEntriesCache, cache.generation == generation {
-            return cache.entries
+        if searchEntriesCache?.generation != generation {
+            searchEntriesCache = (generation, computeSearchableTimelineEntries())
         }
-        let entries = computeSearchableTimelineEntries()
-        searchEntriesCache = (generation, entries)
-        return entries
+        return (searchEntriesCache?.entries ?? []).map { entry in
+            var enriched = entry
+            enriched.labels += entry.contactAttachmentIDs.compactMap { search.displayedContactName(for: $0) }
+            if let url = entry.previewURL, let metadata = searchableLinkPreview(for: url) {
+                enriched.labels += [metadata.title, metadata.summary, LinkPreviewCardContent.host(for: url)].compactMap { $0 }
+            }
+            return enriched
+        }
+    }
+
+    /// Search uses only metadata the card already has permission to display.
+    private func searchableLinkPreview(for url: URL) -> LinkPreviewMetadata? {
+        guard LinkPreviewSettingsStore.shared.showsPreviews else { return nil }
+        return LinkPreviewLoader.cachedMetadata(for: url) ?? nil
     }
 
     func timelineDaySections(
@@ -2365,9 +2389,8 @@ final class ConversationViewModel {
         timelineStore.agentEventDisplay(for: item)
     }
 
-    /// Confirmed, previewable, non-deleted message rows flattened to plain text
-    /// through the budgeted preview path (`MessagePreview.body` →
-    /// `MarkdownPlainText.flatten`).
+    /// Index only the visible timeline's bounded text, sender, and attachment labels.
+    /// A search must never fetch a profile, link preview, or attachment.
     private func computeSearchableTimelineEntries() -> [ConversationSearchEntry] {
         timeline.compactMap { item in
             guard case .message(let record, _) = item.kind,
@@ -2375,13 +2398,42 @@ final class ConversationViewModel {
                   MessagePreview.isPreviewable(record),
                   !isDeleted(record.messageIdHex)
             else { return nil }
-            let text = displayBody(of: record)
-            guard !text.isEmpty else { return nil }
-            return ConversationSearchEntry(
-                itemId: item.id,
-                messageIdHex: record.messageIdHex,
-                text: text
+            let name = record.direction == "sent" ? L10n.string("You") : IdentityPresentation.text(
+                accountIdHex: record.sender,
+                knownName: conversationWindow == nil ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender)
+                    : windowIdentities[record.sender]?.displayName
             )
+            let media = mediaItems(for: item)
+            var labels = [name]
+            let contacts = media.filter { ["text/vcard", "text/x-vcard"].contains(MediaAttachmentPolicy.canonicalMediaType($0.mediaType)) }
+            if !contacts.isEmpty { labels.append(L10n.string("Contact")) }
+            for attachment in media {
+                labels.append(attachment.fileName)
+                switch attachment.kind {
+                case .image: labels.append(L10n.string("Photo"))
+                case .video: labels.append(L10n.string("Video"))
+                case .audio: labels.append(L10n.string("Voice message"))
+                case .document, .unsupported: labels.append(L10n.string("File"))
+                }
+            }
+            if record.kind == MessageSemantics.kindPoll {
+                let poll = poll(for: record.messageIdHex)
+                if poll != nil { labels.append(L10n.string("Poll")) }
+                labels += poll?.options.map { ContentSanitizer.messageBody($0.label) } ?? []
+                let question = poll.map { ContentSanitizer.messageBody($0.question) } ?? L10n.string("This poll can’t be displayed.")
+                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: question, labels: labels, poll: poll)
+            }
+            let usesTextBody = record.sticker == nil && !RemoteGiphyMedia.isEnvelopeText(record.plaintext)
+            let blocks = usesTextBody ? markdownDisplayBlocks(for: item) : nil
+            let text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
+                ?? ContentSanitizer.messageBody(displayBody(of: record))
+            if usesTextBody, media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
+                labels.append(L10n.string("Location"))
+            }
+            let previewURL = media.isEmpty ? LinkPreviewMetadata.previewURL(in: blocks) : nil
+            return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex,
+                text: text, labels: labels, previewURL: previewURL,
+                contactAttachmentIDs: contacts.map(\.id))
         }
     }
 

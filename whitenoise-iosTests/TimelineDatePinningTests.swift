@@ -12,6 +12,32 @@ struct TimelineDatePinningTests {
         ) == nil)
     }
 
+    @Test func firstDateHandsOffAtTheBottomEdgeOfItsInlineLabel() {
+        let labelHeight: CGFloat = 22
+        let padding = TimelineDatePinning.verticalPadding
+        let rowHeight = labelHeight + 2 * padding
+        func pill(labelBottom: CGFloat) -> String? {
+            let position = TimelineDatePinning.position(
+                minY: labelBottom - labelHeight - padding, height: rowHeight, isFirst: true
+            )
+            return TimelineDatePinning.presentation(
+                orderedHeaderIDs: ["first"], positions: ["first": position], topRowHeaderID: "first"
+            )?.headerID
+        }
+
+        #expect(pill(labelBottom: 60) == nil)
+        #expect(pill(labelBottom: 1) == nil)
+        #expect(pill(labelBottom: 0) == "first")
+        #expect(pill(labelBottom: -10) == "first")
+    }
+
+    @Test func returningToFirstInlineDateOverridesAStaleTopRowFromAnotherDay() {
+        #expect(TimelineDatePinning.presentation(
+            orderedHeaderIDs: ["first", "second"],
+            positions: ["first": .below], topRowHeaderID: "second"
+        ) == nil)
+    }
+
     @Test func theLastPassedHeaderPins() {
         #expect(TimelineDatePinning.presentation(
             orderedHeaderIDs: ["first", "second", "third"],
@@ -24,6 +50,20 @@ struct TimelineDatePinningTests {
             orderedHeaderIDs: ["first", "second"],
             positions: ["first": .passed, "second": .approaching(offset: -25)]
         ) == .init(headerID: "first", offset: -25))
+    }
+
+    @Test func outgoingPillFadesBeforeTheGlassReachesTheTopEdge() {
+        func opacity(afterMovingUp distance: CGFloat) -> Double {
+            TimelineDatePinning.Presentation(headerID: "first", offset: -distance).opacity
+        }
+
+        let gap = TimelineDatePinning.verticalPadding
+        #expect(opacity(afterMovingUp: 0) == 1)
+        let early = opacity(afterMovingUp: gap / 3)
+        let late = opacity(afterMovingUp: 2 * gap / 3)
+        #expect(1 > early && early > late && late > 0)
+        #expect(opacity(afterMovingUp: gap) == 0)
+        #expect(opacity(afterMovingUp: gap + 10) == 0)
     }
 
     @Test func crossingTheTopReplacesTheHeaderWithoutKeepingItsOffset() {
@@ -76,6 +116,40 @@ struct TimelineDatePinningTests {
         #expect(TimelineDatePinning.presentation(
             orderedHeaderIDs: ["first", "second"], positions: ["first": .below], topRowHeaderID: "first"
         ) == nil)
+    }
+
+    @Test func anInlineDateCannotAlsoBePinnedDuringAVisibilityChange() {
+        let ids = ["monday", "tuesday"]
+        #expect(TimelineDatePinning.presentation(orderedHeaderIDs: ids,
+            positions: ["monday": .below, "tuesday": .below], topRowHeaderID: "tuesday") == nil)
+    }
+
+    @MainActor @Test func anInlineHeaderRemainsMeasuredWhileSiblingRowsChange() {
+        let viewport = TimelineDateViewport()
+        viewport.headerID = "today"
+        viewport.set(.below, for: "today")
+        viewport.set(.below, for: "tomorrow")
+        viewport.set(nil, for: "tomorrow")
+        #expect(TimelineDatePinning.presentation(orderedHeaderIDs: ["today", "tomorrow"],
+            positions: viewport.positions, topRowHeaderID: viewport.headerID) == nil)
+        viewport.set(.passed, for: "today")
+        #expect(TimelineDatePinning.presentation(orderedHeaderIDs: ["today", "tomorrow"],
+            positions: viewport.positions, topRowHeaderID: viewport.headerID)?.headerID == "today")
+    }
+
+    @Test func repeatedSectionsDoNotDuplicateTheVisibleCalendarDate() {
+        let monday = Date(timeIntervalSince1970: 0)
+        let days = ["first": monday, "middle": monday.addingTimeInterval(86400), "again": monday]
+        let ids = ["first", "middle", "again"]
+        #expect(TimelineDatePinning.presentation(orderedHeaderIDs: ids, positions: ["again": .below],
+            topRowHeaderID: "first", dayForHeader: { days[$0] }) == nil)
+        #expect(TimelineDatePinning.presentation(orderedHeaderIDs: ids, positions: ["again": .offscreenBelow],
+            topRowHeaderID: "first", dayForHeader: { days[$0] })?.headerID == "first")
+    }
+
+    @Test func aLaterDateIsOffscreenUntilItsLabelEntersTheViewport() {
+        #expect(TimelineDatePinning.position(minY: 490, height: 56, viewportHeight: 500) == .offscreenBelow)
+        #expect(TimelineDatePinning.position(minY: 481, height: 56, viewportHeight: 500) == .below)
     }
 
     @Test func geometryChangesOnlyMatterAtTheHeaderTransition() {

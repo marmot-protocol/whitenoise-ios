@@ -89,7 +89,6 @@ nonisolated enum MessageBubbleReplyLayout {
     static let bodyTopInsetAfterReply: CGFloat = 0
     static let bodyBottomInset = ChatBubbleMetrics.verticalInset
     static let cardOuterInset: CGFloat = 6
-    static let cardHorizontalInset: CGFloat = 10
     static let cardVerticalInset: CGFloat = 6
     static let cardCornerRadius = ChatBubbleMetrics.cornerRadius - cardOuterInset
     static let sentCardOpacity = 0.16
@@ -143,6 +142,73 @@ nonisolated enum MessageRichMediaBubblePresentation {
     }
 }
 
+nonisolated enum TranscriptMessagePreview {
+    static func snippet(_ text: String) -> String? {
+        let prefix = text.prefix(512)
+        guard prefix.endIndex != text.endIndex else { return nil }
+        var newlines = 0
+        let visible = prefix.prefix { character in
+            if character.isNewline { newlines += 1 }
+            return newlines <= 15
+        }
+        return String(visible).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func sourceChunk(_ remaining: Substring) -> Substring {
+        let chunk = remaining.prefix(2048)
+        guard chunk.endIndex != remaining.endIndex,
+              let space = chunk.suffix(512).lastIndex(where: { $0.isWhitespace }) else { return chunk }
+        return remaining[...space]
+    }
+
+    /// A search result can show every indexed character and still have more authored source.
+    static func exceedsInlineLimit(_ text: String) -> Bool {
+        text.utf8.count > ContentSanitizer.maxMessageLength
+            && text.prefix(ContentSanitizer.maxMessageLength).endIndex != text.endIndex
+    }
+
+    static func requiresReader(_ text: String) -> Bool {
+        // Signal weights each newline as 16 UTF-8 bytes. Stop at the first
+        // exceeded budget, including our existing inline rendering limit.
+        var estimate = 0
+        for byte in text.utf8 {
+            estimate += byte == 10 ? 16 : 1
+            if estimate > 8192 { return true }
+        }
+        return exceedsInlineLimit(text)
+    }
+}
+
+private struct LongMessageSourceText: View {
+    @Environment(AppState.self) private var appState
+    let text: String
+    @State private var starts: [String.Index]
+
+    init(text: String) {
+        self.text = text
+        _starts = State(initialValue: [text.startIndex])
+    }
+
+    var body: some View {
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(starts, id: \.self) { start in
+                let chunk = TranscriptMessagePreview.sourceChunk(text[start...])
+                let safeText = ContentSanitizer.textRun(String(chunk))
+                let display = CanonicalMentionDisplayProjection.project(safeText) { npub in
+                    guard let id = NostrProfileReference.pubkeyHex(fromBech32: npub) else { return nil }
+                    return appState.cachedKnownDisplayName(forAccountIdHex: id)
+                }
+                Text(verbatim: display.text)
+                    .onAppear {
+                        if start == starts.last, chunk.endIndex < text.endIndex {
+                            starts.append(chunk.endIndex)
+                        }
+                    }
+            }
+        }
+    }
+}
+
 nonisolated enum MessageBodyCollapsePresentation {
     static let maxCollapsedCharacters = 900
     static let maxCollapsedLines = 12
@@ -182,6 +248,12 @@ extension MessageBubble: Equatable {
             && lhs.isEdited == rhs.isEdited
             && lhs.hasReports == rhs.hasReports
             && lhs.usesReviewLayout == rhs.usesReviewLayout
+            && lhs.agentActivity == rhs.agentActivity
+            && lhs.voiceTranscript == rhs.voiceTranscript
+            && lhs.transcribingVoice == rhs.transcribingVoice
+            && lhs.readingSpeech === rhs.readingSpeech
+            && lhs.displaysReader == rhs.displaysReader
+            && lhs.incompleteMarkdown == rhs.incompleteMarkdown
             && lhs.clusterPresentation == rhs.clusterPresentation
             && lhs.showsSenderIdentity == rhs.showsSenderIdentity
             && lhs.replyPreview == rhs.replyPreview
@@ -235,14 +307,19 @@ struct MessageBubble: View {
     var isEdited: Bool = false
     var hasReports: Bool = false
     var usesReviewLayout: Bool = false
+    var agentActivity: AgentEventPresentation.Display?
     var clusterPresentation: MessageClusterPresentation = .none
     var showsSenderIdentity = true
     var replyPreview: ConversationReplyPreview? = nil
     var mediaItems: [MessageMediaAttachment] = []
+    var voiceTranscript: String?
+    var transcribingVoice = false
+    var readingSpeech: ConversationSpeech?
     /// NIP-30 custom emoji drawn inline in the body; their attachments are
     /// already excluded from `mediaItems`.
     var customEmoji: CustomEmojiRowResolution = .empty
     var markdownBlocks: [MarkdownDisplayBlock]? = nil
+    var incompleteMarkdown = false
     var poll: PollProjectionFfi? = nil
     var onPollVote: ((String) -> Void)? = nil
     var onViewPollVotes: (() -> Void)? = nil
@@ -267,16 +344,19 @@ struct MessageBubble: View {
     /// retry/discard sheet.
     var onFailedTap: (() -> Void)? = nil
     var onSenderAvatarTap: (() -> Void)? = nil
+    var displaysReader = false
     /// Owned by the list, not the bubble: a lazy list rebuilds rows that
     /// scroll away, and a "Read more" the reader chose must survive that.
     var isBodyExpanded = false
     var onExpandBody: () -> Void = {}
 
+    @Environment(\.timelineSearchQuery) private var searchQuery
+    @State private var readerProfile: String?
     @State private var mediaGallery: MessageMediaGallery?
     @State private var pendingExternalLink: PendingMessageExternalLink?
     @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
-    private var isFromMe: Bool { !usesReviewLayout && record.direction == "sent" }
+    private var isFromMe: Bool { !usesReviewLayout && !displaysReader && record.direction == "sent" }
 
     private var bubbleMaxWidth: CGFloat? {
         sizeClass == .regular ? ChatBubbleMetrics.regularMaximumWidth : nil
@@ -344,25 +424,28 @@ struct MessageBubble: View {
         MessageMediaUploadPresentation.showsIndicator(status: status, items: mediaItems)
     }
 
-    private var standaloneEmoji: String? {
-        guard debugStyle == nil,
+    var standaloneEmoji: String? {
+        guard agentActivity == nil, debugStyle == nil,
               !isDeleted,
               replyPreview == nil,
               mediaItems.isEmpty
         else { return nil }
 
-        return SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText)
+        guard let emoji = SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText), !offersSourceReader else { return nil }
+        return emoji
     }
 
     private var standaloneCustomEmoji: CustomEmojiShortcode? {
-        guard debugStyle == nil,
+        guard agentActivity == nil, debugStyle == nil,
               !isDeleted,
               replyPreview == nil,
               mediaItems.isEmpty,
               !customEmoji.isEmpty
         else { return nil }
 
-        return SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes)
+        guard let shortcode = SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes),
+              !offersSourceReader else { return nil }
+        return shortcode
     }
 
     /// White-on-gradient text is only appropriate for our own user-visible bubbles.
@@ -371,6 +454,48 @@ struct MessageBubble: View {
     }
 
     var body: some View {
+        Group {
+            if displaysReader {
+                readerBody
+                    .navigationDestination(item: $readerProfile) { npub in
+                        ProfileContentView(npub: npub)
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbarRole(.editor)
+                    }
+            } else {
+                transcriptRow
+            }
+        }
+        .sheet(item: $pendingExternalLink) { link in
+            MessageLinkActionSheet(
+                url: link.url,
+                onOpen: {
+                    pendingExternalLink = nil
+                    openURL(link.url)
+                },
+                onCopy: {
+                    pendingExternalLink = nil
+                    if let target = MessageLinkTarget(url: link.url) {
+                        MessageLinkCopyAction.copy(target, presenting: appState)
+                    }
+                },
+                onCancel: { pendingExternalLink = nil }
+            )
+            .appAppearance()
+        }
+    }
+
+    @ViewBuilder private var readerBody: some View {
+        if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
+            // Beyond the formatter's budget, read the authored source in viewport-sized batches.
+            LongMessageSourceText(text: record.plaintext)
+                .id(record.plaintext)
+        } else {
+            messageBodyContent(snippet: nil)
+        }
+    }
+
+    private var transcriptRow: some View {
         HStack(alignment: .messageSurfaceBottom, spacing: 0) {
             if isFromMe { Spacer(minLength: oppositeInset) }
 
@@ -446,27 +571,10 @@ struct MessageBubble: View {
                 mediaGallery = nil
             }
         }
-        .sheet(item: $pendingExternalLink) { link in
-            MessageLinkActionSheet(
-                url: link.url,
-                onOpen: {
-                    pendingExternalLink = nil
-                    openURL(link.url)
-                },
-                onCopy: {
-                    pendingExternalLink = nil
-                    if let target = MessageLinkTarget(url: link.url) {
-                        MessageLinkCopyAction.copy(target, presenting: appState)
-                    }
-                },
-                onCancel: { pendingExternalLink = nil }
-            )
-            .appAppearance()
-        }
     }
 
     private var senderLabel: some View {
-        Text(identityName?(record.sender) ?? appState.displayName(forAccountIdHex: record.sender))
+        TimelineSearchText(identityName?(record.sender) ?? appState.displayName(forAccountIdHex: record.sender))
             .font(.caption2.weight(.semibold))
             .foregroundStyle(WNIdentityPalette.color(for: record.sender))
             .padding(.leading, 12)
@@ -489,11 +597,15 @@ struct MessageBubble: View {
                                        onViewVotes: onViewPollVotes)
                 } else {
                     // MDK projects no tally for a malformed poll; never show its raw question.
-                    Label(L10n.string("This poll can’t be displayed."), systemImage: "chart.bar.xaxis")
-                        .font(.subheadline)
-                        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-                        .padding(.horizontal, rich ? MessageBubbleReplyLayout.cardOuterInset : density.metrics.bubbleHorizontalInset)
-                        .padding(.vertical, rich ? 2 : density.metrics.bubbleVerticalInset)
+                    Label {
+                        TimelineSearchText(L10n.string("This poll can’t be displayed."))
+                    } icon: {
+                        Image(systemName: "chart.bar.xaxis")
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
+                    .padding(.horizontal, rich ? MessageBubbleReplyLayout.cardOuterInset : density.metrics.bubbleHorizontalInset)
+                    .padding(.vertical, rich ? 2 : density.metrics.bubbleVerticalInset)
                 }
             }
             .frame(width: rich ? MessageBubbleReplyLayout.richContentWidth : nil, alignment: .leading)
@@ -618,7 +730,8 @@ struct MessageBubble: View {
 
     private func replyCard(_ preview: ConversationReplyPreview) -> some View {
         quoted(preview)
-            .padding(.horizontal, MessageBubbleReplyLayout.cardHorizontalInset)
+            .padding(.leading, MessageBubbleReplyLayout.cardCornerRadius)
+            .padding(.trailing, MessageBubbleReplyLayout.cardOuterInset)
             .padding(.vertical, MessageBubbleReplyLayout.cardVerticalInset)
             .frame(
                 maxWidth: .infinity,
@@ -654,7 +767,13 @@ struct MessageBubble: View {
                 if let replyPreview, showsStandardBody {
                     replyHeader(replyPreview)
                 }
-                if showsStandardBody {
+                if let agentActivity {
+                    AgentActivityContent(display: agentActivity)
+                        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: usesSentBubbleForeground))
+                        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+                        .padding(.vertical, density.metrics.bubbleVerticalInset)
+                    if let debugStyle { debugTagsFooter(debugStyle) }
+                } else if showsStandardBody {
                     if let sharedLocation {
                         sharedLocationBody(sharedLocation)
                     } else {
@@ -698,7 +817,11 @@ struct MessageBubble: View {
             .accessibilityLabel(L10n.string("Location"))
 
             HStack(alignment: .lastTextBaseline, spacing: 8) {
-                Label(L10n.string("Location"), systemImage: "mappin.and.ellipse")
+                Label {
+                    TimelineSearchText(L10n.string("Location"))
+                } icon: {
+                    Image(systemName: "mappin.and.ellipse")
+                }
                     .font(.subheadline.weight(.semibold))
             }
             .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : MessageBubblePalette.receivedForeground)
@@ -785,8 +908,13 @@ struct MessageBubble: View {
     }
 
     private var legacyMediaMessageContent: some View {
-        VStack(alignment: isFromMe ? .trailing : .leading, spacing: 6) {
+        let showsTranscript = transcribingVoice || voiceTranscript != nil
+        return VStack(alignment: isFromMe ? .trailing : .leading, spacing: 6) {
             mediaAttachments
+                .frame(width: showsTranscript ? mediaGridWidth : nil, alignment: .leading)
+                .background {
+                    if showsTranscript { bubbleBackground.clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius)) }
+                }
 
             if let replyPreview {
                 MessageTextBubbleLayout(fitsQuote: true) {
@@ -808,6 +936,25 @@ struct MessageBubble: View {
     }
 
     private var mediaAttachments: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            attachmentContent
+            if transcribingVoice {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Transcribing…").font(.caption)
+                }
+            } else if let voiceTranscript {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Transcribed").font(.caption2).foregroundStyle(.secondary)
+                    Text(voiceTranscript).font(.body)
+                }
+                .padding(.horizontal, 6)
+                .padding(.bottom, 3)
+            }
+        }
+    }
+
+    private var attachmentContent: some View {
         MessageMediaAttachmentContent(
             items: mediaItems,
             isFromMe: isFromMe,
@@ -912,6 +1059,8 @@ struct MessageBubble: View {
                     isFromMe: isFromMe,
                     onLoadMedia: onLoadMedia
                 )
+                .id(media.localTarget)
+                .id(media.sourceHint)
             }
         }
         .padding(.leading, 10)
@@ -929,13 +1078,35 @@ struct MessageBubble: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// The complete source stays reachable for a durable row even when search expands the projected text.
+    var offersSourceReader: Bool {
+        !usesReviewLayout && !isLiveStream
+            && (incompleteMarkdown || TranscriptMessagePreview.requiresReader(record.plaintext))
+    }
+
+    private var isLiveStream: Bool {
+        status == .streaming || (record.direction == "received" && record.messageIdHex.isEmpty)
+    }
+
+    private var isStreamBody: Bool {
+        if isLiveStream { return true }
+        if case .streamFinal = MessageSemantics.classify(record) { return true }
+        return false
+    }
+
     private func messageBodyText(hasReply: Bool, richContent: Bool = false) -> some View {
-        let isCollapsed = MessageBodyCollapsePresentation.isCollapsed(
+        let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil && !isStreamBody {
+            TranscriptMessagePreview.snippet(markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }
+                .joined(separator: "\n") ?? sanitizedBodyText)
+        } else { nil }
+        let isCollapsed = usesReviewLayout && MessageBodyCollapsePresentation.isCollapsed(
             sanitizedBodyText,
             isExpanded: isBodyExpanded
         )
         return VStack(alignment: .leading, spacing: 5) {
-            messageBodyContent
+            messageBodyContent(snippet: snippet)
+                // The body mask also needs room for mention corners outside the text bounds.
+                .padding(.horizontal, TimelineTextRenderer.mentionHorizontalOutset)
                 .frame(
                     maxHeight: isCollapsed ? MessageBodyCollapsePresentation.collapsedBodyMaxHeight : nil,
                     alignment: .topLeading
@@ -956,8 +1127,9 @@ struct MessageBubble: View {
                         Rectangle()
                     }
                 }
+                .padding(.horizontal, -TimelineTextRenderer.mentionHorizontalOutset)
 
-            if isCollapsed {
+            if isCollapsed || snippet != nil || offersSourceReader {
                 Button {
                     onExpandBody()
                 } label: {
@@ -966,6 +1138,10 @@ struct MessageBubble: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground.opacity(0.9) : Color.accentColor)
+            }
+            if let readingSpeech {
+                MessageReadingProgress(speech: readingSpeech)
+                    .padding(.top, 6)
             }
         }
         .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : MessageBubblePalette.receivedForeground)
@@ -1002,11 +1178,11 @@ struct MessageBubble: View {
     }
 
     @ViewBuilder
-    private var messageBodyContent: some View {
+    private func messageBodyContent(snippet: String?) -> some View {
         if customEmoji.isEmpty {
-            messageBodyTextContent
+            messageBodyTextContent(snippet: snippet)
         } else {
-            messageBodyTextContent
+            messageBodyTextContent(snippet: snippet)
                 .modifier(CustomEmojiInlineLoader(resolution: customEmoji))
         }
     }
@@ -1014,28 +1190,33 @@ struct MessageBubble: View {
     private static let excerptBudgets = [768, 512, 384, 320, 256, 208, 168, 132, 100, 72, 48, 28, 12, 4]
 
     @ViewBuilder
-    private var messageBodyTextContent: some View {
+    private func messageBodyTextContent(snippet: String?) -> some View {
         if let blocks = markdownBlocks {
             let quoteColor = isFromMe ? MessageBubblePalette.sentForeground.opacity(0.8) : Color.accentColor
+            let visible = snippet.map {
+                MarkdownDisplayBlock.excerpt(blocks, characterBudget: $0.count, emoji: customEmoji.shortcodes,
+                                             countingBlockSeparators: true)
+            } ?? blocks
             Group {
-                if actionBodySize != nil, blocks.count == 1, let inline = blocks[0].inlineText, customEmoji.isEmpty {
+                if actionBodySize != nil, visible.count == 1, let inline = visible[0].inlineText, customEmoji.isEmpty {
                     liftedInlineText(inline)
                 } else if actionBodySize != nil {
-                    let length = blocks.reduce(0) { $0 + $1.menuExcerptLength }
+                    let length = visible.reduce(0) { $0 + $1.menuExcerptLength }
                     ViewThatFits(in: .vertical) {
                         // The measured body exceeds this frame. Start with a bounded
                         // excerpt and keep whole code or quote lines where possible.
                         ForEach(Self.excerptBudgets.filter { $0 < length }, id: \.self) { budget in
-                            MarkdownMessageView(blocks: MarkdownDisplayBlock.excerpt(blocks, characterBudget: budget, emoji: customEmoji.shortcodes),
+                            MarkdownMessageView(blocks: MarkdownDisplayBlock.excerpt(visible, characterBudget: budget, emoji: customEmoji.shortcodes),
                                                 quoteBar: quoteColor)
                         }
                         Text(verbatim: "…")
                     }
                 } else {
-                    MarkdownMessageView(blocks: blocks, quoteBar: quoteColor)
+                    MarkdownMessageView(blocks: visible, quoteBar: quoteColor)
                 }
             }
-            .tint(isFromMe ? MessageBubblePalette.sentForeground : Color.accentColor)
+            .tint(MessageBubblePalette.foreground(isFromMe: isFromMe))
+            .environment(\.messageTextIsOutgoing, isFromMe)
             .environment(\.openURL, OpenURLAction(handler: handleMessageLink))
             .environment(\.copyMessageLink, MessageLinkCopyAction { [appState] target in
                 MessageLinkCopyAction.copy(target, presenting: appState)
@@ -1043,11 +1224,11 @@ struct MessageBubble: View {
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
             // stream bubbles, pre-markdown history) keep the plain path.
-            let text = AttributedString(sanitizedBodyText)
+            let text = AttributedString(snippet.map { $0 + "…" } ?? sanitizedBodyText)
             if actionBodySize != nil {
                 liftedInlineText(text)
             } else {
-                CustomEmojiAwareText(text)
+                MarkdownLinkText(text.highlightingTimelineMatches(searchQuery))
             }
         }
     }
@@ -1057,7 +1238,7 @@ struct MessageBubble: View {
     private func liftedInlineText(_ text: AttributedString) -> some View {
         GeometryReader { proxy in
             let lineHeight = UIFont.preferredFont(forTextStyle: .body).lineHeight
-            MarkdownLinkText(text)
+            MarkdownLinkText(text.highlightingTimelineMatches(searchQuery))
                 .lineLimit(max(1, Int(ceil(proxy.size.height / lineHeight))))
                 .truncationMode(.tail)
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
@@ -1067,7 +1248,7 @@ struct MessageBubble: View {
     private func handleMessageLink(_ url: URL) -> OpenURLAction.Result {
         switch MessageLinkPolicy.action(for: url) {
         case .openProfile(let npub):
-            appState.presentProfile(npub: npub)
+            if displaysReader { readerProfile = npub } else { appState.presentProfile(npub: npub) }
             return .handled
         case .openChat(let groupIdHex):
             appState.presentChat(groupIdHex: groupIdHex)
@@ -2460,7 +2641,7 @@ private struct MessageMediaTile: View {
         VStack(spacing: 6) {
             Image(systemName: "doc")
                 .font(.title3)
-            Text(item.fileName)
+            TimelineSearchText(item.fileName, keepsMatchVisible: true)
                 .font(.caption2)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
@@ -3605,7 +3786,7 @@ private struct MessageDocumentAttachmentView: View {
                     .frame(width: 24, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.fileName)
+                    TimelineSearchText(item.fileName, keepsMatchVisible: true)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                         .multilineTextAlignment(.leading)

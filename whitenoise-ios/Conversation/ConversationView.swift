@@ -675,9 +675,20 @@ struct ConversationView: View {
     @State private var showStickerPicker = false
     @State private var showDetails = false
     @State private var openAddMembersOnDetails = false
+    @Environment(ConversationSpeech.self) private var speech
     @State private var actionsTarget: ActionsTarget?
     @State private var emojiPickerTarget: ActionsTarget?
     @State private var composerCustomEmojiPicker: ComposerCustomEmojiPicker?
+    private struct LongMessageTarget: Identifiable {
+        var id: String { rowID }
+        let accountRef: String?
+        let runtimeGeneration: Int
+        let modelID: ObjectIdentifier
+        let rowID: String
+        let messageID: String
+    }
+    @State private var longMessageTarget: LongMessageTarget?
+    @State private var oversizedSearchResultID: String?
     @State private var messageInfoTarget: ActionsTarget?
     @State private var reactionDetailsTarget: ReactionDetailsTarget?
     @State private var pollVotesTarget: PollVotesTarget?
@@ -707,7 +718,7 @@ struct ConversationView: View {
     @State private var failedSendTarget: FailedSendTarget?
     @State private var senderProfileTarget: SenderProfileTarget?
     @State private var conversationViewport = ChatListViewport()
-    @State private var timelineTopRowDay = TimelineTopRowDay()
+    @State private var timelineDateViewport = TimelineDateViewport()
     @State private var blockedUsers = BlockedUsersModel()
     @State private var timelineVisibility = TimelineVisibilityStore()
     @State private var measuredActionRowFrameKey: String?
@@ -1017,6 +1028,7 @@ struct ConversationView: View {
                 if pending != nil {
                     showDetails = false
                     senderProfileTarget = nil
+                    longMessageTarget = nil
                 }
             }
             .navigationDestination(item: $senderProfileTarget) { target in
@@ -1048,6 +1060,24 @@ struct ConversationView: View {
 
     private var conversationMessageSheets: some View {
         conversationChromeView
+            .onChange(of: viewModel?.timelineProjectionGeneration) { _, _ in
+                guard let viewModel else { return }
+                pruneSpeech(in: viewModel)
+                viewModel.search.refreshAfterTimelineChange()
+            }
+            .onChange(of: speechScope.route) { speech.reset() }
+            .task(id: speechScope) { await revalidateSpeech(in: speechScope) }
+            .sheet(item: $longMessageTarget) { target in
+                NavigationStack {
+                    longMessageReader(target)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { longMessageTarget = nil }
+                            }
+                        }
+                }
+                .appAppearance()
+            }
             .sheet(item: $emojiPickerTarget) { target in
                 if let viewModel {
                     EmojiPickerSheet(
@@ -1565,7 +1595,7 @@ struct ConversationView: View {
     @ViewBuilder
     private var composerArea: some View {
         if let viewModel, viewModel.search.isActive {
-            ConversationSearchControls(search: viewModel.search)
+            ConversationSearchControls(search: viewModel.search, oversizedResultID: oversizedSearchResultID)
         } else if isSelectingMessages, let viewModel {
             messageSelectionBar(viewModel: viewModel)
         } else if let viewModel, viewModel.hasPendingInvite {
@@ -1997,6 +2027,7 @@ struct ConversationView: View {
             } else {
                 let concealInitialTimeline = shouldConcealInitialTimelineContent(viewModel: viewModel)
                 let showsSenderIdentity = !viewModel.groupDisplay.isDirectMessage
+                let searchResultID = viewModel.search.isActive ? viewModel.search.currentMatch?.itemId : nil
                 let dateHeadings = viewModel.timelineDaySections().compactMap { section in
                     section.items.first.map { TimelineDateHeading(id: $0.id, day: section.day) }
                 }
@@ -2022,10 +2053,16 @@ struct ConversationView: View {
                                         )
                                         VStack(alignment: .leading, spacing: density.metrics.timelineHeadingSpacing) {
                                             if let heading = dayHeaders[item.id] {
-                                                TimelineInlineDateHeader(heading: heading)
+                                                TimelineInlineDateHeader(
+                                                    heading: heading,
+                                                    isFirst: heading.id == dateHeadings.first?.id,
+                                                    viewport: timelineDateViewport
+                                                )
+                                                .opacity(searchResultID == nil ? 1 : 0.28)
                                             }
                                             if showsUnreadDivider {
                                                 UnreadMessagesDivider()
+                                                    .opacity(searchResultID == nil ? 1 : 0.28)
                                                     .id(unreadDividerID(for: viewModel.initialWindowUnreadMessageId ?? ""))
                                             }
                                             row(
@@ -2033,8 +2070,22 @@ struct ConversationView: View {
                                                 viewModel: viewModel,
                                                 showsSenderIdentity: showsSenderIdentity
                                             )
+                                                .opacity(searchResultID == nil || searchResultID == item.id ? 1 : 0.28)
+                                                .overlay {
+                                                    if searchResultID == item.id {
+                                                        Color.clear
+                                                            .allowsHitTesting(false)
+                                                            .onGeometryChange(for: Bool.self) { geometry in
+                                                                geometry.size.height > (geometry.bounds(of: .scrollView)?.height ?? .infinity)
+                                                            } action: { oversized in
+                                                                oversizedSearchResultID = oversized ? item.id : nil
+                                                            }
+                                                            .onDisappear {
+                                                                if oversizedSearchResultID == item.id { oversizedSearchResultID = nil }
+                                                            }
+                                                    }
+                                                }
                                                 .background {
-                                                    searchMatchHighlight(for: item, viewModel: viewModel)
                                                     ChatListRowAnchor(groupId: item.id,
                                                         sequence: viewModel.conversationWindow?.revision.sequence ?? 0,
                                                         viewport: conversationViewport)
@@ -2082,7 +2133,10 @@ struct ConversationView: View {
                                     .frame(width: 0, height: 0)
                             }
                         }
-                        .modifier(TimelinePinnedDateModifier(headings: dateHeadings, topRowDay: timelineTopRowDay))
+                        .environment(\.timelinePreviewSearch, viewModel.search)
+                        .onChange(of: dateHeadings) { noteTopVisibleRowDay(viewModel: viewModel) }
+                        .modifier(TimelinePinnedDateModifier(orderedHeaderIDs: dateHeadings.map(\.id), headingsByID: dayHeaders,
+                                                             dimsForSearch: searchResultID != nil, viewport: timelineDateViewport))
                         .overlay(alignment: .bottomTrailing) {
                             scrollToBottomButton(proxy: proxy, viewModel: viewModel)
                         }
@@ -2126,7 +2180,8 @@ struct ConversationView: View {
                         } action: { visible in
                             openPerformance?.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
                         }
-                        .compatibleBottomScrollEdgeEffectHidden()
+                        .scrollIndicators(.hidden)
+                        .compatibleBottomScrollEdgeEffect(soft: true)
                         .scrollDismissesKeyboard(.interactively)
                         .onScrollPhaseChange { oldPhase, phase in
                             // New-message follow requests must not interrupt
@@ -2260,7 +2315,6 @@ struct ConversationView: View {
                             await viewModel.prepareReactionEmojiCatalog()
                         }
                         .onChange(of: viewModel.timelineProjectionGeneration) { _, _ in
-                            viewModel.search.refreshAfterTimelineChange()
                             pruneMessageSelection(viewModel: viewModel)
                             handleTimelineProjectionChange(viewModel: viewModel)
                             reaimTimelineJump(proxy: proxy, viewModel: viewModel)
@@ -2366,13 +2420,17 @@ struct ConversationView: View {
             if let groupSystemText = viewModel.groupSystemDisplayText(for: record) {
                 GroupSystemEventRow(text: groupSystemText)
             } else if let agentDisplay = viewModel.agentEventDisplay(for: item) {
-                AgentEventRow(
-                    senderName: viewModel.windowDisplayName(for: record.sender),
-                    display: agentDisplay,
-                    debugStyle: appState.streamingDebugEnabled
-                        ? MessageSemantics.debugStyle(for: record)
-                        : nil
-                )
+                if agentDisplay.kind == .activity {
+                    messageBubble(for: item, record: record, status: status, viewModel: viewModel,
+                                  showsSenderIdentity: showsSenderIdentity, usesSelectionLayout: isSelectingMessages,
+                                  agentActivity: agentDisplay)
+                } else {
+                    AgentEventRow(
+                        senderName: viewModel.windowDisplayName(for: record.sender),
+                        display: agentDisplay,
+                        debugStyle: appState.streamingDebugEnabled ? MessageSemantics.debugStyle(for: record) : nil
+                    )
+                }
             } else {
                 agentMessageBubbleRow(
                     for: item,
@@ -2542,6 +2600,26 @@ struct ConversationView: View {
         await viewModel.toggleReaction(emoji, on: record)
     }
 
+    private func longMessageReader(_ target: LongMessageTarget) -> some View {
+        ScrollView {
+            if let viewModel, ObjectIdentifier(viewModel) == target.modelID,
+               appState.activeAccountRef == target.accountRef, appState.runtimeGeneration == target.runtimeGeneration,
+               let item = viewModel.timeline.first(where: { item in
+                   guard case .message(let record, _) = item.kind else { return false }
+                   return target.rowID == item.id || (!target.messageID.isEmpty && record.messageIdHex == target.messageID)
+               }), case .message(let record, let status) = item.kind, !viewModel.isDeleted(record.messageIdHex) {
+                messageBubble(for: item, record: record, status: status, viewModel: viewModel,
+                              showsSenderIdentity: false, usesSelectionLayout: false, displaysReader: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            } else {
+                Text(L10n.string("Message unavailable")).foregroundStyle(.secondary).padding()
+            }
+        }
+        .navigationTitle(L10n.string("Message"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
     private func messageBubble(
         for item: TimelineItem,
         record: AppMessageRecordFfi,
@@ -2549,6 +2627,8 @@ struct ConversationView: View {
         viewModel: ConversationViewModel,
         showsSenderIdentity: Bool,
         usesSelectionLayout: Bool,
+        agentActivity: AgentEventPresentation.Display? = nil,
+        displaysReader: Bool = false,
         showMessageActions: ((MessageActionSurface) -> Void)? = nil
     ) -> some View {
         let debugStyle = appState.streamingDebugEnabled
@@ -2560,6 +2640,7 @@ struct ConversationView: View {
             cluster.showsAvatar = false
         }
         let selectionInset = record.direction == "sent" ? Self.selectionIndicatorSize : Self.receivedSelectionInset
+        let incompleteMarkdown = viewModel.timelineStore.markdownProjections.isTruncated(for: item)
         return MessageBubble(
             record: record,
             status: status,
@@ -2569,12 +2650,17 @@ struct ConversationView: View {
             deletionSource: viewModel.timelineStore.deletedProjections.source(for: record.messageIdHex),
             isEdited: viewModel.isEdited(record.messageIdHex),
             hasReports: viewModel.hasReports(record.messageIdHex),
+            agentActivity: agentActivity,
             clusterPresentation: cluster,
             showsSenderIdentity: showsSenderIdentity,
             replyPreview: viewModel.replyPreview(for: record),
             mediaItems: viewModel.mediaItems(for: item),
+            voiceTranscript: visibleVoiceTranscript(for: record, in: viewModel),
+            transcribingVoice: speech.transcribingID == record.messageIdHex,
+            readingSpeech: speech.readingID == record.messageIdHex ? speech : nil,
             customEmoji: viewModel.customEmoji(for: item),
             markdownBlocks: viewModel.markdownDisplayBlocks(for: item),
+            incompleteMarkdown: incompleteMarkdown,
             poll: viewModel.poll(for: record.messageIdHex),
             onPollVote: viewModel.canVoteInPolls && status != .sending && status != .failed
                 ? { optionId in Task { await viewModel.votePoll(option: optionId, on: record) } }
@@ -2631,19 +2717,25 @@ struct ConversationView: View {
             onSenderAvatarTap: isSelectingMessages || viewModel.search.isActive
                 ? nil
                 : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) },
+            displaysReader: displaysReader,
             isBodyExpanded: viewModel.expandedBodies.contains(rowID: item.id, messageID: record.messageIdHex),
             onExpandBody: {
-                // The reader continues from the top of the message, so the
-                // tail must not hold the bottom while the row grows below.
-                // Anchored like a scroll away, so a window update keeps the place.
-                cancelPendingBottomScroll()
-                userMovedAwayFromTimelineBottom = true
-                viewModel.reportConversationViewport(atTail: false, visibleRowID: conversationViewport.visibleAnchor())
-                viewModel.expandBody(rowID: item.id, messageID: record.messageIdHex)
+                if incompleteMarkdown || TranscriptMessagePreview.requiresReader(record.plaintext) {
+                    longMessageTarget = LongMessageTarget(accountRef: appState.activeAccountRef, runtimeGeneration: appState.runtimeGeneration,
+                                                          modelID: ObjectIdentifier(viewModel), rowID: item.id,
+                                                          messageID: record.messageIdHex)
+                } else {
+                    cancelPendingBottomScroll()
+                    userMovedAwayFromTimelineBottom = true
+                    viewModel.reportConversationViewport(atTail: false, visibleRowID: conversationViewport.visibleAnchor())
+                    viewModel.expandBody(rowID: item.id, messageID: record.messageIdHex)
+                }
             }
         )
         .equatable()
         .padding(.leading, usesSelectionLayout ? selectionInset : 0)
+        .environment(\.timelineSearchQuery, viewModel.search.isActive && viewModel.search.matchingItemIDs.contains(item.id)
+            ? ConversationSearchEngine.normalizedQuery(viewModel.search.query) : nil)
         .environment(\.customEmojiStore, viewModel.customEmojiStore)
         .environment(\.stickerAssets, viewModel.stickerAssets)
         .environment(\.stickerLibrary, viewModel.stickerLibrary)
@@ -3127,10 +3219,13 @@ struct ConversationView: View {
     /// Tells the pinned date which day the topmost visible row belongs to.
     private func noteTopVisibleRowDay(viewModel: ConversationViewModel) {
         let visible = timelineVisibility.visibleRowKeys
-        guard let top = viewModel.timeline.first(where: { visible.contains($0.rowFrameKey) }) else { return }
+        guard let top = viewModel.timeline.first(where: { visible.contains($0.rowFrameKey) }) else {
+            timelineDateViewport.headerID = nil
+            return
+        }
         let headerID = viewModel.timelineDaySections()
             .first { section in section.items.contains { $0.id == top.id } }?.items.first?.id
-        if timelineTopRowDay.headerID != headerID { timelineTopRowDay.headerID = headerID }
+        if timelineDateViewport.headerID != headerID { timelineDateViewport.headerID = headerID }
     }
 
     private func prefetchNearbyMedia(viewModel: ConversationViewModel) {
@@ -4224,14 +4319,6 @@ struct ConversationView: View {
         viewModel?.search.end()
     }
 
-    @ViewBuilder
-    private func searchMatchHighlight(for item: TimelineItem, viewModel: ConversationViewModel) -> some View {
-        if viewModel.search.isActive, viewModel.search.currentMatch?.itemId == item.id {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.accentColor.opacity(0.16))
-        }
-    }
-
     /// Jump the timeline to a search match. Deferred through a cancellable
     /// main-actor task like the bottom-follow coordinator, and any queued
     /// bottom-follow is cancelled so it cannot race the targeted jump.
@@ -4421,6 +4508,7 @@ struct ConversationView: View {
             failedSendTarget = FailedSendTarget(rowId: rowId)
             return
         }
+        if let readingID = speech.readingID, readingID != record.messageIdHex { speech.stopReading() }
         if isComposerInputFocused {
             composerFocusSuspendedForActions = true
             dismissKeyboard()
@@ -4464,6 +4552,7 @@ struct ConversationView: View {
     }
 
     private func dismissActions(resumingComposerFocus: Bool = false) {
+        speech.availableAudio = nil
         guard let target = actionsTarget, actionsPhase != .returning else { return }
         withAnimation(MessageActionsPresentation.returnAnimation(reduceMotion: reduceTranscriptMotion),
                       completionCriteria: .logicallyComplete) {
@@ -4621,6 +4710,9 @@ struct ConversationView: View {
                     }
                 }
             }
+            .task(id: voiceAvailabilityRequest(for: item, in: viewModel)) {
+                await checkVoiceAvailability(for: target.record, in: viewModel)
+            }
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .transition(.identity)
             .allowsHitTesting(actionsPhase != .returning)
@@ -4629,8 +4721,192 @@ struct ConversationView: View {
         }
     }
 
+    private var speechScope: ConversationSpeech.Scope {
+        .init(route: .init(groupID: chat.groupIdHex, modelID: viewModel.map(ObjectIdentifier.init),
+                           account: appState.activeAccountRef, runtimeGeneration: appState.runtimeGeneration),
+              revision: AttachmentPresentationState.shared.revision)
+    }
+
+    private struct VoiceAvailabilityRequest: Equatable {
+        let scope: ConversationSpeech.Scope
+        let messageID: String
+        let attachmentID: String?
+        let target: AttachmentLocalTargetFfi?
+        let sourceHint: AttachmentSourceHint?
+    }
+
+    private func voiceAvailabilityRequest(for item: TimelineItem, in model: ConversationViewModel) -> VoiceAvailabilityRequest {
+        let audio: MessageMediaAttachment?
+        if case .message(let record, _) = item.kind, record.direction != "sent", hasBlankMessageText(record) {
+            audio = voiceAttachment(for: record, in: model)
+        } else {
+            audio = nil
+        }
+        return VoiceAvailabilityRequest(scope: speechScope, messageID: item.id, attachmentID: audio?.id,
+                                        target: audio?.localTarget, sourceHint: audio?.sourceHint)
+    }
+
     private func hasBlankMessageText(_ record: AppMessageRecordFfi) -> Bool {
         record.plaintext.unicodeScalars.allSatisfy(CharacterSet.whitespacesAndNewlines.contains)
+    }
+
+    private func revalidateSpeech(in scope: ConversationSpeech.Scope) async {
+        guard let model = viewModel, scope == speechScope else { return }
+        await speech.revalidate(in: scope) { id, recording in
+            guard scope == speechScope, !Task.isCancelled else { return nil }
+            guard let row = speechRow(id, in: model),
+                  case .message(let record, _) = row.kind, hasBlankMessageText(record),
+                  let media = voiceAttachment(for: record, in: model), recording.matches(media) else { return false }
+            do {
+                let source = try await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState)
+                guard scope == speechScope, !Task.isCancelled else { return nil }
+                return source?.target == recording.target && recording.matches(voiceAttachment(for: record, in: model))
+            } catch {
+                return nil
+            }
+        }
+    }
+
+    private func speechRow(_ id: String, in model: ConversationViewModel) -> TimelineItem? {
+        guard !id.isEmpty, !model.isDeleted(id), let index = model.timelineStore.timelineIndex(forMessageIdHex: id),
+              model.timeline.indices.contains(index) else { return nil }
+        return model.timeline[index]
+    }
+
+    private func voiceAttachment(for record: AppMessageRecordFfi, in model: ConversationViewModel) -> MessageMediaAttachment? {
+        guard let row = speechRow(record.messageIdHex, in: model) else { return nil }
+        let media = model.mediaItems(for: row)
+        guard media.count == 1, let audio = media.first, audio.kind == .audio, audio.rejectionKind == nil else { return nil }
+        return audio
+    }
+
+    private func visibleVoiceTranscript(for record: AppMessageRecordFfi, in model: ConversationViewModel) -> String? {
+        guard let transcript = speech.transcripts[record.messageIdHex], transcript.isVerified(in: speechScope), transcript.visible,
+              hasBlankMessageText(record),
+              transcript.recording.matches(voiceAttachment(for: record, in: model)) else { return nil }
+        return transcript.text
+    }
+
+    private func speechActions(for target: AppMessageRecordFfi, in model: ConversationViewModel) -> [MessageSpeechAction] {
+        let id = target.messageIdHex
+        guard self.viewModel === model, let row = speechRow(id, in: model),
+              case .message(let record, _) = row.kind else { return [] }
+        let received = record.direction != "sent"
+        let audio = voiceAttachment(for: record, in: model)
+        if !hasBlankMessageText(record) {
+            switch MessageSemantics.classify(record) {
+            case .chat, .reply, .media, .streamFinal:
+                guard SharedLocationText.location(from: record.plaintext) == nil,
+                      RemoteGiphyMedia.parse(wireText: record.plaintext) == nil else { return [] }
+                guard received else { return [] }
+                if speech.readingID == id { return [.stop] }
+                let emoji = model.customEmoji(for: row)
+                if !emoji.isEmpty, model.replyPreview(for: record) == nil, model.mediaItems(for: row).isEmpty,
+                   SingleCustomEmojiMessagePresentation.shortcode(in: record.plaintext, resolvable: emoji.shortcodes) != nil {
+                    return []
+                }
+                if !record.contentTokens.blocks.isEmpty, !TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
+                    let blocks = model.markdownDisplayBlocks(for: row) ?? []
+                    guard blocks.contains(where: { block in
+                        block.textFields(includeCodeLanguage: false).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                    }) else { return [] }
+                }
+                return [.read]
+            default: return []
+            }
+        }
+        guard received, let audio else { return [] }
+        if speech.transcribingID == id { return [.transcribing] }
+        if let transcript = speech.transcripts[id], transcript.isVerified(in: speechScope), transcript.recording.matches(audio) {
+            return transcript.visible ? [.hide, .copy] : [.show]
+        }
+        // Keep this slot stable while the available model and retained audio are checked.
+        if #available(iOS 26, *) { return [.transcribe] }
+        return []
+    }
+
+    private func canTranscribe(_ record: AppMessageRecordFfi, in model: ConversationViewModel) -> Bool {
+        guard speech.transcribingID == nil, let available = speech.availableAudio, available.scope == speechScope,
+              let audio = voiceAttachment(for: record, in: model) else { return false }
+        return available.recording.matches(audio)
+    }
+
+    private func checkVoiceAvailability(for target: AppMessageRecordFfi, in model: ConversationViewModel) async {
+        let scope = speechScope
+        speech.availableAudio = nil
+        guard #available(iOS 26, *), self.viewModel === model, let row = speechRow(target.messageIdHex, in: model),
+              case .message(let record, _) = row.kind, record.direction != "sent", hasBlankMessageText(record),
+              let audio = voiceAttachment(for: record, in: model) else { return }
+        let request = voiceAvailabilityRequest(for: row, in: model)
+        func isCurrent() -> Bool {
+            !Task.isCancelled && self.viewModel === model && actionsPhase != .returning
+                && actionsTarget?.record.messageIdHex == record.messageIdHex && request == voiceAvailabilityRequest(for: row, in: model)
+        }
+        let source: LocalVoiceAttachment?
+        do {
+            source = try await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState)
+        } catch {
+            if isCurrent(), let transcript = speech.transcripts[record.messageIdHex] {
+                speech.updateRetention(nil, id: record.messageIdHex, recording: transcript.recording, scope: scope)
+            }
+            return
+        }
+        guard isCurrent() else { return }
+        if let transcript = speech.transcripts[record.messageIdHex] {
+            let held = transcript.recording.matches(audio) && source?.target == transcript.recording.target
+            speech.updateRetention(held, id: record.messageIdHex, recording: transcript.recording, scope: scope)
+            if held { return }
+        }
+        guard let source, await LocalVoiceRecognition.recognizer() != nil, isCurrent() else { return }
+        let recording = ConversationSpeech.Recording(displayID: audio.id, target: source.target)
+        guard recording.matches(voiceAttachment(for: record, in: model)) else { return }
+        speech.availableAudio = (recording, source, scope)
+    }
+
+    private func performSpeechAction(_ action: MessageSpeechAction, for record: AppMessageRecordFfi, in model: ConversationViewModel) {
+        let id = record.messageIdHex
+        guard let row = speechRow(id, in: model), case .message(let current, _) = row.kind,
+              speechActions(for: current, in: model).contains(action),
+              action != .transcribe || canTranscribe(current, in: model) else { return }
+        let availableAudio = speech.availableAudio
+        dismissActions(resumingComposerFocus: true)
+        switch action {
+        case .read:
+            speech.read(markdown: model.copyBody(of: current), id: id) {
+                appState.present(.warning(L10n.string("This message has no text to read aloud.")))
+            }
+        case .stop: speech.stopReading()
+        case .show, .hide: speech.setTranscriptVisible(action == .show, id: id)
+        case .copy:
+            if let text = visibleVoiceTranscript(for: current, in: model) {
+                SensitiveClipboard.copyLocalOnly(text)
+                Haptics.tap()
+            }
+        case .transcribe:
+            guard let audio = voiceAttachment(for: current, in: model),
+                  let availableAudio, availableAudio.recording.matches(audio), availableAudio.scope == speechScope else { return }
+            speech.transcribe(id: id, recording: availableAudio.recording, data: {
+                guard self.viewModel === model, speechScope == availableAudio.scope,
+                      availableAudio.recording.matches(voiceAttachment(for: current, in: model)) else { throw CancellationError() }
+                return try await availableAudio.source.data(in: appState)
+            }, verifiedScope: {
+                let scope = speechScope
+                guard scope.route == availableAudio.scope.route, self.viewModel === model,
+                      let media = voiceAttachment(for: current, in: model), availableAudio.recording.matches(media),
+                      let source = try? await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState),
+                      source.target == availableAudio.recording.target, scope == speechScope,
+                      availableAudio.recording.matches(voiceAttachment(for: current, in: model)) else { return nil }
+                return scope
+            }, onError: { appState.present(.warning(L10n.string("Couldn’t transcribe this recording."))) })
+        case .transcribing: break
+        }
+    }
+
+    private func pruneSpeech(in model: ConversationViewModel) {
+        speech.prune(visibleMessage: { speechRow($0, in: model) != nil }, audioMatches: { id, recording in
+            guard let row = speechRow(id, in: model), case .message(let record, _) = row.kind else { return false }
+            return recording.matches(voiceAttachment(for: record, in: model))
+        })
     }
 
     private func messageActionCount(
@@ -4656,7 +4932,8 @@ struct ConversationView: View {
             canDelete: viewModel.deleteCapability(for: record).canDelete,
             canReport: viewModel.canReport(record),
             canBlock: canBlockAuthor(of: record, viewModel: viewModel),
-            canViewVotes: canViewPollVotes(for: record, viewModel: viewModel)
+            canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
+            speechActionCount: speechActions(for: record, in: viewModel).count
         )
     }
 
@@ -4746,6 +5023,9 @@ struct ConversationView: View {
             canReport: viewModel.canReport(record),
             canBlock: canBlockAuthor(of: record, viewModel: viewModel),
             canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
+            speechActions: speechActions(for: record, in: viewModel),
+            onSpeechAction: { performSpeechAction($0, for: record, in: viewModel) },
+            canTranscribe: canTranscribe(record, in: viewModel),
             quickReactions: appState.quickReactions,
             selectedReaction: selectedReaction?.emoji,
             selectedReactionMessageId: selectedReaction?.reactionMessageIdHex,

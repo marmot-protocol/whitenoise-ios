@@ -28,11 +28,14 @@ extension MarmotClient {
 
     /// Every chunk revalidates the opaque reference against current visibility.
     func attachmentData(accountRef: String, groupID: String,
-                        target: AttachmentLocalTargetFfi) async throws -> Data? {
+                        target: AttachmentLocalTargetFfi, previewByteLimit: Int? = nil) async throws -> Data? {
         let assets = try await marmot.attachmentLocalAssets(accountRef: accountRef,
             groupIdHex: groupID, targets: [target])
         guard let asset = assets.first, let reference = asset.reference else { return nil }
         guard asset.byteCount <= 512 * 1024 * 1024 else { throw AttachmentReadError.tooLarge }
+        if let previewByteLimit, asset.byteCount > previewByteLimit {
+            throw AttachmentReadError.previewLimitExceeded(byteCount: Int(asset.byteCount))
+        }
         return try await RetainedAttachmentReader.read(byteCount: asset.byteCount) { offset, limit in
             try await self.marmot.readAttachmentAsset(accountRef: accountRef,
                 reference: reference, offset: offset, limit: limit)
@@ -40,7 +43,8 @@ extension MarmotClient {
     }
 }
 
-nonisolated enum AttachmentReadError: Error {
+nonisolated enum AttachmentReadError: Error, Equatable {
+    case previewLimitExceeded(byteCount: Int?)
     case stale
     case tooLarge
     case unavailable
@@ -170,6 +174,15 @@ extension MarmotClient {
     /// Reply previews omit the original source event ID. Resolve their original slot locally.
     func resolveAttachmentTarget(accountRef: String, groupID: String,
                                  hint: AttachmentSourceHint) async throws -> AttachmentLocalTargetFfi {
+        guard let target = try await findAttachmentTarget(accountRef: accountRef, groupID: groupID, hint: hint) else {
+            throw AttachmentReadError.unavailable
+        }
+        return target
+    }
+
+    /// A completed history scan can establish absence. An interrupted lookup cannot.
+    func findAttachmentTarget(accountRef: String, groupID: String,
+                              hint: AttachmentSourceHint) async throws -> AttachmentLocalTargetFfi? {
         var cursor: AttachmentHistoryCursor?
         let deadline = ContinuousClock.now.advanced(by: .seconds(30))
         repeat {
@@ -184,9 +197,10 @@ extension MarmotClient {
                         sourceMessageIdHex: entry.sourceMessageIdHex, attachmentIndex: index)
                 }
             }
-            cursor = page.hasMore ? page.nextCursor : nil
-        } while cursor != nil
-        throw AttachmentReadError.unavailable
+            guard page.hasMore else { return nil }
+            guard let next = page.nextCursor else { throw AttachmentReadError.unavailable }
+            cursor = next
+        } while true
     }
 }
 

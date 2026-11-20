@@ -15,6 +15,7 @@ nonisolated struct LinkPreviewMetadata: Equatable, Sendable {
 
     let title: String?
     let imageURL: URL?
+    var summary: String? = nil
 
     static func previewURL(in blocks: [MarkdownDisplayBlock]?) -> URL? {
         MessageLinkTarget.targets(in: blocks)
@@ -34,8 +35,11 @@ nonisolated struct LinkPreviewMetadata: Equatable, Sendable {
             .compactMap { resolvedImageURL(decodeEntities($0), baseURL: baseURL) }
             .first
 
-        guard title != nil || imageURL != nil else { return nil }
-        return LinkPreviewMetadata(title: title, imageURL: imageURL)
+        let summary = ["og:description", "twitter:description", "description"]
+            .lazy.compactMap { properties[$0] }
+            .compactMap { ContentSanitizer.compactSingleLine(decodeEntities($0), maxLength: 400) }.first
+        guard title != nil || imageURL != nil || summary != nil else { return nil }
+        return LinkPreviewMetadata(title: title, imageURL: imageURL, summary: summary)
     }
 
     private static func metaProperties(in head: String) -> [String: String] {
