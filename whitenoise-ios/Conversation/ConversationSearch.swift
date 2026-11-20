@@ -230,7 +230,7 @@ final class ConversationSearchModel {
         updateContactRevision()
         guard displayedContactNames.object(forKey: attachmentID as NSString) as String? != name else { return }
         displayedContactNames.setObject(name as NSString, forKey: attachmentID as NSString)
-        refreshAfterTimelineChange()
+        refreshAfterSearchableContentChange()
     }
 
     func displayedContactName(for attachmentID: String) -> String? {
@@ -247,7 +247,7 @@ final class ConversationSearchModel {
             ?? ConversationSearchEngine.initialIndex(matchCount: matches.count)
     }
 
-    func refreshAfterPollDeadline() {
+    func refreshAfterSearchableContentChange() {
         let previousID = currentMatch?.itemId
         refreshAfterTimelineChange()
         if previousID != currentMatch?.itemId { requestScrollToCurrentMatch() }

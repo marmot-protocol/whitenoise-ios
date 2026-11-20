@@ -82,9 +82,9 @@ extension View {
 
     /// Lets scrolling content show through bottom Liquid Glass chrome on iOS 26.
     @ViewBuilder
-    func compatibleBottomScrollEdgeEffect() -> some View {
+    func compatibleBottomScrollEdgeEffect(soft: Bool = false) -> some View {
         if #available(iOS 26.0, *) {
-            scrollEdgeEffectStyle(.automatic, for: .bottom)
+            scrollEdgeEffectStyle(soft ? .soft : .automatic, for: .bottom)
         } else {
             self
         }

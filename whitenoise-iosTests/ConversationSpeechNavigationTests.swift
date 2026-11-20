@@ -1,3 +1,4 @@
+import MarmotKit
 import SwiftUI
 import Testing
 import UIKit
@@ -15,6 +16,18 @@ struct ConversationSpeechNavigationTests {
         #expect(speech.readingID == nil)
     }
 
+    @Test func voiceSourceHintAcceptsOnlyItsResolvedTargetWhenTheDirectTargetArrives() {
+        let recording = ConversationSpeech.Recording(displayID: "audio", target: .init(
+            messageIdHex: "message", sourceMessageIdHex: "original", attachmentIndex: 0))
+        var media = MessageMediaAttachment(id: "audio", reference: nil, fileName: "voice.m4a", mediaType: "audio/mp4", dim: nil, localData: nil)
+        media.sourceHint = .init(messageID: "message", slot: 0)
+        #expect(recording.matches(media))
+        media.localTarget = recording.target
+        #expect(recording.matches(media))
+        media.localTarget?.sourceMessageIdHex = "replacement"
+        #expect(!recording.matches(media))
+    }
+
     @available(iOS 26, *)
     @Test func poppingPastAnOpenDetailClearsTheChatsSpeechSession() async throws {
         let model = SpeechStackHarness.Model()
@@ -26,7 +39,9 @@ struct ConversationSpeechNavigationTests {
             // Keep a real transcription request pending at its data read while navigating.
             let started = TestLatch()
             let cancelled = TestLatch()
-            model.speech.transcribe(id: "voice-note", attachmentID: "audio", data: {
+            let recording = ConversationSpeech.Recording(displayID: "audio", target: .init(
+                messageIdHex: "voice-note", sourceMessageIdHex: "source", attachmentIndex: 0))
+            model.speech.transcribe(id: "voice-note", recording: recording, data: {
                 started.signal()
                 defer { if Task.isCancelled { cancelled.signal() } }
                 try await parkUntilCancelled()

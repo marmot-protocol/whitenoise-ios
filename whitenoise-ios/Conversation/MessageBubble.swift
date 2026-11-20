@@ -89,7 +89,6 @@ nonisolated enum MessageBubbleReplyLayout {
     static let bodyTopInsetAfterReply: CGFloat = 0
     static let bodyBottomInset = ChatBubbleMetrics.verticalInset
     static let cardOuterInset: CGFloat = 6
-    static let cardHorizontalInset: CGFloat = 10
     static let cardVerticalInset: CGFloat = 6
     static let cardCornerRadius = ChatBubbleMetrics.cornerRadius - cardOuterInset
     static let sentCardOpacity = 0.16
@@ -425,25 +424,28 @@ struct MessageBubble: View {
         MessageMediaUploadPresentation.showsIndicator(status: status, items: mediaItems)
     }
 
-    private var standaloneEmoji: String? {
-        guard debugStyle == nil,
+    var standaloneEmoji: String? {
+        guard agentActivity == nil, debugStyle == nil,
               !isDeleted,
               replyPreview == nil,
               mediaItems.isEmpty
         else { return nil }
 
-        return SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText)
+        guard let emoji = SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText), !offersSourceReader else { return nil }
+        return emoji
     }
 
     private var standaloneCustomEmoji: CustomEmojiShortcode? {
-        guard debugStyle == nil,
+        guard agentActivity == nil, debugStyle == nil,
               !isDeleted,
               replyPreview == nil,
               mediaItems.isEmpty,
               !customEmoji.isEmpty
         else { return nil }
 
-        return SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes)
+        guard let shortcode = SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes),
+              !offersSourceReader else { return nil }
+        return shortcode
     }
 
     /// White-on-gradient text is only appropriate for our own user-visible bubbles.
@@ -724,7 +726,8 @@ struct MessageBubble: View {
 
     private func replyCard(_ preview: ConversationReplyPreview) -> some View {
         quoted(preview)
-            .padding(.horizontal, MessageBubbleReplyLayout.cardHorizontalInset)
+            .padding(.leading, MessageBubbleReplyLayout.cardCornerRadius)
+            .padding(.trailing, MessageBubbleReplyLayout.cardOuterInset)
             .padding(.vertical, MessageBubbleReplyLayout.cardVerticalInset)
             .frame(
                 maxWidth: .infinity,
@@ -901,8 +904,13 @@ struct MessageBubble: View {
     }
 
     private var legacyMediaMessageContent: some View {
-        VStack(alignment: isFromMe ? .trailing : .leading, spacing: 6) {
+        let showsTranscript = transcribingVoice || voiceTranscript != nil
+        return VStack(alignment: isFromMe ? .trailing : .leading, spacing: 6) {
             mediaAttachments
+                .frame(width: showsTranscript ? mediaGridWidth : nil, alignment: .leading)
+                .background {
+                    if showsTranscript { bubbleBackground.clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius)) }
+                }
 
             if let replyPreview {
                 MessageTextBubbleLayout(fitsQuote: true) {
@@ -1067,7 +1075,7 @@ struct MessageBubble: View {
     /// The complete source stays reachable for a durable row even when search expands the projected text.
     var offersSourceReader: Bool {
         !usesReviewLayout && !isLiveStream
-            && (incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext))
+            && (incompleteMarkdown || TranscriptMessagePreview.requiresReader(record.plaintext))
     }
 
     private var isLiveStream: Bool {

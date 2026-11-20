@@ -18,7 +18,7 @@ struct ConversationSearchBar: View {
                     // Installed on the main run loop, including while the transcript scrolls.
                     MainActor.assumeIsolated {
                         guard let search, search.nextPollDeadline == deadline else { return }
-                        search.refreshAfterPollDeadline()
+                        search.refreshAfterSearchableContentChange()
                     }
                 }
                 RunLoop.main.add(timer, forMode: .common)

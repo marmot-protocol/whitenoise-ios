@@ -46,7 +46,7 @@ struct LinkPreviewCard: View {
                 Color.clear.frame(width: 0, height: 0)
             }
         }
-        .onChange(of: metadata) { _, _ in previewSearch?.refreshAfterTimelineChange() }
+        .onChange(of: metadata) { _, _ in previewSearch?.refreshAfterSearchableContentChange() }
         .task(id: LinkPreviewTaskID(url: url, isVisible: isTimelineRowVisible, cardWidth: cardWidth)) {
             guard isTimelineRowVisible else { return }
             await load()

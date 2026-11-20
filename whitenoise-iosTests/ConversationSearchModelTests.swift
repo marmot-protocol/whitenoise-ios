@@ -59,10 +59,10 @@ struct ConversationSearchModelTests {
         model.query = "Select one"
         let originalRequest = model.scrollRequest
 
-        model.refreshAfterPollDeadline()
+        model.refreshAfterSearchableContentChange()
         #expect(model.scrollRequest == originalRequest)
         stub.loaded[1] = Self.entry("b", "Final results")
-        model.refreshAfterPollDeadline()
+        model.refreshAfterSearchableContentChange()
         #expect(model.scrollRequest?.itemId == "msg:a")
         #expect(model.matchingItemIDs == ["msg:a"])
     }
