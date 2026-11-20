@@ -3425,7 +3425,7 @@ private struct MessageDocumentAttachmentView: View {
                         .lineLimit(1)
                         .multilineTextAlignment(.leading)
                     if let name, name != item.fileName, let searchQuery, item.fileName.localizedStandardContains(searchQuery) {
-                        TimelineSearchText(item.fileName)
+                        TimelineSearchText(item.fileName, keepsMatchVisible: true)
                             .font(.caption)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)

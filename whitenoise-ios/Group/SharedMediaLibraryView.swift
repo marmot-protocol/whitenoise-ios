@@ -15,7 +15,8 @@ final class SharedMediaLibraryViewModel {
     private(set) var visualMonthSections: [SharedMediaLibraryPresentation.MonthSection] = []
     private(set) var links: [SharedMediaLibraryPresentation.LinkItem] = []
     private(set) var isLoading = false
-    private(set) var isLoadingLinks = false
+    private var linkRequest: UUID?
+    var isLoadingLinks: Bool { linkRequest != nil }
     private(set) var linksTruncated = false
     var loadError: String?
     var linksError: String?
@@ -43,9 +44,9 @@ final class SharedMediaLibraryViewModel {
             scope = nil
             resetPages()
             loadError = L10n.string("Couldn't load shared media.")
-            links = []
+            resetLinks()
+            linksError = L10n.string("Couldn't load links.")
             isLoading = false
-            isLoadingLinks = false
             return
         }
 
@@ -54,9 +55,7 @@ final class SharedMediaLibraryViewModel {
             scope = newScope
             isLoading = false
             resetPages()
-            didLoadLinks = false
-            isLoadingLinks = false
-            links = []
+            resetLinks()
         }
         guard !isLoading || force, force || nextPage || !didLoad else { return }
         guard !nextPage || hasMore else { return }
@@ -120,17 +119,25 @@ final class SharedMediaLibraryViewModel {
         didLoad = false
     }
 
+    private func resetLinks() {
+        linkRequest = nil
+        links = []
+        linksError = nil
+        linksTruncated = false
+        didLoadLinks = false
+    }
+
     /// Pages message history newest-first and extracts links. The scan is
     /// bounded; when it stops early the truncation is surfaced, never silent.
     func loadLinks(groupIdHex: String, using appState: AppState, force: Bool = false) async {
-        guard let accountRef = appState.activeAccountRef else { return }
-        guard !isLoadingLinks, force || !didLoadLinks else { return }
-        let requestGeneration = generation
-        isLoadingLinks = true
+        guard let scope, scope == AttachmentHistoryPager.Scope(appState: appState, group: groupIdHex),
+              !isLoadingLinks, force || !didLoadLinks else { return }
+        let request = UUID()
+        linkRequest = request
         linksError = nil
-        defer { if generation == requestGeneration { isLoadingLinks = false } }
+        defer { if linkRequest == request { linkRequest = nil } }
         do {
-            let client = try appState.currentMarmotClient()
+            let client = try scope.currentClient(in: appState)
             var scanned: [SharedMediaLibraryPresentation.LinkScanRecord] = []
             var before: UInt64?
             var beforeMessageId: String?
@@ -138,7 +145,7 @@ final class SharedMediaLibraryViewModel {
             while true {
                 try Task.checkCancellation()
                 let page = try await client.timelineMessages(
-                    accountRef: accountRef,
+                    accountRef: scope.account,
                     query: TimelineMessageQueryFfi(
                         groupIdHex: groupIdHex,
                         search: nil,
@@ -153,6 +160,8 @@ final class SharedMediaLibraryViewModel {
                         limit: Self.linkScanPageLimit
                     )
                 )
+                _ = try scope.currentClient(in: appState)
+                guard linkRequest == request else { return }
                 scanned.append(contentsOf: page.messages.map {
                     SharedMediaLibraryPresentation.LinkScanRecord(
                         messageIdHex: $0.messageIdHex,
@@ -173,14 +182,13 @@ final class SharedMediaLibraryViewModel {
                 beforeMessageId = nextBeforeMessageId
             }
             try Task.checkCancellation()
-            guard generation == requestGeneration, appState.activeAccountRef == accountRef,
-                  appState.client === client else { return }
             links = SharedMediaLibraryPresentation.linkItems(from: scanned)
             linksTruncated = truncated
             didLoadLinks = true
         } catch is CancellationError {
             return
         } catch {
+            guard linkRequest == request, scope == AttachmentHistoryPager.Scope(appState: appState, group: groupIdHex) else { return }
             linksError = L10n.string("Couldn't load links.")
         }
     }
