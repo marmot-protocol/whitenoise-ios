@@ -157,3 +157,10 @@ enum DestructiveWipeGate {
         )
     }
 }
+
+/// A wipe left the profile's data on this device, so it wasn't removed.
+struct ProfileDataRemainsError: LocalizedError {
+    var errorDescription: String? {
+        L10n.string("This profile’s data is still on this device. Keep White Noise open and try again.")
+    }
+}

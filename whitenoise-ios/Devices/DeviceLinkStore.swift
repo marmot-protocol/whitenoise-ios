@@ -83,6 +83,9 @@ final class DeviceLinkStore {
     private var dismissedPromptIDs: Set<String> = []
     private var scope: Scope?
     private var tickets: [Part: UUID] = [:]
+    /// The latest read of each other profile's requests; an older read that
+    /// finishes later is dropped.
+    private var otherProfileTickets: [String: UUID] = [:]
 
     // MARK: - Derived
 
@@ -251,10 +254,14 @@ final class DeviceLinkStore {
         if accountIdHex == nil {
             otherProfilePrompts = otherProfilePrompts.filter { id, _ in others.contains { $0.accountIdHex == id } }
         }
+        let tickets = Dictionary(uniqueKeysWithValues: others.map { ($0.accountIdHex, UUID()) })
+        otherProfileTickets.merge(tickets) { _, new in new }
         for account in others {
             guard let snapshot = try? await client.marmot.deviceLinkSnapshot(accountRef: account.label) else { continue }
             // A switch or a new runtime started a newer read.
             guard self.scope == scope, matches(appState) else { return }
+            // A newer read of this profile owns its requests.
+            guard otherProfileTickets[account.accountIdHex] == tickets[account.accountIdHex] else { continue }
             otherProfilePrompts[account.accountIdHex] = snapshot.prompts
         }
     }
@@ -404,6 +411,7 @@ final class DeviceLinkStore {
         isAvailable = false
         scope = nil
         tickets = [:]
+        otherProfileTickets = [:]
     }
 
     private func matches(_ appState: AppState) -> Bool {
@@ -413,23 +421,41 @@ final class DeviceLinkStore {
 
     // MARK: - Actions
 
-    /// Runs one user action against the live runtime for this store's account.
+    /// The account and runtime a user action acts on, captured once when it
+    /// starts. Every step of the action runs against this scope, never the
+    /// profile that is active by the time a later step runs.
+    private func actionScope(using appState: AppState) throws -> Scope {
+        guard let scope, matches(appState) else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+        return scope
+    }
+
+    /// Runs one step of a user action against `scope`'s live runtime, or
+    /// refuses if the user switched profiles or the runtime was replaced.
+    private func mutate<Result>(
+        in scope: Scope,
+        using appState: AppState,
+        _ body: (Marmot, String) async throws -> Result
+    ) async throws -> Result {
+        guard self.scope == scope, matches(appState) else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+        defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        return try await body(lease.client.marmot, scope.accountRef)
+    }
+
+    /// A one-step user action against the active account.
     private func mutate<Result>(
         using appState: AppState,
         _ body: (Marmot, String) async throws -> Result
     ) async throws -> Result {
-        guard let scope, matches(appState) else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
-        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
-        defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
-        return try await body(lease.client.marmot, scope.accountRef)
+        try await mutate(in: actionScope(using: appState), using: appState, body)
     }
 
     private func mutateSnapshot(
         using appState: AppState,
         _ body: (Marmot, String) async throws -> DeviceLinkSnapshotFfi
     ) async throws {
-        let scope = self.scope
-        let next = try await mutate(using: appState, body)
+        let scope = try actionScope(using: appState)
+        let next = try await mutate(in: scope, using: appState, body)
         guard self.scope == scope else { return }
         apply(next)
     }
@@ -438,15 +464,12 @@ final class DeviceLinkStore {
     /// names this device's published KeyPackage; if there is none it publishes
     /// one first, since the user asked to link.
     func startLink(using appState: AppState) async throws {
-        let scope = self.scope
-        do {
-            try await mutateSnapshot(using: appState) { marmot, account in
-                try await marmot.startDeviceLink(accountRef: account)
-            }
-        } catch where DeviceGroupRefusal(error: error)?.reason == "key_package_not_published" {
-            // Never publish a KeyPackage for a profile the user switched to meanwhile.
-            guard self.scope == scope else { throw error }
-            try await mutateSnapshot(using: appState) { marmot, account in
+        // One lease and one account for the whole retry, so the KeyPackage is
+        // never published for a profile the user switched to meanwhile.
+        try await mutateSnapshot(using: appState) { marmot, account in
+            do {
+                return try await marmot.startDeviceLink(accountRef: account)
+            } catch where DeviceGroupRefusal(error: error)?.reason == "key_package_not_published" {
                 _ = try await marmot.rotateKeyPackage(accountRef: account)
                 return try await marmot.startDeviceLink(accountRef: account)
             }
@@ -471,6 +494,7 @@ final class DeviceLinkStore {
         promptID: String, label: String, addToAllChats: Bool, bringHistory: Bool,
         thisDeviceLabel: String? = nil, using appState: AppState
     ) async throws {
+        let scope = try actionScope(using: appState)
         let previousOwnLabel = pendingOwnLabel
         if let thisDeviceLabel { pendingOwnLabel = thisDeviceLabel }
         do {
@@ -481,7 +505,8 @@ final class DeviceLinkStore {
                 )
             }
         } catch {
-            if pendingOwnLabel == thisDeviceLabel { pendingOwnLabel = previousOwnLabel }
+            // Only this profile's name, and only if this call wrote it.
+            if self.scope == scope, pendingOwnLabel == thisDeviceLabel { pendingOwnLabel = previousOwnLabel }
             throw error
         }
     }
@@ -494,13 +519,13 @@ final class DeviceLinkStore {
             pendingOwnLabel = nil
             return
         }
-        let scope = self.scope
+        guard let scope = try? actionScope(using: appState) else { return }
         applyingOwnLabel = true
         defer { applyingOwnLabel = false }
         // Only the name this call applied, for this profile, is finished.
         func finish() { if self.scope == scope, pendingOwnLabel == label { pendingOwnLabel = nil } }
         do {
-            try await mutate(using: appState) { marmot, account in
+            try await mutate(in: scope, using: appState) { marmot, account in
                 try await marmot.renameLinkedDevice(accountRef: account, slotIdHex: me.slotIdHex, label: label)
             }
             finish()
@@ -559,8 +584,8 @@ final class DeviceLinkStore {
     }
 
     func checkSignIns(using appState: AppState) async throws {
-        let scope = self.scope
-        let next = try await mutate(using: appState) { marmot, account in
+        let scope = try actionScope(using: appState)
+        let next = try await mutate(in: scope, using: appState) { marmot, account in
             try await marmot.checkSignIns(accountRef: account)
         }
         guard self.scope == scope else { return }
@@ -621,29 +646,28 @@ final class DeviceLinkStore {
         }
     }
 
-    /// Discards this device's stalled device-group copy and publishes a fresh
-    /// KeyPackage, ready for a new compared-code link. Keeps chats and keys.
+    /// Discards this device's stalled device-group copy, publishes a fresh
+    /// KeyPackage and opens Link to Another Device, ready for a new
+    /// compared-code link. Keeps chats and keys.
     func resetForRepair(using appState: AppState) async throws {
-        try await mutateSnapshot(using: appState) { marmot, account in
-            try await marmot.resetDeviceGroupForRepair(accountRef: account)
-        }
-        // The reset stands even if publishing the KeyPackage fails; show it, then report.
-        var rotationError: Error?
-        do {
-            try await mutate(using: appState) { marmot, account in
+        let scope = try actionScope(using: appState)
+        // One lease and one account: the KeyPackage goes out for the profile
+        // that was reset, even if the user switches profiles meanwhile.
+        let (next, rotationError) = try await mutate(in: scope, using: appState) { marmot, account in
+            let next = try await marmot.resetDeviceGroupForRepair(accountRef: account)
+            do {
                 _ = try await marmot.rotateKeyPackage(accountRef: account)
+                return (next, Error?.none)
+            } catch {
+                return (next, Error?.some(error))
             }
-        } catch {
-            rotationError = error
         }
+        guard self.scope == scope else { return }
+        // The reset stands even if publishing the KeyPackage fails; show it, then report.
+        apply(next)
         await refresh(.devices, using: appState)
         if let rotationError { throw rotationError }
-    }
-}
-
-/// The unlinked profile's data is still on this device.
-struct UnlinkedAccountRemovalError: LocalizedError {
-    var errorDescription: String? {
-        L10n.string("This profile’s data is still on this device. Keep White Noise open and try again.")
+        guard self.scope == scope else { return }
+        present(.linkThisDevice)
     }
 }

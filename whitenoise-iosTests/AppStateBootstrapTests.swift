@@ -2093,6 +2093,49 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func laterLeavesAnUnlinkedProfileSignedOutWhenTheRefreshFails() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
+        appState.beforeAccountRefreshForTesting = { throw URLError(.notConnectedToInternet) }
+
+        await appState.leaveUnlinkedAccount(accountIdHex: account.accountIdHex)
+        appState.beforeAccountRefreshForTesting = nil
+
+        // The chooser offers only rows that aren't signed out.
+        let row = try #require(appState.accounts.first { $0.accountIdHex == account.accountIdHex })
+        #expect(row.signedOut && row.unlinked)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.phase == .onboarding)
+
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func removingAnInactiveProfileWipesItLikeSignOutAndWipe() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
+        #expect(await appState.signOut())
+        #expect(appState.activeAccountRef == nil)
+
+        // The push drain and clear run while account exit holds off a new registration.
+        var exitHeldDuringWipe = false
+        appState.afterAccountExitClientCapturedForTesting = {
+            exitHeldDuringWipe = appState.isAccountExitInProgress
+        }
+        try await appState.removeUnlinkedAccount(accountRef: account.accountIdHex)
+        appState.afterAccountExitClientCapturedForTesting = nil
+
+        #expect(exitHeldDuringWipe)
+        #expect(!appState.isAccountExitInProgress)
+        #expect(!appState.accounts.contains { $0.accountIdHex == account.accountIdHex })
+        #expect(try await appState.client?.listAccounts().isEmpty == true)
+
+        await stopReadyRuntime(appState)
+    }
+
     @Test func explicitPushDisableSupersedesAnInterruptedExitsRestore() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState

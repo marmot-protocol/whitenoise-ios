@@ -481,7 +481,10 @@ final class AppState {
                 handleRuntimeEvent(event, generation: generation)
             }
         }
-        await announceRetainedUndeliveredChange(client: client, generation: generation)
+        // One read per chat: run it beside live events so a launch burst can't
+        // overflow the stream's buffer while it reads.
+        let retainedScan = Task { await self.announceRetainedUndeliveredChange(client: client, generation: generation) }
+        defer { retainedScan.cancel() }
         for await event in events {
             guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
             handleRuntimeEvent(event, generation: generation)
@@ -507,6 +510,7 @@ final class AppState {
             }
         }
         // An interrupted scan runs again with the next runtime.
+        guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
         checkedRetainedUndeliveredChanges = true
         if let newest { handleRuntimeEvent(newest.event, generation: generation) }
     }
@@ -1039,7 +1043,8 @@ final class AppState {
     private func completeSignOut(
         removedRef: String,
         removedAccountIdHex: String?,
-        destructive: Bool
+        destructive: Bool,
+        routesAway: Bool = true
     ) async -> [WipeFailureItem] {
         var localCleanupFailures: [WipeFailureItem] = []
         if destructive {
@@ -1089,8 +1094,13 @@ final class AppState {
             ))
         }
 
-        accountStore.requestProfileSelection()
-        if !accounts.contains(where: { !$0.signedOut }) {
+        if !routesAway {
+            // Whichever profile is active stays; only this one's projections go.
+            if let removedAccountIdHex {
+                profileStore.clearForAccountRemoval(accountIdHex: removedAccountIdHex)
+            }
+        } else if !accounts.contains(where: { !$0.signedOut }) {
+            accountStore.requestProfileSelection()
             // Last account signed out: tear the profile-projection state back
             // down to empty so cached peer data (#366), the per-account version
             // map (#353), and their sibling queues do not survive a full sign-out
@@ -1107,6 +1117,7 @@ final class AppState {
             retentionSweeper.cancelWithoutAwaiting()
             phase = .onboarding
         } else {
+            accountStore.requestProfileSelection()
             if destructive, let removedAccountIdHex {
                 profileStore.clearForAccountRemoval(accountIdHex: removedAccountIdHex)
             }
@@ -1145,6 +1156,22 @@ final class AppState {
     @discardableResult
     func signOutAndWipeActiveAccount(onError: ((Toast) -> Void)? = nil) async -> Bool {
         guard let wipingRef = activeAccountRef else { return false }
+        do {
+            try await wipeActiveAccount(wipingRef)
+            return true
+        } catch ForegroundRuntimeMutationError.runtimeUnavailable {
+            (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
+        } catch let error as ProfileDataRemainsError {
+            (onError ?? present)(.error(L10n.string("Couldn't wipe profile"), message: error.errorDescription))
+        } catch {
+            (onError ?? present)(UserFacingError.toast(title: L10n.string("Couldn't wipe profile"), error: error))
+        }
+        return false
+    }
+
+    /// Throws `runtimeUnavailable` when the wipe can't begin, or the wipe's error.
+    @MainActor
+    private func wipeActiveAccount(_ wipingRef: String) async throws {
         guard DestructiveWipeGate.canBegin(
             isReady: phase == .ready,
             isAppSceneActive: isAppSceneActive,
@@ -1152,8 +1179,7 @@ final class AppState {
             isRuntimeSuspending: isRuntimeSuspending,
             hasRuntimeClient: client != nil
         ), !isSigningOut else {
-            (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
-            return false
+            throw ForegroundRuntimeMutationError.runtimeUnavailable
         }
         let wipingAccountIdHex = accounts
             .first(where: { $0.label == wipingRef })?
@@ -1165,11 +1191,23 @@ final class AppState {
         isSigningOut = true
         notifications.cancelForegroundBatches(accountRef: wipingRef)
         defer { finishAccountExit() }
-        guard let exitingClient = client else {
-            (onError ?? present)(.error(L10n.string("Couldn't wipe profile")))
-            return false
-        }
+        guard let exitingClient = client else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
         await awaitCancelledForegroundMutationFollowups()
+        try await wipeAccount(wipingRef, accountIdHex: wipingAccountIdHex, using: exitingClient, routesAway: true)
+    }
+
+    /// The wipe shared by Sign Out & Wipe and removing an unlinked profile:
+    /// clears push the way sign-out does, wipes through MDK, then removes what
+    /// the app keeps for that profile and reports anything left. Only
+    /// `routesAway` leaves the active profile. The caller holds `isSigningOut`.
+    /// Throws when nothing was removed, with push restored.
+    @MainActor
+    private func wipeAccount(
+        _ wipingRef: String,
+        accountIdHex wipingAccountIdHex: String?,
+        using exitingClient: MarmotClient,
+        routesAway: Bool
+    ) async throws {
         let nativePushWasEnabled = (
             try? await exitingClient
                 .notificationSettings(accountRef: wipingRef)
@@ -1191,14 +1229,13 @@ final class AppState {
         do {
             outcome = try await exitingClient.signOutAndWipe(accountRef: wipingRef)
         } catch {
-            // Total FFI failure: nothing was wiped. Roll native push back and toast.
+            // Total FFI failure: nothing was wiped. Roll native push back.
             await restoreNativePushAfterFailedSignOut(
                 using: exitingClient,
                 accountRef: wipingRef,
                 wasEnabled: nativePushWasEnabled
             )
-            (onError ?? present)(UserFacingError.toast(title: L10n.string("Couldn't wipe profile"), error: error))
-            return false
+            throw error
         }
 
         // Incomplete cleanup can still follow a committed removal (a secret
@@ -1212,21 +1249,19 @@ final class AppState {
                 accountRef: wipingRef,
                 wasEnabled: nativePushWasEnabled
             )
-            (onError ?? present)(.error(
-                L10n.string("Couldn't wipe profile"),
-                message: L10n.string("This profile’s data is still on this device. Keep White Noise open and try again.")
-            ))
-            return false
+            throw ProfileDataRemainsError()
         }
 
         nativePushRestoreIntents.clear(wipingRef)
         // MDK removed the account: the ref is invalid now. Do the same local
-        // removal + routing the normal sign-out does — regardless of per-stage
-        // best-effort failures — then surface a report only when something remains.
+        // removal (and, for the active profile, routing) the normal sign-out
+        // does — regardless of per-stage best-effort failures — then surface a
+        // report only when something remains.
         let localCleanupFailures = await completeSignOut(
             removedRef: wipingRef,
             removedAccountIdHex: wipingAccountIdHex,
-            destructive: true
+            destructive: true,
+            routesAway: routesAway
         )
 
         let report = WipeReportProjection.report(
@@ -1236,7 +1271,6 @@ final class AppState {
         if !report.clean {
             pendingWipeReport = report
         }
-        return true
     }
 
     func eraseAppData() async throws {
@@ -1636,39 +1670,38 @@ final class AppState {
     func removeUnlinkedAccount(accountRef: String) async throws {
         let account = accounts.first { $0.label == accountRef || $0.accountIdHex == accountRef }
         if let account, account.label == activeAccountRef {
-            guard await signOutAndWipeActiveAccount() else { throw UnlinkedAccountRemovalError() }
+            try await wipeActiveAccount(account.label)
             return
         }
+        // Another profile (or none) is active: wipe this one the same way, but
+        // leave whichever profile is open where it is.
+        guard !isSigningOut else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
         let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
-        let ref = account?.label ?? accountRef
-        _ = try? await lease.client.marmot.clearPushRegistration(accountRef: ref)
-        let outcome = try await lease.client.signOutAndWipe(accountRef: ref)
-        // As for the active profile: leftover files after a committed removal
-        // still count as removed, so signing in again isn't blocked.
-        let presence: AccountPresence = outcome.localCleanup.completed
-            ? .removed : await accountPresence(ref, using: lease.client, storedAccounts: nil)
-        guard WipeReportProjection.removedLocalAccount(outcome, presence: presence) else {
-            try? await refreshAccounts(refreshUnreadSummaries: false)
-            throw UnlinkedAccountRemovalError()
+        isSigningOut = true
+        notifications.cancelForegroundBatches(accountRef: account?.label ?? accountRef)
+        defer {
+            finishAccountExit()
+            scheduleNativePushRegistrationIfEnabled()
         }
-        // MDK's copy is gone; drop what the app keeps for the same profile.
-        conversationDraftStore.removeDrafts(accountRef: ref)
-        await conversationDraftStore.flush()
-        MessageHideStore.clearAll(accountRef: ref)
-        if let accountIdHex = account?.accountIdHex {
-            ChatMuteStore.clearAll(accountIdHex: accountIdHex)
-            profileStore.clearContactNicknames(ownerAccountIdHex: accountIdHex)
-            profileStore.clearForAccountRemoval(accountIdHex: accountIdHex)
-        }
-        try? await refreshAccounts(refreshUnreadSummaries: false)
+        try await wipeAccount(
+            account?.label ?? accountRef, accountIdHex: account?.accountIdHex,
+            using: lease.client, routesAway: false
+        )
     }
 
     @MainActor
     func leaveUnlinkedAccount(accountIdHex: String) async {
-        try? await refreshAccounts()
-        // MDK reported the unlink, so leave even when the refresh failed and
-        // the list still shows the profile signed in.
+        do {
+            try await refreshAccounts()
+        } catch {
+            // MDK reported the unlink, so leave even when the refresh failed:
+            // mark the row the way MDK lists it, so the chooser doesn't offer it.
+            if let index = accountStore.accounts.firstIndex(where: { $0.accountIdHex == accountIdHex }) {
+                accountStore.accounts[index].signedOut = true
+                accountStore.accounts[index].unlinked = true
+            }
+        }
         guard let active = activeAccount, active.accountIdHex == accountIdHex else { return }
         activeAccountRef = nil
         _ = stopNotificationSubscription()

@@ -66,10 +66,7 @@ struct LinkedDevicesView: View {
                 Button("Start Fresh") { run("startFresh") { try await store.startFresh(using: appState) } }
             case .reset:
                 Button("Reset", role: .destructive) {
-                    run("reset") {
-                        try await store.resetForRepair(using: appState)
-                        store.present(.linkThisDevice)
-                    }
+                    run("reset") { try await store.resetForRepair(using: appState) }
                 }
             }
             Button("Cancel", role: .cancel) {}

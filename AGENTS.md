@@ -276,7 +276,9 @@ new device) and nothing once MDK reports none.
 devices, sign-ins and compromise warning, re-reading on MDK's
 `DeviceLinkChanged`/`LinkedDevicesChanged`/`UnrecognizedSignInsChanged`/
 `CompromiseWarningChanged`/`KeyPackageRefreshOverdueChanged` events, and routes
-user choices back; MDK owns every decision. Word `device group refused: <reason>`
+user choices back; MDK owns every decision. Each action captures its account and
+runtime once and runs every MDK call (and any sheet it opens) against them, never
+the profile active by the time a later step runs. Word `device group refused: <reason>`
 refusals through `DeviceGroupRefusal`. Only the new device can start a link, and
 either device may look new to the other, so the Devices screen offers both sides:
 Add a New Device (steps for the new device, waiting for its request) and Link to
@@ -311,7 +313,8 @@ itself on Device Linked, and an unnamed device reads as "<platform> · <client>"
 Sign Out & Wipe with linked devices says the other devices finish removing this one;
 the wipe report shows `siblingsNotReached` (never clean) and `groupsLeftToSiblings`.
 An unlinked account stays listed (`unlinked`, `signedOut`), so `DeviceUnlinked`
-offers Remove from This Device (`signOutAndWipe`) or Later, which routes away like
+offers Remove from This Device (`signOutAndWipe`, through the same wipe as Sign Out &
+Wipe, which leaves another active profile open) or Later, which routes away like
 a sign-out; each launch raises it again, once, for a signed-out `unlinked` profile. Signing in to it fails with `AccountUnlinked`; the import flow asks
 before removing that copy and retrying the import.
 
