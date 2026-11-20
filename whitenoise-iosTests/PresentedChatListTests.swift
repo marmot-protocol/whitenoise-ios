@@ -328,6 +328,26 @@ struct PresentedChatListTests {
         #expect(SelectedChatPresentation.display(selected, row: row, nickname: "Bestie").title == "Public name")
     }
 
+    @Test func namedTwoMemberGroupKeepsItsNameOverPeerNickname() {
+        // MDK reports a peer for a named 2-member group; only a peer-sourced title takes the nickname.
+        let row = chatListRow(groupIdHex: "pair", title: "Legacy", conversationKind: .direct)
+        var selected = ConversationPresentationFfi(
+            title: .literal(text: "Project room"), avatar: .placeholder(stableSeed: "pair", source: .groupFallback),
+            titleSource: .group, avatarSource: .groupFallback, peerId: "peer", resolution: .lastKnown
+        )
+        #expect(SelectedChatPresentation.headerTitle(for: selected, nickname: "Bestie") == "Project room")
+        #expect(SelectedChatPresentation.display(selected, row: row, nickname: "Bestie").title == "Project room")
+
+        selected.title = .literal(text: "Public name")
+        for source in [PresentationSourceFfi.peerProfile, .peerFallback] {
+            selected.titleSource = source
+            #expect(SelectedChatPresentation.headerTitle(for: selected, nickname: "Bestie") == "Bestie")
+            #expect(SelectedChatPresentation.display(selected, row: row, nickname: "Bestie").title == "Bestie")
+        }
+        selected.titleSource = .peerProfile
+        #expect(SelectedChatPresentation.headerTitle(for: selected, nickname: nil) == "Public name")
+    }
+
     @Test func selectedAvatarRejectsPrivateURLsAndUsesLocalizableFallbacks() {
         let row = chatListRow(groupIdHex: "presented", title: "Legacy title")
         let selected = ConversationPresentationFfi(

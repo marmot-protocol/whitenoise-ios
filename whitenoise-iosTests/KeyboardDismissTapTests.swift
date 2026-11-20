@@ -28,6 +28,14 @@ struct KeyboardDismissTapTests {
         #expect(!KeyboardDismissTap.resignsKeyboard(touching: inner))
     }
 
+    @Test func leavesAlertTapsToTheAlert() {
+        let alert = UIAlertController(title: "Set nickname", message: nil, preferredStyle: .alert)
+        let actionArea = UIView()
+        alert.view.addSubview(actionArea)
+        #expect(!KeyboardDismissTap.resignsKeyboard(touching: alert.view))
+        #expect(!KeyboardDismissTap.resignsKeyboard(touching: actionArea))
+    }
+
     @Test func dismissesForSiblingsOfATextField() {
         let row = UIView()
         let field = UITextField()

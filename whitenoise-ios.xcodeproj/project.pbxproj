@@ -253,6 +253,7 @@
 				Base,
 				de,
 				es,
+				fi,
 				fr,
 				it,
 				pt,

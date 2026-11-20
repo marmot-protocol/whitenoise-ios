@@ -37,8 +37,8 @@ enum SelectedChatPresentation {
         var isTitleFallback = false
         switch selected.title {
         case .literal(let text):
-            let localTitle = row.conversationKind == .direct && selected.peerId != nil
-                ? ContentSanitizer.displayName(nickname)
+            let localTitle = row.conversationKind == .direct
+                ? nicknameTitle(for: selected, nickname: nickname)
                 : nil
             if let localTitle {
                 title = localTitle
@@ -65,6 +65,26 @@ enum SelectedChatPresentation {
             isDirectMessage: row.conversationKind == .direct,
             directPeerAccountIdHex: selected.peerId
         )
+    }
+
+    /// A local nickname replaces only a title MDK took from the peer. A named
+    /// 2-member group still reports a `peerId`, but its own name wins (#1259).
+    static func nicknameTitle(for selected: ConversationPresentationFfi, nickname: String?) -> String? {
+        guard selected.peerId != nil,
+              selected.titleSource == .peerProfile || selected.titleSource == .peerFallback
+        else { return nil }
+        return ContentSanitizer.displayName(nickname)
+    }
+
+    /// Conversation header title from MDK's selected presentation.
+    static func headerTitle(for selected: ConversationPresentationFfi, nickname: String?) -> String {
+        switch selected.title {
+        case .literal(let title):
+            return nicknameTitle(for: selected, nickname: nickname)
+                ?? ContentSanitizer.groupName(title) ?? L10n.string("Unnamed group")
+        case .unnamedGroup: return L10n.string("Unnamed group")
+        case .unavailableConversation: return L10n.string("Conversation unavailable")
+        }
     }
 
     static func avatarSeed(for selected: ConversationPresentationFfi) -> String {

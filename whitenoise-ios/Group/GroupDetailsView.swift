@@ -585,9 +585,9 @@ struct GroupDetailsView: View {
                     loadError: model.sharedGroupsLoadError,
                     onRetry: { Task { await model.loadSharedGroups(using: appState, force: true) } },
                     onOpenChat: openChat,
-                    onAddToGroup: { showAddContactToGroup = true }
+                    onAddToGroup: { showAddContactToGroup = true },
+                    canAddToGroup: !blockedUsers.targetIsBlocked
                 )
-                .disabled(blockedUsers.targetIsBlocked)
             }
             if let contactAccountIdHex {
                 ContactNicknameRow(accountIdHex: contactAccountIdHex)

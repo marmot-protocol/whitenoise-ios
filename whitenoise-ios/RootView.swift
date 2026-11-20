@@ -244,6 +244,7 @@ private struct InitialSignInSheet: View {
         )
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.resizes)
+        .presentationBackground(Color(uiColor: .systemBackground))
     }
 }
 
