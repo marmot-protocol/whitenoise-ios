@@ -3246,10 +3246,12 @@ struct ConversationView: View {
             mediaDrafts = composerState.mediaDrafts
             return
         }
-        // Drafts can't hold every attachment, so there is no draft revision to
-        // claim: clearing the composer deletes the saved draft, and a failed
-        // send stays in its bubble.
-        let sendsThroughDraft = MediaDraftProcessor.sendsThroughDraft(payload.attachments)
+        // Until MDK holds a large attachment as a file in the draft, there is
+        // no draft revision to claim: clearing the composer deletes the saved
+        // draft, and a failed send stays in its bubble.
+        let sendsThroughDraft = appState.conversationDraftStore.sendsThroughDraft(
+            payload.attachments, accountRef: accountRef, groupIdHex: chat.groupIdHex
+        )
         if sendsThroughDraft {
             appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
         }
