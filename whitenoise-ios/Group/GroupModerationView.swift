@@ -362,12 +362,12 @@ struct GroupModerationView: View {
         let scope = AttachmentHistoryPager.Scope(appState: appState, group: conversation.group.groupIdHex)
         return ConversationMediaLoader({ try await conversation.data(for: $0) },
             openHandoff: { try await conversation.openHandoff(for: $0, control: $1) },
-            canShareDocument: { media, _ in
-                guard let scope, conversation.canModerateReports else { return false }
+            canShareDocument: { media, target in
+                guard let scope, let target, media.localTarget == target, conversation.canModerateReports else { return false }
                 let client = try scope.currentClient(in: appState)
                 let message = try await client.reportedMessage(accountRef: scope.account, groupID: scope.group, messageID: entry.report.messageIdHex)
-                _ = try scope.currentClient(in: appState)
-                guard conversation.canModerateReports, let message, !message.deleted,
+                guard let message, !message.deleted,
+                      try await scope.stillRetains(target, in: appState), conversation.canModerateReports,
                       model.entries.contains(where: { $0.id == entry.id && $0.mediaItems.contains { $0.isSameDocumentSource(as: media) } })
                 else { return false }
                 return GroupModerationModel.mediaItems(for: message, reportIdHex: entry.id).contains { $0.isSameDocumentSource(as: media) }

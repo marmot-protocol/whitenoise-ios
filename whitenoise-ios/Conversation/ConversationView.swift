@@ -5071,12 +5071,7 @@ struct ConversationView: View {
             guard let target = leasedTarget else { return isPresented(requiringOwnBytes: true) }
             guard isPresented() else { return false }
             guard let scope = AttachmentHistoryPager.Scope(appState: appState, group: viewModel.group.groupIdHex) else { return false }
-            let version = try await scope.version(in: appState)
-            let client = try scope.currentClient(in: appState)
-            let assets = try await client.marmot.attachmentLocalAssets(accountRef: scope.account, groupIdHex: scope.group, targets: [target])
-            guard assets.first?.reference != nil else { return false }
-            let current = try await scope.version(in: appState)
-            return current.changeSince(previous: version) != .restartRequired && isPresented()
+            return try await scope.stillRetains(target, in: appState) && isPresented()
         } automaticAttachmentByteCount: { media in
             await viewModel.automaticAttachmentByteCount(for: media)
         }
