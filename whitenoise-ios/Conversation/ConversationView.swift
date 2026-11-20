@@ -1453,6 +1453,10 @@ struct ConversationView: View {
             .onChange(of: viewModel?.acceptedCustomEmojiSend?.id) { _, id in
                 if id != nil { reconcileAcceptedCustomEmojiSend() }
             }
+            .onChange(of: appState.conversationDraftStore.fileBackedGeneration) { _, _ in
+                // A large attachment MDK now holds can pre-upload.
+                reconcileDraftMediaUploads()
+            }
             .onChange(of: mediaDrafts.map(\.id)) { _, _ in
                 reconcileDraftMediaUploads()
                 if editSession == nil {

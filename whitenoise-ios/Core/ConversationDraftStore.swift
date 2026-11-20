@@ -298,6 +298,12 @@ final class ConversationDraftStore {
     @ObservationIgnored private var pendingSendHandoffs: [ConversationDraftKey: PendingDraftSendHandoff] = [:]
     /// Large attachments MDK is copying into the draft as files, by chat and id.
     @ObservationIgnored private var stagingControls: [ConversationDraftKey: [String: MediaFileTransferControlFfi]] = [:]
+    /// Advances when MDK finishes holding a large attachment as a file, so the
+    /// composer can start its pre-upload.
+    private(set) var fileBackedGeneration = 0
+    /// What was typed after a Send tap, before that submission was claimed:
+    /// the next message, kept once the claim is done.
+    @ObservationIgnored private var typedWhileQueued: [ConversationDraftKey: ConversationDraftSnapshot?] = [:]
     /// Advances whenever a pending-send handoff starts or ends, so the chat
     /// list can re-project its rows.
     private(set) var pendingSendHandoffGeneration = 0
@@ -386,6 +392,7 @@ final class ConversationDraftStore {
                 accountRef: key.accountRef, revision: selected.revision, attachment: attachment, control: control
             )
             selections[key] = staged
+            fileBackedGeneration &+= 1
             if pendingWrites[key] == nil {
                 summaries[key] = Self.summary(for: staged)
                 generation &+= 1
@@ -431,15 +438,28 @@ final class ConversationDraftStore {
     /// claim by revision. Everything the user types afterwards goes through the
     /// ordinary edited-while-sending path and is restored by `finishSend`.
     func beginQueuedSend(accountRef: String, groupIdHex: String) {
-        suppressEmptyAfterSendKeys.insert(ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex))
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        suppressEmptyAfterSendKeys.insert(key)
+        typedWhileQueued[key] = .some(nil)
     }
 
     func prepareSend(_ snapshot: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) async throws -> MessageDraftRevisionFfi {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
         guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else { throw MarmotKitError.MessageDraftRevisionConflict }
+        // Wait out a running write (a large attachment's copy can take a while)
+        // before writing the submission, so nothing typed meanwhile can take
+        // its place in the write that Send claims.
+        while activeWrites[key, default: 0] > 0 {
+            await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
+        }
+        guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else { throw MarmotKitError.MessageDraftRevisionConflict }
+        // What was typed after the tap is the next message: keep it once the
+        // submission is claimed (or fails to be).
+        let typedAfterTap = typedWhileQueued.removeValue(forKey: key) ?? nil
         setDraft(snapshot, accountRef: accountRef, groupIdHex: groupIdHex)
         await flush(key: key, using: nil)
         guard pendingWrites[key] == nil, let selection = selections[key], selection.draft != nil else {
+            if let typedAfterTap { setDraft(typedAfterTap, accountRef: accountRef, groupIdHex: groupIdHex) }
             throw MarmotKitError.MessageDraftRevisionConflict
         }
         sendingKeys.insert(key)
@@ -449,6 +469,8 @@ final class ConversationDraftStore {
         setPendingSendHandoff(Self.summary(for: selection).map {
             PendingDraftSendHandoff(revision: selection.revision, submitted: $0)
         }, for: key)
+        // Saved by `finishSend`, like anything typed while the send runs.
+        if let typedAfterTap { setDraft(typedAfterTap, accountRef: accountRef, groupIdHex: groupIdHex) }
         return selection.revision
     }
 
@@ -692,6 +714,9 @@ final class ConversationDraftStore {
         guard !resetPausedKeys.contains(key) else { return }
         resetKeys.remove(key)
         let operation = Self.normalizedSnapshot(snapshot).map(PendingOperation.save) ?? .delete
+        if typedWhileQueued[key] != nil {
+            if case .save = operation { typedWhileQueued[key] = .some(snapshot) } else { typedWhileQueued[key] = .some(nil) }
+        }
         if let accepted = acceptedUnrevisionedSends[key] {
             // A composer still showing an accepted custom emoji message (for
             // example on disappear) must not save it back as a draft.

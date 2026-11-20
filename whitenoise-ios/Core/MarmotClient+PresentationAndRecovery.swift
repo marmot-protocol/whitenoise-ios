@@ -127,12 +127,14 @@ extension MarmotClient {
             if item.fileBacked {
                 // Mapped from a private copy, never resident: it can be 512 MiB.
                 // Written off the MainActor, where this async method would otherwise run.
-                bytes = try await Task.detached(priority: .utility) { [marmot] in
+                let copy = Task.detached(priority: .utility) { [marmot] in
                     try await PickedMediaFile.mappedData(expectedSize: item.plaintextSize) { offset in
                         try await marmot.readMessageDraftAttachment(accountRef: accountRef, revision: selected.revision,
                             attachmentId: item.id, offset: offset, limit: MessageDraftAttachmentInputs.readChunkBytes)
                     }
-                }.value
+                }
+                // Leaving the chat stops the copy and removes the partial file.
+                bytes = try await withTaskCancellationHandler { try await copy.value } onCancel: { copy.cancel() }
             } else {
                 let inline = try await Task.detached(priority: .utility) { [marmot] in
                     try marmot.messageDraftAttachmentIfRevision(accountRef: accountRef,

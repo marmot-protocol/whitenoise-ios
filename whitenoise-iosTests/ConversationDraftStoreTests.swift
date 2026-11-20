@@ -417,6 +417,36 @@ struct ConversationDraftStoreTests {
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "second message")
     }
 
+    /// Send waits for a running write (a large attachment's copy can take a
+    /// while). Text typed meanwhile is the next message: the write Send claims
+    /// holds what was tapped, and the typed text stays a draft.
+    @Test func textTypedWhileSendWaitsIsNotSentInPlaceOfTheSubmission() async throws {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        var release: CheckedContinuation<Void, Never>?
+        persistence.beforePersist = { await withCheckedContinuation { release = $0 } }
+        store.setDraft(textSnapshot("earlier"), accountRef: "account", groupIdHex: "group")
+        let running = Task { await store.flush() }
+        try await eventually { release != nil }
+        persistence.beforePersist = nil
+
+        store.beginQueuedSend(accountRef: "account", groupIdHex: "group")
+        store.setDraft(textSnapshot(""), accountRef: "account", groupIdHex: "group")
+        let send = Task {
+            try await store.prepareSend(textSnapshot("submitted"), accountRef: "account", groupIdHex: "group")
+        }
+        await Task.yield()
+        store.setDraft(textSnapshot("next message"), accountRef: "account", groupIdHex: "group")
+        release?.resume()
+        await running.value
+        // No MDK selection here, so the claim itself is refused after the write.
+        _ = try? await send.value
+
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "submitted")
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "next message")
+    }
+
     @Test func textRestoredAfterAnAttachmentRejectionSurvivesReopeningTheConversation() async {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)
