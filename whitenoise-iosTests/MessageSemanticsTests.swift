@@ -39,6 +39,8 @@ struct MessageSemanticsTests {
         #expect(comment([["e", parent]]) == .unsupportedEvent)
         #expect(comment([["e", parent], ["k", "not a kind"]]) == .unsupportedEvent)
         #expect(comment([["e", parent], ["k", "-0"]]) == .unsupportedEvent)
+        #expect(comment([["e", parent], ["k", "+9"]]) == .unsupportedEvent)
+        #expect(comment([["e", parent], ["k", " 9"]]) == .unsupportedEvent)
         #expect(comment([["e", parent], ["K", "9"]]) == .unsupportedEvent)
     }
 

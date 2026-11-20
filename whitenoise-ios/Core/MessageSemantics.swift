@@ -142,10 +142,12 @@ nonisolated enum MessageSemantics {
         }
     }
 
-    /// MDK's test for a NIP-22 comment: any `k` tag naming a numeric kind.
-    /// Swift reads "-0" as zero where MDK's parser refuses a sign.
+    /// MDK's test for a NIP-22 comment: any `k` tag naming a numeric kind,
+    /// digits only (Swift's parser would also take a sign).
     private static func isNIP22Comment(_ tags: [MessageTagFfi]) -> Bool {
-        allValues(of: "k", in: tags).contains { !$0.hasPrefix("-") && UInt64($0) != nil }
+        allValues(of: "k", in: tags).contains { value in
+            !value.isEmpty && value.utf8.allSatisfy(isAsciiDigit) && UInt64(value) != nil
+        }
     }
 
     static func classify(_ record: AppMessageRecordFfi) -> Kind {
@@ -163,10 +165,11 @@ nonisolated enum MessageSemantics {
         kind != kindComment && classify(kind: kind, tags: []) == .unsupportedEvent
     }
 
-    /// Kinds a person sends as their own conversation message: chat, polls,
-    /// and other clients' NIP-22 comments, each a timeline row of its own.
+    /// Kinds a person sends as their own conversation message: chat and polls.
+    /// MarmotKit 0.18.0 doesn't count NIP-22 comments as chat activity, so
+    /// they can't carry the read marker.
     static func isUserMessageKind(_ kind: UInt64) -> Bool {
-        kind == kindChat || kind == kindPoll || kind == kindComment
+        kind == kindChat || kind == kindPoll
     }
 
     static func isTypedAgentEventKind(_ kind: UInt64) -> Bool {

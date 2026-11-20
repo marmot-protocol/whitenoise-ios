@@ -88,6 +88,39 @@ struct UnsupportedEventPresentationTests {
         #expect(store.replyPreview(for: reply)?.text == MessagePreview.unsupportedEventLabel)
     }
 
+    /// MDK clears a deleted row's tags, so a deleted comment can't be told
+    /// from another kind 1111: its quote reads as deleted, as any quote does.
+    @Test func aQuotedDeletedCommentReadsAsDeleted() throws {
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
+        let target = hex("01")
+        let quote = TimelineReplyPreviewFfi(
+            messageIdHex: target, sender: hex("11"), plaintext: "",
+            kind: MessageSemantics.kindComment, mediaJson: nil, media: [],
+            agentTextStreamJson: nil, deleted: true
+        )
+        store.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [
+                    timelineRecord(
+                        messageIdHex: target, plaintext: "", kind: MessageSemantics.kindComment,
+                        timelineAt: 1, deleted: true
+                    ),
+                    timelineRecord(
+                        messageIdHex: hex("02"), plaintext: "it's gone", timelineAt: 2,
+                        replyToMessageIdHex: target, replyPreview: quote
+                    ),
+                ],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+
+        let reply = try #require(record(kind: MessageSemantics.kindChat, in: store))
+        #expect(store.replyPreview(for: reply)?.text == MessagePreview.body(quote))
+        #expect(store.replyPreview(for: reply)?.text != MessagePreview.unsupportedEventLabel)
+    }
+
     private func record(kind: UInt64, in store: TimelineStore) -> AppMessageRecordFfi? {
         store.timeline.compactMap { item -> AppMessageRecordFfi? in
             guard case .message(let record, _) = item.kind, record.kind == kind else { return nil }

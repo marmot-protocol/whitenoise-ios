@@ -518,7 +518,8 @@ final class TimelineStore {
             guard !isBlockedAuthor(preview.sender) else { return nil }
             // A kind 1111 is a comment only with a numeric `k` tag, which the
             // projected quote doesn't carry: decide from the loaded target.
-            let targetUnsupported = preview.kind == MessageSemantics.kindComment
+            // A deleted target has no tags left; it reads as deleted.
+            let targetUnsupported = preview.kind == MessageSemantics.kindComment && !preview.deleted
                 && messageById[targetId].map { MessageSemantics.classify($0) == .unsupportedEvent } == true
             let key = ReplyPreviewDisplayCacheKey(
                 messageIdHex: record.messageIdHex,
