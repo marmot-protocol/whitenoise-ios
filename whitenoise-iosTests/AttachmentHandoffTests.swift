@@ -124,6 +124,22 @@ struct AttachmentHandoffTests {
         #expect(await waitForReleases(releaser, count: 1) == [lease])
     }
 
+    @Test func documentShareReleasesTheLeaseWhenItsSourceDisappears() async throws {
+        let releaser = FakeReleaser()
+        let leased = AttachmentHandoffLease(lease: lease, path: "/tmp/handoff/report.pdf", releaser: releaser)
+        var visible = true
+        let loader = ConversationMediaLoader { _ in throw AttachmentReadError.unavailable } openHandoff: { _, _ in
+            visible = false
+            return leased
+        } canShareDocument: { _, _ in visible }
+        let presentation = DocumentSharePresentation()
+        await #expect(throws: AttachmentReadError.unavailable) {
+            try await presentation.present(document(localTarget: Self.target), using: loader, demand: .explicit)
+        }
+        #expect(presentation.file == nil)
+        #expect(await waitForReleases(releaser, count: 1) == [lease])
+    }
+
     @Test func droppingAnUnreleasedLeaseReleasesIt() async {
         let releaser = FakeReleaser()
         do {

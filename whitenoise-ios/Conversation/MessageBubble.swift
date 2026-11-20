@@ -70,13 +70,16 @@ final class ConversationMediaLoader {
 
     private let load: (MessageMediaAttachment) async throws -> Data
     private let openHandoff: OpenHandoff?
+    let canShareDocument: @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool
     fileprivate let automaticAttachmentByteCount: (MessageMediaAttachment) async -> Int?
 
 
     init(_ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil,
+         canShareDocument: @escaping @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool = { _, _ in true },
          automaticAttachmentByteCount: @escaping (MessageMediaAttachment) async -> Int? = { $0.localData?.count }) {
         self.load = load
         self.openHandoff = openHandoff
+        self.canShareDocument = canShareDocument
         self.automaticAttachmentByteCount = automaticAttachmentByteCount
     }
 
@@ -2312,6 +2315,8 @@ private struct MessageMediaTile: View {
     @State private var gifData: Data?
     @State private var gifReplay = 0
     @State private var loadedImageID: String?
+    @State private var imageRequest = UUID()
+    @State private var explicitReadInFlight = false
     @State private var isLoading = false
     @State private var didFail = false
     @State private var awaitingManualDownload = false
@@ -2476,7 +2481,16 @@ private struct MessageMediaTile: View {
     }
 
     private func loadImageIfNeeded(scale: CGFloat, demand: AttachmentDemand = .automatic) async -> Data? {
-        guard item.isImage else { return nil }
+        guard item.isImage, demand != .automatic || (!explicitReadInFlight && !didFail) else { return nil }
+        let request = UUID()
+        imageRequest = request
+        explicitReadInFlight = demand != .automatic
+        defer {
+            if imageRequest == request {
+                isLoading = false
+                explicitReadInFlight = false
+            }
+        }
         let maxPixelSize = max(1, Int(ceil(max(size.width, size.height) * scale)))
         let cached = demand == .retry ? nil : MessageMediaThumbnailDecoder.cachedThumbnail(for: thumbnailCacheKey, maxPixelSize: maxPixelSize)
         // Identical photos share decoded thumbnails. An explicit open still needs
@@ -2490,14 +2504,13 @@ private struct MessageMediaTile: View {
         }
         isLoading = true
         didFail = false
-        defer { isLoading = false }
         // host_media_prepare: bytes through decode, before the UI assignment.
         let analytics = appState.productAnalytics
         let prepareTiming = analytics.beginTiming()
         do {
             let requested = demand == .automatic ? item : item.forTranscriptPage
             let data = try await onLoadMedia.data(for: requested, demand: demand)
-            guard !Task.isCancelled else {
+            guard !Task.isCancelled, imageRequest == request else {
                 analytics.recordStage(.mediaPrepare, since: prepareTiming, outcome: .cancelled)
                 return nil
             }
@@ -2511,6 +2524,7 @@ private struct MessageMediaTile: View {
             }
             analytics.recordStage(.mediaPrepare, since: prepareTiming,
                                   outcome: decoded == nil ? .failure : Task.isCancelled ? .cancelled : .success)
+            guard !Task.isCancelled, imageRequest == request else { return nil }
             guard let decoded else {
                 image = nil
                 gifData = nil
@@ -2518,7 +2532,6 @@ private struct MessageMediaTile: View {
                 didFail = demand.failureOffersRetry
                 return nil
             }
-            guard !Task.isCancelled else { return nil }
             image = decoded
             gifData = item.isGIF ? data : nil
             loadedImageID = item.id
@@ -2529,7 +2542,7 @@ private struct MessageMediaTile: View {
         } catch {
             analytics.recordStage(.mediaPrepare, since: prepareTiming,
                                   outcome: error is CancellationError ? .cancelled : .failure)
-            guard !Task.isCancelled else { return nil }
+            guard !Task.isCancelled, imageRequest == request else { return nil }
             if loadedImageID != item.id {
                 image = nil
                 gifData = nil
@@ -3380,7 +3393,14 @@ private struct MessageDocumentAttachmentView: View {
     let onLoadMedia: ConversationMediaLoader
 
     @Environment(\.scenePhase) private var scenePhase
-    @State private var preview: MessageDocumentPreview?
+    private struct OpenDocument: Identifiable {
+        let preview: MessageDocumentPreview
+        let item: MessageMediaAttachment
+        let loader: ConversationMediaLoader
+        var id: UUID { preview.id }
+    }
+
+    @State private var preview: OpenDocument?
     @State private var openingID: UUID?
     @State private var openingTask: Task<Void, Never>?
     @State private var contactName: String?
@@ -3469,7 +3489,7 @@ private struct MessageDocumentAttachmentView: View {
             if let name { transcriptSearch?.registerContactName(name, for: item.id) }
         }
         .sheet(item: $preview) { document in
-            MessageDocumentPreviewSheet(preview: document, item: item, loader: onLoadMedia)
+            MessageDocumentPreviewSheet(preview: document.preview, item: document.item, loader: document.loader)
                 .appAppearance()
         }
         .sheet(item: $share.file) { file in
@@ -3544,7 +3564,7 @@ private struct MessageDocumentAttachmentView: View {
             if let document = try await share.openDocument(item, using: onLoadMedia, demand: demand,
                 isCurrent: isCurrent, didReadSize: { byteCount = $0 }), isCurrent() {
                 if case .contact(let card) = document.content { contactName = card.name }
-                preview = document
+                preview = OpenDocument(preview: document, item: item, loader: onLoadMedia)
             }
         } catch is CancellationError {
             return
@@ -3968,6 +3988,7 @@ struct MessageMediaFullscreenGalleryView: View {
 
     init(
         gallery: MessageMediaGallery,
+        openingSelection: MessageMediaGallery.PendingSelection? = nil,
         onLoadMedia: ConversationMediaLoader,
         forwardingContext: MediaForwardingContext? = nil,
         onGoToMessage: ((String) -> Void)? = nil,
@@ -3979,7 +4000,7 @@ struct MessageMediaFullscreenGalleryView: View {
         self.onGoToMessage = onGoToMessage
         self.onDismiss = onDismiss
         _selectedItemID = State(initialValue: gallery.initialItemID)
-        _pendingSelection = State(initialValue: gallery.pendingSelection(for: gallery.initialItemID))
+        _pendingSelection = State(initialValue: gallery.pendingSelection(for: gallery.initialItemID) ?? openingSelection)
     }
 
     var body: some View {

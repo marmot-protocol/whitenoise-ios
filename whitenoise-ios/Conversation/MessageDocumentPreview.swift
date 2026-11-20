@@ -116,11 +116,15 @@ final class DocumentSharePresentation {
         control = request
         defer { if control === request { control = nil } }
         let opened = try await loader.shareFile(for: item, demand: demand, control: request)
-        guard control === request, !request.isCancelled(), !Task.isCancelled, isCurrent() else {
+        do {
+            guard control === request, !request.isCancelled(), isCurrent() else { throw CancellationError() }
+            guard try await loader.canShareDocument(item, opened.lease?.target) else { throw AttachmentReadError.unavailable }
+            guard control === request, !request.isCancelled(), !Task.isCancelled, isCurrent() else { throw CancellationError() }
+            file = opened
+        } catch {
             opened.finish()
-            throw CancellationError()
+            throw error
         }
-        file = opened
     }
 
     func close() {

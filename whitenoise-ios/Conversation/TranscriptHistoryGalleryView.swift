@@ -20,6 +20,7 @@ extension EnvironmentValues {
 struct TranscriptHistoryGalleryView: View {
     let gallery: MessageMediaGallery
     let conversation: ConversationViewModel
+    var openingSelection: MessageMediaGallery.PendingSelection? = nil
     var gifRowID: String? = nil
     let onLoadMedia: ConversationMediaLoader
     let forwardingContext: MediaForwardingContext?
@@ -51,7 +52,7 @@ struct TranscriptHistoryGalleryView: View {
                 }
             } else {
                 let expanded = scoped && !history.validationFailed ? expandedGallery : gallery
-                MessageMediaFullscreenGalleryView(gallery: expanded, onLoadMedia: onLoadMedia,
+                MessageMediaFullscreenGalleryView(gallery: expanded, openingSelection: openingSelection, onLoadMedia: onLoadMedia,
                     forwardingContext: forwardingContext, onGoToMessage: onGoToMessage, onDismiss: onDismiss)
                     .id(history.viewerGeneration)
                     .environment(\.transcriptHistoryControls, scoped ? controls(for: expanded) : nil)

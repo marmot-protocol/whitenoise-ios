@@ -23,7 +23,7 @@ final class SharedMediaLibraryViewModel {
     private var pager = AttachmentHistoryPager()
     var hasMore: Bool { didLoad && pager.canLoadMore }
     private(set) var hasNewAttachments = false
-    private var scope: AttachmentHistoryPager.Scope?
+    private(set) var scope: AttachmentHistoryPager.Scope?
     private var generation = 0
     private var didLoad = false
     private var didLoadLinks = false
@@ -129,9 +129,9 @@ final class SharedMediaLibraryViewModel {
 
     /// Pages message history newest-first and extracts links. The scan is
     /// bounded; when it stops early the truncation is surfaced, never silent.
-    func loadLinks(groupIdHex: String, using appState: AppState, force: Bool = false) async {
+    func loadLinks(groupIdHex: String, using appState: AppState, force: Bool = false, enteringTab: Bool = false) async {
         guard let scope, scope == AttachmentHistoryPager.Scope(appState: appState, group: groupIdHex),
-              !isLoadingLinks, force || !didLoadLinks else { return }
+              enteringTab || !isLoadingLinks, force || !didLoadLinks else { return }
         let request = UUID()
         linkRequest = request
         linksError = nil
@@ -260,7 +260,6 @@ struct SharedMediaLibraryView: View {
         .task(id: scope) {
             await model.load(groupIdHex: conversation.group.groupIdHex, using: appState)
             guard scope != nil else { return }
-            if category == .links { await model.loadLinks(groupIdHex: conversation.group.groupIdHex, using: appState) }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 await model.refreshVersion(groupIdHex: conversation.group.groupIdHex, using: appState)
@@ -277,10 +276,9 @@ struct SharedMediaLibraryView: View {
             // never fires for a region/calendar change; this one does.
             model.rebuildMonthSections()
         }
-        .task(id: category) {
-            if category == .links {
-                await model.loadLinks(groupIdHex: conversation.group.groupIdHex, using: appState)
-            }
+        .task(id: category == .links ? model.scope : nil) {
+            guard category == .links, model.scope == scope, scope != nil else { return }
+            await model.loadLinks(groupIdHex: conversation.group.groupIdHex, using: appState, enteringTab: true)
         }
         .fullScreenCover(item: $gallery) { gallery in
             MessageMediaFullscreenGalleryView(

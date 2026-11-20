@@ -351,6 +351,11 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
             && (earlier.sourceHint == nil || earlier.sourceHint == sourceHint)
     }
 
+    func isSameDocumentSource(as original: Self) -> Bool {
+        id == original.id && reference == original.reference && localTarget == original.localTarget && sourceHint == original.sourceHint
+            && (reference != nil || localData == original.localData)
+    }
+
     var isDocument: Bool {
         MediaAttachmentKind.classify(mediaType: mediaType, fileName: fileName) == .document
     }

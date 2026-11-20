@@ -153,7 +153,9 @@ final class TranscriptAttachmentHistory {
     private var scope: Scope?
     private var pager = AttachmentHistoryPager()
     var isReconnectingPages: Bool { refreshedPrefix != nil }
-    private var olderContinuation: AttachmentHistoryPager?
+    private var lastScannedSlot: AttachmentLocalTargetFfi?
+    private var refreshBoundary: AttachmentLocalTargetFfi?
+    private var refreshingVersion: AttachmentHistoryVersion?
     private var refreshedPrefix: TranscriptHistoryPages?
     private var additionsVersion: AttachmentHistoryVersion?
     private var generation = 0
@@ -216,7 +218,9 @@ final class TranscriptAttachmentHistory {
         hasAdditions = false
         pager = .init()
         refreshedPrefix = nil
-        olderContinuation = nil
+        lastScannedSlot = nil
+        refreshBoundary = nil
+        refreshingVersion = nil
         additionsVersion = nil
         isLoading = false
     }
@@ -225,12 +229,21 @@ final class TranscriptAttachmentHistory {
         guard self.scope == scope, scope == Scope(appState: appState, group: scope.group),
               hasAdditions, !isLoading, !validationFailed else { return }
         generation &+= 1
-        olderContinuation = pager
+        // An exhausted collection must be rescanned through exhaustion. A native page
+        // can also end without visible media, so use its original, unfiltered last slot.
+        refreshBoundary = pager.canLoadMore ? lastScannedSlot : nil
         refreshedPrefix = .init()
         pager = pager.fromHead()
         hasAdditions = false
         scannedSlots = 0
         await loadPage(scope: scope, appState: appState)
+    }
+
+    private func originalSlot(_ entry: AttachmentEntryFfi) -> AttachmentLocalTargetFfi {
+        let index: UInt32 = switch entry.attachment {
+        case .accepted(let index, _), .rejected(let index, _): index
+        }
+        return .init(messageIdHex: entry.messageIdHex, sourceMessageIdHex: entry.sourceMessageIdHex, attachmentIndex: index)
     }
 
     /// One page per request. A stale native cursor may restart once at the head.
@@ -251,7 +264,7 @@ final class TranscriptAttachmentHistory {
                 })
             guard ticket == generation, (try? scope.currentClient(in: appState)) != nil else { return }
             let firstRefreshPage = refreshedPrefix != nil && pager.cursor == nil
-            let additionsBase = firstRefreshPage ? page.version : (additionsVersion ?? pager.baseline ?? page.version)
+            let additionsBase = firstRefreshPage ? page.version : (refreshingVersion ?? additionsVersion ?? pager.baseline ?? page.version)
             if revision != startingRevision {
                 let checkedRevision = revision
                 let current = try await scope.version(in: appState)
@@ -264,21 +277,21 @@ final class TranscriptAttachmentHistory {
                 guard checkedRevision == revision else { pageFailed = true; return }
                 if current.changeSince(previous: additionsBase) == .additions { hasAdditions = true }
             }
-            if firstRefreshPage { additionsVersion = page.version }
+            if firstRefreshPage { refreshingVersion = page.version }
+            lastScannedSlot = page.entries.last.map(originalSlot)
             scannedSlots += page.entries.count
             pager = next
             if var prefix = refreshedPrefix {
                 prefix.append(page.entries)
-                if !canLoadMore || prefix.reaches(pages) {
-                    if canLoadMore, !pages.isEmpty, let olderContinuation {
-                        pages = prefix.includingRetainedTail(pages)
-                        pager = olderContinuation
-                    } else {
-                        pages = prefix
-                    }
+                let covered = refreshBoundary.map { boundary in page.entries.contains { originalSlot($0) == boundary } } ?? false
+                if !canLoadMore || covered {
+                    pages = prefix
+                    additionsVersion = refreshingVersion
+                    refreshingVersion = nil
                     refreshedPrefix = nil
-                    olderContinuation = nil
+                    refreshBoundary = nil
                 } else {
+                    pages = prefix.includingRetainedTail(pages)
                     refreshedPrefix = prefix
                 }
             } else {
@@ -344,7 +357,7 @@ final class TranscriptAttachmentHistory {
                 // Later pages may take several taps to reconnect to the retained
                 // gallery. Keep any newer arrivals available for the next refresh.
                 if (!isReconnectingPages || pager.cursor != nil),
-                   current.changeSince(previous: additionsVersion ?? baseline) == .additions {
+                   current.changeSince(previous: refreshingVersion ?? additionsVersion ?? baseline) == .additions {
                     hasAdditions = true
                 }
                 validationFailed = false
