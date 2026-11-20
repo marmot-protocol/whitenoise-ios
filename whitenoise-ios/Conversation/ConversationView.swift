@@ -1497,6 +1497,9 @@ struct ConversationView: View {
                 dictationInstallWatch = nil
                 viewModel?.search.end()
                 cancelPendingTimelineFollowUpWork()
+                actionsTarget = nil
+                actionsReturnGeometry = nil
+                composerFocusSuspendedForActions = false
                 dismissKeyboard()
                 if let editSession {
                     persistDraft(
@@ -4757,7 +4760,9 @@ struct ConversationView: View {
             },
             onReact: { emoji in
                 Task { await viewModel.toggleReaction(emoji, on: record) }
-                appState.addRecentReaction(emoji)
+                if CustomEmojiShortcode(reactionContent: emoji) == nil && selectedReaction?.emoji != emoji {
+                    appState.addRecentReaction(emoji)
+                }
                 dismissActions(resumingComposerFocus: true)
             },
             onReply: {

@@ -1089,7 +1089,7 @@ struct MessageBubble: View {
     }
 
     private var showsReactionStrip: Bool {
-        !isDeleted && !(status == .failed && onFailedTap != nil) && (!reactions.isEmpty || omittedReactionKinds > 0)
+        !isDeleted && (!reactions.isEmpty || omittedReactionKinds > 0)
     }
 
     private var widensTextForReactions: Bool {
@@ -1106,31 +1106,38 @@ struct MessageBubble: View {
     @ViewBuilder
     private var bubbleMetadataRow: some View {
         if status == .failed, !isDeleted, let onFailedTap {
-            VStack(alignment: .trailing, spacing: 2) {
-                Button(action: onFailedTap) {
-                    MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: .failed, isFromMe: true)
-                        .multilineTextAlignment(.trailing)
-                }
-                .buttonStyle(.plain)
-                .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
-                    showMessageActions?(.failureNotice)
-                })
-                if isEdited || hasReports {
-                    MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
-                        showsDeliveryStatus: false, hasReports: hasReports,
-                        onViewEditHistory: onViewEditHistory)
-                }
+            VStack(alignment: .trailing, spacing: 0) {
+                if showsReactionStrip { reactionMetadata(showsTimestamp: false) }
+                failedNotice(action: onFailedTap)
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.horizontal, density.metrics.bubbleHorizontalInset)
-            .padding(.top, density.metrics.bubbleMetadataSpacing)
         } else if !showsReactionStrip {
             if showsMetadataFooter {
                 metadataWithoutReactions.padding(.top, density.metrics.bubbleMetadataSpacing)
             }
         } else {
-            reactionMetadata
+            reactionMetadata(showsTimestamp: showsMetadataFooter)
         }
+    }
+
+    private func failedNotice(action: @escaping () -> Void) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Button(action: action) {
+                MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: .failed, isFromMe: true)
+                    .multilineTextAlignment(.trailing)
+            }
+            .buttonStyle(.plain)
+            .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
+                showMessageActions?(.failureNotice)
+            })
+            if isEdited || hasReports {
+                MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
+                    showsDeliveryStatus: false, hasReports: hasReports,
+                    onViewEditHistory: onViewEditHistory)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+        .padding(.top, density.metrics.bubbleMetadataSpacing)
     }
 
     private var metadataWithoutReactions: some View {
@@ -1151,7 +1158,7 @@ struct MessageBubble: View {
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
     }
 
-    private var reactionMetadata: some View {
+    private func reactionMetadata(showsTimestamp: Bool) -> some View {
         let allPills = reactions
         let pills = Array(allPills.prefix(ReactionPillPresentation.maximumRenderedPills))
         let preHiddenCount = allPills.count - pills.count + Int(clamping: min(omittedReactionKinds, UInt64(Int.max - allPills.count)))
@@ -1202,7 +1209,7 @@ struct MessageBubble: View {
                     }
             }
 
-            if showsMetadataFooter {
+            if showsTimestamp {
                 messageMetadataFooter
             }
         }

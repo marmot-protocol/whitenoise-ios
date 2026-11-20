@@ -89,7 +89,8 @@ final class ChatListViewport {
     var visibleFrameInWindow: CGRect? {
         guard let scrollView, let window = scrollView.window else { return nil }
         let visible = scrollView.bounds.inset(by: scrollView.adjustedContentInset)
-        return scrollView.convert(visible, to: window).intersection(window.safeAreaLayoutGuide.layoutFrame)
+        let frame = scrollView.convert(visible, to: window).intersection(window.safeAreaLayoutGuide.layoutFrame)
+        return frame.isEmpty ? nil : frame
     }
 
     private func visibleRows() -> [(id: String, offset: CGFloat, height: CGFloat)] {
