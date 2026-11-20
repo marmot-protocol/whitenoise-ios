@@ -334,6 +334,15 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         MediaAttachmentPolicy.canonicalMediaType(mediaType).hasPrefix("audio/")
     }
 
+    /// Delivery can supply the original source for an already displayed outgoing attachment.
+    /// A replacement for a previously known slot must prepare its own bytes.
+    func canUseBytesPrepared(for earlier: Self) -> Bool {
+        guard id == earlier.id, reference == earlier.reference else { return false }
+        if localTarget == earlier.localTarget { return true }
+        return earlier.localTarget == nil && localTarget != nil && reference != nil
+            && (earlier.sourceHint == nil || earlier.sourceHint == sourceHint)
+    }
+
     var isDocument: Bool {
         MediaAttachmentKind.classify(mediaType: mediaType, fileName: fileName) == .document
     }

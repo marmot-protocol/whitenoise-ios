@@ -30,6 +30,22 @@ struct MessageMediaGalleryTests {
             data: draft.data)) == nil)
     }
 
+    @Test func aPreparedPhotoAcceptsItsFirstOriginalSlotAndRejectsAReplacement() throws {
+        var ref = MediaAttachmentReferenceFfi(locators: [], ciphertextSha256: "", plaintextSha256: "photo",
+            nonceHex: "", fileName: "photo.png", mediaType: "image/png", version: .v1,
+            sourceEpoch: 1, dim: nil, thumbhash: nil)
+        let pending = try #require(MessageMediaAttachment.displayItems(from: [ref], ownerId: "row").first)
+        var source = pending
+        source.localTarget = .init(messageIdHex: "message", sourceMessageIdHex: "confirmation", attachmentIndex: 0)
+        #expect(source.canUseBytesPrepared(for: pending))
+        var edited = source
+        edited.localTarget?.sourceMessageIdHex = "replacement"
+        #expect(!edited.canUseBytesPrepared(for: source))
+        ref.fileName = "different.png"
+        let different = try #require(MessageMediaAttachment.displayItems(from: [ref], ownerId: "row").first)
+        #expect(!different.canUseBytesPrepared(for: pending))
+    }
+
     @Test func preparedTranscriptPhotoNeedsLiveSlotVerificationToExport() async throws {
         let photo = attachment(id: "photo", mediaType: "image/png")
         let gallery = try #require(MessageMediaGallery(transcriptItems: [photo], openingID: photo.id,
@@ -46,7 +62,7 @@ struct MessageMediaGalleryTests {
         let gallery = MessageMediaGallery(
             items: [image, document],
             initialItem: document,
-            initialImageData: Data()
+            initialMediaData: Data()
         )
 
         #expect(gallery == nil)
@@ -60,7 +76,7 @@ struct MessageMediaGalleryTests {
         let gallery = try #require(MessageMediaGallery(
             items: [image, video, document],
             initialItem: image,
-            initialImageData: imageData()
+            initialMediaData: imageData()
         ))
 
         #expect(gallery.items.map(\.id) == ["image", "video"])
@@ -113,7 +129,7 @@ struct MessageMediaGalleryTests {
         let gallery = try #require(MessageMediaGallery(
             items: [document, otherImage, video],
             initialItem: initial,
-            initialImageData: data
+            initialMediaData: data
         ))
 
         #expect(gallery.items.map(\.id) == ["initial", "other", "video"])

@@ -1042,7 +1042,8 @@ final class ConversationViewModel {
 
     /// Project the currently loaded transcript only while its media sheet is open.
     /// Keep the row's original media objects so opening a page addresses its original slot.
-    func transcriptMediaGallery(opening itemID: String, initialData: Data?, includingGIFsIn gifRowID: String? = nil) -> MessageMediaGallery? {
+    func transcriptMediaGallery(opening itemID: String, initialData: Data?, includingGIFsIn gifRowID: String? = nil,
+                                allowsEmptyWindow: Bool = false) -> MessageMediaGallery? {
         var items: [MessageMediaAttachment] = []
         var messages: [String: String] = [:]
         var captions: [String: MessageMediaGallery.Caption] = [:]
@@ -1064,7 +1065,7 @@ final class ConversationViewModel {
             }
         }
         return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: initialData,
-            messages: messages, captions: captions)
+            messages: messages, captions: captions, allowsEmptyWindow: allowsEmptyWindow)
     }
 
     func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
@@ -2423,7 +2424,7 @@ final class ConversationViewModel {
             )
             let media = mediaItems(for: item)
             var labels = [name]
-            let contacts = media.filter { ["text/vcard", "text/x-vcard"].contains(MediaAttachmentPolicy.canonicalMediaType($0.mediaType)) }
+            let contacts = media.filter { DocumentPreviewFormat(for: $0) == .contact }
             if !contacts.isEmpty { labels.append(L10n.string("Contact")) }
             for attachment in media {
                 labels.append(attachment.fileName)
