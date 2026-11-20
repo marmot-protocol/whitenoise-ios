@@ -6,7 +6,7 @@ import Testing
 struct QuickReactionChoicesTests {
     @Test func quickReactionChoicesAreStableUniqueAndFilledToSix() {
         #expect(QuickReactionChoices.normalize(["🔥", "🔥", "\u{202E}", "👍"]) == [
-            "🔥", "👍", "❤️", "👎", "😂", "😮",
+            "🔥", "👍", "❤️", "🤘", "😂", "🦫",
         ])
         #expect(QuickReactionChoices.normalize(["❤", "❤️"]).filter { $0 == "❤" || $0 == "❤️" }.count == 1)
     }
@@ -30,7 +30,7 @@ struct QuickReactionChoicesTests {
         #expect(QuickReactionChoices.resolved(
             customized: nil,
             recent: ["🔥"]
-        ) == ["🔥", "❤️", "👍", "👎", "😂", "😮"])
+        ) == ["🔥", "❤️", "🤘", "😂", "🦫", "🚀"])
 
         let saved = QuickReactionPreferences.save(
             ["🚀", "✅", "🎉", "👀", "🙏", "💯"],

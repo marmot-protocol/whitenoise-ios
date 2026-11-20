@@ -7,6 +7,7 @@ nonisolated struct ConversationReplyPreview: Equatable {
     let name: String
     let text: String
     let media: MessageMediaAttachment?
+    var isPoll = false
 }
 
 /// Owns the conversation's merged timeline: the durable message mirror, the
@@ -528,8 +529,9 @@ final class TimelineStore {
                 return cached.value
             }
             let name = resolvedAccountDisplayName(preview.sender)
+            let isPoll = !preview.deleted && preview.sticker == nil && preview.kind == MessageSemantics.kindPoll
             let text = ContentSanitizer.compactSingleLine(
-                MessagePreview.body(
+                isPoll ? MessagePreview.pollTitle(question: preview.plaintext) : MessagePreview.body(
                     preview,
                     mentionDisplayName: mentionDisplayNameResolver,
                     systemEventNaming: systemEventNaming
@@ -546,7 +548,7 @@ final class TimelineStore {
                     resolveMissingSource: true
                 ).first
             let value = ConversationReplyPreview(
-                name: name, text: text.isEmpty ? media?.rejectionMessage ?? "" : text, media: media
+                name: name, text: text.isEmpty ? media?.rejectionMessage ?? "" : text, media: media, isPoll: isPoll
             )
             replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
             return value
@@ -570,16 +572,19 @@ final class TimelineStore {
             return cached.value
         }
         let name = resolvedAccountDisplayName(target.sender)
+        let isPoll = !targetDeleted && target.sticker == nil && target.kind == MessageSemantics.kindPoll
         let text = targetDeleted
             ? MessageDeletionPresentation.text(source: deletedProjections.source(for: targetId))
-            : ContentSanitizer.compactSingleLine(displayBody(of: target), maxLength: 120) ?? ""
+            : ContentSanitizer.compactSingleLine(
+                isPoll ? MessagePreview.pollTitle(question: target.plaintext) : displayBody(of: target), maxLength: 120
+            ) ?? ""
         let media = targetDeleted
             ? nil
             : mediaProjections.build(
                 for: target,
                 ownerId: "reply:\(record.messageIdHex):\(targetId)"
             ).first
-        let value = ConversationReplyPreview(name: name, text: text, media: media)
+        let value = ConversationReplyPreview(name: name, text: text, media: media, isPoll: isPoll)
         replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
         return value
     }
