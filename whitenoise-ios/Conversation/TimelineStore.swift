@@ -7,6 +7,26 @@ nonisolated struct ConversationReplyPreview: Equatable {
     let name: String
     let text: String
     let media: MessageMediaAttachment?
+    let isPoll: Bool
+
+    init(name: String, text: String, media: MessageMediaAttachment?, isPoll: Bool = false) {
+        self.isPoll = isPoll
+        self.name = name
+        self.media = media
+        self.text = text.isEmpty ? (media?.rejectionMessage ?? media?.fileName ?? "") : text
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.name == rhs.name && lhs.text == rhs.text && lhs.isPoll == rhs.isPoll && lhs.media == rhs.media
+            && lhs.media?.localTarget == rhs.media?.localTarget && lhs.media?.sourceHint == rhs.media?.sourceHint
+    }
+
+    static func excerpt(_ rendered: String) -> String {
+        for line in rendered.lazy.split(whereSeparator: \.isNewline) {
+            if let text = ContentSanitizer.compactSingleLine(String(line), maxLength: 120), !text.isEmpty { return text }
+        }
+        return ""
+    }
 }
 
 /// Owns the conversation's merged timeline: the durable message mirror, the
@@ -247,6 +267,8 @@ final class TimelineStore {
     @ObservationIgnored let deletedProjections = ConversationDeletedMessageProjection()
     @ObservationIgnored let editProjections = ConversationEditProjectionCache()
     @ObservationIgnored private var timelineSignature: [TimelineItemSignature] = []
+    @ObservationIgnored private var clusterCalendar: Calendar?
+    @ObservationIgnored private var answeredActivityRows: Set<String> = []
     @ObservationIgnored private var messageClusterPresentations: [String: MessageClusterPresentation] = [:]
 
     @ObservationIgnored private weak var appState: AppState?
@@ -382,6 +404,7 @@ final class TimelineStore {
 
     private enum ReplyPreviewSourceSignature: Equatable {
         case projected(
+            sourceMessageID: String?,
             sender: String,
             plaintext: String,
             kind: UInt64,
@@ -392,7 +415,7 @@ final class TimelineStore {
             deleted: Bool,
             deletionSource: DeletionSourceFfi
         )
-        case loadedTarget(record: MessageTimelineSignature, deleted: Bool, deletionSource: DeletionSourceFfi)
+        case loadedTarget(record: MessageTimelineSignature, sourceMessageID: String?, deleted: Bool, deletionSource: DeletionSourceFfi)
     }
 
     private struct ReplyPreviewDisplayCacheKey: Equatable {
@@ -474,8 +497,12 @@ final class TimelineStore {
         pendingPollSelections[messageIdHex]
     }
 
-    func messageClusterPresentation(for item: TimelineItem) -> MessageClusterPresentation {
+    func messageClusterPresentation(for item: TimelineItem, calendar: Calendar = .current) -> MessageClusterPresentation {
         _ = timelineProjectionGeneration
+        if clusterCalendar != calendar {
+            messageClusterPresentations = MessageClusterProjection.presentations(for: timeline, calendar: calendar)
+            clusterCalendar = calendar
+        }
         return messageClusterPresentations[item.id] ?? .none
     }
 
@@ -504,10 +531,12 @@ final class TimelineStore {
         }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
             guard !isBlockedAuthor(preview.sender) else { return nil }
+            let sourceMessageID = mediaProjections.sourceMessageID(for: preview.messageIdHex)
             let key = ReplyPreviewDisplayCacheKey(
                 messageIdHex: record.messageIdHex,
                 targetId: targetId,
                 source: .projected(
+                    sourceMessageID: sourceMessageID,
                     sender: preview.sender,
                     plaintext: preview.plaintext,
                     kind: preview.kind,
@@ -523,33 +552,36 @@ final class TimelineStore {
                 return cached.value
             }
             let name = resolvedAccountDisplayName(preview.sender)
-            let text = ContentSanitizer.compactSingleLine(
-                MessagePreview.body(
+            let isPoll = !preview.deleted && preview.sticker == nil && preview.kind == MessageSemantics.kindPoll
+            let text = replyExcerpt(tokens: preview.contentTokens, isText: !preview.deleted && preview.kind == MessageSemantics.kindChat
+                && preview.sticker == nil && !RemoteGiphyMedia.isEnvelopeText(preview.plaintext)) {
+                if isPoll { return MessagePreview.pollTitle(question: preview.plaintext) }
+                return MessagePreview.body(
                     preview,
                     mentionDisplayName: mentionDisplayNameResolver,
                     systemEventNaming: systemEventNaming
-                ),
-                maxLength: 120
-            ) ?? ""
+                )
+            }
             let media = preview.deleted
                 ? nil
                 : MessageMediaAttachment.displayItems(
                     fromOutcomes: preview.media,
                     ownerId: "reply:\(record.messageIdHex):\(targetId)",
                     messageId: preview.messageIdHex,
-                    sourceMessageId: mediaProjections.sourceMessageID(for: preview.messageIdHex),
+                    sourceMessageId: sourceMessageID,
                     resolveMissingSource: true
                 ).first
             let value = ConversationReplyPreview(
-                name: name, text: text.isEmpty ? media?.rejectionMessage ?? "" : text, media: media
+                name: name, text: text, media: media, isPoll: isPoll
             )
             replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
             return value
         }
-        guard let storedTarget = messageById[targetId],
-              !isBlockedAuthor(storedTarget.sender) else {
-            return nil
+        guard let storedTarget = messageById[targetId] else {
+            guard !isHidden(targetId) else { return nil }
+            return ConversationReplyPreview(name: L10n.string("Message"), text: L10n.string("Message unavailable"), media: nil)
         }
+        guard !isBlockedAuthor(storedTarget.sender) else { return nil }
         let target = editProjections.displayRecord(for: storedTarget)
         let targetDeleted = deletedProjections.contains(targetId)
         let key = ReplyPreviewDisplayCacheKey(
@@ -557,6 +589,7 @@ final class TimelineStore {
             targetId: targetId,
             source: .loadedTarget(
                 record: MessageTimelineSignature(target),
+                sourceMessageID: mediaProjections.sourceMessageID(for: targetId),
                 deleted: targetDeleted,
                 deletionSource: deletedProjections.source(for: targetId)
             )
@@ -565,18 +598,36 @@ final class TimelineStore {
             return cached.value
         }
         let name = resolvedAccountDisplayName(target.sender)
+        let isPoll = !targetDeleted && target.sticker == nil && target.kind == MessageSemantics.kindPoll
         let text = targetDeleted
             ? MessageDeletionPresentation.text(source: deletedProjections.source(for: targetId))
-            : ContentSanitizer.compactSingleLine(displayBody(of: target), maxLength: 120) ?? ""
+            : replyExcerpt(tokens: target.contentTokens, isText: target.kind == MessageSemantics.kindChat
+                && target.sticker == nil && !RemoteGiphyMedia.isEnvelopeText(target.plaintext)) {
+                    isPoll ? MessagePreview.pollTitle(question: target.plaintext) : displayBody(of: target)
+                }
         let media = targetDeleted
             ? nil
             : mediaProjections.build(
                 for: target,
                 ownerId: "reply:\(record.messageIdHex):\(targetId)"
             ).first
-        let value = ConversationReplyPreview(name: name, text: text, media: media)
+        let value = ConversationReplyPreview(name: name, text: text, media: media, isPoll: isPoll)
         replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
         return value
+    }
+
+    private func replyExcerpt(tokens: MarkdownDocumentFfi, isText: Bool, fallback: () -> String) -> String {
+        if isText, let blocks = MarkdownMessageBuilder.build(for: tokens, mentionDisplayName: mentionDisplayNameResolver,
+                                                           usesStaticTimestamps: true).blocks {
+            for block in blocks {
+                let fields = block.textFields(includeCodeLanguage: false)
+                for field in fields {
+                    let excerpt = ConversationReplyPreview.excerpt(field)
+                    if !excerpt.isEmpty { return excerpt }
+                }
+            }
+        }
+        return ConversationReplyPreview.excerpt(fallback())
     }
 
     func replyTargetMessageId(for record: AppMessageRecordFfi) -> String? {
@@ -628,6 +679,11 @@ final class TimelineStore {
         replyPreviewDisplayCache.removeAll()
         noteProjectionChanged()
         return changed
+    }
+
+    func hasUnsourcedOwnMessage(_ messageID: String) -> Bool {
+        guard let record = preparedRecords[messageID] else { return false }
+        return !record.deleted && record.direction == "sent" && record.sourceMessageIdHex == nil
     }
 
     func isHidden(_ messageIdHex: String) -> Bool {
@@ -753,7 +809,13 @@ final class TimelineStore {
 
     func agentEventDisplay(for item: TimelineItem) -> AgentEventPresentation.Display? {
         _ = timelineProjectionGeneration
-        return agentEventProjections.display(for: item)
+        guard var display = agentEventProjections.display(for: item) else { return nil }
+        if display.reportsWorkInProgress, answeredActivityRows.contains(item.id) {
+            display.iconName = AgentEventPresentation.completedIcon
+            display.secondaryText = L10n.string("Done")
+            display.reportsWorkInProgress = false
+        }
+        return display
     }
 
     // MARK: - Page application (driven by the view model's IO)
@@ -1010,6 +1072,7 @@ final class TimelineStore {
            let poll = record.poll, Set(poll.localSelection) == Set(pending) {
             pendingPollSelections[appRecord.messageIdHex] = nil
         }
+        let previousReplyTarget = updateTimeline ? messageById[appRecord.messageIdHex].flatMap(replyTargetId(for:)) : nil
         messageById[appRecord.messageIdHex] = appRecord
         // `sourceMessageIdHex` is the durable delivery marker. A nil-source
         // projection means committed but unresolved, except while a successful
@@ -1078,7 +1141,8 @@ final class TimelineStore {
                 for: appRecord,
                 status: messageStatusById[appRecord.messageIdHex]
             ) {
-                projectionChanged = upsertTimelineItem(item) || projectionChanged
+                let replyTargetChanged = previousReplyTarget != replyTargetId(for: appRecord)
+                projectionChanged = upsertTimelineItem(item, replyTargetChanged: replyTargetChanged) || projectionChanged
             } else {
                 projectionChanged = removeTimelineItem(id: displayID(for: appRecord.messageIdHex)) || projectionChanged
             }
@@ -1307,8 +1371,8 @@ final class TimelineStore {
     }
 
     @discardableResult
-    private func upsertTimelineItem(_ item: TimelineItem) -> Bool {
-        if let existingIndex = timeline.firstIndex(where: { $0.id == item.id }),
+    private func upsertTimelineItem(_ item: TimelineItem, replyTargetChanged: Bool = false) -> Bool {
+        if !replyTargetChanged, let existingIndex = timeline.firstIndex(where: { $0.id == item.id }),
            canReplaceTimelineItemInPlace(old: timeline[existingIndex], next: item) {
             let markdownChanged = markdownProjections.update(for: item, resolver: mentionDisplayNameResolver)
             let mediaChanged = mediaProjections.update(for: item)
@@ -1339,10 +1403,14 @@ final class TimelineStore {
         let nextSignature = next.map(TimelineItemSignature.init)
         messageByRowFrameKey = Self.messageRowsByFrameKey(next)
         timelineIndexByMessageId = Self.timelineIndexesByMessageId(next)
-        guard timelineSignature != nextSignature else { return false }
+        // MDK's projected reply target can change independently of the visible record.
+        let answered = answeredActivities(in: next)
+        let answersChanged = answered != answeredActivityRows
+        answeredActivityRows = answered
+        guard timelineSignature != nextSignature else { return answersChanged }
         timeline = next
         timelineSignature = nextSignature
-        messageClusterPresentations = MessageClusterProjection.presentations(for: next)
+        clusterCalendar = nil
         return true
     }
 
@@ -1351,7 +1419,8 @@ final class TimelineStore {
         if index < timelineSignature.count, timelineSignature[index] == signature {
             return false
         }
-        if case .message(let replaced, _) = timeline[index].kind,
+        let previous = timeline[index]
+        if case .message(let replaced, _) = previous.kind,
            timelineIndexByMessageId[replaced.messageIdHex] == index {
             timelineIndexByMessageId[replaced.messageIdHex] = nil
         }
@@ -1369,8 +1438,56 @@ final class TimelineStore {
         } else {
             timelineSignature = timeline.map(TimelineItemSignature.init)
         }
-        messageClusterPresentations = MessageClusterProjection.presentations(for: timeline)
+        clusterCalendar = nil
+        if affectsActivityCompletion(previous) || affectsActivityCompletion(item) {
+            answeredActivityRows = answeredActivities(in: timeline)
+        }
         return true
+    }
+
+    private func affectsActivityCompletion(_ item: TimelineItem) -> Bool {
+        guard case .message(let record, let status) = item.kind else { return false }
+        if record.kind == MessageSemantics.kindAgentActivity { return true }
+        return record.kind == MessageSemantics.kindChat && (status == .sent || status == .received)
+            && replyTargetId(for: record) != nil
+    }
+
+    /// An answer closes progress only for the same author and the same request.
+    private func answeredActivities(in visibleRows: [TimelineItem]) -> Set<String> {
+        guard visibleRows.contains(where: { item in
+            if case .message(let record, _) = item.kind { return record.kind == MessageSemantics.kindAgentActivity }
+            return false
+        }) else { return [] }
+        // Delete for me hides an answer without undoing the work. Preserve timeline
+        // ordering so an earlier answer cannot complete a later activity.
+        var rows = visibleRows
+        if !hiddenMessageIds.isEmpty {
+            let hiddenAnswers = messageById.values.compactMap { record -> TimelineItem? in
+                guard record.kind == MessageSemantics.kindChat, isHidden(record.messageIdHex),
+                      !isBlockedAuthor(record.sender), replyTargetId(for: record) != nil else { return nil }
+                let item = TimelineItem.message(record, status: messageStatusById[record.messageIdHex])
+                return TimelineItem(id: displayID(for: record.messageIdHex), kind: item.kind, timestamp: item.timestamp)
+            }
+            if !hiddenAnswers.isEmpty { rows = orderedTimeline(visibleRows + hiddenAnswers) }
+        }
+        struct Request: Hashable {
+            let sender: String
+            let messageID: String
+        }
+        var pending: [Request: [String]] = [:]
+        var answered: Set<String> = []
+        for item in rows {
+            guard case let .message(record, status) = item.kind else { continue }
+            if record.kind == MessageSemantics.kindAgentActivity,
+               let target = MessageSemantics.firstValue(of: MessageSemantics.eventRefTag, in: record.tags), !target.isEmpty {
+                pending[Request(sender: record.sender, messageID: target), default: []].append(item.id)
+            } else if !pending.isEmpty, record.kind == MessageSemantics.kindChat,
+                      status == .received || status == .sent, let target = replyTargetId(for: record),
+                      let rows = pending.removeValue(forKey: Request(sender: record.sender, messageID: target)) {
+                answered.formUnion(rows)
+            }
+        }
+        return answered
     }
 
     private static func timelineIndexesByMessageId(
@@ -1756,6 +1873,8 @@ final class TimelineStore {
         messageStatusById[messageIdHex] = status
         if let item = visibleTimelineItem(forMessageId: messageIdHex) {
             _ = upsertTimelineItem(item)
+        } else if isHidden(messageIdHex) {
+            answeredActivityRows = answeredActivities(in: timeline)
         }
         noteProjectionChanged()
     }

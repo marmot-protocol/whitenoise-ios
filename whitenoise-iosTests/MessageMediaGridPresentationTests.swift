@@ -10,6 +10,18 @@ import Synchronization
 
 struct MessageMediaGridPresentationTests {
 
+    @Test func onlyThreeAcrossVideoTilesOmitTheirDuration() {
+        // The three-item layout also has 84-point tiles, stacked beside a larger one.
+        for count in 1...4 {
+            let layout = MessageMediaGridPresentation.layout(totalCount: count, maxWidth: 256)
+            #expect(layout.threeAcrossTiles.isEmpty)
+        }
+        for count in [5, 6] {
+            let layout = MessageMediaGridPresentation.layout(totalCount: count, maxWidth: 256)
+            #expect(layout.threeAcrossTiles == 2..<5)
+        }
+    }
+
     @Test func gridShowsAtMostFiveTilesAndCountsHiddenAttachments() {
         #expect(MessageMediaGridPresentation.visibleCount(totalCount: 1) == 1)
         #expect(MessageMediaGridPresentation.visibleCount(totalCount: 4) == 4)

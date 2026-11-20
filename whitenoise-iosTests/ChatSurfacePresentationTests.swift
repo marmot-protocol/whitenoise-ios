@@ -23,7 +23,7 @@ struct ChatSurfacePresentationTests {
     func confirmationKeepsDeliveryFooterSizeStable(dynamicType: DynamicTypeSize) {
         func size(_ status: MessageStatus) -> CGSize {
             let host = UIHostingController(rootView: MessageMetadataFooter(
-                time: "12:34", isEdited: false, status: status, isFromMe: true
+                caption: .timestamp("12:34"), isEdited: false, status: status, isFromMe: true
             ).environment(\.dynamicTypeSize, dynamicType))
             return host.sizeThatFits(in: CGSize(width: 300, height: 100))
         }
@@ -34,8 +34,8 @@ struct ChatSurfacePresentationTests {
     }
 
     @Test func deliveryFooterUsesCompactSymbols() {
-        #expect(MessageFooterPresentation.value(for: .sent, isFromMe: true).systemImage == "checkmark")
-        #expect(MessageFooterPresentation.value(for: .sending, isFromMe: true).systemImage == "clock")
+        #expect(MessageFooterPresentation.value(for: .sent, isFromMe: true).systemImage == "checkmark.circle.fill")
+        #expect(MessageFooterPresentation.value(for: .sending, isFromMe: true).systemImage == "ellipsis.message")
         #expect(MessageFooterPresentation.value(for: .failed, isFromMe: true).isFailure)
         #expect(MessageFooterPresentation.value(for: .received, isFromMe: false).systemImage == nil)
     }
@@ -132,6 +132,20 @@ struct ChatSurfacePresentationTests {
         #expect(EmojiCatalogSearch.results(in: [entry], query: "FACE joy") == [entry])
     }
 
+    @Test func aFutureRowSharesTodayUntilThatDayArrives() {
+        let cache = ConversationDaySectionProjectionCache()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let rows = [
+            TimelineItem.systemEvent(id: "today", event: .groupCreated, timestamp: 86_400),
+            TimelineItem.systemEvent(id: "future", event: .rosterChanged, timestamp: 172_800)
+        ]
+        let today = cache.sections(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 86_400))
+        #expect(today.map(\.items.count) == [2])
+        let tomorrow = cache.sections(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 172_800))
+        #expect(tomorrow.map(\.items.count) == [1, 1])
+    }
+
     @Test func timelineDaySectionsReuseGenerationAndInvalidateForCalendarContext() {
         let cache = ConversationDaySectionProjectionCache()
         var calendar = Calendar(identifier: .gregorian)
@@ -172,33 +186,13 @@ struct ChatSurfacePresentationTests {
         #expect(ReplyPreviewLayout.closeHitSize >= 44)
     }
 
-    @Test func singleEmojiMessagesUseStickerPresentation() {
-        #expect(SingleEmojiMessagePresentation.emoji(in: "😀") == "😀")
-        #expect(SingleEmojiMessagePresentation.emoji(in: "  ❤️\n") == "❤️")
-        #expect(SingleEmojiMessagePresentation.emoji(in: "👨‍👩‍👧‍👦") == "👨‍👩‍👧‍👦")
-        #expect(SingleEmojiMessagePresentation.emoji(in: "👍🏽") == "👍🏽")
-        #expect(SingleEmojiMessagePresentation.emoji(in: "1️⃣") == "1️⃣")
-        #expect(SingleEmojiMessagePresentation.emoji(in: "🇮🇹") == "🇮🇹")
-        #expect(SingleEmojiMessagePresentation.fontSize >= 56)
-    }
-
-    @Test func stickerPresentationRejectsTextAndMultipleEmoji() {
-        #expect(SingleEmojiMessagePresentation.emoji(in: "") == nil)
-        #expect(SingleEmojiMessagePresentation.emoji(in: "A") == nil)
-        #expect(SingleEmojiMessagePresentation.emoji(in: "1") == nil)
-        #expect(SingleEmojiMessagePresentation.emoji(in: "©") == nil)
-        #expect(SingleEmojiMessagePresentation.emoji(in: "😀😀") == nil)
-        #expect(SingleEmojiMessagePresentation.emoji(in: "😀 hello") == nil)
-        #expect(SingleEmojiMessagePresentation.emoji(in: "\u{FE0F}") == nil)
-    }
-
     @Test func singleResolvableCustomEmojiStandsAloneAtStickerSize() throws {
         let marmot = try #require(CustomEmojiShortcode("marmot"))
         let wave = try #require(CustomEmojiShortcode("wave"))
         let resolvable: Set = [marmot, wave]
         #expect(SingleCustomEmojiMessagePresentation.shortcode(in: ":marmot:", resolvable: resolvable) == marmot)
         #expect(SingleCustomEmojiMessagePresentation.shortcode(in: "  :wave:\n", resolvable: resolvable) == wave)
-        #expect(SingleCustomEmojiMessagePresentation.side > SingleEmojiMessagePresentation.fontSize)
+        #expect(SingleCustomEmojiMessagePresentation.shortcode(in: "😀", resolvable: resolvable) == nil)
     }
 
     @Test func customEmojiWithTextOrUnresolvedStaysInBubble() throws {
@@ -313,9 +307,26 @@ struct ChatSurfacePresentationTests {
         let older = UInt64(calendar.date(byAdding: .day, value: -4, to: now)!.timeIntervalSince1970)
 
         #expect(ConversationDateHeader.label(timestamp: today, now: now, calendar: calendar) == "Today")
+        #expect(ConversationDateHeader.label(timestamp: UInt64(now.timeIntervalSince1970 + 86_400), now: now, calendar: calendar) == "Today")
         #expect(ConversationDateHeader.label(timestamp: yesterday, now: now, calendar: calendar) == "Yesterday")
         #expect(ConversationDateHeader.label(timestamp: older, now: now, calendar: calendar) != "Today")
         #expect(ConversationDateHeader.label(timestamp: older, now: now, calendar: calendar) != "Yesterday")
+    }
+
+    @Test func dateHeaderSwitchesFromWeekdayToYearAtSixCalendarMonths() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let locale = Locale(identifier: "en_US")
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 17, hour: 18)))
+        func label(_ day: Int, hour: Int = 21) throws -> String {
+            let date = try #require(calendar.date(from: DateComponents(year: 2026, month: 5, day: day, hour: hour)))
+            return ConversationDateHeader.label(timestamp: UInt64(date.timeIntervalSince1970), now: now,
+                                                calendar: calendar, locale: locale)
+        }
+        #expect(try label(17, hour: 18).contains("2026"))
+        #expect(try !label(17).contains("2026"))
+        let recent = try label(18)
+        #expect(recent.contains("Mon") && !recent.contains("2026"))
     }
 
     @Test func composerShowsExpandedEditorForLongOrMultilineDrafts() {

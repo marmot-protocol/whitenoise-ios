@@ -4,6 +4,15 @@ import Testing
 @testable import whitenoise_ios
 
 struct ReactionMetadataFittingTests {
+    @Test func aChipCannotClearAnotherOwnedOrUnseenReactionKind() {
+        let mine = ConversationViewModel.ReactionTally(emoji: "🥾", count: 2, mine: true)
+        var other = ConversationViewModel.ReactionTally(emoji: "🎉", count: 1, mine: false)
+        #expect(ReactionPillPresentation.canRemoveIndividually("🥾", from: [mine, other], omittedKinds: 0))
+        #expect(!ReactionPillPresentation.canRemoveIndividually("🥾", from: [mine, other], omittedKinds: 1))
+        other = .init(emoji: "🎉", count: 2, mine: true)
+        #expect(!ReactionPillPresentation.canRemoveIndividually("🥾", from: [mine, other], omittedKinds: 0))
+    }
+
     @Test func keepsEveryPillWhenTheMetadataRowFits() {
         let fit = ReactionMetadataFitting.fit(
             reactionWidths: [30, 30, 30],
@@ -26,25 +35,22 @@ struct ReactionMetadataFittingTests {
         #expect(fit == ReactionMetadataFit(visibleReactionCount: 1, hiddenReactionCount: 2))
     }
 
-    @Test func canCollapseToOnlyOverflowAndFooter() {
-        let fit = ReactionMetadataFitting.fit(
-            reactionWidths: [30, 30, 30],
-            overflowWidthForHiddenCount: [1: 24, 2: 24, 3: 24],
-            footerWidth: 20,
-            availableWidth: 52
-        )
-
-        #expect(fit == ReactionMetadataFit(visibleReactionCount: 0, hiddenReactionCount: 3))
+    @Test func aCountedEmojiKeepsItsPlaceWhenTheTimestampLeavesTooLittleWidth() {
+        let fit = ReactionMetadataFitting.fit(reactionWidths: [44], overflowWidthForHiddenCount: [1: 34],
+                                              footerWidth: 35, availableWidth: 78)
+        #expect(fit == ReactionMetadataFit(visibleReactionCount: 1, hiddenReactionCount: 0))
     }
 
-    @Test func sortsOurReactionFirstThenByPopularity() {
-        let sorted = ReactionPillPresentation.sorted([
-            .init(emoji: "a", count: 5, mine: false),
-            .init(emoji: "b", count: 1, mine: true),
-            .init(emoji: "c", count: 3, mine: false),
-        ])
+    @Test func aNarrowRowKeepsTheFirstEmojiAndCountsOnlyAdditionalKindsInOverflow() {
+        let fit = ReactionMetadataFitting.fit(reactionWidths: [44, 34, 34], overflowWidthForHiddenCount: [5: 34, 6: 34],
+                                              footerWidth: 35, availableWidth: 78, preHiddenReactionCount: 3)
+        #expect(fit == ReactionMetadataFit(visibleReactionCount: 1, hiddenReactionCount: 5))
+    }
 
-        #expect(sorted.map(\.emoji) == ["b", "a", "c"])
+    @Test func aSummaryWithoutEmojiRetainsTheOmittedCount() {
+        let fit = ReactionMetadataFitting.fit(reactionWidths: [], overflowWidthForHiddenCount: [:],
+                                              footerWidth: 35, availableWidth: 20, preHiddenReactionCount: 5)
+        #expect(fit == ReactionMetadataFit(visibleReactionCount: 0, hiddenReactionCount: 5))
     }
 
     @Test func preservesAlreadyHiddenReactionTypesWhenEveryRenderedPillFits() {
@@ -57,7 +63,7 @@ struct ReactionMetadataFittingTests {
         )
 
         #expect(fit == ReactionMetadataFit(visibleReactionCount: 2, hiddenReactionCount: 3))
-        #expect(ReactionPillPresentation.maximumRenderedPills == 7)
+        #expect(ReactionPillPresentation.maximumRenderedPills == 4)
     }
 }
 
@@ -96,8 +102,9 @@ struct MessageClusterProjectionTests {
         let system = TimelineItem.systemEvent(id: "break", event: .rosterChanged, timestamp: 103)
         let afterSystem = item(id: "14", sender: "alice", timestamp: 104)
         let outgoing = item(id: "15", sender: "me", timestamp: 105, direction: "sent")
+        let secondOutgoing = item(id: "17", sender: "me", timestamp: 105, direction: "sent")
         let afterOutgoing = item(id: "16", sender: "alice", timestamp: 106)
-        let items = [first, otherSender, beforeSystem, system, afterSystem, outgoing, afterOutgoing]
+        let items = [first, otherSender, beforeSystem, system, afterSystem, outgoing, secondOutgoing, afterOutgoing]
 
         let result = MessageClusterProjection.presentations(for: items, calendar: calendar)
 
@@ -106,7 +113,34 @@ struct MessageClusterProjectionTests {
             #expect(presentation.showsSenderName)
             #expect(presentation.showsAvatar)
         }
-        #expect(result[outgoing.id] == nil)
+        let own = try #require(result[outgoing.id])
+        #expect(own.startsCluster)
+        #expect(result[secondOutgoing.id]?.startsCluster == false)
+        #expect(!own.endsCluster)
+        #expect(result[secondOutgoing.id]?.endsCluster == true)
+        #expect(!own.reservesIdentityLane && !own.showsAvatar && !own.showsSenderName)
+    }
+
+    @Test func visibleUnreadDividerSplitsAnOtherwiseContinuousCluster() throws {
+        let timeline = (1...3).map { item(id: "message\($0)", sender: "maya", timestamp: UInt64($0)) }
+        let clusters = MessageClusterProjection.presentations(for: timeline, calendar: calendar)
+        let preceding = try #require(clusters[timeline[0].id])
+        let unread = try #require(clusters[timeline[1].id])
+        let lastRead = preceding.atUnreadBoundary(rowID: timeline[0].id, timeline: timeline, firstUnreadIndex: 1)
+        #expect(lastRead.endsCluster && lastRead.showsAvatar)
+        #expect(unread.atUnreadBoundary(rowID: timeline[1].id, timeline: timeline, firstUnreadIndex: 1).showsSenderName)
+        #expect(preceding.atUnreadBoundary(rowID: timeline[0].id, timeline: timeline, firstUnreadIndex: nil) == preceding)
+    }
+
+    @Test func nonterminalRowsKeepActionableMetadata() {
+        var cluster = MessageClusterPresentation.none
+        cluster.endsCluster = false
+        for status: MessageStatus in [.sending, .failed, .streaming] {
+            #expect(cluster.showsFooter(status: status, isDeleted: false, isEdited: false, reported: false))
+        }
+        #expect(!cluster.showsFooter(status: .received, isDeleted: false, isEdited: false, reported: false))
+        #expect(cluster.showsFooter(status: .received, isDeleted: false, isEdited: false, reported: true))
+        #expect(!cluster.showsFooter(status: .sent, isDeleted: false, isEdited: false, reported: false))
     }
 
     @Test func calendarDayAndFiveMinuteBoundaryAreDeterministic() throws {

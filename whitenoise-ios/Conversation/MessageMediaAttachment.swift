@@ -269,12 +269,15 @@ nonisolated enum MediaAttachmentPolicy {
 }
 
 nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
+    /// Waveform analysis and on-device transcription both need the whole encoded recording.
+    static let audioAnalysisByteLimit = 16 * 1024 * 1024
+
     let id: String
     let reference: MediaAttachmentReferenceFfi?
     let fileName: String
     let mediaType: String
     let dim: String?
-    let localData: Data?
+    private(set) var localData: Data?
     let thumbnail: UIImage?
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
@@ -282,6 +285,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     var localTarget: AttachmentLocalTargetFfi?
     var sourceHint: AttachmentSourceHint?
     var demand = AttachmentDemand.automatic
+    var previewByteLimit: Int?
 
     init(
         id: String,
@@ -317,12 +321,42 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         MediaAttachmentPolicy.canonicalMediaType(mediaType) == "image/gif"
     }
 
+    /// GIFs play inline. Rejected slots retain their original unavailable row.
+    var isTranscriptGalleryMedia: Bool {
+        rejectionKind == nil && !isGIF && (isImage || isVideo)
+    }
+
     var isVideo: Bool {
         MediaAttachmentPolicy.canonicalMediaType(mediaType).hasPrefix("video/")
     }
 
     var isAudio: Bool {
         MediaAttachmentPolicy.canonicalMediaType(mediaType).hasPrefix("audio/")
+    }
+
+    /// A content-hash overlay can display a matching own send on another message.
+    /// Opening a sourced transcript page must still go through that page's original slot.
+    var forTranscriptPage: Self {
+        var copy = self
+        if localTarget != nil { copy.localData = nil }
+        return copy
+    }
+
+    /// Delivery can supply the original source for an already displayed outgoing attachment.
+    /// A replacement for a previously known slot must prepare its own bytes.
+    func canUseBytesPrepared(for earlier: Self) -> Bool {
+        guard id == earlier.id, reference == earlier.reference else { return false }
+        if localTarget == earlier.localTarget { return true }
+        return earlier.localTarget == nil && localTarget != nil && reference != nil
+            && (earlier.sourceHint == nil || earlier.sourceHint == sourceHint)
+    }
+
+    func isSameDocumentSource(as original: Self, leasedTarget: AttachmentLocalTargetFfi? = nil) -> Bool {
+        guard id == original.id, reference == original.reference else { return false }
+        if let leasedTarget {
+            return AttachmentHandoffSource(self).matches(leasedTarget) && AttachmentHandoffSource(original).matches(leasedTarget)
+        }
+        return localTarget == original.localTarget && sourceHint == original.sourceHint && (reference != nil || localData == original.localData)
     }
 
     var isDocument: Bool {

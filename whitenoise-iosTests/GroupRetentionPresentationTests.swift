@@ -107,6 +107,13 @@ struct GroupRetentionPresentationTests {
         #expect(draft.value.isEmpty)
     }
 
+    @Test func headerDurationUsesCompactDaysWeeksAndRoundedCustomIntervals() {
+        let locale = Locale(identifier: "en_US")
+        #expect(GroupRetentionPresentation.compactLabel(seconds: 86_400, locale: locale) == "1d")
+        #expect(GroupRetentionPresentation.compactLabel(seconds: 28 * 86_400, locale: locale) == "4w")
+        #expect(GroupRetentionPresentation.compactLabel(seconds: 100_000, locale: locale) == "1d 4h")
+    }
+
     @Test func labelUsesOffSentinelForZero() {
         let offLabel = GroupRetentionPresentation.label(seconds: 0)
         #expect(offLabel == L10n.string("Off"))

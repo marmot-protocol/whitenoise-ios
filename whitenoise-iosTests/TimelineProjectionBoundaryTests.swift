@@ -6,6 +6,10 @@ import Testing
 
 @MainActor
 struct TimelineProjectionBoundaryTests {
+    @Test func aQuoteStopsAtTheFirstRenderedLine() {
+        #expect(ConversationReplyPreview.excerpt("\n  First line  \n\nNext paragraph") == "First line")
+    }
+
     @Test func rejectedSiblingsKeepTheirSlotAndCannotBecomeDownloadable() {
         let reference = mediaReference(sourceEpoch: 42)
         let outcomes: [MediaAttachmentOutcomeFfi] = [
@@ -22,6 +26,24 @@ struct TimelineProjectionBoundaryTests {
         #expect(items[2].rejectionMessage == L10n.string("Attachment couldn’t be read"))
         let another = MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: "message-b")
         #expect(Set(items.map(\.id)).isDisjoint(with: another.map(\.id)))
+    }
+
+    @Test func changingOnlyTheSourceReplacesTheCachedAttachmentTarget() throws {
+        let cache = ConversationMediaProjectionCache()
+        let record = appRecord(messageIdHex: hexId(1), plaintext: "", tags: [])
+        let item = TimelineItem(id: "row", kind: .message(record: record, status: .received), timestamp: 0)
+        let outcomes: [MediaAttachmentOutcomeFfi] = [.accepted(attachmentIndex: 0, reference: mediaReference(sourceEpoch: 42))]
+        cache.setOutcomes(outcomes, forMessageId: record.messageIdHex, sourceMessageId: hexId(2))
+        cache.update(for: item)
+        let original = try #require(cache.items(for: item).first)
+        let recording = ConversationSpeech.Recording(displayID: original.id, target: try #require(original.localTarget))
+
+        cache.setOutcomes(outcomes, forMessageId: record.messageIdHex, sourceMessageId: hexId(3))
+        #expect(cache.update(for: item))
+        let updated = try #require(cache.items(for: item).first)
+        #expect(updated.id == original.id)
+        #expect(updated.localTarget?.sourceMessageIdHex == hexId(3))
+        #expect(!recording.matches(updated))
     }
 
     @Test func mediaCacheTreatsPresentEmptyRowProjectionAsAuthoritative() {
@@ -120,6 +142,33 @@ struct TimelineProjectionBoundaryTests {
         #expect(preview.text == "target body")
     }
 
+    @Test func quotesOfAnUntitledPollMatchWithAndWithoutAProjectedPreview() throws {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        var poll = timelineRecord(messageIdHex: hexId(20), plaintext: "")
+        poll.kind = MessageSemantics.kindPoll
+        let fromTarget = timelineRecord(
+            messageIdHex: hexId(21), plaintext: "Reply", replyToMessageIdHex: poll.messageIdHex
+        )
+        let offscreenPollID = hexId(23)
+        let fromProjection = timelineRecord(
+            messageIdHex: hexId(22), plaintext: "Another reply", replyToMessageIdHex: offscreenPollID,
+            replyPreview: TimelineReplyPreviewFfi(
+                messageIdHex: offscreenPollID, sender: poll.sender, plaintext: "", kind: poll.kind,
+                mediaJson: nil, media: [], agentTextStreamJson: nil, deleted: false
+            )
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [poll, fromTarget, fromProjection], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        for reply in [fromTarget, fromProjection] {
+            let record = try #require(viewModel.record(for: reply.messageIdHex))
+            let quote = try #require(viewModel.replyPreview(for: record))
+            #expect(quote.isPoll)
+            #expect(quote.text == L10n.string("Poll"))
+        }
+    }
+
     @Test func projectedReplyPreviewCarriesResolvedMediaWithoutAnotherLookup() throws {
         let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(
@@ -155,6 +204,11 @@ struct TimelineProjectionBoundaryTests {
         #expect(preview.media?.reference == reference)
         #expect(preview.media?.id.contains(targetID) == true)
         #expect(counter.mediaBuilds == 0)
+
+        var target = timelineRecord(messageIdHex: targetID, plaintext: "", media: [reference])
+        target.sourceMessageIdHex = hexId(35)
+        _ = viewModel.timelineStore.applyTimelineRecord(target, updateTimeline: true)
+        #expect(viewModel.replyPreview(for: replyRecord)?.media?.localTarget?.sourceMessageIdHex == hexId(35))
     }
 
     @Test func markdownProjectionCacheSkipsUnchangedWindowRows() throws {

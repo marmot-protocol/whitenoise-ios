@@ -10,105 +10,41 @@ import Synchronization
 
 struct MessageImageBubblePresentationTests {
 
-    @Test func mediaOnlyPortraitBubbleWrapsRenderedImageWidth() {
-        let renderedSize = MessageImageBubblePresentation.displaySize(
-            maxWidth: 300,
-            dim: "1080x1920"
-        )
-
-        #expect(MessageRichMediaBubblePresentation.contentWidth(
-            maxWidth: 300,
-            singleVisualWidth: renderedSize.width,
-            hasCaption: false,
-            hasReply: false
-        ) == renderedSize.width)
+    @Test func singleVisualSizeUsesTheSameCanvasForPhotosVideosAndCaptions() {
+        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: "1080x1920") == CGSize(width: 192, height: 256))
+        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: "640x360") == CGSize(width: 256, height: 144))
+        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: "32x32") == CGSize(width: 192, height: 192))
+        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: "10000x1") == CGSize(width: 256, height: 90))
     }
 
-    @Test func captionOrReplyKeepsRichMediaBubbleReadable() {
-        #expect(MessageRichMediaBubblePresentation.contentWidth(
-            maxWidth: 300,
-            singleVisualWidth: 228,
-            hasCaption: true,
-            hasReply: false
-        ) == 300)
-        #expect(MessageRichMediaBubblePresentation.contentWidth(
-            maxWidth: 300,
-            singleVisualWidth: 228,
-            hasCaption: false,
-            hasReply: true
-        ) == 300)
+    @Test func aPhotoSetsTheContentWidthWhenFilesShareItsBubble() {
+        func item(_ name: String, _ mediaType: String, dim: String? = nil) -> MessageMediaAttachment {
+            MessageMediaAttachment(id: name, reference: nil, fileName: name, mediaType: mediaType,
+                                  dim: dim, localData: nil)
+        }
+
+        let portrait = item("portrait.jpg", "image/jpeg", dim: "1080x1920")
+        let landscape = item("landscape.jpg", "image/jpeg", dim: "640x360")
+        let file = item("route.pdf", "application/pdf")
+        let video = item("clip.mp4", "video/mp4", dim: "1080x1920")
+
+        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [portrait, file], maxWidth: 256) == 192)
+        let unknownFile = item("route.bin", "application/octet-stream")
+        let unavailable = MessageMediaAttachment(id: "rejected", reference: nil, fileName: "Attachment",
+                                                mediaType: "", dim: nil, localData: nil, rejectionKind: .unsupportedFormat)
+        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [portrait, unavailable], maxWidth: 256) == 192)
+        for companion in [item("voice.m4a", "audio/mp4"), item("loop.gif", "image/gif")] {
+            #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [portrait, companion], maxWidth: 256) == 256)
+        }
+        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [unknownFile, portrait], maxWidth: 256) == 192)
+        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [file, landscape], maxWidth: 256) == 256)
+        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [portrait, landscape, file], maxWidth: 256) == 256)
+        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [video, file], maxWidth: 256) == 256)
     }
 
-    @Test func landscapeImageUsesActualAspectRatio() {
-        let size = MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "640x360")
-
-        #expect(size.width == 300)
-        #expect(size.height == 169)
-    }
-
-    @Test func portraitImageNarrowsAndCapsItsHeight() {
-        let size = MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "1080x1920")
-
-        #expect(size.width == 228)
-        #expect(size.height == 405)
-    }
-
-    @Test func captionedPortraitImageFillsTheBubbleMediaWidth() {
-        let size = MessageImageBubblePresentation.displaySize(
-            maxWidth: 300,
-            dim: "1080x1920",
-            fillsWidth: true
-        )
-
-        #expect(size.width == 300)
-        #expect(size.height == 405)
-    }
-
-    @Test func captionedLandscapeImageKeepsItsUnfilledSize() {
-        let filled = MessageImageBubblePresentation.displaySize(
-            maxWidth: 300,
-            dim: "640x360",
-            fillsWidth: true
-        )
-
-        #expect(filled == MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "640x360"))
-    }
-
-    @Test func captionedShallowPortraitImageNeedsNoCrop() {
-        let filled = MessageImageBubblePresentation.displaySize(
-            maxWidth: 300,
-            dim: "900x1000",
-            fillsWidth: true
-        )
-
-        #expect(filled == MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "900x1000"))
-        #expect(filled == CGSize(width: 300, height: 333))
-    }
-
-    @Test func captionOrReplyMakesTheSingleVisualFillTheBubble() {
-        #expect(MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
-            hasCaption: false,
-            hasReply: false
-        ) == false)
-        #expect(MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
-            hasCaption: true,
-            hasReply: false
-        ))
-        #expect(MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
-            hasCaption: false,
-            hasReply: true
-        ))
-    }
-
-    @Test func missingOrMalformedImageDimensionsUseSquareFallback() {
-        #expect(MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: nil) == CGSize(width: 300, height: 300))
-        #expect(MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "bad") == CGSize(width: 300, height: 300))
-        #expect(MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "0x400") == CGSize(width: 300, height: 300))
-    }
-
-    @Test func extremeImageDimensionsAreClamped() {
-        #expect(MessageImageBubblePresentation.aspectRatio(dim: "10000x1") == 4)
-        #expect(MessageImageBubblePresentation.aspectRatio(dim: "1x10000") == 0.25)
+    @Test(arguments: [nil, "bad", "0x400", "20xinf"] as [String?])
+    func unusableDimensionsReserveASquare(_ dimensions: String?) {
+        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: dimensions) == CGSize(width: 256, height: 256))
     }
 
     // MARK: - Media cache keys

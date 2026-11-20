@@ -1,12 +1,20 @@
 import SwiftUI
 
+extension EnvironmentValues {
+    @Entry var timelinePreviewSearch: ConversationSearchModel?
+}
+
 struct LinkPreviewCard: View {
     let url: URL
     let isFromMe: Bool
     let onOpen: () -> Void
 
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
+    @Environment(\.timelinePreviewSearch) private var previewSearch
     @Environment(\.displayScale) private var displayScale
+    #if DEBUG
+    @Environment(\.isChatFixture) private var isChatFixture
+    #endif
     @State private var metadata: LinkPreviewMetadata?
     @State private var image: UIImage?
     @State private var imageFailed = false
@@ -25,6 +33,7 @@ struct LinkPreviewCard: View {
                 Button(action: onOpen) {
                     LinkPreviewCardContent(
                         title: metadata.title,
+                        summary: metadata.summary,
                         host: LinkPreviewCardContent.host(for: url),
                         image: image,
                         showsImageSlot: metadata.imageURL != nil && !imageFailed,
@@ -40,6 +49,7 @@ struct LinkPreviewCard: View {
                 Color.clear.frame(width: 0, height: 0)
             }
         }
+        .onChange(of: metadata) { _, _ in previewSearch?.refreshAfterSearchableContentChange() }
         .task(id: LinkPreviewTaskID(url: url, isVisible: isTimelineRowVisible, cardWidth: cardWidth)) {
             guard isTimelineRowVisible else { return }
             await load()
@@ -47,6 +57,13 @@ struct LinkPreviewCard: View {
     }
 
     private func load() async {
+        #if DEBUG
+        if isChatFixture {
+            metadata = ChatPreviewThread.linkMetadata(for: url)
+            image = metadata?.imageURL.flatMap { UIImage(contentsOfFile: $0.path) }
+            return
+        }
+        #endif
         if metadata == nil {
             guard let loaded = try? await LinkPreviewLoader.metadata(for: url) else { return }
             metadata = loaded

@@ -524,6 +524,7 @@
 			baseConfigurationReference = C0F16000000000000000A002 /* Production.xcconfig */;
 			buildSettings = {
 				APS_ENVIRONMENT = production;
+				EXCLUDED_SOURCE_FILE_NAMES = "$(inherited) ChatPreviewMedia.bundle";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "whitenoise-ios/whitenoise-ios.entitlements";
 				CODE_SIGN_STYLE = Automatic;
@@ -844,6 +845,7 @@
 			baseConfigurationReference = C0F16000000000000000A003 /* Staging.xcconfig */;
 			buildSettings = {
 				APS_ENVIRONMENT = production;
+				EXCLUDED_SOURCE_FILE_NAMES = "$(inherited) ChatPreviewMedia.bundle";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "whitenoise-ios/whitenoise-ios.entitlements";
 				CODE_SIGN_STYLE = Automatic;

@@ -88,7 +88,9 @@ final class BackgroundRuntimeSuspensionTask {
     }
 }
 
+#if !DEBUG
 @main
+#endif
 struct whitenoise_iosApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase

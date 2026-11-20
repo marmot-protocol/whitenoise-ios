@@ -6,9 +6,9 @@ import Testing
 
 @MainActor
 struct MediaAcquisitionIntentTests {
-    private func attachment(_ mediaType: String = "image/jpeg") -> MessageMediaAttachment {
+    private func attachment(_ mediaType: String = "image/jpeg", localData: Data? = nil) -> MessageMediaAttachment {
         MessageMediaAttachment(id: "source-slot", reference: nil, fileName: "attachment",
-            mediaType: mediaType, dim: nil, localData: nil)
+            mediaType: mediaType, dim: nil, localData: localData)
     }
 
     @Test func neighbouringGalleryPagesNeverInvokeTheDownloader() async throws {
@@ -27,20 +27,53 @@ struct MediaAcquisitionIntentTests {
 
     @Test func documentPrefetchRequiresVisibilityAndPermissionAndNeverEscalatesFailure() async {
         var requests = [AttachmentDemand]()
-        let loader = ConversationMediaLoader { item in
+        var sizeRequests = 0
+        let loader = ConversationMediaLoader({ item in
             requests.append(item.demand)
             throw AttachmentReadError.unavailable
+        }, automaticAttachmentByteCount: { _ in
+            sizeRequests += 1
+            return nil
+        })
+        let pdf = attachment("application/pdf")
+        let contact = attachment("text/vcard")
+        for document in [pdf, contact] {
+            await loader.prefetchDocument(document, isVisible: false, allowed: true)
+            await loader.prefetchDocument(document, isVisible: true, allowed: false)
         }
-        let document = attachment("application/pdf")
-        await loader.prefetchDocument(document, isVisible: false, allowed: true)
-        await loader.prefetchDocument(document, isVisible: true, allowed: false)
         await loader.prefetchDocument(attachment(), isVisible: true, allowed: true)
         #expect(requests.isEmpty)
-        await loader.prefetchDocument(document, isVisible: true, allowed: true)
-        #expect(requests == [.automatic])
-        // Reappearing may repeat demand, but cannot reset MDK's durable download history.
-        await loader.prefetchDocument(document, isVisible: true, allowed: true)
+        #expect(sizeRequests == 0)
+        for _ in 0..<2 {
+            await loader.prefetchDocument(pdf, isVisible: true, allowed: true)
+            await loader.prefetchDocument(contact, isVisible: true, allowed: true)
+        }
+        #expect(sizeRequests == 2)
         #expect(requests == [.automatic, .automatic])
+    }
+
+    @Test func documentRowsReadOnlyTheBytesNeededForTheirLabels() async throws {
+        let card = Data("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Avery Stone\r\nN:Stone;Avery;;;\r\nEND:VCARD\r\n".utf8)
+        var bytesRead = 0
+        let downloader = ConversationMediaDownloader()
+        let loader = ConversationMediaLoader({ item in
+            let data = try await downloader.data(for: item, groupIdHex: "group", appState: nil)
+            bytesRead += data.count
+            return data
+        }, automaticAttachmentByteCount: { item in
+            await downloader.automaticAttachmentByteCount(for: item, groupIdHex: "group", appState: nil)
+        })
+        for type in ["application/pdf", "text/plain", "application/zip"] {
+            let document = attachment(type, localData: Data(repeating: 1, count: 1024))
+            let metadata = await loader.prefetchDocument(document, isVisible: true, allowed: true)
+            #expect(metadata?.size == 1024)
+        }
+        #expect(bytesRead == 0)
+        let contact = attachment("text/vcard", localData: card)
+        let metadata = await loader.prefetchDocument(contact, isVisible: true, allowed: true)
+        #expect(metadata?.size == card.count)
+        #expect(metadata?.contactName?.contains("Avery") == true)
+        #expect(bytesRead == card.count)
     }
 
     @Test func selectedPageRetryCarriesTheRetryDemand() async throws {

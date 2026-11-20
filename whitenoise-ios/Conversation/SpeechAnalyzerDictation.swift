@@ -26,27 +26,36 @@ nonisolated enum DictationRecognizer: Sendable {
 
     /// The first candidate language either model supports, preferring
     /// `SpeechTranscriber` for each language before moving to the next.
-    static func resolve(_ identifiers: [String]) async -> DictationRecognizer? {
+    static func resolve(_ identifiers: [String], installedOnly: Bool = false) async -> DictationRecognizer? {
         let speechAvailable = SpeechTranscriber.isAvailable
         for identifier in identifiers {
             let requested = Locale(identifier: identifier)
+            var languageSupported = false
             if speechAvailable, let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) {
-                return .speech(SpeechTranscriber(
+                languageSupported = true
+                let recognizer = Self.speech(SpeechTranscriber(
                     locale: locale,
                     transcriptionOptions: [],
                     reportingOptions: [.volatileResults, .fastResults],
                     attributeOptions: []
                 ))
+                if !installedOnly { return recognizer }
+                if await AssetInventory.status(forModules: [recognizer.module]) == .installed { return recognizer }
             }
             if let locale = await DictationTranscriber.supportedLocale(equivalentTo: requested) {
-                return .dictation(DictationTranscriber(
+                languageSupported = true
+                let recognizer = Self.dictation(DictationTranscriber(
                     locale: locale,
                     contentHints: [.shortForm],
                     transcriptionOptions: [.punctuation],
                     reportingOptions: [.volatileResults, .frequentFinalization],
                     attributeOptions: []
                 ))
+                if !installedOnly { return recognizer }
+                if await AssetInventory.status(forModules: [recognizer.module]) == .installed { return recognizer }
             }
+            // Do not interpret one language with another language's installed model.
+            if languageSupported { return nil }
         }
         return nil
     }

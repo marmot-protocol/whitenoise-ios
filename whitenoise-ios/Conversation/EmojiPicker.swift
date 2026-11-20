@@ -137,18 +137,22 @@ private final class EmojiPickerModel: ObservableObject {
     }
 }
 
+extension EnvironmentValues {
+    @Entry var emojiRecentsDefaults: UserDefaults = .standard
+}
+
 private enum EmojiRecents {
     static let key = "chat.emoji-picker.recents"
     static let maximumCount = 40
 
-    static var values: [String] {
-        UserDefaults.standard.stringArray(forKey: key) ?? AppState.defaultReactions
+    static func values(in defaults: UserDefaults) -> [String] {
+        defaults.stringArray(forKey: key) ?? AppState.defaultReactions
     }
 
-    static func record(_ emoji: String) {
-        var result = values.filter { $0 != emoji }
+    static func record(_ emoji: String, in defaults: UserDefaults) {
+        var result = values(in: defaults).filter { $0 != emoji }
         result.insert(emoji, at: 0)
-        UserDefaults.standard.set(Array(result.prefix(maximumCount)), forKey: key)
+        defaults.set(Array(result.prefix(maximumCount)), forKey: key)
     }
 }
 
@@ -315,6 +319,7 @@ struct ComposerEmojiPanel: View {
 }
 
 private struct EmojiPickerContent: View {
+    @Environment(\.emojiRecentsDefaults) private var recentsDefaults
     let showsSearchField: Bool
     var customEmoji: [CustomEmojiSendable] = []
     var onConfigure: (() -> Void)?
@@ -404,7 +409,7 @@ private struct EmojiPickerContent: View {
                             customEmojiSection(header: EmojiSectionHeader(verbatim: group.title), entries: group.emoji)
                                 .id(groups.other.isEmpty && index == 0 ? "custom" : "set-\(group.id)")
                         }
-                        let recentEntries = EmojiRecents.values.compactMap { emoji in
+                        let recentEntries = EmojiRecents.values(in: recentsDefaults).compactMap { emoji in
                             model.entries.first { $0.emoji == emoji }
                         }
                         if !recentEntries.isEmpty {
@@ -438,7 +443,7 @@ private struct EmojiPickerContent: View {
             LazyVGrid(columns: columns, spacing: 5) {
                 ForEach(entries) { entry in
                     Button {
-                        EmojiRecents.record(entry.emoji)
+                        EmojiRecents.record(entry.emoji, in: recentsDefaults)
                         onPick(entry.emoji)
                     } label: {
                         Text(entry.emoji)

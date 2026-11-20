@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct ZoomableMediaImage: UIViewRepresentable {
+    @Environment(\.isTranscriptMediaSheet) private var isTranscriptMediaSheet
     let image: UIImage
     let isSelected: Bool
     let onTap: () -> Void
@@ -15,6 +16,8 @@ struct ZoomableMediaImage: UIViewRepresentable {
     }
 
     func updateUIView(_ view: MediaImageScrollView, context: Context) {
+        view.doubleTapScale = isTranscriptMediaSheet ? 2 : 2.5
+        view.preservesZoomOnHeightChange = isTranscriptMediaSheet
         view.onTap = onTap
         view.onZoomChanged = onZoomChanged
         view.display(image)

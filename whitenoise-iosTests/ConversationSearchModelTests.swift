@@ -51,6 +51,51 @@ struct ConversationSearchModelTests {
         #expect(model.scrollRequest?.itemId == "msg:c")
     }
 
+    @Test func pollDeadlineScrollsOnlyWhenTheSelectedSearchResultChanges() {
+        let stub = TimelineStub(loaded: [Self.entry("a", "Select one"), Self.entry("b", "Select one")])
+        let model = ConversationSearchModel()
+        stub.attach(to: model)
+        model.activate()
+        model.query = "Select one"
+        let originalRequest = model.scrollRequest
+
+        model.refreshAfterSearchableContentChange()
+        #expect(model.scrollRequest == originalRequest)
+        stub.loaded[1] = Self.entry("b", "Final results")
+        model.refreshAfterSearchableContentChange()
+        #expect(model.scrollRequest?.itemId == "msg:a")
+        #expect(model.matchingItemIDs == ["msg:a"])
+    }
+
+    @Test func aNewPageCanAddASearchMatchWithoutTakingTheViewport() {
+        let stub = TimelineStub(loaded: [Self.entry("a", "Hello")])
+        let model = ConversationSearchModel()
+        stub.attach(to: model)
+        model.activate()
+        model.query = "receipt"
+        stub.loaded.insert(Self.entry("older", "receipt"), at: 0)
+        model.refreshAfterSearchableContentChange { $0 == "a" }
+        #expect(model.currentMatch?.itemId == "msg:older")
+        #expect(model.scrollRequest == nil)
+    }
+
+    @Test func newSenderMatchScrollsWhileAnOlderQueryFinishesPaging() async {
+        let stub = TimelineStub(loaded: [Self.entry("a", "Hello")], olderBacklog: [[]])
+        let model = ConversationSearchModel()
+        stub.attach(to: model)
+        model.activate()
+        model.query = "first query"
+        model.loadOlderPage = { [weak model] in
+            guard let model else { return }
+            model.query = "Alice"
+            stub.loaded[0].labels = ["Alice"]
+            model.refreshAfterSearchableContentChange()
+        }
+        await model.searchOlder()
+        #expect(model.currentMatch?.itemId == "msg:a")
+        #expect(model.scrollRequest?.itemId == "msg:a")
+    }
+
     @Test func olderNavigationMovesThroughLoadedMatchesThenWraps() async {
         let stub = TimelineStub(loaded: [
             Self.entry("a", "meet at noon"),

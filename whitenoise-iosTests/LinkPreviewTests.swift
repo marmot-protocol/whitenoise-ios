@@ -30,6 +30,29 @@ struct LinkPreviewTests {
         #expect(document.title == "Document title")
     }
 
+    @Test func selectsTheFirstUsableSummaryAndDecodesItsText() throws {
+        let metadata = try #require(parse("""
+        <head><meta name="description" content="Page text">
+        <meta name="twitter:description" content="Fallback text">
+        <meta property="og:description" content="  Fish &amp;  chips  "></head>
+        """))
+        #expect(metadata.summary == "Fish & chips")
+        #expect(metadata.title == nil && metadata.imageURL == nil)
+
+        let fallback = try #require(parse("""
+        <head><meta property="og:description" content="   ">
+        <meta name="description" content="Page description"></head>
+        """))
+        #expect(fallback.summary == "Page description")
+    }
+
+    @Test func boundsRemoteSummaryAndIgnoresBodyMetadata() throws {
+        let untrusted = "\u{202E}" + String(repeating: "x", count: 500)
+        let metadata = try #require(parse(#"<head><meta name="description" content="\#(untrusted)"></head>"#))
+        #expect(metadata.summary == String(repeating: "x", count: 400))
+        #expect(parse(#"<head></head><body><meta name="description" content="Unexpected"></body>"#) == nil)
+    }
+
     @Test func prefersSecureImageAndRejectsUnsafeImageURLs() throws {
         let secure = try #require(parse("""
         <head>

@@ -45,6 +45,49 @@ struct AgentEventPresentationTests {
         #expect(display?.iconName == "ellipsis.message")
     }
 
+    @MainActor
+    @Test func progressFinishesOnlyAfterTheSameAgentAnswersTheSameRequest() throws {
+        let model = ConversationViewModel(appState: AppState.test(), group: testAgentGroup())
+        let request = hex("31")
+        let bot = hex("11")
+        let activity = timelineRecord(messageIdHex: hex("21"), groupIdHex: hex("bb"), sender: bot,
+                                     plaintext: #"{"status":"thinking","text":"Checking the route"}"#,
+                                     kind: MessageSemantics.kindAgentActivity,
+                                     tags: [.init(values: ["e", request])], timelineAt: 1)
+        let otherPerson = timelineRecord(messageIdHex: hex("22"), groupIdHex: hex("bb"), sender: hex("12"),
+                                         timelineAt: 2, replyToMessageIdHex: request)
+        let unrelatedAnswer = timelineRecord(messageIdHex: hex("23"), groupIdHex: hex("bb"), sender: bot,
+                                             timelineAt: 3, replyToMessageIdHex: hex("32"))
+        let answer = timelineRecord(messageIdHex: hex("24"), groupIdHex: hex("bb"), sender: bot,
+                                    timelineAt: 4, replyToMessageIdHex: request)
+
+        func show(_ records: [TimelineMessageRecordFfi]) {
+            model.applyTimelinePage(.init(messages: records, hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        }
+        show([activity, otherPerson, unrelatedAnswer])
+        let row = try #require(model.timeline.first)
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == true)
+        show([activity, otherPerson, unrelatedAnswer, answer])
+        let finished = try #require(model.agentEventDisplay(for: row))
+        #expect(finished.iconName == "checkmark.message")
+        #expect(!finished.reportsWorkInProgress)
+
+        model.timelineStore.setHiddenMessageIds([answer.messageIdHex])
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == false)
+
+        model.timelineStore.setDurableRowStatus(.sending, messageIdHex: answer.messageIdHex)
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == true)
+        model.timelineStore.setDurableRowStatus(.sent, messageIdHex: answer.messageIdHex)
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == false)
+
+        var reprojected = answer
+        reprojected.replyToMessageIdHex = nil
+        _ = model.timelineStore.applyTimelineRecord(reprojected, updateTimeline: true)
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == true)
+        _ = model.timelineStore.applyTimelineRecord(answer, updateTimeline: true)
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == false)
+    }
+
     @Test func operationDisplayPrefersTextAndFallsBackToPreview() {
         let record = agentRecord(
             kind: MessageSemantics.kindAgentOperation,

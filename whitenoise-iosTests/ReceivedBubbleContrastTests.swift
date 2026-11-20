@@ -3,24 +3,11 @@ import UIKit
 @testable import whitenoise_ios
 
 struct MessageBubbleMetadataLayoutTests {
-    @Test func onlyReplyHeadersPreferACompactMeasurementWidth() throws {
-        let available = MessageBubbleReplyLayout.richBubbleWidth * 2
-        let header = try #require(MessageBubbleReplyLayout.measurementWidth(proposedWidth: available, isReplyHeader: true))
-        let body = try #require(MessageBubbleReplyLayout.measurementWidth(proposedWidth: available, isReplyHeader: false))
-
-        #expect(header < body)
-        #expect(body == available)
-    }
-
-    @Test func aReplyHeaderDoesNotOutgrowANarrowProposal() {
-        let available = MessageBubbleReplyLayout.richBubbleWidth / 2
-        #expect(MessageBubbleReplyLayout.measurementWidth(proposedWidth: available, isReplyHeader: true) == available)
-    }
-
-    @Test func unspecifiedBodyWidthStaysFlexibleWhileTheHeaderStaysFinite() throws {
-        #expect(MessageBubbleReplyLayout.measurementWidth(proposedWidth: nil, isReplyHeader: false) == nil)
-        let header = try #require(MessageBubbleReplyLayout.measurementWidth(proposedWidth: nil, isReplyHeader: true))
-        #expect(header.isFinite && header > 0)
+    @Test func shortQuotesHugTheirContentsAndLongExchangesRespectAvailableWidth() {
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: 300, ideal: 80) == 80)
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: 240, ideal: 400) == 240)
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: nil, ideal: 400) == 332)
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: 500, ideal: nil) == 332)
     }
 
     @Test func timestampsAlwaysUseTheOuterConversationEdge() {
@@ -47,6 +34,7 @@ struct MessageBubbleMetadataLayoutTests {
     }
 
     @Test func chromeHeightAddsBubbleMetadataAndSpacing() {
+        #expect(MessageBubbleChromeSizing.height(bubbleHeight: 44, metadataHeight: 0, spacing: 3) == 44)
         #expect(MessageBubbleChromeSizing.height(
             bubbleHeight: 44,
             metadataHeight: 14,
@@ -75,5 +63,57 @@ struct MessageBodyCollapsePresentationTests {
         let body = String(repeating: "x", count: MessageBodyCollapsePresentation.maxCollapsedCharacters + 1)
         #expect(MessageBodyCollapsePresentation.isCollapsed(body, isExpanded: false))
         #expect(!MessageBodyCollapsePresentation.isCollapsed(body, isExpanded: true))
+    }
+}
+
+struct TranscriptMessagePreviewTests {
+    @Test func characterLimitCountsWholeEmojiAndNewlinesOnlyLimitAnExcerpt() {
+        let emoji = "👩🏽‍💻"
+        let boundary = String(repeating: emoji, count: 512)
+        #expect(TranscriptMessagePreview.snippet(boundary) == nil)
+        #expect(TranscriptMessagePreview.snippet(boundary + "x") == boundary)
+
+        let lines = Array(repeating: "a", count: 17).joined(separator: "\n")
+        #expect(TranscriptMessagePreview.snippet(lines) == nil)
+        #expect(TranscriptMessagePreview.snippet(lines + boundary) == String(lines.dropLast(2)))
+    }
+
+    @Test func longReaderAccountsForNewlinesAndTheExistingInlineRenderLimit() {
+        let text = String(repeating: "🌲", count: 2044)
+        #expect(!TranscriptMessagePreview.requiresReader(text + "\n"))
+        #expect(TranscriptMessagePreview.requiresReader(text + "\nx"))
+        #expect(TranscriptMessagePreview.requiresReader(String(repeating: "a", count: 8001)))
+    }
+
+    @Test func inlineSourceLimitCountsCharactersEvenWhenSearchExpandsTheMatchingRow() {
+        let inline = String(repeating: "é", count: ContentSanitizer.maxMessageLength)
+        #expect(!TranscriptMessagePreview.exceedsInlineLimit(inline))
+        #expect(TranscriptMessagePreview.exceedsInlineLimit(inline + "x"))
+    }
+
+    @Test func formattedPreviewCountsBlockBoundariesAndKeepsItsLastEmphasis() {
+        var emphatic = AttributedString("abcdef")
+        emphatic.inlinePresentationIntent = .stronglyEmphasized
+        let blocks: [MarkdownDisplayBlock] = [.paragraph(AttributedString("123")), .heading(emphatic)]
+        let excerpt = MarkdownDisplayBlock.excerpt(blocks, characterBudget: 6, countingBlockSeparators: true)
+        guard case .heading(let heading) = excerpt.last else {
+            Issue.record("Missing heading at the end of the preview")
+            return
+        }
+        #expect(String(heading.characters) == "ab…")
+        #expect(heading.runs.first?.inlinePresentationIntent == .stronglyEmphasized)
+    }
+
+    @Test func sourceReaderRetainsEveryCharacterAcrossChunkBoundaries() {
+        let text = String(repeating: "🥾 a trail without a break ", count: 220) + String(repeating: "x", count: 5000)
+        var tail = text[...]
+        var recovered = ""
+        while !tail.isEmpty {
+            let chunk = TranscriptMessagePreview.sourceChunk(tail)
+            #expect((1...2048).contains(chunk.count))
+            recovered += chunk
+            tail = tail[chunk.endIndex...]
+        }
+        #expect(recovered == text)
     }
 }

@@ -290,7 +290,10 @@ final class ConversationViewModel {
     private(set) var openingTargetUnavailable = false
     private(set) var initialWindowUnreadMessageId: String?
     private(set) var conversationWindow: ConversationWindowSnapshotFfi?
-    private var windowSubscription: ConversationWindowSubscription?
+    private var windowSubscription: (any ConversationWindowFeed)?
+    typealias ProjectionClientResolver = @MainActor (AppState) throws -> any ConversationProjectionClient
+    @ObservationIgnored private let projectionClient: ProjectionClientResolver
+    @ObservationIgnored private let canReadLocalWindow: @MainActor (AppState) -> Bool
     @ObservationIgnored private var windowCursor: ProjectionSequenceCursor?
     @ObservationIgnored private var windowLifetime = UUID()
     private var startRequest = UUID()
@@ -309,7 +312,7 @@ final class ConversationViewModel {
     @ObservationIgnored var windowDidChange: (() -> Void)?
     private(set) var windowIdentities: [String: ConversationIdentityFfi] = [:]
     private(set) var windowReactions: [String: ConversationReactionsFfi] = [:]
-    @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
+    @ObservationIgnored private let mediaDownloader: any ConversationMediaSource
     /// Captures no view model: a fetch can outlast the conversation's screen.
     @ObservationIgnored private lazy var mediaPrefetcher = ConversationMediaPrefetcher {
         [mediaDownloader, groupIdHex = group.groupIdHex, weak appState] media in
@@ -438,9 +441,13 @@ final class ConversationViewModel {
                                                               available: Bool)?
     // Lazy so its timeline-index closure can capture a fully initialized
     // store; first touched on the post-start apply/mark paths.
+    #if DEBUG
+    @ObservationIgnored var fixtureActions: ChatPreviewActions?
+    #endif
+    private let marksMessagesRead: Bool
     @ObservationIgnored private lazy var readMarker = ConversationReadMarker(
         groupIdHex: group.groupIdHex,
-        appState: appState,
+        appState: marksMessagesRead ? appState : nil,
         timelineIndex: { [weak timelineStore] messageIdHex in
             timelineStore?.timelineIndex(forMessageIdHex: messageIdHex)
         },
@@ -1036,6 +1043,50 @@ final class ConversationViewModel {
         timelineStore.editHistory(for: messageIdHex)
     }
 
+    func firstGalleryGIF(in row: TimelineItem) -> MessageMediaAttachment? {
+        mediaItems(for: row).first { $0.isGIF && $0.rejectionKind == nil && isAvailableInGallery($0) }
+    }
+
+    private func isAvailableInGallery(_ media: MessageMediaAttachment) -> Bool {
+        #if DEBUG
+        if fixtureActions != nil { return ChatPreviewMedia.url(media.fileName) != nil }
+        #endif
+        return true
+    }
+
+    /// Project the currently loaded transcript only while its media sheet is open.
+    /// Keep the row's original media objects so opening a page addresses its original slot.
+    func transcriptMediaGallery(opening itemID: String, initialData: Data?, openingItem: MessageMediaAttachment? = nil,
+                                includingGIFsIn gifRowID: String? = nil,
+                                allowsEmptyWindow: Bool = false) -> MessageMediaGallery? {
+        var items: [MessageMediaAttachment] = []
+        var messages: [String: String] = [:]
+        var captions: [String: MessageMediaGallery.Caption] = [:]
+        for row in timeline {
+            guard case .message(let record, _) = row.kind, !isDeleted(record.messageIdHex),
+                  (record.kind != MessageSemantics.kindPoll || record.sticker != nil),
+                  !(appState?.streamingDebugEnabled == true && MessageSemantics.debugStyle(for: record).isUserVisibleBubble == false),
+                  groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row)?.kind != .operation else { continue }
+            guard !timelineStore.isHidden(record.messageIdHex), !timelineStore.isBlockedAuthor(record.sender) else { continue }
+            for (index, media) in mediaItems(for: row).enumerated() {
+                guard media.isTranscriptGalleryMedia || (row.id == gifRowID && media.isGIF && media.rejectionKind == nil),
+                      isAvailableInGallery(media) else { continue }
+                guard captions[media.id] == nil else { continue }
+                items.append(media)
+                if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }
+                let name = IdentityPresentation.resolve(accountIdHex: record.sender, knownName: windowIdentities[record.sender]?.displayName).text
+                captions[media.id] = .init(sender: record.direction == "sent" ? L10n.string("You") : name,
+                    date: Date(timeIntervalSince1970: TimeInterval(row.timestamp)),
+                    outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
+            }
+        }
+        let openingBytes = openingItem.flatMap { original in
+            items.contains { $0.canUseBytesPrepared(for: original) && $0.localTarget == original.localTarget } ? initialData : nil
+        }
+        return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: openingBytes,
+            messages: messages, captions: captions, allowsEmptyWindow: allowsEmptyWindow)
+    }
+
     func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
         timelineStore.mediaItems(for: item)
     }
@@ -1070,8 +1121,17 @@ final class ConversationViewModel {
         timelineStore.refreshStreamingDebugPresentation()
     }
 
-    func refreshProfileDependentTimelineProjections() {
-        timelineStore.refreshProfileDependentTimelineProjections()
+    func refreshProfileDependentTimelineProjections(affectedMessageIDs: Set<String>? = nil,
+                                                    allowScrollTo: (String) -> Bool = { _ in true }) {
+        timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affectedMessageIDs)
+        guard search.isActive, search.hasQuery, affectedMessageIDs?.isEmpty != true else { return }
+        if let selected = search.currentMatch,
+           timelineStore.timelineIndex(forMessageIdHex: selected.messageIdHex) == nil || isDeleted(selected.messageIdHex) {
+            // A page, hide or deletion owns this change of viewport.
+            search.refreshAfterTimelineChange()
+        } else {
+            search.refreshAfterSearchableContentChange(allowScrollTo: allowScrollTo)
+        }
     }
 
     func applyTimestampRenderGeneration(_ generation: Int) {
@@ -1106,7 +1166,11 @@ final class ConversationViewModel {
         timelineTimings: TimelineStoreTimings? = nil,
         composerMarmotCalls: ComposerMarmotCalls = .live,
         inviteDeclineCalls: InviteDeclineCalls = .live,
-        groupCalls: ConversationGroupCalls = .live
+        groupCalls: ConversationGroupCalls = .live,
+        projectionClient: @escaping ProjectionClientResolver = { try $0.currentMarmotClient() },
+        canReadLocalWindow: @escaping @MainActor (AppState) -> Bool = { $0.canUseRuntimeForLocalForegroundWork },
+        marksMessagesRead: Bool = true,
+        mediaSource: (any ConversationMediaSource)? = nil
     ) {
         self.appState = appState
         self.moderationAccountRef = appState.activeAccountRef
@@ -1120,6 +1184,10 @@ final class ConversationViewModel {
         self.durableRetryOperations = durableRetryOperations
         self.inviteDeclineCalls = inviteDeclineCalls
         self.groupCalls = groupCalls
+        self.projectionClient = projectionClient
+        self.canReadLocalWindow = canReadLocalWindow
+        self.marksMessagesRead = marksMessagesRead
+        self.mediaDownloader = mediaSource ?? ConversationMediaDownloader()
         let hiddenMessageIds = appState.activeAccountRef.map {
             MessageHideStore.hiddenMessageIds(accountRef: $0, groupIdHex: group.groupIdHex)
         } ?? []
@@ -1170,7 +1238,7 @@ final class ConversationViewModel {
         guard !isLocallyReset, let appState,
               let accountRef = appState.activeAccountRef
         else { return }
-        let canLoadLocalSnapshot = appState.canUseRuntimeForLocalForegroundWork
+        let canLoadLocalSnapshot = canReadLocalWindow(appState)
         let canStartLiveWork = appState.canUseRuntimeForForegroundWork
         let startDecision = ConversationRuntimeStartDecision.evaluate(
             canLoadLocalSnapshot: canLoadLocalSnapshot,
@@ -1372,6 +1440,9 @@ final class ConversationViewModel {
     }
 
     func votePoll(option optionId: String, on message: AppMessageRecordFfi) async {
+        #if DEBUG
+        if let fixtureActions { fixtureActions.vote(optionId, on: message.messageIdHex); return }
+        #endif
         let messageId = message.messageIdHex
         guard canVoteInPolls, let appState, let accountRef = appState.activeAccountRef,
               !messageId.isEmpty,
@@ -1504,6 +1575,9 @@ final class ConversationViewModel {
     }
 
     func retryFailedSend(rowId: String) async {
+        #if DEBUG
+        if let fixtureActions, let id = timelineStore.undeliveredDurableMessageId(rowId: rowId) { fixtureActions.retry(id); return }
+        #endif
         if let messageIdHex = timelineStore.undeliveredDurableMessageId(rowId: rowId) {
             guard durableRetryOperations.isOnline() else {
                 composer.onError(L10n.string("You're offline. Try again once you're connected."))
@@ -1603,6 +1677,9 @@ final class ConversationViewModel {
     }
 
     func discardFailedSend(rowId: String) {
+        #if DEBUG
+        if let fixtureActions, let id = timelineStore.undeliveredDurableMessageId(rowId: rowId) { fixtureActions.hide(id); return }
+        #endif
         if let messageIdHex = timelineStore.undeliveredDurableMessageId(rowId: rowId) {
             Task { await discardDurableFailedSend(messageIdHex: messageIdHex) }
             return
@@ -1688,7 +1765,9 @@ final class ConversationViewModel {
     }
 
     private func startLiveTimeline(accountRef: String) {
-        guard let appState, appState.canUseRuntimeForLocalForegroundWork else { return }
+        guard let appState, canReadLocalWindow(appState) else { return }
+        let resolveProjectionClient = projectionClient
+        let canReadLocalWindow = self.canReadLocalWindow
         let groupIdHex = group.groupIdHex
         let lifetime = windowLifetime
         timelineTask = Task { [weak self, weak appState] in
@@ -1703,11 +1782,11 @@ final class ConversationViewModel {
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
             while !Task.isCancelled {
                 do {
-                    guard let appState, appState.canUseRuntimeForLocalForegroundWork,
+                    guard let appState, canReadLocalWindow(appState),
                           appState.activeAccountRef == accountRef else { return }
-                    let client = try appState.currentMarmotClient()
+                    let client = try resolveProjectionClient(appState)
                     openTiming = .some(appState.productAnalytics.beginTiming())
-                    let window: ConversationWindowSubscription
+                    let window: any ConversationWindowFeed
                     var targetUnavailable = false
                     do {
                         let target: String?
@@ -1716,11 +1795,12 @@ final class ConversationViewModel {
                             else { target = nil }
                         } else { target = self?.openingMessageId }
                         let mode: ConversationOpenModeFfi = target != nil ? .message : (self?.conversationWindow == nil ? .automatic : .latest)
-                        window = try await client.openConversationWindow(accountRef: accountRef, groupIdHex: groupIdHex,
+                        window = try await client.openConversationWindowFeed(accountRef: accountRef, groupIdHex: groupIdHex,
                             mode: mode, messageIdHex: target)
                     } catch MarmotKitError.ConversationWindowMessageNotRetained {
                         targetUnavailable = true
-                        window = try await client.openConversationWindow(accountRef: accountRef, groupIdHex: groupIdHex, mode: .latest)
+                        window = try await client.openConversationWindowFeed(accountRef: accountRef, groupIdHex: groupIdHex,
+                                                                            mode: .latest, messageIdHex: nil)
                     }
                     guard !Task.isCancelled, self?.windowLifetime == lifetime,
                           appState.activeAccountRef == accountRef else {
@@ -1761,7 +1841,7 @@ final class ConversationViewModel {
                             guard let snapshot = next else { break }
                             guard !Task.isCancelled, self?.windowLifetime == lifetime,
                                   appState.activeAccountRef == accountRef,
-                                  appState.canUseRuntimeForLocalForegroundWork else { break }
+                                  canReadLocalWindow(appState) else { break }
                             self?.acceptConversationWindow(snapshot, from: window)
                             retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
                         }
@@ -1790,7 +1870,7 @@ final class ConversationViewModel {
         }
     }
 
-    private func acceptConversationWindow(_ snapshot: ConversationWindowSnapshotFfi, from window: ConversationWindowSubscription) {
+    private func acceptConversationWindow(_ snapshot: ConversationWindowSnapshotFfi, from window: any ConversationWindowFeed) {
         guard windowSubscription === window,
               windowCursor?.accept(generation: snapshot.revision.generation, sequence: snapshot.revision.sequence) == true else { return }
         if let previous = conversationWindow, previous.revision.generation == snapshot.revision.generation {
@@ -1825,6 +1905,7 @@ final class ConversationViewModel {
                 viewportIntent = .history(id)
             }
         }
+        let previousWindow = conversationWindow
         conversationWindow = snapshot
         // Mutating an observed property invalidates the whole conversation view,
         // so only touch the admission when a page is actually pending.
@@ -1853,7 +1934,10 @@ final class ConversationViewModel {
                 let identities = Set(references.mentions + references.replyMentions + [references.sender, references.replyAuthor].compactMap { $0 })
                 return references.system != nil || !identities.isDisjoint(with: changedNames) ? message.timeline.messageIdHex : nil
             })
-            timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affected)
+            refreshProfileDependentTimelineProjections(affectedMessageIDs: affected) { messageID in
+                // New page rows update the count without interrupting the scroll that loaded them.
+                affected.contains(messageID) && previousWindow?.messages.contains { $0.timeline.messageIdHex == messageID } == true
+            }
         }
         error = navigationFailure
         windowDidChange?()
@@ -2341,12 +2425,26 @@ final class ConversationViewModel {
     /// budgeted markdown AST walk) on the typing hot path.
     private func searchableTimelineEntries() -> [ConversationSearchEntry] {
         let generation = timelineProjectionGeneration
-        if let cache = searchEntriesCache, cache.generation == generation {
-            return cache.entries
+        if searchEntriesCache?.generation != generation {
+            searchEntriesCache = (generation, computeSearchableTimelineEntries())
         }
-        let entries = computeSearchableTimelineEntries()
-        searchEntriesCache = (generation, entries)
-        return entries
+        return (searchEntriesCache?.entries ?? []).map { entry in
+            var enriched = entry
+            enriched.labels += entry.contactAttachmentIDs.compactMap { search.displayedContactName(for: $0) }
+            if let url = entry.previewURL, let metadata = searchableLinkPreview(for: url) {
+                enriched.labels += [metadata.title, metadata.summary, LinkPreviewCardContent.host(for: url)].compactMap { $0 }
+            }
+            return enriched
+        }
+    }
+
+    /// Search uses only metadata the card already has permission to display.
+    private func searchableLinkPreview(for url: URL) -> LinkPreviewMetadata? {
+        #if DEBUG
+        if fixtureActions != nil { return ChatPreviewThread.linkMetadata(for: url) }
+        #endif
+        guard LinkPreviewSettingsStore.shared.showsPreviews else { return nil }
+        return LinkPreviewLoader.cachedMetadata(for: url) ?? nil
     }
 
     func timelineDaySections(
@@ -2365,9 +2463,8 @@ final class ConversationViewModel {
         timelineStore.agentEventDisplay(for: item)
     }
 
-    /// Confirmed, previewable, non-deleted message rows flattened to plain text
-    /// through the budgeted preview path (`MessagePreview.body` →
-    /// `MarkdownPlainText.flatten`).
+    /// Index only the visible timeline's bounded text, sender, and attachment labels.
+    /// A search must never fetch a profile, link preview, or attachment.
     private func computeSearchableTimelineEntries() -> [ConversationSearchEntry] {
         timeline.compactMap { item in
             guard case .message(let record, _) = item.kind,
@@ -2375,18 +2472,51 @@ final class ConversationViewModel {
                   MessagePreview.isPreviewable(record),
                   !isDeleted(record.messageIdHex)
             else { return nil }
-            let text = displayBody(of: record)
-            guard !text.isEmpty else { return nil }
-            return ConversationSearchEntry(
-                itemId: item.id,
-                messageIdHex: record.messageIdHex,
-                text: text
+            let name = record.direction == "sent" ? L10n.string("You") : IdentityPresentation.text(
+                accountIdHex: record.sender,
+                knownName: conversationWindow == nil ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender)
+                    : windowIdentities[record.sender]?.displayName
             )
+            let media = mediaItems(for: item)
+            var labels = [name]
+            let contacts = media.filter { DocumentPreviewFormat(for: $0) == .contact }
+            if !contacts.isEmpty { labels.append(L10n.string("Contact")) }
+            for attachment in media {
+                labels.append(attachment.fileName)
+                switch attachment.kind {
+                case .image: labels.append(L10n.string("Photo"))
+                case .video: labels.append(L10n.string("Video"))
+                case .audio: labels.append(L10n.string("Voice message"))
+                case .document, .unsupported: labels.append(L10n.string("File"))
+                }
+            }
+            if record.kind == MessageSemantics.kindPoll {
+                let poll = poll(for: record.messageIdHex)
+                if poll != nil { labels.append(L10n.string("Poll")) }
+                labels += poll?.options.map { ContentSanitizer.messageBody($0.label) } ?? []
+                let question = poll.map { ContentSanitizer.messageBody($0.question) } ?? L10n.string("This poll can’t be displayed.")
+                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: question, labels: labels, poll: poll)
+            }
+            let usesTextBody = record.sticker == nil && !RemoteGiphyMedia.isEnvelopeText(record.plaintext)
+            let blocks = usesTextBody ? markdownDisplayBlocks(for: item) : nil
+            let text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
+                ?? ContentSanitizer.messageBody(displayBody(of: record))
+            if usesTextBody, media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
+                labels.append(L10n.string("Location"))
+            }
+            let previewURL = media.isEmpty ? LinkPreviewMetadata.previewURL(in: blocks) : nil
+            return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex,
+                text: text, labels: labels, previewURL: previewURL,
+                contactAttachmentIDs: contacts.map(\.id))
         }
     }
 
     func data(for media: MessageMediaAttachment) async throws -> Data {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
+    }
+
+    func automaticAttachmentByteCount(for media: MessageMediaAttachment) async -> Int? {
+        await mediaDownloader.automaticAttachmentByteCount(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
     /// Requests the images in rows just beyond the viewport under the same
@@ -2474,6 +2604,21 @@ final class ConversationViewModel {
         let reactions = reactionArtworkScope == customEmojiScope
             ? CustomEmojiReactionResolution.catalogEntries(reactionArtwork) : []
         return CustomEmojiCatalog.merge(messages: timelineStore.customEmojiCatalogEntries, reactions: reactions)
+    }
+
+    /// Repeating a chip must send the same image, even when two sets use the same shortcode.
+    func canRepeatReaction(_ shortcode: CustomEmojiShortcode, reactionID: String?) -> Bool {
+        guard canSendMediaAttachments, let scope = customEmojiSendScope else { return false }
+        if let reactionID, !reactionID.isEmpty {
+            guard reactionArtworkScope == scope else { return false }
+            if !reactionArtworkMisses.contains(reactionID) {
+                guard let artwork = reactionArtwork[reactionID], artwork.shortcode == shortcode,
+                      let hash = artwork.reference?.plaintextSha256.lowercased() else { return false }
+                return customEmojiSendables.contains { $0.shortcode == shortcode && $0.plaintextSha256 == hash }
+            }
+        }
+        // An untagged reaction displays the bundled image when one exists.
+        return CustomEmojiBuiltins.shortcodes.contains(shortcode)
     }
 
     /// The artwork of one `:shortcode:` reaction event, read once per scope
@@ -3424,6 +3569,9 @@ final class ConversationViewModel {
     /// invokes Marmot and therefore cannot publish a delete event.
     @discardableResult
     func deleteMessageForMe(_ message: AppMessageRecordFfi) async -> Bool {
+        #if DEBUG
+        if let fixtureActions { fixtureActions.hide(message.messageIdHex); return true }
+        #endif
         guard let canonical = canonicalDeleteRecord(for: message),
               deleteCapability(for: canonical).canDeleteForMe,
               let accountRef = appState?.activeAccountRef
@@ -3456,6 +3604,9 @@ final class ConversationViewModel {
     /// here so stale UI state cannot request a broader delete scope.
     @discardableResult
     func deleteMessageForEveryone(_ message: AppMessageRecordFfi) async -> Bool {
+        #if DEBUG
+        if let fixtureActions { fixtureActions.delete([message.messageIdHex]); return true }
+        #endif
         guard let canonical = canonicalDeleteRecord(for: message),
               deleteCapability(for: canonical).canDeleteForEveryone,
               let appState, let accountRef = appState.activeAccountRef
@@ -3624,12 +3775,33 @@ final class ConversationViewModel {
         return reference
     }
 
+    // The picker, menu, chips and details share the same optimistic reaction state.
+    private enum PendingReaction: Hashable { case add(String), removeAll }
+    @ObservationIgnored private var pendingReactions: [String: Set<PendingReaction>] = [:]
+
     func toggleReaction(_ emoji: String, on message: AppMessageRecordFfi) async {
+        #if DEBUG
+        if let fixtureActions { fixtureActions.react(emoji, to: message.messageIdHex); return }
+        #endif
         guard canSendMessages,
               let appState, let accountRef = appState.activeAccountRef,
               !message.messageIdHex.isEmpty else { return }
         let me = appState.activeAccount?.accountIdHex ?? ""
         let alreadyMine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
+        // Different additions can upload together. Unreact clears every owned reaction
+        // on this message, so it must not overlap another addition or removal.
+        let id = message.messageIdHex
+        let operation: PendingReaction = alreadyMine ? .removeAll : .add(emoji)
+        let pending = pendingReactions[id] ?? []
+        guard !pending.contains(.removeAll), !alreadyMine || pending.isEmpty,
+              pendingReactions[id, default: []].insert(operation).inserted else {
+            Haptics.warning()
+            return
+        }
+        defer {
+            pendingReactions[id]?.remove(operation)
+            if pendingReactions[id]?.isEmpty == true { pendingReactions[id] = nil }
+        }
         // A `:shortcode:` reaction is sent with its image; one this chat
         // holds no image for can only be removed.
         var customEmoji: CustomEmojiSendable?
