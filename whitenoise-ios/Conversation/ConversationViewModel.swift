@@ -1042,7 +1042,8 @@ final class ConversationViewModel {
 
     /// Project the currently loaded transcript only while its media sheet is open.
     /// Keep the row's original media objects so opening a page addresses its original slot.
-    func transcriptMediaGallery(opening itemID: String, initialData: Data?, includingGIFsIn gifRowID: String? = nil,
+    func transcriptMediaGallery(opening itemID: String, initialData: Data?, openingItem: MessageMediaAttachment? = nil,
+                                includingGIFsIn gifRowID: String? = nil,
                                 allowsEmptyWindow: Bool = false) -> MessageMediaGallery? {
         var items: [MessageMediaAttachment] = []
         var messages: [String: String] = [:]
@@ -1064,7 +1065,10 @@ final class ConversationViewModel {
                     outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
             }
         }
-        return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: initialData,
+        let openingBytes = openingItem.flatMap { original in
+            items.contains { $0.canUseBytesPrepared(for: original) } ? initialData : nil
+        }
+        return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: openingBytes,
             messages: messages, captions: captions, allowsEmptyWindow: allowsEmptyWindow)
     }
 

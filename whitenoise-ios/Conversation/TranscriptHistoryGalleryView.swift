@@ -10,7 +10,7 @@ struct TranscriptHistoryControls {
     var allowsOpeningDemand: Bool
     var didSelect: (String) -> Void
     var verify: (MessageMediaAttachment) async throws -> Bool
-    var verifyForward: (MessageMediaAttachment) async throws -> Bool
+    var verifyForward: (MessageMediaAttachment, MessageMediaGallery.PendingSelection?) async throws -> Bool
 }
 
 extension EnvironmentValues {
@@ -38,7 +38,9 @@ struct TranscriptHistoryGalleryView: View {
         let currentScope = scope
         let scoped = currentScope != nil && currentScope == activeScope
         // The opening draft can disappear briefly while its confirmed slot is being matched.
-        let selectedFromHistory = history.selectedItemID.map { gallery.transcriptCaptions?[$0] == nil } ?? false
+        let selectedID = history.selectedItemID ?? gallery.initialItemID
+        let selectedFromHistory = gallery.transcriptCaptions?[selectedID] == nil
+            && (history.resetViewerOnDiscard || history.pages.contains(attachmentID: selectedID))
         Group {
             if scoped && history.validationFailed && selectedFromHistory {
                 ContentUnavailableView {
@@ -105,7 +107,9 @@ struct TranscriptHistoryGalleryView: View {
                 history.resetViewerOnDiscard = gallery.transcriptCaptions?[itemID] == nil
                 if !history.resetViewerOnDiscard { history.lastWindowItemID = itemID }
             }, verify: { [activeScope] item in try await self.verify(item, in: activeScope) },
-            verifyForward: { [activeScope] item in try await self.verify(item, in: activeScope, allowingConfirmation: true) })
+            verifyForward: { [activeScope] item, pending in
+                try await self.verifyForward(item, pending: pending, in: activeScope)
+            })
     }
 
     private func validate() {
@@ -119,6 +123,19 @@ struct TranscriptHistoryGalleryView: View {
             guard activeScope == scope, scenePhase == .active else { return }
             await history.loadPage(scope: scope, appState: appState)
         }
+    }
+
+    private func verifyForward(_ item: MessageMediaAttachment, pending: MessageMediaGallery.PendingSelection?,
+                               in scope: TranscriptAttachmentHistory.Scope?) async throws -> Bool {
+        if let pending, let window = conversation.transcriptMediaGallery(opening: item.id, initialData: nil, allowsEmptyWindow: true),
+           window.transcriptCaptions?[item.id] == nil {
+            // The chooser may outlive an optimistic UUID. Use the gallery's original
+            // row, slot and plaintext match before verifying the confirmed source.
+            guard window.confirmedItem(for: pending) != nil else { throw AttachmentReadError.stale }
+            guard let confirmed = await window.confirmedSelection(for: pending) else { return false }
+            return try await verify(confirmed, in: scope, allowingConfirmation: true)
+        }
+        return try await verify(item, in: scope, allowingConfirmation: true)
     }
 
     private func verify(_ item: MessageMediaAttachment, in openingScope: TranscriptAttachmentHistory.Scope?,

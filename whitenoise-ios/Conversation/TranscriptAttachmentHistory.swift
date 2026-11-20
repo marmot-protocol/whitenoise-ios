@@ -92,6 +92,10 @@ struct TranscriptHistoryPages {
 
     func contains(messageID: String) -> Bool { byMessage[messageID] != nil }
 
+    func contains(attachmentID: String) -> Bool {
+        byMessage.values.contains { slots in slots.contains { $0.attachment.id == attachmentID } }
+    }
+
     /// Extend each edge only once the native cursor has reached that exact slot. In particular, a
     /// recent page cannot appear adjacent to an old search result while intervening pages are missing.
     func extensions(around window: [MessageMediaAttachment],

@@ -38,6 +38,15 @@ struct MessageMediaGalleryTests {
         var source = pending
         source.localTarget = .init(messageIdHex: "message", sourceMessageIdHex: "confirmation", attachmentIndex: 0)
         #expect(source.canUseBytesPrepared(for: pending))
+        let draft = MessageMediaAttachment(id: "draft", reference: nil, fileName: "photo.png",
+            mediaType: "image/png", dim: nil, localData: Data([1, 2, 3]))
+        var sends = OwnSendMediaStore()
+        sends.retain(draft, plaintextSha256: ref.plaintextSha256)
+        let receivedCopy = sends.overlay(source)
+        #expect(receivedCopy.localData == draft.localData)
+        #expect(receivedCopy.forTranscriptPage.localData == nil)
+        #expect(receivedCopy.forTranscriptPage.localTarget == source.localTarget)
+        #expect(draft.forTranscriptPage.localData == draft.localData)
         var edited = source
         edited.localTarget?.sourceMessageIdHex = "replacement"
         #expect(!edited.canUseBytesPrepared(for: source))

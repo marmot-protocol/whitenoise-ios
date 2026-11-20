@@ -277,7 +277,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     let fileName: String
     let mediaType: String
     let dim: String?
-    let localData: Data?
+    private(set) var localData: Data?
     let thumbnail: UIImage?
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
@@ -332,6 +332,14 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
 
     var isAudio: Bool {
         MediaAttachmentPolicy.canonicalMediaType(mediaType).hasPrefix("audio/")
+    }
+
+    /// A content-hash overlay can display a matching own send on another message.
+    /// Opening a sourced transcript page must still go through that page's original slot.
+    var forTranscriptPage: Self {
+        var copy = self
+        if localTarget != nil { copy.localData = nil }
+        return copy
     }
 
     /// Delivery can supply the original source for an already displayed outgoing attachment.

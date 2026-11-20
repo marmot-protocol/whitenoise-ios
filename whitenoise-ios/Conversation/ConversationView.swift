@@ -703,7 +703,8 @@ struct ConversationView: View {
     @State private var actionsCrossfadeExcerpt = false
     @State private var actionsReturnGeometry: (row: CGRect, body: CGSize?, documents: [String: LiftedDocumentDetails])?
     private struct TranscriptMediaTarget: Identifiable {
-        let id: String
+        let item: MessageMediaAttachment
+        var id: String { item.id }
         let scope: MessageBubble.MediaOpenScope
         let initialData: Data?
         var gifRowID: String? = nil
@@ -1089,7 +1090,7 @@ struct ConversationView: View {
             }
             .sheet(item: $transcriptMedia, onDismiss: { mediaOpenIntent.invalidate() }) { target in
                 if let viewModel, target.scope.isCurrent(viewModel, appState: appState),
-                   let gallery = viewModel.transcriptMediaGallery(opening: target.id, initialData: target.initialData,
+                   let gallery = viewModel.transcriptMediaGallery(opening: target.id, initialData: target.initialData, openingItem: target.item,
                                                                 includingGIFsIn: target.gifRowID, allowsEmptyWindow: true) {
                     TranscriptHistoryGalleryView(gallery: gallery, conversation: viewModel, gifRowID: target.gifRowID, onLoadMedia: mediaLoader(for: viewModel),
                         forwardingContext: forwardingContext(for: viewModel),
@@ -2706,7 +2707,7 @@ struct ConversationView: View {
                 guard mediaScope.isCurrent(self.viewModel, appState: appState), !viewModel.isDeleted(record.messageIdHex),
                       let current = viewModel.timeline.first(where: { $0.id == item.id }),
                       viewModel.mediaItems(for: current).contains(where: { $0.canUseBytesPrepared(for: media) }) else { return }
-                transcriptMedia = TranscriptMediaTarget(id: media.id, scope: mediaScope, initialData: data)
+                transcriptMedia = TranscriptMediaTarget(item: media, scope: mediaScope, initialData: data)
             },
             mediaForwardingContext: forwardingContext(for: viewModel),
             onGoToMessage: { messageIdHex in
@@ -4607,7 +4608,7 @@ struct ConversationView: View {
                 let bodySize = actionsPhase == .returning ? actionsReturnGeometry?.body ?? target.bodySize : target.bodySize
                 let canInteract = viewModel.canSendMessages
                 let openGIF = viewModel.firstGalleryGIF(in: item).map { gif in
-                    let mediaTarget = TranscriptMediaTarget(id: gif.id, scope: .init(viewModel, appState: appState),
+                    let mediaTarget = TranscriptMediaTarget(item: gif, scope: .init(viewModel, appState: appState),
                         initialData: nil, gifRowID: rowId)
                     return {
                         dismissActions()

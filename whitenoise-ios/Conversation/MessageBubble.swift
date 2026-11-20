@@ -2466,7 +2466,8 @@ private struct MessageMediaTile: View {
         let analytics = appState.productAnalytics
         let prepareTiming = analytics.beginTiming()
         do {
-            let data = try await onLoadMedia.data(for: item, demand: demand)
+            let requested = demand == .automatic ? item : item.forTranscriptPage
+            let data = try await onLoadMedia.data(for: requested, demand: demand)
             guard !Task.isCancelled else {
                 analytics.recordStage(.mediaPrepare, since: prepareTiming, outcome: .cancelled)
                 return nil
@@ -3836,6 +3837,7 @@ private struct FullscreenMediaPrepared: Identifiable {
     let item: MessageMediaAttachment
     let data: Data
     let contentType: UTType
+    var pendingSelection: MessageMediaGallery.PendingSelection? = nil
 }
 
 private struct DecryptedMediaExportDocument: FileDocument {
@@ -3991,7 +3993,8 @@ struct MessageMediaFullscreenGalleryView: View {
                     media: prepared.item,
                     data: prepared.data,
                     verifySource: { item in
-                        try await gallery.mayExport(item, verify: transcriptHistory?.verifyForward)
+                        if let transcriptHistory { return try await transcriptHistory.verifyForward(item, prepared.pendingSelection) }
+                        return try await gallery.mayExport(item, verify: nil)
                     },
                     viewModel: forwardingContext.viewModel,
                     destinationProvider: forwardingContext.destinationProvider
@@ -4040,17 +4043,18 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func page(_ item: MessageMediaAttachment) -> some View {
-        MessageMediaFullscreenPage(
-            item: item,
+        let source = gallery.transcriptCaptions == nil ? item : item.forTranscriptPage
+        return MessageMediaFullscreenPage(
+            item: source,
             isSelected: item.id == selectedItemID,
-            initialImageData: preparedMedia?.id == item.id ? preparedMedia?.data : gallery.initialData(for: item),
+            initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.data : nil } ?? gallery.initialData(for: source),
             selectionDemand: gallery.transcriptCaptions == nil || (!hasPaged && item.id == gallery.initialItemID && transcriptHistory?.allowsOpeningDemand != false)
                 ? .explicit : .automatic,
             onLoadMedia: onLoadMedia,
             onData: { data in
                 guard selectedItemID == item.id, selectedItem != nil else { return }
                 preparedMedia = FullscreenMediaPrepared(id: item.id, item: item, data: data,
-                    contentType: UTType(mimeType: item.mediaType) ?? .data)
+                    contentType: UTType(mimeType: item.mediaType) ?? .data, pendingSelection: gallery.pendingSelection(for: item.id))
             },
             onToggleChrome: toggleChrome,
             onZoomChanged: { zoomed in
@@ -4099,7 +4103,8 @@ struct MessageMediaFullscreenGalleryView: View {
 
     private var currentPreparedMedia: FullscreenMediaPrepared? {
         guard let selectedItem, let preparedMedia, selectedItem.canUseBytesPrepared(for: preparedMedia.item) else { return nil }
-        return FullscreenMediaPrepared(id: selectedItem.id, item: selectedItem, data: preparedMedia.data, contentType: preparedMedia.contentType)
+        return FullscreenMediaPrepared(id: selectedItem.id, item: selectedItem, data: preparedMedia.data,
+            contentType: preparedMedia.contentType, pendingSelection: preparedMedia.pendingSelection)
     }
 
 
@@ -4205,14 +4210,27 @@ private struct MessageMediaFullscreenPage: View {
     let onData: (Data) -> Void
     let onToggleChrome: () -> Void
     let onZoomChanged: (Bool) -> Void
+    @State private var sourceGeneration = 0
 
     var body: some View {
+        content
+            .id(sourceGeneration)
+            .onChange(of: item.localTarget) { previous, _ in
+                if previous != nil {
+                    sourceGeneration &+= 1
+                    onZoomChanged(false)
+                }
+            }
+    }
+
+    @ViewBuilder private var content: some View {
+        let demand = sourceGeneration == 0 ? selectionDemand : .automatic
         if item.isVideo {
             MessageMediaFullscreenVideoPage(
                 item: item,
                 isSelected: isSelected,
-                initialMediaData: initialImageData,
-                selectionDemand: selectionDemand,
+                initialMediaData: sourceGeneration == 0 ? initialImageData : nil,
+                selectionDemand: demand,
                 onLoadMedia: onLoadMedia,
                 onData: onData,
                 onToggleChrome: onToggleChrome
@@ -4221,8 +4239,8 @@ private struct MessageMediaFullscreenPage: View {
             MessageMediaFullscreenImagePage(
                 item: item,
                 isSelected: isSelected,
-                initialImageData: initialImageData,
-                selectionDemand: selectionDemand,
+                initialImageData: sourceGeneration == 0 ? initialImageData : nil,
+                selectionDemand: demand,
                 onLoadMedia: onLoadMedia,
                 onData: onData,
                 onToggleChrome: onToggleChrome,
