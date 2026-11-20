@@ -458,7 +458,7 @@ final class GroupDetailsViewModel {
     /// Advisory: `enableAccountDevices` checks again.
     func loadAccountDevicesActivation(using appState: AppState) async {
         guard let conversation, let accountRef = appState.activeAccountRef,
-              let client = try? appState.currentMarmotClient(), client.deviceGroupsEnabled else {
+              let client = try? appState.currentMarmotClient() else {
             accountDevicesActivation = nil
             return
         }

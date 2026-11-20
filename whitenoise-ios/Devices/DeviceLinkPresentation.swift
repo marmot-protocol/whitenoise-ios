@@ -272,6 +272,20 @@ nonisolated enum LinkedDevicePresentation {
         return named || device.isThisDevice ? clientLine(device) : nil
     }
 
+    /// How far a newly linked device is through its chats, while some remain.
+    /// On the device that approved the link, the count is chats it has added
+    /// the new device to; on the new device, chats it has joined. MDK reports
+    /// nothing once progress is unavailable, so neither does this.
+    static func chatProgress(_ device: LinkedDeviceFfi, progress: [LinkChatProgressFfi]) -> String? {
+        guard let entry = progress.first(where: { $0.slotIdHex == device.slotIdHex }),
+              entry.remaining > 0, entry.total >= entry.remaining else { return nil }
+        let done = String(entry.total - entry.remaining)
+        let total = String(entry.total)
+        return entry.onNewDevice
+            ? L10n.formatted("Joining chats: %1$@ of %2$@", done, total)
+            : L10n.formatted("Adding to chats: %1$@ of %2$@", done, total)
+    }
+
     /// "iOS · whitenoise", or nil before the device has announced either.
     static func clientLine(_ device: LinkedDeviceFfi) -> String? {
         let parts = [device.platform, device.client]
@@ -456,23 +470,6 @@ nonisolated enum AccountDevicesActivationPresentation {
             L10n.string("A member’s device needs to leave and be added again first.")
         case .deviceLimitExceeded: L10n.string("A member has too many devices in this chat.")
         }
-    }
-}
-
-/// What Developer Tools says about the experimental device-group toggle.
-nonisolated enum ExperimentalDeviceGroupsStatus: Equatable {
-    case off
-    case on
-    /// The toggle differs from how the running runtime was opened.
-    case restartRequired
-    /// Requested, but the MarmotKit library was built without device groups.
-    case unavailableInBuild
-
-    static func resolve(preference: Bool, runtimeRequested: Bool?, runtimeEnabled: Bool) -> Self {
-        guard let runtimeRequested else { return preference ? .on : .off }
-        if preference != runtimeRequested { return .restartRequired }
-        if runtimeRequested && !runtimeEnabled { return .unavailableInBuild }
-        return runtimeEnabled ? .on : .off
     }
 }
 

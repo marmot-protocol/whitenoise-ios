@@ -87,9 +87,7 @@ struct AccountSetupCheckView: View {
         if let finding = notice.finding { Text(verbatim: finding) }
         if !failures.isEmpty || notice.finding != nil, !notice.explanation.isEmpty { Divider() }
         ForEach(notice.explanation, id: \.self) { Text(verbatim: $0) }
-        if appState.client?.deviceGroupsEnabled == true {
-            Text(verbatim: LinkThisDeviceCopy.setupNote)
-        }
+        Text(verbatim: LinkThisDeviceCopy.setupNote)
     }
 
     @ViewBuilder private func secureMessagingExplanation(failures: [String]) -> some View {

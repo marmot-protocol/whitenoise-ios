@@ -118,6 +118,35 @@ struct GroupChangeNoticeTests {
         #expect(invite?.message != notMember?.message)
     }
 
+    private func notDelivered(commit: String = "commit", kind: String, reason: String) -> MarmotEventFfi {
+        .groupEvent(accountIdHex: "account", accountLabel: "private profile", groupIdHex: "group",
+                    event: .groupChangeNotDelivered(commitIdHex: commit, intentKind: kind, reason: reason))
+    }
+
+    /// A change MDK gave up after its call returned is reported like a dropped
+    /// queued change, with each reason worded on its own.
+    @Test func changesMDKGaveUpTellTheUserWhy() throws {
+        let reasons = ["not_delivered", "event_too_large", "refused"]
+        let messages = try reasons.map { reason in
+            let toast = try #require(GroupChangeNotice.toast(for: notDelivered(kind: "update_group_data", reason: reason)))
+            #expect(toast.style == .warning)
+            #expect(toast.title == GroupChangeNotice.refusedIntentToast(intentKind: "update_group_data", reason: reason).title)
+            return toast.message
+        }
+        #expect(Set(messages).count == reasons.count)
+        #expect(messages[1] == UserFacingError.eventTooLargeMessage(.commit))
+    }
+
+    @Test func eachChangeMDKGaveUpIsAnnouncedOnce() {
+        var announcements = RefusedIntentAnnouncements()
+        let admitted = [
+            announcements.admit(notDelivered(commit: "a", kind: "invite", reason: "refused")),
+            announcements.admit(notDelivered(commit: "a", kind: "invite", reason: "refused")),
+            announcements.admit(notDelivered(commit: "b", kind: "invite", reason: "refused")),
+        ]
+        #expect(admitted == [true, false, true])
+    }
+
     @Test func eachDroppedChangeIsAnnouncedOnce() {
         var announcements = RefusedIntentAnnouncements()
         let admitted = [

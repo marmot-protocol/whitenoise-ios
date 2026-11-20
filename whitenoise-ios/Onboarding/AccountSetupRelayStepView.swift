@@ -145,6 +145,7 @@ struct AccountSetupRelayStepView: View {
             case .edit: Button(editTitle) { perform(.edit) }
             case .replaceWithDefaults:
                 Button("Replace With Default Relays", role: .destructive) { perform(.replaceWithDefaults) }
+            case .approve: Button("Save Anyway", role: .destructive) { perform(.approve) }
             default: Button("Discard Changes", role: .destructive) { perform(.discard) }
             }
             Button("Cancel", role: .cancel) {}
@@ -154,6 +155,8 @@ struct AccountSetupRelayStepView: View {
                 Text("Editing withdraws this proposal and keeps the addresses in your draft. Nothing is published until you review and save again.")
             case .replaceWithDefaults:
                 Text("We couldn’t check your inbox relays. If you already have an inbox relay list, the default relays will replace it, and relays left out will stop receiving your invitations. You’ll review the change before anything is published.")
+            case .approve:
+                Text("We couldn’t finish checking your relays, so this change is based on incomplete information. Saving publishes it anyway, and relays that don’t work could stop others from finding you or reaching your inbox.")
             default: Text("This discards the proposed relay list without publishing it.")
             }
         }
@@ -165,6 +168,7 @@ struct AccountSetupRelayStepView: View {
         switch discardAction {
         case .edit: return editTitle
         case .replaceWithDefaults: return "Replace With Default Relays"
+        case .approve: return "Save Without a Full Check?"
         default: return "Discard relay changes?"
         }
     }

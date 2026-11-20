@@ -154,6 +154,12 @@ struct UserFacingError: Equatable {
             return L10n.string("This chat may be out of date on this device. Wait for it to sync, then try again.")
         case .GroupCommitUndelivered:
             return L10n.string("The group's last change hasn't reached all of its relays yet. Try again in a moment.")
+        case .GroupCommitPending:
+            return L10n.string("The group's last change is still being sent. Try again once it goes through.")
+        case .NoUsableRelay:
+            return L10n.string("None of this chat's relays can be used, so nothing was sent.")
+        case .ReactionNotFound:
+            return L10n.string("That reaction was already removed.")
         case .InvalidEditTarget:
             return L10n.string("This message can't be edited.")
         case .StorageFull:

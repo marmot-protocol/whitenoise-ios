@@ -918,14 +918,11 @@ on the White Noise relays).
 - [ ] After the author publishes an update, the installed row shows Update
       available, and Update installs the new version.
 
-## Device linking (experimental)
+## Device linking
 
-Needs a `dev-device-groups` MarmotKit build installed with
-`scripts/sync-local-bindings.sh --dev-device-groups <mdk-checkout> <sha>` on two
-devices (or a device and a simulator). Turn on Developer Tools → Link Devices on
-both, then quit and reopen; the row must say it's on, and Settings → Devices must
-appear. With the published MarmotKit, the row must say this build lacks device groups
-and the app must otherwise behave as before.
+Needs two devices (or a device and a simulator) on MarmotKit 0.18.0 or later,
+where multi-device is always on. Settings → Devices must appear without any
+Developer Tools setting.
 
 - [ ] Device A: an existing profile with chats. Device B: sign in with the same
       nsec; setup passes "Chats on this device" without asking.
@@ -1420,10 +1417,11 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
       links, promote a member, remove admin status, and remove a member.
 - [ ] Group Details: a non-admin sees the member list but no add/manage
       controls.
-- [ ] Group Details: an admin must step down before leaving; the last
-      admin cannot step down until another admin exists.
-- [ ] Blocked leave (needs experimental device groups, where MDK demotes a
-      nonlast admin itself and leaves directly): admins A and B leave at
+- [ ] Group Details: an admin who isn't the last admin leaves directly (MDK
+      steps them down); the last admin cannot leave or step down until another
+      admin exists.
+- [ ] Blocked leave (MDK demotes a nonlast admin itself and leaves
+      directly): admins A and B leave at
       nearly the same time with A offline, so A's pending leave becomes the
       last active admin's. A reconnects: the Chats row still reads Leaving,
       Group Details and the composer say "Can't leave: you're the only admin",

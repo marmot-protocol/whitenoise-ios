@@ -490,7 +490,7 @@ struct AccountSetupTests {
     ) -> AccountSetupDeviceNoticePresentation {
         let packages = publishedAt.enumerated().map { index, publishedAt in
             OnboardingDevicePackageFfi(slotId: "slot-\(index)", keyPackageRefHex: nil, eventIdHex: hex("\(index)"),
-                                       publishedAt: publishedAt, expiresAt: nil, usable: true)
+                                       publishedAt: publishedAt, expiresAt: nil, usable: true, client: nil)
         }
         return AccountSetupDeviceNoticePresentation(
             OnboardingSingleDeviceNoticeFfi(discovery: discovery, otherPackages: packages,
@@ -771,6 +771,21 @@ struct AccountSetupTests {
             return proposed
         })
         #expect(approvedRevision == proposed.revision)
+    }
+
+    /// Use Default Relays approves in one tap, unless MDK built the proposal on
+    /// an inconclusive check: then the user reviews it and confirms the risk.
+    @Test(arguments: [false, true])
+    func defaultRelaysStopAtReviewAfterAnInconclusiveCheck(inconclusive: Bool) async throws {
+        var proposed = proposalSnapshot(step: .relays)
+        proposed.proposal?.inconclusive = inconclusive
+        var approved = false
+        let result = try await AccountSetupPublication.publish(step: .relays, propose: { proposed }, approve: { _, _ in
+            approved = true
+            return proposed
+        })
+        #expect(approved == !inconclusive)
+        #expect(result.proposal?.inconclusive == inconclusive)
     }
 
     @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])

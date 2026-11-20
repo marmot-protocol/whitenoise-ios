@@ -4,9 +4,6 @@ import MarmotKit
 /// The active account's linked devices, link requests, sign-ins and compromise
 /// warning, mirrored from MDK for presentation. MDK owns every decision; this
 /// re-reads on MDK's events and routes the user's choices back.
-///
-/// Everything here needs a runtime opened with experimental device groups
-/// (`MarmotClient.deviceGroupsEnabled`); otherwise it stays empty.
 @MainActor @Observable
 final class DeviceLinkStore {
     // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
@@ -93,6 +90,7 @@ final class DeviceLinkStore {
     var pendingPrompts: [DeviceLinkPromptFfi] { DeviceLinkPromptPolicy.pending(snapshot?.prompts ?? []) }
     var deviceGroupStalled: Bool { snapshot?.deviceGroupStalled ?? false }
     var moves: [DeviceGroupMoveViewFfi] { snapshot?.moves ?? [] }
+    var chatProgress: [LinkChatProgressFfi] { snapshot?.chatProgress ?? [] }
     var warnsAboutPendingLinkBeforeMove: Bool {
         DeviceGroupMovePresentation.warnsAboutPendingLink(hasDeviceGroup: hasDeviceGroup, prompts: snapshot?.prompts ?? [])
     }
@@ -288,7 +286,7 @@ final class DeviceLinkStore {
         guard appState.canUseRuntimeForForegroundWork,
               let accountRef = appState.activeAccountRef,
               let accountIdHex = appState.activeAccount?.accountIdHex,
-              let client = try? appState.currentMarmotClient() else {
+              (try? appState.currentMarmotClient()) != nil else {
             return false
         }
         let next = Scope(accountRef: accountRef, accountIdHex: accountIdHex,
@@ -297,7 +295,7 @@ final class DeviceLinkStore {
             clear(keepingPresentation: scope?.accountRef == accountRef)
             scope = next
         }
-        isAvailable = client.deviceGroupsEnabled
+        isAvailable = true
         return isAvailable
     }
 

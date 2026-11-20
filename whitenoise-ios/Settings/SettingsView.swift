@@ -76,7 +76,7 @@ struct SettingsView: View {
             destinationSection([
                 .profile,
                 .profileKeys,
-            ] + (appState.client?.deviceGroupsEnabled == true ? [.devices] : []) + [
+                .devices,
                 .notifications,
                 .appearance,
                 .privacyAndSecurity,

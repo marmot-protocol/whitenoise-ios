@@ -36,7 +36,7 @@ struct AddDeviceView: View {
                     }
                     .padding(.top, 8)
 
-                    Text("While multi-device is experimental, both devices need Developer Tools → Link Devices turned on.")
+                    Text("Both devices need an up-to-date version of White Noise.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

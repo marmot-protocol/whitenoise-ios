@@ -37,7 +37,7 @@ nonisolated struct GroupDetailsMarmotCalls: Sendable {
     var cancelLeave: @MainActor (
         MarmotClient, _ accountRef: String, _ groupIdHex: String
     ) async throws -> Void
-    /// Whether an admin may let members' linked devices join (experimental device groups).
+    /// Whether an admin may let members' linked devices join.
     var accountDevicesActivation: @MainActor (
         MarmotClient, _ accountRef: String, _ groupIdHex: String
     ) async throws -> AccountDevicesActivationFfi = { client, accountRef, groupIdHex in

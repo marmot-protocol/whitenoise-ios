@@ -51,12 +51,6 @@ nonisolated final class MarmotClient: Sendable {
     let cursorPersistence: CursorPersistenceFfi
     let productConfig: ProductAnalyticsBuildConfig
     let telemetryConfig: TelemetryBuildConfig
-    /// Whether this runtime opened with MDK's experimental device groups, so
-    /// device linking and the Devices screen work. Fixed for the runtime's life.
-    let deviceGroupsEnabled: Bool
-    /// Whether this runtime asked for device groups; with `deviceGroupsEnabled`
-    /// false, the MarmotKit library lacks the capability.
-    let deviceGroupsRequested: Bool
 
     convenience init() throws {
         try self.init(rootPath: AppContainerConfig.productionMarmotRoot().path, relayUrls: Self.seedRelays)
@@ -85,8 +79,7 @@ nonisolated final class MarmotClient: Sendable {
         rootPath: String,
         relayUrls: [String],
         cursorPersistence: CursorPersistenceFfi,
-        telemetryConfig: TelemetryBuildConfig,
-        deviceGroupsRequested: Bool = ExperimentalDeviceGroupsPreference.isEnabled()
+        telemetryConfig: TelemetryBuildConfig
     ) throws {
         let constructionStartedAt = ContinuousClock.now
         self.rootPath = rootPath
@@ -94,19 +87,16 @@ nonisolated final class MarmotClient: Sendable {
         self.cursorPersistence = cursorPersistence
         self.telemetryConfig = telemetryConfig
         self.productConfig = .current()
-        let opened = try MarmotRuntimeOpener.open(
+        // Every MarmotKit constructor opens with device groups (multi-device) on.
+        self.marmot = try Marmot.newWithConfiguration(
             rootPath: rootPath,
             relayUrls: relayUrls,
             options: MarmotOptions(cursorPersistence: cursorPersistence, clientName: "whitenoise",
                 devicePlatform: AppContainerConfig.marmotDevicePlatform,
                 attachmentAcquisitionMode: .hostManaged,
                 moderationReportConfig: ModerationReportBuildConfig.current()?.ffi,
-                deployment: marmotDeploymentWhiteNoise()),
-            deviceGroupsRequested: deviceGroupsRequested
+                deployment: marmotDeploymentWhiteNoise())
         )
-        self.marmot = opened.marmot
-        self.deviceGroupsEnabled = opened.deviceGroupsEnabled
-        self.deviceGroupsRequested = deviceGroupsRequested
         moderationReportingAvailable = marmot.moderationReportingAvailable()
         // Opt-in startup capture must begin before the first account read.
         if StartupDiagnosticsPreference.isEnabled() {

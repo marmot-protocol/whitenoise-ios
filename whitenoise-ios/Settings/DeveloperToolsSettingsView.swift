@@ -19,7 +19,6 @@ struct DeveloperToolsSettingsView: View {
     @State private var showDemoConfirmation = false
     @State private var quarantinedGroupsModel = QuarantinedGroupsViewModel()
     @State private var auditDelivery = AuditDeliveryStatusModel()
-    @State private var deviceGroupsPreference = ExperimentalDeviceGroupsPreference.isEnabled()
 
     var body: some View {
         @Bindable var model = model
@@ -120,8 +119,6 @@ struct DeveloperToolsSettingsView: View {
                 } footer: {
                     Text("Chat Debug Mode adds technical conversation details intended for development and testing.")
                 }
-
-                deviceGroupsSection
 
                 Section {
                     NavigationLink {
@@ -282,41 +279,6 @@ struct DeveloperToolsSettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This creates Johnny Appleseed on this device and publishes real encrypted setup and conversation events through the configured relays.")
-        }
-    }
-
-    private var deviceGroupsSection: some View {
-        let status = ExperimentalDeviceGroupsStatus.resolve(
-            preference: deviceGroupsPreference,
-            runtimeRequested: appState.client?.deviceGroupsRequested,
-            runtimeEnabled: appState.client?.deviceGroupsEnabled ?? false
-        )
-        return Section {
-            WNToggle("Link Devices", isOn: Binding(
-                get: { deviceGroupsPreference },
-                set: { enabled in
-                    guard let defaults = ExperimentalDeviceGroupsPreference.defaults else { return }
-                    ExperimentalDeviceGroupsPreference.setEnabled(enabled, defaults: defaults)
-                    deviceGroupsPreference = ExperimentalDeviceGroupsPreference.isEnabled(defaults: defaults)
-                }
-            ))
-            switch status {
-            case .on:
-                Label("On. Find it in Settings → Devices.", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-            case .off:
-                EmptyView()
-            case .restartRequired:
-                Label("Quit and reopen White Noise to apply.", systemImage: "arrow.clockwise.circle.fill")
-                    .foregroundStyle(.orange)
-            case .unavailableInBuild:
-                Label("This build’s MarmotKit doesn’t include device groups.", systemImage: "xmark.octagon.fill")
-                    .foregroundStyle(.red)
-            }
-        } header: {
-            Text("Multi-Device (Experimental)")
-        } footer: {
-            Text("Opens your profiles with MDK’s experimental device groups so you can link devices and sync chats between them. Needs a MarmotKit library built with device groups. A profile that has linked a device can’t be opened with this off.")
         }
     }
 

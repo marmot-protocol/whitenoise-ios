@@ -246,6 +246,12 @@ struct LinkedDevicesView: View {
                             .font(.footnote.weight(.medium))
                             .foregroundStyle(.orange)
                     }
+                    if let progress = LinkedDevicePresentation.chatProgress(device, progress: store.chatProgress) {
+                        Text(progress)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
                 }
             }
             .accessibilityElement(children: .combine)

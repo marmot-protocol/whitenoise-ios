@@ -83,8 +83,8 @@ nonisolated enum AccountSetupPresentation {
         }
     }
 
-    /// The checks the setup list shows. Device-group builds acknowledge
-    /// "Chats on this device" themselves and offer linking after setup, so the
+    /// The checks the setup list shows. The app acknowledges
+    /// "Chats on this device" itself and offer linking after setup, so the
     /// row stays hidden unless that step is left for the user to review.
     static func visibleSteps(
         _ steps: [OnboardingStepStateFfi],

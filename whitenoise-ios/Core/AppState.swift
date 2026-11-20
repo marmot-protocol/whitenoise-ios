@@ -491,7 +491,7 @@ final class AppState {
     var groupMembershipUpdate: GroupRecoveryUpdate?
     var groupProjectionUpdate: GroupRecoveryUpdate?
     let historyNotices = HistoryNoticeStore()
-    /// Linked devices and device linking for the active account (experimental).
+    /// Linked devices and device linking for the active account.
     let deviceLinks = DeviceLinkStore()
     @ObservationIgnored private var refusedIntentAnnouncements = RefusedIntentAnnouncements()
     /// The active account's NIP-51 emoji sets, shared by every chat so typed
@@ -549,6 +549,7 @@ final class AppState {
         case .groupChangeSuperseded(let accountID, _, _, _, _, _, _):
             noticeAccountID = accountID
         case .groupEvent(let accountID, _, _, .queuedIntentRefused),
+             .groupEvent(let accountID, _, _, .groupChangeNotDelivered),
              .groupEvent(let accountID, _, _, .groupHydrationQuarantined(.rewindRestoreFailed)):
             noticeAccountID = accountID
         default:
@@ -559,6 +560,15 @@ final class AppState {
               let notice = GroupChangeNotice.toast(for: event),
               refusedIntentAnnouncements.admit(event) else { return }
         present(notice)
+        // MDK keeps a given-up change until the user has seen it.
+        if case .groupEvent(let accountID, _, let groupID, .groupChangeNotDelivered(let commitID, _, _)) = event,
+           let client = try? currentMarmotClient() {
+            Task {
+                _ = try? await client.marmot.acknowledgeChangeNotDelivered(
+                    accountRef: accountID, groupIdHex: groupID, commitIdHex: commitID
+                )
+            }
+        }
     }
 
     /// Whether the runtime is mid-suspension. AppState-internal only: the
@@ -2121,7 +2131,7 @@ final class AppState {
         signInAttempts.begin(snapshot.accountIdHex)
         imported = true
         pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
-        pendingAccountSetup?.acknowledgesSingleDevice = lease.client.deviceGroupsEnabled
+        pendingAccountSetup?.acknowledgesSingleDevice = true
         pendingAccountSetup?.onProductReady = { [productAnalytics] in
             productAnalytics.record(.onboarding(.localReady, .import, .success), ticket: ticket)
             productAnalytics.record(.onboarding(.networkReady, .import, .success), ticket: ticket)

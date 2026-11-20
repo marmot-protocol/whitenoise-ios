@@ -182,7 +182,8 @@ final class AccountSetupModel {
     }
 
     var onProductReady: (() -> Void)?
-    /// Device-group builds acknowledge the single-device step automatically.
+    /// Acknowledges the single-device step automatically: the user links
+    /// devices after setup instead. Sign-in turns it on.
     var acknowledgesSingleDevice = false
 
     func apply(_ next: OnboardingSnapshotFfi) {
@@ -354,13 +355,15 @@ nonisolated enum AccountSetupPublication {
               proposal.revision == proposed.revision,
               proposed.steps.first(where: { $0.step == step })?.actions.contains(.approveRepair) == true
         else { throw MarmotKitError.OnboardingActionUnavailable }
+        // Built on an inconclusive check: the user reviews it and confirms the risk first.
+        if proposal.inconclusive { return proposed }
         return try await approve(proposed.revision, proposed.recoveryEpoch)
     }
 }
 
 nonisolated enum AccountSetupPolicy {
-    /// `acknowledgesSingleDevice` is on in device-group builds: there the user
-    /// links devices after setup, so the "Chats on this device" step is
+    /// With `acknowledgesSingleDevice` (sign-in turns it on), the user links
+    /// devices after setup, so the "Chats on this device" step is
     /// acknowledged without a screen. MDK still requires that acknowledgement,
     /// bound to the snapshot's revision, before it publishes the KeyPackage.
     static func automaticAction(

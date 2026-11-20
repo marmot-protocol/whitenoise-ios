@@ -79,9 +79,9 @@ accounts out of normal account activation and maintenance until `snapshot.ready`
 Render offered actions from the current snapshot; the single-device acknowledgment
 automatically continues initial KeyPackage publication without another approval.
 Use “Continue” for `noneFound` and “Continue anyway” for possible or unknown
-installations; runtimes with experimental device groups acknowledge that step
-automatically (`AccountSetupPolicy.automaticAction`), bound to the offered revision,
-and offer linking after setup instead. Never publish a follow list during setup; skip that optional step
+installations; the app acknowledges that step automatically
+(`AccountSetupPolicy.automaticAction`), bound to the offered revision, and offers
+linking after setup instead. Never publish a follow list during setup; skip that optional step
 when MDK offers it. Profile editing is optional and reuses the sign-up form in a
 sheet. Save publishes the entered profile and dismisses only after success.
 Relay recovery offers another discovery relay or the app's two seed relays,
@@ -130,7 +130,11 @@ Request `proposeOnboardingRelayRepair` only on explicit Suggest a Fix. On the sh
 Relay/Inbox step, `AccountSetupRelayStepPresentation` makes it the primary action
 when Use Default Relays isn't offered (a step retry and Search Default Relays then
 stay available as secondary actions). Show MDK's typed relay diff for consent and
-approve only when it accounts for every published tag. `ManualReview` never
+approve only when it accounts for every published tag. A proposal MDK marks
+`inconclusive` (built on a relay or inbox check that didn't finish) is approved
+only after an at-your-own-risk confirmation, and Use Default Relays stops at its
+review instead of approving. `removeUnusableRelays` offers Suggest a Fix, and the
+diff says why each relay goes (`removalReason`). `ManualReview` never
 approves: prefill the editor from `beforeTags` or offer the separately labeled
 default-relay replacement, which returns its own diff.
 
@@ -149,7 +153,7 @@ Install a formal release or a dated nightly using its version:
 ./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-The app pins the formal MarmotKit 0.17.0 release. Nightlies are for testing only
+The app pins the formal MarmotKit 0.18.0 release. Nightlies are for testing only
 and are deleted after 30 days; pin a formal release before shipping. For local
 reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
@@ -181,6 +185,11 @@ not a join or Welcome delivery. On `CreatedGroupMemberReportUnavailable`, open t
 named group; never create another. A permanent relay refusal of a confirmed group
 change (`groupCommitDelivery.refusedRelays`) shows in the conversation's recovery
 area until the user dismisses it through `acknowledgeGroupCommitUndelivered`.
+While the group's own commit is pending, changes, leaves and declines fail with
+`GroupCommitPending`; no acknowledgement releases it, so word it and let the user
+retry later. A change MDK gives up after its call returned arrives as
+`GroupChangeNotDelivered`: toast it like `QueuedIntentRefused`, then acknowledge
+it (`acknowledgeChangeNotDelivered`). `NoUsableRelay` offers no retry.
 Both the app and the NSE call `setAuditLogSource` before any account opens.
 Delete on a failed own send calls `discardFailedSend`, which publishes nothing;
 polls and stickers sent while replying carry the same reply tags as text.
@@ -219,7 +228,8 @@ cancelling the awaiting task.
 Only bytes MDK has no slot for (an outgoing draft) use the host export.
 Outgoing attachments may reach MDK's 512 MiB blob limit. Read picked files through
 `PickedMediaFile` (an unlinked, mapped clone), never into resident memory. MDK's draft
-API copies every attachment on each save, so until marmot-protocol/mdk#3431 lands,
+API copies every attachment on each save, so until the app adopts MDK 0.18.0's
+file-backed draft attachments (`stageMessageDraftAttachmentFile`),
 attachments over `maxDraftAttachmentBytes` are not saved in drafts or pre-uploaded,
 and their message sends without a draft revision. Such a message has no recovery
 copy: leaving the chat before Send drops the attachment, and a failed send stays in
@@ -248,19 +258,17 @@ updates, and use `reportedMessage` for the current deletion-masked content,
 including targets hidden by personal blocking. Keep report plaintext only in
 transient review state; MDK owns durable storage.
 
-## Device linking (experimental)
+## Device linking
 
 Multi-device linking follows MDK's device groups: a new device asks
 (`startDeviceLink`), both devices show the same seven emoji, the user confirms on
 both, and the device already signed in adds it (`linkDevice`, whose commit is the
-approval). It works only in a runtime opened with
-`Marmot.newWithExperimentalDeviceGroups`, which needs a MarmotKit library built
-with `dev-device-groups` (`scripts/sync-local-bindings.sh --dev-device-groups`;
-published releases lack it). Developer Tools → Link Devices stores the request in
-the shared App Group suite (`ExperimentalDeviceGroupsPreference`), and every opener,
-the NSE included, goes through `MarmotRuntimeOpener`: an ordinary constructor
-refuses an account that holds or is joining a device group. Fall back to the
-ordinary constructor only on `experimental_device_groups_unavailable`.
+approval). Since MarmotKit 0.18.0 every constructor opens with device groups on and
+nothing turns them off, so Settings → Devices and the link and sign-in UI are
+always offered. The app and the NSE open with `Marmot.newWithConfiguration`; never
+reintroduce a toggle or a second constructor. While a link is under way, each
+device row shows MDK's `chatProgress` (chats added on the approver, joined on the
+new device) and nothing once MDK reports none.
 `DeviceLinkStore` on `AppState` mirrors the active account's link snapshot,
 devices, sign-ins and compromise warning, re-reading on MDK's
 `DeviceLinkChanged`/`LinkedDevicesChanged`/`UnrecognizedSignInsChanged`/

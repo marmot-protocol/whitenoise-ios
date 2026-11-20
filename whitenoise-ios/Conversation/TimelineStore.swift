@@ -1642,7 +1642,8 @@ final class TimelineStore {
             retentionSeconds: record.retentionSeconds,
             retentionExpiresAt: record.retentionExpiresAt,
             recordedAt: record.recordedAt,
-            receivedAt: record.receivedAt
+            receivedAt: record.receivedAt,
+            invalidated: false
         )
         if !realId.isEmpty {
             // A confirmed real-id row is still an optimistic local echo until

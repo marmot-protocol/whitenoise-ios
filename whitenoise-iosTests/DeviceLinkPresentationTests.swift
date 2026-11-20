@@ -34,16 +34,6 @@ struct DeviceLinkPresentationTests {
         #expect(UserFacingError.message(for: error) == DeviceGroupRefusal(reason: "unknown_device").message)
     }
 
-    @Test func onlyTheMissingCapabilityFallsBackToTheOrdinaryConstructor() {
-        #expect(MarmotRuntimeOpener.isCapabilityUnavailable(
-            MarmotKitError.Runtime(details: "experimental_device_groups_unavailable")
-        ))
-        #expect(!MarmotRuntimeOpener.isCapabilityUnavailable(
-            MarmotKitError.Runtime(details: "experimental_device_groups_required")
-        ))
-        #expect(!MarmotRuntimeOpener.isCapabilityUnavailable(CancellationError()))
-    }
-
     // MARK: New device
 
     @Test func cancelIsOfferedOnlyWhileALinkRuns() {
@@ -147,6 +137,25 @@ struct DeviceLinkPresentationTests {
         #expect(!LinkedDevicePresentation.name(bare).isEmpty)
     }
 
+    /// Progress shows on the device MDK names, only while chats remain, and says
+    /// which side of the link this device is on.
+    @Test func chatProgressShowsOnlyWhileChatsRemain() {
+        let newDevice = linkedDevice(slot: hex("b"))
+        func progress(_ entries: [LinkChatProgressFfi]) -> String? {
+            LinkedDevicePresentation.chatProgress(newDevice, progress: entries)
+        }
+        let approving = LinkChatProgressFfi(slotIdHex: hex("b"), onNewDevice: false, total: 10, remaining: 3)
+        let joining = LinkChatProgressFfi(slotIdHex: hex("b"), onNewDevice: true, total: 10, remaining: 3)
+        #expect(progress([approving]) != nil)
+        #expect(progress([joining]) != nil)
+        #expect(progress([approving]) != progress([joining]))
+        #expect(progress([]) == nil)
+        #expect(progress([LinkChatProgressFfi(slotIdHex: hex("c"), onNewDevice: false, total: 10, remaining: 3)]) == nil)
+        #expect(progress([LinkChatProgressFfi(slotIdHex: hex("b"), onNewDevice: false, total: 10, remaining: 0)]) == nil)
+        // A count MDK can't have meant shows nothing rather than a negative number.
+        #expect(progress([LinkChatProgressFfi(slotIdHex: hex("b"), onNewDevice: false, total: 2, remaining: 5)]) == nil)
+    }
+
     // MARK: Device actions
 
     @Test func keepAndRemoveAreOfferedOnlyForAnUnkeptInactiveSibling() {
@@ -229,21 +238,6 @@ struct DeviceLinkPresentationTests {
         #expect(!offer(hasDeviceGroup: true))
         #expect(!offer(newDevice: .waitingForAnswer))
         #expect(!offer(newDevice: .ended(reason: .timedOut)))
-    }
-
-    // MARK: Developer toggle
-
-    @Test func theToggleStatusSaysWhetherTheRunningRuntimeMatches() {
-        #expect(ExperimentalDeviceGroupsStatus.resolve(
-            preference: true, runtimeRequested: true, runtimeEnabled: true) == .on)
-        #expect(ExperimentalDeviceGroupsStatus.resolve(
-            preference: false, runtimeRequested: false, runtimeEnabled: false) == .off)
-        #expect(ExperimentalDeviceGroupsStatus.resolve(
-            preference: true, runtimeRequested: false, runtimeEnabled: false) == .restartRequired)
-        #expect(ExperimentalDeviceGroupsStatus.resolve(
-            preference: false, runtimeRequested: true, runtimeEnabled: true) == .restartRequired)
-        #expect(ExperimentalDeviceGroupsStatus.resolve(
-            preference: true, runtimeRequested: true, runtimeEnabled: false) == .unavailableInBuild)
     }
 
     // MARK: Group activation

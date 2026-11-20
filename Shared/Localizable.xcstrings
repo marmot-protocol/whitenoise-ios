@@ -168170,366 +168170,6 @@
         }
       }
     },
-    "Link Devices" : {
-      "comment" : "Developer Tools toggle that turns on experimental device linking.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Geräte verknüpfen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vincular dispositivos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Associer des appareils"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collega dispositivi"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vincular dispositivos"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Привязка устройств"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cihaz Bağlama"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关联设备"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連結裝置"
-          }
-        }
-      }
-    },
-    "On. Find it in Settings → Devices." : {
-      "comment" : "Developer Tools footer when device linking is on.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "An. Du findest es unter Einstellungen → Geräte."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activado. Lo encontrarás en Configuración → Dispositivos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activé. Accessible dans Paramètres → Appareils."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attivo. Lo trovi in Impostazioni → Dispositivi."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ativado. Encontre em Configurações → Dispositivos."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Включено. Откройте Настройки → Устройства."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Açık. Ayarlar → Cihazlar bölümünde bulabilirsiniz."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已开启。可在“设置 → 设备”中找到。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已開啟。可在「設定 → 裝置」中找到。"
-          }
-        }
-      }
-    },
-    "Quit and reopen White Noise to apply." : {
-      "comment" : "Developer Tools footer after changing the device linking toggle.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beende White Noise und öffne es erneut, um die Änderung anzuwenden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cierra y vuelve a abrir White Noise para aplicarlo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quittez puis rouvrez White Noise pour appliquer la modification."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chiudi e riapri White Noise per applicare la modifica."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Feche e abra o White Noise novamente para aplicar."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Закройте и снова откройте White Noise, чтобы применить."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uygulamak için White Noise’u kapatıp yeniden açın."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "退出并重新打开 White Noise 以应用。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "結束並重新開啟 White Noise 以套用。"
-          }
-        }
-      }
-    },
-    "This build’s MarmotKit doesn’t include device groups." : {
-      "comment" : "Developer Tools footer when MarmotKit lacks device groups.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das MarmotKit dieser App-Version enthält keine Gerätegruppen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El MarmotKit de esta versión de la app no incluye grupos de dispositivos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le MarmotKit de cette version de l’app n’inclut pas les groupes d’appareils."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Il MarmotKit di questa versione dell’app non include i gruppi di dispositivi."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O MarmotKit desta versão do app não inclui grupos de dispositivos."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MarmotKit в этой сборке не поддерживает группы устройств."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu derlemedeki MarmotKit cihaz gruplarını içermiyor."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此构建版本的 MarmotKit 不包含设备组。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此建置版本的 MarmotKit 不包含裝置群組。"
-          }
-        }
-      }
-    },
-    "Multi-Device (Experimental)" : {
-      "comment" : "Developer Tools section header for experimental device linking.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mehrere Geräte (experimentell)"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Multidispositivo (experimental)"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Multi-appareil (expérimental)"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Multi-dispositivo (sperimentale)"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Multidispositivo (experimental)"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Несколько устройств (экспериментально)"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Çoklu Cihaz (Deneysel)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "多设备（实验性）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "多裝置（實驗性）"
-          }
-        }
-      }
-    },
-    "Opens your profiles with MDK’s experimental device groups so you can link devices and sync chats between them. Needs a MarmotKit library built with device groups. A profile that has linked a device can’t be opened with this off." : {
-      "comment" : "Developer Tools footer explaining experimental device linking.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Öffnet deine Profile mit den experimentellen Gerätegruppen von MDK, damit du Geräte verknüpfen und Chats zwischen ihnen synchronisieren kannst. Erfordert eine MarmotKit-Bibliothek mit Gerätegruppen. Ein Profil, das ein Gerät verknüpft hat, lässt sich nicht öffnen, solange dies ausgeschaltet ist."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre tus perfiles con los grupos de dispositivos experimentales de MDK para que puedas vincular dispositivos y sincronizar chats entre ellos. Requiere una biblioteca MarmotKit compilada con grupos de dispositivos. Un perfil que haya vinculado un dispositivo no se puede abrir con esta opción desactivada."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ouvre vos profils avec les groupes d’appareils expérimentaux de MDK afin que vous puissiez associer des appareils et synchroniser les discussions entre eux. Nécessite une bibliothèque MarmotKit compilée avec les groupes d’appareils. Un profil qui a associé un appareil ne peut pas être ouvert lorsque cette option est désactivée."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apre i tuoi profili con i gruppi di dispositivi sperimentali di MDK, così puoi collegare dispositivi e sincronizzare le chat tra di essi. Richiede una libreria MarmotKit compilata con i gruppi di dispositivi. Un profilo che ha collegato un dispositivo non può essere aperto con questa opzione disattivata."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre seus perfis com os grupos de dispositivos experimentais do MDK para que você possa vincular dispositivos e sincronizar conversas entre eles. Requer uma biblioteca MarmotKit compilada com grupos de dispositivos. Um perfil que vinculou um dispositivo não pode ser aberto com esta opção desativada."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Открывает ваши профили с экспериментальными группами устройств MDK, чтобы вы могли привязывать устройства и синхронизировать чаты между ними. Требуется библиотека MarmotKit, собранная с поддержкой групп устройств. Профиль, к которому привязано устройство, нельзя открыть, пока эта настройка выключена."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profillerinizi MDK’nin deneysel cihaz gruplarıyla açar; böylece cihazları bağlayabilir ve sohbetleri aralarında eşitleyebilirsiniz. Cihaz gruplarıyla derlenmiş bir MarmotKit kütüphanesi gerekir. Cihaz bağlamış bir profil, bu ayar kapalıyken açılamaz."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用 MDK 的实验性设备组打开你的个人资料，以便关联设备并在设备间同步聊天。需要使用包含设备组的 MarmotKit 库。关联过设备的个人资料在此选项关闭时无法打开。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用 MDK 的實驗性裝置群組開啟你的個人檔案，以便連結裝置並在裝置間同步聊天。需要使用包含裝置群組的 MarmotKit 程式庫。連結過裝置的個人檔案在此選項關閉時無法開啟。"
-          }
-        }
-      }
-    },
     "Turning on linked devices…" : {
       "comment" : "Progress toast while turning on linked devices for a chat.",
       "extractionState" : "manual",
@@ -169546,66 +169186,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在等待請求…"
-          }
-        }
-      }
-    },
-    "While multi-device is experimental, both devices need Developer Tools → Link Devices turned on." : {
-      "comment" : "Add a New Device note about the experimental toggle both devices need.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Solange Mehrgeräte-Nutzung experimentell ist, muss auf beiden Geräten „Entwicklerwerkzeuge → Geräte verknüpfen“ aktiviert sein."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mientras el uso en varios dispositivos sea experimental, ambos dispositivos necesitan activar Herramientas de desarrollo → Vincular dispositivos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tant que l’usage multi-appareil est expérimental, les deux appareils doivent activer Outils de développement → Associer des appareils."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Finché l’uso su più dispositivi è sperimentale, entrambi i dispositivi devono attivare Strumenti di sviluppo → Collega dispositivi."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enquanto o uso em vários dispositivos for experimental, os dois dispositivos precisam ativar Ferramentas de desenvolvedor → Vincular dispositivos."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Пока работа на нескольких устройствах экспериментальная, на обоих устройствах нужно включить «Инструменты разработчика → Привязка устройств»."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Çoklu cihaz deneysel olduğu sürece iki cihazda da Geliştirici araçları → Cihaz Bağlama’nın açık olması gerekir."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "多设备功能仍处于实验阶段，两台设备都需要开启“开发者工具 → 关联设备”。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "多裝置功能仍處於實驗階段，兩台裝置都需要開啟「開發者工具 → 連結裝置」。"
           }
         }
       }
@@ -172066,6 +171646,832 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "請先完成新裝置的連結，再移動這台裝置。現在移動可能會讓新裝置無法加入你的聊天。"
+          }
+        }
+      }
+    },
+    "Adding to chats: %1$@ of %2$@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu Chats hinzufügen: %1$@ von %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadiendo a chats: %1$@ de %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajout aux discussions : %1$@ sur %2$@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiunta alle chat: %1$@ di %2$@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionando às conversas: %1$@ de %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавление в чаты: %1$@ из %2$@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sohbetlere ekleniyor: %1$@ / %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在添加到聊天：%1$@/%2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在新增到聊天：%1$@/%2$@"
+          }
+        }
+      }
+    },
+    "It didn't reach any of the group's relays. Check your connection, then try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie hat keines der Relays der Gruppe erreicht. Prüfe deine Verbindung und versuche es dann erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No llegó a ninguno de los relays del grupo. Comprueba tu conexión y vuelve a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elle n’a atteint aucun des relais du groupe. Vérifiez votre connexion, puis réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non ha raggiunto nessuno dei relay del gruppo. Controlla la connessione, poi riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ela não chegou a nenhum dos relays do grupo. Verifique sua conexão e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оно не дошло ни до одного ретранслятора группы. Проверьте подключение и повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grubun hiçbir rölesine ulaşmadı. Bağlantınızı kontrol edip tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它未送达该群组的任何中继服务器。请检查网络连接，然后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它未送達該群組的任何中繼伺服器。請檢查網路連線，然後再試一次。"
+          }
+        }
+      }
+    },
+    "Joining chats: %1$@ of %2$@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chats beitreten: %1$@ von %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uniéndose a chats: %1$@ de %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajout aux discussions : %1$@ sur %2$@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingresso nelle chat: %1$@ di %2$@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrando nas conversas: %1$@ de %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вход в чаты: %1$@ из %2$@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sohbetlere katılıyor: %1$@ / %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在加入聊天：%1$@/%2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在加入聊天：%1$@/%2$@"
+          }
+        }
+      }
+    },
+    "None of this chat's relays can be used, so nothing was sent." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keines der Relays dieses Chats kann verwendet werden, daher wurde nichts gesendet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede usar ninguno de los relays de este chat, así que no se envió nada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun des relais de cette discussion n’est utilisable, donc rien n’a été envoyé."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuno dei relay di questa chat può essere usato, quindi non è stato inviato nulla."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum dos relays desta conversa pode ser usado, então nada foi enviado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ни один из ретрансляторов этого чата нельзя использовать, поэтому ничего не отправлено."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu sohbetin rölelerinin hiçbiri kullanılamıyor, bu yüzden hiçbir şey gönderilmedi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天的中继服务器均无法使用，因此未发送任何内容。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天的中繼伺服器均無法使用，因此未傳送任何內容。"
+          }
+        }
+      }
+    },
+    "Save Anyway" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trotzdem speichern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar de todos modos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer quand même"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva comunque"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvar mesmo assim"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Всё равно сохранить"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yine de Kaydet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然保存"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍要儲存"
+          }
+        }
+      }
+    },
+    "Save Without a Full Check?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ohne vollständige Prüfung speichern?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Guardar sin una comprobación completa?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer sans vérification complète ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvare senza un controllo completo?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvar sem uma verificação completa?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранить без полной проверки?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tam Kontrol Olmadan Kaydedilsin mi?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要在未完整检查的情况下保存吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要在未完整檢查的情況下儲存嗎？"
+          }
+        }
+      }
+    },
+    "That reaction was already removed." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Reaktion wurde bereits entfernt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esa reacción ya se había eliminado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette réaction a déjà été retirée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa reazione era già stata rimossa."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Essa reação já tinha sido removida."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эта реакция уже удалена."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu tepki zaten kaldırılmış."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该回应已被移除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該回應已被移除。"
+          }
+        }
+      }
+    },
+    "The group's last change is still being sent. Try again once it goes through." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die letzte Änderung der Gruppe wird noch gesendet. Versuche es erneut, sobald sie durch ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El último cambio del grupo aún se está enviando. Inténtalo de nuevo cuando se complete."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La dernière modification du groupe est encore en cours d’envoi. Réessayez une fois qu’elle sera passée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’ultima modifica del gruppo è ancora in fase di invio. Riprova quando sarà completata."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A última alteração do grupo ainda está sendo enviada. Tente novamente quando ela for concluída."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Последнее изменение группы ещё отправляется. Повторите попытку, когда оно пройдёт."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grubun son değişikliği hâlâ gönderiliyor. Tamamlandığında tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该群组的最近一次更改仍在发送中。发送完成后请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該群組的最近一次變更仍在傳送中。傳送完成後請再試一次。"
+          }
+        }
+      }
+    },
+    "The group's relays refused it. Check the chat, then try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Relays der Gruppe haben sie abgelehnt. Prüfe den Chat und versuche es dann erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los relays del grupo lo rechazaron. Revisa el chat y vuelve a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les relais du groupe l’ont refusée. Vérifiez la discussion, puis réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I relay del gruppo l’hanno rifiutata. Controlla la chat, poi riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os relays do grupo a recusaram. Verifique a conversa e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ретрансляторы группы отклонили его. Проверьте чат и повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grubun röleleri bunu reddetti. Sohbeti kontrol edip tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该群组的中继服务器拒绝了它。请检查聊天，然后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該群組的中繼伺服器拒絕了它。請檢查聊天，然後再試一次。"
+          }
+        }
+      }
+    },
+    "This relay asks for a sign-in White Noise can’t give it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Relay verlangt eine Anmeldung, die White Noise nicht geben kann."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este relay pide un inicio de sesión que White Noise no puede darle."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce relais demande une connexion que White Noise ne peut pas lui fournir."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo relay richiede un accesso che White Noise non può fornirgli."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este relay pede um login que o White Noise não consegue fornecer."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот ретранслятор требует вход, который White Noise не может выполнить."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu röle, White Noise’un sağlayamadığı bir oturum açma istiyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此中继服务器要求登录，而 White Noise 无法提供。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此中繼伺服器要求登入，而 White Noise 無法提供。"
+          }
+        }
+      }
+    },
+    "This relay is no longer running." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Relay ist nicht mehr in Betrieb."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este relay ya no está en funcionamiento."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce relais n’est plus en service."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo relay non è più attivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este relay não está mais em funcionamento."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот ретранслятор больше не работает."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu röle artık çalışmıyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此中继服务器已停止运行。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此中繼伺服器已停止運作。"
+          }
+        }
+      }
+    },
+    "This relay requires payment." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Relay ist kostenpflichtig."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este relay requiere un pago."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce relais est payant."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo relay è a pagamento."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este relay exige pagamento."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот ретранслятор платный."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu röle ödeme gerektiriyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此中继服务器需要付费。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此中繼伺服器需要付費。"
+          }
+        }
+      }
+    },
+    "We couldn’t finish checking your relays, so this change is based on incomplete information. Saving publishes it anyway, and relays that don’t work could stop others from finding you or reaching your inbox." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wir konnten deine Relays nicht vollständig prüfen, daher beruht diese Änderung auf unvollständigen Informationen. Beim Speichern wird sie trotzdem veröffentlicht, und Relays, die nicht funktionieren, können verhindern, dass andere dich finden oder deinen Posteingang erreichen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pudimos terminar de comprobar tus relays, así que este cambio se basa en información incompleta. Al guardarlo se publica igualmente, y los relays que no funcionen podrían impedir que otros te encuentren o lleguen a tu bandeja de entrada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous n’avons pas pu terminer la vérification de vos relais : cette modification repose donc sur des informations incomplètes. L’enregistrer la publie quand même, et des relais qui ne fonctionnent pas pourraient empêcher d’autres personnes de vous trouver ou de joindre votre boîte de réception."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non siamo riusciti a completare il controllo dei tuoi relay, quindi questa modifica si basa su informazioni incomplete. Salvandola viene pubblicata comunque, e i relay che non funzionano potrebbero impedire agli altri di trovarti o di raggiungere la tua casella in arrivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não conseguimos terminar de verificar seus relays, então esta alteração se baseia em informações incompletas. Salvar a publica mesmo assim, e relays que não funcionam podem impedir que outras pessoas encontrem você ou cheguem à sua caixa de entrada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось до конца проверить ваши ретрансляторы, поэтому это изменение основано на неполных данных. При сохранении оно всё равно будет опубликовано, а неработающие ретрансляторы могут помешать другим найти вас или отправить вам приглашение."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rölelerinizin kontrolü tamamlanamadı, bu yüzden bu değişiklik eksik bilgilere dayanıyor. Kaydetmek onu yine de yayımlar ve çalışmayan röleler başkalarının sizi bulmasını veya gelen kutunuza ulaşmasını engelleyebilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我们未能完成对你的中继服务器的检查，因此此更改基于不完整的信息。保存后仍会发布它，而无法工作的中继服务器可能会让其他人无法找到你或无法送达你的收件箱。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我們未能完成對你的中繼伺服器的檢查，因此此變更是根據不完整的資訊。儲存後仍會發佈它，而無法運作的中繼伺服器可能會讓其他人無法找到你或無法送達你的收件匣。"
+          }
+        }
+      }
+    },
+    "Both devices need an up-to-date version of White Noise." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beide Geräte brauchen eine aktuelle Version von White Noise."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ambos dispositivos necesitan una versión actualizada de White Noise."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les deux appareils doivent disposer d’une version à jour de White Noise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrambi i dispositivi devono avere una versione aggiornata di White Noise."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os dois dispositivos precisam de uma versão atualizada do White Noise."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На обоих устройствах должна быть установлена актуальная версия White Noise."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Her iki cihazda da White Noise’un güncel bir sürümü olmalı."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两台设备都需要安装最新版本的 White Noise。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "兩台裝置都需要安裝最新版本的 White Noise。"
           }
         }
       }

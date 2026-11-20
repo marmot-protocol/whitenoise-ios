@@ -2236,7 +2236,8 @@ final class ConversationViewModel {
             retentionSeconds: record.retentionSeconds,
             retentionExpiresAt: record.retentionExpiresAt,
             recordedAt: record.timelineAt,
-            receivedAt: record.receivedAt
+            receivedAt: record.receivedAt,
+            invalidated: false
         )
     }
 
@@ -2638,7 +2639,8 @@ final class ConversationViewModel {
             retentionSeconds: r.message.retentionSeconds,
             retentionExpiresAt: r.message.retentionExpiresAt,
             recordedAt: r.message.recordedAt > 0 ? r.message.recordedAt : now,
-            receivedAt: r.message.receivedAt > 0 ? r.message.receivedAt : now
+            receivedAt: r.message.receivedAt > 0 ? r.message.receivedAt : now,
+            invalidated: false
         )
     }
 
@@ -3720,6 +3722,8 @@ final class ConversationViewModel {
                 )
             }
         } catch {
+            // Nothing to remove: the reaction is already gone, as the optimistic change shows.
+            if alreadyMine, case .ReactionNotFound = error as? MarmotKitError { return }
             // Revert the optimistic change.
             if let addedKey { timelineStore.reactionProjections.removeRecord(forKey: addedKey) }
             for removal in removals {
