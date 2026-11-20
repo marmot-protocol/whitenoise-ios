@@ -3,7 +3,8 @@ name: Tests
 on:
   pull_request:
   push:
-    branches: [master]
+    # ci-stall-experiment: throwaway benchmark branch, do not merge.
+    branches: [master, ci-stall-experiment]
 
 permissions:
   contents: read
@@ -54,6 +55,14 @@ jobs:
   test:
     needs: changes
     if: needs.changes.outputs.relevant == 'true'
+    # Benchmark: does the build stall because the simulator boots alongside it,
+    # because simulator runtimes were just deleted, both, or neither?
+    name: test (boot ${{ matrix.boot }}, runtimes ${{ matrix.runtimes }})
+    strategy:
+      fail-fast: false
+      matrix:
+        boot: [during-build, after-build]
+        runtimes: [deleted, kept]
     runs-on: xcode-27
     # Allow runner setup and artifact upload around the bounded 50-minute test step.
     timeout-minutes: 65
@@ -65,6 +74,8 @@ jobs:
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
       WN_TEST_SOURCE_PACKAGES: ${{ github.workspace }}/build/SourcePackages
       WN_TEST_COMPILATION_CACHE: ${{ github.workspace }}/build/CompilationCache
+      WN_TEST_BOOT_SIMULATOR: ${{ matrix.boot }}
+      WN_TEST_TIMING_DIR: ${{ github.workspace }}/build/ci-timing
 
     steps:
       - name: Checkout
@@ -81,24 +92,41 @@ jobs:
       # Extracting the compiler cache ran out of disk alongside the image's
       # unused Xcodes, simulator runtimes and toolchains, so drop them first.
       - name: Free runner disk
+        env:
+          RUNTIMES: ${{ matrix.runtimes }}
         run: |
-          df -h /
+          mkdir -p build/ci-timing
+          df -h / | tee build/ci-timing/disk-before-cleanup.txt
           keep="$(dirname "$(dirname "$(xcode-select -p)")")"
           for x in /Applications/Xcode*.app; do
             [ "$(cd "$x" && pwd -P)" = "$(cd "$keep" && pwd -P)" ] || sudo rm -rf "$x" &
           done
-          xcrun simctl runtime list -j \
-            | python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items() if not v["platformIdentifier"].endswith("iphonesimulator") or not v["version"].startswith("27")]' \
-            | xargs -n1 xcrun simctl runtime delete || true
+          # Both arms list the runtimes, so both touch CoreSimulator here; only
+          # one deletes. Every request's outcome is kept, because a deletion
+          # that did nothing is not a sample of the "deleted" arm.
+          xcrun simctl runtime list -j > build/ci-timing/runtimes-before.json || true
+          targets=$(python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items() if not v["platformIdentifier"].endswith("iphonesimulator") or not v["version"].startswith("27")]' < build/ci-timing/runtimes-before.json || true)
+          {
+            echo "arm: $RUNTIMES"
+            echo "runtimes outside iOS 27: $(printf '%s\n' "$targets" | grep -c . || true)"
+            if [ "$RUNTIMES" = deleted ]; then
+              for id in $targets; do
+                if xcrun simctl runtime delete "$id"; then echo "delete requested: $id"; else echo "delete FAILED: $id"; fi
+              done
+            fi
+          } 2>&1 | tee build/ci-timing/runtime-cleanup.txt
           sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.ghcup &
           wait
-          df -h /
+          xcrun simctl runtime list -j > build/ci-timing/runtimes-after.json || true
+          df -h / | tee build/ci-timing/disk-after-cleanup.txt
 
       - name: Pick simulator
         # Test on an iPhone Air, on the newest iOS runtime that has one.
         run: |
           destination=$(WN_TEST_DEVICE_NAME="iPhone Air" scripts/pick-simulator.sh)
           echo "WN_TEST_DESTINATION=$destination" >> "$GITHUB_ENV"
+          echo "$destination" | tee build/ci-timing/destination.txt
+          xcrun simctl list devices available > build/ci-timing/devices-at-pick.txt || true
 
       - name: Verify published MarmotKit provenance
         run: python3 scripts/check-marmotkit-bindings.py
@@ -152,8 +180,24 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: TestResults
+          name: TestResults-${{ matrix.boot }}-${{ matrix.runtimes }}-attempt${{ github.run_attempt }}
           path: build/TestResults.xcresult
+          if-no-files-found: warn
+
+      # Lowest free space matters for whether the cleanup step is needed at all.
+      - name: Collect timing
+        if: always()
+        run: |
+          df -h / | tee build/ci-timing/disk-at-end.txt
+          cat build/ci-timing/probe.log || true
+          gzip -f build/ci-timing/*.raw.log || true
+
+      - name: Upload timing
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-timing-${{ matrix.boot }}-${{ matrix.runtimes }}-attempt${{ github.run_attempt }}
+          path: build/ci-timing
           if-no-files-found: warn
 
   # The ruleset requires this check. It passes only when the job passed, or was
