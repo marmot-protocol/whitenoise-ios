@@ -269,6 +269,25 @@ final class ConversationDraftStore {
     private enum PendingOperation: Equatable {
         case save(ConversationDraftSnapshot)
         case delete
+
+        /// Attachments compare without their bytes: a file-backed one can be
+        /// hundreds of MiB, and its id never names other bytes.
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            switch (lhs, rhs) {
+            case (.delete, .delete):
+                return true
+            case (.save(let lhs), .save(let rhs)):
+                func identity(_ snapshot: ConversationDraftSnapshot) -> [String] {
+                    snapshot.mediaAttachments.map {
+                        "\($0.id)|\($0.fileName)|\($0.mediaType)|\($0.data.count)|\($0.dim ?? "")|\($0.thumbhash ?? "")"
+                    }
+                }
+                return lhs.canonicalText == rhs.canonicalText && lhs.replyToMessageIdHex == rhs.replyToMessageIdHex
+                    && identity(lhs) == identity(rhs)
+            default:
+                return false
+            }
+        }
     }
 
     private struct PendingWrite: Equatable {

@@ -687,7 +687,17 @@ nonisolated enum MediaDraftProcessor {
     }
 
     @MainActor
+    /// Off the MainActor, as the picker prepares: a video's thumbnail writes
+    /// its bytes to a temporary file, and a file-backed one can be 512 MiB.
     static func restoredDraftAttachments(
+        from stored: [MessageDraftAttachmentFfi]
+    ) async -> [MediaDraftAttachment] {
+        await Task.detached(priority: .userInitiated) {
+            await restoredDraftAttachmentsValue(from: stored)
+        }.value
+    }
+
+    private static func restoredDraftAttachmentsValue(
         from stored: [MessageDraftAttachmentFfi]
     ) async -> [MediaDraftAttachment] {
         var restored: [MediaDraftAttachment] = []
