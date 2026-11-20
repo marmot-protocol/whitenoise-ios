@@ -1196,7 +1196,7 @@ struct MessageBubble: View {
                                 let removes = tally.mine && ReactionPillPresentation.canRemoveIndividually(
                                     tally.emoji, from: allPills, omittedKinds: omittedReactionKinds
                                 )
-                                Button(removes ? L10n.formatted("Remove %@", name) : name) { onTapReaction(tally) }
+                                Button(removes ? L10n.formatted("Remove reaction %@", name) : name) { onTapReaction(tally) }
                             }
                         }
                     }
