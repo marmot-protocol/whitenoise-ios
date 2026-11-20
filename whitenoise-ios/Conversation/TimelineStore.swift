@@ -1405,7 +1405,8 @@ final class TimelineStore {
         if index < timelineSignature.count, timelineSignature[index] == signature {
             return false
         }
-        if case .message(let replaced, _) = timeline[index].kind,
+        let previous = timeline[index]
+        if case .message(let replaced, _) = previous.kind,
            timelineIndexByMessageId[replaced.messageIdHex] == index {
             timelineIndexByMessageId[replaced.messageIdHex] = nil
         }
@@ -1424,8 +1425,17 @@ final class TimelineStore {
             timelineSignature = timeline.map(TimelineItemSignature.init)
         }
         clusterCalendar = nil
-        answeredActivityRows = answeredActivities(in: timeline)
+        if affectsActivityCompletion(previous) || affectsActivityCompletion(item) {
+            answeredActivityRows = answeredActivities(in: timeline)
+        }
         return true
+    }
+
+    private func affectsActivityCompletion(_ item: TimelineItem) -> Bool {
+        guard case .message(let record, let status) = item.kind else { return false }
+        if record.kind == MessageSemantics.kindAgentActivity { return true }
+        return record.kind == MessageSemantics.kindChat && (status == .sent || status == .received)
+            && replyTargetId(for: record) != nil
     }
 
     /// An answer closes progress only for the same author and the same request.

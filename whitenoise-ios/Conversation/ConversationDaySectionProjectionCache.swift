@@ -12,6 +12,7 @@ struct TimelineDaySection: Identifiable, Equatable {
 final class ConversationDaySectionProjectionCache {
     private struct CacheKey: Equatable {
         let generation: Int
+        let today: Date
         let calendarIdentifier: Calendar.Identifier
         let timeZoneIdentifier: String
         let localeIdentifier: String
@@ -23,10 +24,12 @@ final class ConversationDaySectionProjectionCache {
         for items: [TimelineItem],
         generation: Int,
         calendar: Calendar = .autoupdatingCurrent,
-        locale: Locale = .autoupdatingCurrent
+        locale: Locale = .autoupdatingCurrent,
+        now: Date = .now
     ) -> [TimelineDaySection] {
         let key = CacheKey(
             generation: generation,
+            today: calendar.startOfDay(for: now),
             calendarIdentifier: calendar.identifier,
             timeZoneIdentifier: calendar.timeZone.identifier,
             localeIdentifier: locale.identifier
@@ -37,7 +40,7 @@ final class ConversationDaySectionProjectionCache {
 
         var sections: [TimelineDaySection] = []
         for item in items {
-            let day = ConversationDateHeader.dayStart(timestamp: item.timestamp, calendar: calendar)
+            let day = min(key.today, ConversationDateHeader.dayStart(timestamp: item.timestamp, calendar: calendar))
             if sections.last?.day == day {
                 sections[sections.count - 1].items.append(item)
             } else {

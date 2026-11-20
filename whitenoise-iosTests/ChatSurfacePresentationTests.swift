@@ -132,6 +132,20 @@ struct ChatSurfacePresentationTests {
         #expect(EmojiCatalogSearch.results(in: [entry], query: "FACE joy") == [entry])
     }
 
+    @Test func aFutureRowSharesTodayUntilThatDayArrives() {
+        let cache = ConversationDaySectionProjectionCache()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let rows = [
+            TimelineItem.systemEvent(id: "today", event: .groupCreated, timestamp: 86_400),
+            TimelineItem.systemEvent(id: "future", event: .rosterChanged, timestamp: 172_800)
+        ]
+        let today = cache.sections(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 86_400))
+        #expect(today.map(\.items.count) == [2])
+        let tomorrow = cache.sections(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 172_800))
+        #expect(tomorrow.map(\.items.count) == [1, 1])
+    }
+
     @Test func timelineDaySectionsReuseGenerationAndInvalidateForCalendarContext() {
         let cache = ConversationDaySectionProjectionCache()
         var calendar = Calendar(identifier: .gregorian)

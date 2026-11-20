@@ -597,11 +597,15 @@ struct MessageBubble: View {
                                        onViewVotes: onViewPollVotes)
                 } else {
                     // MDK projects no tally for a malformed poll; never show its raw question.
-                    Label(L10n.string("This poll can’t be displayed."), systemImage: "chart.bar.xaxis")
-                        .font(.subheadline)
-                        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-                        .padding(.horizontal, rich ? MessageBubbleReplyLayout.cardOuterInset : density.metrics.bubbleHorizontalInset)
-                        .padding(.vertical, rich ? 2 : density.metrics.bubbleVerticalInset)
+                    Label {
+                        TimelineSearchText(L10n.string("This poll can’t be displayed."))
+                    } icon: {
+                        Image(systemName: "chart.bar.xaxis")
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
+                    .padding(.horizontal, rich ? MessageBubbleReplyLayout.cardOuterInset : density.metrics.bubbleHorizontalInset)
+                    .padding(.vertical, rich ? 2 : density.metrics.bubbleVerticalInset)
                 }
             }
             .frame(width: rich ? MessageBubbleReplyLayout.richContentWidth : nil, alignment: .leading)
