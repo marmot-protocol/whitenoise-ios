@@ -268,11 +268,9 @@ private struct BootstrapFailureView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         } actions: {
-            Button("Retry") {
+            WNButton(title: "Retry", size: .compact) {
                 Task { await appState.bootstrap() }
             }
-            .wnPrimaryButtonStyle()
-            .controlSize(.large)
         }
         .padding()
     }
