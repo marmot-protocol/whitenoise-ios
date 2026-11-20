@@ -68,20 +68,6 @@ enum CustomEmojiTextComposer {
     }
 }
 
-/// Text that draws the environment's inline custom emoji.
-struct CustomEmojiAwareText: View {
-    @Environment(\.customEmojiInline) private var customEmoji
-    let text: AttributedString
-
-    init(_ text: AttributedString) {
-        self.text = text
-    }
-
-    var body: some View {
-        CustomEmojiTextComposer.text(text, context: customEmoji)
-    }
-}
-
 /// Loads a message row's inline emoji images while the row is visible.
 struct CustomEmojiInlineLoader: ViewModifier {
     @Environment(\.customEmojiStore) private var store

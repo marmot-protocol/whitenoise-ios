@@ -81,7 +81,7 @@ struct TranscriptMediaSheet<Page: View>: View {
                             }
                             HStack {
                                 MessageMediaGalleryButton(title: "Share", systemImage: "square.and.arrow.up", action: onShare)
-                                    .disabled(history == nil || !controls.canShare)
+                                    .disabled(!controls.canShareFromTranscript(hasHistoryControls: history != nil))
                                 Spacer()
                                 MessageMediaGalleryButton(title: "Forward", systemImage: "arrowshape.turn.up.right", action: { verified(onForward) })
                                     .disabled(history == nil || !controls.canForward)

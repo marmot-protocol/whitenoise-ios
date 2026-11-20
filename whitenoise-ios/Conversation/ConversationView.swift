@@ -702,11 +702,9 @@ struct ConversationView: View {
     @State private var actionsCrossfadeExcerpt = false
     @State private var actionsReturnGeometry: (row: CGRect, body: CGSize?, documents: [String: LiftedDocumentDetails])?
     private struct TranscriptMediaTarget: Identifiable {
-        let id: String
-        let modelID: ObjectIdentifier
-        let accountRef: String?
-        let runtimeGeneration: Int
-        let attachmentRevision: Int
+        let item: MessageMediaAttachment
+        var id: String { item.id }
+        let scope: MessageBubble.MediaOpenScope
         let initialData: Data?
         var gifRowID: String? = nil
     }
@@ -1102,14 +1100,12 @@ struct ConversationView: View {
             .environment(\.mediaOpenIntent, mediaOpenIntent)
             .onDisappear { mediaOpenIntent.invalidate() }
             .onChange(of: appState.runtimeGeneration) { _, generation in
-                if let target = transcriptMedia, target.runtimeGeneration != generation { transcriptMedia = nil }
+                if let target = transcriptMedia, target.scope.generation != generation { transcriptMedia = nil }
             }
             .sheet(item: $transcriptMedia, onDismiss: { mediaOpenIntent.invalidate() }) { target in
-                if let viewModel, ObjectIdentifier(viewModel) == target.modelID,
-                   appState.activeAccountRef == target.accountRef,
-                   appState.runtimeGeneration == target.runtimeGeneration,
-                   AttachmentPresentationState.shared.revision == target.attachmentRevision,
-                   let gallery = viewModel.transcriptMediaGallery(opening: target.id, initialData: target.initialData, includingGIFsIn: target.gifRowID) {
+                if let viewModel, target.scope.isCurrent(viewModel, appState: appState),
+                   let gallery = viewModel.transcriptMediaGallery(opening: target.id, initialData: target.initialData, openingItem: target.item,
+                                                                includingGIFsIn: target.gifRowID, allowsEmptyWindow: true) {
                     TranscriptHistoryGalleryView(gallery: gallery, conversation: viewModel, gifRowID: target.gifRowID, onLoadMedia: mediaLoader(for: viewModel),
                         forwardingContext: forwardingContext(for: viewModel),
                         onGoToMessage: { navigateToTimelineMessage($0, viewModel: viewModel) },
@@ -2774,6 +2770,7 @@ struct ConversationView: View {
         }
         let selectionInset = record.direction == "sent" ? Self.selectionIndicatorSize : Self.receivedSelectionInset
         let incompleteMarkdown = viewModel.timelineStore.markdownProjections.isTruncated(for: item)
+        let mediaScope = MessageBubble.MediaOpenScope(viewModel, appState: appState)
         return MessageBubble(
             record: record,
             status: status,
@@ -2825,14 +2822,12 @@ struct ConversationView: View {
                 }
             },
             onLoadMedia: mediaLoader(for: viewModel),
-            mediaOpenScope: .init(model: ObjectIdentifier(viewModel), account: appState.activeAccountRef,
-                                 generation: appState.runtimeGeneration),
-            onOpenTranscriptMedia: { [accountRef = appState.activeAccountRef, generation = appState.runtimeGeneration,
-                                      revision = AttachmentPresentationState.shared.revision] media, data in
-                guard self.viewModel === viewModel, accountRef == appState.activeAccountRef,
-                      generation == appState.runtimeGeneration, revision == AttachmentPresentationState.shared.revision else { return }
-                transcriptMedia = TranscriptMediaTarget(id: media.id, modelID: ObjectIdentifier(viewModel),
-                    accountRef: accountRef, runtimeGeneration: generation, attachmentRevision: revision, initialData: data)
+            mediaOpenScope: mediaScope,
+            onOpenTranscriptMedia: { media, data in
+                guard mediaScope.isCurrent(self.viewModel, appState: appState), !viewModel.isDeleted(record.messageIdHex),
+                      let current = viewModel.timeline.first(where: { $0.id == item.id }),
+                      viewModel.mediaItems(for: current).contains(where: { $0.canUseBytesPrepared(for: media) }) else { return }
+                transcriptMedia = TranscriptMediaTarget(item: media, scope: mediaScope, initialData: data)
             },
             mediaForwardingContext: forwardingContext(for: viewModel),
             onGoToMessage: { messageIdHex in
@@ -4745,14 +4740,11 @@ struct ConversationView: View {
                 let bodySize = actionsPhase == .returning ? actionsReturnGeometry?.body ?? target.bodySize : target.bodySize
                 let canInteract = viewModel.canSendMessages
                 let openGIF = viewModel.firstGalleryGIF(in: item).map { gif in
-                    let mediaTarget = TranscriptMediaTarget(id: gif.id, modelID: ObjectIdentifier(viewModel),
-                        accountRef: appState.activeAccountRef, runtimeGeneration: appState.runtimeGeneration,
-                        attachmentRevision: AttachmentPresentationState.shared.revision, initialData: nil, gifRowID: rowId)
+                    let mediaTarget = TranscriptMediaTarget(item: gif, scope: .init(viewModel, appState: appState),
+                        initialData: nil, gifRowID: rowId)
                     return {
                         dismissActions()
-                        guard self.viewModel === viewModel, appState.activeAccountRef == mediaTarget.accountRef,
-                              appState.runtimeGeneration == mediaTarget.runtimeGeneration,
-                              AttachmentPresentationState.shared.revision == mediaTarget.attachmentRevision,
+                        guard mediaTarget.scope.isCurrent(self.viewModel, appState: appState),
                               let current = viewModel.timeline.first(where: { $0.id == rowId }),
                               !viewModel.isDeleted(target.record.messageIdHex),
                               viewModel.firstGalleryGIF(in: current)?.id == gif.id else { return }

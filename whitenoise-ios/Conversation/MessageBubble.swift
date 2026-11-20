@@ -130,9 +130,9 @@ final class ConversationMediaLoader {
     }
 
     @discardableResult
-    func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool) async -> (size: Int, contactName: String?)? {
+    func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool, hasContactName: Bool = false) async -> (size: Int, contactName: String?)? {
         guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return nil }
-        guard DocumentPreviewFormat(for: media) == .contact else {
+        guard !hasContactName, DocumentPreviewFormat(for: media) == .contact else {
             return await automaticAttachmentByteCount(media).map { ($0, nil) }
         }
         var requested = media
@@ -344,6 +344,18 @@ struct MessageBubble: View {
         let model: ObjectIdentifier
         let account: String?
         let generation: Int
+        let attachmentRevision: Int
+
+        init(_ viewModel: ConversationViewModel, appState: AppState) {
+            model = ObjectIdentifier(viewModel)
+            account = appState.activeAccountRef
+            generation = appState.runtimeGeneration
+            attachmentRevision = AttachmentPresentationState.shared.revision
+        }
+
+        func isCurrent(_ viewModel: ConversationViewModel?, appState: AppState) -> Bool {
+            viewModel.map { Self($0, appState: appState) == self } == true
+        }
     }
 
     @Environment(\.messageActionBodySize) private var actionBodySize
@@ -659,11 +671,15 @@ struct MessageBubble: View {
                                        onViewVotes: onViewPollVotes)
                 } else {
                     // MDK projects no tally for a malformed poll; never show its raw question.
-                    Label(L10n.string("This poll can’t be displayed."), systemImage: "chart.bar.xaxis")
-                        .font(.subheadline)
-                        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-                        .padding(.horizontal, rich ? MessageBubbleReplyLayout.cardOuterInset : density.metrics.bubbleHorizontalInset)
-                        .padding(.vertical, rich ? 2 : density.metrics.bubbleVerticalInset)
+                    Label {
+                        TimelineSearchText(L10n.string("This poll can’t be displayed."))
+                    } icon: {
+                        Image(systemName: "chart.bar.xaxis")
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
+                    .padding(.horizontal, rich ? MessageBubbleReplyLayout.cardOuterInset : density.metrics.bubbleHorizontalInset)
+                    .padding(.vertical, rich ? 2 : density.metrics.bubbleVerticalInset)
                 }
             }
             .frame(width: rich ? MessageBubbleReplyLayout.richContentWidth : nil, alignment: .leading)
@@ -2496,17 +2512,15 @@ private struct MessageMediaTile: View {
     private func loadImageIfNeeded(scale: CGFloat, demand: AttachmentDemand = .automatic) async -> Data? {
         guard item.isImage else { return nil }
         let maxPixelSize = max(1, Int(ceil(max(size.width, size.height) * scale)))
-        if demand != .retry {
-            if let cachedThumbnail = MessageMediaThumbnailDecoder.cachedThumbnail(
-                for: thumbnailCacheKey,
-                maxPixelSize: maxPixelSize
-            ) {
-                image = cachedThumbnail.image
-                gifData = item.isGIF ? cachedThumbnail.sourceData : nil
-                loadedImageID = item.id
-                didFail = false
-                return cachedThumbnail.sourceData
-            }
+        let cached = demand == .retry ? nil : MessageMediaThumbnailDecoder.cachedThumbnail(for: thumbnailCacheKey, maxPixelSize: maxPixelSize)
+        // Identical photos share decoded thumbnails. An explicit open still needs
+        // the tapped slot's own bytes and acquisition state.
+        if let cached, demand == .automatic || item.reference == nil {
+            image = cached.image
+            gifData = item.isGIF ? cached.sourceData : nil
+            loadedImageID = item.id
+            didFail = false
+            return cached.sourceData
         }
         isLoading = true
         didFail = false
@@ -2515,18 +2529,20 @@ private struct MessageMediaTile: View {
         let analytics = appState.productAnalytics
         let prepareTiming = analytics.beginTiming()
         do {
-            let data = try await onLoadMedia.data(for: item, demand: demand)
+            let requested = demand == .automatic ? item : item.forTranscriptPage
+            let data = try await onLoadMedia.data(for: requested, demand: demand)
             guard !Task.isCancelled else {
                 analytics.recordStage(.mediaPrepare, since: prepareTiming, outcome: .cancelled)
                 return nil
             }
-            let decodeTiming = analytics.beginTiming()
-            let decoded = await MessageMediaThumbnailDecoder.image(
-                data: data,
-                maxPixelSize: maxPixelSize,
-                scale: scale
-            )
-            analytics.recordStage(.mediaDecode, since: decodeTiming, outcome: decoded == nil ? .failure : .success)
+            let decoded: UIImage?
+            if let cached {
+                decoded = cached.image
+            } else {
+                let decodeTiming = analytics.beginTiming()
+                decoded = await MessageMediaThumbnailDecoder.image(data: data, maxPixelSize: maxPixelSize, scale: scale)
+                analytics.recordStage(.mediaDecode, since: decodeTiming, outcome: decoded == nil ? .failure : .success)
+            }
             analytics.recordStage(.mediaPrepare, since: prepareTiming,
                                   outcome: decoded == nil ? .failure : Task.isCancelled ? .cancelled : .success)
             guard let decoded else {
@@ -2540,12 +2556,9 @@ private struct MessageMediaTile: View {
             image = decoded
             gifData = item.isGIF ? data : nil
             loadedImageID = item.id
-            MessageMediaThumbnailDecoder.store(
-                decoded,
-                sourceData: data,
-                for: thumbnailCacheKey,
-                maxPixelSize: maxPixelSize
-            )
+            if cached == nil {
+                MessageMediaThumbnailDecoder.store(decoded, sourceData: data, for: thumbnailCacheKey, maxPixelSize: maxPixelSize)
+            }
             return data
         } catch {
             analytics.recordStage(.mediaPrepare, since: prepareTiming,
@@ -3512,10 +3525,10 @@ private struct MessageDocumentAttachmentView: View {
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard liftedDocuments == nil, !fixtureUnavailable else { return }
             let metadata = await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
-                allowed: onLoadMedia.allowsAutomaticLoad(.document))
+                allowed: onLoadMedia.allowsAutomaticLoad(.document), hasContactName: displayName != nil)
             if !Task.isCancelled, let metadata {
                 byteCount = metadata.size
-                contactName = metadata.contactName
+                if let name = metadata.contactName { contactName = name }
             }
         }
     }
@@ -3808,31 +3821,13 @@ struct MessageMediaGallery: Identifiable {
     let transcriptCaptions: [String: Caption]?
 
     init?(transcriptItems: [MessageMediaAttachment], openingID: String, initialData: Data?,
-          messages: [String: String], captions: [String: Caption]) {
-        guard !transcriptItems.isEmpty else { return nil }
+          messages: [String: String], captions: [String: Caption], allowsEmptyWindow: Bool = false) {
+        guard allowsEmptyWindow || !transcriptItems.isEmpty else { return nil }
         items = transcriptItems
         initialItemID = openingID
         initialMediaData = captions[openingID] == nil ? nil : initialData
         messageIdByItemID = messages
         transcriptCaptions = captions
-    }
-
-    init?(item: MessageMediaAttachment, imageData: Data) {
-        self.init(items: [item], initialItem: item, initialMediaData: imageData)
-    }
-
-    init?(
-        items: [MessageMediaAttachment],
-        initialItem: MessageMediaAttachment,
-        initialImageData: Data,
-        messageIdByItemID: [String: String] = [:]
-    ) {
-        self.init(
-            items: items,
-            initialItem: initialItem,
-            initialMediaData: initialImageData,
-            messageIdByItemID: messageIdByItemID
-        )
     }
 
     init?(
@@ -3916,6 +3911,7 @@ private struct FullscreenMediaPrepared: Identifiable {
     let item: MessageMediaAttachment
     let data: Data
     let contentType: UTType
+    var pendingSelection: MessageMediaGallery.PendingSelection? = nil
 }
 
 private struct DecryptedMediaExportDocument: FileDocument {
@@ -4074,7 +4070,8 @@ struct MessageMediaFullscreenGalleryView: View {
                     media: prepared.item,
                     data: prepared.data,
                     verifySource: { item in
-                        try await gallery.mayExport(item, verify: transcriptHistory?.verify)
+                        if let transcriptHistory { return try await transcriptHistory.verifyForward(item, prepared.pendingSelection) }
+                        return try await gallery.mayExport(item, verify: nil)
                     },
                     viewModel: forwardingContext.viewModel,
                     destinationProvider: forwardingContext.destinationProvider
@@ -4123,17 +4120,18 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func page(_ item: MessageMediaAttachment) -> some View {
-        MessageMediaFullscreenPage(
-            item: item,
+        let source = gallery.transcriptCaptions == nil ? item : item.forTranscriptPage
+        return MessageMediaFullscreenPage(
+            item: source,
             isSelected: item.id == selectedItemID,
-            initialImageData: preparedMedia?.id == item.id ? preparedMedia?.data : gallery.initialData(for: item),
+            initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.data : nil } ?? gallery.initialData(for: source),
             selectionDemand: gallery.transcriptCaptions == nil || (!hasPaged && item.id == gallery.initialItemID && transcriptHistory?.allowsOpeningDemand != false)
                 ? .explicit : .automatic,
             onLoadMedia: onLoadMedia,
             onData: { data in
                 guard selectedItemID == item.id, selectedItem != nil else { return }
                 preparedMedia = FullscreenMediaPrepared(id: item.id, item: item, data: data,
-                    contentType: UTType(mimeType: item.mediaType) ?? .data)
+                    contentType: UTType(mimeType: item.mediaType) ?? .data, pendingSelection: gallery.pendingSelection(for: item.id))
             },
             onToggleChrome: toggleChrome,
             onZoomChanged: { zoomed in
@@ -4181,8 +4179,9 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private var currentPreparedMedia: FullscreenMediaPrepared? {
-        guard selectedItem != nil, preparedMedia?.id == selectedItemID else { return nil }
-        return preparedMedia
+        guard let selectedItem, let preparedMedia, selectedItem.canUseBytesPrepared(for: preparedMedia.item) else { return nil }
+        return FullscreenMediaPrepared(id: selectedItem.id, item: selectedItem, data: preparedMedia.data,
+            contentType: preparedMedia.contentType, pendingSelection: preparedMedia.pendingSelection)
     }
 
     #if DEBUG
@@ -4196,7 +4195,7 @@ struct MessageMediaFullscreenGalleryView: View {
         #if DEBUG
         if isChatFixture {
             return .init(hasPreparedMedia: false, hasForwardingContext: false, hasSourceMessage: sourceMessageIdHex != nil,
-                         hasShareFile: bundledShareURL != nil)
+                         hasBundledShareFile: bundledShareURL != nil)
         }
         #endif
         return MediaViewerControlState(
@@ -4306,14 +4305,27 @@ private struct MessageMediaFullscreenPage: View {
     let onData: (Data) -> Void
     let onToggleChrome: () -> Void
     let onZoomChanged: (Bool) -> Void
+    @State private var sourceGeneration = 0
 
     var body: some View {
+        content
+            .id(sourceGeneration)
+            .onChange(of: item.localTarget) { previous, _ in
+                if previous != nil {
+                    sourceGeneration &+= 1
+                    onZoomChanged(false)
+                }
+            }
+    }
+
+    @ViewBuilder private var content: some View {
+        let demand = sourceGeneration == 0 ? selectionDemand : .automatic
         if item.isVideo {
             MessageMediaFullscreenVideoPage(
                 item: item,
                 isSelected: isSelected,
-                initialMediaData: initialImageData,
-                selectionDemand: selectionDemand,
+                initialMediaData: sourceGeneration == 0 ? initialImageData : nil,
+                selectionDemand: demand,
                 onLoadMedia: onLoadMedia,
                 onData: onData,
                 onToggleChrome: onToggleChrome
@@ -4322,8 +4334,8 @@ private struct MessageMediaFullscreenPage: View {
             MessageMediaFullscreenImagePage(
                 item: item,
                 isSelected: isSelected,
-                initialImageData: initialImageData,
-                selectionDemand: selectionDemand,
+                initialImageData: sourceGeneration == 0 ? initialImageData : nil,
+                selectionDemand: demand,
                 onLoadMedia: onLoadMedia,
                 onData: onData,
                 onToggleChrome: onToggleChrome,

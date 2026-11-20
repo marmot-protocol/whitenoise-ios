@@ -198,6 +198,31 @@ extension GroupSharedMediaPresentationTests {
             attachment: .accepted(attachmentIndex: slot, reference: reference))
     }
 
+    @Test func aLoadedContactNameIsSearchableWhenTheFileHasAGenericType() throws {
+        let app = AppState.test()
+        let viewModel = ConversationViewModel(appState: app, group: group(name: "Chat"))
+        let reference = mediaRecord(messageID: "contact", index: 0, mediaType: "application/octet-stream",
+                                    fileName: "person.vcf", timestamp: 1).reference
+        let record = timelineRecord(messageIdHex: hex("ac"), timelineAt: 1, media: [reference])
+        viewModel.applyTimelinePage(.init(messages: [record], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        let row = try #require(viewModel.timeline.first { $0.id == TimelineItem.messageRowId(forMessageIdHex: record.messageIdHex) })
+        let contact = try #require(viewModel.mediaItems(for: row).first)
+        viewModel.search.registerContactName("Avery Stone", for: contact.id)
+        viewModel.search.activate()
+        viewModel.search.query = "Avery"
+        #expect(viewModel.search.currentMatch?.messageIdHex == record.messageIdHex)
+    }
+
+    @Test func anEmptyWindowKeepsOnlyMediaConnectedToItsSelectedRetainedPage() throws {
+        let photo = entry("selected")
+        let id = try #require(TranscriptHistorySlot(photo)).attachment.id
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("newer"), photo])
+        #expect(pages.extensions(around: [], excluding: [], preserving: id).older.map(\.target.messageIdHex) == ["selected", "newer"])
+        #expect(pages.extensions(around: [], excluding: ["selected"], preserving: id).older.isEmpty)
+        #expect(pages.extensions(around: [], excluding: [], preserving: "removed").older.isEmpty)
+    }
+
     @Test func refreshingNewerPhotosKeepsTheSelectedOlderPhotoAcrossPageBoundaries() throws {
         let anchor = entry("visible")
         let window = [try #require(TranscriptHistorySlot(anchor)).attachment]

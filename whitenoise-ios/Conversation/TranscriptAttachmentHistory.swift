@@ -92,14 +92,22 @@ struct TranscriptHistoryPages {
 
     func contains(messageID: String) -> Bool { byMessage[messageID] != nil }
 
+    func contains(attachmentID: String) -> Bool {
+        byMessage.values.contains { slots in slots.contains { $0.attachment.id == attachmentID } }
+    }
+
     /// Extend each edge only once the native cursor has reached that exact slot. In particular, a
     /// recent page cannot appear adjacent to an old search result while intervening pages are missing.
     func extensions(around window: [MessageMediaAttachment],
-                    excluding windowMessages: Set<String>, atLiveTail: Bool = false) -> (older: [TranscriptHistorySlot], newer: [TranscriptHistorySlot]) {
+                    excluding windowMessages: Set<String>, atLiveTail: Bool = false, preserving selectedID: String? = nil) -> (older: [TranscriptHistorySlot], newer: [TranscriptHistorySlot]) {
         let chronological = newestFirst.reversed().flatMap { byMessage[$0] ?? [] }
         // A held GIF can anchor its own window. Other GIFs still play inline.
         func isGalleryPage(_ slot: TranscriptHistorySlot) -> Bool {
             !windowMessages.contains(slot.target.messageIdHex) && !slot.attachment.isGIF
+        }
+        // The live window may evict its last photo while the viewer is on a retained page.
+        if window.isEmpty, let selectedID, chronological.contains(where: { $0.attachment.id == selectedID && isGalleryPage($0) }) {
+            return (chronological.filter(isGalleryPage), [])
         }
         guard let first = window.first(where: { $0.localTarget != nil }),
               let last = window.last(where: { $0.localTarget != nil }) else {

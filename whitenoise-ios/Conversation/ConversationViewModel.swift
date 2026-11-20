@@ -1056,7 +1056,9 @@ final class ConversationViewModel {
 
     /// Project the currently loaded transcript only while its media sheet is open.
     /// Keep the row's original media objects so opening a page addresses its original slot.
-    func transcriptMediaGallery(opening itemID: String, initialData: Data?, includingGIFsIn gifRowID: String? = nil) -> MessageMediaGallery? {
+    func transcriptMediaGallery(opening itemID: String, initialData: Data?, openingItem: MessageMediaAttachment? = nil,
+                                includingGIFsIn gifRowID: String? = nil,
+                                allowsEmptyWindow: Bool = false) -> MessageMediaGallery? {
         var items: [MessageMediaAttachment] = []
         var messages: [String: String] = [:]
         var captions: [String: MessageMediaGallery.Caption] = [:]
@@ -1078,8 +1080,11 @@ final class ConversationViewModel {
                     outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
             }
         }
-        return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: initialData,
-            messages: messages, captions: captions)
+        let openingBytes = openingItem.flatMap { original in
+            items.contains { $0.canUseBytesPrepared(for: original) } ? initialData : nil
+        }
+        return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: openingBytes,
+            messages: messages, captions: captions, allowsEmptyWindow: allowsEmptyWindow)
     }
 
     func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
@@ -1116,8 +1121,17 @@ final class ConversationViewModel {
         timelineStore.refreshStreamingDebugPresentation()
     }
 
-    func refreshProfileDependentTimelineProjections() {
-        timelineStore.refreshProfileDependentTimelineProjections()
+    func refreshProfileDependentTimelineProjections(affectedMessageIDs: Set<String>? = nil,
+                                                    allowScrollTo: (String) -> Bool = { _ in true }) {
+        timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affectedMessageIDs)
+        guard search.isActive, search.hasQuery, affectedMessageIDs?.isEmpty != true else { return }
+        if let selected = search.currentMatch,
+           timelineStore.timelineIndex(forMessageIdHex: selected.messageIdHex) == nil || isDeleted(selected.messageIdHex) {
+            // A page, hide or deletion owns this change of viewport.
+            search.refreshAfterTimelineChange()
+        } else {
+            search.refreshAfterSearchableContentChange(allowScrollTo: allowScrollTo)
+        }
     }
 
     func applyTimestampRenderGeneration(_ generation: Int) {
@@ -1891,6 +1905,7 @@ final class ConversationViewModel {
                 viewportIntent = .history(id)
             }
         }
+        let previousWindow = conversationWindow
         conversationWindow = snapshot
         // Mutating an observed property invalidates the whole conversation view,
         // so only touch the admission when a page is actually pending.
@@ -1919,7 +1934,10 @@ final class ConversationViewModel {
                 let identities = Set(references.mentions + references.replyMentions + [references.sender, references.replyAuthor].compactMap { $0 })
                 return references.system != nil || !identities.isDisjoint(with: changedNames) ? message.timeline.messageIdHex : nil
             })
-            timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affected)
+            refreshProfileDependentTimelineProjections(affectedMessageIDs: affected) { messageID in
+                // New page rows update the count without interrupting the scroll that loaded them.
+                affected.contains(messageID) && previousWindow?.messages.contains { $0.timeline.messageIdHex == messageID } == true
+            }
         }
         error = navigationFailure
         windowDidChange?()
@@ -2461,7 +2479,7 @@ final class ConversationViewModel {
             )
             let media = mediaItems(for: item)
             var labels = [name]
-            let contacts = media.filter { ["text/vcard", "text/x-vcard"].contains(MediaAttachmentPolicy.canonicalMediaType($0.mediaType)) }
+            let contacts = media.filter { DocumentPreviewFormat(for: $0) == .contact }
             if !contacts.isEmpty { labels.append(L10n.string("Contact")) }
             for attachment in media {
                 labels.append(attachment.fileName)
@@ -3776,7 +3794,10 @@ final class ConversationViewModel {
         let operation: PendingReaction = alreadyMine ? .removeAll : .add(emoji)
         let pending = pendingReactions[id] ?? []
         guard !pending.contains(.removeAll), !alreadyMine || pending.isEmpty,
-              pendingReactions[id, default: []].insert(operation).inserted else { return }
+              pendingReactions[id, default: []].insert(operation).inserted else {
+            Haptics.warning()
+            return
+        }
         defer {
             pendingReactions[id]?.remove(operation)
             if pendingReactions[id]?.isEmpty == true { pendingReactions[id] = nil }

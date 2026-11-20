@@ -48,17 +48,7 @@ nonisolated enum ComposerMediaDraftLayout {
 
 nonisolated enum VideoPreviewOverlayPresentation {
     static let compactDiameter: CGFloat = 44
-    static let regularDiameter: CGFloat = 64
     static let maximumDiameter: CGFloat = 76
-
-    static func diameter(for size: CGSize) -> CGFloat {
-        let shortestSide = min(size.width, size.height)
-        guard shortestSide.isFinite, shortestSide >= 96 else {
-            return compactDiameter
-        }
-        return min(maximumDiameter, max(regularDiameter, shortestSide * 0.24))
-            .rounded(.toNearestOrAwayFromZero)
-    }
 
     static func iconFontSize(for diameter: CGFloat) -> CGFloat {
         max(19, diameter * 0.42).rounded(.toNearestOrAwayFromZero)

@@ -10,6 +10,7 @@ struct TranscriptHistoryControls {
     var allowsOpeningDemand: Bool
     var didSelect: (String) -> Void
     var verify: (MessageMediaAttachment) async throws -> Bool
+    var verifyForward: (MessageMediaAttachment, MessageMediaGallery.PendingSelection?) async throws -> Bool
 }
 
 extension EnvironmentValues {
@@ -40,7 +41,9 @@ struct TranscriptHistoryGalleryView: View {
         let currentScope = scope
         let scoped = currentScope != nil && currentScope == activeScope
         // The opening draft can disappear briefly while its confirmed slot is being matched.
-        let selectedFromHistory = history.selectedItemID.map { gallery.transcriptCaptions?[$0] == nil } ?? false
+        let selectedID = history.selectedItemID ?? gallery.initialItemID
+        let selectedFromHistory = gallery.transcriptCaptions?[selectedID] == nil
+            && (history.resetViewerOnDiscard || history.pages.contains(attachmentID: selectedID))
         Group {
             if scoped && history.validationFailed && selectedFromHistory {
                 ContentUnavailableView {
@@ -106,7 +109,10 @@ struct TranscriptHistoryGalleryView: View {
                 history.selectedItemID = itemID
                 history.resetViewerOnDiscard = gallery.transcriptCaptions?[itemID] == nil
                 if !history.resetViewerOnDiscard { history.lastWindowItemID = itemID }
-            }, verify: { [activeScope] item in try await self.verify(item, in: activeScope) })
+            }, verify: { [activeScope] item in try await self.verify(item, in: activeScope) },
+            verifyForward: { [activeScope] item, pending in
+                try await self.verifyForward(item, pending: pending, in: activeScope)
+            })
     }
 
     private func validate() {
@@ -122,7 +128,21 @@ struct TranscriptHistoryGalleryView: View {
         }
     }
 
-    private func verify(_ item: MessageMediaAttachment, in openingScope: TranscriptAttachmentHistory.Scope?) async throws -> Bool {
+    private func verifyForward(_ item: MessageMediaAttachment, pending: MessageMediaGallery.PendingSelection?,
+                               in scope: TranscriptAttachmentHistory.Scope?) async throws -> Bool {
+        if let pending, let window = conversation.transcriptMediaGallery(opening: item.id, initialData: nil, allowsEmptyWindow: true),
+           window.transcriptCaptions?[item.id] == nil {
+            // The chooser may outlive an optimistic UUID. Use the gallery's original
+            // row, slot and plaintext match before verifying the confirmed source.
+            guard window.confirmedItem(for: pending) != nil else { throw AttachmentReadError.stale }
+            guard let confirmed = await window.confirmedSelection(for: pending) else { return false }
+            return try await verify(confirmed, in: scope, allowingConfirmation: true)
+        }
+        return try await verify(item, in: scope, allowingConfirmation: true)
+    }
+
+    private func verify(_ item: MessageMediaAttachment, in openingScope: TranscriptAttachmentHistory.Scope?,
+                        allowingConfirmation: Bool = false) async throws -> Bool {
         guard let openingScope else { throw CancellationError() }
         func checkScope() throws {
             try Task.checkCancellation()
@@ -130,31 +150,33 @@ struct TranscriptHistoryGalleryView: View {
                   appState.isAppSceneActive, scenePhase == .active else { throw CancellationError() }
         }
         try checkScope()
-        func isPresented() throws -> Bool {
+        func presentedItem() throws -> MessageMediaAttachment? {
             if let window = conversation.transcriptMediaGallery(opening: item.id, initialData: nil, includingGIFsIn: gifRowID),
                let visible = window.items.first(where: { $0.id == item.id }) {
-                return visible.reference == item.reference && visible.localTarget == item.localTarget
+                guard visible.canUseBytesPrepared(for: item),
+                      allowingConfirmation || visible.localTarget == item.localTarget else { return nil }
+                return visible
             }
-            guard let target = item.localTarget else { return false }
+            guard let target = item.localTarget else { return nil }
             let store = conversation.timelineStore
             guard !store.isHidden(target.messageIdHex), !store.isDeleted(target.messageIdHex),
                   !conversation.timeline.contains(where: { row in
                       guard case .message(let record, _) = row.kind else { return false }
                       return record.messageIdHex == target.messageIdHex
-                  }) else { return false }
+                  }) else { return nil }
             // An invalidated history page cannot establish whether the slot was removed.
             guard let slot = history.pages.slot(for: item) else { throw AttachmentReadError.stale }
-            return slot.isVisible(in: store)
+            return slot.isVisible(in: store) ? slot.attachment : nil
         }
-        guard try isPresented() else { return false }
-        guard let target = item.localTarget else {
+        guard let presented = try presentedItem() else { return false }
+        guard let target = presented.localTarget else {
             if item.localData != nil { return true }
             guard let messageID = gallery.messageIdByItemID[item.id], item.reference != nil else { return false }
             return conversation.timelineStore.hasUnsourcedOwnMessage(messageID)
         }
         let retained = try await history.verifyRetained(target, scope: openingScope, appState: appState)
         try checkScope()
-        return try retained && isPresented()
+        return try retained && presentedItem()?.localTarget == target
     }
 
     private var expandedGallery: MessageMediaGallery {
@@ -164,7 +186,8 @@ struct TranscriptHistoryGalleryView: View {
             return record.messageIdHex
         })
         let edges = history.pages.extensions(around: gallery.items, excluding: windowMessages,
-                                             atLiveTail: conversation.conversationWindow?.hasMoreAfter == false)
+                                             atLiveTail: conversation.conversationWindow?.hasMoreAfter == false,
+                                             preserving: history.selectedItemID ?? gallery.initialItemID)
         guard !edges.older.isEmpty || !edges.newer.isEmpty || history.resumeItemID != nil else { return gallery }
         var messages = gallery.messageIdByItemID
         func include(_ slot: TranscriptHistorySlot) -> MessageMediaAttachment? {
