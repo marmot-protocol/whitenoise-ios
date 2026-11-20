@@ -16,6 +16,11 @@ nonisolated struct ConversationReplyPreview: Equatable {
         self.text = text.isEmpty ? (media?.rejectionMessage ?? media?.fileName ?? "") : text
     }
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.name == rhs.name && lhs.text == rhs.text && lhs.isPoll == rhs.isPoll && lhs.media == rhs.media
+            && lhs.media?.localTarget == rhs.media?.localTarget && lhs.media?.sourceHint == rhs.media?.sourceHint
+    }
+
     static func excerpt(_ rendered: String) -> String {
         for line in rendered.lazy.split(whereSeparator: \.isNewline) {
             if let text = ContentSanitizer.compactSingleLine(String(line), maxLength: 120), !text.isEmpty { return text }
@@ -399,6 +404,7 @@ final class TimelineStore {
 
     private enum ReplyPreviewSourceSignature: Equatable {
         case projected(
+            sourceMessageID: String?,
             sender: String,
             plaintext: String,
             kind: UInt64,
@@ -409,7 +415,7 @@ final class TimelineStore {
             deleted: Bool,
             deletionSource: DeletionSourceFfi
         )
-        case loadedTarget(record: MessageTimelineSignature, deleted: Bool, deletionSource: DeletionSourceFfi)
+        case loadedTarget(record: MessageTimelineSignature, sourceMessageID: String?, deleted: Bool, deletionSource: DeletionSourceFfi)
     }
 
     private struct ReplyPreviewDisplayCacheKey: Equatable {
@@ -525,10 +531,12 @@ final class TimelineStore {
         }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
             guard !isBlockedAuthor(preview.sender) else { return nil }
+            let sourceMessageID = mediaProjections.sourceMessageID(for: preview.messageIdHex)
             let key = ReplyPreviewDisplayCacheKey(
                 messageIdHex: record.messageIdHex,
                 targetId: targetId,
                 source: .projected(
+                    sourceMessageID: sourceMessageID,
                     sender: preview.sender,
                     plaintext: preview.plaintext,
                     kind: preview.kind,
@@ -560,7 +568,7 @@ final class TimelineStore {
                     fromOutcomes: preview.media,
                     ownerId: "reply:\(record.messageIdHex):\(targetId)",
                     messageId: preview.messageIdHex,
-                    sourceMessageId: mediaProjections.sourceMessageID(for: preview.messageIdHex),
+                    sourceMessageId: sourceMessageID,
                     resolveMissingSource: true
                 ).first
             let value = ConversationReplyPreview(
@@ -581,6 +589,7 @@ final class TimelineStore {
             targetId: targetId,
             source: .loadedTarget(
                 record: MessageTimelineSignature(target),
+                sourceMessageID: mediaProjections.sourceMessageID(for: targetId),
                 deleted: targetDeleted,
                 deletionSource: deletedProjections.source(for: targetId)
             )
@@ -1859,6 +1868,8 @@ final class TimelineStore {
         messageStatusById[messageIdHex] = status
         if let item = visibleTimelineItem(forMessageId: messageIdHex) {
             _ = upsertTimelineItem(item)
+        } else if isHidden(messageIdHex) {
+            answeredActivityRows = answeredActivities(in: timeline)
         }
         noteProjectionChanged()
     }

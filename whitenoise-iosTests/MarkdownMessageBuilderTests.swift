@@ -28,13 +28,13 @@ struct MarkdownMessageBuilderTests {
     }
 
     @Test func aNodeLimitedProjectionKeepsTheSourceReaderAvailable() {
-        let source = String(repeating: "- a\n", count: 900) + "- TAIL"
-        let item = MarkdownListItemFfi(blocks: [para([.text(content: "a")])], checked: nil)
-        let tail = MarkdownListItemFfi(blocks: [para([.text(content: "TAIL")])], checked: nil)
-        let document = doc([.listBlock(kind: .bullet(marker: "-"), tight: true, items: Array(repeating: item, count: 900) + [tail])])
+        let source = String(repeating: "*x* ", count: 750) + "TAIL"
+        let word: [MarkdownInlineFfi] = [.emph(children: [.text(content: "x")]), .text(content: " ")]
+        let inlines = Array(repeating: word, count: 750).flatMap { $0 } + [.text(content: "TAIL")]
+        let document = doc([para(inlines)])
         let row = record(plaintext: source, tokens: document)
         let projection = MessageMarkdownDisplayProjection.build(for: row, mentionDisplayName: nil)
-        #expect(!TranscriptMessagePreview.exceedsInlineLimit(source))
+        #expect(!TranscriptMessagePreview.requiresReader(source))
         #expect(projection.isTruncated)
         #expect(MessageBubble(record: row, status: .received, incompleteMarkdown: projection.isTruncated,
                               isBodyExpanded: true).offersSourceReader)

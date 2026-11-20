@@ -75,6 +75,11 @@ struct AgentEventPresentationTests {
         model.timelineStore.setHiddenMessageIds([answer.messageIdHex])
         #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == false)
 
+        model.timelineStore.setDurableRowStatus(.sending, messageIdHex: answer.messageIdHex)
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == true)
+        model.timelineStore.setDurableRowStatus(.sent, messageIdHex: answer.messageIdHex)
+        #expect(model.agentEventDisplay(for: row)?.reportsWorkInProgress == false)
+
         var reprojected = answer
         reprojected.replyToMessageIdHex = nil
         _ = model.timelineStore.applyTimelineRecord(reprojected, updateTimeline: true)

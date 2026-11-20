@@ -80,6 +80,17 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         let recording: Recording
         let text: String
         var visible = true
+        var verified = true
+
+        func isVerified(in current: Scope) -> Bool { verified && scope == current }
+
+        func revalidated(held: Bool?, in current: Scope) -> Self? {
+            guard held != false, scope.route == current.route else { return nil }
+            var next = self
+            next.verified = held == true
+            if next.verified { next.scope = current }
+            return next
+        }
     }
 
     private(set) var readingID: String?
@@ -200,23 +211,18 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
            !Task.isCancelled, requestID == running {
             cancelTranscription()
         }
-        for (id, transcript) in transcripts where transcript.scope != scope {
+        for (id, transcript) in transcripts where !transcript.isVerified(in: scope) {
             guard !Task.isCancelled else { return }
-            let held: Bool
-            if transcript.scope.route == scope.route {
-                guard let result = await isHeld(id, transcript.recording) else { return }
-                held = result
-            } else {
-                held = false
-            }
+            let held = transcript.scope.route == scope.route ? await isHeld(id, transcript.recording) : false
             guard !Task.isCancelled else { return }
             guard transcripts[id]?.scope == transcript.scope, transcripts[id]?.recording == transcript.recording else { continue }
-            if held {
-                transcripts[id]?.scope = scope
-            } else {
-                transcripts.removeValue(forKey: id)
-            }
+            updateRetention(held, id: id, recording: transcript.recording, scope: scope)
         }
+    }
+
+    func updateRetention(_ held: Bool?, id: String, recording: Recording, scope: Scope) {
+        guard let transcript = transcripts[id], transcript.recording == recording else { return }
+        transcripts[id] = transcript.revalidated(held: held, in: scope)
     }
 
     func setTranscriptVisible(_ visible: Bool, id: String) {
@@ -296,25 +302,26 @@ struct LocalVoiceAttachment {
     private let client: MarmotClient
     let target: AttachmentLocalTargetFfi
 
-    static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState) async -> Self? {
-        guard let account = app.activeAccountRef, let client = try? app.currentMarmotClient() else { return nil }
+    static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState) async throws -> Self? {
+        guard let account = app.activeAccountRef else { return nil }
+        let client = try app.currentMarmotClient()
         let target: AttachmentLocalTargetFfi
         if let original = media.localTarget {
             target = original
-        } else if let hint = media.sourceHint, let resolved = try? await client.resolveAttachmentTarget(
-            accountRef: account, groupID: group, hint: hint) {
+        } else if let hint = media.sourceHint {
+            guard let resolved = try await client.findAttachmentTarget(accountRef: account, groupID: group, hint: hint) else { return nil }
             target = resolved
         } else {
             return nil
         }
         let source = Self(account: account, group: group, client: client, target: target)
-        return await source.isAvailable(in: app) ? source : nil
+        return try await source.isAvailable(in: app) ? source : nil
     }
 
-    func isAvailable(in app: AppState) async -> Bool {
+    private func isAvailable(in app: AppState) async throws -> Bool {
         guard app.client === client, app.activeAccountRef == account else { return false }
-        let assets = try? await client.marmot.attachmentLocalAssets(accountRef: account, groupIdHex: group, targets: [target])
-        guard let asset = assets?.first, asset.reference != nil,
+        let assets = try await client.marmot.attachmentLocalAssets(accountRef: account, groupIdHex: group, targets: [target])
+        guard let asset = assets.first, asset.reference != nil,
               asset.byteCount > 0, asset.byteCount <= MessageMediaAttachment.audioAnalysisByteLimit else { return false }
         return !Task.isCancelled && app.client === client && app.activeAccountRef == account
     }
