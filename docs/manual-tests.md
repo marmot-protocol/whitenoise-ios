@@ -333,10 +333,14 @@ microphone on a Mac without one.
 - [ ] With a saved draft whose video came back on reopen, background the app
       and return, then leave and reopen the chat: the caption and video are
       both there.
-- [ ] Add a video of about 300 MB with a caption and background the app
-      straight away. On return the app responds at once. Leave and reopen
-      the chat without editing: the caption is there. The video may or may
-      not be, depending on whether its copy finished first.
+- [ ] In a chat with an empty composer, type a new caption, add a video of
+      about 300 MB and background the app straight away. On return the app
+      responds at once.
+- [ ] Repeat, but force-quit the app from the switcher instead of returning
+      to it. Relaunch and open the chat: the caption is there. The video may
+      or may not be, depending on whether its copy finished first. (Leaving
+      the chat after a return saves the composer's video again, so only a
+      force-quit shows what backgrounding saved.)
 - [ ] Add two videos of about 450 MB each: the second is refused as too large
       to send together.
 - [ ] Send a reply with a video over 50 MB: it sends as a reply, the saved
