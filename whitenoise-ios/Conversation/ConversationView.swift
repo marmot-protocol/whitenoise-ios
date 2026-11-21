@@ -1598,7 +1598,7 @@ struct ConversationView: View {
                     dismissRequest: composerDismissRequest,
                     onInputFocusChange: { isComposerInputFocused = $0 },
                     mentionCandidates: mentionCandidates,
-                    submissionEnabled: editSubmissionEnabled,
+                    submissionEnabled: editSubmissionEnabled && (editSession != nil || composerHasSavedDraft),
                     submissionAccessibilityLabel: editSession == nil
                         ? L10n.string("Send")
                         : L10n.string("Save edit"),
@@ -3177,6 +3177,7 @@ struct ConversationView: View {
 
     private func send() {
         guard viewModel?.canSendMessages == true else { return }
+        guard editSession != nil || composerHasSavedDraft else { return }
         // Reject over-limit text before any snapshot, staging, edit or send so
         // the draft, reply target and attachments stay exactly as they are.
         if let viewModel,
@@ -3451,9 +3452,9 @@ struct ConversationView: View {
             surfacesTransientFailures: surfacesTransientFailures,
             hydratingComposer: true
         )
-        // Transient results are retried by the caller; a failure stays
-        // unhydrated so leaving can't delete the draft, and retries on the next
-        // readiness change.
+        // Transient and cancelled results are retried by the caller, and writes
+        // keep the draft's files meanwhile. After a failed read nothing could
+        // show or remove them, so writes stop keeping them.
         guard result.hydratesComposer, !Task.isCancelled, editSession == nil else {
             if result == .failed { draftHydrationFailed = true }
             return result
@@ -3554,6 +3555,12 @@ struct ConversationView: View {
             keepsSavedFiles: keepsSavedDraftFiles
         )
     }
+
+    /// Whether the composer has the saved draft (or it couldn't be read). Until
+    /// then it may be typed in, but sends nothing and takes no attachments: a
+    /// send would claim or clear a draft whose files it doesn't show, and an
+    /// attachment added now would have to be merged with the saved ones.
+    private var composerHasSavedDraft: Bool { !keepsSavedDraftFiles }
 
     /// Until the composer has the saved draft, a write it makes keeps the
     /// draft's files: leaving one out would have MDK delete it.
@@ -3730,7 +3737,7 @@ struct ConversationView: View {
     }
 
     private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
-        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
+        guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
         let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
         let slotted = Array(attachments.prefix(availableSlots))
         guard !slotted.isEmpty else {
@@ -3976,7 +3983,7 @@ struct ConversationView: View {
 
     private func canBeginMediaSelection() -> Bool {
         // A custom emoji send in flight owns the composer until it settles.
-        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
+        guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
         guard let viewModel, viewModel.canAddMediaAttachments else {
             appState.present(.warning(L10n.string("Media is not available in this group")))
             return false
@@ -3990,7 +3997,7 @@ struct ConversationView: View {
 
     @discardableResult
     private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
-        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
+        guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
         let kept = MediaDraftProcessor.draftsKept(mediaDrafts, addingAudio: attachment.kind == .audio)
         guard kept.count < MediaDraftProcessor.maxAttachmentCount else {
             presentMaxAttachmentWarning()

@@ -243,7 +243,9 @@ recorded (a save would drop its files), and a claimed revision that doesn't hold
 its attachments fails the send. A composer that hasn't received its
 saved draft writes with `keepsSavedFiles`, so its saves keep every file MDK holds; its
 read holds the draft's write slot and returns an earlier edit with the saved
-attachments, and once a read fails its writes stop keeping them. The host copy MDK
+attachments, and once a read fails its writes stop keeping them. Until it has the draft, the
+composer may be typed in but sends nothing and takes no attachments. The read waits
+out a send in flight, and a read cancelled by suspension is retried, never failed. The host copy MDK
 stages from is written outside the write slot, and suspending the runtime cancels draft
 copies and reads rather than waiting for them. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
 draft. Images keep `maxImageSourceBytes` before decoding. The composer refuses an

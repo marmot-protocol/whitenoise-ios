@@ -801,9 +801,9 @@ final class ConversationDraftStore {
         // The saved draft is still the tapped message; a reopened composer
         // shows what was typed after it.
         if unclaimedSends[key] != nil { return .loaded(typedWhileQueued[key]??.snapshot) }
-        // An edit from a composer that hasn't received the saved draft still
-        // needs its files, so it doesn't stand in for the read.
-        if let pending = pendingWrites[key], !(hydratingComposer && pending.keepsSavedFiles) {
+        // An edit from a composer that hasn't received the saved draft leaves
+        // out its files, so it never stands in for the stored draft.
+        if let pending = pendingWrites[key], !pending.keepsSavedFiles {
             switch pending.operation {
             case .save(let snapshot):
                 return .loaded(snapshot)
@@ -821,12 +821,12 @@ final class ConversationDraftStore {
                 let client = try state.currentMarmotClient()
                 if hydratingComposer {
                     loaded = try await readForComposer(key: key, client: client)
-                    editBeforeRead = pendingWrites[key].flatMap { $0.keepsSavedFiles ? $0 : nil }
                 } else {
                     let selected = try await client.selectedMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
                     selections[key] = selected
                     loaded = try await client.hydrateSelectedDraft(accountRef: accountRef, selected: selected)
                 }
+                editBeforeRead = pendingWrites[key].flatMap { $0.keepsSavedFiles ? $0 : nil }
             } else {
                 loaded = try await persistence.loadMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
             }
@@ -876,22 +876,20 @@ final class ConversationDraftStore {
 
     /// Reads the saved draft for a composer while holding the draft's write
     /// slot: a write in between would change the revision its chunked reads
-    /// are bound to. A send in flight already holds the slot and writes
-    /// nothing, so the read doesn't wait for it.
+    /// are bound to. It also waits out a send, which holds the slot until it
+    /// settles: read earlier, the composer could restore the message MDK is
+    /// sending.
     private func readForComposer(key: ConversationDraftKey, client: MarmotClient) async throws -> MessageDraftFfi? {
-        while activeWrites[key, default: 0] > 0, !sendingKeys.contains(key) {
+        while activeWrites[key, default: 0] > 0 {
             await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
         }
         try Task.checkCancellation()
-        let holdsSlot = !sendingKeys.contains(key)
-        if holdsSlot { activeWrites[key, default: 0] += 1 }
+        activeWrites[key, default: 0] += 1
         defer {
-            if holdsSlot {
-                activeWrites[key, default: 0] -= 1
-                if activeWrites[key] == 0 {
-                    activeWrites[key] = nil
-                    resetWaiters.removeValue(forKey: key)?.forEach { $0.resume() }
-                }
+            activeWrites[key, default: 0] -= 1
+            if activeWrites[key] == 0 {
+                activeWrites[key] = nil
+                resetWaiters.removeValue(forKey: key)?.forEach { $0.resume() }
             }
         }
         let read = Task { @MainActor in
@@ -900,7 +898,16 @@ final class ConversationDraftStore {
         }
         hydrationReads[key] = read
         defer { if hydrationReads[key] == read { hydrationReads[key] = nil } }
-        let (selected, loaded) = try await withTaskCancellationHandler { try await read.value } onCancel: { read.cancel() }
+        let (selected, loaded): (SelectedMessageDraftFfi, MessageDraftFfi?)
+        do {
+            (selected, loaded) = try await withTaskCancellationHandler { try await read.value } onCancel: { read.cancel() }
+        } catch {
+            // Suspension cancels the read and may close storage under a chunk
+            // already in flight; that is a cancelled read, retried on resume,
+            // never a failed one (which would stop keeping the draft's files).
+            if read.isCancelled || Task.isCancelled { throw CancellationError() }
+            throw error
+        }
         selections[key] = selected
         return loaded
     }

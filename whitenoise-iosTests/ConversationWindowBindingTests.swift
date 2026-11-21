@@ -100,6 +100,8 @@ struct ConversationWindowBindingTests {
                 try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft
             }
             store.setDraft(text("typed early"), accountRef: ref, groupIdHex: chat, keepsSavedFiles: true)
+            // Not the stored draft: it leaves out the file it keeps.
+            #expect(await store.snapshot(accountRef: ref, groupIdHex: chat)?.mediaAttachments.map(\.id) == [video.id])
             await store.flush()
             let early = try await saved()
             #expect(early?.content == "typed early")
@@ -142,6 +144,51 @@ struct ConversationWindowBindingTests {
             await store.flush()
             let removed = try await saved()
             #expect(removed?.mediaAttachments.isEmpty == true)
+        }
+    }
+
+    /// A chat reopened while its draft is being sent reads the draft only once
+    /// the send settles, so the composer can't restore the message MDK is
+    /// sending (and send it again).
+    @Test func aComposerReopenedDuringASendReadsTheDraftAfterIt() async throws {
+        let readCalled = TestLatch()
+        try await withLargeAttachmentDraft(staged: false, readSelectedDraft: { client, ref, selected in
+            readCalled.signal()
+            return try await client.hydrateSelectedDraft(accountRef: ref, selected: selected)
+        }) { client, store, ref, chat, _ in
+            let message = ConversationDraftSnapshot(canonicalText: "sent", replyToMessageIdHex: nil, mediaAttachments: [])
+            store.setDraft(message, accountRef: ref, groupIdHex: chat)
+            await store.flush()
+            store.beginQueuedSend(accountRef: ref, groupIdHex: chat)
+            store.setDraft(ConversationDraftSnapshot(canonicalText: "", replyToMessageIdHex: nil, mediaAttachments: []),
+                           accountRef: ref, groupIdHex: chat)
+            let revision = try await store.prepareSend(message, accountRef: ref, groupIdHex: chat)
+
+            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
+            // Bounded on purpose: the read must still be waiting for the send.
+            await #expect(throws: (any Error).self) { try await readCalled.wait(timeout: .seconds(2)) }
+            _ = try await client.sendDraftWithClientToken(accountRef: ref, revision: revision,
+                attachments: [], clientToken: UUID().uuidString)
+            await store.finishSend(accountRef: ref, groupIdHex: chat, accepted: true)
+            #expect(await reopened.value == .loaded(nil))
+        }
+    }
+
+    /// Suspension cancels a composer's read; storage closing under a chunk
+    /// already in flight is still a cancelled read (retried on resume), not a
+    /// failed one, which would stop keeping the draft's files.
+    @Test func aReadCancelledBySuspensionIsNotAFailure() async throws {
+        let readStarted = TestLatch()
+        try await withLargeAttachmentDraft(readSelectedDraft: { _, _, _ in
+            readStarted.signal()
+            // The chunk in flight returns once storage closes.
+            try? await eventually { Task.isCancelled }
+            throw MarmotKitError.StorageClosed(details: "closed")
+        }) { client, store, ref, chat, _ in
+            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
+            try await readStarted.wait()
+            await store.flush(using: client)
+            #expect(await reopened.value == .cancelled)
         }
     }
 
