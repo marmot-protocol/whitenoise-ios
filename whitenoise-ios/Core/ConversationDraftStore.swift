@@ -803,13 +803,12 @@ final class ConversationDraftStore {
         return snapshot
     }
 
-    /// `hydratingComposer`: the read restores a composer, whose writes keep
-    /// the draft's files (`keepsSavedFiles`) until it has the result.
+    /// An edit written with `keepsSavedFiles` (by a composer that hasn't
+    /// received the draft) is returned with the saved attachments merged in.
     func loadSnapshot(
         accountRef: String,
         groupIdHex: String,
-        surfacesTransientFailures: Bool = false,
-        hydratingComposer: Bool = false
+        surfacesTransientFailures: Bool = false
     ) async -> ConversationDraftLoadResult {
         let epoch = suspensionEpoch
         await loadIfNeeded(accountRef: accountRef)
@@ -836,14 +835,9 @@ final class ConversationDraftStore {
             var editBeforeRead: PendingWrite?
             if let state = persistence as? AppState {
                 let client = try state.currentMarmotClient()
-                if hydratingComposer {
-                    (loaded, editBeforeRead) = try await readForComposer(key: key, client: client, epoch: epoch)
-                } else {
-                    let selected = try await client.selectedMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
-                    selections[key] = selected
-                    loaded = try await client.hydrateSelectedDraft(accountRef: accountRef, selected: selected)
-                    editBeforeRead = pendingWrites[key].flatMap { $0.keepsSavedFiles ? $0 : nil }
-                }
+                // Every read holds the write slot: a write landing between its
+                // chunks would change the revision they're bound to.
+                (loaded, editBeforeRead) = try await readForComposer(key: key, client: client, epoch: epoch)
             } else {
                 loaded = try await persistence.loadMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
             }

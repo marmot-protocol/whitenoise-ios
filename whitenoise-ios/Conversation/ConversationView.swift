@@ -3447,8 +3447,7 @@ struct ConversationView: View {
         let result = await appState.conversationDraftStore.loadSnapshot(
             accountRef: draftAccountRef,
             groupIdHex: chat.groupIdHex,
-            surfacesTransientFailures: surfacesTransientFailures,
-            hydratingComposer: true
+            surfacesTransientFailures: surfacesTransientFailures
         )
         // Transient and cancelled results are retried by the caller, and writes
         // keep the draft's files meanwhile. After a failed read nothing could

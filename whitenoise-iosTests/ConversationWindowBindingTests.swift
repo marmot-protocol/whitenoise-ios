@@ -84,9 +84,9 @@ struct ConversationWindowBindingTests {
     /// read hands back the edit with the saved attachment. Once the composer has
     /// the draft, removing the attachment removes it.
     @Test func editsBeforeHydrationKeepTheDraftsFiles() async throws {
-        let readStarted = TestLatch(), releaseRead = TestLatch()
+        let holdReads = TestLatch(), readStarted = TestLatch(), releaseRead = TestLatch()
         try await withLargeAttachmentDraft(readSelectedDraft: { client, ref, selected in
-            if selected.draft?.mediaAttachments.contains(where: \.fileBacked) == true {
+            if holdReads.isSignalled {
                 readStarted.signal()
                 try await releaseRead.wait()
             }
@@ -114,7 +114,8 @@ struct ConversationWindowBindingTests {
             // An edit lands while the composer's read is between chunks. Its
             // write waits for the read (a new revision would fail the next
             // chunk), and the read returns the edit with the saved attachment.
-            let load = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
+            holdReads.signal()
+            let load = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat) }
             try await readStarted.wait()
             store.setDraft(text("typed while loading"), accountRef: ref, groupIdHex: chat, keepsSavedFiles: true)
             let written = TestLatch()
@@ -187,7 +188,7 @@ struct ConversationWindowBindingTests {
             await store.flush()
             try await sourceStarted.wait()
 
-            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
+            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat) }
             store.setDraft(ConversationDraftSnapshot(canonicalText: "caption, edited", replyToMessageIdHex: nil, mediaAttachments: []),
                            accountRef: ref, groupIdHex: chat, keepsSavedFiles: true)
             await store.flush()
@@ -224,7 +225,7 @@ struct ConversationWindowBindingTests {
                            accountRef: ref, groupIdHex: chat)
             let revision = try await store.prepareSend(message, accountRef: ref, groupIdHex: chat)
 
-            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
+            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat) }
             // Bounded on purpose: the read must still be waiting for the send.
             await #expect(throws: (any Error).self) { try await readCalled.wait(timeout: .seconds(2)) }
             _ = try await client.sendDraftWithClientToken(accountRef: ref, revision: revision,
@@ -245,7 +246,7 @@ struct ConversationWindowBindingTests {
             try? await eventually { Task.isCancelled }
             throw MarmotKitError.StorageClosed(details: "closed")
         }) { client, store, ref, chat, _ in
-            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
+            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat) }
             try await readStarted.wait()
             await store.flush(using: client)
             #expect(await reopened.value == .cancelled)
@@ -263,7 +264,7 @@ struct ConversationWindowBindingTests {
 
             // The read starts first and waits for the send; the suspension
             // comes while it waits.
-            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
+            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat) }
             let suspended = Task {
                 await store.flush(using: client)
                 await store.finishSend(accountRef: ref, groupIdHex: chat, accepted: false)
