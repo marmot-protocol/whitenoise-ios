@@ -361,7 +361,7 @@ final class ConversationDraftStore {
     /// A composer's read of the saved draft, by chat. It holds the draft's
     /// write slot, so no write changes the revision it reads, and the
     /// runtime's suspension cancels it rather than waiting.
-    @ObservationIgnored private var hydrationReads: [ConversationDraftKey: Task<(SelectedMessageDraftFfi, MessageDraftFfi?), Error>] = [:]
+    @ObservationIgnored private var hydrationReads: [ConversationDraftKey: Task<(MessageDraftFfi?, PendingWrite?), Error>] = [:]
     /// Advances on every suspension. A composer's read started before one
     /// ends as cancelled when it next wakes, even if it was still waiting.
     @ObservationIgnored private var suspensionEpoch = 0
@@ -832,18 +832,18 @@ final class ConversationDraftStore {
         loadErrorKeys.remove(key)
         do {
             let loaded: MessageDraftFfi?
-            // Taken as the read ends, before a write waiting on it can run.
+            // An earlier edit that kept the files, taken as the read ends.
             var editBeforeRead: PendingWrite?
             if let state = persistence as? AppState {
                 let client = try state.currentMarmotClient()
                 if hydratingComposer {
-                    loaded = try await readForComposer(key: key, client: client, epoch: epoch)
+                    (loaded, editBeforeRead) = try await readForComposer(key: key, client: client, epoch: epoch)
                 } else {
                     let selected = try await client.selectedMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
                     selections[key] = selected
                     loaded = try await client.hydrateSelectedDraft(accountRef: accountRef, selected: selected)
+                    editBeforeRead = pendingWrites[key].flatMap { $0.keepsSavedFiles ? $0 : nil }
                 }
-                editBeforeRead = pendingWrites[key].flatMap { $0.keepsSavedFiles ? $0 : nil }
             } else {
                 loaded = try await persistence.loadMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
             }
@@ -887,7 +887,9 @@ final class ConversationDraftStore {
                 state.present(UserFacingError.toast(title: L10n.string("Couldn't load draft"), error: error))
             }
             Self.logger.error("Failed to hydrate encrypted composer draft")
-            return .failed
+            // A readiness error that outlived the retries is still transient: the
+            // draft is readable once the runtime is, so its files stay kept.
+            return result == .failed ? .failed : .runtimeUnavailable
         }
     }
 
@@ -898,16 +900,16 @@ final class ConversationDraftStore {
     /// sending. And it waits for copies already under way (a previous composer
     /// started them): one landing after the read would put a file in the draft
     /// that this composer doesn't show, and its next save would delete it.
-    private func readForComposer(key: ConversationDraftKey, client: MarmotClient, epoch: Int) async throws -> MessageDraftFfi? {
-        let read = Task { @MainActor [weak self] () async throws -> (SelectedMessageDraftFfi, MessageDraftFfi?) in
+    private func readForComposer(key: ConversationDraftKey, client: MarmotClient, epoch: Int) async throws
+        -> (MessageDraftFfi?, PendingWrite?) {
+        let read = Task { @MainActor [weak self] () async throws -> (MessageDraftFfi?, PendingWrite?) in
             guard let self else { throw CancellationError() }
             return try await self.readHoldingSlot(key: key, client: client, epoch: epoch)
         }
         hydrationReads[key] = read
         defer { if hydrationReads[key] == read { hydrationReads[key] = nil } }
-        let (selected, loaded): (SelectedMessageDraftFfi, MessageDraftFfi?)
         do {
-            (selected, loaded) = try await withTaskCancellationHandler { try await read.value } onCancel: { read.cancel() }
+            return try await withTaskCancellationHandler { try await read.value } onCancel: { read.cancel() }
         } catch {
             // Suspension cancels the read and may close storage under a chunk
             // already in flight; that is a cancelled read, retried on resume,
@@ -915,15 +917,16 @@ final class ConversationDraftStore {
             if read.isCancelled || Task.isCancelled { throw CancellationError() }
             throw error
         }
-        selections[key] = selected
-        return loaded
     }
 
     /// Throws `CancellationError` once a suspension has happened since the
     /// read started (`epoch`), including one while it waited: the runtime it
     /// would read through may be closed, and that must not read as a failure.
+    /// The selection it read and any earlier edit are taken while it still
+    /// holds the slot: a write waiting on it then starts from that revision and
+    /// that edit, and nothing older overwrites what the write records.
     private func readHoldingSlot(key: ConversationDraftKey, client: MarmotClient, epoch: Int) async throws
-        -> (SelectedMessageDraftFfi, MessageDraftFfi?) {
+        -> (MessageDraftFfi?, PendingWrite?) {
         func checkSuspension() throws {
             try Task.checkCancellation()
             guard epoch == suspensionEpoch else { throw CancellationError() }
@@ -943,7 +946,9 @@ final class ConversationDraftStore {
         }
         let selected = try await client.selectedMessageDraft(accountRef: key.accountRef, groupIdHex: key.groupIdHex)
         try checkSuspension()
-        return (selected, try await readSelectedDraft(client, key.accountRef, selected))
+        let loaded = try await readSelectedDraft(client, key.accountRef, selected)
+        selections[key] = selected
+        return (loaded, pendingWrites[key].flatMap { $0.keepsSavedFiles ? $0 : nil })
     }
 
     /// `keepsSavedFiles`: the composer hasn't received the saved draft yet

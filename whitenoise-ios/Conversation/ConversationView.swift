@@ -3476,7 +3476,10 @@ struct ConversationView: View {
         else {
             // Edited while loading: the edit wins, but the saved attachments
             // stay. Leaving one out would have MDK delete its file.
-            let merged = ConversationDraftHydrationGate.attachments(composer: mediaDrafts, loaded: snapshot.mediaAttachments)
+            // Attachments removed during the read stay removed.
+            let removed = Set(mediaIDsBeforeLoad).subtracting(mediaDrafts.map(\.id))
+            let merged = ConversationDraftHydrationGate.attachments(
+                composer: mediaDrafts, loaded: snapshot.mediaAttachments.filter { !removed.contains($0.id) })
             if merged.map(\.id) != mediaDrafts.map(\.id) {
                 mediaDrafts = merged
                 persistCurrentDraft()

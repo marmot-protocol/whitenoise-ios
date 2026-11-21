@@ -267,13 +267,13 @@ struct MediaFileUploadTests {
     @Test func aMissingOrMisSizedDraftAttachmentIsRefused() async throws {
         let directory = Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        await #expect(throws: (any Error).self) {
+        await #expect(throws: CocoaError(.fileReadNoSuchFile)) {
             _ = try await PickedMediaFile.mappedData(expectedSize: 10, in: directory) { _ in nil }
         }
-        await #expect(throws: (any Error).self) {
+        await #expect(throws: CocoaError(.fileReadCorruptFile)) {
             _ = try await PickedMediaFile.mappedData(expectedSize: 10, in: directory) { $0 == 0 ? Data(count: 4) : Data() }
         }
-        await #expect(throws: (any Error).self) {
+        await #expect(throws: CocoaError(.fileReadCorruptFile)) {
             _ = try await PickedMediaFile.mappedData(expectedSize: 2, in: directory) { $0 == 0 ? Data(count: 4) : Data() }
         }
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)

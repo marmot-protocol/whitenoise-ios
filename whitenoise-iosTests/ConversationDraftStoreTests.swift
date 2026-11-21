@@ -116,9 +116,11 @@ struct ConversationDraftStoreTests {
         let store = ConversationDraftStore(persistence: persistence)
         #expect(await store.loadSnapshot(accountRef: "account", groupIdHex: "group") == .runtimeUnavailable)
         #expect(store.loadErrorKeys.isEmpty)
+        // Surfaced on the final attempt, but still transient: the composer keeps
+        // the draft's files until a read succeeds.
         #expect(
             await store.loadSnapshot(accountRef: "account", groupIdHex: "group", surfacesTransientFailures: true)
-                == .failed
+                == .runtimeUnavailable
         )
         #expect(store.loadErrorKeys == [ConversationDraftKey(accountRef: "account", groupIdHex: "group")])
 
