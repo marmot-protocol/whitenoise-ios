@@ -653,6 +653,9 @@ struct ConversationView: View {
     @State private var composerTextOverage: Int?
     @State private var didRestorePersistedDraft = false
     @State private var composerChangedBeforeDraftRestore = false
+    /// The saved draft couldn't be read. Writes then stop keeping files the
+    /// composer never showed, so the chat can still send and clear its draft.
+    @State private var draftHydrationFailed = false
     @State private var mediaDrafts: [MediaDraftAttachment] = []
     @StateObject private var voiceRecorder = VoiceMessageRecorder()
     @State private var dictation = ComposerDictationController()
@@ -3279,10 +3282,12 @@ struct ConversationView: View {
 
         // `ConversationDraftStore` admits one revision-checked submission at a
         // time, so queued sends serialize here while their bubbles are already up.
+        let keepsSavedFiles = keepsSavedDraftFiles
         viewModel.enqueueStagedSubmission {
             let store = appState.conversationDraftStore
             do {
-                let revision = try await store.prepareSend(saved, accountRef: accountRef, groupIdHex: chat.groupIdHex)
+                let revision = try await store.prepareSend(saved, accountRef: accountRef, groupIdHex: chat.groupIdHex,
+                                                           keepsSavedFiles: keepsSavedFiles)
                 appState.productAnalytics.recordTiming(.sendDraftReady, since: tapped)
                 let rejection = await viewModel.submitStagedSend(staged, draftRevision: revision) { accepted in
                     await store.finishSend(accountRef: accountRef, groupIdHex: chat.groupIdHex, accepted: accepted)
@@ -3449,8 +3454,12 @@ struct ConversationView: View {
         // Transient results are retried by the caller; a failure stays
         // unhydrated so leaving can't delete the draft, and retries on the next
         // readiness change.
-        guard result.hydratesComposer, !Task.isCancelled, editSession == nil else { return result }
+        guard result.hydratesComposer, !Task.isCancelled, editSession == nil else {
+            if result == .failed { draftHydrationFailed = true }
+            return result
+        }
         didRestorePersistedDraft = true
+        draftHydrationFailed = false
         guard case .loaded(let loaded) = result, let snapshot = loaded else {
             guard draft == draftBeforeLoad,
                   mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
@@ -3482,9 +3491,6 @@ struct ConversationView: View {
         viewModel.restoreComposerMentionDraftState(mentionState)
         viewModel.restoreReplyTarget(messageIdHex: snapshot.replyToMessageIdHex)
         mediaDrafts = snapshot.mediaAttachments
-        appState.conversationDraftStore.composerReceivedAttachments(
-            snapshot.mediaAttachments, accountRef: draftAccountRef, groupIdHex: chat.groupIdHex
-        )
         draft = mentionState.draft
         refreshComposerTextOverage()
         return result
@@ -3544,8 +3550,15 @@ struct ConversationView: View {
                 mediaAttachments: mediaAttachments
             ),
             accountRef: draftAccountRef,
-            groupIdHex: chat.groupIdHex
+            groupIdHex: chat.groupIdHex,
+            keepsSavedFiles: keepsSavedDraftFiles
         )
+    }
+
+    /// Until the composer has the saved draft, a write it makes keeps the
+    /// draft's files: leaving one out would have MDK delete it.
+    private var keepsSavedDraftFiles: Bool {
+        ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: didRestorePersistedDraft, hydrationFailed: draftHydrationFailed)
     }
 
     private func takePhoto() {

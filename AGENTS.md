@@ -240,9 +240,12 @@ the copy lands, or if it fails, the attachment is left out of saves and its mess
 sends without a draft revision, as before: no recovery copy, and a failed send stays
 in its bubble. From a draft send's tap until it claims its revision, composer edits are only
 recorded (a save would drop its files), and a claimed revision that doesn't hold exactly
-its attachments fails the send. Until a reopened composer has received the draft's
-files, every write keeps them, and an edit made while it loads keeps the saved
-attachments. Suspending the runtime cancels draft copies rather than waiting for them. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
+its attachments fails the send. A composer that hasn't received its
+saved draft writes with `keepsSavedFiles`, so its saves keep every file MDK holds; its
+read holds the draft's write slot and returns an earlier edit with the saved
+attachments, and once a read fails its writes stop keeping them. The host copy MDK
+stages from is written outside the write slot, and suspending the runtime cancels draft
+copies and reads rather than waiting for them. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
 draft. Images keep `maxImageSourceBytes` before decoding. The composer refuses an
 attachment that would take one send past `maxFileMediaCiphertextBytes()`.
 Conversation-open performance ends at rendered layout, uses the navigation consent

@@ -94,6 +94,14 @@ struct ConversationDraftStoreTests {
                 <= MediaDraftProcessor.maxAttachmentCount)
     }
 
+    /// A composer keeps the saved draft's files until it has received them,
+    /// unless they couldn't be read.
+    @Test func onlyAComposerStillWaitingForItsDraftKeepsTheSavedFiles() {
+        #expect(ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: false, hydrationFailed: false))
+        #expect(!ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: true, hydrationFailed: false))
+        #expect(!ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: false, hydrationFailed: true))
+    }
+
     @Test func onlyAnAuthoritativeReadHydratesTheComposer() {
         #expect(ConversationDraftLoadResult.loaded(nil).hydratesComposer)
         #expect(ConversationDraftLoadResult.loaded(textSnapshot("saved")).hydratesComposer)

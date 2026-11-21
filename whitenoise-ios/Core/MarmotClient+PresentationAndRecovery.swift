@@ -100,18 +100,11 @@ extension MarmotClient {
     /// Copies `attachment` into the account's encrypted media store as a
     /// file-backed attachment of the draft `revision` selects.
     func stageMessageDraftAttachment(accountRef: String, revision: MessageDraftRevisionFfi,
-        attachment: MediaDraftAttachment, control: MediaFileTransferControlFfi) async throws -> SelectedMessageDraftFfi {
-        let sources = try await MediaUploadSourceFiles.stage([attachment])
-        do {
-            let selected = try await marmot.stageMessageDraftAttachmentFile(accountRef: accountRef, revision: revision,
-                request: MessageDraftAttachmentInputs.fileRequest(for: attachment, sourcePath: sources.urls[0].path),
-                control: control)
-            await sources.remove()
-            return selected
-        } catch {
-            await sources.remove()
-            throw error
-        }
+        attachment: MediaDraftAttachment, sourcePath: String,
+        control: MediaFileTransferControlFfi) async throws -> SelectedMessageDraftFfi {
+        try await marmot.stageMessageDraftAttachmentFile(accountRef: accountRef, revision: revision,
+            request: MessageDraftAttachmentInputs.fileRequest(for: attachment, sourcePath: sourcePath),
+            control: control)
     }
 
     func clearMessageDraftIfRevision(accountRef: String, revision: MessageDraftRevisionFfi) async throws -> SelectedMessageDraftFfi {
