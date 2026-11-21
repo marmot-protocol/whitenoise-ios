@@ -80,9 +80,8 @@ struct ConversationWindowBindingTests {
     }
 
     /// A reopened composer can be edited before it has the saved draft. Those
-    /// writes keep the draft's files (MDK would delete one left out), a send
-    /// from it fails rather than claim a file it doesn't show, and the read
-    /// hands back the edit with the saved attachment. Once the composer has
+    /// writes keep the draft's files (MDK would delete one left out), and the
+    /// read hands back the edit with the saved attachment. Once the composer has
     /// the draft, removing the attachment removes it.
     @Test func editsBeforeHydrationKeepTheDraftsFiles() async throws {
         let readStarted = TestLatch(), releaseRead = TestLatch()
@@ -112,11 +111,6 @@ struct ConversationWindowBindingTests {
             let cleared = try await saved()
             #expect(cleared?.mediaAttachments.map(\.id) == [video.id.uuidString])
 
-            store.beginQueuedSend(accountRef: ref, groupIdHex: chat)
-            await #expect(throws: MarmotKitError.self) {
-                try await store.prepareSend(text("caption only"), accountRef: ref, groupIdHex: chat, keepsSavedFiles: true)
-            }
-
             // An edit lands while the composer's read is between chunks. Its
             // write waits for the read (a new revision would fail the next
             // chunk), and the read returns the edit with the saved attachment.
@@ -144,6 +138,70 @@ struct ConversationWindowBindingTests {
             await store.flush()
             let removed = try await saved()
             #expect(removed?.mediaAttachments.isEmpty == true)
+        }
+    }
+
+    /// Removing a large attachment just as MDK commits its copy removes it:
+    /// the copy's commit can't make the removal look like no change.
+    @Test func removingAnAttachmentAsItsCopyCommitsRemovesIt() async throws {
+        let committed = TestLatch(), releaseCommit = TestLatch()
+        try await withLargeAttachmentDraft(staged: false, stageIntoDraft: { client, ref, revision, attachment, path, control in
+            let staged = try await client.stageMessageDraftAttachment(accountRef: ref, revision: revision,
+                attachment: attachment, sourcePath: path, control: control)
+            committed.signal()
+            try await releaseCommit.wait()
+            return staged
+        }) { client, store, ref, chat, video in
+            func caption(_ attachments: [MediaDraftAttachment]) -> ConversationDraftSnapshot {
+                ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: attachments)
+            }
+            store.setDraft(caption([video]), accountRef: ref, groupIdHex: chat)
+            await store.flush()  // The caption saves before the copy commits.
+            try await committed.wait()
+            store.setDraft(caption([]), accountRef: ref, groupIdHex: chat)
+            releaseCommit.signal()
+            await store.flush()
+            let draft = try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft
+            #expect(draft?.content == "caption")
+            #expect(draft?.mediaAttachments.isEmpty == true)
+        }
+    }
+
+    /// A chat reopened while a large attachment's copy is still being prepared
+    /// reads the draft once the copy lands, so the composer shows the file
+    /// rather than a later save deleting it. An edit typed meanwhile doesn't
+    /// cancel the copy.
+    @Test func aComposerReopenedDuringACopyReadsTheDraftAfterIt() async throws {
+        let sourceStarted = TestLatch(), releaseSource = TestLatch(), readCalled = TestLatch()
+        try await withLargeAttachmentDraft(staged: false, prepareStagingSource: { attachment in
+            sourceStarted.signal()
+            try await releaseSource.wait()
+            return try await MediaUploadSourceFiles.stage([attachment])
+        }, readSelectedDraft: { client, ref, selected in
+            readCalled.signal()
+            return try await client.hydrateSelectedDraft(accountRef: ref, selected: selected)
+        }) { client, store, ref, chat, video in
+            store.setDraft(ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [video]),
+                           accountRef: ref, groupIdHex: chat)
+            await store.flush()
+            try await sourceStarted.wait()
+
+            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
+            store.setDraft(ConversationDraftSnapshot(canonicalText: "caption, edited", replyToMessageIdHex: nil, mediaAttachments: []),
+                           accountRef: ref, groupIdHex: chat, keepsSavedFiles: true)
+            // Bounded on purpose: the read must still be waiting for the copy.
+            await #expect(throws: (any Error).self) { try await readCalled.wait(timeout: .seconds(2)) }
+            releaseSource.signal()
+            guard case .loaded(let restored) = await reopened.value else {
+                Issue.record("The composer's read failed")
+                return
+            }
+            #expect(restored?.canonicalText == "caption, edited")
+            #expect(restored?.mediaAttachments.map(\.id) == [video.id])
+            await store.flush()
+            let saved = try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft
+            #expect(saved?.content == "caption, edited")
+            #expect(saved?.mediaAttachments.map(\.id) == [video.id.uuidString])
         }
     }
 
@@ -233,12 +291,18 @@ struct ConversationWindowBindingTests {
         readSelectedDraft: @escaping @MainActor (MarmotClient, String, SelectedMessageDraftFfi) async throws -> MessageDraftFfi? = {
             try await $0.hydrateSelectedDraft(accountRef: $1, selected: $2)
         },
+        stageIntoDraft: @escaping @MainActor (
+            MarmotClient, String, MessageDraftRevisionFfi, MediaDraftAttachment, String, MediaFileTransferControlFfi
+        ) async throws -> SelectedMessageDraftFfi = {
+            try await $0.stageMessageDraftAttachment(accountRef: $1, revision: $2, attachment: $3, sourcePath: $4, control: $5)
+        },
         _ body: (MarmotClient, ConversationDraftStore, String, String, MediaDraftAttachment) async throws -> Void
     ) async throws {
         try await withTestClient { client in
             let defaults = try #require(UserDefaults(suiteName: "DraftClaimTests.\(UUID())"))
             let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString),
-                                               prepareStagingSource: prepareStagingSource, readSelectedDraft: readSelectedDraft)
+                                               prepareStagingSource: prepareStagingSource, readSelectedDraft: readSelectedDraft,
+                                               stageIntoDraft: stageIntoDraft)
             let state = AppState.test(client: client, conversationDraftStore: store,
                 accountDefaults: defaults, erasureDefaults: defaults)
             state.setPhase(.ready)

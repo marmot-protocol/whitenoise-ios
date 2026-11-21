@@ -344,6 +344,8 @@ final class ConversationDraftStore {
     @ObservationIgnored private var pendingSendHandoffs: [ConversationDraftKey: PendingDraftSendHandoff] = [:]
     /// Large attachments MDK is copying into the draft as files, by chat and id.
     @ObservationIgnored private var stagingControls: [ConversationDraftKey: [String: MediaFileTransferControlFfi]] = [:]
+    /// Copies still running, by chat, cancelled ones included until they return.
+    @ObservationIgnored private var runningCopies: [ConversationDraftKey: Int] = [:]
     /// Advances when MDK finishes holding a large attachment as a file, so the
     /// composer can start its pre-upload.
     private(set) var fileBackedGeneration = 0
@@ -363,6 +365,10 @@ final class ConversationDraftStore {
     /// Writes the host copy of a large attachment that MDK then copies into the
     /// draft. Runs outside the draft's write slot.
     @ObservationIgnored private let prepareStagingSource: @Sendable (MediaDraftAttachment) async throws -> MediaUploadSourceFiles
+    /// Has MDK copy a prepared host file into the draft revision.
+    @ObservationIgnored private let stageIntoDraft: @MainActor (
+        MarmotClient, String, MessageDraftRevisionFfi, MediaDraftAttachment, String, MediaFileTransferControlFfi
+    ) async throws -> SelectedMessageDraftFfi
     /// Reads a selected draft's attachments for a composer (chunked for files).
     @ObservationIgnored private let readSelectedDraft: @MainActor (MarmotClient, String, SelectedMessageDraftFfi) async throws -> MessageDraftFfi?
     /// Advances whenever a pending-send handoff starts or ends, so the chat
@@ -422,11 +428,16 @@ final class ConversationDraftStore {
     private func stage(_ attachment: MediaDraftAttachment, key: ConversationDraftKey,
                        control: MediaFileTransferControlFfi) async {
         let id = attachment.id.uuidString
+        runningCopies[key, default: 0] += 1
         defer {
+            runningCopies[key, default: 0] -= 1
+            if runningCopies[key] == 0 { runningCopies[key] = nil }
             if stagingControls[key]?[id] === control {
                 stagingControls[key]?[id] = nil
                 if stagingControls[key]?.isEmpty == true { stagingControls[key] = nil }
             }
+            // A composer's read waits for copies as well as writes.
+            if activeWrites[key] == nil { resetWaiters.removeValue(forKey: key)?.forEach { $0.resume() } }
         }
         guard let state = persistence as? AppState else { return }
         // The host copy MDK reads from is written before taking the draft's
@@ -465,10 +476,8 @@ final class ConversationDraftStore {
             let selected: SelectedMessageDraftFfi
             if let cached = selections[key] { selected = cached }
             else { selected = try await client.selectedMessageDraft(accountRef: key.accountRef, groupIdHex: key.groupIdHex) }
-            let staged = try await client.stageMessageDraftAttachment(
-                accountRef: key.accountRef, revision: selected.revision, attachment: attachment,
-                sourcePath: sources.urls[0].path, control: control
-            )
+            let staged = try await stageIntoDraft(client, key.accountRef, selected.revision, attachment,
+                                                  sources.urls[0].path, control)
             selections[key] = staged
             fileBackedGeneration &+= 1
             if pendingWrites[key] == nil {
@@ -523,10 +532,7 @@ final class ConversationDraftStore {
         typedWhileQueued[key] = .some(nil)
     }
 
-    /// `keepsSavedFiles`: the composer hasn't received the saved draft (see
-    /// `setDraft`). The claim then keeps its files, and fails on them.
-    func prepareSend(_ snapshot: ConversationDraftSnapshot, accountRef: String, groupIdHex: String,
-                     keepsSavedFiles: Bool = false) async throws -> MessageDraftRevisionFfi {
+    func prepareSend(_ snapshot: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) async throws -> MessageDraftRevisionFfi {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
         if unclaimedSends[key] == nil {
             unclaimedSends[key] = 1
@@ -550,7 +556,7 @@ final class ConversationDraftStore {
         guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else {
             throw MarmotKitError.MessageDraftRevisionConflict
         }
-        applyDraft(snapshot, key: key, keepsSavedFiles: keepsSavedFiles)
+        applyDraft(snapshot, key: key)
         await flush(key: key, using: nil)
         // The revision must hold exactly the tapped attachments: not one MDK no
         // longer holds (left out of the write), and not one the composer never
@@ -713,11 +719,17 @@ final class ConversationDraftStore {
         },
         readSelectedDraft: @escaping @MainActor (MarmotClient, String, SelectedMessageDraftFfi) async throws -> MessageDraftFfi? = {
             try await $0.hydrateSelectedDraft(accountRef: $1, selected: $2)
+        },
+        stageIntoDraft: @escaping @MainActor (
+            MarmotClient, String, MessageDraftRevisionFfi, MediaDraftAttachment, String, MediaFileTransferControlFfi
+        ) async throws -> SelectedMessageDraftFfi = {
+            try await $0.stageMessageDraftAttachment(accountRef: $1, revision: $2, attachment: $3, sourcePath: $4, control: $5)
         }
     ) {
         self.persistence = persistence
         self.prepareStagingSource = prepareStagingSource
         self.readSelectedDraft = readSelectedDraft
+        self.stageIntoDraft = stageIntoDraft
         self.legacyFile = LegacyConversationDraftFile(
             url: legacyFileURL ?? Self.defaultLegacyFileURL()
         )
@@ -787,8 +799,8 @@ final class ConversationDraftStore {
         return snapshot
     }
 
-    /// `hydratingComposer`: the read restores a composer, which hasn't
-    /// received the draft's files until `composerReceivedAttachments`.
+    /// `hydratingComposer`: the read restores a composer, whose writes keep
+    /// the draft's files (`keepsSavedFiles`) until it has the result.
     func loadSnapshot(
         accountRef: String,
         groupIdHex: String,
@@ -878,9 +890,11 @@ final class ConversationDraftStore {
     /// slot: a write in between would change the revision its chunked reads
     /// are bound to. It also waits out a send, which holds the slot until it
     /// settles: read earlier, the composer could restore the message MDK is
-    /// sending.
+    /// sending. And it waits for copies already under way (a previous composer
+    /// started them): one landing after the read would put a file in the draft
+    /// that this composer doesn't show, and its next save would delete it.
     private func readForComposer(key: ConversationDraftKey, client: MarmotClient) async throws -> MessageDraftFfi? {
-        while activeWrites[key, default: 0] > 0 {
+        while activeWrites[key, default: 0] > 0 || runningCopies[key] != nil {
             await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
         }
         try Task.checkCancellation()
@@ -947,15 +961,21 @@ final class ConversationDraftStore {
             if case .delete = operation, !editedWhileSending.contains(key) { return }
             editedWhileSending.insert(key)
         }
-        if case .save(let saved) = operation {
-            stageLargeAttachments(saved.mediaAttachments, key: key)
-        } else {
-            stageLargeAttachments([], key: key)
+        // A composer that hasn't received the draft doesn't know its
+        // attachments, so it neither starts nor cancels their copies.
+        if !keepsSavedFiles {
+            if case .save(let saved) = operation {
+                stageLargeAttachments(saved.mediaAttachments, key: key)
+            } else {
+                stageLargeAttachments([], key: key)
+            }
         }
         if let pending = pendingWrites[key], pending.operation == operation, pending.keepsSavedFiles == keepsSavedFiles {
             return
         }
-        if pendingWrites[key] == nil {
+        // A copy still running may commit after the summary was taken, so the
+        // saved draft can't be assumed to match it until the copy is done.
+        if pendingWrites[key] == nil, runningCopies[key] == nil {
             switch operation {
             case .save(let snapshot) where Self.summary(summaries[key], matches: snapshot):
                 return

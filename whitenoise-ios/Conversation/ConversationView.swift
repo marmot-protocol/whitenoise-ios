@@ -3283,12 +3283,10 @@ struct ConversationView: View {
 
         // `ConversationDraftStore` admits one revision-checked submission at a
         // time, so queued sends serialize here while their bubbles are already up.
-        let keepsSavedFiles = keepsSavedDraftFiles
         viewModel.enqueueStagedSubmission {
             let store = appState.conversationDraftStore
             do {
-                let revision = try await store.prepareSend(saved, accountRef: accountRef, groupIdHex: chat.groupIdHex,
-                                                           keepsSavedFiles: keepsSavedFiles)
+                let revision = try await store.prepareSend(saved, accountRef: accountRef, groupIdHex: chat.groupIdHex)
                 appState.productAnalytics.recordTiming(.sendDraftReady, since: tapped)
                 let rejection = await viewModel.submitStagedSend(staged, draftRevision: revision) { accepted in
                     await store.finishSend(accountRef: accountRef, groupIdHex: chat.groupIdHex, accepted: accepted)
