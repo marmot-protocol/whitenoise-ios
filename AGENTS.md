@@ -230,13 +230,26 @@ opened it). Cancel a copy only through its `MediaFileTransferControlFfi`, never 
 cancelling the awaiting task.
 Only bytes MDK has no slot for (an outgoing draft) use the host export.
 Outgoing attachments may reach MDK's 512 MiB blob limit. Read picked files through
-`PickedMediaFile` (an unlinked, mapped clone), never into resident memory. MDK's draft
-API copies every attachment on each save, so until the app adopts MDK 0.18.0's
-file-backed draft attachments (`stageMessageDraftAttachmentFile`),
-attachments over `maxDraftAttachmentBytes` are not saved in drafts or pre-uploaded,
-and their message sends without a draft revision. Such a message has no recovery
-copy: leaving the chat before Send drops the attachment, and a failed send stays in
-its bubble. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
+`PickedMediaFile` (an unlinked, mapped clone), never into resident memory. MDK copies
+an inline draft attachment's bytes on each save, so one over `maxDraftAttachmentBytes`
+goes into the draft as a file: `ConversationDraftStore.stageLargeAttachments` has
+MDK copy it in (`stageMessageDraftAttachmentFile`, one write at a time per draft),
+and saves keep it by id (`saveMessageDraftInputsIfRevision`, `.retained`), never
+inline. A reopened draft reads it back in chunks into a mapped private copy. Until
+the copy lands, or if it fails, the attachment is left out of saves and its message
+sends without a draft revision, as before: no recovery copy, and a failed send stays
+in its bubble. From a draft send's tap until it claims its revision, composer edits are only
+recorded (a save would drop its files), and a claimed revision that doesn't hold exactly
+its attachments fails the send. A composer that hasn't received its
+saved draft writes with `keepsSavedFiles`, so its saves keep every attachment the draft holds, inline or file; its
+read holds the draft's write slot and returns an earlier edit with the saved
+attachments, and once a read fails its writes stop keeping them. Until it has the draft, the
+composer may be typed in but sends nothing and takes no attachments. The read waits
+out a send in flight and copies already under way, and a read cancelled by suspension
+is retried, never failed. Its earlier edits neither start nor cancel copies, and no save
+is skipped as unchanged while a copy can still commit. The host copy MDK
+stages from is written outside the write slot, and suspending the runtime cancels draft
+copies and reads rather than waiting for them. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
 draft. Images keep `maxImageSourceBytes` before decoding. The composer refuses an
 attachment that would take one send past `maxFileMediaCiphertextBytes()`.
 Conversation-open performance ends at rendered layout, uses the navigation consent

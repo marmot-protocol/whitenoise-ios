@@ -653,6 +653,9 @@ struct ConversationView: View {
     @State private var composerTextOverage: Int?
     @State private var didRestorePersistedDraft = false
     @State private var composerChangedBeforeDraftRestore = false
+    /// The saved draft couldn't be read. Writes then stop keeping files the
+    /// composer never showed, so the chat can still send and clear its draft.
+    @State private var draftHydrationFailed = false
     @State private var mediaDrafts: [MediaDraftAttachment] = []
     @StateObject private var voiceRecorder = VoiceMessageRecorder()
     @State private var dictation = ComposerDictationController()
@@ -1453,6 +1456,10 @@ struct ConversationView: View {
             .onChange(of: viewModel?.acceptedCustomEmojiSend?.id) { _, id in
                 if id != nil { reconcileAcceptedCustomEmojiSend() }
             }
+            .onChange(of: appState.conversationDraftStore.fileBackedGeneration) { _, _ in
+                // A large attachment MDK now holds can pre-upload.
+                reconcileDraftMediaUploads()
+            }
             .onChange(of: mediaDrafts.map(\.id)) { _, _ in
                 reconcileDraftMediaUploads()
                 if editSession == nil {
@@ -1591,7 +1598,7 @@ struct ConversationView: View {
                     dismissRequest: composerDismissRequest,
                     onInputFocusChange: { isComposerInputFocused = $0 },
                     mentionCandidates: mentionCandidates,
-                    submissionEnabled: editSubmissionEnabled,
+                    submissionEnabled: editSubmissionEnabled && (editSession != nil || composerHasSavedDraft),
                     submissionAccessibilityLabel: editSession == nil
                         ? L10n.string("Send")
                         : L10n.string("Save edit"),
@@ -3170,6 +3177,7 @@ struct ConversationView: View {
 
     private func send() {
         guard viewModel?.canSendMessages == true else { return }
+        guard editSession != nil || composerHasSavedDraft else { return }
         // Reject over-limit text before any snapshot, staging, edit or send so
         // the draft, reply target and attachments stay exactly as they are.
         if let viewModel,
@@ -3246,10 +3254,12 @@ struct ConversationView: View {
             mediaDrafts = composerState.mediaDrafts
             return
         }
-        // Drafts can't hold every attachment, so there is no draft revision to
-        // claim: clearing the composer deletes the saved draft, and a failed
-        // send stays in its bubble.
-        let sendsThroughDraft = MediaDraftProcessor.sendsThroughDraft(payload.attachments)
+        // Until MDK holds a large attachment as a file in the draft, there is
+        // no draft revision to claim: clearing the composer deletes the saved
+        // draft, and a failed send stays in its bubble.
+        let sendsThroughDraft = appState.conversationDraftStore.sendsThroughDraft(
+            payload.attachments, accountRef: accountRef, groupIdHex: chat.groupIdHex
+        )
         if sendsThroughDraft {
             appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
         }
@@ -3439,11 +3449,15 @@ struct ConversationView: View {
             groupIdHex: chat.groupIdHex,
             surfacesTransientFailures: surfacesTransientFailures
         )
-        // Transient results are retried by the caller; a failure stays
-        // unhydrated so leaving can't delete the draft, and retries on the next
-        // readiness change.
-        guard result.hydratesComposer, !Task.isCancelled, editSession == nil else { return result }
+        // Transient and cancelled results are retried by the caller, and writes
+        // keep the draft's files meanwhile. After a failed read nothing could
+        // show or remove them, so writes stop keeping them.
+        guard result.hydratesComposer, !Task.isCancelled, editSession == nil else {
+            if result == .failed { draftHydrationFailed = true }
+            return result
+        }
         didRestorePersistedDraft = true
+        draftHydrationFailed = false
         guard case .loaded(let loaded) = result, let snapshot = loaded else {
             guard draft == draftBeforeLoad,
                   mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
@@ -3454,11 +3468,23 @@ struct ConversationView: View {
             viewModel.restoreReplyTarget(messageIdHex: nil)
             return result
         }
-        guard !Task.isCancelled,
-              draft == draftBeforeLoad,
+        guard !Task.isCancelled else { return result }
+        guard draft == draftBeforeLoad,
               mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
               viewModel.replyTargetMessageIdHex == replyBeforeLoad
-        else { return result }
+        else {
+            // Edited while loading: the edit wins, but the saved attachments
+            // stay. Leaving one out would have MDK delete its file.
+            // Attachments removed during the read stay removed.
+            let removed = Set(mediaIDsBeforeLoad).subtracting(mediaDrafts.map(\.id))
+            let merged = ConversationDraftHydrationGate.attachments(
+                composer: mediaDrafts, loaded: snapshot.mediaAttachments.filter { !removed.contains($0.id) })
+            if merged.map(\.id) != mediaDrafts.map(\.id) {
+                mediaDrafts = merged
+                persistCurrentDraft()
+            }
+            return result
+        }
         let mentionState = ComposerMentionDraftState(
             canonicalText: snapshot.canonicalText,
             mentionDisplayName: { appState.mentionDisplayName(for: $0) }
@@ -3525,8 +3551,21 @@ struct ConversationView: View {
                 mediaAttachments: mediaAttachments
             ),
             accountRef: draftAccountRef,
-            groupIdHex: chat.groupIdHex
+            groupIdHex: chat.groupIdHex,
+            keepsSavedFiles: keepsSavedDraftFiles
         )
+    }
+
+    /// Whether the composer has the saved draft (or it couldn't be read). Until
+    /// then it may be typed in, but sends nothing and takes no attachments: a
+    /// send would claim or clear a draft whose files it doesn't show, and an
+    /// attachment added now would have to be merged with the saved ones.
+    private var composerHasSavedDraft: Bool { !keepsSavedDraftFiles }
+
+    /// Until the composer has the saved draft, a write it makes keeps the
+    /// draft's files: leaving one out would have MDK delete it.
+    private var keepsSavedDraftFiles: Bool {
+        ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: didRestorePersistedDraft, hydrationFailed: draftHydrationFailed)
     }
 
     private func takePhoto() {
@@ -3698,7 +3737,7 @@ struct ConversationView: View {
     }
 
     private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
-        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
+        guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
         let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
         let slotted = Array(attachments.prefix(availableSlots))
         guard !slotted.isEmpty else {
@@ -3944,7 +3983,7 @@ struct ConversationView: View {
 
     private func canBeginMediaSelection() -> Bool {
         // A custom emoji send in flight owns the composer until it settles.
-        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
+        guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
         guard let viewModel, viewModel.canAddMediaAttachments else {
             appState.present(.warning(L10n.string("Media is not available in this group")))
             return false
@@ -3958,7 +3997,7 @@ struct ConversationView: View {
 
     @discardableResult
     private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
-        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
+        guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
         let kept = MediaDraftProcessor.draftsKept(mediaDrafts, addingAudio: attachment.kind == .audio)
         guard kept.count < MediaDraftProcessor.maxAttachmentCount else {
             presentMaxAttachmentWarning()
