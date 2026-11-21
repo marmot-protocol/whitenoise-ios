@@ -59,29 +59,8 @@ struct ConversationWindowBindingTests {
     /// out its large attachment, MDK would delete the file, and the claim
     /// would send the caption alone. The next message is saved afterwards.
     @Test func typingWhileASendWaitsKeepsItsLargeAttachment() async throws {
-        try await withTestClient { client in
-            let defaults = try #require(UserDefaults(suiteName: "DraftClaimTests.\(UUID())"))
-            let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-            let state = AppState.test(client: client, conversationDraftStore: store,
-                accountDefaults: defaults, erasureDefaults: defaults)
-            state.setPhase(.ready)
-            let watchdog = MarmotFixtureWatchdog.start("Draft claim did not complete", breaking: client)
-            defer { watchdog.cancel() }
-            try await client.startRuntime()
-            let account = try await client.marmot.createIdentityWithProfile(
-                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
-            ).account
-            let group = try await client.createGroupWithOptionsDetailed(accountRef: account.label,
-                name: "Draft claim", memberRefs: [], options: CreateGroupOptionsFfi(
-                    description: nil, initialImage: nil, disappearingMessageSecs: 0)).requireCreated()
-            let ref = account.label, chat = group.groupIdHex
-            let video = MediaDraftAttachment(fileName: "clip.mov", mediaType: "video/quicktime",
-                data: Data(count: MediaDraftProcessor.maxDraftAttachmentBytes + 1), dim: nil)
+        try await withLargeAttachmentDraft { client, store, ref, chat, video in
             let tapped = ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [video])
-            store.setDraft(tapped, accountRef: ref, groupIdHex: chat)
-            try await eventually { store.sendsThroughDraft([video], accountRef: ref, groupIdHex: chat) }
-            await store.flush()
-
             // Send tap, then the next message while the send waits its turn.
             store.beginQueuedSend(accountRef: ref, groupIdHex: chat)
             store.setDraft(ConversationDraftSnapshot(canonicalText: "", replyToMessageIdHex: nil, mediaAttachments: []),
@@ -97,6 +76,95 @@ struct ConversationWindowBindingTests {
             await store.finishSend(accountRef: ref, groupIdHex: chat, accepted: false)
             await store.flush()
             #expect(try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft?.content == "next message")
+        }
+    }
+
+    /// A reopened composer can be edited before its draft's files arrive.
+    /// Until it receives them, no write drops them (MDK would delete the file),
+    /// and no send claims a revision holding one the composer doesn't show.
+    /// Once received, removing one removes it.
+    @Test func editsBeforeHydrationKeepTheDraftsFiles() async throws {
+        try await withLargeAttachmentDraft { client, store, ref, chat, video in
+            func text(_ value: String) -> ConversationDraftSnapshot {
+                ConversationDraftSnapshot(canonicalText: value, replyToMessageIdHex: nil, mediaAttachments: [])
+            }
+            func saved() async throws -> SelectedMessageDraftContentFfi? {
+                try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft
+            }
+            _ = await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true)
+
+            store.setDraft(text("typed early"), accountRef: ref, groupIdHex: chat)
+            await store.flush()
+            let early = try await saved()
+            #expect(early?.content == "typed early")
+            #expect(early?.mediaAttachments.map(\.id) == [video.id.uuidString])
+
+            store.setDraft(text(""), accountRef: ref, groupIdHex: chat)
+            await store.flush()
+            let cleared = try await saved()
+            #expect(cleared?.mediaAttachments.map(\.id) == [video.id.uuidString])
+
+            store.beginQueuedSend(accountRef: ref, groupIdHex: chat)
+            await #expect(throws: MarmotKitError.self) {
+                try await store.prepareSend(text("caption only"), accountRef: ref, groupIdHex: chat)
+            }
+
+            store.composerReceivedAttachments([video], accountRef: ref, groupIdHex: chat)
+            store.setDraft(text("typed early"), accountRef: ref, groupIdHex: chat)
+            await store.flush()
+            let removed = try await saved()
+            #expect(removed?.mediaAttachments.isEmpty == true)
+        }
+    }
+
+    /// Suspending the runtime doesn't wait out a large copy into the draft:
+    /// the copy is cancelled and the caption saved. The next edit copies the
+    /// attachment again.
+    @Test func suspendingCancelsADraftCopyAndSavesTheCaption() async throws {
+        try await withLargeAttachmentDraft(staged: false) { client, store, ref, chat, video in
+            store.setDraft(ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [video]),
+                           accountRef: ref, groupIdHex: chat)
+            await store.flush(using: client)
+            let draft = try #require(try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft)
+            #expect(draft.content == "caption")
+            #expect(!store.sendsThroughDraft([video], accountRef: ref, groupIdHex: chat))
+
+            store.setDraft(ConversationDraftSnapshot(canonicalText: "caption, edited", replyToMessageIdHex: nil, mediaAttachments: [video]),
+                           accountRef: ref, groupIdHex: chat)
+            try await eventually { store.sendsThroughDraft([video], accountRef: ref, groupIdHex: chat) }
+        }
+    }
+
+    /// A runtime with one chat whose draft holds `video` (over the inline
+    /// draft limit) as a file, unless `staged` is false.
+    private func withLargeAttachmentDraft(
+        staged: Bool = true,
+        _ body: (MarmotClient, ConversationDraftStore, String, String, MediaDraftAttachment) async throws -> Void
+    ) async throws {
+        try await withTestClient { client in
+            let defaults = try #require(UserDefaults(suiteName: "DraftClaimTests.\(UUID())"))
+            let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+            let state = AppState.test(client: client, conversationDraftStore: store,
+                accountDefaults: defaults, erasureDefaults: defaults)
+            state.setPhase(.ready)
+            let watchdog = MarmotFixtureWatchdog.start("Large attachment draft did not settle", breaking: client)
+            defer { watchdog.cancel() }
+            try await client.startRuntime()
+            let account = try await client.marmot.createIdentityWithProfile(
+                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
+            ).account
+            let group = try await client.createGroupWithOptionsDetailed(accountRef: account.label,
+                name: "Large draft", memberRefs: [], options: CreateGroupOptionsFfi(
+                    description: nil, initialImage: nil, disappearingMessageSecs: 0)).requireCreated()
+            let video = MediaDraftAttachment(fileName: "clip.mov", mediaType: "video/quicktime",
+                data: Data(count: MediaDraftProcessor.maxDraftAttachmentBytes + 1), dim: nil)
+            if staged {
+                store.setDraft(ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [video]),
+                               accountRef: account.label, groupIdHex: group.groupIdHex)
+                try await eventually { store.sendsThroughDraft([video], accountRef: account.label, groupIdHex: group.groupIdHex) }
+                await store.flush()
+            }
+            try await body(client, store, account.label, group.groupIdHex, video)
         }
     }
 

@@ -3443,7 +3443,8 @@ struct ConversationView: View {
         let result = await appState.conversationDraftStore.loadSnapshot(
             accountRef: draftAccountRef,
             groupIdHex: chat.groupIdHex,
-            surfacesTransientFailures: surfacesTransientFailures
+            surfacesTransientFailures: surfacesTransientFailures,
+            hydratingComposer: true
         )
         // Transient results are retried by the caller; a failure stays
         // unhydrated so leaving can't delete the draft, and retries on the next
@@ -3460,11 +3461,20 @@ struct ConversationView: View {
             viewModel.restoreReplyTarget(messageIdHex: nil)
             return result
         }
-        guard !Task.isCancelled,
-              draft == draftBeforeLoad,
+        guard !Task.isCancelled else { return result }
+        guard draft == draftBeforeLoad,
               mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
               viewModel.replyTargetMessageIdHex == replyBeforeLoad
-        else { return result }
+        else {
+            // Edited while loading: the edit wins, but the saved attachments
+            // stay. Leaving one out would have MDK delete its file.
+            let merged = ConversationDraftHydrationGate.attachments(composer: mediaDrafts, loaded: snapshot.mediaAttachments)
+            if merged.map(\.id) != mediaDrafts.map(\.id) {
+                mediaDrafts = merged
+                persistCurrentDraft()
+            }
+            return result
+        }
         let mentionState = ComposerMentionDraftState(
             canonicalText: snapshot.canonicalText,
             mentionDisplayName: { appState.mentionDisplayName(for: $0) }
@@ -3472,6 +3482,9 @@ struct ConversationView: View {
         viewModel.restoreComposerMentionDraftState(mentionState)
         viewModel.restoreReplyTarget(messageIdHex: snapshot.replyToMessageIdHex)
         mediaDrafts = snapshot.mediaAttachments
+        appState.conversationDraftStore.composerReceivedAttachments(
+            snapshot.mediaAttachments, accountRef: draftAccountRef, groupIdHex: chat.groupIdHex
+        )
         draft = mentionState.draft
         refreshComposerTextOverage()
         return result

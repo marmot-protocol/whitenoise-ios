@@ -239,8 +239,10 @@ inline. A reopened draft reads it back in chunks into a mapped private copy. Unt
 the copy lands, or if it fails, the attachment is left out of saves and its message
 sends without a draft revision, as before: no recovery copy, and a failed send stays
 in its bubble. From a draft send's tap until it claims its revision, composer edits are only
-recorded (a save would drop its files), and a claimed revision missing one of its
-attachments fails the send. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
+recorded (a save would drop its files), and a claimed revision that doesn't hold exactly
+its attachments fails the send. Until a reopened composer has received the draft's
+files, every write keeps them, and an edit made while it loads keeps the saved
+attachments. Suspending the runtime cancels draft copies rather than waiting for them. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
 draft. Images keep `maxImageSourceBytes` before decoding. The composer refuses an
 attachment that would take one send past `maxFileMediaCiphertextBytes()`.
 Conversation-open performance ends at rendered layout, uses the navigation consent

@@ -79,6 +79,21 @@ struct ConversationDraftStoreTests {
         ))
     }
 
+    /// Typing while the draft loads keeps the typed content and every saved
+    /// attachment it doesn't already have.
+    @Test func aComposerEditedWhileItsDraftLoadsKeepsTheSavedAttachments() {
+        func file(_ name: String) -> MediaDraftAttachment {
+            MediaDraftAttachment(fileName: name, mediaType: "application/pdf", data: Data(count: 1), dim: nil)
+        }
+        let saved = file("saved.pdf"), shared = file("both.pdf"), picked = file("picked.pdf")
+        let merged = ConversationDraftHydrationGate.attachments(composer: [shared, picked], loaded: [saved, shared])
+        #expect(merged.map(\.id) == [saved.id, shared.id, picked.id])
+
+        let full = (0..<MediaDraftProcessor.maxAttachmentCount).map { file("\($0).pdf") }
+        #expect(ConversationDraftHydrationGate.attachments(composer: full, loaded: [saved]).count
+                <= MediaDraftProcessor.maxAttachmentCount)
+    }
+
     @Test func onlyAnAuthoritativeReadHydratesTheComposer() {
         #expect(ConversationDraftLoadResult.loaded(nil).hydratesComposer)
         #expect(ConversationDraftLoadResult.loaded(textSnapshot("saved")).hydratesComposer)
