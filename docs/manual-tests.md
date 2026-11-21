@@ -320,8 +320,16 @@ microphone on a Mac without one.
 - [ ] Pick a file over 512 MB, or an image over 50 MB: it is refused as too
       large before any upload.
 - [ ] Add a video over 50 MB with a caption and leave the chat: reopening it
-      shows only the caption. A video of 50 MB or less comes back, also after
-      a relaunch.
+      shows the caption and the video, also after a relaunch. Do the same
+      with a video of 50 MB or less.
+- [ ] Add a video over 50 MB, leave the chat and reopen it at once. Until the
+      saved draft loads you can type, but Send and the attach button do
+      nothing; then the video and what you typed both show.
+- [ ] Add a video over 50 MB, remove it straight away, then leave and reopen
+      the chat: it does not come back.
+- [ ] Add a video over 50 MB with a caption and background the app straight
+      away. On return the app responds at once and the caption is kept; the
+      video comes back only if its copy finished before you left.
 - [ ] Add two videos of about 450 MB each: the second is refused as too large
       to send together.
 - [ ] Send a reply with a video over 50 MB: it sends as a reply, the saved
