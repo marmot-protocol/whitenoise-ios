@@ -3,6 +3,17 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# When the simulator boots: during-build (the default) or after-build. Checked
+# first, so a mistyped value stops before anything is removed or built.
+BOOT_SIMULATOR="${WN_TEST_BOOT_SIMULATOR:-during-build}"
+case "$BOOT_SIMULATOR" in
+  during-build | after-build) ;;
+  *)
+    echo "WN_TEST_BOOT_SIMULATOR must be during-build or after-build, not '$BOOT_SIMULATOR'" >&2
+    exit 2
+    ;;
+esac
+
 DESTINATION="${WN_TEST_DESTINATION:-$(scripts/pick-simulator.sh)}"
 RESULT_BUNDLE="${WN_TEST_RESULT_BUNDLE:-build/TestResults.xcresult}"
 
@@ -82,8 +93,12 @@ phase() {
   return "$status"
 }
 
-# Booting the simulator is dead time on the critical path, so overlap it with
-# the build instead of letting `xcodebuild test` serialize the two.
+# Booting the simulator is dead time on the critical path, so by default overlap
+# it with the build instead of letting `xcodebuild test` serialize the two. On
+# CI's 3-core, 7 GB runner that overlap costs more than it saves: with a first
+# boot running alongside, package resolution took 3.5 to 9 minutes instead of
+# under 45 seconds. CI therefore sets WN_TEST_BOOT_SIMULATOR=after-build and
+# boots once the build is done (#1378).
 boot_pid=""
 case "$DESTINATION" in
   *id=*)
@@ -92,15 +107,27 @@ case "$DESTINATION" in
     ;;
   *) udid="" ;;
 esac
-if [ -n "$udid" ]; then
+
+if [ -n "$udid" ] && [ "$BOOT_SIMULATOR" = during-build ]; then
   xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 &
   boot_pid=$!
 fi
+
+# Best effort, like the background boot: the test run still boots the simulator
+# itself if this fails, but say why it failed.
+boot_simulator_after_build() {
+  local output
+  if ! output=$(xcrun simctl bootstatus "$udid" -b 2>&1); then
+    echo "warning: simctl bootstatus failed: $output" >&2
+  fi
+}
 
 phase "build-for-testing" run build-for-testing "${xcodebuild_args[@]}" "${build_settings[@]}"
 
 if [ -n "$boot_pid" ]; then
   wait "$boot_pid" || true
+elif [ -n "$udid" ]; then
+  phase "simulator-boot" boot_simulator_after_build
 fi
 
 phase "test-without-building" run test-without-building \
