@@ -600,12 +600,13 @@ nonisolated enum MessageDraftAttachmentInputs {
 
     /// Each attachment MDK already holds as a file is kept by id. Others go
     /// inline while drafts can hold their bytes; a large one MDK doesn't hold
-    /// yet is left out, so the save never carries its bytes. Files in `kept`
-    /// that the attachments don't name are kept after them.
+    /// yet is left out, so the save never carries its bytes. Attachments the
+    /// draft holds whose ids are in `kept` and that `attachments` don't name
+    /// are kept after them, by id and in order.
     static func inputs(
         for attachments: [MediaDraftAttachment],
         retainedIDs: Set<String>,
-        keeping kept: Set<String> = []
+        keeping kept: [String] = []
     ) -> [MessageDraftAttachmentInputFfi] {
         let named = Set(attachments.map(\.id.uuidString))
         return attachments.compactMap { attachment in
@@ -613,7 +614,7 @@ nonisolated enum MessageDraftAttachmentInputs {
             if retainedIDs.contains(id) { return .retained(id: id) }
             guard MediaDraftProcessor.persistsInDraft(attachment) else { return nil }
             return .inline(attachment: attachment.messageDraftAttachment)
-        } + kept.subtracting(named).sorted().map { .retained(id: $0) }
+        } + kept.filter { !named.contains($0) }.map { .retained(id: $0) }
     }
 
     /// A large attachment drafts can hold only as a file, which MDK copies in.

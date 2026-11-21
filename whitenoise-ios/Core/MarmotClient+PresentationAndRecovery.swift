@@ -88,7 +88,7 @@ extension MarmotClient {
     /// id (`retainedIDs`) and leaving out large ones it doesn't hold yet.
     func saveMessageDraftIfRevision(accountRef: String, revision: MessageDraftRevisionFfi,
         snapshot: ConversationDraftSnapshot, retainedIDs: Set<String> = [],
-        keeping kept: Set<String> = []) async throws -> SelectedMessageDraftFfi {
+        keeping kept: [String] = []) async throws -> SelectedMessageDraftFfi {
         let attachments = MessageDraftAttachmentInputs.inputs(for: snapshot.mediaAttachments, retainedIDs: retainedIDs, keeping: kept)
         return try await Task.detached(priority: .utility) { [marmot] in
             try marmot.saveMessageDraftInputsIfRevision(accountRef: accountRef, revision: revision,

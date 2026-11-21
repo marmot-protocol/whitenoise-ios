@@ -241,7 +241,7 @@ sends without a draft revision, as before: no recovery copy, and a failed send s
 in its bubble. From a draft send's tap until it claims its revision, composer edits are only
 recorded (a save would drop its files), and a claimed revision that doesn't hold exactly
 its attachments fails the send. A composer that hasn't received its
-saved draft writes with `keepsSavedFiles`, so its saves keep every file MDK holds; its
+saved draft writes with `keepsSavedFiles`, so its saves keep every attachment the draft holds, inline or file; its
 read holds the draft's write slot and returns an earlier edit with the saved
 attachments, and once a read fails its writes stop keeping them. Until it has the draft, the
 composer may be typed in but sends nothing and takes no attachments. The read waits

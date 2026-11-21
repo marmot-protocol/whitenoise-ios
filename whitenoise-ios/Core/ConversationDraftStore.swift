@@ -362,6 +362,9 @@ final class ConversationDraftStore {
     /// write slot, so no write changes the revision it reads, and the
     /// runtime's suspension cancels it rather than waiting.
     @ObservationIgnored private var hydrationReads: [ConversationDraftKey: Task<(SelectedMessageDraftFfi, MessageDraftFfi?), Error>] = [:]
+    /// Advances on every suspension. A composer's read started before one
+    /// ends as cancelled when it next wakes, even if it was still waiting.
+    @ObservationIgnored private var suspensionEpoch = 0
     /// Writes the host copy of a large attachment that MDK then copies into the
     /// draft. Runs outside the draft's write slot.
     @ObservationIgnored private let prepareStagingSource: @Sendable (MediaDraftAttachment) async throws -> MediaUploadSourceFiles
@@ -591,6 +594,7 @@ final class ConversationDraftStore {
             for control in controls.values { control.cancel() }
         }
         for read in hydrationReads.values { read.cancel() }
+        suspensionEpoch &+= 1
     }
 
     /// Ends one tapped send's hold. Once none is left unclaimed, applies what
@@ -807,6 +811,7 @@ final class ConversationDraftStore {
         surfacesTransientFailures: Bool = false,
         hydratingComposer: Bool = false
     ) async -> ConversationDraftLoadResult {
+        let epoch = suspensionEpoch
         await loadIfNeeded(accountRef: accountRef)
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
         guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }
@@ -832,7 +837,7 @@ final class ConversationDraftStore {
             if let state = persistence as? AppState {
                 let client = try state.currentMarmotClient()
                 if hydratingComposer {
-                    loaded = try await readForComposer(key: key, client: client)
+                    loaded = try await readForComposer(key: key, client: client, epoch: epoch)
                 } else {
                     let selected = try await client.selectedMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
                     selections[key] = selected
@@ -893,22 +898,10 @@ final class ConversationDraftStore {
     /// sending. And it waits for copies already under way (a previous composer
     /// started them): one landing after the read would put a file in the draft
     /// that this composer doesn't show, and its next save would delete it.
-    private func readForComposer(key: ConversationDraftKey, client: MarmotClient) async throws -> MessageDraftFfi? {
-        while activeWrites[key, default: 0] > 0 || runningCopies[key] != nil {
-            await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
-        }
-        try Task.checkCancellation()
-        activeWrites[key, default: 0] += 1
-        defer {
-            activeWrites[key, default: 0] -= 1
-            if activeWrites[key] == 0 {
-                activeWrites[key] = nil
-                resetWaiters.removeValue(forKey: key)?.forEach { $0.resume() }
-            }
-        }
-        let read = Task { @MainActor in
-            let selected = try await client.selectedMessageDraft(accountRef: key.accountRef, groupIdHex: key.groupIdHex)
-            return (selected, try await readSelectedDraft(client, key.accountRef, selected))
+    private func readForComposer(key: ConversationDraftKey, client: MarmotClient, epoch: Int) async throws -> MessageDraftFfi? {
+        let read = Task { @MainActor [weak self] () async throws -> (SelectedMessageDraftFfi, MessageDraftFfi?) in
+            guard let self else { throw CancellationError() }
+            return try await self.readHoldingSlot(key: key, client: client, epoch: epoch)
         }
         hydrationReads[key] = read
         defer { if hydrationReads[key] == read { hydrationReads[key] = nil } }
@@ -924,6 +917,33 @@ final class ConversationDraftStore {
         }
         selections[key] = selected
         return loaded
+    }
+
+    /// Throws `CancellationError` once a suspension has happened since the
+    /// read started (`epoch`), including one while it waited: the runtime it
+    /// would read through may be closed, and that must not read as a failure.
+    private func readHoldingSlot(key: ConversationDraftKey, client: MarmotClient, epoch: Int) async throws
+        -> (SelectedMessageDraftFfi, MessageDraftFfi?) {
+        func checkSuspension() throws {
+            try Task.checkCancellation()
+            guard epoch == suspensionEpoch else { throw CancellationError() }
+        }
+        while activeWrites[key, default: 0] > 0 || runningCopies[key] != nil {
+            await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
+            try checkSuspension()
+        }
+        try checkSuspension()
+        activeWrites[key, default: 0] += 1
+        defer {
+            activeWrites[key, default: 0] -= 1
+            if activeWrites[key] == 0 {
+                activeWrites[key] = nil
+                resetWaiters.removeValue(forKey: key)?.forEach { $0.resume() }
+            }
+        }
+        let selected = try await client.selectedMessageDraft(accountRef: key.accountRef, groupIdHex: key.groupIdHex)
+        try checkSuspension()
+        return (selected, try await readSelectedDraft(client, key.accountRef, selected))
     }
 
     /// `keepsSavedFiles`: the composer hasn't received the saved draft yet
@@ -1145,7 +1165,9 @@ final class ConversationDraftStore {
                 if let cached = selections[key] { selected = cached }
                 else { selected = try await liveClient.selectedMessageDraft(accountRef: key.accountRef, groupIdHex: key.groupIdHex) }
                 let held = MessageDraftAttachmentInputs.fileBackedIDs(in: selected)
-                let kept = pending.keepsSavedFiles ? held : []
+                // Everything the draft holds, inline or as a file, in its order:
+                // the composer can't have left out what it never received.
+                let kept = pending.keepsSavedFiles ? (selected.draft?.mediaAttachments.map(\.id) ?? []) : []
                 let saved: SelectedMessageDraftFfi
                 switch pending.operation {
                 case .save(let snapshot):
@@ -1167,38 +1189,22 @@ final class ConversationDraftStore {
                 }
                 return
             }
+            // Without a runtime (tests' persistence): a supplied client always
+            // took the revisioned path above.
+            guard let persistence else { return }
             let saved: MessageDraftFfi?
             switch pending.operation {
             case .save(let snapshot):
-                if let client {
-                    saved = try await client.saveMessageDraft(
-                        accountRef: key.accountRef,
-                        groupIdHex: key.groupIdHex,
-                        content: snapshot.canonicalText,
-                        replyToMessageIdHex: snapshot.replyToMessageIdHex,
-                        mediaAttachments: snapshot.withInlineAttachments.mediaAttachments.map(\.messageDraftAttachment)
-                    )
-                } else {
-                    guard let persistence else { return }
-                    saved = try await persistence.persistMessageDraft(
-                        accountRef: key.accountRef,
-                        groupIdHex: key.groupIdHex,
-                        snapshot: snapshot.withInlineAttachments
-                    )
-                }
+                saved = try await persistence.persistMessageDraft(
+                    accountRef: key.accountRef,
+                    groupIdHex: key.groupIdHex,
+                    snapshot: snapshot.withInlineAttachments
+                )
             case .delete:
-                if let client {
-                    try await client.deleteMessageDraft(
-                        accountRef: key.accountRef,
-                        groupIdHex: key.groupIdHex
-                    )
-                } else {
-                    guard let persistence else { return }
-                    try await persistence.deletePersistedMessageDraft(
-                        accountRef: key.accountRef,
-                        groupIdHex: key.groupIdHex
-                    )
-                }
+                try await persistence.deletePersistedMessageDraft(
+                    accountRef: key.accountRef,
+                    groupIdHex: key.groupIdHex
+                )
                 saved = nil
             }
 

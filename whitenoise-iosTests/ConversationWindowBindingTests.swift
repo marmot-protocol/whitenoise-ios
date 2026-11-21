@@ -169,8 +169,8 @@ struct ConversationWindowBindingTests {
 
     /// A chat reopened while a large attachment's copy is still being prepared
     /// reads the draft once the copy lands, so the composer shows the file
-    /// rather than a later save deleting it. An edit typed meanwhile doesn't
-    /// cancel the copy.
+    /// rather than a later save deleting it. An edit typed and saved meanwhile
+    /// neither cancels the copy nor drops the draft's other attachments.
     @Test func aComposerReopenedDuringACopyReadsTheDraftAfterIt() async throws {
         let sourceStarted = TestLatch(), releaseSource = TestLatch(), readCalled = TestLatch()
         try await withLargeAttachmentDraft(staged: false, prepareStagingSource: { attachment in
@@ -181,7 +181,8 @@ struct ConversationWindowBindingTests {
             readCalled.signal()
             return try await client.hydrateSelectedDraft(accountRef: ref, selected: selected)
         }) { client, store, ref, chat, video in
-            store.setDraft(ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [video]),
+            let pdf = MediaDraftAttachment(fileName: "notes.pdf", mediaType: "application/pdf", data: Data(count: 1_024), dim: nil)
+            store.setDraft(ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [pdf, video]),
                            accountRef: ref, groupIdHex: chat)
             await store.flush()
             try await sourceStarted.wait()
@@ -189,6 +190,7 @@ struct ConversationWindowBindingTests {
             let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
             store.setDraft(ConversationDraftSnapshot(canonicalText: "caption, edited", replyToMessageIdHex: nil, mediaAttachments: []),
                            accountRef: ref, groupIdHex: chat, keepsSavedFiles: true)
+            await store.flush()
             // Bounded on purpose: the read must still be waiting for the copy.
             await #expect(throws: (any Error).self) { try await readCalled.wait(timeout: .seconds(2)) }
             releaseSource.signal()
@@ -197,11 +199,11 @@ struct ConversationWindowBindingTests {
                 return
             }
             #expect(restored?.canonicalText == "caption, edited")
-            #expect(restored?.mediaAttachments.map(\.id) == [video.id])
+            #expect(restored?.mediaAttachments.map(\.id) == [pdf.id, video.id])
             await store.flush()
             let saved = try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft
             #expect(saved?.content == "caption, edited")
-            #expect(saved?.mediaAttachments.map(\.id) == [video.id.uuidString])
+            #expect(saved?.mediaAttachments.map(\.id) == [pdf.id.uuidString, video.id.uuidString])
         }
     }
 
@@ -247,6 +249,33 @@ struct ConversationWindowBindingTests {
             try await readStarted.wait()
             await store.flush(using: client)
             #expect(await reopened.value == .cancelled)
+        }
+    }
+
+    /// Suspension also cancels a composer's read that is still waiting for a
+    /// send to settle: it ends as cancelled (retried on resume), not failed, so
+    /// a later edit still keeps the draft's file.
+    @Test func aReadStillWaitingWhenSuspendedIsCancelled() async throws {
+        try await withLargeAttachmentDraft { client, store, ref, chat, video in
+            let tapped = ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [video])
+            store.beginQueuedSend(accountRef: ref, groupIdHex: chat)
+            _ = try await store.prepareSend(tapped, accountRef: ref, groupIdHex: chat)
+
+            // The read starts first and waits for the send; the suspension
+            // comes while it waits.
+            let reopened = Task { await store.loadSnapshot(accountRef: ref, groupIdHex: chat, hydratingComposer: true) }
+            let suspended = Task {
+                await store.flush(using: client)
+                await store.finishSend(accountRef: ref, groupIdHex: chat, accepted: false)
+            }
+            await suspended.value
+            #expect(await reopened.value == .cancelled)
+
+            store.setDraft(ConversationDraftSnapshot(canonicalText: "typed", replyToMessageIdHex: nil, mediaAttachments: []),
+                           accountRef: ref, groupIdHex: chat, keepsSavedFiles: true)
+            await store.flush()
+            let draft = try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft
+            #expect(draft?.mediaAttachments.map(\.id) == [video.id.uuidString])
         }
     }
 
