@@ -319,9 +319,28 @@ microphone on a Mac without one.
       it sends with upload progress. A recipient can play it.
 - [ ] Pick a file over 512 MB, or an image over 50 MB: it is refused as too
       large before any upload.
-- [ ] Add a video over 50 MB with a caption and leave the chat: reopening it
-      shows only the caption. A video of 50 MB or less comes back, also after
-      a relaunch.
+- [ ] Add a video of about 300 MB with a caption and leave the chat:
+      reopening it shows the caption and the video. Force-quit and relaunch:
+      both are still there. Do the same with a video of about 20 MB.
+- [ ] With a saved draft holding a video of about 450 MB, leave the chat and
+      reopen it at once. Until the video shows you can type, but Send stays
+      dimmed and Camera, Photos and Videos, Files and Contact in the + menu
+      open nothing. Then the video and what you typed both show. If the
+      video shows before you can try, the check isn't done: retry with a
+      larger file.
+- [ ] Remove the video from a draft where it came back on reopen, then leave
+      and reopen the chat: the caption is there and the video stays gone.
+- [ ] With a saved draft whose video came back on reopen, background the app
+      and return, then leave and reopen the chat: the caption and video are
+      both there.
+- [ ] In a chat with an empty composer, type a new caption, add a video of
+      about 300 MB and background the app straight away. On return the app
+      responds at once.
+- [ ] Repeat, but force-quit the app from the switcher instead of returning
+      to it. Relaunch and open the chat: the caption is there. The video may
+      or may not be, depending on whether its copy finished first. (Leaving
+      the chat after a return saves the composer's video again, so only a
+      force-quit shows what backgrounding saved.)
 - [ ] Add two videos of about 450 MB each: the second is refused as too large
       to send together.
 - [ ] Send a reply with a video over 50 MB: it sends as a reply, the saved
