@@ -320,11 +320,14 @@ final class ConversationDraftStore {
     /// Advances when MDK finishes holding a large attachment as a file, so the
     /// composer can start its pre-upload.
     private(set) var fileBackedGeneration = 0
-    /// The composer's latest text after a Send tap, until that submission is
-    /// claimed: the next message, applied once the claim is done.
+    /// Draft sends tapped but not yet claimed, by chat. Composer edits are
+    /// only recorded meanwhile: a save of the next message would drop the
+    /// tapped one's staged files, which MDK then deletes.
+    @ObservationIgnored private var unclaimedSends: [ConversationDraftKey: Int] = [:]
+    /// The composer's latest content since the last Send tap, applied once
+    /// every tapped send is claimed.
     @ObservationIgnored private var typedWhileQueued: [ConversationDraftKey: ConversationDraftSnapshot?] = [:]
-    /// Chats whose Send is writing and claiming its submission. Composer edits
-    /// are only recorded meanwhile, so none can take the claimed write's place.
+    /// Chats whose Send is writing and claiming its submission.
     @ObservationIgnored private var claimingKeys: Set<ConversationDraftKey> = []
     /// Advances whenever a pending-send handoff starts or ends, so the chat
     /// list can re-project its rows.
@@ -394,7 +397,7 @@ final class ConversationDraftStore {
             await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
         }
         guard !control.isCancelled(), !resetPausedKeys.contains(key), !sendingKeys.contains(key),
-              !claimingKeys.contains(key), !conflictedKeys.contains(key),
+              unclaimedSends[key] == nil, !conflictedKeys.contains(key),
               let state = persistence as? AppState else { return }
         activeWrites[key, default: 0] += 1
         defer {
@@ -458,35 +461,46 @@ final class ConversationDraftStore {
     ///
     /// The composer clears immediately so its bubble can be staged, and that
     /// empty write must not delete the draft the queued submission still has to
-    /// claim by revision. Everything the user types afterwards goes through the
-    /// ordinary edited-while-sending path and is restored by `finishSend`.
+    /// claim by revision. Until `prepareSend` claims it, whatever the user types
+    /// is only recorded (`setDraft`); it is applied once every tapped send is
+    /// claimed. Every call is followed by one `prepareSend`.
     func beginQueuedSend(accountRef: String, groupIdHex: String) {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
         suppressEmptyAfterSendKeys.insert(key)
+        unclaimedSends[key, default: 0] += 1
         typedWhileQueued[key] = .some(nil)
     }
 
     func prepareSend(_ snapshot: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) async throws -> MessageDraftRevisionFfi {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        if unclaimedSends[key] == nil {
+            unclaimedSends[key] = 1
+            typedWhileQueued[key] = .some(nil)
+        }
         guard !sendingKeys.contains(key), !claimingKeys.contains(key), !conflictedKeys.contains(key) else {
+            endClaim(key)
             throw MarmotKitError.MessageDraftRevisionConflict
         }
-        // From here until the claim, the composer's edits are only recorded:
-        // the write Send claims holds the tapped submission and nothing else.
         claimingKeys.insert(key)
-        if typedWhileQueued[key] == nil { typedWhileQueued[key] = .some(nil) }
+        // Runs after a successful claim has marked the chat sending, so what
+        // was typed meanwhile is saved by `finishSend`.
+        defer {
+            claimingKeys.remove(key)
+            endClaim(key)
+        }
         // Wait out a running write first (a large attachment's copy can take a while).
         while activeWrites[key, default: 0] > 0 {
             await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
         }
         guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else {
-            endClaim(key)
             throw MarmotKitError.MessageDraftRevisionConflict
         }
         applyDraft(snapshot, key: key)
         await flush(key: key, using: nil)
-        guard pendingWrites[key] == nil, let selection = selections[key], selection.draft != nil else {
-            endClaim(key)
+        // A large attachment MDK no longer holds was left out of the write, so
+        // the revision would send the message without it.
+        guard pendingWrites[key] == nil, let selection = selections[key],
+              Self.holdsAttachments(of: snapshot, in: selection) else {
             throw MarmotKitError.MessageDraftRevisionConflict
         }
         sendingKeys.insert(key)
@@ -496,15 +510,26 @@ final class ConversationDraftStore {
         setPendingSendHandoff(Self.summary(for: selection).map {
             PendingDraftSendHandoff(revision: selection.revision, submitted: $0)
         }, for: key)
-        // Saved by `finishSend`, like anything typed while the send runs.
-        endClaim(key)
         return selection.revision
     }
 
-    /// Applies what the composer was given after the Send tap. A cleared
-    /// composer changes nothing: the submission's draft stays until it sends.
+    /// Whether the draft `selection` holds every attachment of `snapshot`.
+    nonisolated static func holdsAttachments(of snapshot: ConversationDraftSnapshot, in selection: SelectedMessageDraftFfi) -> Bool {
+        guard let draft = selection.draft else { return false }
+        let held = Set(draft.mediaAttachments.map(\.id))
+        return snapshot.mediaAttachments.allSatisfy { held.contains($0.id.uuidString) }
+    }
+
+    /// Ends one tapped send's hold. Once none is left unclaimed, applies what
+    /// the composer was given after the last tap. A cleared composer changes
+    /// nothing: the submission's draft stays until it sends.
     private func endClaim(_ key: ConversationDraftKey) {
-        claimingKeys.remove(key)
+        let remaining = unclaimedSends[key, default: 1] - 1
+        guard remaining <= 0 else {
+            unclaimedSends[key] = remaining
+            return
+        }
+        unclaimedSends[key] = nil
         if case .some(.some(let typed)) = typedWhileQueued.removeValue(forKey: key) {
             applyDraft(typed, key: key)
         }
@@ -695,6 +720,9 @@ final class ConversationDraftStore {
         await loadIfNeeded(accountRef: accountRef)
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
         guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }
+        // The saved draft is still the tapped message; a reopened composer
+        // shows what was typed after it.
+        if unclaimedSends[key] != nil { return .loaded(typedWhileQueued[key] ?? nil) }
         if let pending = pendingWrites[key] {
             switch pending.operation {
             case .save(let snapshot):
@@ -751,9 +779,9 @@ final class ConversationDraftStore {
         groupIdHex: String
     ) {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
-        if typedWhileQueued[key] != nil {
+        if unclaimedSends[key] != nil {
             typedWhileQueued[key] = .some(Self.normalizedSnapshot(snapshot) == nil ? nil : snapshot)
-            if claimingKeys.contains(key) { return }
+            return
         }
         applyDraft(snapshot, key: key)
     }

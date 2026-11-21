@@ -411,8 +411,14 @@ struct ConversationDraftStoreTests {
         await store.flush()
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "first message")
 
-        // The next message typed while that send is still queued is its own draft.
+        // The next message typed while that send is still queued waits for
+        // its claim, then becomes the draft.
         store.setDraft(textSnapshot("second message"), accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "first message")
+        #expect(await store.snapshot(accountRef: "account", groupIdHex: "group")?.canonicalText == "second message")
+        // No MDK selection here, so the claim itself is refused after the write.
+        _ = try? await store.prepareSend(textSnapshot("first message"), accountRef: "account", groupIdHex: "group")
         await store.flush()
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "second message")
     }
@@ -432,11 +438,10 @@ struct ConversationDraftStoreTests {
 
         store.beginQueuedSend(accountRef: "account", groupIdHex: "group")
         store.setDraft(textSnapshot(""), accountRef: "account", groupIdHex: "group")
+        store.setDraft(textSnapshot("next message"), accountRef: "account", groupIdHex: "group")
         let send = Task {
             try await store.prepareSend(textSnapshot("submitted"), accountRef: "account", groupIdHex: "group")
         }
-        await Task.yield()
-        store.setDraft(textSnapshot("next message"), accountRef: "account", groupIdHex: "group")
         release?.resume()
         await running.value
         // No MDK selection here, so the claim itself is refused after the write.
@@ -460,6 +465,10 @@ struct ConversationDraftStoreTests {
 
         store.beginQueuedSend(accountRef: "account", groupIdHex: "group")
         store.setDraft(textSnapshot(""), accountRef: "account", groupIdHex: "group")
+        _ = try? await store.prepareSend(
+            ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [rejected]),
+            accountRef: "account", groupIdHex: "group"
+        )
         await store.finishSend(accountRef: "account", groupIdHex: "group", accepted: false)
         store.setDraft(textSnapshot("caption"), accountRef: "account", groupIdHex: "group")
         await store.flush()

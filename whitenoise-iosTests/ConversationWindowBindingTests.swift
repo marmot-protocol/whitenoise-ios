@@ -54,10 +54,11 @@ struct ConversationWindowBindingTests {
         }
     }
 
-    /// Typing the next message while Send writes and claims the tapped one
-    /// neither fails the claim nor takes the submission's place; the next
-    /// message is saved once the send finishes.
-    @Test func typingWhileSendClaimsItsWriteKeepsBothMessages() async throws {
+    /// A send waits its turn behind the one before it. The next message typed
+    /// meanwhile must not be saved over the tapped one: that save would leave
+    /// out its large attachment, MDK would delete the file, and the claim
+    /// would send the caption alone. The next message is saved afterwards.
+    @Test func typingWhileASendWaitsKeepsItsLargeAttachment() async throws {
         try await withTestClient { client in
             let defaults = try #require(UserDefaults(suiteName: "DraftClaimTests.\(UUID())"))
             let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
@@ -73,25 +74,29 @@ struct ConversationWindowBindingTests {
             let group = try await client.createGroupWithOptionsDetailed(accountRef: account.label,
                 name: "Draft claim", memberRefs: [], options: CreateGroupOptionsFfi(
                     description: nil, initialImage: nil, disappearingMessageSecs: 0)).requireCreated()
-            func draft(_ text: String) -> ConversationDraftSnapshot {
-                ConversationDraftSnapshot(canonicalText: text, replyToMessageIdHex: nil, mediaAttachments: [])
-            }
-            store.beginQueuedSend(accountRef: account.label, groupIdHex: group.groupIdHex)
-            store.setDraft(draft(""), accountRef: account.label, groupIdHex: group.groupIdHex)
-            let claim = Task {
-                try await store.prepareSend(draft("tapped"), accountRef: account.label, groupIdHex: group.groupIdHex)
-            }
-            // The claim is now writing the submission.
-            await Task.yield()
-            store.setDraft(draft("next message"), accountRef: account.label, groupIdHex: group.groupIdHex)
-            let revision = try await claim.value
-
-            #expect(try await client.selectedMessageDraft(accountRef: account.label, groupIdHex: group.groupIdHex).draft?.content == "tapped")
-            _ = try await client.sendDraftWithClientToken(accountRef: account.label, revision: revision,
-                attachments: [], clientToken: UUID().uuidString)
-            await store.finishSend(accountRef: account.label, groupIdHex: group.groupIdHex, accepted: true)
+            let ref = account.label, chat = group.groupIdHex
+            let video = MediaDraftAttachment(fileName: "clip.mov", mediaType: "video/quicktime",
+                data: Data(count: MediaDraftProcessor.maxDraftAttachmentBytes + 1), dim: nil)
+            let tapped = ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [video])
+            store.setDraft(tapped, accountRef: ref, groupIdHex: chat)
+            try await eventually { store.sendsThroughDraft([video], accountRef: ref, groupIdHex: chat) }
             await store.flush()
-            #expect(try await client.selectedMessageDraft(accountRef: account.label, groupIdHex: group.groupIdHex).draft?.content == "next message")
+
+            // Send tap, then the next message while the send waits its turn.
+            store.beginQueuedSend(accountRef: ref, groupIdHex: chat)
+            store.setDraft(ConversationDraftSnapshot(canonicalText: "", replyToMessageIdHex: nil, mediaAttachments: []),
+                           accountRef: ref, groupIdHex: chat)
+            store.setDraft(ConversationDraftSnapshot(canonicalText: "next message", replyToMessageIdHex: nil, mediaAttachments: []),
+                           accountRef: ref, groupIdHex: chat)
+            await store.flush()
+            _ = try await store.prepareSend(tapped, accountRef: ref, groupIdHex: chat)
+
+            let claimed = try #require(try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft)
+            #expect(claimed.content == "caption")
+            #expect(claimed.mediaAttachments.map(\.id) == [video.id.uuidString])
+            await store.finishSend(accountRef: ref, groupIdHex: chat, accepted: false)
+            await store.flush()
+            #expect(try await client.selectedMessageDraft(accountRef: ref, groupIdHex: chat).draft?.content == "next message")
         }
     }
 

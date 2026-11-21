@@ -238,7 +238,9 @@ and saves keep it by id (`saveMessageDraftInputsIfRevision`, `.retained`), never
 inline. A reopened draft reads it back in chunks into a mapped private copy. Until
 the copy lands, or if it fails, the attachment is left out of saves and its message
 sends without a draft revision, as before: no recovery copy, and a failed send stays
-in its bubble. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
+in its bubble. From a draft send's tap until it claims its revision, composer edits are only
+recorded (a save would drop its files), and a claimed revision missing one of its
+attachments fails the send. Do not rebuild draft recovery in host memory; it needs MDK's revisioned
 draft. Images keep `maxImageSourceBytes` before decoding. The composer refuses an
 attachment that would take one send past `maxFileMediaCiphertextBytes()`.
 Conversation-open performance ends at rendered layout, uses the navigation consent
