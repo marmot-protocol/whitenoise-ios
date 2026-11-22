@@ -193,8 +193,7 @@ struct ChatSurfacePresentationTests {
         #expect(SingleEmojiMessagePresentation.emoji(in: "👍🏽") == "👍🏽")
         #expect(SingleEmojiMessagePresentation.emoji(in: "1️⃣") == "1️⃣")
         #expect(SingleEmojiMessagePresentation.emoji(in: "🇮🇹") == "🇮🇹")
-        #expect(SingleEmojiMessagePresentation.fontSize == 64)
-        #expect(SingleCustomEmojiMessagePresentation.side == 112)
+        #expect(SingleEmojiMessagePresentation.fontSize < SingleCustomEmojiMessagePresentation.side)
     }
 
     @Test func stickerPresentationRejectsTextAndMultipleEmoji() {

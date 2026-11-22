@@ -156,7 +156,7 @@ final class TranscriptAttachmentHistory {
     private(set) var revision: UInt64 = 0
     private(set) var hasPaged = false
     // Selection belongs to the pager. Sample it when the collection or validation changes.
-    private(set) var selectedItemID: String?
+    @ObservationIgnored private(set) var selectedItemID: String?
     @ObservationIgnored private var lastWindowItemID: String?
     @ObservationIgnored var resetViewerOnDiscard = false
     private(set) var viewerGeneration = 0

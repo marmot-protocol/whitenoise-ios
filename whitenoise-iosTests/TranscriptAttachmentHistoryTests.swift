@@ -41,6 +41,20 @@ struct TranscriptAttachmentHistoryTests {
         #expect(!store.hasUnsourcedOwnMessage(row.messageIdHex))
     }
 
+    @Test func aWindowChangeRebuildsRetainedMediaWhenAMessageCrossesTheWindowBoundary() throws {
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("retained")])
+        let gallery = try #require(MessageMediaGallery(transcriptItems: [], openingID: "photo", initialData: nil,
+            messages: [:], captions: [:], allowsEmptyWindow: true))
+        func window(_ ids: Set<String>) -> TranscriptHistoryGalleryView.Window {
+            .init(gallery: gallery, messageIDs: ids, durableIDs: [], atTail: true,
+                visibility: .init(hidden: [], blocked: [], deleted: []), identityNames: [:])
+        }
+        let original = window(["retained", "text"])
+        #expect(window(["retained", "another-text"]).hasSameMedia(as: original, pages: pages))
+        #expect(!window(["text"]).hasSameMedia(as: original, pages: pages))
+    }
+
     @Test func aReplacedWindowStaysSeparateUntilItReconnectsToTheSelectedPhoto() throws {
         let photo = entry("selected")
         let id = try #require(TranscriptHistorySlot(photo)).attachment.id
@@ -124,7 +138,8 @@ struct TranscriptAttachmentHistoryTests {
         #expect(joined.older.map(\.target.attachmentIndex) == [0, 1, 4])
         #expect(joined.newer.isEmpty)
     }
-    @Test @MainActor func locallyHiddenAndBlockedAttachmentsStayOutOfHistory() throws {
+
+    @Test func locallyHiddenAndBlockedAttachmentsStayOutOfHistory() throws {
         let olderID = String(repeating: "ab", count: 32)
         let slot = try #require(TranscriptHistorySlot(entry(olderID)))
         let store = TimelineStore(appState: nil, groupIdHex: hex("aa"), hiddenMessageIds: [olderID])
@@ -167,6 +182,7 @@ struct TranscriptAttachmentHistoryTests {
         let joined = pages.extensions(around: [pending, attached], excluding: ["linked"])
         #expect(joined.older.map(\.target.messageIdHex) == ["earlier"])
     }
+
     @Test func newerRetainedHistoryPrecedesOptimisticSends() throws {
         func photo(_ id: String) throws -> MessageMediaAttachment {
             try #require(TranscriptHistorySlot(entry(id))).attachment

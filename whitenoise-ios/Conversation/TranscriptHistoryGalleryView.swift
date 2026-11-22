@@ -46,12 +46,11 @@ struct TranscriptHistoryGalleryView: View {
     private struct Inputs: Equatable {
         let window: WindowRevision
         let pages: Int
-        let selection: String?
         let resume: String?
         let viewer: Int
     }
 
-    private struct Window {
+    struct Window {
         var gallery: MessageMediaGallery
         let messageIDs, durableIDs: Set<String>
         let atTail: Bool
@@ -80,7 +79,7 @@ struct TranscriptHistoryGalleryView: View {
         Inputs(window: WindowRevision(timeline: conversation.timelineProjectionGeneration,
             snapshot: conversation.conversationWindow?.revision, profiles: appState.profileRefreshGeneration,
             account: conversation.myAccountId, debug: appState.streamingDebugEnabled, language: AppLanguage.current),
-            pages: history.pagesRevision, selection: history.selectedItemID, resume: history.resumeItemID, viewer: history.viewerGeneration)
+            pages: history.pagesRevision, resume: history.resumeItemID, viewer: history.viewerGeneration)
     }
 
     private var scope: TranscriptAttachmentHistory.Scope? {
@@ -248,7 +247,7 @@ struct TranscriptHistoryGalleryView: View {
                 identityNames: conversation.windowIdentities.mapValues(\.displayName))
             let previous = window
             window = next
-            if let previous, old.pages == new.pages, old.selection == new.selection, old.resume == new.resume, old.viewer == new.viewer,
+            if let previous, old.pages == new.pages, old.resume == new.resume, old.viewer == new.viewer,
                old.window.profiles == new.window.profiles, old.window.language == new.window.language, old.window.account == new.window.account,
                next.hasSameMedia(as: previous, pages: history.pages) { return }
         }

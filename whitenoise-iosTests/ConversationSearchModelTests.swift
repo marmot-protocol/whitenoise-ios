@@ -24,7 +24,6 @@ struct ConversationSearchModelTests {
         #expect(viewModel.search.currentMatch == nil)
     }
 
-
     /// A fake loaded window: entries in timeline order plus an older backlog
     /// that pages in one slice per `loadOlderPage` call.
     @MainActor

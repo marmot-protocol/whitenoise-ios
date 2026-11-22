@@ -730,7 +730,7 @@ struct MessageBubble: View {
     }
 
     private func standaloneEmojiContent(_ emoji: String) -> some View {
-        Text(emoji)
+        TimelineSearchText(emoji)
             .font(.system(size: SingleEmojiMessagePresentation.fontSize))
             .lineLimit(1)
             .fixedSize()
