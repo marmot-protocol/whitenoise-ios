@@ -5,7 +5,7 @@ import Observation
 import Speech
 import SwiftUI
 
-enum MessageSpeechAction: String, Hashable {
+nonisolated enum MessageSpeechAction: String, Hashable {
     case read, stop, transcribe, transcribing, show, hide, copy
 
     var title: LocalizedStringKey {
@@ -29,6 +29,37 @@ enum MessageSpeechAction: String, Hashable {
         case .hide: "text.bubble.fill"
         case .copy: "doc.on.doc"
         }
+    }
+}
+
+nonisolated enum MessageSpeechPresentation {
+    static func hasBlankText(_ record: AppMessageRecordFfi) -> Bool {
+        record.plaintext.unicodeScalars.allSatisfy(CharacterSet.whitespacesAndNewlines.contains)
+    }
+
+    static func voiceAttachment(for record: AppMessageRecordFfi, media: [MessageMediaAttachment]) -> MessageMediaAttachment? {
+        guard record.direction != "sent", hasBlankText(record),
+              media.count == 1, let audio = media.first, audio.kind == .audio, audio.rejectionKind == nil else { return nil }
+        return audio
+    }
+
+    static func textActions(for record: AppMessageRecordFfi, isReading: Bool, standaloneEmoji: @autoclosure () -> Bool,
+                            hasSpokenText: @autoclosure () -> Bool) -> [MessageSpeechAction] {
+        guard record.direction != "sent", !hasBlankText(record) else { return [] }
+        switch MessageSemantics.classify(record) {
+        case .chat, .reply, .media, .streamFinal:
+            guard SharedLocationText.location(from: record.plaintext) == nil,
+                  RemoteGiphyMedia.parse(wireText: record.plaintext) == nil else { return [] }
+            if isReading { return [.stop] }
+            return !standaloneEmoji() && hasSpokenText() ? [.read] : []
+        default: return []
+        }
+    }
+
+    static func voiceActions(isTranscribing: Bool, transcriptVisible: Bool?, canTranscribe: Bool) -> [MessageSpeechAction] {
+        if isTranscribing { return [.transcribing] }
+        if let transcriptVisible { return transcriptVisible ? [.hide, .copy] : [.show] }
+        return canTranscribe ? [.transcribe] : []
     }
 }
 

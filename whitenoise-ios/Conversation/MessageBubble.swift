@@ -445,6 +445,7 @@ struct MessageBubble: View {
 
         guard let shortcode = SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes),
               !offersSourceReader else { return nil }
+        if let searchQuery, sanitizedBodyText.localizedStandardContains(searchQuery) { return nil }
         return shortcode
     }
 
@@ -667,7 +668,7 @@ struct MessageBubble: View {
     }
 
     private func standaloneEmojiContent(_ emoji: String) -> some View {
-        Text(emoji)
+        TimelineSearchText(emoji)
             .font(.system(size: SingleEmojiMessagePresentation.fontSize))
             .lineLimit(1)
             .fixedSize()

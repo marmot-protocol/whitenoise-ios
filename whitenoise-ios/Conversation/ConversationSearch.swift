@@ -11,7 +11,6 @@ nonisolated struct ConversationSearchEntry: Equatable {
     var labels: [String] = []
     var poll: PollProjectionFfi?
     var previewURL: URL?
-    var contactAttachmentIDs: [String] = []
 
     func matchingText(for query: String, now: Date) -> String? {
         if text.localizedStandardContains(query) { return text }
@@ -220,31 +219,6 @@ final class ConversationSearchModel {
         scrollRequest = nil
         olderPageRequest = nil
         return observation
-    }
-
-    // Names come only from vCards the conversation has already been allowed to render.
-    @ObservationIgnored private let displayedContactNames = NSCache<NSString, NSString>()
-    @ObservationIgnored private var contactRevision: Int?
-
-    private func updateContactRevision() {
-        let revision = AttachmentPresentationState.shared.revision
-        if revision != contactRevision {
-            displayedContactNames.removeAllObjects()
-            displayedContactNames.countLimit = 512
-            contactRevision = revision
-        }
-    }
-
-    func registerContactName(_ name: String, for attachmentID: String) {
-        updateContactRevision()
-        guard displayedContactNames.object(forKey: attachmentID as NSString) as String? != name else { return }
-        displayedContactNames.setObject(name as NSString, forKey: attachmentID as NSString)
-        refreshAfterSearchableContentChange()
-    }
-
-    func displayedContactName(for attachmentID: String) -> String? {
-        updateContactRevision()
-        return displayedContactNames.object(forKey: attachmentID as NSString) as String?
     }
 
     func refreshAfterTimelineChange() {

@@ -40,19 +40,19 @@ struct LinkPreviewCardContent: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let host {
                     Label {
-                        TimelineSearchText(host)
+                        TimelineSearchText(host, keepsMatchVisible: true)
                     } icon: { Image(systemName: "link") }
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
                     .lineLimit(1)
                 }
                 if let title {
-                    TimelineSearchText(title)
+                    TimelineSearchText(title, keepsMatchVisible: true)
                         .font(.headline)
                         .lineLimit(2)
                 }
                 if let summary {
-                    TimelineSearchText(summary)
+                    TimelineSearchText(summary, keepsMatchVisible: true)
                         .font(.subheadline)
                         .lineLimit(3)
                         .opacity(0.78)

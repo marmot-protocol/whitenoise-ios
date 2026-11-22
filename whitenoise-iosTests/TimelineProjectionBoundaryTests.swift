@@ -119,6 +119,83 @@ struct TimelineProjectionBoundaryTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func searchCountsOnlyRowsWithAVisibleSender(inDirectChat: Bool) {
+        let app = AppState.test()
+        var group = testGroup()
+        if inDirectChat { group.name = "" }
+        let model = ConversationViewModel(appState: app, group: group, initialMemberCount: 2)
+        let first = timelineRecord(messageIdHex: hexId(1), plaintext: "First message")
+        let grouped = timelineRecord(messageIdHex: hexId(2), plaintext: "Second message")
+        var own = timelineRecord(messageIdHex: hexId(3), plaintext: "My reply")
+        own.direction = "sent"
+        var ownWithMatch = timelineRecord(messageIdHex: hexId(4), plaintext: "See you soon")
+        ownWithMatch.direction = "sent"
+        model.applyTimelinePage(.init(messages: [first, grouped, own, ownWithMatch], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        model.search.query = IdentityPresentation.text(accountIdHex: first.sender, knownName: nil)
+        #expect(model.search.matches.map(\.messageIdHex) == (inDirectChat ? [] : [first.messageIdHex]))
+        model.search.query = "you"
+        #expect(model.search.matches.map(\.messageIdHex) == [ownWithMatch.messageIdHex])
+    }
+
+    @Test func searchMatchesTheDocumentFilenameButSkipsUnlabeledMediaTiles() {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let image = mediaReference(sourceEpoch: 42)
+        var document = image
+        document.mediaType = "application/pdf"
+        document.fileName = "itinerary.pdf"
+        let photo = timelineRecord(messageIdHex: hexId(1), plaintext: "", media: [image])
+        let file = timelineRecord(messageIdHex: hexId(2), plaintext: "", media: [document])
+        model.applyTimelinePage(.init(messages: [photo, file], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        for query in [image.fileName, L10n.string("Photo"), L10n.string("File")] {
+            model.search.query = query
+            #expect(model.search.matches.isEmpty)
+        }
+        model.search.query = "itinerary"
+        #expect(model.search.matches.map(\.messageIdHex) == [file.messageIdHex])
+    }
+
+    @Test func searchMatchesAStickerCaptionButSkipsTheStandaloneStickerLabel() {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        var captioned = timelineRecord(messageIdHex: hexId(1), plaintext: "Meet at six")
+        captioned.sticker = .init(packCoordinate: "pack", shortcode: "wave", plaintextSha256: "hash")
+        var standalone = timelineRecord(messageIdHex: hexId(2), plaintext: "")
+        standalone.sticker = captioned.sticker
+        model.applyTimelinePage(.init(messages: [captioned, standalone], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        model.search.query = "six"
+        #expect(model.search.matches.map(\.messageIdHex) == [captioned.messageIdHex])
+        model.search.query = MessagePreview.stickerLabel
+        #expect(model.search.matches.isEmpty)
+    }
+
+    @Test func searchUsesTheVisibleGIFCreditAndLocationLabel() {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let gif = timelineRecord(messageIdHex: hexId(1), plaintext: "https://media.giphy.com/media/abc/giphy.mp4\nvia GIPHY · Otter")
+        let location = timelineRecord(messageIdHex: hexId(2), plaintext: SharedLocationText.value(latitude: 45, longitude: 20))
+        model.applyTimelinePage(.init(messages: [gif, location], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        model.search.query = "Otter"
+        #expect(model.search.matches.map(\.messageIdHex) == [gif.messageIdHex])
+        model.search.query = L10n.string("Location")
+        #expect(model.search.matches.map(\.messageIdHex) == [location.messageIdHex])
+        model.search.query = "giphy.mp4"
+        #expect(model.search.matches.isEmpty)
+    }
+
+    @Test func replyWithAnUnloadedTargetShowsOnlyAGenericQuote() throws {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let reply = timelineRecord(messageIdHex: hexId(4), plaintext: "My reply", replyToMessageIdHex: hexId(3))
+        model.applyTimelinePage(.init(messages: [reply], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        let record = try #require(model.record(for: reply.messageIdHex))
+        let preview = try #require(model.replyPreview(for: record))
+        #expect(preview.name == L10n.string("Message"))
+        #expect(preview.text == L10n.string("Message unavailable"))
+        #expect(preview.media == nil)
+    }
+
     @Test func projectedReplyTargetCanUseLoadedTargetAsPreviewFallback() throws {
         let viewModel = ConversationViewModel(
             appState: AppState.test(),

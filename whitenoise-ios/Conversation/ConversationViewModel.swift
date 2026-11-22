@@ -288,6 +288,8 @@ final class ConversationViewModel {
     private var hasComposerLoadingGraceExpired = false
     @ObservationIgnored var openingMessageId: String?
     private(set) var openingTargetUnavailable = false
+    var suppressesInitialUnreadDivider = false
+    var visibleUnreadDividerID: String? { suppressesInitialUnreadDivider ? nil : initialWindowUnreadMessageId }
     private(set) var initialWindowUnreadMessageId: String?
     private(set) var conversationWindow: ConversationWindowSnapshotFfi?
     private var windowSubscription: ConversationWindowSubscription?
@@ -2345,7 +2347,24 @@ final class ConversationViewModel {
         timeline.lazy.compactMap(Self.messageId(in:)).last
     }
 
-    @ObservationIgnored private var searchEntriesCache: (generation: Int, entries: [ConversationSearchEntry])?
+    struct SearchRowContext: Equatable {
+        let showsIdentity: Bool
+        let unreadDividerID: String?
+        let streamingDebug: Bool
+        let showsLinkPreviews: Bool
+    }
+
+    var searchRowContext: SearchRowContext {
+        SearchRowContext(showsIdentity: !groupDisplay.isDirectMessage, unreadDividerID: visibleUnreadDividerID,
+                         streamingDebug: timelineStore.streamingDebugEnabled, showsLinkPreviews: LinkPreviewSettingsStore.shared.showsPreviews)
+    }
+
+    func clusterAtUnreadBoundary(for item: TimelineItem) -> MessageClusterPresentation {
+        let index = visibleUnreadDividerID.flatMap { timelineStore.timelineIndex(forMessageIdHex: $0) }
+        return messageClusterPresentation(for: item).atUnreadBoundary(rowID: item.id, timeline: timeline, firstUnreadIndex: index)
+    }
+
+    @ObservationIgnored private var searchEntriesCache: (generation: Int, context: SearchRowContext, entries: [ConversationSearchEntry])?
 
     /// Haystack rows for in-conversation search, memoized by
     /// `timelineProjectionGeneration`. Search recomputes matches on every
@@ -2354,23 +2373,17 @@ final class ConversationViewModel {
     /// budgeted markdown AST walk) on the typing hot path.
     private func searchableTimelineEntries() -> [ConversationSearchEntry] {
         let generation = timelineProjectionGeneration
-        if searchEntriesCache?.generation != generation {
-            searchEntriesCache = (generation, computeSearchableTimelineEntries())
+        let context = searchRowContext
+        if searchEntriesCache?.generation != generation || searchEntriesCache?.context != context {
+            searchEntriesCache = (generation, context, computeSearchableTimelineEntries(in: context))
         }
         return (searchEntriesCache?.entries ?? []).map { entry in
             var enriched = entry
-            enriched.labels += entry.contactAttachmentIDs.compactMap { search.displayedContactName(for: $0) }
-            if let url = entry.previewURL, let metadata = searchableLinkPreview(for: url) {
+            if let url = entry.previewURL, let metadata = LinkPreviewLoader.cachedMetadata(for: url) ?? nil {
                 enriched.labels += [metadata.title, metadata.summary, LinkPreviewCardContent.host(for: url)].compactMap { $0 }
             }
             return enriched
         }
-    }
-
-    /// Search uses only metadata the card already has permission to display.
-    private func searchableLinkPreview(for url: URL) -> LinkPreviewMetadata? {
-        guard LinkPreviewSettingsStore.shared.showsPreviews else { return nil }
-        return LinkPreviewLoader.cachedMetadata(for: url) ?? nil
     }
 
     func timelineDaySections(
@@ -2391,49 +2404,50 @@ final class ConversationViewModel {
 
     /// Index only the visible timeline's bounded text, sender, and attachment labels.
     /// A search must never fetch a profile, link preview, or attachment.
-    private func computeSearchableTimelineEntries() -> [ConversationSearchEntry] {
+    private func computeSearchableTimelineEntries(in context: SearchRowContext) -> [ConversationSearchEntry] {
         timeline.compactMap { item in
             guard case .message(let record, _) = item.kind,
                   !record.messageIdHex.isEmpty,
                   MessagePreview.isPreviewable(record),
                   !isDeleted(record.messageIdHex)
             else { return nil }
-            let name = record.direction == "sent" ? L10n.string("You") : IdentityPresentation.text(
-                accountIdHex: record.sender,
-                knownName: conversationWindow == nil ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender)
-                    : windowIdentities[record.sender]?.displayName
-            )
-            let media = mediaItems(for: item)
-            var labels = [name]
-            let contacts = media.filter { ["text/vcard", "text/x-vcard"].contains(MediaAttachmentPolicy.canonicalMediaType($0.mediaType)) }
-            if !contacts.isEmpty { labels.append(L10n.string("Contact")) }
-            for attachment in media {
-                labels.append(attachment.fileName)
-                switch attachment.kind {
-                case .image: labels.append(L10n.string("Photo"))
-                case .video: labels.append(L10n.string("Video"))
-                case .audio: labels.append(L10n.string("Voice message"))
-                case .document, .unsupported: labels.append(L10n.string("File"))
-                }
+            var labels: [String] = []
+            if context.showsIdentity, record.direction != "sent", clusterAtUnreadBoundary(for: item).showsSenderName {
+                // Search only identities already available to the row, without requesting a profile.
+                labels.append(IdentityPresentation.text(accountIdHex: record.sender, knownName: conversationWindow == nil
+                    ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender) : windowIdentities[record.sender]?.displayName))
             }
             if record.kind == MessageSemantics.kindPoll {
                 let poll = poll(for: record.messageIdHex)
-                if poll != nil { labels.append(L10n.string("Poll")) }
                 labels += poll?.options.map { ContentSanitizer.messageBody($0.label) } ?? []
                 let question = poll.map { ContentSanitizer.messageBody($0.question) } ?? L10n.string("This poll can’t be displayed.")
                 return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: question, labels: labels, poll: poll)
             }
-            let usesTextBody = record.sticker == nil && !RemoteGiphyMedia.isEnvelopeText(record.plaintext)
-            let blocks = usesTextBody ? markdownDisplayBlocks(for: item) : nil
-            let text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
-                ?? ContentSanitizer.messageBody(displayBody(of: record))
-            if usesTextBody, media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
-                labels.append(L10n.string("Location"))
+            let media = mediaItems(for: item)
+            let text: String
+            var previewURL: URL?
+            let standaloneSticker = record.sticker != nil && StickerBubbleLayout.standsAlone(plaintext: record.plaintext,
+                hasReply: replyPreview(for: record) != nil, hasMedia: !media.isEmpty)
+            if standaloneSticker {
+                text = ""
+            } else if !context.streamingDebug, record.sticker == nil, media.isEmpty, let gif = RemoteGiphyMedia.parse(wireText: record.plaintext) {
+                text = gif.displayedCredit
+            } else if media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
+                text = L10n.string("Location")
+            } else {
+                labels += media.compactMap { attachment in
+                    guard attachment.rejectionKind == nil, attachment.kind == .document || attachment.kind == .unsupported else { return nil }
+                    return attachment.fileName
+                }
+                let blocks = markdownDisplayBlocks(for: item)
+                text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
+                    ?? (media.isEmpty || !record.plaintext.isEmpty ? ContentSanitizer.messageBody(displayBody(of: record)) : "")
+                if media.isEmpty, !context.streamingDebug, context.showsLinkPreviews {
+                    previewURL = LinkPreviewMetadata.previewURL(in: blocks)
+                }
             }
-            let previewURL = media.isEmpty ? LinkPreviewMetadata.previewURL(in: blocks) : nil
             return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex,
-                text: text, labels: labels, previewURL: previewURL,
-                contactAttachmentIDs: contacts.map(\.id))
+                                           text: text, labels: labels, previewURL: previewURL)
         }
     }
 
