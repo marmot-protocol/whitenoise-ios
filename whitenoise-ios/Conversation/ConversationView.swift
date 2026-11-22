@@ -2464,8 +2464,6 @@ struct ConversationView: View {
             }
         case .systemEvent(let event):
             SystemEventRow(event: event)
-        case .streamDebugEvent(let event):
-            StreamDebugEventRow(event: event)
         }
     }
 

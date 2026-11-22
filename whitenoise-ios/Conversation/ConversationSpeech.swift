@@ -47,7 +47,7 @@ nonisolated enum MessageSpeechPresentation {
                             hasSpokenText: @autoclosure () -> Bool) -> [MessageSpeechAction] {
         guard !MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountID), !hasBlankText(record) else { return [] }
         switch MessageSemantics.classify(record) {
-        case .chat, .reply, .media, .streamFinal:
+        case .chat, .reply, .media:
             guard SharedLocationText.location(from: record.plaintext) == nil,
                   RemoteGiphyMedia.parse(wireText: record.plaintext) == nil else { return [] }
             return !standaloneEmoji() && hasSpokenText() ? [.read] : []

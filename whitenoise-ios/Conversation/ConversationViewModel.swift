@@ -23,36 +23,6 @@ enum ConversationInviteAction: Equatable {
     case declining
 }
 
-enum AgentStreamWatchAdmission {
-    static func canStart(
-        streamIdHex: String?,
-        activeStreamIds: Set<String>,
-        inFlightStreamIds: Set<String> = [],
-        latestStreamWatchInFlight: Bool
-    ) -> Bool {
-        if let streamIdHex {
-            return !activeStreamIds.contains(streamIdHex) && !inFlightStreamIds.contains(streamIdHex)
-        }
-        return !latestStreamWatchInFlight
-    }
-
-    /// Post-await install decision. The epoch check is what makes `cancelAll()`
-    /// stick: a watch suspended on the subscription open when the session was
-    /// cancelled must not install into the restarted session's dictionaries —
-    /// the emptied dictionaries alone would wave it through.
-    static func shouldInstall(
-        sessionEpoch: Int,
-        currentSessionEpoch: Int,
-        streamId: String,
-        activeStreamIds: Set<String>,
-        finalizedStreamIds: Set<String>
-    ) -> Bool {
-        sessionEpoch == currentSessionEpoch
-            && !activeStreamIds.contains(streamId)
-            && !finalizedStreamIds.contains(streamId)
-    }
-}
-
 enum ConversationRuntimeStartDecision: Equatable {
     case skipForegroundWork
     case loadLocalSnapshot(startLiveWork: Bool)
@@ -456,12 +426,6 @@ final class ConversationViewModel {
     /// when the group roster (`groupMlsRefreshGeneration`) or resolved profile
     /// data (`AppState.profileRefreshGeneration`) actually changes.
     @ObservationIgnored private let mentionController = ComposerMentionController()
-    /// Agent-text-stream (QUIC) watch subsystem. Invoked from the timeline ingest
-    /// (`watchStartIfNeeded`/`recordFinalizedStreams`/`resolveFinalizedStream`/
-    /// `dropMatchingStreamPreview`) and writes its synthetic stream/debug rows into
-    /// `timelineStore` through `StreamWatcherTimelineSink`. Constructed eagerly in
-    /// `init` so `timelineStore.streamWatcher` is wired before the first page apply.
-    @ObservationIgnored private let streamWatcher: StreamWatcher
 
     /// First-open load timings. Visible under category "conversation-load" in
     /// Console.app. Measures how long each Marmot read on the open path takes so
@@ -1145,7 +1109,6 @@ final class ConversationViewModel {
             projectionBuilders: projectionBuilders,
             timings: timelineTimings
         )
-        self.streamWatcher = StreamWatcher(appState: appState, groupIdHex: group.groupIdHex)
         self.composer = ComposerModel(appState: appState, groupIdHex: group.groupIdHex, timelineStore: timelineStore,
                                       marmotCalls: composerMarmotCalls)
         self.search = ConversationSearchModel()
@@ -1153,8 +1116,6 @@ final class ConversationViewModel {
         search.entriesProvider = { [weak self] in self?.searchableTimelineEntries() ?? [] }
         search.hasMoreBefore = { [weak self] in self?.hasMoreBefore ?? false }
         search.loadOlderPage = { [weak self] in await self?.loadOlderTimelinePage() }
-        streamWatcher.sink = timelineStore
-        timelineStore.streamWatcher = streamWatcher
         timelineStore.identityNameResolver = { [weak self] id in self?.windowDisplayName(for: id) ?? L10n.string("Unknown user") }
         timelineStore.mentionResolver = { [weak self, weak appState] entity in
             if self?.conversationWindow != nil, let id = NostrProfileReference.pubkeyHex(fromBech32: entity.bech32) {
@@ -1175,7 +1136,6 @@ final class ConversationViewModel {
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
         tailRefreshTask.cancel()
-        streamWatcher.cancelAll()
         composer.cancelDraftMediaUploads()
     }
 
@@ -1326,6 +1286,7 @@ final class ConversationViewModel {
                 pendingIndex: nil,
                 flushedIndex: nil,
                 kind: record.kind,
+                tags: record.tags,
                 isDeleted: isDeleted(record.messageIdHex)
             )
             if accepted != nil { return record }
@@ -1698,7 +1659,6 @@ final class ConversationViewModel {
         groupDetailsTask = nil
         readMarker.cancelPendingReadMarks()
         cancelTimelineTailRefresh()
-        streamWatcher.cancelAll()
     }
 
     private func startLiveTimeline(accountRef: String) {
@@ -1814,7 +1774,7 @@ final class ConversationViewModel {
                 wasAtTail: !previous.hasMoreAfter, isAtTail: !snapshot.hasMoreAfter)
             for message in snapshot.messages where appended.contains(message.timeline.messageIdHex) {
                 let record = Self.appMessageRecord(from: message.timeline)
-                if record.direction == "received", MessageSemantics.isUserMessageKind(record.kind) {
+                if record.direction == "received", MessageSemantics.isChatActivity(record) {
                     timelineStore.beginMessageVisibility(rowID: "msg:\(record.messageIdHex)", operation: .inboundMessageVisible)
                 }
             }
@@ -2098,28 +2058,6 @@ final class ConversationViewModel {
                 self.error = UserFacingError.message(for: error)
             }
         }
-    }
-
-    /// Forwarder retained for tests; the watch subsystem lives in `StreamWatcher`.
-    static func agentStreamStartIdToWatch(
-        from record: AppMessageRecordFfi,
-        finalizedStreamIds: Set<String>,
-        trigger: TimelineUpdateTriggerFfi?
-    ) -> String? {
-        StreamWatcher.agentStreamStartIdToWatch(
-            from: record,
-            finalizedStreamIds: finalizedStreamIds,
-            trigger: trigger
-        )
-    }
-
-    func applyStreamUpdate(streamId: String, sender: String, update: AgentStreamUpdateFfi) {
-        streamWatcher.applyStreamUpdate(streamId: streamId, sender: sender, update: update)
-    }
-
-    /// Forwarder retained for tests; the watch subsystem lives in `StreamWatcher`.
-    nonisolated static func streamPreviewTimestamp(startedAt: UInt64?, fallback: UInt64) -> UInt64 {
-        StreamWatcher.streamPreviewTimestamp(startedAt: startedAt, fallback: fallback)
     }
 
     func refreshTimelineTail() async {
@@ -2700,15 +2638,6 @@ final class ConversationViewModel {
             return nil
         }
         return messageId
-    }
-
-    /// Pure decision for whether a naturally-completing stream watch task may
-    /// clear its own dictionary entry. Only the task whose generation still
-    /// matches the stored generation owns the key; a stale task whose key was
-    /// reused by a later re-watch must not tear that re-watch down. Extracted
-    /// so the generation-guard is observable without a live broker subscription.
-    static func shouldClearCompletedStreamWatch(storedGeneration: UUID?, taskGeneration: UUID) -> Bool {
-        storedGeneration == taskGeneration
     }
 
     /// Prefer the event's own `recordedAt` so the timeline sorts by send time;
@@ -3582,15 +3511,6 @@ final class ConversationViewModel {
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't delete message"), error: error))
             return false
         }
-    }
-
-    // MARK: - Agent text streaming
-
-    /// The stream id of a kind-1200 start, read from its `stream` tag. Returns
-    /// nil (watch the latest stream) if absent or malformed.
-    static func agentStreamId(from message: ReceivedMessageFfi) -> String? {
-        guard case .agentStreamStart(let start) = MessageSemantics.classify(message) else { return nil }
-        return MessageSemantics.normalizedStreamId(start.streamId)
     }
 
     // MARK: - Custom emoji sending

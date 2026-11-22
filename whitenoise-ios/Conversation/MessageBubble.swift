@@ -1115,22 +1115,12 @@ struct MessageBubble: View {
 
     /// The complete source stays reachable for a durable row even when search expands the projected text.
     var offersSourceReader: Bool {
-        !usesReviewLayout && !isLiveStream
+        !usesReviewLayout
             && (incompleteMarkdown || TranscriptMessagePreview.requiresReader(record.plaintext))
     }
 
-    private var isLiveStream: Bool {
-        status == .streaming || (record.direction == "received" && record.messageIdHex.isEmpty)
-    }
-
-    private var isStreamBody: Bool {
-        if isLiveStream { return true }
-        if case .streamFinal = MessageSemantics.classify(record) { return true }
-        return false
-    }
-
     private func messageBodyText(hasReply: Bool, richContent: Bool = false) -> some View {
-        let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil && !isStreamBody {
+        let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil {
             TranscriptMessagePreview.snippet(markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }
                 .joined(separator: "\n") ?? sanitizedBodyText)
         } else { nil }
@@ -1255,7 +1245,7 @@ struct MessageBubble: View {
             })
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
-            // stream bubbles, pre-markdown history) keep the plain path.
+            // sends, pre-markdown history) keep the plain path.
             let text = AttributedString(snippet.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) + "…" } ?? sanitizedBodyText)
             if actionBodySize != nil {
                 liftedInlineText(text)

@@ -56,20 +56,6 @@ struct MarkdownMessageBuilderTests {
         #expect(MessageBubble(record: row, status: .received, incompleteMarkdown: projection.isTruncated).standaloneEmoji == nil)
     }
 
-    @Test func onlyFinalizedStreamsOfferTheUnshownSource() {
-        var row = record(plaintext: String(repeating: "🌲", count: 3000), tokens: doc([]))
-        row.tags = [
-            .init(values: ["stream", String(repeating: "ab", count: 32)]),
-            .init(values: ["stream-start", String(repeating: "cc", count: 32)]),
-            .init(values: ["stream-hash", String(repeating: "55", count: 32)]),
-            .init(values: ["stream-chunks", "2"])
-        ]
-        #expect(MessageBubble(record: row, status: .received).offersSourceReader)
-        #expect(!MessageBubble(record: row, status: .streaming).offersSourceReader)
-        row.plaintext = "Finished"
-        #expect(!MessageBubble(record: row, status: .received).offersSourceReader)
-    }
-
     private func para(_ inlines: [MarkdownInlineFfi]) -> MarkdownBlockFfi {
         .paragraph(inlines: inlines)
     }
