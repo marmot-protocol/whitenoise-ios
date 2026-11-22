@@ -38,18 +38,22 @@ struct ConversationSpeechNavigationTests {
             sender: "peer", plaintext: "", contentTokens: .emptyDocument, kind: MessageSemantics.kindChat,
             tags: [], recordedAt: 1, receivedAt: 1)
         let audio = MessageMediaAttachment(id: "audio", reference: nil, fileName: "voice.m4a", mediaType: "audio/mp4", dim: nil, localData: nil)
+        func actions(visible: Bool? = nil, supported: Bool = true) -> [MessageSpeechAction] {
+            MessageSpeechPresentation.voiceActions(for: record, isTranscribing: false, transcriptVisible: visible, supportsTranscription: supported)
+        }
         #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: nil, media: [audio])?.id == audio.id)
         #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: nil, media: [audio, audio]) == nil)
+        #expect(actions(supported: false).isEmpty)
+        #expect(actions() == [.transcribe])
         record.plaintext = "The gate number changed"
-        #expect(!MessageSpeechPresentation.hasBlankText(record))
         #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: nil, media: [audio])?.id == audio.id)
+        #expect(actions().isEmpty)
+        #expect(actions(visible: true) == [.hide, .copy])
+        #expect(actions(visible: false) == [.show])
         record.sender = String(repeating: "ab", count: 32)
         #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: record.sender, media: [audio]) == nil)
         record.direction = "sent"
         #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: nil, media: [audio]) == nil)
-        #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: nil, offersTranscribe: false).isEmpty)
-        #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: nil, offersTranscribe: true) == [.transcribe])
-        #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: true, offersTranscribe: false) == [.hide, .copy])
     }
 
     @Test func aRetainedRecordingAtTheSizeLimitCanBeReadAndALargerOneGetsASizeError() throws {

@@ -55,10 +55,10 @@ nonisolated enum MessageSpeechPresentation {
         }
     }
 
-    static func voiceActions(isTranscribing: Bool, transcriptVisible: Bool?, offersTranscribe: Bool) -> [MessageSpeechAction] {
+    static func voiceActions(for record: AppMessageRecordFfi, isTranscribing: Bool, transcriptVisible: Bool?, supportsTranscription: Bool) -> [MessageSpeechAction] {
         if isTranscribing { return [.transcribing] }
         if let transcriptVisible { return transcriptVisible ? [.hide, .copy] : [.show] }
-        return offersTranscribe ? [.transcribe] : []
+        return supportsTranscription && hasBlankText(record) ? [.transcribe] : []
     }
 }
 

@@ -4844,9 +4844,9 @@ struct ConversationView: View {
             let transcript = speech.transcripts[id]
             let verified = transcript?.isVerified(in: speechScope) == true && transcript?.recording.matches(audio) == true
             let supportsTranscription: Bool = if #available(iOS 26, *) { true } else { false }
-            voiceActions = MessageSpeechPresentation.voiceActions(isTranscribing: speech.transcribingID == id,
+            voiceActions = MessageSpeechPresentation.voiceActions(for: record, isTranscribing: speech.transcribingID == id,
                 transcriptVisible: verified ? transcript?.visible : nil,
-                offersTranscribe: supportsTranscription && MessageSpeechPresentation.hasBlankText(record))
+                supportsTranscription: supportsTranscription)
         }
         if speech.readingID == id { return [.stop] + voiceActions }
         func standaloneEmoji() -> Bool {
