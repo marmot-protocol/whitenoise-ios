@@ -1098,9 +1098,9 @@ struct ConversationView: View {
                         messageIdHex: target.messageIdHex,
                         viewModel: viewModel,
                         initialEmoji: target.initialEmoji,
-                        onRemoveOwnReaction: { emoji in
+                        onRemoveOwnReactions: {
                             Task {
-                                await viewModel.toggleReaction(emoji, on: target.record)
+                                await viewModel.removeOwnReactions(from: target.record)
                                 if viewModel.reactions(for: target.messageIdHex).isEmpty {
                                     reactionDetailsTarget = nil
                                 }

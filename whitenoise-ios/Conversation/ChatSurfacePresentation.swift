@@ -402,7 +402,9 @@ nonisolated enum ReactionPillPresentation {
         if let shortcode = CustomEmojiShortcode(reactionContent: tally.emoji) {
             return canRepeatCustom(shortcode) ? .toggle : .showDetails
         }
-        return SingleEmojiMessagePresentation.emoji(in: tally.emoji) == tally.emoji ? .toggle : .showDetails
+        guard ContentSanitizer.reactionEmoji(tally.emoji) == tally.emoji,
+              SingleEmojiMessagePresentation.emoji(in: tally.emoji) != nil else { return .showDetails }
+        return .toggle
     }
 
     static func canRemoveIndividually(_ emoji: String, from reactions: [ConversationViewModel.ReactionTally],

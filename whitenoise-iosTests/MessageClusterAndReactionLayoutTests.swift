@@ -21,6 +21,7 @@ struct ReactionMetadataFittingTests {
         #expect(action("❤️") == .toggle)
         #expect(action("1") == .showDetails)
         #expect(action("©") == .showDetails)
+        #expect(action("😀" + String(repeating: "\u{0301}", count: 100)) == .showDetails)
         #expect(action(":party:", repeatable: true) == .toggle)
         #expect(action(":party:") == .showDetails)
         #expect(action(":party:", mine: true) == .toggle)

@@ -196,7 +196,7 @@ struct ReactionDetailsSheet: View {
 
     let messageIdHex: String
     let viewModel: ConversationViewModel
-    let onRemoveOwnReaction: ((String) -> Void)?
+    let onRemoveOwnReactions: (() -> Void)?
     @State private var selectedEmoji: String?
     @State private var model = MessageReactionsModel()
     @State private var retryCount = 0
@@ -213,11 +213,11 @@ struct ReactionDetailsSheet: View {
         messageIdHex: String,
         viewModel: ConversationViewModel,
         initialEmoji: String?,
-        onRemoveOwnReaction: ((String) -> Void)? = nil
+        onRemoveOwnReactions: (() -> Void)? = nil
     ) {
         self.messageIdHex = messageIdHex
         self.viewModel = viewModel
-        self.onRemoveOwnReaction = onRemoveOwnReaction
+        self.onRemoveOwnReactions = onRemoveOwnReactions
         _selectedEmoji = State(initialValue: initialEmoji)
     }
 
@@ -425,35 +425,19 @@ struct ReactionDetailsSheet: View {
                 Text(appState.shortNpub(forAccountIdHex: user.sender))
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
+                if isMe, viewModel.canSendMessages, let onRemoveOwnReactions {
+                    Button("Remove all my reactions", action: onRemoveOwnReactions)
+                        .font(.subheadline)
+                        .frame(minHeight: 44)
+                }
             }
 
             Spacer(minLength: 12)
 
             HStack(spacing: 5) {
                 ForEach(user.emojis, id: \.self) { emoji in
-                    if isMe, let onRemoveOwnReaction {
-                        Button {
-                            onRemoveOwnReaction(emoji)
-                        } label: {
-                            HStack(spacing: 3) {
-                                CustomEmojiReactionLabel(emoji: emoji, reactionMessageIdHex: details.reactionMessageIdHex(for: emoji))
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.title3)
-                            .padding(.leading, 7)
-                            .padding(.trailing, 5)
-                            .padding(.vertical, 4)
-                            .background(Color(.tertiarySystemFill), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(L10n.string("Remove"))
-                        .accessibilityValue(CustomEmojiShortcode.spokenReaction(emoji))
-                    } else {
-                        CustomEmojiReactionLabel(emoji: emoji, reactionMessageIdHex: details.reactionMessageIdHex(for: emoji))
-                            .font(.title3)
-                    }
+                    CustomEmojiReactionLabel(emoji: emoji, reactionMessageIdHex: details.reactionMessageIdHex(for: emoji))
+                        .font(.title3)
                 }
             }
         }

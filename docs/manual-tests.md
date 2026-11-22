@@ -1921,7 +1921,9 @@ Marmot root. Automated simulator checks do not replace these device checks.
       Both views include every reactor. Tap an available emoji
       to add it and tap your sole reaction to remove it. If other reactions of
       yours could also be removed, the chip and quick menu both open details.
-      A fast read shows no spinner flash.
+      In the sheet, Remove all my reactions clears every reaction you added to
+      that message, including kinds outside the preview. Other people’s reactions
+      remain. A fast read shows no spinner flash.
       With the sheet open, a reaction added, changed or removed on another device
       (including one outside the two-name preview) updates the list. Removing your
       own reaction updates it immediately. Blocked reactors are not listed. A

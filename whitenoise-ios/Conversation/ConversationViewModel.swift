@@ -3650,17 +3650,25 @@ final class ConversationViewModel {
     @ObservationIgnored private var pendingReactions: [String: Set<PendingReaction>] = [:]
 
     func toggleReaction(_ emoji: String, on message: AppMessageRecordFfi) async {
+        let mine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
+        await performReaction(mine ? .removeAll : .add(emoji), on: message)
+    }
+
+    /// The Reactions sheet lists every kind, including those outside the bubble's preview.
+    func removeOwnReactions(from message: AppMessageRecordFfi) async {
+        await performReaction(.removeAll, on: message)
+    }
+
+    private func performReaction(_ operation: PendingReaction, on message: AppMessageRecordFfi) async {
         guard canSendMessages,
               let appState, let accountRef = appState.activeAccountRef,
               !message.messageIdHex.isEmpty else { return }
         let me = appState.activeAccount?.accountIdHex ?? ""
-        let alreadyMine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
         // Different additions can upload together. Unreact clears every owned reaction
         // on this message, so it must not overlap another addition or removal.
         let id = message.messageIdHex
-        let operation: PendingReaction = alreadyMine ? .removeAll : .add(emoji)
         let pending = pendingReactions[id] ?? []
-        guard !pending.contains(.removeAll), !alreadyMine || pending.isEmpty,
+        guard !pending.contains(.removeAll), operation != .removeAll || pending.isEmpty,
               pendingReactions[id, default: []].insert(operation).inserted else {
             Haptics.warning()
             return
@@ -3672,7 +3680,7 @@ final class ConversationViewModel {
         // A `:shortcode:` reaction is sent with its image; one this chat
         // holds no image for can only be removed.
         var customEmoji: CustomEmojiSendable?
-        if !alreadyMine, let shortcode = CustomEmojiShortcode(reactionContent: emoji) {
+        if case .add(let emoji) = operation, let shortcode = CustomEmojiShortcode(reactionContent: emoji) {
             guard canSendMediaAttachments, customEmojiSendScope != nil else { return }
             customEmoji = customEmojiSendables.first { $0.shortcode == shortcode }
             guard customEmoji != nil else { return }
@@ -3684,7 +3692,8 @@ final class ConversationViewModel {
         var removals: Set<ReactionRemoval> = []
         var clearedRemoval: ReactionRemoval?
 
-        if alreadyMine {
+        switch operation {
+        case .removeAll:
             removals = Self.reactionRemovalsForUnreact(
                 target: message.messageIdHex,
                 tallies: reactions(for: message.messageIdHex),
@@ -3699,7 +3708,7 @@ final class ConversationViewModel {
                 target: message.messageIdHex,
                 sender: me
             )
-        } else {
+        case .add(let emoji):
             // Re-react: clear any pending optimistic un-react for this
             // target+emoji so the new add isn't immediately subtracted by a
             // stale removal in `timelineStore.recomputeReactions()` (#349). The removal is
@@ -3735,25 +3744,26 @@ final class ConversationViewModel {
 
         do {
             let client = try appState.currentMarmotClient()
-            if alreadyMine {
+            switch operation {
+            case .removeAll:
                 _ = try await client.unreactFromMessage(
                     accountRef: accountRef,
                     groupIdHex: group.groupIdHex,
                     targetMessageId: message.messageIdHex
                 )
-            } else if let customEmoji {
-                try await customEmojiSender.sendReaction(customEmoji, to: message.messageIdHex)
-            } else {
-                _ = try await client.reactToMessage(
-                    accountRef: accountRef,
-                    groupIdHex: group.groupIdHex,
-                    targetMessageId: message.messageIdHex,
-                    emoji: emoji
-                )
+            case .add(let emoji):
+                if let customEmoji {
+                    try await customEmojiSender.sendReaction(customEmoji, to: message.messageIdHex)
+                } else {
+                    _ = try await client.reactToMessage(
+                        accountRef: accountRef, groupIdHex: group.groupIdHex,
+                        targetMessageId: message.messageIdHex, emoji: emoji
+                    )
+                }
             }
         } catch {
             // Nothing to remove: the reaction is already gone, as the optimistic change shows.
-            if alreadyMine, case .ReactionNotFound = error as? MarmotKitError { return }
+            if operation == .removeAll, case .ReactionNotFound = error as? MarmotKitError { return }
             // Revert the optimistic change.
             if let addedKey { timelineStore.reactionProjections.removeRecord(forKey: addedKey) }
             for removal in removals {
