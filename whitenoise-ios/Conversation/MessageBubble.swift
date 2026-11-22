@@ -2980,8 +2980,6 @@ private struct MessageVideoAttachmentView: View {
 
     @State private var previewThumbnail: UIImage?
     @State private var localDuration: Double?
-    @State private var posterDecodeFailed = false
-    @State private var durationReadFailed = false
     @State private var lastRead: (request: TimelineMediaTaskID, overPreviewLimit: Bool)?
     @Environment(\.displayScale) private var displayScale
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
@@ -3059,8 +3057,8 @@ private struct MessageVideoAttachmentView: View {
             let request = previewRequest.media
             guard request.isVisible, onLoadMedia.allowsAutomaticLoad(.video),
                   lastRead?.request != request || lastRead?.overPreviewLimit != true else { return }
-            let needsPoster = displayThumbnail == nil && !posterDecodeFailed
-            let needsDuration = showsBadges && showsDuration && !durationReadFailed && item.durationSeconds == nil
+            let needsPoster = displayThumbnail == nil
+            let needsDuration = previewRequest.showsDuration && item.durationSeconds == nil
                 && localDuration == nil && MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey) == nil
             guard needsPoster || needsDuration else {
                 // Metadata can come from identical bytes in another message. Admit this
@@ -3089,8 +3087,6 @@ private struct MessageVideoAttachmentView: View {
                 if let seconds = time?.seconds, seconds.isFinite, seconds > 0 {
                     localDuration = seconds
                     MessageVideoThumbnailDecoder.store(duration: seconds, for: thumbnailCacheKey)
-                } else {
-                    durationReadFailed = true
                 }
             }
             if needsPoster { await loadPreviewThumbnail(from: url, scale: displayScale) }
@@ -3112,10 +3108,7 @@ private struct MessageVideoAttachmentView: View {
             scale: scale
         )
         guard !Task.isCancelled else { return }
-        guard let thumbnail = result else {
-            posterDecodeFailed = true
-            return
-        }
+        guard let thumbnail = result else { return }
         previewThumbnail = thumbnail
         MessageVideoThumbnailDecoder.store(
             thumbnail,

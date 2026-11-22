@@ -11,13 +11,17 @@ import Synchronization
 @MainActor
 struct MessageMediaGalleryTests {
 
-    @Test func tappingAVideoInChatPlaysItAndSwipingWaitsForAnotherPlayTap() {
-        nonisolated final class TestPlayer: AVPlayer {
-            let playCount = Mutex(0)
-            var plays: Int { playCount.withLock { $0 } }
-            override func play() { playCount.withLock { $0 += 1 } }
-            override func pause() {}
+    private nonisolated final class TestPlayer: AVPlayer {
+        private let playbackRate = Mutex<Float>(0)
+        override var rate: Float {
+            get { playbackRate.withLock { $0 } }
+            set { playbackRate.withLock { $0 = newValue } }
         }
+        override func play() { rate = 1 }
+        override func pause() { rate = 0 }
+    }
+
+    @Test func tappingAVideoInChatPlaysItAndSwipingWaitsForAnotherPlayTap() {
         let player = TestPlayer()
         var selection = TranscriptMediaSelection(openingID: "first video")
         func presentSelection() {
@@ -26,19 +30,22 @@ struct MessageMediaGalleryTests {
         }
         selection.select("first video")
         presentSelection()
-        #expect(player.plays == 1)
+        #expect(player.rate == 1)
         selection.select("another video")
         presentSelection()
-        #expect(player.plays == 1)
+        #expect(player.rate == 0)
         MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: .userTap(afterFailure: false))
-        #expect(player.plays == 2)
+        #expect(player.rate == 1)
         selection.select("first video")
         presentSelection()
-        #expect(player.plays == 2)
+        #expect(player.rate == 0)
         let restored = TranscriptMediaSelection(openingID: selection.selectedID)
         MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: restored.demand(for: restored.selectedID, allowsOpeningDemand: false))
-        #expect(player.plays == 2)
+        #expect(player.rate == 0)
+    }
 
+    @Test func aVerifiedOutgoingVideoKeepsItsNativePlaybackIntentWithoutPromotingAcquisition() {
+        let player = TestPlayer()
         var outgoing = TranscriptMediaSelection(openingID: "draft")
         let pending = PendingVideoPlayback()
         pending.request(.explicit)
@@ -47,15 +54,18 @@ struct MessageMediaGalleryTests {
         #expect(confirmedDemand == .automatic)
         MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: confirmedDemand,
             resumeConfirmed: outgoing.resumingVideoID == outgoing.selectedID)
-        #expect(player.plays == 3)
+        #expect(player.rate == 1)
         outgoing.select("another video")
         outgoing.select("confirmed slot")
         #expect(outgoing.resumingVideoID == nil)
 
-        let paused = AVPlayer()
-        pending.observe(paused)
-        pending.detach(paused)
+        pending.observe(player)
+        player.pause()
         #expect(pending.wantsPlayback == false)
+        player.play()
+        pending.detach(player)
+        player.pause()
+        #expect(pending.wantsPlayback == true)
     }
 
     @Test func confirmedPhotoMustMatchTheSelectedDraftsRowSlotAndBytes() async throws {
