@@ -64,6 +64,12 @@ struct GroupDetailsView: View {
         viewModel.canEditGroup && !viewModel.isGroupDisbandingOrDisbanded
     }
     private var isDirectMessage: Bool { viewModel.groupDisplay.isDirectMessage }
+    /// Membership changes can change which leaves advertise linked devices.
+    private var accountDevicesActivationKey: String {
+        "\(viewModel.group.groupIdHex)/\(appState.runtimeGeneration)/\(isAdmin)/"
+            + "\(viewModel.members.hashValue)/\(viewModel.groupMemberDetails.count)"
+    }
+
     private var memberCount: Int {
         viewModel.groupMemberDetails.isEmpty ? viewModel.members.count : viewModel.groupMemberDetails.count
     }
@@ -83,6 +89,10 @@ struct GroupDetailsView: View {
                 groupIdentitySection
             }
             groupLifecycleSection
+            // MDK answers `eligible` only to an admin, once every member's devices support it.
+            if model.accountDevicesActivation == .eligible {
+                linkedDevicesNudgeSection
+            }
             if isDirectMessage {
                 contactProfileActionsSection
                 contactSharedContentSection
@@ -289,6 +299,15 @@ struct GroupDetailsView: View {
         }
         .task(id: muteStateKey) {
             model.loadMuteState(using: appState)
+        }
+        .task(id: accountDevicesActivationKey) {
+            await model.loadAccountDevicesActivation(using: appState)
+        }
+        .alert("Let Linked Devices Join?", isPresented: $model.confirmsEnableAccountDevices) {
+            Button("Turn On") { Task { await model.enableAccountDevices(using: appState) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Members’ other devices can then join this chat and add each other without an admin. This can’t be turned off.")
         }
         .task(id: model.muteExpiresAt) {
             guard let deadline = model.muteExpiresAt else { return }
@@ -752,6 +771,23 @@ struct GroupDetailsView: View {
             Text("Settings")
         } footer: {
             Text("Archiving hides the chat from your main list. It doesn't notify anyone.")
+        }
+    }
+
+    /// Shown to an admin only once MDK says every member's devices support it.
+    private var linkedDevicesNudgeSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Linked Devices Are Ready", systemImage: "laptopcomputer.and.iphone")
+                    .font(.headline)
+                Text("Everyone’s app in this chat now supports linked devices. Turn them on so people here can add their other devices to it.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+            Button("Turn On Linked Devices") { model.confirmsEnableAccountDevices = true }
+                .disabled(model.membershipActionInFlight)
         }
     }
 

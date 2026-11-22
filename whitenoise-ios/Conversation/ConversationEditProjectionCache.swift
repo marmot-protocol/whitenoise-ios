@@ -96,7 +96,8 @@ final class ConversationEditProjectionCache {
             retentionSeconds: base.retentionSeconds,
             retentionExpiresAt: base.retentionExpiresAt,
             recordedAt: base.recordedAt,
-            receivedAt: base.receivedAt
+            receivedAt: base.receivedAt,
+            invalidated: base.invalidated
         )
     }
 

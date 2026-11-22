@@ -11,7 +11,7 @@ nonisolated enum MessageForwardingPolicy {
                 ? nil
                 : record.plaintext
         case .streamFinal, .reaction, .delete, .edit, .poll, .agentStreamStart,
-             .agentActivity, .agentOperation, .groupSystem, .unknown:
+             .agentActivity, .agentOperation, .groupSystem, .unsupportedEvent, .unknown:
             return nil
         }
     }
@@ -21,19 +21,21 @@ nonisolated enum MessageEditingPolicy {
     static func canEdit(
         _ record: AppMessageRecordFfi,
         isDeleted: Bool,
-        canSendMessages: Bool
+        canSendMessages: Bool,
+        myAccountId: String?
     ) -> Bool {
         guard canSendMessages,
               !isDeleted,
+              !record.invalidated,
               !record.messageIdHex.isEmpty,
-              record.direction == "sent"
+              MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountId)
         else { return false }
 
         switch MessageSemantics.classify(record) {
         case .chat, .reply, .media:
             return true
         case .streamFinal, .reaction, .delete, .edit, .poll, .agentStreamStart,
-             .agentActivity, .agentOperation, .groupSystem, .unknown:
+             .agentActivity, .agentOperation, .groupSystem, .unsupportedEvent, .unknown:
             return false
         }
     }

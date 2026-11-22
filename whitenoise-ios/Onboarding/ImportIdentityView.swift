@@ -276,6 +276,19 @@ struct ImportIdentityView: View {
         } message: {
             Text("A previous sign-in stopped before setup finished. Recovery removes that incomplete local setup and tries again. A KeyPackage from the failed attempt may remain published on relays.")
         }
+        .alert(
+            "Remove Unlinked Profile?",
+            isPresented: $model.showUnlinkedRemovalConfirmation
+        ) {
+            Button("Remove and Sign In", role: .destructive) {
+                model.resolveUnlinkedRemovalConfirmation(approved: true)
+            }
+            Button("Cancel", role: .cancel) {
+                model.resolveUnlinkedRemovalConfirmation(approved: false)
+            }
+        } message: {
+            Text("Another of your devices unlinked this one from this profile. Removing it deletes this device’s copy of its chats; then you can sign in again and link this device anew.")
+        }
         .onDisappear {
             model.scrubDismissedImportState()
         }

@@ -69,7 +69,10 @@ nonisolated struct AccountSetupRelayStepPresentation {
     var canSearchDefaults: Bool { proposal == nil && canDiscover && !allows(.useRecommendedRelays) }
 
     /// Suggest a Fix only ever runs on an explicit tap, while no proposal is pending.
-    var offersSuggestion: Bool { proposal == nil && !isInterrupted && allows(.editRelays) }
+    /// `removeUnusableRelays` says the suggestion would remove a relay that can't serve its role.
+    var offersSuggestion: Bool {
+        proposal == nil && !isInterrupted && (allows(.editRelays) || allows(.removeUnusableRelays))
+    }
     /// A ready-made minimal fix is easier than a blank editor or a bare retry, so it
     /// leads unless Use Default Relays is on offer.
     var suggestionLeads: Bool { offersSuggestion && !allows(.useRecommendedRelays) }
@@ -92,9 +95,13 @@ nonisolated struct AccountSetupRelayStepPresentation {
     var editsDirectly: Bool { proposal == nil || (isManualReview && allows(.editRelays)) }
 
     /// Withdrawing a reviewable proposal loses it; a manual-review preview has no change to lose.
+    /// A proposal built on an inconclusive check is saved only at the user's own risk.
     func needsConfirmation(_ action: Action) -> Bool {
-        !isManualReview && (action == .discard || (action == .edit && proposal != nil) || action == .replaceWithDefaults)
+        if action == .approve { return isInconclusive }
+        return !isManualReview && (action == .discard || (action == .edit && proposal != nil) || action == .replaceWithDefaults)
     }
+
+    var isInconclusive: Bool { proposal?.inconclusive == true }
 
     static func needsEarlierReview(in snapshot: OnboardingSnapshotFfi, step: OnboardingStepFfi) -> Bool {
         guard snapshot.steps.first(where: { $0.step == step })?.status == .pending,

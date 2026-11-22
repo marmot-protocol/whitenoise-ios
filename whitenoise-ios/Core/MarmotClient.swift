@@ -87,6 +87,7 @@ nonisolated final class MarmotClient: Sendable {
         self.cursorPersistence = cursorPersistence
         self.telemetryConfig = telemetryConfig
         self.productConfig = .current()
+        // Every MarmotKit constructor opens with device groups (multi-device) on.
         self.marmot = try Marmot.newWithConfiguration(
             rootPath: rootPath,
             relayUrls: relayUrls,

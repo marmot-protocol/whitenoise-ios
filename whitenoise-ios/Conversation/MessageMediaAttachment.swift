@@ -552,6 +552,95 @@ nonisolated enum PickedMediaFile {
         )
         return try Data(contentsOf: clone, options: .alwaysMapped)
     }
+
+    /// Writes the chunks `read` returns (from `offset`, until an empty chunk)
+    /// into a private file and maps it, as `mappedData(from:)` maps a clone.
+    /// `read` returning nil means the bytes are gone. Refuses a body whose
+    /// size isn't `expectedSize`.
+    static func mappedData(
+        expectedSize: UInt64,
+        in directory: URL = defaultDirectory,
+        now: Date = Date(),
+        read: (UInt64) async throws -> Data?
+    ) async throws -> Data {
+        let manager = FileManager.default
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+        MediaUploadSourceFiles.removeStale(in: directory, olderThan: staleAge, now: now)
+        let copy = directory.appendingPathComponent(UUID().uuidString, isDirectory: false)
+        // Not complete protection, for the same reason as a picked clone.
+        guard manager.createFile(atPath: copy.path, contents: nil,
+            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+        else { throw CocoaError(.fileWriteUnknown) }
+        defer { try? manager.removeItem(at: copy) }
+        let handle = try FileHandle(forWritingTo: copy)
+        var offset: UInt64 = 0
+        do {
+            while true {
+                try Task.checkCancellation()
+                guard let chunk = try await read(offset) else { throw CocoaError(.fileReadNoSuchFile) }
+                if chunk.isEmpty { break }
+                try handle.write(contentsOf: chunk)
+                offset += UInt64(chunk.count)
+                guard offset <= expectedSize else { throw CocoaError(.fileReadCorruptFile) }
+            }
+            try handle.close()
+        } catch {
+            try? handle.close()
+            throw error
+        }
+        guard offset == expectedSize else { throw CocoaError(.fileReadCorruptFile) }
+        return try Data(contentsOf: copy, options: .alwaysMapped)
+    }
+}
+
+/// How a composer attachment is saved into, or staged as a file in, MDK's draft.
+nonisolated enum MessageDraftAttachmentInputs {
+    /// MDK's chunk size for reading a file-backed draft attachment.
+    static let readChunkBytes: UInt32 = 1024 * 1024
+
+    /// Each attachment MDK already holds as a file is kept by id. Others go
+    /// inline while drafts can hold their bytes; a large one MDK doesn't hold
+    /// yet is left out, so the save never carries its bytes. Attachments the
+    /// draft holds whose ids are in `kept` and that `attachments` don't name
+    /// are kept after them, by id and in order.
+    static func inputs(
+        for attachments: [MediaDraftAttachment],
+        retainedIDs: Set<String>,
+        keeping kept: [String] = []
+    ) -> [MessageDraftAttachmentInputFfi] {
+        let named = Set(attachments.map(\.id.uuidString))
+        return attachments.compactMap { attachment in
+            let id = attachment.id.uuidString
+            if retainedIDs.contains(id) { return .retained(id: id) }
+            guard MediaDraftProcessor.persistsInDraft(attachment) else { return nil }
+            return .inline(attachment: attachment.messageDraftAttachment)
+        } + kept.filter { !named.contains($0) }.map { .retained(id: $0) }
+    }
+
+    /// A large attachment drafts can hold only as a file, which MDK copies in.
+    static func needsStaging(_ attachment: MediaDraftAttachment) -> Bool {
+        !MediaDraftProcessor.persistsInDraft(attachment)
+            && attachment.data.count <= MediaDraftProcessor.maxAttachmentBytes
+    }
+
+    static func fileRequest(for attachment: MediaDraftAttachment, sourcePath: String) -> MessageDraftAttachmentFileRequestFfi {
+        MessageDraftAttachmentFileRequestFfi(
+            id: attachment.id.uuidString,
+            sourcePath: sourcePath,
+            expectedSize: UInt64(attachment.data.count),
+            fileName: attachment.fileName,
+            mediaType: attachment.mediaType,
+            dim: attachment.dim,
+            thumbhash: attachment.thumbhash,
+            durationSeconds: attachment.durationSeconds,
+            waveformSamples: attachment.waveformSamples.map(Double.init)
+        )
+    }
+
+    /// The ids of attachments MDK holds as files in `selection`.
+    static func fileBackedIDs(in selection: SelectedMessageDraftFfi?) -> Set<String> {
+        Set(selection?.draft?.mediaAttachments.filter(\.fileBacked).map(\.id) ?? [])
+    }
 }
 
 nonisolated enum MediaDraftProcessor {
@@ -564,9 +653,9 @@ nonisolated enum MediaDraftProcessor {
     /// MDK's largest encrypted media blob (512 MiB) less the AEAD tag that
     /// encryption adds to it.
     static let maxAttachmentBytes = 512 * 1024 * 1024 - Int(MediaFileUploadLimit.aeadTagBytes)
-    /// MDK's draft API copies every attachment's bytes on each save, so larger
-    /// attachments stay out of saved drafts until it can keep one by file
-    /// (marmot-protocol/mdk#3431).
+    /// MDK copies an inline draft attachment's bytes on each save, so larger
+    /// attachments go into the draft as files instead
+    /// (`MessageDraftAttachmentInputs`, `stageMessageDraftAttachmentFile`).
     static let maxDraftAttachmentBytes = 50 * 1024 * 1024
     static let draftThumbnailPixelSize: CGFloat = 160
 
@@ -589,18 +678,30 @@ nonisolated enum MediaDraftProcessor {
         addingAudio ? drafts.filter { $0.kind != .audio } : drafts
     }
 
+    /// Whether drafts can hold the attachment's bytes inline.
     static func persistsInDraft(_ attachment: MediaDraftAttachment) -> Bool {
         attachment.data.count <= maxDraftAttachmentBytes
     }
 
-    /// A message carrying an attachment that drafts can't hold is sent without
-    /// a draft revision, and nothing in it is uploaded ahead of Send.
-    static func sendsThroughDraft(_ attachments: [MediaDraftAttachment]) -> Bool {
-        attachments.allSatisfy(persistsInDraft)
+    /// A message carrying an attachment the draft doesn't hold, inline or as a
+    /// file MDK has staged (`fileBackedIDs`), is sent without a draft revision,
+    /// and nothing in it is uploaded ahead of Send.
+    static func sendsThroughDraft(_ attachments: [MediaDraftAttachment], fileBackedIDs: Set<String> = []) -> Bool {
+        attachments.allSatisfy { persistsInDraft($0) || fileBackedIDs.contains($0.id.uuidString) }
     }
 
     @MainActor
+    /// Off the MainActor, as the picker prepares: a video's thumbnail writes
+    /// its bytes to a temporary file, and a file-backed one can be 512 MiB.
     static func restoredDraftAttachments(
+        from stored: [MessageDraftAttachmentFfi]
+    ) async -> [MediaDraftAttachment] {
+        await Task.detached(priority: .userInitiated) {
+            await restoredDraftAttachmentsValue(from: stored)
+        }.value
+    }
+
+    private static func restoredDraftAttachmentsValue(
         from stored: [MessageDraftAttachmentFfi]
     ) async -> [MediaDraftAttachment] {
         var restored: [MediaDraftAttachment] = []

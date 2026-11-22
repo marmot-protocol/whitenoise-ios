@@ -35,6 +35,25 @@ struct GroupChangeNoticeTests {
         )])
     }
 
+    /// MDK keeps given-up changes until they're acknowledged; launch raises the
+    /// newest the same way as the live event, and the rest wait their turn.
+    @Test func theNewestRetainedUndeliveredChangeIsRaisedAtLaunch() {
+        let alice = accountSummary("Alice", byte: "aa")
+        func record(_ commit: String, at: UInt64) -> GroupChangeNotDeliveredFfi {
+            GroupChangeNotDeliveredFfi(groupIdHex: "group", commitIdHex: commit, queuedIntentIdHex: nil,
+                                       intentKind: "invite", reason: "not_delivered", at: at)
+        }
+        let event = GroupChangeNotice.retainedNotDeliveredEvent(
+            account: alice, records: [record("old", at: 1), record("new", at: 5), record("mid", at: 3)]
+        )
+        #expect(event == .groupEvent(
+            accountIdHex: alice.accountIdHex, accountLabel: alice.label, groupIdHex: "group",
+            event: .groupChangeNotDelivered(commitIdHex: "new", intentKind: "invite", reason: "not_delivered")
+        ))
+        #expect(event.flatMap(GroupChangeNotice.toast(for:)) != nil)
+        #expect(GroupChangeNotice.retainedNotDeliveredEvent(account: alice, records: []) == nil)
+    }
+
     @Test func eachAccountsFailedRewindRestoreOfAGroupIsAnnouncedOnce() {
         var announcements = RefusedIntentAnnouncements()
         let admitted = [
@@ -116,6 +135,35 @@ struct GroupChangeNoticeTests {
         #expect(invite?.title != removal?.title)
         #expect(invite?.message == removal?.message)
         #expect(invite?.message != notMember?.message)
+    }
+
+    private func notDelivered(commit: String = "commit", kind: String, reason: String) -> MarmotEventFfi {
+        .groupEvent(accountIdHex: "account", accountLabel: "private profile", groupIdHex: "group",
+                    event: .groupChangeNotDelivered(commitIdHex: commit, intentKind: kind, reason: reason))
+    }
+
+    /// A change MDK gave up after its call returned is reported like a dropped
+    /// queued change, with each reason worded on its own.
+    @Test func changesMDKGaveUpTellTheUserWhy() throws {
+        let reasons = ["not_delivered", "event_too_large", "refused"]
+        let messages = try reasons.map { reason in
+            let toast = try #require(GroupChangeNotice.toast(for: notDelivered(kind: "update_group_data", reason: reason)))
+            #expect(toast.style == .warning)
+            #expect(toast.title == GroupChangeNotice.refusedIntentToast(intentKind: "update_group_data", reason: reason).title)
+            return toast.message
+        }
+        #expect(Set(messages).count == reasons.count)
+        #expect(messages[1] == UserFacingError.eventTooLargeMessage(.commit))
+    }
+
+    @Test func eachChangeMDKGaveUpIsAnnouncedOnce() {
+        var announcements = RefusedIntentAnnouncements()
+        let admitted = [
+            announcements.admit(notDelivered(commit: "a", kind: "invite", reason: "refused")),
+            announcements.admit(notDelivered(commit: "a", kind: "invite", reason: "refused")),
+            announcements.admit(notDelivered(commit: "b", kind: "invite", reason: "refused")),
+        ]
+        #expect(admitted == [true, false, true])
     }
 
     @Test func eachDroppedChangeIsAnnouncedOnce() {
