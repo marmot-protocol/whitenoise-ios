@@ -303,10 +303,9 @@ enum MarkdownMessageBuilder {
                 if !raw.isEmpty { truncated = true }
                 return ""
             }
-            return String(take(MarkdownMessageBuilder.boundedTextRun(
-                raw,
-                maxCharacters: remainingCharacters
-            )))
+            let run = MarkdownMessageBuilder.boundedTextRun(raw, maxCharacters: remainingCharacters)
+            if run.isTruncated { truncated = true }
+            return String(take(run.text))
         }
     }
 
@@ -358,7 +357,7 @@ enum MarkdownMessageBuilder {
     }
 
     nonisolated static func truncatedBech32(_ bech32: String) -> String {
-        let clean = boundedTextRun(bech32, maxCharacters: 64)
+        let clean = boundedTextRun(bech32, maxCharacters: 64).text
         guard clean.count > 16 else { return clean }
         return "\(clean.prefix(8))…\(clean.suffix(4))"
     }
@@ -366,7 +365,7 @@ enum MarkdownMessageBuilder {
     /// Render-side scheme gate for link destinations. Returns nil (no link,
     /// children render as plain text) for disallowed or unparseable URLs.
     static func allowedLinkURL(_ raw: String) -> URL? {
-        let trimmed = boundedTextRun(raw, maxCharacters: ContentSanitizer.maxImageURLLength)
+        let trimmed = boundedTextRun(raw, maxCharacters: ContentSanitizer.maxImageURLLength).text
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let components = URLComponents(string: trimmed),
@@ -418,7 +417,7 @@ enum MarkdownMessageBuilder {
                 out.append(.thematicBreak)
 
             case .codeBlock(let kind, let info, let content):
-                let language = kind == .fenced ? boundedTextRun(info, maxCharacters: 40).split(whereSeparator: \.isWhitespace).first.map { String($0.prefix(40)) } : nil
+                let language = kind == .fenced ? boundedTextRun(info, maxCharacters: 40).text.split(whereSeparator: \.isWhitespace).first.map { String($0.prefix(40)) } : nil
                 appendCodeBlock(content, language: language, to: &out, budget: &budget)
 
             case .blockQuote(let children, _):
@@ -773,7 +772,7 @@ enum MarkdownMessageBuilder {
         if context.link == nil {
             switch entity.hrp {
             case .npub, .nprofile:
-                nested.link = allowedLinkURL("nostr:\(boundedTextRun(entity.bech32, maxCharacters: 512))")
+                nested.link = allowedLinkURL("nostr:\(boundedTextRun(entity.bech32, maxCharacters: 512).text)")
             case .note, .nevent, .naddr, .nrelay:
                 break
             }
@@ -865,11 +864,10 @@ enum MarkdownMessageBuilder {
         return true
     }
 
-    nonisolated private static func boundedTextRun(_ raw: String, maxCharacters: Int) -> String {
-        guard maxCharacters > 0, !raw.isEmpty else { return "" }
-        let maxScalars = max(maxCharacters, maxCharacters * 8)
-        let scalarPrefix = String(String.UnicodeScalarView(raw.unicodeScalars.prefix(maxScalars)))
-        return ContentSanitizer.textRun(scalarPrefix)
+    nonisolated private static func boundedTextRun(_ raw: String, maxCharacters: Int) -> (text: String, isTruncated: Bool) {
+        let scalars = raw.unicodeScalars
+        let prefix = scalars.prefix(maxCharacters * 8)
+        return (ContentSanitizer.textRun(String(prefix)), prefix.endIndex != scalars.endIndex)
     }
 
     /// Breaks are structural, not attacker text: soft → space, hard → newline,

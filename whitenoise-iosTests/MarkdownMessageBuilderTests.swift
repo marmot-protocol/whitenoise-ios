@@ -410,6 +410,16 @@ struct MarkdownMessageBuilderTests {
 
     // MARK: - Budgets
 
+    @Test func scalarBoundMarksAnIncompleteProjectionEvenWhenTheVisibleGraphemesFit() {
+        let first = String(repeating: "x", count: MarkdownMessageBuilder.maxCharacters - 6)
+        func projection(accents: Int) -> Bool {
+            let last = "a" + String(repeating: "\u{301}", count: accents) + "Z"
+            return MarkdownMessageBuilder.build(for: doc([para([.text(content: first), .text(content: last)])])).isTruncated
+        }
+        #expect(!projection(accents: 4))
+        #expect(projection(accents: 49))
+    }
+
     @Test func characterBudgetCapsTotalOutput() throws {
         let big = String(repeating: "a", count: 4000)
         let blocks = try #require(MarkdownMessageBuilder.displayBlocks(for: doc([

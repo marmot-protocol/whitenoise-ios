@@ -151,7 +151,7 @@ nonisolated enum TranscriptMessagePreview {
             if character.isNewline { newlines += 1 }
             return newlines <= 15
         }
-        return String(visible).trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(visible)
     }
 
     static func sourceChunk(_ remaining: Substring) -> Substring {
@@ -1249,7 +1249,7 @@ struct MessageBubble: View {
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
             // stream bubbles, pre-markdown history) keep the plain path.
-            let text = AttributedString(snippet.map { $0 + "…" } ?? sanitizedBodyText)
+            let text = AttributedString(snippet.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) + "…" } ?? sanitizedBodyText)
             if actionBodySize != nil {
                 liftedInlineText(text)
             } else {
