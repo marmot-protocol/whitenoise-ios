@@ -72,12 +72,23 @@ struct ConversationSpeechSession<Route: Equatable>: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(speech)
-            .onDisappear { speech.reset() }
+            .background { SpeechSessionLifetime(speech: speech).frame(width: 0, height: 0) }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { speech.reset() }
             }
             .onChange(of: route) { speech.reset() }
     }
+}
+
+/// A full-screen cover can hide the stack without removing it. End speech
+/// when SwiftUI dismantles the stack, including while a detail covers the chat.
+private struct SpeechSessionLifetime: UIViewRepresentable {
+    let speech: ConversationSpeech
+
+    func makeCoordinator() -> ConversationSpeech { speech }
+    func makeUIView(context: Context) -> UIView { UIView(frame: .zero) }
+    func updateUIView(_ view: UIView, context: Context) {}
+    static func dismantleUIView(_ view: UIView, coordinator: ConversationSpeech) { coordinator.reset() }
 }
 
 @Observable @MainActor

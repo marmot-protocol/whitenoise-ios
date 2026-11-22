@@ -840,6 +840,11 @@ final class TimelineStore {
             display.iconName = AgentEventPresentation.completedIcon
             display.secondaryText = L10n.string("Done")
             display.reportsWorkInProgress = false
+        } else if display.reportsWorkInProgress, hasMoreAfter {
+            // An answer may be in a newer page. Show the historical update
+            // without presenting it as work that is still running.
+            display.reportsWorkInProgress = false
+            display.secondaryText = nil
         }
         return display
     }

@@ -1074,7 +1074,10 @@ struct ConversationView: View {
             .onChange(of: viewModel?.searchRowContext) { _, _ in
                 viewModel?.search.refreshAfterTimelineChange()
             }
-            .onChange(of: speechScope.route) { speech.reset() }
+            .onChange(of: speechScope.route) {
+                longMessageTarget = nil
+                speech.reset()
+            }
             .task(id: speechScope) { await revalidateSpeech(in: speechScope) }
             .sheet(item: $longMessageTarget) { target in
                 NavigationStack {

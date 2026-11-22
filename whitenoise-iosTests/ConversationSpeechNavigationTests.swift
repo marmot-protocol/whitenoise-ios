@@ -123,6 +123,12 @@ struct ConversationSpeechNavigationTests {
                 return Data()
             }, revalidate: { _ in nil }, onError: { Issue.record("Cancelled transcription reported an error") })
             try await started.wait()
+            model.showsMedia = true
+            try await model.coverOpened.wait()
+            #expect(model.speech.transcribingID == "voice-note")
+            model.showsMedia = false
+            try await model.coverDismissed.wait()
+            #expect(model.speech.transcribingID == "voice-note")
             model.showsDetails = true
             try await settleLayout(window) { model.visible }
             #expect(model.visible == "details")
@@ -139,6 +145,9 @@ private struct SpeechStackHarness: View {
     @Observable @MainActor final class Model {
         var path: [ChatsListView.ChatNavigationTarget] = []
         var showsDetails = false
+        var showsMedia = false
+        let coverOpened = TestLatch()
+        let coverDismissed = TestLatch()
         var visible = ""
         let speech = ConversationSpeech()
     }
@@ -149,6 +158,9 @@ private struct SpeechStackHarness: View {
             Text("Chats")
                 .navigationDestination(for: ChatsListView.ChatNavigationTarget.self) { target in
                     Text(target.groupIdHex)
+                        .fullScreenCover(isPresented: $model.showsMedia, onDismiss: { model.coverDismissed.signal() }) {
+                            Text("Media").onAppear { model.coverOpened.signal() }
+                        }
                         .onAppear { model.visible = target.groupIdHex }
                         .navigationDestination(isPresented: $model.showsDetails) {
                             Text("Details").onAppear { model.visible = "details" }
