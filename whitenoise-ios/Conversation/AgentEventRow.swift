@@ -63,7 +63,7 @@ struct AgentActivityContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text(display.primaryText)
+                TimelineSearchText(display.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 Group {
                     if display.iconName == "ellipsis.message" {
@@ -76,17 +76,14 @@ struct AgentActivityContent: View {
                 }
                 .accessibilityHidden(true)
             }
-            if let status = display.secondaryText, !statusIsInIcon, status != display.primaryText {
-                Text(status)
+            if let status = display.visibleActivityStatus {
+                TimelineSearchText(status)
                     .font(.caption)
             }
         }
         .font(.subheadline)
         .accessibilityElement(children: .combine)
-        .accessibilityValue(statusIsInIcon ? display.secondaryText ?? "" : "")
+        .accessibilityValue(display.showsStatusInIcon ? display.secondaryText ?? "" : "")
     }
 
-    private var statusIsInIcon: Bool {
-        display.reportsWorkInProgress || display.iconName == AgentEventPresentation.completedIcon
-    }
 }

@@ -4798,6 +4798,8 @@ struct ConversationView: View {
             let source = try await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState)
             guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
             return source?.target == recording.target && recording.matches(voiceAttachment(id: id, in: model))
+        } catch is LocalVoiceAttachment.SizeError {
+            return scope == speechScope && viewModel === model && !Task.isCancelled ? false : nil
         } catch {
             return nil
         }
@@ -4831,7 +4833,7 @@ struct ConversationView: View {
             let supportsTranscription: Bool = if #available(iOS 26, *) { true } else { false }
             return MessageSpeechPresentation.voiceActions(isTranscribing: speech.transcribingID == id,
                 transcriptVisible: verified ? transcript?.visible : nil,
-                offersTranscribe: supportsTranscription && speech.transcribingID == nil)
+                offersTranscribe: supportsTranscription)
         }
         func standaloneEmoji() -> Bool {
             guard media.isEmpty, model.replyPreview(for: record) == nil else { return false }
@@ -4863,9 +4865,10 @@ struct ConversationView: View {
             source = try await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState)
         } catch {
             guard isCurrent() else { return }
-            speech.checkedVoice = (request, .unavailable(L10n.string("Couldn’t transcribe this recording.")))
+            let sizeError = error as? LocalVoiceAttachment.SizeError
+            speech.checkedVoice = (request, .unavailable(sizeError?.message ?? L10n.string("Couldn’t transcribe this recording.")))
             if let transcript = speech.transcripts[record.messageIdHex] {
-                speech.updateRetention(nil, id: record.messageIdHex, recording: transcript.recording, scope: scope)
+                speech.updateRetention(sizeError == nil ? nil : false, id: record.messageIdHex, recording: transcript.recording, scope: scope)
             }
             return
         }
@@ -4895,7 +4898,14 @@ struct ConversationView: View {
         guard let row = speechRow(id, in: model), case .message(let current, _) = row.kind,
               speechActions(for: current, in: model).contains(action) else { return }
         let checked = speech.checkedVoice
-        if action == .transcribe, checked?.request != voiceAvailabilityRequest(for: row, in: model) { return }
+        if action == .transcribe {
+            if speech.transcribingID != nil {
+                dismissActions(resumingComposerFocus: true)
+                appState.present(.warning(L10n.string("Wait for the current transcription to finish.")))
+                return
+            }
+            guard checked?.request == voiceAvailabilityRequest(for: row, in: model) else { return }
+        }
         dismissActions(resumingComposerFocus: true)
         switch action {
         case .read:
@@ -5057,10 +5067,10 @@ struct ConversationView: View {
             canBlock: canBlockAuthor(of: record, viewModel: viewModel),
             canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
             speechActions: speechActions(for: record, in: viewModel),
-            transcribeCheckFinished: speech.checkedVoice.map { checked in
+            canTapTranscribe: speech.transcribingID != nil || (speech.checkedVoice.map { checked in
                 guard let row = speechRow(record.messageIdHex, in: viewModel) else { return false }
                 return checked.request == voiceAvailabilityRequest(for: row, in: viewModel)
-            } ?? false,
+            } ?? false),
             onSpeechAction: { performSpeechAction($0, for: record, in: viewModel) },
             quickReactions: appState.quickReactions,
             selectedReaction: selectedReaction?.emoji,

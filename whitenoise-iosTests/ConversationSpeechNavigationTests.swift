@@ -47,6 +47,13 @@ struct ConversationSpeechNavigationTests {
         #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: true, offersTranscribe: false) == [.hide, .copy])
     }
 
+    @Test func aRetainedRecordingAtTheSizeLimitCanBeReadAndALargerOneGetsASizeError() throws {
+        let limit = UInt64(MessageMediaAttachment.audioAnalysisByteLimit)
+        try LocalVoiceAttachment.validateSize(limit)
+        #expect(throws: LocalVoiceAttachment.SizeError.tooLarge) { try LocalVoiceAttachment.validateSize(limit + 1) }
+        #expect(throws: LocalVoiceAttachment.SizeError.empty) { try LocalVoiceAttachment.validateSize(0) }
+    }
+
     @Test func readingMarkupWithNoSpokenTextExplainsWhyPlaybackDidNotStart() async throws {
         let speech = ConversationSpeech()
         let empty = TestLatch()

@@ -159,7 +159,7 @@ struct MessageActionsMenu: View {
     var canBlock: Bool = false
     var canViewVotes: Bool = false
     var speechActions: [MessageSpeechAction] = []
-    var transcribeCheckFinished = false
+    var canTapTranscribe = false
     var onSpeechAction: (MessageSpeechAction) -> Void = { _ in }
     let quickReactions: [String]
     let selectedReaction: String?
@@ -216,7 +216,7 @@ struct MessageActionsMenu: View {
                     }
                     ForEach(speechActions, id: \.self) { item in
                         actionRow(item.title, systemImage: item.symbol) { onSpeechAction(item) }
-                            .disabled(item == .transcribing || (item == .transcribe && !transcribeCheckFinished))
+                            .disabled(item == .transcribing || (item == .transcribe && !canTapTranscribe))
                     }
                     if canCopy { actionRow("Copy", systemImage: "doc.on.doc", action: onCopy) }
                     actionRow("Select", systemImage: "checkmark.circle", action: onSelect)
