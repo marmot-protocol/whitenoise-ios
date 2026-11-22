@@ -45,7 +45,19 @@ struct MarkdownMessageBuilderTests {
         let row = record(plaintext: source, tokens: doc([]))
         #expect(!ContentSanitizer.messageBody(source).hasSuffix("TAIL"))
         #expect(MessageBubble(record: row, status: .received).readerShowsSource)
-        #expect(!MessageBubble(record: row, status: .received, markdownBlocks: [.paragraph(AttributedString(source))]).readerShowsSource)
+    }
+
+    @Test func longSourceWithCompleteFormattedLinksKeepsThemTappableInTheReader() throws {
+        let destination = "https://example.org/" + String(repeating: "x", count: 100)
+        let source = String(repeating: "[Map](\(destination)) ", count: 80)
+        let links: [MarkdownInlineFfi] = Array(repeating: .link(dest: destination, title: nil, children: [.text(content: "Map")],
+                                                               classification: .web), count: 80)
+        let row = record(plaintext: source, tokens: doc([para(links)]))
+        let projection = MessageMarkdownDisplayProjection.build(for: row, mentionDisplayName: nil)
+        let blocks = try #require(projection.blocks)
+        #expect(!projection.isTruncated)
+        #expect(TranscriptMessagePreview.requiresReader(source))
+        #expect(!MessageBubble(record: row, status: .received, markdownBlocks: blocks).readerShowsSource)
     }
 
     @Test func anEmojiAtTheStartOfATruncatedDocumentKeepsTheTextBubble() {

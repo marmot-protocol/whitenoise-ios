@@ -493,8 +493,10 @@ struct MessageBubble: View {
     }
 
     var readerShowsSource: Bool {
-        if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) { return true }
-        guard markdownBlocks == nil, record.plaintext.utf8.count > ContentSanitizer.maxMessageScalars else { return false }
+        if incompleteMarkdown { return true }
+        guard markdownBlocks == nil else { return false }
+        if TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) { return true }
+        guard record.plaintext.utf8.count > ContentSanitizer.maxMessageScalars else { return false }
         let scalars = record.plaintext.unicodeScalars
         return scalars.prefix(ContentSanitizer.maxMessageScalars).endIndex != scalars.endIndex
     }
