@@ -492,8 +492,15 @@ struct MessageBubble: View {
         }
     }
 
+    var readerShowsSource: Bool {
+        if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) { return true }
+        guard markdownBlocks == nil, record.plaintext.utf8.count > ContentSanitizer.maxMessageScalars else { return false }
+        let scalars = record.plaintext.unicodeScalars
+        return scalars.prefix(ContentSanitizer.maxMessageScalars).endIndex != scalars.endIndex
+    }
+
     @ViewBuilder private var readerBody: some View {
-        if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
+        if readerShowsSource {
             // Beyond the formatter's budget, read the authored source in viewport-sized batches.
             LongMessageSourceText(text: record.plaintext)
                 .id(Data(record.plaintext.utf8))

@@ -16,6 +16,7 @@ nonisolated enum ContentSanitizer {
 
     private static let blankLineRunRegex = try! NSRegularExpression(pattern: "\n{3,}")
     private static let scalarBudgetMultiplier = 8
+    static let maxMessageScalars = maxMessageLength * scalarBudgetMultiplier
 
     /// Single-line text: strip control/bidi characters, collapse all
     /// whitespace (including newlines) to single spaces, trim, cap length.

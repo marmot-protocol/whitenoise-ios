@@ -40,6 +40,14 @@ struct MarkdownMessageBuilderTests {
                               isBodyExpanded: true).offersSourceReader)
     }
 
+    @Test func plainReaderPreservesTheTailOfOneOversizedGrapheme() {
+        let source = "a" + String(repeating: "\u{301}", count: ContentSanitizer.maxMessageScalars) + "TAIL"
+        let row = record(plaintext: source, tokens: doc([]))
+        #expect(!ContentSanitizer.messageBody(source).hasSuffix("TAIL"))
+        #expect(MessageBubble(record: row, status: .received).readerShowsSource)
+        #expect(!MessageBubble(record: row, status: .received, markdownBlocks: [.paragraph(AttributedString(source))]).readerShowsSource)
+    }
+
     @Test func anEmojiAtTheStartOfATruncatedDocumentKeepsTheTextBubble() {
         let document = MarkdownDocumentFfi(blocks: [para([.text(content: "🐿️")])], truncated: true)
         let row = record(plaintext: "🐿️ followed by omitted text", tokens: document)
