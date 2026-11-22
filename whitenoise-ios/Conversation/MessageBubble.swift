@@ -3003,7 +3003,8 @@ private struct MessageVideoAttachmentView: View {
                 // Metadata can come from identical bytes in another message. Admit this
                 // slot under the Videos preference without decoding the movie again.
                 guard lastRead?.request != request, await onLoadMedia.admitAutomaticAttachment(item) != nil, !Task.isCancelled else { return }
-                lastRead = (request, false)
+                // A local hash overlay can disappear independently of this request.
+                if item.localData == nil { lastRead = (request, false) }
                 return
             }
             let epoch = MessageMediaCache.currentProducerEpoch()
@@ -3012,11 +3013,11 @@ private struct MessageVideoAttachmentView: View {
                 data = try await onLoadMedia.videoPreviewData(for: item)
             } catch AttachmentReadError.previewLimitExceeded(let size) {
                 // An unknown size can become available later. Known oversize files get a poster on playback.
-                if size != nil, !Task.isCancelled { lastRead = (request, true) }
+                if size != nil, item.localData == nil, !Task.isCancelled { lastRead = (request, true) }
                 return
             } catch { return }
             guard !Task.isCancelled else { return }
-            lastRead = (request, false)
+            if item.localData == nil { lastRead = (request, false) }
             guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: epoch),
                   !Task.isCancelled else { return }
             if needsDuration {
