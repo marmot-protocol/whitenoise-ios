@@ -616,7 +616,8 @@ simulator, find that folder with
 - [ ] Linked devices: link A and B, then have someone invite the account to a
       group. Accept on A while renaming B on B at the same moment, so the device
       group forks. B shows the invitation answered within seconds, and both
-      list the group. Repeat with a decline.
+      list the group. Repeat with a decline: B shows it declined within
+      seconds, and neither device joins the group.
 
 ## In-place MarmotKit upgrade
 
