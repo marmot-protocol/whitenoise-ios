@@ -1239,7 +1239,8 @@ struct MessageBubble: View {
             }
         }
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
-        .padding(.top, -16)
+        // Only the visible capsule overlaps the lower edge of the message.
+        .padding(.top, -7)
     }
 
     private func reactionChip<Label: View>(emoji: String?, mine: Bool, onTap: @escaping () -> Void,
@@ -1253,7 +1254,7 @@ struct MessageBubble: View {
             .background(mine ? Color(.systemGray4) : Color(.secondarySystemBackground), in: Capsule())
             .overlay { Capsule().strokeBorder(Color(.opaqueSeparator), lineWidth: 1) }
             .fixedSize()
-            .frame(minWidth: 44, minHeight: 44)
+            .frame(minWidth: 44, minHeight: 44, alignment: .top)
             // The strip proposes zero width to omitted chips, including their hit targets.
             .frame(minWidth: 0, maxWidth: .infinity)
             .clipped()
