@@ -3009,9 +3009,15 @@ private struct MessageVideoAttachmentView: View {
             maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize)
     }
 
-    private var previewRequest: TimelineMediaTaskID {
-        TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))
+    private struct PreviewRequest: Equatable {
+        let media: TimelineMediaTaskID
+        let showsDuration: Bool
+    }
+
+    private var previewRequest: PreviewRequest {
+        PreviewRequest(media: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item)),
+            showsDuration: showsBadges && showsDuration)
     }
 
     var body: some View {
@@ -3050,7 +3056,7 @@ private struct MessageVideoAttachmentView: View {
             localDuration = MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey)
         }
         .task(id: previewRequest) {
-            let request = previewRequest
+            let request = previewRequest.media
             guard request.isVisible, onLoadMedia.allowsAutomaticLoad(.video),
                   lastRead?.request != request || lastRead?.overPreviewLimit != true else { return }
             let needsPoster = displayThumbnail == nil && !posterDecodeFailed
@@ -4116,6 +4122,10 @@ private enum MediaFullscreenDismiss {
 }
 
 nonisolated enum MessageMediaFullscreenGalleryPresentation {
+    @MainActor static func prepareVideo(_ player: AVPlayer, demand: AttachmentDemand, resumeConfirmed: Bool = false) {
+        if demand.isUserInitiated || resumeConfirmed { player.play() } else { player.pause() }
+    }
+
     static func pageCountLabel(
         selectedIndex: Int?,
         totalCount: Int,
@@ -4128,6 +4138,52 @@ nonisolated enum MessageMediaFullscreenGalleryPresentation {
         let current = LocalizedNumberLabel.decimal(UInt64(selectedIndex + 1), locale: locale)
         let total = LocalizedNumberLabel.decimal(UInt64(totalCount), locale: locale)
         return L10n.formatted("%@ of %@", arguments: [current, total], locale: locale)
+    }
+}
+
+/// An outgoing slot can confirm while its local video is loading, playing, or paused in the native controls.
+@MainActor final class PendingVideoPlayback {
+    private weak var player: AVPlayer?
+    private var requested: Bool?
+
+    var wantsPlayback: Bool? {
+        player.map { $0.rate != 0 || $0.timeControlStatus == .waitingToPlayAtSpecifiedRate } ?? requested
+    }
+
+    func request(_ demand: AttachmentDemand) { requested = demand.isUserInitiated }
+    func observe(_ player: AVPlayer) { self.player = player }
+    func detach(_ player: AVPlayer) {
+        guard self.player === player else { return }
+        requested = wantsPlayback
+        self.player = nil
+    }
+}
+
+nonisolated struct TranscriptMediaSelection {
+    let openingID: String
+    private(set) var selectedID: String
+    private(set) var resumingVideoID: String?
+    private var hasPaged = false
+
+    init(openingID: String) {
+        self.openingID = openingID
+        selectedID = openingID
+    }
+
+    mutating func select(_ id: String) {
+        guard selectedID != id else { return }
+        hasPaged = true
+        selectedID = id
+        resumingVideoID = nil
+    }
+
+    mutating func confirm(_ id: String, resumeVideo: Bool) {
+        select(id)
+        resumingVideoID = resumeVideo ? id : nil
+    }
+
+    func demand(for id: String, allowsOpeningDemand: Bool) -> AttachmentDemand {
+        !hasPaged && id == openingID && allowsOpeningDemand ? .explicit : .automatic
     }
 }
 
@@ -4144,8 +4200,9 @@ struct MessageMediaFullscreenGalleryView: View {
     let onDismiss: () -> Void
 
     @State private var pendingSelection: MessageMediaGallery.PendingSelection?
-    @State private var selectedItemID: String
-    @State private var hasPaged = false
+    @State private var pendingVideo = PendingVideoPlayback()
+    @State private var selection: TranscriptMediaSelection
+    private var selectedItemID: String { selection.selectedID }
     @State private var zoomedItemID: String?
     @State private var dismissDragOffset: CGFloat = 0
     @State private var preparedMedia: FullscreenMediaPrepared?
@@ -4173,7 +4230,7 @@ struct MessageMediaFullscreenGalleryView: View {
         self.forwardingContext = forwardingContext
         self.onGoToMessage = onGoToMessage
         self.onDismiss = onDismiss
-        _selectedItemID = State(initialValue: gallery.initialItemID)
+        _selection = State(initialValue: TranscriptMediaSelection(openingID: gallery.initialItemID))
         _pendingSelection = State(initialValue: gallery.pendingSelection(for: gallery.initialItemID) ?? openingSelection)
     }
 
@@ -4200,10 +4257,13 @@ struct MessageMediaFullscreenGalleryView: View {
             guard let replacement else { onDismiss(); return }
             preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
                 contentType: UTType(mimeType: replacement.mediaType) ?? .data)
-            select(replacement.id)
+            let wasPlaying = pendingVideo.wantsPlayback ?? selection.demand(for: pendingSelection.id,
+                allowsOpeningDemand: transcriptHistory?.allowsOpeningDemand != false).isUserInitiated
+            selection.confirm(replacement.id, resumeVideo: replacement.isVideo && wasPlaying)
+            self.pendingSelection = nil
+            pendingVideo = PendingVideoPlayback()
         }
         .onChange(of: selectedItemID) { _, selection in
-            hasPaged = true
             if gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
             if preparedMedia?.id != selection { preparedMedia = nil }
             handoffControl?.cancel()
@@ -4261,7 +4321,8 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func select(_ id: String) {
-        selectedItemID = id
+        if selectedItemID != id { pendingVideo = PendingVideoPlayback() }
+        selection.select(id)
         pendingSelection = gallery.pendingSelection(for: id)
     }
 
@@ -4276,8 +4337,10 @@ struct MessageMediaFullscreenGalleryView: View {
             item: source,
             isSelected: item.id == selectedItemID,
             initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.data : nil } ?? gallery.initialData(for: source),
-            selectionDemand: gallery.transcriptCaptions == nil || (!hasPaged && item.id == gallery.initialItemID && transcriptHistory?.allowsOpeningDemand != false)
-                ? .explicit : .automatic,
+            selectionDemand: gallery.transcriptCaptions == nil ? .explicit
+                : selection.demand(for: item.id, allowsOpeningDemand: transcriptHistory?.allowsOpeningDemand != false),
+            resumeConfirmedVideo: selection.resumingVideoID == item.id,
+            pendingVideo: pendingSelection?.id == item.id ? pendingVideo : nil,
             onLoadMedia: onLoadMedia,
             onData: { data in
                 guard selectedItemID == item.id, selectedItem != nil else { return }
@@ -4300,7 +4363,7 @@ struct MessageMediaFullscreenGalleryView: View {
         ZStack {
             WNMediaSurface().ignoresSafeArea()
 
-            TabView(selection: $selectedItemID) {
+            TabView(selection: Binding(get: { selectedItemID }, set: select)) {
                 ForEach(gallery.items) { item in
                     page(item)
                         .tag(item.id)
@@ -4465,6 +4528,8 @@ private struct MessageMediaFullscreenPage: View {
     let isSelected: Bool
     let initialImageData: Data?
     let selectionDemand: AttachmentDemand
+    let resumeConfirmedVideo: Bool
+    let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
     let onData: (Data) -> Void
     let onToggleChrome: () -> Void
@@ -4492,6 +4557,8 @@ private struct MessageMediaFullscreenPage: View {
                 isSelected: isSelected,
                 initialMediaData: sourceGeneration == 0 ? initialImageData : nil,
                 selectionDemand: demand,
+                resumeConfirmedVideo: sourceGeneration == 0 && resumeConfirmedVideo,
+                pendingVideo: pendingVideo,
                 onLoadMedia: onLoadMedia,
                 onData: onData,
                 onToggleChrome: onToggleChrome
@@ -4517,6 +4584,8 @@ private struct MessageMediaFullscreenVideoPage: View {
     let isSelected: Bool
     let initialMediaData: Data?
     let selectionDemand: AttachmentDemand
+    let resumeConfirmedVideo: Bool
+    let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
     let onData: (Data) -> Void
     let onToggleChrome: () -> Void
@@ -4595,7 +4664,7 @@ private struct MessageMediaFullscreenVideoPage: View {
             }
             let demand = playRequest != handledPlayRequest ? .userTap(afterFailure: didFail) : selectionDemand
             handledPlayRequest = playRequest
-            await loadAndPlay(demand: demand)
+            await loadVideo(demand: demand)
         }
         .onDisappear { releasePlayback() }
         .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { notification in
@@ -4606,12 +4675,13 @@ private struct MessageMediaFullscreenVideoPage: View {
         .accessibilityLabel(L10n.string("Video attachment"))
     }
 
-    private func loadAndPlay(demand: AttachmentDemand) async {
+    private func loadVideo(demand: AttachmentDemand) async {
         guard isSelected else { return }
+        pendingVideo?.request(demand)
         if demand == .retry {
             releasePlayback()
         } else if let player {
-            player.play()
+            MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: demand, resumeConfirmed: resumeConfirmedVideo)
             audioSession.attach(to: player)
             return
         }
@@ -4619,7 +4689,8 @@ private struct MessageMediaFullscreenVideoPage: View {
         let productTicket = appState.productAnalytics.ticket()
         var productOutcome: ProductOutcome = .cancelled
         defer { appState.productAnalytics.record(.attachment(.open, productOutcome), ticket: productTicket) }
-        isLoading = true
+        // An automatic read may be waiting on backoff. Play can take over through the same task ID.
+        isLoading = demand.isUserInitiated
         didFail = false
         defer { if !Task.isCancelled { isLoading = false } }
         do {
@@ -4628,7 +4699,8 @@ private struct MessageMediaFullscreenVideoPage: View {
             let next = AVPlayer(url: url)
             productOutcome = .success
             player = next
-            next.play()
+            MessageMediaFullscreenGalleryPresentation.prepareVideo(next, demand: demand, resumeConfirmed: resumeConfirmedVideo)
+            pendingVideo?.observe(next)
             audioSession.attach(to: next)
             if isTranscriptMediaSheet {
                 isLoading = false
@@ -4657,6 +4729,7 @@ private struct MessageMediaFullscreenVideoPage: View {
 
     private func releasePlayback() {
         isLoading = false
+        if let player { pendingVideo?.detach(player) }
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         audioSession.stop()
