@@ -4049,6 +4049,10 @@ private enum MediaFullscreenDismiss {
 }
 
 nonisolated enum MessageMediaFullscreenGalleryPresentation {
+    @MainActor static func prepareVideo(_ player: AVPlayer, demand: AttachmentDemand) {
+        if demand.isUserInitiated { player.play() } else { player.pause() }
+    }
+
     static func pageCountLabel(
         selectedIndex: Int?,
         totalCount: Int,
@@ -4064,6 +4068,27 @@ nonisolated enum MessageMediaFullscreenGalleryPresentation {
     }
 }
 
+nonisolated struct TranscriptMediaSelection {
+    let openingID: String
+    private(set) var selectedID: String
+    private var hasPaged = false
+
+    init(openingID: String) {
+        self.openingID = openingID
+        selectedID = openingID
+    }
+
+    mutating func select(_ id: String) {
+        guard selectedID != id else { return }
+        hasPaged = true
+        selectedID = id
+    }
+
+    func demand(for id: String, allowsOpeningDemand: Bool) -> AttachmentDemand {
+        !hasPaged && id == openingID && allowsOpeningDemand ? .explicit : .automatic
+    }
+}
+
 struct MessageMediaFullscreenGalleryView: View {
     @Environment(\.transcriptHistoryControls) private var transcriptHistory
     @Environment(AppState.self) private var appState
@@ -4074,8 +4099,8 @@ struct MessageMediaFullscreenGalleryView: View {
     let onDismiss: () -> Void
 
     @State private var pendingSelection: MessageMediaGallery.PendingSelection?
-    @State private var selectedItemID: String
-    @State private var hasPaged = false
+    @State private var selection: TranscriptMediaSelection
+    private var selectedItemID: String { selection.selectedID }
     @State private var zoomedItemID: String?
     @State private var dismissDragOffset: CGFloat = 0
     @State private var preparedMedia: FullscreenMediaPrepared?
@@ -4103,7 +4128,7 @@ struct MessageMediaFullscreenGalleryView: View {
         self.forwardingContext = forwardingContext
         self.onGoToMessage = onGoToMessage
         self.onDismiss = onDismiss
-        _selectedItemID = State(initialValue: gallery.initialItemID)
+        _selection = State(initialValue: TranscriptMediaSelection(openingID: gallery.initialItemID))
         _pendingSelection = State(initialValue: gallery.pendingSelection(for: gallery.initialItemID) ?? openingSelection)
     }
 
@@ -4133,7 +4158,6 @@ struct MessageMediaFullscreenGalleryView: View {
             select(replacement.id)
         }
         .onChange(of: selectedItemID) { _, selection in
-            hasPaged = true
             if gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
             if preparedMedia?.id != selection { preparedMedia = nil }
             handoffControl?.cancel()
@@ -4191,7 +4215,7 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func select(_ id: String) {
-        selectedItemID = id
+        selection.select(id)
         pendingSelection = gallery.pendingSelection(for: id)
     }
 
@@ -4206,8 +4230,8 @@ struct MessageMediaFullscreenGalleryView: View {
             item: source,
             isSelected: item.id == selectedItemID,
             initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.data : nil } ?? gallery.initialData(for: source),
-            selectionDemand: gallery.transcriptCaptions == nil || (!hasPaged && item.id == gallery.initialItemID && transcriptHistory?.allowsOpeningDemand != false)
-                ? .explicit : .automatic,
+            selectionDemand: gallery.transcriptCaptions == nil ? .explicit
+                : selection.demand(for: item.id, allowsOpeningDemand: transcriptHistory?.allowsOpeningDemand != false),
             onLoadMedia: onLoadMedia,
             onData: { data in
                 guard selectedItemID == item.id, selectedItem != nil else { return }
@@ -4230,7 +4254,7 @@ struct MessageMediaFullscreenGalleryView: View {
         ZStack {
             WNMediaSurface().ignoresSafeArea()
 
-            TabView(selection: $selectedItemID) {
+            TabView(selection: Binding(get: { selectedItemID }, set: select)) {
                 ForEach(gallery.items) { item in
                     page(item)
                         .tag(item.id)
@@ -4498,7 +4522,7 @@ private struct MessageMediaFullscreenVideoPage: View {
             }
             let demand = playRequest != handledPlayRequest ? .userTap(afterFailure: didFail) : selectionDemand
             handledPlayRequest = playRequest
-            await loadAndPlay(demand: demand)
+            await loadVideo(demand: demand)
         }
         .onDisappear { releasePlayback() }
         .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { notification in
@@ -4509,12 +4533,12 @@ private struct MessageMediaFullscreenVideoPage: View {
         .accessibilityLabel(L10n.string("Video attachment"))
     }
 
-    private func loadAndPlay(demand: AttachmentDemand) async {
+    private func loadVideo(demand: AttachmentDemand) async {
         guard isSelected else { return }
         if demand == .retry {
             releasePlayback()
         } else if let player {
-            player.play()
+            MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: demand)
             audioSession.attach(to: player)
             return
         }
@@ -4532,7 +4556,7 @@ private struct MessageMediaFullscreenVideoPage: View {
             let next = AVPlayer(url: url)
             productOutcome = .success
             player = next
-            next.play()
+            MessageMediaFullscreenGalleryPresentation.prepareVideo(next, demand: demand)
             audioSession.attach(to: next)
             if isTranscriptMediaSheet {
                 isLoading = false

@@ -11,6 +11,34 @@ import Synchronization
 @MainActor
 struct MessageMediaGalleryTests {
 
+    @Test func tappingAVideoInChatPlaysItAndSwipingWaitsForAnotherPlayTap() {
+        final class TestPlayer: AVPlayer, @unchecked Sendable {
+            var plays = 0
+            override func play() { plays += 1 }
+            override func pause() {}
+        }
+        let player = TestPlayer()
+        var selection = TranscriptMediaSelection(openingID: "first video")
+        func presentSelection() {
+            let demand = selection.demand(for: selection.selectedID, allowsOpeningDemand: true)
+            MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: demand)
+        }
+        selection.select("first video")
+        presentSelection()
+        #expect(player.plays == 1)
+        selection.select("another video")
+        presentSelection()
+        #expect(player.plays == 1)
+        MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: .userTap(afterFailure: false))
+        #expect(player.plays == 2)
+        selection.select("first video")
+        presentSelection()
+        #expect(player.plays == 2)
+        let restored = TranscriptMediaSelection(openingID: selection.selectedID)
+        MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: restored.demand(for: restored.selectedID, allowsOpeningDemand: false))
+        #expect(player.plays == 2)
+    }
+
     @Test func confirmedPhotoMustMatchTheSelectedDraftsRowSlotAndBytes() async throws {
         let slot = MessageMediaGallery.OutgoingSlot(rowID: "my-send", index: 1)
         let draft = MessageMediaGallery.PendingSelection(id: "draft", slot: slot, data: Data("abc".utf8))
