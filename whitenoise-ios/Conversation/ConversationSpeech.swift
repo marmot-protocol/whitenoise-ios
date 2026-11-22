@@ -355,13 +355,7 @@ enum LocalVoiceAttachment {
         }
     }
 
-    static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState, fixture: Bool) async throws -> Self? {
-        #if DEBUG
-        if fixture {
-            guard let target = media.localTarget, let url = ChatPreviewMedia.url(media.fileName) else { return nil }
-            return .bundled(url, target: target)
-        }
-        #endif
+    static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState) async throws -> Self? {
         guard let account = app.activeAccountRef else { return nil }
         let client = try app.currentMarmotClient()
         let target: AttachmentLocalTargetFfi

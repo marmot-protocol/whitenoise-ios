@@ -4969,12 +4969,22 @@ struct ConversationView: View {
         }
     }
 
+    private func localVoiceSource(for media: MessageMediaAttachment) async throws -> LocalVoiceAttachment? {
+        #if DEBUG
+        if previewsTimeline {
+            guard let target = media.localTarget, let url = ChatPreviewMedia.url(media.fileName) else { return nil }
+            return .bundled(url, target: target)
+        }
+        #endif
+        return try await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState)
+    }
+
     private func retainedRecording(_ recording: ConversationSpeech.Recording, id: String, model: ConversationViewModel,
                                    scope: ConversationSpeech.Scope) async -> Bool? {
         guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
         guard let media = voiceAttachment(id: id, in: model), recording.matches(media) else { return false }
         do {
-            let source = try await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState, fixture: !hasLiveDestinations)
+            let source = try await localVoiceSource(for: media)
             guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
             return source?.target == recording.target && recording.matches(voiceAttachment(id: id, in: model))
         } catch {
@@ -5039,7 +5049,7 @@ struct ConversationView: View {
         }
         let source: LocalVoiceAttachment?
         do {
-            source = try await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState, fixture: !hasLiveDestinations)
+            source = try await localVoiceSource(for: audio)
         } catch {
             guard isCurrent() else { return }
             speech.checkedVoice = (request, .unavailable(L10n.string("Couldn’t transcribe this recording.")))
