@@ -45,7 +45,6 @@ nonisolated enum ConversationTranscriptExport {
         var receivedAt: UInt64
         var replyToMessageIdHex: String?
         var mediaJson: String?
-        var agentTextStreamJson: String?
         var deleted: Bool
         var deletionSource: String
         var deletedByMessageIdHex: String?
@@ -64,7 +63,6 @@ nonisolated enum ConversationTranscriptExport {
             case receivedAt = "received_at"
             case replyToMessageIdHex = "reply_to_message_id_hex"
             case mediaJson = "media_json"
-            case agentTextStreamJson = "agent_text_stream_json"
             case deleted
             case deletionSource = "deletion_source"
             case deletedByMessageIdHex = "deleted_by_message_id_hex"
@@ -154,7 +152,6 @@ nonisolated enum ConversationTranscriptExport {
                 receivedAt: record.receivedAt,
                 replyToMessageIdHex: record.replyToMessageIdHex,
                 mediaJson: record.mediaJson,
-                agentTextStreamJson: record.agentTextStreamJson,
                 deleted: record.deleted,
                 deletionSource: String(describing: record.deletionSource),
                 deletedByMessageIdHex: record.deletedByMessageIdHex,

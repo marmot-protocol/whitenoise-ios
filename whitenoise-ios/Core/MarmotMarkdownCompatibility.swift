@@ -714,7 +714,7 @@ extension TimelineMessageRecordFfi {
         replyPreview: TimelineReplyPreviewFfi?,
         mediaJson: String?,
         media: [MediaAttachmentReferenceFfi],
-        agentTextStreamJson: String?,
+        thread: TimelineThreadRefFfi? = nil,
         groupSystem: GroupSystemEventFfi?,
         poll: PollProjectionFfi? = nil,
         reactions: TimelineReactionSummaryFfi,
@@ -746,9 +746,9 @@ extension TimelineMessageRecordFfi {
             receivedAt: receivedAt,
             replyToMessageIdHex: replyToMessageIdHex,
             replyPreview: replyPreview,
+            thread: thread,
             mediaJson: mediaJson,
             media: media.enumerated().map { .accepted(attachmentIndex: UInt32(clamping: $0.offset), reference: $0.element) },
-            agentTextStreamJson: agentTextStreamJson,
             groupSystem: groupSystem,
             reactions: reactions,
             edit: edit,
@@ -777,7 +777,7 @@ extension TimelineMessageRecordFfi {
         replyPreview: TimelineReplyPreviewFfi?,
         mediaJson: String?,
         media: [MediaAttachmentReferenceFfi] = [],
-        agentTextStreamJson: String?,
+        thread: TimelineThreadRefFfi? = nil,
         groupSystem: GroupSystemEventFfi? = nil,
         poll: PollProjectionFfi? = nil,
         reactions: TimelineReactionSummaryFfi,
@@ -809,9 +809,9 @@ extension TimelineMessageRecordFfi {
             receivedAt: receivedAt,
             replyToMessageIdHex: replyToMessageIdHex,
             replyPreview: replyPreview,
+            thread: thread,
             mediaJson: mediaJson,
             media: media.enumerated().map { .accepted(attachmentIndex: UInt32(clamping: $0.offset), reference: $0.element) },
-            agentTextStreamJson: agentTextStreamJson,
             groupSystem: groupSystem,
             reactions: reactions,
             edit: edit,
@@ -834,12 +834,14 @@ extension TimelineReplyPreviewFfi {
         kind: UInt64,
         mediaJson: String?,
         media: [MediaAttachmentReferenceFfi] = [],
-        agentTextStreamJson: String?,
+        replyToMessageIdHex: String? = nil,
+        thread: TimelineThreadRefFfi? = nil,
         deleted: Bool,
         deletionSource: DeletionSourceFfi = .unknown
     ) {
         self.init(
             messageIdHex: messageIdHex,
+            replyToMessageIdHex: replyToMessageIdHex,
             sender: sender,
             plaintext: plaintext,
             contentTokens: .emptyDocument,
@@ -847,10 +849,10 @@ extension TimelineReplyPreviewFfi {
             sticker: nil,
             mediaJson: mediaJson,
             media: media.enumerated().map { .accepted(attachmentIndex: UInt32(clamping: $0.offset), reference: $0.element) },
-            agentTextStreamJson: agentTextStreamJson,
             deleted: deleted,
             deletionSource: deletionSource,
-            invalidationStatus: nil
+            invalidationStatus: nil,
+            thread: thread
         )
     }
 }

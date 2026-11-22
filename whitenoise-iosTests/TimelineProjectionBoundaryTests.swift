@@ -162,6 +162,25 @@ struct TimelineProjectionBoundaryTests {
         }
     }
 
+    @Test func searchAndSpeechUseTheInlineThreadBodyAndSkipAnUnrelatedKind1111Payload() throws {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let parent = timelineRecord(messageIdHex: hexId(70), plaintext: "Meet for lunch")
+        var thread = timelineRecord(messageIdHex: hexId(71), plaintext: "Near the station", tags: [.init(values: ["e", parent.messageIdHex])],
+                                    replyToMessageIdHex: parent.messageIdHex)
+        thread.kind = MessageSemantics.kindComment
+        var unrelated = timelineRecord(messageIdHex: hexId(72), plaintext: "Near the station")
+        unrelated.kind = MessageSemantics.kindComment
+        model.applyTimelinePage(.init(messages: [parent, thread, unrelated], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        model.search.query = "station"
+        #expect(model.search.matches.map(\.messageIdHex) == [thread.messageIdHex])
+        let reply = try #require(model.record(for: thread.messageIdHex))
+        #expect(model.replyPreview(for: reply)?.text == parent.plaintext)
+        #expect(MessageSpeechPresentation.textActions(for: reply, myAccountID: nil, standaloneEmoji: false, hasSpokenText: true) == [.read])
+        let unsupported = try #require(model.record(for: unrelated.messageIdHex))
+        #expect(MessageSpeechPresentation.textActions(for: unsupported, myAccountID: nil, standaloneEmoji: false, hasSpokenText: true).isEmpty)
+    }
+
     @Test func searchMatchesTheDocumentFilenameButSkipsUnlabeledMediaTiles() {
         let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
         let image = mediaReference(sourceEpoch: 42)
@@ -258,7 +277,7 @@ struct TimelineProjectionBoundaryTests {
             messageIdHex: hexId(22), plaintext: "Another reply", replyToMessageIdHex: offscreenPollID,
             replyPreview: TimelineReplyPreviewFfi(
                 messageIdHex: offscreenPollID, sender: poll.sender, plaintext: "", kind: poll.kind,
-                mediaJson: nil, media: [], agentTextStreamJson: nil, deleted: false
+                mediaJson: nil, media: [], deleted: false
             )
         )
         viewModel.applyTimelinePage(
@@ -280,7 +299,7 @@ struct TimelineProjectionBoundaryTests {
         let fallback = timelineRecord(messageIdHex: hexId(21), plaintext: "Reply", replyToMessageIdHex: poll.messageIdHex)
         let projected = timelineRecord(messageIdHex: hexId(22), plaintext: "Another reply", replyToMessageIdHex: poll.messageIdHex,
             replyPreview: .init(messageIdHex: poll.messageIdHex, sender: poll.sender, plaintext: poll.plaintext,
-                                kind: poll.kind, mediaJson: nil, media: [], agentTextStreamJson: nil, deleted: false))
+                                kind: poll.kind, mediaJson: nil, media: [], deleted: false))
         viewModel.applyTimelinePage(.init(messages: [poll, fallback, projected], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
         for reply in [fallback, projected] {
             let record = try #require(viewModel.record(for: reply.messageIdHex))
@@ -308,7 +327,6 @@ struct TimelineProjectionBoundaryTests {
                 kind: MessageSemantics.kindChat,
                 mediaJson: nil,
                 media: [reference],
-                agentTextStreamJson: nil,
                 deleted: false
             )
         )
@@ -770,7 +788,6 @@ struct TimelineProjectionBoundaryTests {
             replyPreview: replyPreview,
             mediaJson: nil,
             media: media,
-            agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             edit: nil,

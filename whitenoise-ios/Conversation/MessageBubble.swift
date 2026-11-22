@@ -565,8 +565,17 @@ struct MessageBubble: View {
         }
     }
 
+    var readerShowsSource: Bool {
+        if incompleteMarkdown { return true }
+        guard markdownBlocks == nil else { return false }
+        if TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) { return true }
+        guard record.plaintext.utf8.count > ContentSanitizer.maxMessageScalars else { return false }
+        let scalars = record.plaintext.unicodeScalars
+        return scalars.prefix(ContentSanitizer.maxMessageScalars).endIndex != scalars.endIndex
+    }
+
     @ViewBuilder private var readerBody: some View {
-        if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
+        if readerShowsSource {
             // Beyond the formatter's budget, read the authored source in viewport-sized batches.
             LongMessageSourceText(text: record.plaintext)
                 .id(Data(record.plaintext.utf8))
@@ -1112,22 +1121,12 @@ struct MessageBubble: View {
 
     /// The complete source stays reachable for a durable row even when search expands the projected text.
     var offersSourceReader: Bool {
-        !usesReviewLayout && !isLiveStream
+        !usesReviewLayout
             && (incompleteMarkdown || TranscriptMessagePreview.requiresReader(record.plaintext))
     }
 
-    private var isLiveStream: Bool {
-        status == .streaming || (record.direction == "received" && record.messageIdHex.isEmpty)
-    }
-
-    private var isStreamBody: Bool {
-        if isLiveStream { return true }
-        if case .streamFinal = MessageSemantics.classify(record) { return true }
-        return false
-    }
-
     private func messageBodyText(hasReply: Bool, richWidth: CGFloat? = nil) -> some View {
-        let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil && !isStreamBody {
+        let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil {
             TranscriptMessagePreview.snippet(markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }
                 .joined(separator: "\n") ?? sanitizedBodyText)
         } else { nil }
@@ -1252,7 +1251,7 @@ struct MessageBubble: View {
             })
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
-            // stream bubbles, pre-markdown history) keep the plain path.
+            // sends, pre-markdown history) keep the plain path.
             let text = AttributedString(snippet.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) + "…" } ?? sanitizedBodyText)
             if actionBodySize != nil {
                 liftedInlineText(text)

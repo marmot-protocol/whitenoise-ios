@@ -85,11 +85,13 @@ extension MarmotClient {
     }
 
     /// Saves `snapshot`, keeping each attachment MDK holds as a file by its
-    /// id (`retainedIDs`) and leaving out large ones it doesn't hold yet.
+    /// id (`retainedIDs`) and leaving out large ones it doesn't hold yet. MDK
+    /// keeps the draft's other attachments unless they're in `removing`.
     func saveMessageDraftIfRevision(accountRef: String, revision: MessageDraftRevisionFfi,
         snapshot: ConversationDraftSnapshot, retainedIDs: Set<String> = [],
-        keeping kept: [String] = []) async throws -> SelectedMessageDraftFfi {
-        let attachments = MessageDraftAttachmentInputs.inputs(for: snapshot.mediaAttachments, retainedIDs: retainedIDs, keeping: kept)
+        removingUnnamed removing: [String] = []) async throws -> SelectedMessageDraftFfi {
+        let attachments = MessageDraftAttachmentInputs.inputs(for: snapshot.mediaAttachments,
+            retainedIDs: retainedIDs, removingUnnamed: removing)
         return try await Task.detached(priority: .utility) { [marmot] in
             try marmot.saveMessageDraftInputsIfRevision(accountRef: accountRef, revision: revision,
                 content: snapshot.canonicalText, replyToMessageIdHex: snapshot.replyToMessageIdHex,

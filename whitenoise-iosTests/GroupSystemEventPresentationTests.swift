@@ -487,7 +487,6 @@ struct GroupSystemEventPresentationTests {
             """,
             kind: MessageSemantics.kindGroupSystem,
             mediaJson: nil,
-            agentTextStreamJson: nil,
             deleted: false
         )
 

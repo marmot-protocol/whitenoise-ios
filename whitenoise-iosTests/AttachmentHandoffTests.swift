@@ -354,7 +354,7 @@ struct AttachmentHandoffTests {
             groupIdHex: String(repeating: "5", count: 64), sender: String(repeating: "6", count: 64),
             plaintext: "", contentTokens: .emptyDocument, kind: 9, tags: [],
             timelineAt: 1, receivedAt: 1, replyToMessageIdHex: nil, replyPreview: nil,
-            mediaJson: nil, media: [reference], agentTextStreamJson: nil,
+            mediaJson: nil, media: [reference],
             groupSystem: nil, poll: nil, reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             edit: nil, deleted: false, deletedByMessageIdHex: nil, invalidationStatus: nil)
         let items = GroupModerationModel.mediaItems(for: message, reportIdHex: "r1")

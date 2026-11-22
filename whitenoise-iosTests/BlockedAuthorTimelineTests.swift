@@ -105,13 +105,11 @@ struct BlockedAuthorTimelineTests {
                     kind: MessageSemantics.kindChat,
                     mediaJson: nil,
                     media: [],
-                    agentTextStreamJson: nil,
                     deleted: false
                 )
             },
             mediaJson: nil,
             media: [],
-            agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             deleted: false,

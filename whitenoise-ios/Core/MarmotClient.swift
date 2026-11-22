@@ -1202,10 +1202,6 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.subscribeGroupState(accountRef: accountRef, groupIdHex: groupIdHex)
     }
 
-    func watchAgentTextStream(accountRef: String, groupIdHex: String, streamIdHex: String?, serverCertDer: Data?, insecureLocal: Bool) async throws -> AgentStreamSubscription {
-        try await marmot.watchAgentTextStream(accountRef: accountRef, groupIdHex: groupIdHex, streamIdHex: streamIdHex, serverCertDer: serverCertDer, insecureLocal: insecureLocal)
-    }
-
     func startRuntime() async throws {
         // Optional exporters cannot turn missing consent/configuration into a startup failure.
         try? await configureTelemetryRuntime()
