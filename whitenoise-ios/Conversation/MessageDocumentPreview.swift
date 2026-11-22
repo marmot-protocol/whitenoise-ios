@@ -7,14 +7,20 @@ nonisolated struct DocumentPreviewSource: Equatable {
     let id: String
     let reference: MediaAttachmentReferenceFfi?
     let source: AttachmentHandoffSource
+    let format: DocumentPreviewFormat?
 
     init(_ item: MessageMediaAttachment) {
         id = item.id
         reference = item.reference
         source = AttachmentHandoffSource(item)
+        format = DocumentPreviewFormat(for: item)
     }
 
-    func continues(_ previous: Self, outgoing: Bool) -> Bool {
+    func continues(_ previous: Self, outgoing: Bool, openedDraftDigest: String? = nil) -> Bool {
+        if outgoing, previous.reference == nil, previous.source == .none, let openedDraftDigest,
+           let reference, format != nil, format == previous.format {
+            return reference.plaintextSha256.lowercased() == openedDraftDigest
+        }
         guard id == previous.id, reference == previous.reference else { return false }
         if source == previous.source { return true }
         if outgoing, reference != nil, previous.source == .none { return true }

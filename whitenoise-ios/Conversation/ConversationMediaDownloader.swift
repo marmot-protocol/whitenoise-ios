@@ -72,10 +72,12 @@ final class MediaDownloadInFlightStore<Value: Sendable> {
 
 nonisolated enum MediaPlaintextHash {
     static func matches(_ data: Data, expectedSha256: String) async -> Bool {
+        await digest(data) == expectedSha256.lowercased()
+    }
+
+    static func digest(_ data: Data) async -> String {
         // Runs on the path of a visible attachment load, so it must not queue at utility.
-        await Task.detached(priority: .userInitiated) {
-            sha256Hex(of: data) == expectedSha256.lowercased()
-        }.value
+        await Task.detached(priority: .userInitiated) { sha256Hex(of: data) }.value
     }
 
     private static func sha256Hex(of data: Data) -> String {

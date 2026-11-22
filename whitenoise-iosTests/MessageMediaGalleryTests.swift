@@ -87,6 +87,35 @@ struct MessageMediaGalleryTests {
             data: draft.data)) == nil)
     }
 
+    @Test func replacingASourceDuringDraftVerificationInvalidatesTheCandidateEvenWithTheSameDisplayID() throws {
+        let slot = MessageMediaGallery.OutgoingSlot(rowID: "my-send", index: 0)
+        let draft = MessageMediaGallery.PendingSelection(id: "draft", slot: slot, data: Data([1]))
+        func gallery(_ item: MessageMediaAttachment) throws -> MessageMediaGallery {
+            try #require(MessageMediaGallery(transcriptItems: [item], openingID: draft.id, initialData: nil,
+                messages: [:], captions: [item.id: .init(sender: "You", date: .now, outgoingSlot: slot)]))
+        }
+        var reference = encryptedMediaReference(fileName: "photo.jpg", mediaType: "image/jpeg", sourceEpoch: 1)
+        let item = try #require(MessageMediaAttachment.displayItems(from: [reference], ownerId: "row").first)
+        let expected = MessageMediaGallery.Replacement(selectedID: draft.id, candidate: item)
+        guard case .confirmed(let confirmed) = try gallery(item).finishVerification(expected, pending: draft, verified: true),
+              case .unavailable = try gallery(item).finishVerification(expected, pending: draft, verified: false) else {
+            Issue.record("The matching source must follow its byte verification result")
+            return
+        }
+        #expect(confirmed.id == item.id)
+        var updated = item
+        updated.localTarget = .init(messageIdHex: "message", sourceMessageIdHex: "source", attachmentIndex: 0)
+        reference.fileName = "renamed.jpg"
+        let renamed = try #require(MessageMediaAttachment.displayItems(from: [reference], ownerId: "row").first)
+        for replacement in [updated, renamed] {
+            #expect(replacement.id == item.id)
+            guard case .superseded = try gallery(replacement).finishVerification(expected, pending: draft, verified: true) else {
+                Issue.record("A different source must not inherit the old verification")
+                return
+            }
+        }
+    }
+
     @Test func aPreparedPhotoAcceptsItsFirstOriginalSlotAndRejectsAReplacement() throws {
         var ref = MediaAttachmentReferenceFfi(locators: [], ciphertextSha256: "", plaintextSha256: "photo",
             nonceHex: "", fileName: "photo.png", mediaType: "image/png", version: .v1,

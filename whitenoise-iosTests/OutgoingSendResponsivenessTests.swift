@@ -245,6 +245,39 @@ struct OutgoingSendResponsivenessTests {
         #expect(harness.store.mediaProjections.pending(forRowId: rowID)?.count == 1)
     }
 
+    @Test func anOpenDraftDocumentKeepsItsPresentationOwnerWhenItsSendConfirms() async throws {
+        let harness = SendHarness()
+        harness.installWindow([])
+        let photo = MediaDraftAttachment(fileName: "photo.jpg", mediaType: "image/jpeg", data: Data([1]), dim: nil)
+        let document = MediaDraftAttachment(fileName: "notes.txt", mediaType: "text/plain", data: Data("hello".utf8), dim: nil)
+        let rowID = "msg:album"
+        harness.store.mediaProjections.setPending([photo.displayItem, document.displayItem], forRowId: rowID)
+        harness.store.applyPendingOutgoingMessage(tempId: "album", record: harness.optimisticRecord(text: ""), clientToken: "album")
+        harness.store.markLocalSendSubmitted(tempId: "album")
+        let initialRow = try #require(harness.store.timeline.first)
+        let initial = try #require(MessageMediaAttachment.inlineRows(harness.store.mediaItems(for: initialRow), outgoing: true).first)
+        let openedDigest = await MediaPlaintextHash.digest(document.data)
+
+        let digest = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        var reference = mediaReference(plaintextSha256: digest)
+        reference.mediaType = "text/plain"
+        reference.fileName = "notes.txt"
+        var durable = harness.ownRecord(id: hexId(12), text: "", timelineAt: 70, delivered: true, token: "album")
+        durable.media = [.accepted(attachmentIndex: 0, reference: mediaReference(plaintextSha256: String(repeating: "a", count: 64))),
+                         .accepted(attachmentIndex: 1, reference: reference)]
+        harness.installWindow([durable])
+        let confirmedRow = try #require(harness.store.timeline.first)
+        let confirmed = try #require(MessageMediaAttachment.inlineRows(harness.store.mediaItems(for: confirmedRow), outgoing: true).first)
+        #expect(initialRow.id == confirmedRow.id)
+        #expect(initial.id == .outgoingDocument(1))
+        #expect(initial.id == confirmed.id)
+        #expect(initial.item.id != confirmed.item.id)
+        #expect(confirmed.item.localData == nil)
+        let source = DocumentPreviewSource(confirmed.item)
+        #expect(source.continues(DocumentPreviewSource(initial.item), outgoing: true, openedDraftDigest: openedDigest))
+        #expect(!source.continues(DocumentPreviewSource(initial.item), outgoing: true, openedDraftDigest: "different"))
+    }
+
     @Test(arguments: [true, false])
     func aJustSentAttachmentRendersFromItsOwnBytesOnceTheDurableRowArrives(retained: Bool) async throws {
         let harness = SendHarness()
