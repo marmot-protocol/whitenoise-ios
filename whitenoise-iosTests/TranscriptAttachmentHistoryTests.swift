@@ -82,15 +82,16 @@ struct TranscriptAttachmentHistoryTests {
         let selectedID = try #require(TranscriptHistorySlot(selected)).attachment.id
         let window = try [late, latest].map { try #require(TranscriptHistorySlot($0)).attachment }
         var pages = TranscriptHistoryPages()
-        pages.append([latest, selected])
+        pages.append([entry("after"), latest, selected])
         let disconnected = pages.extensions(around: window, excluding: ["late", "latest"], preserving: selectedID)
         #expect(!disconnected.includesWindow)
         #expect(disconnected.older.map(\.attachment.id) == [selectedID])
         var refreshed = TranscriptHistoryPages()
-        refreshed.append([latest, late, selected])
+        refreshed.append([entry("after"), latest, late, selected])
         let connected = refreshed.extensions(around: window, excluding: ["late", "latest"], preserving: selectedID)
         #expect(connected.includesWindow)
         #expect(connected.older.map(\.attachment.id) == [selectedID])
+        #expect(connected.newer.map(\.target.messageIdHex) == ["after"])
     }
 
     @Test func refreshingNewerPhotosKeepsTheSelectedOlderPhotoAcrossPageBoundaries() throws {

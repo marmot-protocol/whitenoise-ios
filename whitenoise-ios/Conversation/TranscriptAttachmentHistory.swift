@@ -125,8 +125,11 @@ struct TranscriptHistoryPages {
         if let selectedID, contains(attachmentID: selectedID), !window.contains(where: { $0.id == selectedID }),
            let selected = chronological.firstIndex(where: { $0.attachment.id == selectedID && isGalleryPage($0) }),
            firstOverlap.map({ selected < $0 }) != true, lastOverlap.map({ selected > $0 }) != true {
-            // Stay in the selected segment until the window edge on its side matches.
-            return Edges(older: chronological.filter(isGalleryPage), includesWindow: false)
+            // Stop at an intervening window message. Otherwise filtering out the
+            // window would put two disconnected parts of history next to each other.
+            let start = chronological[..<selected].lastIndex { windowMessages.contains($0.target.messageIdHex) }.map { $0 + 1 } ?? 0
+            let end = chronological[(selected + 1)...].firstIndex { windowMessages.contains($0.target.messageIdHex) } ?? chronological.endIndex
+            return Edges(older: chronological[start..<end].filter(isGalleryPage), includesWindow: false)
         }
         return Edges(older: firstOverlap.map { chronological[..<$0].filter(isGalleryPage) } ?? [],
                      newer: lastOverlap.map { chronological.suffix(from: $0 + 1).filter(isGalleryPage) } ?? [])
