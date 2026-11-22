@@ -23,7 +23,9 @@ struct ChatPreviewActions {
             if let replyTo, let index = chat.messages.firstIndex(where: { $0.timeline.messageIdHex == replyTo }) {
                 line = PreviewLine(text, .reply(index), by: author)
             } else { line = PreviewLine(text, by: author) }
-            chat.append(line, at: UInt64(Date().timeIntervalSince1970))
+            // Near midnight, the last Today sample can be a few minutes ahead of the clock.
+            let nextTime = (chat.messages.last?.timeline.timelineAt ?? 0) + 1
+            chat.append(line, at: max(UInt64(Date().timeIntervalSince1970), nextTime))
         }
     }
 

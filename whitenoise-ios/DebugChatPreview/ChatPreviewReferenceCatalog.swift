@@ -14,8 +14,10 @@ extension ChatPreviewThread {
         let calendar = Calendar.current
         let date = calendar.date(byAdding: .day, value: -daysAgo, to: referenceNow)!
         let opening = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: date)!
-        // Leave room for the longest same-day sequence before a newly sent preview message.
-        return daysAgo == 0 ? min(opening, referenceNow.addingTimeInterval(-601)) : opening
+        guard daysAgo == 0 else { return opening }
+        // Keep the sample on Today even when the preview opens just after midnight.
+        let latestStart = max(calendar.startOfDay(for: referenceNow), referenceNow.addingTimeInterval(-601))
+        return min(opening, latestStart)
     }
 
     static var referenceExamples: [Self] {
