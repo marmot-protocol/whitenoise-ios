@@ -74,7 +74,6 @@ struct GroupChangeNoticeTests {
 
     @Test func automaticReissueNeedsNoNotice() {
         #expect(GroupChangeNotice.toast(for: event(outcome: "reissued")) == nil)
-        #expect(GroupChangeNotice.toast(for: .agentStreamActivity(accountIdHex: "account", accountLabel: "profile")) == nil)
     }
 
     @Test(arguments: ["conflict", "already_satisfied", "reinvite_required", "abandoned", "not_member", "future_outcome"])

@@ -10,8 +10,7 @@ nonisolated struct ConversationReplyPreview: Equatable {
 }
 
 /// Owns the conversation's merged timeline: the durable message mirror, the
-/// optimistic overlays (pending sends, session system events, stream/debug
-/// rows), the row-display projection caches (markdown / media / reaction /
+/// optimistic overlays (pending sends, session system events),  the row-display projection caches (markdown / media / reaction /
 /// deleted / edit), pagination edges, and the rebuild engine that folds them into the
 /// published `timeline`.
 ///
@@ -24,11 +23,6 @@ nonisolated struct ConversationReplyPreview: Equatable {
 /// timeline statics stay on `ConversationViewModel` (referenced here as
 /// `ConversationViewModel.x`) so their tests are untouched.
 ///
-/// `StreamWatcher` writes its synthetic rows into this store through
-/// `StreamWatcherTimelineSink`; the apply ingest calls back into the watcher for
-/// finalized-stream resolution + live-preview teardown. The view model wires
-/// both refs at init.
-///
 /// Thin-shell ownership boundary:
 /// - Binding projection mirrors: `messageById`, `messageStatusById`,
 ///   `replyTargetByMessageId`, `replyProjectionKnownMessageIds`,
@@ -36,8 +30,7 @@ nonisolated struct ConversationReplyPreview: Equatable {
 ///   edges. These are copied from timeline rows and never repaired from another
 ///   Marmot read.
 /// - UI optimistic overlays: pending/failed sends, pending media, optimistic
-///   reaction toggles, optimistic delete tombstones, session system rows, and
-///   stream/debug preview rows.
+///   reaction toggles, optimistic delete tombstones, and session system rows.
 /// - Compatibility fallbacks: tag parsing is allowed only for local/transient
 ///   records that have no row projection yet; row-projected `nil` / empty values
 ///   are authoritative. Reply text may fall back to an already-loaded target row
@@ -218,20 +211,12 @@ final class TimelineStore {
     @ObservationIgnored private let projectionBuilders: ConversationProjectionBuilders
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
     @ObservationIgnored private var systemTimelineItems: [TimelineItem] = []
-    /// Transient QUIC debug rows keyed by timeline id (streaming debug only).
-    /// Written by `StreamWatcher` via the sink; consumed by `rebuildTimeline`.
-    /// Bounded to a recent window (`maxStreamDebugTimelineItems`) so a long-lived
-    /// stream can't grow this map for the conversation's lifetime (#431).
-    @ObservationIgnored private var streamDebugTimelineItems: [String: TimelineItem] = [:]
     /// Account/group-scoped message ids hidden by the local "Delete for me"
     /// action. Records stay mirrored so reply/edit/reaction projections remain
     /// internally consistent; only the rendered timeline filters them.
     @ObservationIgnored private var hiddenMessageIds: Set<String>
     @ObservationIgnored private var blockedAuthorIds: Set<String> = []
 
-    /// Upper bound on retained streaming-debug rows. Higher than
-    /// `maxSystemTimelineItems` because debug events are far higher volume.
-    nonisolated static let maxStreamDebugTimelineItems = 256
 
     @ObservationIgnored let markdownProjections: ConversationMarkdownProjectionCache
     @ObservationIgnored let relativeTimestampRefresh = RelativeTimestampRefreshScheduler()
@@ -256,7 +241,6 @@ final class TimelineStore {
     @ObservationIgnored private weak var appState: AppState?
     @ObservationIgnored private let timings: TimelineStoreTimings
     @ObservationIgnored private let groupIdHex: String
-    @ObservationIgnored weak var streamWatcher: StreamWatcher?
     /// Resolves a mention entity to a display name (off the profile cache); set by
     /// the view model so this store holds no profile state.
     @ObservationIgnored var identityNameResolver: ((String) -> String)?
@@ -291,8 +275,7 @@ final class TimelineStore {
     func setHasMoreAfter(_ value: Bool) { hasMoreAfter = value }
 
     private var myAccountId: String? { appState?.activeAccount?.accountIdHex }
-    /// Internal (not private) to satisfy `StreamWatcherTimelineSink`.
-    var streamingDebugEnabled: Bool { appState?.streamingDebugEnabled == true }
+    private var streamingDebugEnabled: Bool { appState?.streamingDebugEnabled == true }
     private var mentionDisplayNameResolver: MarkdownMentionResolver { mentionResolver }
 
     private func resolvedAccountDisplayName(_ accountIdHex: String) -> String {
@@ -364,7 +347,6 @@ final class TimelineStore {
     private enum TimelineItemSignatureKind: Equatable {
         case message(MessageTimelineSignature, MessageStatus)
         case systemEvent(SystemEvent)
-        case streamDebugEvent(StreamDebugTimelineEvent)
     }
 
     private struct TimelineItemSignature: Equatable {
@@ -380,8 +362,6 @@ final class TimelineStore {
                 kind = .message(MessageTimelineSignature(record), status)
             case .systemEvent(let event):
                 kind = .systemEvent(event)
-            case .streamDebugEvent(let event):
-                kind = .streamDebugEvent(event)
             }
         }
     }
@@ -516,11 +496,12 @@ final class TimelineStore {
         }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
             guard !isBlockedAuthor(preview.sender) else { return nil }
-            // A kind 1111 is a comment only with a numeric `k` tag, which the
-            // projected quote doesn't carry: decide from the loaded target.
-            // A deleted target has no tags left; it reads as deleted.
+            // MDK places every thread message (`thread`). A kind 1111 outside
+            // a thread is another app's kind unless its loaded tags make it a
+            // parentless comment. A deleted target reads as deleted.
             let targetUnsupported = preview.kind == MessageSemantics.kindComment && !preview.deleted
-                && messageById[targetId].map { MessageSemantics.classify($0) == .unsupportedEvent } == true
+                && preview.thread == nil
+                && messageById[targetId].map { MessageSemantics.classify($0) == .unsupportedEvent } ?? true
             let key = ReplyPreviewDisplayCacheKey(
                 messageIdHex: record.messageIdHex,
                 targetId: targetId,
@@ -822,13 +803,11 @@ final class TimelineStore {
         }
         claimProjectedLocalSends(in: page.messages)
         let changedRecords = page.messages.filter { preparedRecords[$0.messageIdHex] != $0 }
-        streamWatcher?.recordFinalizedStreams(in: changedRecords)
         for record in changedRecords {
             preparedRecords[record.messageIdHex] = record
             changed = applyTimelineRecord(record) || changed
             targets.insert(record.messageIdHex)
         }
-        streamWatcher?.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         hasMoreBefore = page.hasMoreBefore
         hasMoreAfter = page.hasMoreAfter
         if changed || orderChanged {
@@ -861,7 +840,6 @@ final class TimelineStore {
                 ) || projectionChanged
             }
         }
-        streamWatcher?.recordFinalizedStreams(in: page.messages)
         for record in page.messages {
             if !shouldEvictAbsentRecords {
                 collectReactionTargets(
@@ -873,9 +851,6 @@ final class TimelineStore {
                 record,
                 updateTimeline: perRecordTimelineUpdate
             ) || projectionChanged
-        }
-        if shouldEvictAbsentRecords {
-            streamWatcher?.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         }
         hasMoreBefore = page.hasMoreBefore
         hasMoreAfter = page.hasMoreAfter
@@ -905,7 +880,7 @@ final class TimelineStore {
             switch change {
             case .upsert(let trigger, let record):
                 let appRecord = ConversationViewModel.appMessageRecord(from: record)
-                if trigger == .newMessage, appRecord.direction == "received", MessageSemantics.isUserMessageKind(appRecord.kind),
+                if trigger == .newMessage, appRecord.direction == "received", MessageSemantics.isChatActivity(appRecord),
                    !appRecord.messageIdHex.isEmpty, messageById[appRecord.messageIdHex] == nil {
                     beginMessageVisibility(rowID: "msg:\(appRecord.messageIdHex)", operation: .inboundMessageVisible)
                 }
@@ -915,7 +890,6 @@ final class TimelineStore {
                 if case .reaction(let target) = MessageSemantics.classify(appRecord), !target.isEmpty {
                     changedReactionTargets.insert(target)
                 }
-                streamWatcher?.recordFinalizedStreams(in: [record])
                 projectionChanged = applyTimelineRecord(
                     record,
                     updateTimeline: !consolidateTimelineRebuild,
@@ -936,7 +910,6 @@ final class TimelineStore {
                 ) || projectionChanged
             }
         }
-        streamWatcher?.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         rebuildProjectedState(
             rebuildTimeline: consolidateTimelineRebuild,
             projectionChanged: projectionChanged,
@@ -959,14 +932,12 @@ final class TimelineStore {
         let records = hasMoreAfter
             ? page.messages.filter { existingMessageIds.contains($0.messageIdHex) }
             : page.messages
-        streamWatcher?.recordFinalizedStreams(in: records)
         var projectionChanged = false
         var changedReactionTargets: Set<String> = []
         for record in records {
             collectReactionTargets(affectedBy: ConversationViewModel.appMessageRecord(from: record), into: &changedReactionTargets)
             projectionChanged = applyTimelineRecord(record, updateTimeline: true) || projectionChanged
         }
-        streamWatcher?.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         if !hasMoreAfter {
             // A tail refresh only re-reads the newest rows, so its page always
             // reports more history exists; never widen a backward edge the user
@@ -1017,7 +988,6 @@ final class TimelineStore {
             editProjections.setPreparedRecord(appRecord, edit: record.edit,
                 deleted: record.deleted || record.invalidationStatus != nil)
         }
-        let semantics = MessageSemantics.classify(appRecord)
         let affectedEditTargets = editProjections.setRecord(
             appRecord,
             invalidated: record.invalidationStatus != nil,
@@ -1098,9 +1068,6 @@ final class TimelineStore {
             invalidated: record.invalidationStatus != nil
         )
 
-        if let streamId = StreamWatcher.finalizedStreamId(from: record, appRecord: appRecord) {
-            projectionChanged = (streamWatcher?.resolveFinalizedStream(streamId: streamId) ?? false) || projectionChanged
-        }
         if updateTimeline {
             if let item = visibleTimelineItem(
                 for: appRecord,
@@ -1116,8 +1083,6 @@ final class TimelineStore {
                 }
             }
         }
-        streamWatcher?.dropMatchingStreamPreviewIfNeeded(for: appRecord, semantics: semantics, trigger: trigger)
-        streamWatcher?.watchStartIfNeeded(appRecord, trigger: trigger)
         return projectionChanged
     }
 
@@ -1143,7 +1108,6 @@ final class TimelineStore {
         mediaProjections.removeReferences(forMessageId: messageIdHex)
         reactionProjections.removeSummary(forMessageId: messageIdHex)
         deletedProjections.removeProjected(forMessageId: messageIdHex)
-        streamWatcher?.forgetScannedFinalized(messageIdHex)
         var timelineChanged = updateTimeline
             ? removeTimelineItem(id: displayID(for: messageIdHex))
             : false
@@ -1198,7 +1162,6 @@ final class TimelineStore {
         next.append(contentsOf: transientTimelineItems.values.filter {
             localSendCorrelations[$0.id]?.claimedMessageId == nil || localSendPhases[$0.id] == .failed
         })
-        next.append(contentsOf: streamDebugTimelineItems.values)
         next.append(contentsOf: systemTimelineItems)
         next = orderedTimeline(next)
         let markdownTiming = timings.begin()
@@ -1233,44 +1196,9 @@ final class TimelineStore {
     }
 
     func refreshStreamingDebugPresentation() {
-        var changed = false
-        if !streamingDebugEnabled {
-            changed = !streamDebugTimelineItems.isEmpty
-            streamDebugTimelineItems.removeAll()
-            streamWatcher?.resetDebugSequence()
-        }
-        changed = rebuildTimeline() || changed
-        if changed {
+        if rebuildTimeline() {
             noteProjectionChanged()
         }
-    }
-
-    /// Insert `item` into `items` and evict the oldest rows so at most `limit`
-    /// remain, returning the ids removed. Ordering mirrors the timeline sort
-    /// (`timestamp` then `id`), so eviction matches display order and the
-    /// monotonic per-event sequence baked into debug ids keeps same-second
-    /// events in insertion order. Pure and total for unit coverage (#431).
-    nonisolated static func retainStreamDebugTimelineItems(
-        _ items: inout [String: TimelineItem],
-        appending item: TimelineItem,
-        limit: Int = maxStreamDebugTimelineItems
-    ) -> [String] {
-        items[item.id] = item
-        let boundedLimit = max(0, limit)
-        guard boundedLimit > 0 else {
-            let evicted = Array(items.keys)
-            items.removeAll()
-            return evicted
-        }
-        guard items.count > boundedLimit else { return [] }
-        let ordered = items.values.sorted { lhs, rhs in
-            lhs.timestamp == rhs.timestamp ? lhs.id < rhs.id : lhs.timestamp < rhs.timestamp
-        }
-        let evicted = ordered.prefix(items.count - boundedLimit).map(\.id)
-        for evictedId in evicted {
-            items.removeValue(forKey: evictedId)
-        }
-        return evicted
     }
 
     func refreshProfileDependentTimelineProjections(affectedMessageIDs: Set<String>? = nil) {
@@ -1310,7 +1238,7 @@ final class TimelineStore {
             return nil
         }
         switch MessageSemantics.classify(record) {
-        case .chat, .reply, .media, .streamFinal:
+        case .chat, .reply, .media:
             return row(editProjections.displayRecord(for: record))
         case .agentActivity, .agentOperation:
             let item = row(record)
@@ -1332,7 +1260,7 @@ final class TimelineStore {
                 groupSystem: groupSystemByMessageId[record.messageIdHex]
             ) else { return nil }
             return row(record)
-        case .reaction, .delete, .edit, .agentStreamStart, .unknown:
+        case .reaction, .delete, .edit, .unknown:
             guard streamingDebugEnabled else { return nil }
             return row(record)
         }
@@ -1438,7 +1366,7 @@ final class TimelineStore {
         switch (old.kind, next.kind) {
         case (.message(let oldRecord, _), .message(let nextRecord, _)):
             return replyTargetId(for: oldRecord) == replyTargetId(for: nextRecord)
-        case (.systemEvent, .systemEvent), (.streamDebugEvent, .streamDebugEvent):
+        case (.systemEvent, .systemEvent):
             return true
         default:
             return false
@@ -1986,52 +1914,5 @@ final class TimelineStore {
         if changed {
             noteProjectionChanged()
         }
-    }
-}
-
-// MARK: - StreamWatcher timeline sink
-
-extension TimelineStore: StreamWatcherTimelineSink {
-    @discardableResult
-    func streamUpsertTimelineItem(_ item: TimelineItem) -> Bool {
-        upsertTimelineItem(item)
-    }
-
-    @discardableResult
-    func streamRemoveTimelineItem(id: String) -> Bool {
-        removeTimelineItem(id: id)
-    }
-
-    func streamTransientItem(id: String) -> TimelineItem? {
-        transientTimelineItems[id]
-    }
-
-    func streamSetTransientItem(_ item: TimelineItem) {
-        transientTimelineItems[item.id] = item
-    }
-
-    @discardableResult
-    func streamRemoveTransientItem(id: String) -> Bool {
-        transientTimelineItems.removeValue(forKey: id) != nil
-    }
-
-    @discardableResult
-    func streamAppendDebugRow(_ item: TimelineItem) -> Bool {
-        let evictedIds = TimelineStore.retainStreamDebugTimelineItems(
-            &streamDebugTimelineItems,
-            appending: item,
-            limit: TimelineStore.maxStreamDebugTimelineItems
-        )
-        var changed = false
-        for evictedId in evictedIds {
-            changed = removeTimelineItem(id: evictedId) || changed
-        }
-        // The newest row was evicted by the cap itself (limit <= 0); nothing to show.
-        guard streamDebugTimelineItems[item.id] != nil else { return changed }
-        return upsertTimelineItem(item) || changed
-    }
-
-    func streamNoteProjectionChanged() {
-        noteProjectionChanged()
     }
 }

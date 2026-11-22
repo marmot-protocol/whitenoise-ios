@@ -463,7 +463,6 @@ struct ReactionTargetTallyTests {
             replyPreview: nil,
             mediaJson: nil,
             media: [],
-            agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: reactions,
             edit: nil,
@@ -500,90 +499,5 @@ struct ReactionTargetTallyTests {
             welcomerAccountIdHex: nil,
             viaWelcomeMessageIdHex: nil
         )
-    }
-}
-
-/// #48 — a concurrent "latest" (nil stream id) watch must be guarded so it can't
-/// race past the post-await duplicate check and open an orphaned subscription.
-struct StreamWatchRaceGuardTests {
-
-    @Test func startWatchingGuardsConcurrentLatestWatch() {
-        #expect(!AgentStreamWatchAdmission.canStart(
-            streamIdHex: nil,
-            activeStreamIds: [],
-            latestStreamWatchInFlight: true
-        ))
-        #expect(AgentStreamWatchAdmission.canStart(
-            streamIdHex: nil,
-            activeStreamIds: [],
-            latestStreamWatchInFlight: false
-        ))
-        #expect(!AgentStreamWatchAdmission.canStart(
-            streamIdHex: "stream-a",
-            activeStreamIds: ["stream-a"],
-            inFlightStreamIds: [],
-            latestStreamWatchInFlight: false
-        ))
-        #expect(!AgentStreamWatchAdmission.canStart(
-            streamIdHex: "stream-a",
-            activeStreamIds: [],
-            inFlightStreamIds: ["stream-a"],
-            latestStreamWatchInFlight: false
-        ))
-        #expect(AgentStreamWatchAdmission.canStart(
-            streamIdHex: "stream-b",
-            activeStreamIds: ["stream-a"],
-            inFlightStreamIds: ["stream-c"],
-            latestStreamWatchInFlight: true
-        ))
-    }
-
-    @Test func installRejectsWatchesFromACancelledSession() {
-        // cancelAll() bumped the epoch while the subscription open was
-        // awaited; the emptied dictionaries alone would wave the orphan
-        // through and lock out a legitimate re-watch of the same stream.
-        #expect(!AgentStreamWatchAdmission.shouldInstall(
-            sessionEpoch: 0,
-            currentSessionEpoch: 1,
-            streamId: "stream-a",
-            activeStreamIds: [],
-            finalizedStreamIds: []
-        ))
-        #expect(AgentStreamWatchAdmission.shouldInstall(
-            sessionEpoch: 1,
-            currentSessionEpoch: 1,
-            streamId: "stream-a",
-            activeStreamIds: [],
-            finalizedStreamIds: []
-        ))
-        #expect(!AgentStreamWatchAdmission.shouldInstall(
-            sessionEpoch: 1,
-            currentSessionEpoch: 1,
-            streamId: "stream-a",
-            activeStreamIds: ["stream-a"],
-            finalizedStreamIds: []
-        ))
-        #expect(!AgentStreamWatchAdmission.shouldInstall(
-            sessionEpoch: 1,
-            currentSessionEpoch: 1,
-            streamId: "stream-a",
-            activeStreamIds: [],
-            finalizedStreamIds: ["stream-a"]
-        ))
-    }
-
-    @Test func fallbackStreamPreviewDropIsConservativeForConcurrentSenderStreams() {
-        #expect(StreamWatcher.fallbackStreamPreviewToDrop(
-            sender: "alice",
-            streamSenderById: ["stream-a": "alice"]
-        ) == "stream-a")
-        #expect(StreamWatcher.fallbackStreamPreviewToDrop(
-            sender: "alice",
-            streamSenderById: ["stream-a": "alice", "stream-b": "alice"]
-        ) == nil)
-        #expect(StreamWatcher.fallbackStreamPreviewToDrop(
-            sender: "alice",
-            streamSenderById: ["stream-b": "bob"]
-        ) == nil)
     }
 }

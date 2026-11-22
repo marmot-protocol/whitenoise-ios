@@ -19,7 +19,7 @@ struct PreparedConversationLiveUpdateTests {
                 groupIdHex: groupRecord.groupIdHex, sender: accountIdHex, plaintext: text,
                 contentTokens: .emptyDocument, kind: MessageSemantics.kindChat, tags: [], timelineAt: time,
                 receivedAt: time, replyToMessageIdHex: nil, replyPreview: nil, mediaJson: nil, media: [],
-                agentTextStreamJson: nil, groupSystem: nil,
+                groupSystem: nil,
                 reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []), edit: nil, deleted: false,
                 deletedByMessageIdHex: nil, invalidationStatus: nil)
         }

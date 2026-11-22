@@ -96,6 +96,19 @@ struct SendDispatchAndCancellationTests {
         #expect(!MessageDraftAttachmentInputs.needsStaging(attachment(bytes: MediaDraftProcessor.maxAttachmentBytes + 1)))
     }
 
+    /// MDK keeps what a save leaves out, so a held attachment the composer no
+    /// longer names is removed by id, and a named one is never removed.
+    @Test func draftSavesRemoveOnlyHeldAttachmentsTheComposerDropped() {
+        let small = attachment(bytes: 10)
+        let removedID = UUID().uuidString
+
+        let inputs = MessageDraftAttachmentInputs.inputs(
+            for: [small], retainedIDs: [], removingUnnamed: [small.id.uuidString, removedID]
+        )
+
+        #expect(inputs == [.inline(attachment: small.messageDraftAttachment), .removed(id: removedID)])
+    }
+
     @Test func serverSizeRejectionOfASingleUploadIdentifiesThatAttachment() {
         let only = attachment(bytes: 1_024)
         let error = MarmotKitError.Runtime(details: "upload returned HTTP 413: File too large")

@@ -426,7 +426,6 @@ struct ConversationEditProjectionTests {
             replyPreview: nil,
             mediaJson: nil,
             media: [],
-            agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             edit: nil,

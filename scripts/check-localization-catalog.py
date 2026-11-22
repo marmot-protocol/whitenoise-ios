@@ -168,7 +168,7 @@ ONCE_ENGLISH_KEYS = ("Sign In", "Sign Up") + RETENTION_KEYS + DONATION_KEYS
 # is the feature's name: every locale's notification footers keep it as such.
 SHARED_NAMES = (
     "Claude Code", "Codex", "GIF", "GIPHY", "Hermes", "NIP-65", "Native Push", "OpenClaw", "OpenCode", "Pi",
-    "QUIC · %@", "URL", "White Noise", "White Noise · %@", "https://example.com/image.jpg", "npub", "nsec1…",
+    "URL", "White Noise", "White Noise · %@", "https://example.com/image.jpg", "npub", "nsec1…",
 )
 SHARED_WORDS = {
     "%1$@ (HTTP %2$lld)": "fi", "Epoch": "fi", "epoch %llu → %llu": "fi", "Fanout": "fi",
@@ -186,7 +186,7 @@ SHARED_WORDS = {
     "Password": "it", "Photos": "fr", "Question": "fr", "Relay": "de es it pt", "Scan": "de",
     "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "Sticker": "de es it", "%@ Sticker": "de", "Sticker: %@": "de es it",
     "Stickers": "es", "stream %@": "es it pt",
-    "Streaming…": "de fr it", "System": "de", "Tokens": "es pt", "USD": "de es fi fr it pt ru tr", "Version": "de fr",
+    "System": "de", "Tokens": "es pt", "USD": "de es fi fr it pt ru tr", "Version": "de fr",
     "Version %lld": "de fr", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt", "Video": "de es fi it tr",
     "Videos": "de es", "Votes": "fr", "White Noise Support": "de",
     "wss://relay.example.com": "de fi it pt ru tr zh-Hans zh-Hant",

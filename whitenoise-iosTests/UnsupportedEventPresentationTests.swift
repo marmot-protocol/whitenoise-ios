@@ -74,7 +74,7 @@ struct UnsupportedEventPresentationTests {
                         replyPreview: TimelineReplyPreviewFfi(
                             messageIdHex: target, sender: hex("11"), plaintext: "{\"raw\":true}",
                             kind: MessageSemantics.kindComment, mediaJson: nil, media: [],
-                            agentTextStreamJson: nil, deleted: false
+                            deleted: false
                         )
                     ),
                 ],
@@ -88,6 +88,37 @@ struct UnsupportedEventPresentationTests {
         #expect(store.replyPreview(for: reply)?.text == MessagePreview.unsupportedEventLabel)
     }
 
+    /// A quote of a kind 1111 whose row isn't loaded follows MDK's `thread`:
+    /// a thread message shows its text, anything else is an unsupported event.
+    @Test(arguments: [true, false])
+    func anUnloadedQuotedKind1111FollowsMDKsThread(inThread: Bool) throws {
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
+        let target = hex("01")
+        let quote = TimelineReplyPreviewFfi(
+            messageIdHex: target, sender: hex("11"), plaintext: "on it",
+            kind: MessageSemantics.kindComment, mediaJson: nil, media: [],
+            replyToMessageIdHex: inThread ? hex("03") : nil,
+            thread: inThread ? TimelineThreadRefFfi(rootMessageIdHex: hex("03"), parentMessageIdHex: hex("03")) : nil,
+            deleted: false
+        )
+        store.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [
+                    timelineRecord(
+                        messageIdHex: hex("02"), plaintext: "thanks", timelineAt: 2,
+                        replyToMessageIdHex: target, replyPreview: quote
+                    ),
+                ],
+                hasMoreBefore: false,
+                hasMoreAfter: true
+            ),
+            placement: .window
+        )
+
+        let reply = try #require(record(kind: MessageSemantics.kindChat, in: store))
+        #expect(store.replyPreview(for: reply)?.text == (inThread ? "on it" : MessagePreview.unsupportedEventLabel))
+    }
+
     /// MDK clears a deleted row's tags, so a deleted comment can't be told
     /// from another kind 1111: its quote reads as deleted, as any quote does.
     @Test func aQuotedDeletedCommentReadsAsDeleted() throws {
@@ -96,7 +127,7 @@ struct UnsupportedEventPresentationTests {
         let quote = TimelineReplyPreviewFfi(
             messageIdHex: target, sender: hex("11"), plaintext: "",
             kind: MessageSemantics.kindComment, mediaJson: nil, media: [],
-            agentTextStreamJson: nil, deleted: true
+            deleted: true
         )
         store.applyTimelinePage(
             TimelinePageFfi(

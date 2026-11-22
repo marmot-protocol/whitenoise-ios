@@ -293,8 +293,9 @@ final class AppState {
         }
     }
 
-    /// When developer mode is on, show every MLS/stream event in the
-    /// conversation timeline with debug styling (kinds 1200+, reactions, etc.).
+    /// When developer mode is on, show non-chat MLS events (reactions, deletes,
+    /// edits, agent and unknown kinds) in the conversation timeline with debug
+    /// styling.
     var streamingDebugMode: Bool {
         didSet {
             HostSettingsSaveTiming.measure { preferenceDefaults.set(streamingDebugMode, forKey: Self.streamingDebugModeKey) }
@@ -311,7 +312,7 @@ final class AppState {
         }
     }
 
-    /// Effective streaming-debug flag: requires developer mode.
+    /// Effective chat-debug flag: requires developer mode.
     var streamingDebugEnabled: Bool {
         developerMode && streamingDebugMode
     }
@@ -644,8 +645,6 @@ final class AppState {
     private static let blockScreenshotsKey = "marmot.blockScreenshots"
     private static let recentReactionsKey = "marmot.recentReactions"
     private static let defaultSuspendedRuntimeTelemetryBuildConfig = TelemetryBuildConfig.current()
-    static let agentTextStreamQuicBrokerCandidate = "quic://quic-broker.ipf.dev:4450"
-    static let agentTextStreamQuicCandidates = [agentTextStreamQuicBrokerCandidate]
 
     init(
         client: MarmotClient?,
@@ -2399,21 +2398,6 @@ final class AppState {
         try await currentMarmotClient().exportEncryptedSecretKey(
             accountRef: accountRef,
             passphrase: passphrase
-        )
-    }
-
-    @discardableResult
-    func startAgentTextStream(
-        accountRef: String,
-        groupIdHex: String,
-        streamIdHex: String? = nil
-    ) async throws -> AgentStreamStartFfi {
-        let client = try currentMarmotClient()
-        return try await client.marmot.startAgentTextStream(
-            accountRef: accountRef,
-            groupIdHex: groupIdHex,
-            streamIdHex: streamIdHex,
-            quicCandidates: Self.agentTextStreamQuicCandidates
         )
     }
 

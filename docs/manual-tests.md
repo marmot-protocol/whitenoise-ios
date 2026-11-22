@@ -593,6 +593,32 @@ simulator, find that folder with
 - [ ] Force-quit with a share sheet open, relaunch and open the account. The
       leftover copy under `handoff/` is removed.
 
+## MarmotKit 0.19.0 upgrade
+
+- [ ] Run [In-place MarmotKit upgrade](#in-place-marmotkit-upgrade) from the
+      last build on MarmotKit 0.18.0. Account databases advance from schema 216
+      to 218 and the chat list rebuilds once, so time the first open of the
+      largest profile on a real device. The 0.18.0 build must refuse the
+      upgraded store.
+- [ ] A chat where an agent used to stream live previews shows its replies as
+      ordinary messages, once each. Chat Debug Mode shows no QUIC rows.
+- [ ] Threads (needs White Noise Linux): reply in a thread to an iOS message,
+      then reply to that reply. On iOS both show inline, each quoting its
+      parent; the chat moves up, counts them as unread (and as a mention when
+      they mention you), notifies in the foreground and in the background, and
+      reading them clears the unread count. A thread message from Linux before
+      2026-11-17 shows as a reply after the upgrade, not "Unsupported event".
+      Delete the parent: the quote reads as deleted.
+- [ ] Drafts: attach a photo and a large video (over 50 MB), leave the chat,
+      reopen it and type before the attachments appear; leave and reopen again.
+      Both attachments survive. Remove each one, leave and reopen: they stay
+      removed. Clear the composer: nothing comes back.
+- [ ] Linked devices: link A and B, then have someone invite the account to a
+      group. Accept on A while renaming B on B at the same moment, so the device
+      group forks. B shows the invitation answered within seconds, and both
+      list the group. Repeat with a decline: B shows it declined within
+      seconds, and neither device joins the group.
+
 ## In-place MarmotKit upgrade
 
 Run this before releasing any MarmotKit bump that advances the account storage
