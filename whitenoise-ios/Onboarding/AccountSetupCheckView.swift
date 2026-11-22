@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AccountSetupCheckView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
     let model: AccountSetupModel
     let check: AccountSetupCheckPresentation.Check
     let cancelSignIn: () -> Void
@@ -86,6 +87,7 @@ struct AccountSetupCheckView: View {
         if let finding = notice.finding { Text(verbatim: finding) }
         if !failures.isEmpty || notice.finding != nil, !notice.explanation.isEmpty { Divider() }
         ForEach(notice.explanation, id: \.self) { Text(verbatim: $0) }
+        Text(verbatim: LinkThisDeviceCopy.setupNote)
     }
 
     @ViewBuilder private func secureMessagingExplanation(failures: [String]) -> some View {

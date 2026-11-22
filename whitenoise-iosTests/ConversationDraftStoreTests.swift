@@ -79,6 +79,29 @@ struct ConversationDraftStoreTests {
         ))
     }
 
+    /// Typing while the draft loads keeps the typed content and every saved
+    /// attachment it doesn't already have.
+    @Test func aComposerEditedWhileItsDraftLoadsKeepsTheSavedAttachments() {
+        func file(_ name: String) -> MediaDraftAttachment {
+            MediaDraftAttachment(fileName: name, mediaType: "application/pdf", data: Data(count: 1), dim: nil)
+        }
+        let saved = file("saved.pdf"), shared = file("both.pdf"), picked = file("picked.pdf")
+        let merged = ConversationDraftHydrationGate.attachments(composer: [shared, picked], loaded: [saved, shared])
+        #expect(merged.map(\.id) == [saved.id, shared.id, picked.id])
+
+        let full = (0..<MediaDraftProcessor.maxAttachmentCount).map { file("\($0).pdf") }
+        #expect(ConversationDraftHydrationGate.attachments(composer: full, loaded: [saved]).count
+                <= MediaDraftProcessor.maxAttachmentCount)
+    }
+
+    /// A composer keeps the saved draft's files until it has received them,
+    /// unless they couldn't be read.
+    @Test func onlyAComposerStillWaitingForItsDraftKeepsTheSavedFiles() {
+        #expect(ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: false, hydrationFailed: false))
+        #expect(!ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: true, hydrationFailed: false))
+        #expect(!ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: false, hydrationFailed: true))
+    }
+
     @Test func onlyAnAuthoritativeReadHydratesTheComposer() {
         #expect(ConversationDraftLoadResult.loaded(nil).hydratesComposer)
         #expect(ConversationDraftLoadResult.loaded(textSnapshot("saved")).hydratesComposer)
@@ -93,9 +116,11 @@ struct ConversationDraftStoreTests {
         let store = ConversationDraftStore(persistence: persistence)
         #expect(await store.loadSnapshot(accountRef: "account", groupIdHex: "group") == .runtimeUnavailable)
         #expect(store.loadErrorKeys.isEmpty)
+        // Surfaced on the final attempt, but still transient: the composer keeps
+        // the draft's files until a read succeeds.
         #expect(
             await store.loadSnapshot(accountRef: "account", groupIdHex: "group", surfacesTransientFailures: true)
-                == .failed
+                == .runtimeUnavailable
         )
         #expect(store.loadErrorKeys == [ConversationDraftKey(accountRef: "account", groupIdHex: "group")])
 
@@ -411,10 +436,45 @@ struct ConversationDraftStoreTests {
         await store.flush()
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "first message")
 
-        // The next message typed while that send is still queued is its own draft.
+        // The next message typed while that send is still queued waits for
+        // its claim, then becomes the draft.
         store.setDraft(textSnapshot("second message"), accountRef: "account", groupIdHex: "group")
         await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "first message")
+        #expect(await store.snapshot(accountRef: "account", groupIdHex: "group")?.canonicalText == "second message")
+        // No MDK selection here, so the claim itself is refused after the write.
+        _ = try? await store.prepareSend(textSnapshot("first message"), accountRef: "account", groupIdHex: "group")
+        await store.flush()
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "second message")
+    }
+
+    /// Send waits for a running write (a large attachment's copy can take a
+    /// while). Text typed meanwhile is the next message: the write Send claims
+    /// holds what was tapped, and the typed text stays a draft.
+    @Test func textTypedWhileSendWaitsIsNotSentInPlaceOfTheSubmission() async throws {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        var release: CheckedContinuation<Void, Never>?
+        persistence.beforePersist = { await withCheckedContinuation { release = $0 } }
+        store.setDraft(textSnapshot("earlier"), accountRef: "account", groupIdHex: "group")
+        let running = Task { await store.flush() }
+        try await eventually { release != nil }
+        persistence.beforePersist = nil
+
+        store.beginQueuedSend(accountRef: "account", groupIdHex: "group")
+        store.setDraft(textSnapshot(""), accountRef: "account", groupIdHex: "group")
+        store.setDraft(textSnapshot("next message"), accountRef: "account", groupIdHex: "group")
+        let send = Task {
+            try await store.prepareSend(textSnapshot("submitted"), accountRef: "account", groupIdHex: "group")
+        }
+        release?.resume()
+        await running.value
+        // No MDK selection here, so the claim itself is refused after the write.
+        _ = try? await send.value
+
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "submitted")
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "next message")
     }
 
     @Test func textRestoredAfterAnAttachmentRejectionSurvivesReopeningTheConversation() async {
@@ -430,6 +490,10 @@ struct ConversationDraftStoreTests {
 
         store.beginQueuedSend(accountRef: "account", groupIdHex: "group")
         store.setDraft(textSnapshot(""), accountRef: "account", groupIdHex: "group")
+        _ = try? await store.prepareSend(
+            ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [rejected]),
+            accountRef: "account", groupIdHex: "group"
+        )
         await store.finishSend(accountRef: "account", groupIdHex: "group", accepted: false)
         store.setDraft(textSnapshot("caption"), accountRef: "account", groupIdHex: "group")
         await store.flush()

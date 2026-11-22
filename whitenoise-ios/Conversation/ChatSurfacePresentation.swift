@@ -395,6 +395,21 @@ nonisolated enum ReactionPillPresentation {
     static let minimumWidth: CGFloat = 34
     static let maximumRenderedPills = 4
 
+    enum TapAction { case toggle, showDetails }
+
+    static func tapAction(for tally: ConversationViewModel.ReactionTally, in reactions: [ConversationViewModel.ReactionTally],
+                          omittedKinds: UInt64, canRepeatCustom: (CustomEmojiShortcode) -> Bool) -> TapAction {
+        if tally.mine {
+            return canRemoveIndividually(tally.emoji, from: reactions, omittedKinds: omittedKinds) ? .toggle : .showDetails
+        }
+        if let shortcode = CustomEmojiShortcode(reactionContent: tally.emoji) {
+            return canRepeatCustom(shortcode) ? .toggle : .showDetails
+        }
+        guard ContentSanitizer.reactionEmoji(tally.emoji) == tally.emoji,
+              SingleEmojiMessagePresentation.emoji(in: tally.emoji) != nil else { return .showDetails }
+        return .toggle
+    }
+
     static func canRemoveIndividually(_ emoji: String, from reactions: [ConversationViewModel.ReactionTally],
                                       omittedKinds: UInt64) -> Bool {
         omittedKinds == 0 && reactions.filter(\.mine).map(\.emoji) == [emoji]

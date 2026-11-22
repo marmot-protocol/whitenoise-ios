@@ -306,6 +306,17 @@ struct ConversationCustomEmojiSenderTests {
 
     // MARK: Reactions
 
+    @Test func onlyAnUntaggedBuiltInCanRepeatWithoutResolvedArtwork() throws {
+        let state = AppState.test()
+        state.activeAccountRef = "alice"
+        let model = ConversationViewModel(appState: state, group: Self.group())
+        let bundled = try #require(CustomEmojiShortcode("marmot"))
+        let unknown = try #require(CustomEmojiShortcode("party"))
+        #expect(model.canRepeatReaction(bundled, reactionID: nil))
+        #expect(!model.canRepeatReaction(unknown, reactionID: nil))
+        #expect(!model.canRepeatReaction(bundled, reactionID: F.messageID))
+    }
+
     @Test(.marmotRuntimeConcurrencyLimit)
     func tappingTheSelectedChipDuringItsCustomEmojiUploadPreservesTheReaction() async throws {
         try await withTestClient { client in

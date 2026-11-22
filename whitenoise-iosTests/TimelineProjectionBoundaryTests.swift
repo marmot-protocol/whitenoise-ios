@@ -122,21 +122,29 @@ struct TimelineProjectionBoundaryTests {
     @Test(arguments: [false, true])
     func searchCountsOnlyRowsWithAVisibleSender(inDirectChat: Bool) {
         let app = AppState.test()
+        let me = accountSummary("Active", byte: "ab")
+        app.accountStore.accounts = [me]
+        app.activeAccountRef = me.label
         var group = testGroup()
         if inDirectChat { group.name = "" }
         let model = ConversationViewModel(appState: app, group: group, initialMemberCount: 2)
         let first = timelineRecord(messageIdHex: hexId(1), plaintext: "First message")
+        app.seedDiscoveredProfile(profileMetadata(displayName: "Dan"), forAccountIdHex: first.sender)
         let grouped = timelineRecord(messageIdHex: hexId(2), plaintext: "Second message")
         var own = timelineRecord(messageIdHex: hexId(3), plaintext: "My reply")
         own.direction = "sent"
         var ownWithMatch = timelineRecord(messageIdHex: hexId(4), plaintext: "See you soon")
         ownWithMatch.direction = "sent"
-        model.applyTimelinePage(.init(messages: [first, grouped, own, ownWithMatch], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        var otherDevice = timelineRecord(messageIdHex: hexId(5), plaintext: "From my laptop")
+        otherDevice.sender = me.accountIdHex
+        model.applyTimelinePage(.init(messages: [first, grouped, own, ownWithMatch, otherDevice], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
         model.search.activate()
-        model.search.query = IdentityPresentation.text(accountIdHex: first.sender, knownName: nil)
+        model.search.query = "Dan"
         #expect(model.search.matches.map(\.messageIdHex) == (inDirectChat ? [] : [first.messageIdHex]))
         model.search.query = "you"
         #expect(model.search.matches.map(\.messageIdHex) == [ownWithMatch.messageIdHex])
+        model.search.query = IdentityPresentation.text(accountIdHex: me.accountIdHex, knownName: nil)
+        #expect(model.search.matches.isEmpty)
     }
 
     @Test func searchMatchesTheDocumentFilenameButSkipsUnlabeledMediaTiles() {
@@ -149,7 +157,7 @@ struct TimelineProjectionBoundaryTests {
         let file = timelineRecord(messageIdHex: hexId(2), plaintext: "", media: [document])
         model.applyTimelinePage(.init(messages: [photo, file], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
         model.search.activate()
-        for query in [image.fileName, L10n.string("Photo"), L10n.string("File")] {
+        for query in [image.fileName, L10n.string("Photo"), "File"] {
             model.search.query = query
             #expect(model.search.matches.isEmpty)
         }

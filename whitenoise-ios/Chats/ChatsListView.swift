@@ -43,6 +43,7 @@ struct ChatsListView: View {
     @State private var viewModel: ChatsListViewModel?
     @State private var showNewChat = false
     @State private var showSettings = false
+    @State private var showDevices = false
     @State private var showAddProfile = false
     @State private var dismissAddProfileAfterSettingsRemoval = false
     @State private var path: [ChatNavigationTarget] = []
@@ -262,7 +263,13 @@ struct ChatsListView: View {
                         .padding(.top, 6)
                     }
 
-                    if !appState.historyNotices.accountNotices.isEmpty {
+                    if let banner = appState.deviceLinks.attentionBanner(using: appState) {
+                        DeviceAttentionBannerView(banner: banner) { showDevices = true }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 6)
+                    }
+
+                    if !appState.historyNotices.accountNotices.isEmpty || appState.deviceLinks.attentionBanner(using: appState) != nil {
                         Color.clear
                             .frame(height: 6)
                     }
@@ -331,6 +338,48 @@ struct ChatsListView: View {
                 guard appState.canUseRuntimeForLocalForegroundWork else { return }
                 await appState.diagnosticsConsent.reload(using: appState)
             }
+            // Only on the device that just finished setup. Waits for the consent
+            // sheet and other sheets, which would swallow an alert raised under them.
+            .alert(
+                "Signed in on another device?",
+                isPresented: Binding(
+                    get: {
+                        appState.deviceLinks.offersNewDeviceLink && chatsVisible
+                            && !showDiagnosticsPrompt && !secondarySheetVisible
+                    },
+                    set: { if !$0 { appState.deviceLinks.dismissNewDeviceOffer() } }
+                )
+            ) {
+                Button("Not Now", role: .cancel) {}
+                Button(LinkThisDeviceCopy.action) { appState.deviceLinks.linkFromNewDeviceOffer() }
+            } message: {
+                Text(LinkThisDeviceCopy.offer)
+            }
+            // A request for another signed-in profile: comparing needs that profile active.
+            .alert(
+                "Link a New Device?",
+                isPresented: Binding(
+                    get: {
+                        appState.deviceLinks.otherProfileRequest(using: appState) != nil
+                            && appState.deviceLinks.sheet == nil && chatsVisible
+                            && !showDiagnosticsPrompt && !secondarySheetVisible
+                    },
+                    // Each button puts away its own request; deriving one here
+                    // could put away the next request instead.
+                    set: { _ in }
+                ),
+                presenting: appState.deviceLinks.otherProfileRequest(using: appState)
+            ) { request in
+                Button("Not Now", role: .cancel) { appState.deviceLinks.dismissOtherProfileRequest(request) }
+                Button("Review") {
+                    appState.deviceLinks.dismissOtherProfileRequest(request)
+                    Task { await appState.deviceLinks.reviewOtherProfileRequest(request, using: appState) }
+                }
+            } message: { request in
+                Text(L10n.formatted(
+                    "A device wants to link %@.", appState.displayName(forAccountIdHex: request.accountIdHex)
+                ))
+            }
             .sheet(isPresented: $showDiagnosticsPrompt) {
                 DiagnosticsConsentSheet()
                     .appAppearance()
@@ -339,6 +388,9 @@ struct ChatsListView: View {
                 NewChatFlowView()
                     .onAppear { secondarySheetVisible = true }
                     .appAppearance()
+            }
+            .navigationDestination(isPresented: $showDevices) {
+                LinkedDevicesView()
             }
             .navigationDestination(isPresented: $showSettings) {
                 if let viewModel {
@@ -456,6 +508,7 @@ struct ChatsListView: View {
         showNewChat = false
         showAddProfile = false
         showSettings = false
+        showDevices = false
         exitSearch()
         scope = .active
         path = []

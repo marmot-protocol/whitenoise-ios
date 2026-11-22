@@ -43,10 +43,15 @@ nonisolated struct WipeStageReport: Equatable {
 nonisolated struct WipeReport: Equatable {
     let stages: [WipeStageReport]
     var didWipeData = true
+    /// Chats this device left to its other linked devices to finish removing it from.
+    var groupsLeftToSiblings = 0
+    /// The other linked devices couldn't be asked in time, so they may still
+    /// list this device until the user removes it from one of them.
+    var siblingsNotReached = false
 
     var issueCount: Int { stages.reduce(0) { $0 + $1.failures.count } }
-    var clean: Bool { issueCount == 0 }
-    var hasCleanupIssues: Bool { stages.contains { $0.hasCleanupIssues } }
+    var clean: Bool { issueCount == 0 && !siblingsNotReached }
+    var hasCleanupIssues: Bool { stages.contains { $0.hasCleanupIssues } || siblingsNotReached }
 }
 
 /// Maps the engine's `WipeOutcomeFfi` to the pure `WipeReport` UI model. Stages
@@ -86,7 +91,7 @@ nonisolated enum WipeReportProjection {
                 completedCount: nil,
                 failures: localFailures
             )
-        ])
+        ], groupsLeftToSiblings: Int(outcome.groupsLeftToSiblings), siblingsNotReached: outcome.siblingsNotReached)
     }
 
     /// Whether the app may finish the exit: MDK removed the account locally.
@@ -152,3 +157,14 @@ enum DestructiveWipeGate {
         )
     }
 }
+
+/// A wipe left the profile's data on this device, so it wasn't removed.
+struct ProfileDataRemainsError: LocalizedError {
+    var errorDescription: String? {
+        L10n.string("This profile’s data is still on this device. Keep White Noise open and try again.")
+    }
+}
+
+/// A Remove for an unlinked profile that MDK no longer lists as unlinked: it
+/// was signed in again since, so nothing was wiped.
+struct ProfileNotUnlinkedError: Error {}

@@ -654,6 +654,9 @@ struct ConversationView: View {
     @State private var composerTextOverage: Int?
     @State private var didRestorePersistedDraft = false
     @State private var composerChangedBeforeDraftRestore = false
+    /// The saved draft couldn't be read. Writes then stop keeping files the
+    /// composer never showed, so the chat can still send and clear its draft.
+    @State private var draftHydrationFailed = false
     @State private var mediaDrafts: [MediaDraftAttachment] = []
     @StateObject private var voiceRecorder = VoiceMessageRecorder()
     @State private var dictation = ComposerDictationController()
@@ -678,6 +681,7 @@ struct ConversationView: View {
     @Environment(ConversationSpeech.self) private var speech
     @State private var actionsTarget: ActionsTarget?
     @State private var emojiPickerTarget: ActionsTarget?
+    @State private var detailsAfterEmojiPicker: ReactionDetailsTarget?
     @State private var composerCustomEmojiPicker: ComposerCustomEmojiPicker?
     private struct LongMessageTarget: Identifiable {
         var id: String { rowID }
@@ -1020,6 +1024,9 @@ struct ConversationView: View {
                 }
             }
             .overlay { messageActionsOverlay }
+            .onChange(of: actionTargetUnavailable) { _, unavailable in
+                if unavailable { dismissActions(resumingComposerFocus: true) }
+            }
             // An isPresented push fights navigation-path swaps: unwind it
             // before the pending chat replaces the stack, or the details page
             // re-asserts itself over the new conversation.
@@ -1080,7 +1087,12 @@ struct ConversationView: View {
                 }
                 .appAppearance()
             }
-            .sheet(item: $emojiPickerTarget) { target in
+            .sheet(item: $emojiPickerTarget, onDismiss: {
+                if let details = detailsAfterEmojiPicker {
+                    detailsAfterEmojiPicker = nil
+                    reactionDetailsTarget = details
+                }
+            }) { target in
                 if let viewModel {
                     EmojiPickerSheet(
                         quickReactions: appState.quickReactions,
@@ -1088,10 +1100,10 @@ struct ConversationView: View {
                         customEmoji: viewModel.canSendMediaAttachments ? viewModel.customEmojiSendables : [],
                         emojiSets: viewModel.canSendMediaAttachments ? appState.emojiSetLibrary : nil,
                         onPick: { emoji in
-                            Task { await viewModel.toggleReaction(emoji, on: target.record) }
-                            // Custom emoji belong to this chat, not the device-wide recents.
-                            if CustomEmojiShortcode(reactionContent: emoji) == nil {
-                                appState.addRecentReaction(emoji)
+                            Task { @MainActor in
+                                await handlePickedReaction(emoji, on: target.record, viewModel: viewModel) { details in
+                                    detailsAfterEmojiPicker = details
+                                }
                             }
                         }
                     )
@@ -1118,9 +1130,9 @@ struct ConversationView: View {
                         messageIdHex: target.messageIdHex,
                         viewModel: viewModel,
                         initialEmoji: target.initialEmoji,
-                        onRemoveOwnReaction: { emoji in
+                        onRemoveOwnReactions: {
                             Task {
-                                await viewModel.toggleReaction(emoji, on: target.record)
+                                await viewModel.removeOwnReactions(from: target.record)
                                 if viewModel.reactions(for: target.messageIdHex).isEmpty {
                                     reactionDetailsTarget = nil
                                 }
@@ -1503,6 +1515,10 @@ struct ConversationView: View {
             .onChange(of: viewModel?.acceptedCustomEmojiSend?.id) { _, id in
                 if id != nil { reconcileAcceptedCustomEmojiSend() }
             }
+            .onChange(of: appState.conversationDraftStore.fileBackedGeneration) { _, _ in
+                // A large attachment MDK now holds can pre-upload.
+                reconcileDraftMediaUploads()
+            }
             .onChange(of: mediaDrafts.map(\.id)) { _, _ in
                 reconcileDraftMediaUploads()
                 if editSession == nil {
@@ -1644,7 +1660,7 @@ struct ConversationView: View {
                     dismissRequest: composerDismissRequest,
                     onInputFocusChange: { isComposerInputFocused = $0 },
                     mentionCandidates: mentionCandidates,
-                    submissionEnabled: editSubmissionEnabled,
+                    submissionEnabled: editSubmissionEnabled && (editSession != nil || composerHasSavedDraft),
                     submissionAccessibilityLabel: editSession == nil
                         ? L10n.string("Send")
                         : L10n.string("Save edit"),
@@ -1944,6 +1960,9 @@ struct ConversationView: View {
             }
             .lineLimit(1)
         case .retention(let seconds, let memberSubtitle):
+            let duration = GroupRetentionPresentation.label(seconds: seconds)
+            let label = memberSubtitle.map { L10n.formatted("%@, Disappearing messages: %@", $0, duration) }
+                ?? L10n.formatted("Disappearing messages: %@", duration)
             HStack(spacing: 3) {
                 if let memberSubtitle {
                     Text(memberSubtitle)
@@ -1957,10 +1976,7 @@ struct ConversationView: View {
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel([memberSubtitle, L10n.formatted(
-                "Disappearing messages: %@",
-                GroupRetentionPresentation.label(seconds: seconds)
-            )].compactMap { $0 }.joined(separator: ", "))
+            .accessibilityLabel(label)
         case .subtitle(let value):
             // No placeholder line when there is no subtitle (direct messages):
             // reserving the space pushes the name off vertical center.
@@ -2064,6 +2080,9 @@ struct ConversationView: View {
                                                 UnreadMessagesDivider()
                                                     .opacity(searchResultID == nil ? 1 : 0.28)
                                                     .id(unreadDividerID(for: viewModel.initialWindowUnreadMessageId ?? ""))
+                                            }
+                                            if let origin = viewModel.historyImportBoundary(before: item) {
+                                                HistoryImportDivider(origin: origin)
                                             }
                                             row(
                                                 for: item,
@@ -2571,24 +2590,30 @@ struct ConversationView: View {
         guard viewModel.canSendMessages, !isSelectingMessages, !viewModel.search.isActive,
               current.contains(where: { $0.emoji == emoji && $0.mine == tapped.mine && $0.reactionMessageIdHex == tapped.reactionMessageIdHex }) else { return }
 
-        let shortcode = CustomEmojiShortcode(reactionContent: emoji)
-        let canToggle: Bool
-        if tapped.mine {
-            // MDK's unreact clears every reaction this account has on the message.
-            canToggle = ReactionPillPresentation.canRemoveIndividually(
-                emoji, from: current, omittedKinds: viewModel.windowReactions[id]?.omittedKinds ?? 0
-            )
-        } else if let shortcode {
-            canToggle = viewModel.canRepeatReaction(shortcode, reactionID: tapped.reactionMessageIdHex)
-        } else {
-            canToggle = emoji.count == 1 && emoji == ContentSanitizer.reactionEmoji(emoji)
-                && emoji.unicodeScalars.contains { ($0.properties.isEmoji && $0.value > 127) || $0.value == 0x20E3 }
+        let action = ReactionPillPresentation.tapAction(for: tapped, in: current,
+            omittedKinds: viewModel.windowReactions[id]?.omittedKinds ?? 0) { shortcode in
+            viewModel.canRepeatReaction(shortcode, reactionID: tapped.reactionMessageIdHex)
         }
-        guard canToggle else {
+        guard action == .toggle else {
             reactionDetailsTarget = ReactionDetailsTarget(record: record, initialEmoji: emoji)
             return
         }
-        if !tapped.mine && shortcode == nil { appState.addRecentReaction(emoji) }
+        if !tapped.mine && CustomEmojiShortcode(reactionContent: emoji) == nil { appState.addRecentReaction(emoji) }
+        await viewModel.toggleReaction(emoji, on: record)
+    }
+
+    private func handlePickedReaction(_ emoji: String, on record: AppMessageRecordFfi, viewModel: ConversationViewModel,
+                                      beforeToggle: (ReactionDetailsTarget?) -> Void) async {
+        let id = record.messageIdHex
+        let current = viewModel.reactions(for: id)
+        let mine = current.contains { $0.emoji == emoji && $0.mine }
+        // Unreact removes every one of this account's reactions on the message.
+        if mine && !ReactionPillPresentation.canRemoveIndividually(emoji, from: current, omittedKinds: viewModel.windowReactions[id]?.omittedKinds ?? 0) {
+            beforeToggle(ReactionDetailsTarget(record: record, initialEmoji: emoji))
+            return
+        }
+        beforeToggle(nil)
+        if !mine && CustomEmojiShortcode(reactionContent: emoji) == nil { appState.addRecentReaction(emoji) }
         await viewModel.toggleReaction(emoji, on: record)
     }
 
@@ -3251,7 +3276,8 @@ struct ConversationView: View {
         guard MessageEditingPolicy.canEdit(
             message,
             isDeleted: viewModel.isDeleted(message.messageIdHex),
-            canSendMessages: viewModel.canSendMessages
+            canSendMessages: viewModel.canSendMessages,
+            myAccountId: viewModel.myAccountId
         ) else { return }
         let preservedDraft = editSession?.preservedDraft ?? draft
         let preservedMediaDrafts = editSession?.preservedMediaDrafts ?? mediaDrafts
@@ -3331,6 +3357,7 @@ struct ConversationView: View {
 
     private func send() {
         guard viewModel?.canSendMessages == true else { return }
+        guard editSession != nil || composerHasSavedDraft else { return }
         // Reject over-limit text before any snapshot, staging, edit or send so
         // the draft, reply target and attachments stay exactly as they are.
         if let viewModel,
@@ -3407,10 +3434,12 @@ struct ConversationView: View {
             mediaDrafts = composerState.mediaDrafts
             return
         }
-        // Drafts can't hold every attachment, so there is no draft revision to
-        // claim: clearing the composer deletes the saved draft, and a failed
-        // send stays in its bubble.
-        let sendsThroughDraft = MediaDraftProcessor.sendsThroughDraft(payload.attachments)
+        // Until MDK holds a large attachment as a file in the draft, there is
+        // no draft revision to claim: clearing the composer deletes the saved
+        // draft, and a failed send stays in its bubble.
+        let sendsThroughDraft = appState.conversationDraftStore.sendsThroughDraft(
+            payload.attachments, accountRef: accountRef, groupIdHex: chat.groupIdHex
+        )
         if sendsThroughDraft {
             appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
         }
@@ -3600,11 +3629,15 @@ struct ConversationView: View {
             groupIdHex: chat.groupIdHex,
             surfacesTransientFailures: surfacesTransientFailures
         )
-        // Transient results are retried by the caller; a failure stays
-        // unhydrated so leaving can't delete the draft, and retries on the next
-        // readiness change.
-        guard result.hydratesComposer, !Task.isCancelled, editSession == nil else { return result }
+        // Transient and cancelled results are retried by the caller, and writes
+        // keep the draft's files meanwhile. After a failed read nothing could
+        // show or remove them, so writes stop keeping them.
+        guard result.hydratesComposer, !Task.isCancelled, editSession == nil else {
+            if result == .failed { draftHydrationFailed = true }
+            return result
+        }
         didRestorePersistedDraft = true
+        draftHydrationFailed = false
         guard case .loaded(let loaded) = result, let snapshot = loaded else {
             guard draft == draftBeforeLoad,
                   mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
@@ -3615,11 +3648,23 @@ struct ConversationView: View {
             viewModel.restoreReplyTarget(messageIdHex: nil)
             return result
         }
-        guard !Task.isCancelled,
-              draft == draftBeforeLoad,
+        guard !Task.isCancelled else { return result }
+        guard draft == draftBeforeLoad,
               mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
               viewModel.replyTargetMessageIdHex == replyBeforeLoad
-        else { return result }
+        else {
+            // Edited while loading: the edit wins, but the saved attachments
+            // stay. Leaving one out would have MDK delete its file.
+            // Attachments removed during the read stay removed.
+            let removed = Set(mediaIDsBeforeLoad).subtracting(mediaDrafts.map(\.id))
+            let merged = ConversationDraftHydrationGate.attachments(
+                composer: mediaDrafts, loaded: snapshot.mediaAttachments.filter { !removed.contains($0.id) })
+            if merged.map(\.id) != mediaDrafts.map(\.id) {
+                mediaDrafts = merged
+                persistCurrentDraft()
+            }
+            return result
+        }
         let mentionState = ComposerMentionDraftState(
             canonicalText: snapshot.canonicalText,
             mentionDisplayName: { appState.mentionDisplayName(for: $0) }
@@ -3686,8 +3731,21 @@ struct ConversationView: View {
                 mediaAttachments: mediaAttachments
             ),
             accountRef: draftAccountRef,
-            groupIdHex: chat.groupIdHex
+            groupIdHex: chat.groupIdHex,
+            keepsSavedFiles: keepsSavedDraftFiles
         )
+    }
+
+    /// Whether the composer has the saved draft (or it couldn't be read). Until
+    /// then it may be typed in, but sends nothing and takes no attachments: a
+    /// send would claim or clear a draft whose files it doesn't show, and an
+    /// attachment added now would have to be merged with the saved ones.
+    private var composerHasSavedDraft: Bool { !keepsSavedDraftFiles }
+
+    /// Until the composer has the saved draft, a write it makes keeps the
+    /// draft's files: leaving one out would have MDK delete it.
+    private var keepsSavedDraftFiles: Bool {
+        ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: didRestorePersistedDraft, hydrationFailed: draftHydrationFailed)
     }
 
     private func takePhoto() {
@@ -3859,7 +3917,7 @@ struct ConversationView: View {
     }
 
     private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
-        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
+        guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
         let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
         let slotted = Array(attachments.prefix(availableSlots))
         guard !slotted.isEmpty else {
@@ -4105,7 +4163,7 @@ struct ConversationView: View {
 
     private func canBeginMediaSelection() -> Bool {
         // A custom emoji send in flight owns the composer until it settles.
-        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
+        guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
         guard let viewModel, viewModel.canAddMediaAttachments else {
             appState.present(.warning(L10n.string("Media is not available in this group")))
             return false
@@ -4119,7 +4177,7 @@ struct ConversationView: View {
 
     @discardableResult
     private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
-        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
+        guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
         let kept = MediaDraftProcessor.draftsKept(mediaDrafts, addingAudio: attachment.kind == .audio)
         guard kept.count < MediaDraftProcessor.maxAttachmentCount else {
             presentMaxAttachmentWarning()
@@ -4524,7 +4582,7 @@ struct ConversationView: View {
     private func completePendingActionsPresentationIfMeasured(_ preferences: [RowFramePreference]) {
         guard let key = measuredActionRowFrameKey,
               let sourceFrame = preferences.first(where: { $0.key == key && $0.part == .row })?.frame else { return }
-        let bodySize = preferences.first { $0.key == key && $0.part == .body }?.frame?.size
+        let bodySize = preferences.first { $0.key == key && $0.part == .body }?.frame.size
         // The row may move while the menu is open, for example when the keyboard closes.
         if actionsTarget != nil {
             actionsReturnGeometry = (sourceFrame, bodySize)
@@ -4550,7 +4608,7 @@ struct ConversationView: View {
             actionsPhase = .returning
         } completion: {
             guard actionsTarget?.id == target.id else { return }
-            speech.availableAudio = nil
+            speech.checkedVoice = nil
             actionsTarget = nil
             measuredActionRowFrameKey = nil
             actionsReturnGeometry = nil
@@ -4559,19 +4617,14 @@ struct ConversationView: View {
         else { composerFocusSuspendedForActions = false }
     }
 
-    private var messageActionsOverlay: some View {
-        let unavailable = actionsTarget.map { target in
-            guard let viewModel, let rowID = target.rowId else { return true }
-            return viewModel.isDeleted(target.record.messageIdHex) || !viewModel.timeline.contains { $0.id == rowID }
-        } ?? false
-        return presentedMessageActionsOverlay
-            .onChange(of: unavailable) { _, unavailable in
-                if unavailable { dismissActions(resumingComposerFocus: true) }
-            }
+    private var actionTargetUnavailable: Bool {
+        guard let target = actionsTarget else { return false }
+        guard let viewModel, let rowID = target.rowId else { return true }
+        return viewModel.isDeleted(target.record.messageIdHex) || !viewModel.timeline.contains { $0.id == rowID }
     }
 
     @ViewBuilder
-    private var presentedMessageActionsOverlay: some View {
+    private var messageActionsOverlay: some View {
         if let viewModel,
            let target = actionsTarget,
            let rowId = target.rowId,
@@ -4719,22 +4772,14 @@ struct ConversationView: View {
               revision: AttachmentPresentationState.shared.revision)
     }
 
-    private struct VoiceAvailabilityRequest: Equatable {
-        let scope: ConversationSpeech.Scope
-        let messageID: String
-        let attachmentID: String?
-        let target: AttachmentLocalTargetFfi?
-        let sourceHint: AttachmentSourceHint?
-    }
-
-    private func voiceAvailabilityRequest(for item: TimelineItem, in model: ConversationViewModel) -> VoiceAvailabilityRequest {
+    private func voiceAvailabilityRequest(for item: TimelineItem, in model: ConversationViewModel) -> ConversationSpeech.VoiceRequest {
         let audio: MessageMediaAttachment?
         if case .message(let record, _) = item.kind {
             audio = voiceAttachment(id: record.messageIdHex, in: model)
         } else {
             audio = nil
         }
-        return VoiceAvailabilityRequest(scope: speechScope, messageID: item.id, attachmentID: audio?.id,
+        return .init(scope: speechScope, messageID: item.id, attachmentID: audio?.id,
                                         target: audio?.localTarget, sourceHint: audio?.sourceHint)
     }
 
@@ -4766,7 +4811,7 @@ struct ConversationView: View {
 
     private func voiceAttachment(id: String, in model: ConversationViewModel) -> MessageMediaAttachment? {
         guard let row = speechRow(id, in: model), case .message(let record, _) = row.kind else { return nil }
-        return MessageSpeechPresentation.voiceAttachment(for: record, media: model.mediaItems(for: row))
+        return MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: model.myAccountId, media: model.mediaItems(for: row))
     }
 
     private func visibleVoiceTranscript(for record: AppMessageRecordFfi, in model: ConversationViewModel) -> String? {
@@ -4780,13 +4825,13 @@ struct ConversationView: View {
         guard self.viewModel === model, let row = speechRow(id, in: model),
               case .message(let record, _) = row.kind else { return [] }
         let media = model.mediaItems(for: row)
-        if let audio = MessageSpeechPresentation.voiceAttachment(for: record, media: media) {
+        if let audio = MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: model.myAccountId, media: media) {
             let transcript = speech.transcripts[id]
             let verified = transcript?.isVerified(in: speechScope) == true && transcript?.recording.matches(audio) == true
-            let available = speech.availableAudio
+            let supportsTranscription: Bool = if #available(iOS 26, *) { true } else { false }
             return MessageSpeechPresentation.voiceActions(isTranscribing: speech.transcribingID == id,
                 transcriptVisible: verified ? transcript?.visible : nil,
-                canTranscribe: speech.transcribingID == nil && available?.scope == speechScope && available?.recording.matches(audio) == true)
+                offersTranscribe: supportsTranscription && speech.transcribingID == nil)
         }
         func standaloneEmoji() -> Bool {
             guard media.isEmpty, model.replyPreview(for: record) == nil else { return false }
@@ -4798,13 +4843,13 @@ struct ConversationView: View {
                 block.textFields(includeCodeLanguage: false).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             }
         }
-        return MessageSpeechPresentation.textActions(for: record, isReading: speech.readingID == id,
+        return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId, isReading: speech.readingID == id,
                                                      standaloneEmoji: standaloneEmoji(), hasSpokenText: hasSpokenText())
     }
 
     private func checkVoiceAvailability(for target: AppMessageRecordFfi, in model: ConversationViewModel) async {
         let scope = speechScope
-        speech.availableAudio = nil
+        speech.checkedVoice = nil
         guard #available(iOS 26, *), self.viewModel === model, let row = speechRow(target.messageIdHex, in: model),
               case .message(let record, _) = row.kind,
               let audio = voiceAttachment(id: record.messageIdHex, in: model) else { return }
@@ -4817,7 +4862,9 @@ struct ConversationView: View {
         do {
             source = try await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState)
         } catch {
-            if isCurrent(), let transcript = speech.transcripts[record.messageIdHex] {
+            guard isCurrent() else { return }
+            speech.checkedVoice = (request, .unavailable(L10n.string("Couldn’t transcribe this recording.")))
+            if let transcript = speech.transcripts[record.messageIdHex] {
                 speech.updateRetention(nil, id: record.messageIdHex, recording: transcript.recording, scope: scope)
             }
             return
@@ -4828,17 +4875,27 @@ struct ConversationView: View {
             speech.updateRetention(held, id: record.messageIdHex, recording: transcript.recording, scope: scope)
             if held { return }
         }
-        guard let source, await LocalVoiceRecognition.recognizer() != nil, isCurrent() else { return }
+        guard let source else {
+            speech.checkedVoice = (request, .unavailable(L10n.string("Download the recording before transcribing it.")))
+            return
+        }
+        let recognizer = await LocalVoiceRecognition.recognizer()
+        guard isCurrent() else { return }
+        guard recognizer != nil else {
+            speech.checkedVoice = (request, .unavailable(L10n.string("No on-device speech model is available for this language.")))
+            return
+        }
         let recording = ConversationSpeech.Recording(displayID: audio.id, target: source.target)
         guard recording.matches(voiceAttachment(id: record.messageIdHex, in: model)) else { return }
-        speech.availableAudio = (recording, source, scope)
+        speech.checkedVoice = (request, .available(recording, source))
     }
 
     private func performSpeechAction(_ action: MessageSpeechAction, for record: AppMessageRecordFfi, in model: ConversationViewModel) {
         let id = record.messageIdHex
         guard let row = speechRow(id, in: model), case .message(let current, _) = row.kind,
               speechActions(for: current, in: model).contains(action) else { return }
-        let availableAudio = speech.availableAudio
+        let checked = speech.checkedVoice
+        if action == .transcribe, checked?.request != voiceAvailabilityRequest(for: row, in: model) { return }
         dismissActions(resumingComposerFocus: true)
         switch action {
         case .read:
@@ -4853,18 +4910,23 @@ struct ConversationView: View {
                 Haptics.tap()
             }
         case .transcribe:
-            guard let audio = voiceAttachment(id: id, in: model),
-                  let availableAudio, availableAudio.recording.matches(audio), availableAudio.scope == speechScope else { return }
-            speech.transcribe(id: id, recording: availableAudio.recording, data: {
-                guard self.viewModel === model, speechScope == availableAudio.scope,
-                      availableAudio.recording.matches(voiceAttachment(id: id, in: model)) else { throw CancellationError() }
-                return try await availableAudio.source.data(in: appState)
-            }, verifiedScope: {
-                let scope = speechScope
-                guard scope.route == availableAudio.scope.route,
-                      await retainedRecording(availableAudio.recording, id: id, model: model, scope: scope) == true else { return nil }
-                return scope
-            }, onError: { appState.present(.warning(L10n.string("Couldn’t transcribe this recording."))) })
+            guard let checked else { return }
+            switch checked.result {
+            case .unavailable(let reason):
+                appState.present(.warning(reason))
+            case .available(let recording, let source):
+                let openingScope = checked.request.scope
+                speech.transcribe(id: id, recording: recording, data: {
+                    guard self.viewModel === model, speechScope == openingScope,
+                          recording.matches(voiceAttachment(id: id, in: model)) else { throw CancellationError() }
+                    return try await source.data(in: appState)
+                }, verifiedScope: {
+                    let scope = speechScope
+                    guard scope.route == openingScope.route,
+                          await retainedRecording(recording, id: id, model: model, scope: scope) == true else { return nil }
+                    return scope
+                }, onError: { appState.present(.warning(L10n.string("Couldn’t transcribe this recording."))) })
+            }
         case .transcribing: break
         }
     }
@@ -4892,7 +4954,8 @@ struct ConversationView: View {
             canEdit: MessageEditingPolicy.canEdit(
                 record,
                 isDeleted: viewModel.isDeleted(record.messageIdHex),
-                canSendMessages: viewModel.canSendMessages
+                canSendMessages: viewModel.canSendMessages,
+                myAccountId: viewModel.myAccountId
             ),
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
@@ -4952,7 +5015,10 @@ struct ConversationView: View {
     }
 
     private func messageActionsAlignTrailing(record: AppMessageRecordFfi) -> Bool {
-        let outgoing = record.direction == "sent"
+        let outgoing = MessageOwnership.isMine(
+            direction: record.direction, sender: record.sender,
+            myAccountId: appState.activeAccount?.accountIdHex
+        )
         return layoutDirection == .leftToRight ? outgoing : !outgoing
     }
 
@@ -4982,7 +5048,8 @@ struct ConversationView: View {
             canEdit: MessageEditingPolicy.canEdit(
                 record,
                 isDeleted: viewModel.isDeleted(record.messageIdHex),
-                canSendMessages: viewModel.canSendMessages
+                canSendMessages: viewModel.canSendMessages,
+                myAccountId: viewModel.myAccountId
             ),
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
@@ -4990,6 +5057,10 @@ struct ConversationView: View {
             canBlock: canBlockAuthor(of: record, viewModel: viewModel),
             canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
             speechActions: speechActions(for: record, in: viewModel),
+            transcribeCheckFinished: speech.checkedVoice.map { checked in
+                guard let row = speechRow(record.messageIdHex, in: viewModel) else { return false }
+                return checked.request == voiceAvailabilityRequest(for: row, in: viewModel)
+            } ?? false,
             onSpeechAction: { performSpeechAction($0, for: record, in: viewModel) },
             quickReactions: appState.quickReactions,
             selectedReaction: selectedReaction?.emoji,
@@ -5004,11 +5075,13 @@ struct ConversationView: View {
                 Task { await viewModel.retryFailedSend(rowId: rowId) }
             },
             onReact: { emoji in
-                Task { await viewModel.toggleReaction(emoji, on: record) }
-                if CustomEmojiShortcode(reactionContent: emoji) == nil && selectedReaction?.emoji != emoji {
-                    appState.addRecentReaction(emoji)
+                Task { @MainActor in
+                    guard actionsPhase == .presented, actionsTarget?.record.messageIdHex == record.messageIdHex else { return }
+                    await handlePickedReaction(emoji, on: record, viewModel: viewModel) { details in
+                        dismissActions(resumingComposerFocus: details == nil)
+                        if let details { reactionDetailsTarget = details }
+                    }
                 }
-                dismissActions(resumingComposerFocus: true)
             },
             onReply: {
                 dismissActions()
@@ -5159,7 +5232,7 @@ struct RowFramePreference: Equatable {
     enum Part: Equatable { case row, bubble, body }
     var part: Part = .row
     let key: String
-    var frame: CGRect? = nil
+    let frame: CGRect
 }
 
 struct RowFramesKey: PreferenceKey {
