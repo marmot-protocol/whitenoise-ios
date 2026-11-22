@@ -409,6 +409,7 @@ final class TimelineStore {
         let targetId: String
         let source: ReplyPreviewSourceSignature
         var targetUnsupported = false
+        var targetHasMalformedPoll = false
     }
 
     private struct ReplyPreviewDisplayCacheEntry {
@@ -525,13 +526,18 @@ final class TimelineStore {
         guard let targetId = replyTargetId(for: record) else {
             return nil
         }
+        let loadedTarget = messageById[targetId]
+        let malformedPoll = loadedTarget?.kind == MessageSemantics.kindPoll && pollByMessageId[targetId] == nil
+        func pollTitle(_ question: String) -> String {
+            malformedPoll ? L10n.string("This poll can’t be displayed.") : MessagePreview.pollTitle(question: question)
+        }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
             guard !isBlockedAuthor(preview.sender) else { return nil }
             // A kind 1111 is a comment only with a numeric `k` tag, which the
             // projected quote doesn't carry: decide from the loaded target.
             // A deleted target has no tags left; it reads as deleted.
             let targetUnsupported = preview.kind == MessageSemantics.kindComment && !preview.deleted
-                && messageById[targetId].map { MessageSemantics.classify($0) == .unsupportedEvent } == true
+                && loadedTarget.map { MessageSemantics.classify($0) == .unsupportedEvent } == true
             let key = ReplyPreviewDisplayCacheKey(
                 messageIdHex: record.messageIdHex,
                 targetId: targetId,
@@ -546,7 +552,7 @@ final class TimelineStore {
                     deleted: preview.deleted,
                     deletionSource: preview.deletionSource
                 ),
-                targetUnsupported: targetUnsupported
+                targetUnsupported: targetUnsupported, targetHasMalformedPoll: malformedPoll
             )
             if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
                 return cached.value
@@ -557,7 +563,7 @@ final class TimelineStore {
             if targetUnsupported {
                 previewText = MessagePreview.unsupportedEventLabel
             } else if isPoll {
-                previewText = MessagePreview.pollTitle(question: preview.plaintext)
+                previewText = pollTitle(preview.plaintext)
             } else {
                 previewText = MessagePreview.body(preview, mentionDisplayName: mentionDisplayNameResolver, systemEventNaming: systemEventNaming)
             }
@@ -577,7 +583,7 @@ final class TimelineStore {
             replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
             return value
         }
-        guard let storedTarget = messageById[targetId],
+        guard let storedTarget = loadedTarget,
               !isBlockedAuthor(storedTarget.sender) else {
             return nil
         }
@@ -590,7 +596,8 @@ final class TimelineStore {
                 record: MessageTimelineSignature(target),
                 deleted: targetDeleted,
                 deletionSource: deletedProjections.source(for: targetId)
-            )
+            ),
+            targetHasMalformedPoll: malformedPoll
         )
         if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
             return cached.value
@@ -600,7 +607,7 @@ final class TimelineStore {
         let text = targetDeleted
             ? MessageDeletionPresentation.text(source: deletedProjections.source(for: targetId))
             : ContentSanitizer.compactSingleLine(
-                isPoll ? MessagePreview.pollTitle(question: target.plaintext) : displayBody(of: target), maxLength: 120
+                isPoll ? pollTitle(target.plaintext) : displayBody(of: target), maxLength: 120
             ) ?? ""
         let media = targetDeleted
             ? nil
