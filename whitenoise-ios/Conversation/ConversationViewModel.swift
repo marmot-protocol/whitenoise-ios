@@ -288,6 +288,8 @@ final class ConversationViewModel {
     private var hasComposerLoadingGraceExpired = false
     @ObservationIgnored var openingMessageId: String?
     private(set) var openingTargetUnavailable = false
+    var suppressesInitialUnreadDivider = false
+    var visibleUnreadDividerID: String? { suppressesInitialUnreadDivider ? nil : initialWindowUnreadMessageId }
     private(set) var initialWindowUnreadMessageId: String?
     private(set) var conversationWindow: ConversationWindowSnapshotFfi?
     private var windowSubscription: ConversationWindowSubscription?
@@ -921,6 +923,10 @@ final class ConversationViewModel {
 
     func messageClusterPresentation(for item: TimelineItem) -> MessageClusterPresentation {
         timelineStore.messageClusterPresentation(for: item)
+    }
+
+    func historyImportBoundary(before item: TimelineItem) -> HistoryImportOrigin? {
+        timelineStore.historyImportBoundary(before: item)
     }
 
     /// All aggregated reaction tallies (full dict). Used by reaction tests.
@@ -1700,8 +1706,7 @@ final class ConversationViewModel {
     }
 
     func isMessageMine(_ message: AppMessageRecordFfi) -> Bool {
-        guard let myAccountId, !myAccountId.isEmpty else { return false }
-        return message.sender.caseInsensitiveCompare(myAccountId) == .orderedSame
+        MessageOwnership.isMine(direction: message.direction, sender: message.sender, myAccountId: myAccountId)
     }
 
     static func nextLiveSubscriptionRetryDelay(after delay: UInt64) -> UInt64 {
@@ -2290,7 +2295,8 @@ final class ConversationViewModel {
             retentionSeconds: record.retentionSeconds,
             retentionExpiresAt: record.retentionExpiresAt,
             recordedAt: record.timelineAt,
-            receivedAt: record.receivedAt
+            receivedAt: record.receivedAt,
+            invalidated: record.invalidationStatus != nil
         )
     }
 
@@ -2392,7 +2398,25 @@ final class ConversationViewModel {
         timeline.lazy.compactMap(Self.messageId(in:)).last
     }
 
-    @ObservationIgnored private var searchEntriesCache: (generation: Int, entries: [ConversationSearchEntry])?
+    struct SearchRowContext: Equatable {
+        let showsIdentity: Bool
+        let accountID: String?
+        let unreadDividerID: String?
+        let streamingDebug: Bool
+        let showsLinkPreviews: Bool
+    }
+
+    var searchRowContext: SearchRowContext {
+        SearchRowContext(showsIdentity: !groupDisplay.isDirectMessage, accountID: myAccountId, unreadDividerID: visibleUnreadDividerID,
+                         streamingDebug: timelineStore.streamingDebugEnabled, showsLinkPreviews: LinkPreviewSettingsStore.shared.showsPreviews)
+    }
+
+    func clusterAtUnreadBoundary(for item: TimelineItem) -> MessageClusterPresentation {
+        let index = visibleUnreadDividerID.flatMap { timelineStore.timelineIndex(forMessageIdHex: $0) }
+        return messageClusterPresentation(for: item).atUnreadBoundary(rowID: item.id, timeline: timeline, firstUnreadIndex: index)
+    }
+
+    @ObservationIgnored private var searchEntriesCache: (generation: Int, context: SearchRowContext, entries: [ConversationSearchEntry])?
 
     /// Haystack rows for in-conversation search, memoized by
     /// `timelineProjectionGeneration`. Search recomputes matches on every
@@ -2401,23 +2425,18 @@ final class ConversationViewModel {
     /// budgeted markdown AST walk) on the typing hot path.
     private func searchableTimelineEntries() -> [ConversationSearchEntry] {
         let generation = timelineProjectionGeneration
-        if searchEntriesCache?.generation != generation {
-            searchEntriesCache = (generation, computeSearchableTimelineEntries())
+        let context = searchRowContext
+        if searchEntriesCache?.generation != generation || searchEntriesCache?.context != context {
+            searchEntriesCache = (generation, context, computeSearchableTimelineEntries(in: context))
         }
         return (searchEntriesCache?.entries ?? []).map { entry in
             var enriched = entry
             enriched.labels += entry.contactAttachmentIDs.compactMap { search.displayedContactName(for: $0) }
-            if let url = entry.previewURL, let metadata = searchableLinkPreview(for: url) {
+            if let url = entry.previewURL, let metadata = LinkPreviewLoader.cachedMetadata(for: url) ?? nil {
                 enriched.labels += [metadata.title, metadata.summary, LinkPreviewCardContent.host(for: url)].compactMap { $0 }
             }
             return enriched
         }
-    }
-
-    /// Search uses only metadata the card already has permission to display.
-    private func searchableLinkPreview(for url: URL) -> LinkPreviewMetadata? {
-        guard LinkPreviewSettingsStore.shared.showsPreviews else { return nil }
-        return LinkPreviewLoader.cachedMetadata(for: url) ?? nil
     }
 
     func timelineDaySections(
@@ -2438,49 +2457,56 @@ final class ConversationViewModel {
 
     /// Index only the visible timeline's bounded text, sender, and attachment labels.
     /// A search must never fetch a profile, link preview, or attachment.
-    private func computeSearchableTimelineEntries() -> [ConversationSearchEntry] {
+    private func computeSearchableTimelineEntries(in context: SearchRowContext) -> [ConversationSearchEntry] {
         timeline.compactMap { item in
             guard case .message(let record, _) = item.kind,
                   !record.messageIdHex.isEmpty,
                   MessagePreview.isPreviewable(record),
                   !isDeleted(record.messageIdHex)
             else { return nil }
-            let name = record.direction == "sent" ? L10n.string("You") : IdentityPresentation.text(
-                accountIdHex: record.sender,
-                knownName: conversationWindow == nil ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender)
-                    : windowIdentities[record.sender]?.displayName
-            )
-            let media = mediaItems(for: item)
-            var labels = [name]
-            let contacts = media.filter { DocumentPreviewFormat(for: $0) == .contact }
-            if !contacts.isEmpty { labels.append(L10n.string("Contact")) }
-            for attachment in media {
-                labels.append(attachment.fileName)
-                switch attachment.kind {
-                case .image: labels.append(L10n.string("Photo"))
-                case .video: labels.append(L10n.string("Video"))
-                case .audio: labels.append(L10n.string("Voice message"))
-                case .document, .unsupported: labels.append(L10n.string("File"))
-                }
+            var labels: [String] = []
+            if context.showsIdentity, clusterAtUnreadBoundary(for: item).showsSenderName {
+                // Search only identities already available to the row, without requesting a profile.
+                labels.append(IdentityPresentation.text(accountIdHex: record.sender, knownName: conversationWindow == nil
+                    ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender) : windowIdentities[record.sender]?.displayName))
             }
             if record.kind == MessageSemantics.kindPoll {
                 let poll = poll(for: record.messageIdHex)
-                if poll != nil { labels.append(L10n.string("Poll")) }
                 labels += poll?.options.map { ContentSanitizer.messageBody($0.label) } ?? []
                 let question = poll.map { ContentSanitizer.messageBody($0.question) } ?? L10n.string("This poll can’t be displayed.")
                 return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: question, labels: labels, poll: poll)
             }
-            let usesTextBody = record.sticker == nil && !RemoteGiphyMedia.isEnvelopeText(record.plaintext)
-            let blocks = usesTextBody ? markdownDisplayBlocks(for: item) : nil
-            let text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
-                ?? ContentSanitizer.messageBody(displayBody(of: record))
-            if usesTextBody, media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
-                labels.append(L10n.string("Location"))
+            if case .unsupportedEvent = MessageSemantics.classify(record) {
+                let event = UnsupportedEventPresentation(record: record)
+                labels += [UnsupportedEventPresentation.kindLabel(event.kind), event.title, event.summary].compactMap { $0 }
+                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: L10n.string("Unsupported event"), labels: labels)
             }
-            let previewURL = media.isEmpty ? LinkPreviewMetadata.previewURL(in: blocks) : nil
+            let media = mediaItems(for: item)
+            let text: String
+            var previewURL: URL?
+            var contactIDs: [String] = []
+            let standaloneSticker = record.sticker != nil && StickerBubbleLayout.standsAlone(plaintext: record.plaintext,
+                hasReply: replyPreview(for: record) != nil, hasMedia: !media.isEmpty)
+            if standaloneSticker {
+                text = ""
+            } else if !context.streamingDebug, record.sticker == nil, media.isEmpty, let gif = RemoteGiphyMedia.parse(wireText: record.plaintext) {
+                text = gif.displayedCredit
+            } else if media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
+                text = L10n.string("Location")
+            } else {
+                for attachment in media where attachment.rejectionKind == nil && (attachment.kind == .document || attachment.kind == .unsupported) {
+                    labels.append(attachment.fileName)
+                    if DocumentPreviewFormat(for: attachment) == .contact { contactIDs.append(attachment.id) }
+                }
+                let blocks = markdownDisplayBlocks(for: item)
+                text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
+                    ?? (media.isEmpty || !record.plaintext.isEmpty ? ContentSanitizer.messageBody(displayBody(of: record)) : "")
+                if media.isEmpty, !context.streamingDebug, context.showsLinkPreviews {
+                    previewURL = LinkPreviewMetadata.previewURL(in: blocks)
+                }
+            }
             return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex,
-                text: text, labels: labels, previewURL: previewURL,
-                contactAttachmentIDs: contacts.map(\.id))
+                                           text: text, labels: labels, previewURL: previewURL, contactAttachmentIDs: contactIDs)
         }
     }
 
@@ -2750,7 +2776,8 @@ final class ConversationViewModel {
             retentionSeconds: r.message.retentionSeconds,
             retentionExpiresAt: r.message.retentionExpiresAt,
             recordedAt: r.message.recordedAt > 0 ? r.message.recordedAt : now,
-            receivedAt: r.message.receivedAt > 0 ? r.message.receivedAt : now
+            receivedAt: r.message.receivedAt > 0 ? r.message.receivedAt : now,
+            invalidated: false
         )
     }
 
@@ -3489,7 +3516,8 @@ final class ConversationViewModel {
         guard MessageEditingPolicy.canEdit(
                 message,
                 isDeleted: isDeleted(message.messageIdHex),
-                canSendMessages: canSendMessages
+                canSendMessages: canSendMessages,
+                myAccountId: myAccountId
               ),
               let outgoing = preparedComposerText(content).flatMap(MessageEditingPolicy.normalizedContent),
               let appState,
@@ -3747,17 +3775,25 @@ final class ConversationViewModel {
     @ObservationIgnored private var pendingReactions: [String: Set<PendingReaction>] = [:]
 
     func toggleReaction(_ emoji: String, on message: AppMessageRecordFfi) async {
+        let mine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
+        await performReaction(mine ? .removeAll : .add(emoji), on: message)
+    }
+
+    /// The Reactions sheet lists every kind, including those outside the bubble's preview.
+    func removeOwnReactions(from message: AppMessageRecordFfi) async {
+        await performReaction(.removeAll, on: message)
+    }
+
+    private func performReaction(_ operation: PendingReaction, on message: AppMessageRecordFfi) async {
         guard canSendMessages,
               let appState, let accountRef = appState.activeAccountRef,
               !message.messageIdHex.isEmpty else { return }
         let me = appState.activeAccount?.accountIdHex ?? ""
-        let alreadyMine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
         // Different additions can upload together. Unreact clears every owned reaction
         // on this message, so it must not overlap another addition or removal.
         let id = message.messageIdHex
-        let operation: PendingReaction = alreadyMine ? .removeAll : .add(emoji)
         let pending = pendingReactions[id] ?? []
-        guard !pending.contains(.removeAll), !alreadyMine || pending.isEmpty,
+        guard !pending.contains(.removeAll), operation != .removeAll || pending.isEmpty,
               pendingReactions[id, default: []].insert(operation).inserted else {
             Haptics.warning()
             return
@@ -3769,7 +3805,7 @@ final class ConversationViewModel {
         // A `:shortcode:` reaction is sent with its image; one this chat
         // holds no image for can only be removed.
         var customEmoji: CustomEmojiSendable?
-        if !alreadyMine, let shortcode = CustomEmojiShortcode(reactionContent: emoji) {
+        if case .add(let emoji) = operation, let shortcode = CustomEmojiShortcode(reactionContent: emoji) {
             guard canSendMediaAttachments, customEmojiSendScope != nil else { return }
             customEmoji = customEmojiSendables.first { $0.shortcode == shortcode }
             guard customEmoji != nil else { return }
@@ -3781,7 +3817,8 @@ final class ConversationViewModel {
         var removals: Set<ReactionRemoval> = []
         var clearedRemoval: ReactionRemoval?
 
-        if alreadyMine {
+        switch operation {
+        case .removeAll:
             removals = Self.reactionRemovalsForUnreact(
                 target: message.messageIdHex,
                 tallies: reactions(for: message.messageIdHex),
@@ -3796,7 +3833,7 @@ final class ConversationViewModel {
                 target: message.messageIdHex,
                 sender: me
             )
-        } else {
+        case .add(let emoji):
             // Re-react: clear any pending optimistic un-react for this
             // target+emoji so the new add isn't immediately subtracted by a
             // stale removal in `timelineStore.recomputeReactions()` (#349). The removal is
@@ -3832,23 +3869,26 @@ final class ConversationViewModel {
 
         do {
             let client = try appState.currentMarmotClient()
-            if alreadyMine {
+            switch operation {
+            case .removeAll:
                 _ = try await client.unreactFromMessage(
                     accountRef: accountRef,
                     groupIdHex: group.groupIdHex,
                     targetMessageId: message.messageIdHex
                 )
-            } else if let customEmoji {
-                try await customEmojiSender.sendReaction(customEmoji, to: message.messageIdHex)
-            } else {
-                _ = try await client.reactToMessage(
-                    accountRef: accountRef,
-                    groupIdHex: group.groupIdHex,
-                    targetMessageId: message.messageIdHex,
-                    emoji: emoji
-                )
+            case .add(let emoji):
+                if let customEmoji {
+                    try await customEmojiSender.sendReaction(customEmoji, to: message.messageIdHex)
+                } else {
+                    _ = try await client.reactToMessage(
+                        accountRef: accountRef, groupIdHex: group.groupIdHex,
+                        targetMessageId: message.messageIdHex, emoji: emoji
+                    )
+                }
             }
         } catch {
+            // Nothing to remove: the reaction is already gone, as the optimistic change shows.
+            if operation == .removeAll, case .ReactionNotFound = error as? MarmotKitError { return }
             // Revert the optimistic change.
             if let addedKey { timelineStore.reactionProjections.removeRecord(forKey: addedKey) }
             for removal in removals {

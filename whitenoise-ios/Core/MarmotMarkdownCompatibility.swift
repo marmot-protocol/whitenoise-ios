@@ -537,7 +537,8 @@ extension AppMessageRecordFfi {
             retentionSeconds: nil,
             retentionExpiresAt: nil,
             recordedAt: recordedAt,
-            receivedAt: receivedAt
+            receivedAt: receivedAt,
+            invalidated: false
         )
     }
 
@@ -566,7 +567,8 @@ extension AppMessageRecordFfi {
             retentionSeconds: nil,
             retentionExpiresAt: nil,
             recordedAt: recordedAt,
-            receivedAt: receivedAt
+            receivedAt: receivedAt,
+            invalidated: false
         )
     }
 }

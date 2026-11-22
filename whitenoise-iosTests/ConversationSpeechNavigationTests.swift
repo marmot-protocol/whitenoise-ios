@@ -6,6 +6,47 @@ import UIKit
 
 @MainActor
 struct ConversationSpeechNavigationTests {
+    @Test func readAloudIsOfferedOnlyForSpokenIncomingContent() {
+        var record = AppMessageRecordFfi(messageIdHex: "row", direction: "received", groupIdHex: "group",
+            sender: "peer", plaintext: "Meet at six", contentTokens: .emptyDocument, kind: MessageSemantics.kindChat,
+            tags: [], recordedAt: 1, receivedAt: 1)
+        func actions(emoji: Bool = false, spoken: Bool = true) -> [MessageSpeechAction] {
+            MessageSpeechPresentation.textActions(for: record, myAccountID: nil, isReading: false, standaloneEmoji: emoji, hasSpokenText: spoken)
+        }
+        #expect(actions() == [.read])
+        record.sticker = .init(packCoordinate: "pack", shortcode: "wave", plaintextSha256: "hash")
+        #expect(actions() == [.read])
+        record.sticker = nil
+        #expect(actions(spoken: false).isEmpty)
+        record.plaintext = ":marmot:"
+        #expect(actions(emoji: true).isEmpty)
+        record.plaintext = SharedLocationText.value(latitude: 45, longitude: 20)
+        #expect(actions().isEmpty)
+        record.plaintext = "https://media.giphy.com/media/abc/giphy.mp4\nvia GIPHY"
+        #expect(actions().isEmpty)
+        record.plaintext = "   "
+        #expect(actions().isEmpty)
+        record.direction = "sent"
+        record.plaintext = "Meet at six"
+        #expect(actions().isEmpty)
+    }
+
+    @Test func transcriptionNeedsOneReceivedRecordingAndRecognizesAnExistingTranscript() {
+        var record = AppMessageRecordFfi(messageIdHex: "row", direction: "received", groupIdHex: "group",
+            sender: "peer", plaintext: "", contentTokens: .emptyDocument, kind: MessageSemantics.kindChat,
+            tags: [], recordedAt: 1, receivedAt: 1)
+        let audio = MessageMediaAttachment(id: "audio", reference: nil, fileName: "voice.m4a", mediaType: "audio/mp4", dim: nil, localData: nil)
+        #expect(MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: nil, media: [audio])?.id == audio.id)
+        #expect(MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: nil, media: [audio, audio]) == nil)
+        record.sender = String(repeating: "ab", count: 32)
+        #expect(MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: record.sender, media: [audio]) == nil)
+        record.direction = "sent"
+        #expect(MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: nil, media: [audio]) == nil)
+        #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: nil, offersTranscribe: false).isEmpty)
+        #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: nil, offersTranscribe: true) == [.transcribe])
+        #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: true, offersTranscribe: false) == [.hide, .copy])
+    }
+
     @Test func readingMarkupWithNoSpokenTextExplainsWhyPlaybackDidNotStart() async throws {
         let speech = ConversationSpeech()
         let empty = TestLatch()

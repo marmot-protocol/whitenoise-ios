@@ -417,9 +417,15 @@ struct MessageBubble: View {
     @State private var readerProfile: String?
     @State private var mediaGallery: MessageMediaGallery?
     @State private var pendingExternalLink: PendingMessageExternalLink?
+    @State private var showsUnsupportedEventData = false
     @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
-    private var isFromMe: Bool { !usesReviewLayout && !displaysReader && record.direction == "sent" }
+    private var isFromMe: Bool {
+        !usesReviewLayout && !displaysReader && MessageOwnership.isMine(
+            direction: record.direction, sender: record.sender,
+            myAccountId: appState.activeAccount?.accountIdHex
+        )
+    }
 
     private var bubbleMaxWidth: CGFloat? {
         sizeClass == .regular ? ChatBubbleMetrics.regularMaximumWidth : nil
@@ -508,6 +514,7 @@ struct MessageBubble: View {
 
         guard let shortcode = SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes),
               !offersSourceReader else { return nil }
+        if let searchQuery, sanitizedBodyText.localizedStandardContains(searchQuery) { return nil }
         return shortcode
     }
 
@@ -634,6 +641,10 @@ struct MessageBubble: View {
                 mediaGallery = nil
             }
         }
+        .sheet(isPresented: $showsUnsupportedEventData) {
+            UnsupportedEventSheet(record: record, senderName: identityName?(record.sender))
+                .appAppearance()
+        }
     }
 
     private var senderLabel: some View {
@@ -673,6 +684,21 @@ struct MessageBubble: View {
             }
             .frame(width: rich ? MessageBubbleReplyLayout.richContentWidth : nil, alignment: .leading)
             .padding(rich ? MessageBubbleReplyLayout.cardOuterInset : 0)
+            .background { bubbleBackground }
+            .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
+            .opacity(status == .sending ? 0.7 : 1)
+        } else if case .unsupportedEvent = MessageSemantics.classify(record), showsStandardBody {
+            VStack(alignment: .leading, spacing: 0) {
+                if let replyPreview {
+                    replyHeader(replyPreview)
+                }
+                UnsupportedEventCard(
+                    presentation: UnsupportedEventPresentation(record: record),
+                    isFromMe: isFromMe
+                ) {
+                    showsUnsupportedEventData = true
+                }
+            }
             .background { bubbleBackground }
             .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
             .opacity(status == .sending ? 0.7 : 1)
@@ -1389,7 +1415,8 @@ struct MessageBubble: View {
             }
         }
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
-        .padding(.top, -16)
+        // Only the visible capsule overlaps the lower edge of the message.
+        .padding(.top, -7)
     }
 
     private func reactionChip<Label: View>(emoji: String?, mine: Bool, onTap: @escaping () -> Void,
@@ -1403,7 +1430,7 @@ struct MessageBubble: View {
             .background(mine ? Color(.systemGray4) : Color(.secondarySystemBackground), in: Capsule())
             .overlay { Capsule().strokeBorder(Color(.opaqueSeparator), lineWidth: 1) }
             .fixedSize()
-            .padding(.bottom, 9)
+            .frame(minWidth: 44, minHeight: 44, alignment: .top)
             // The strip proposes zero width to omitted chips, including their hit targets.
             .frame(minWidth: 0, maxWidth: .infinity)
             .clipped()
@@ -1413,7 +1440,6 @@ struct MessageBubble: View {
                     .onEnded { _ in onShowReactionDetails(emoji) }
                     .exclusively(before: TapGesture().onEnded(onTap))
             )
-            .padding(.top, 9)
     }
 
     private func reactionLabel(_ tally: ConversationViewModel.ReactionTally) -> some View {

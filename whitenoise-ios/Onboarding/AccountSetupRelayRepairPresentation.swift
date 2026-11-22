@@ -16,6 +16,8 @@ nonisolated struct AccountSetupRelayRepairPresentation: Equatable {
         let text: String?
         let host: String?
         let restores: OnboardingRelayCapabilityFfi
+        /// Why MDK proposes removing it, for an entry that can't serve its role.
+        let removalReason: OnboardingRelayRemovalReasonFfi
         /// A relay address this proposal would publish that fails the app's validator.
         let isInvalidPublishedAddress: Bool
     }
@@ -47,6 +49,7 @@ nonisolated struct AccountSetupRelayRepairPresentation: Equatable {
                 host: change.endpoint.flatMap { AccountSetupInput.proposalRelays([$0])?.first }
                     .flatMap { URL(string: $0)?.host },
                 restores: kind == .added ? change.restores : .none,
+                removalReason: kind == .removed ? change.removalReason : .none,
                 isInvalidPublishedAddress: published && !Self.isValidAddress(change.endpoint)
             )
         }

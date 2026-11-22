@@ -63,6 +63,9 @@ private struct AccountSetupRelayRepairRow: View {
                 if let capability = capabilityLabel {
                     Text(capability).font(.subheadline).foregroundStyle(.secondary)
                 }
+                if let removal = removalLabel {
+                    Text(removal).font(.subheadline).foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -92,6 +95,15 @@ private struct AccountSetupRelayRepairRow: View {
         case .read: "Read only"
         case .write: "Write only"
         case .inbox, .other: nil
+        }
+    }
+
+    private var removalLabel: LocalizedStringKey? {
+        switch row.removalReason {
+        case .retired: "This relay is no longer running."
+        case .authenticationRequired: "This relay asks for a sign-in White Noise can’t give it."
+        case .paymentRequired: "This relay requires payment."
+        case .none: nil
         }
     }
 

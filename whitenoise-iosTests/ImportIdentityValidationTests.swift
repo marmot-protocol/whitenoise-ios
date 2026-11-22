@@ -63,6 +63,14 @@ struct ImportIdentityValidationTests {
         ))
     }
 
+    @Test @MainActor func onlyAnUnlinkedAccountOffersRemovalBeforeSigningInAgain() {
+        #expect(ImportIdentityViewModel.unlinkedAccountRef(
+            MarmotKitError.AccountUnlinked(accountRef: hex("a"))
+        ) == hex("a"))
+        #expect(ImportIdentityViewModel.unlinkedAccountRef(MarmotKitError.AccountSetupRecoveryRequired) == nil)
+        #expect(ImportIdentityViewModel.unlinkedAccountRef(CancellationError()) == nil)
+    }
+
     @Test @MainActor func invalidRuntimeIdentityUsesTheInlineValidationCopy() {
         let message = ImportIdentityViewModel.importFallbackMessage(
             for: MarmotKitError.InvalidIdentity(details: "bad key")

@@ -23,6 +23,7 @@ struct SignOutView: View {
             isBusy: isBusy,
             canSignOut: canSignOut,
             error: error,
+            hasLinkedDevices: !appState.deviceLinks.otherDevices.isEmpty,
             onClose: { appState.accountExitIntent = nil },
             onSignOut: signOut
         ) {

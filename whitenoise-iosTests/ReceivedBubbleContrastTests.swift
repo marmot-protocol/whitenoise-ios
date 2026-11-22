@@ -6,8 +6,9 @@ struct MessageBubbleMetadataLayoutTests {
     @Test func shortQuotesHugTheirContentsAndLongExchangesRespectAvailableWidth() {
         #expect(MessageBubbleReplyLayout.textWidth(proposed: 300, ideal: 80) == 80)
         #expect(MessageBubbleReplyLayout.textWidth(proposed: 240, ideal: 400) == 240)
-        #expect(MessageBubbleReplyLayout.textWidth(proposed: nil, ideal: 400) == 332)
-        #expect(MessageBubbleReplyLayout.textWidth(proposed: 500, ideal: nil) == 332)
+        let cap = ChatBubbleMetrics.textMaximumWidth
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: nil, ideal: cap + 80) == cap)
+        #expect(MessageBubbleReplyLayout.textWidth(proposed: cap + 80, ideal: nil) == cap)
     }
 
     @Test func timestampsAlwaysUseTheOuterConversationEdge() {

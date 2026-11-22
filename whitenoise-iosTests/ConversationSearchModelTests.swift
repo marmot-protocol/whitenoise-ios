@@ -13,9 +13,10 @@ struct ConversationSearchModelTests {
         viewModel.applyTimelinePage(.init(messages: [record], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
         let row = try #require(viewModel.timeline.first { $0.id == TimelineItem.messageRowId(forMessageIdHex: record.messageIdHex) })
         let contact = try #require(viewModel.mediaItems(for: row).first)
-        viewModel.search.registerContactName("Avery Stone", for: contact.id, in: record.messageIdHex)
         viewModel.search.activate()
         viewModel.search.query = "Avery"
+        #expect(viewModel.search.currentMatch == nil)
+        viewModel.search.registerContactName("Avery Stone", for: contact.id, in: record.messageIdHex)
         #expect(viewModel.search.currentMatch?.messageIdHex == record.messageIdHex)
 
         viewModel.timelineStore.applyConversationWindowPage(.init(messages: [], hasMoreBefore: false, hasMoreAfter: false))

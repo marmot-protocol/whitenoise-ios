@@ -248,6 +248,37 @@ struct MediaFileUploadTests {
         #expect(try Data(contentsOf: source) == bytes)
     }
 
+    /// A reopened draft's large attachment comes back from MDK in chunks and is
+    /// mapped like a picked file, leaving nothing behind.
+    @Test func chunkedDraftAttachmentIsReassembledAndMapped() async throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bytes = Data((0..<2_500).map { UInt8($0 % 251) })
+        func read(_ offset: UInt64) -> Data? {
+            Data(bytes.dropFirst(Int(offset)).prefix(1_000))
+        }
+
+        let data = try await PickedMediaFile.mappedData(expectedSize: UInt64(bytes.count), in: directory) { read($0) }
+
+        #expect(data == bytes)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
+
+    @Test func aMissingOrMisSizedDraftAttachmentIsRefused() async throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        await #expect(throws: CocoaError(.fileReadNoSuchFile)) {
+            _ = try await PickedMediaFile.mappedData(expectedSize: 10, in: directory) { _ in nil }
+        }
+        await #expect(throws: CocoaError(.fileReadCorruptFile)) {
+            _ = try await PickedMediaFile.mappedData(expectedSize: 10, in: directory) { $0 == 0 ? Data(count: 4) : Data() }
+        }
+        await #expect(throws: CocoaError(.fileReadCorruptFile)) {
+            _ = try await PickedMediaFile.mappedData(expectedSize: 2, in: directory) { $0 == 0 ? Data(count: 4) : Data() }
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
+
     @Test func pickedFileStaysReadableAfterItsSourceIsDeleted() throws {
         let directory = Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

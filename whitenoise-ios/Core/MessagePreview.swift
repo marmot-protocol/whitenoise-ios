@@ -18,6 +18,8 @@ enum MessagePreview {
     static let timelineMediaPreviewMaxFileNames = MediaDraftProcessor.maxAttachmentCount
 
     static var stickerLabel: String { L10n.string("Sticker") }
+    /// An event of a kind the app can't render; its content is never shown as text.
+    static var unsupportedEventLabel: String { L10n.string("Unsupported event") }
 
     /// Whether a record should drive the chat-list preview. Skips agent-stream
     /// start signals and non-textual events (reactions, deletes). A kind-9
@@ -26,7 +28,7 @@ enum MessagePreview {
         switch MessageSemantics.classify(record) {
         case .reaction, .delete, .edit, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
             return false
-        case .chat, .reply, .media, .streamFinal, .poll:
+        case .chat, .reply, .media, .streamFinal, .poll, .unsupportedEvent:
             return true
         }
     }
@@ -54,6 +56,8 @@ enum MessagePreview {
             return AgentEventPresentation.previewText(from: record.plaintext) ?? ""
         case .poll:
             return pollPreview(question: record.plaintext)
+        case .unsupportedEvent:
+            return unsupportedEventLabel
         case .groupSystem:
             return GroupSystemEventPresentation.displayText(
                 from: record.plaintext,
@@ -101,6 +105,9 @@ enum MessagePreview {
                 if let label = RemoteGiphyMedia.envelopePreviewText(for: record.plaintext) { return label }
                 return copyText(record.plaintext, mentionDisplayName: mentionDisplayName)
             }
+        case .unsupportedEvent:
+            // The card's content is the event itself.
+            return UnsupportedEventPresentation.eventJSON(for: record)
         default:
             break
         }
@@ -121,6 +128,7 @@ enum MessagePreview {
         if preview.deleted {
             return MessageDeletionPresentation.text(source: preview.deletionSource)
         }
+        if MessageSemantics.isUnsupportedEventKind(preview.kind) { return unsupportedEventLabel }
         if preview.sticker != nil, preview.plaintext.isEmpty { return stickerLabel }
         if !preview.plaintext.isEmpty {
             if preview.kind == MessageSemantics.kindGroupSystem {
@@ -160,6 +168,7 @@ enum MessagePreview {
         if preview.deleted {
             return MessageDeletionPresentation.text(source: preview.deletionSource)
         }
+        if MessageSemantics.isUnsupportedEventKind(preview.kind) { return unsupportedEventLabel }
         if preview.sticker != nil, preview.plaintext.isEmpty { return stickerLabel }
         if !preview.plaintext.isEmpty {
             if preview.kind == MessageSemantics.kindGroupSystem {

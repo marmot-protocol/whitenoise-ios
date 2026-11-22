@@ -55,8 +55,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.relevant == 'true'
     runs-on: xcode-27
-    # Allow runner setup and artifact upload around the bounded 40-minute test step.
-    timeout-minutes: 55
+    # Allow runner setup and artifact upload around the bounded 50-minute test step.
+    timeout-minutes: 65
 
     env:
       # D2 on #1202 keeps CI at one runtime permit; pin it so a runner with more
@@ -135,7 +135,10 @@ jobs:
 
       - name: Run tests
         # End the step before the job deadline so failure artifacts can upload.
-        timeout-minutes: 40
+        # A MarmotKit update misses both caches (a new binary to download and
+        # generated Swift that recompiles most of the app), which takes about
+        # 30 minutes to build before ~15 minutes of tests.
+        timeout-minutes: 50
         run: ./scripts/test.sh
 
       - name: Save compilation cache

@@ -28,6 +28,10 @@ struct WipeOutcomeReportView: View {
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 }
 
+                if report.siblingsNotReached || report.groupsLeftToSiblings > 0 {
+                    linkedDevicesSection
+                }
+
                 ForEach(report.stages, id: \.stage) { stage in
                     WipeOutcomeStageSection(stage: stage, didWipeData: report.didWipeData) {
                         selectedFailures = $0
@@ -50,6 +54,31 @@ struct WipeOutcomeReportView: View {
         .sheet(item: $selectedFailures) { selection in
             WipeOutcomeFailuresView(title: selection.title, failures: selection.failures)
                 .appAppearance()
+        }
+    }
+}
+
+extension WipeOutcomeReportView {
+    /// What this device's other linked devices took over, or couldn't.
+    private var linkedDevicesSection: some View {
+        Section {
+            if report.groupsLeftToSiblings > 0 {
+                Label {
+                    Text(L10n.plural("%lld chats were left to your other devices to finish.",
+                                     Int64(report.groupsLeftToSiblings)))
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.green)
+                }
+            }
+            if report.siblingsNotReached {
+                Label {
+                    Text("Your other devices couldn’t be reached. They may still list this device until you remove it from one of them.")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.orange)
+                }
+            }
+        } header: {
+            Text("Your Other Devices").wnSectionHeader()
         }
     }
 }

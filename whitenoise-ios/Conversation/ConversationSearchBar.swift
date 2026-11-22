@@ -5,28 +5,19 @@ import SwiftUI
 struct ConversationSearchBar: View {
     @Bindable var search: ConversationSearchModel
     let onClose: () -> Void
-    @State private var deadlineTimer: Timer?
 
     var body: some View {
         WNSearchBar(query: $search.query, prompt: "Search messages",
                     dismissesKeyboardOnSubmit: false, onClose: onClose)
-            .onChange(of: search.nextPollDeadline, initial: true) { _, deadline in
-                deadlineTimer?.invalidate()
-                deadlineTimer = nil
-                guard let deadline else { return }
-                let timer = Timer(fire: deadline, interval: 0, repeats: false) { [weak search = self.search] _ in
-                    // Installed on the main run loop, including while the transcript scrolls.
-                    MainActor.assumeIsolated {
-                        guard let search, search.nextPollDeadline == deadline else { return }
-                        search.refreshAfterSearchableContentChange()
-                    }
+            .task(id: search.nextPollDeadline) {
+                guard let deadline = search.nextPollDeadline else { return }
+                // MDK deadlines are unsigned timestamps and may exceed the range of a Duration.
+                while deadline.timeIntervalSinceNow > 0 {
+                    do { try await Task.sleep(for: .seconds(min(deadline.timeIntervalSinceNow, 86_400))) }
+                    catch { return }
                 }
-                RunLoop.main.add(timer, forMode: .common)
-                deadlineTimer = timer
-            }
-            .onDisappear {
-                deadlineTimer?.invalidate()
-                deadlineTimer = nil
+                guard !Task.isCancelled, search.nextPollDeadline == deadline else { return }
+                search.refreshAfterSearchableContentChange()
             }
     }
 }

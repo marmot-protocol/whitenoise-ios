@@ -101,17 +101,18 @@ struct AppStateBootstrapTests {
     }
 
     @Test func accountRefreshStartedBeforeImportCannotDiscardItsNewSetup() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let reads = AccountRefreshReadsStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
         let appState = seeded.appState
         let active = appState.activeAccountRef
         let maintenance = appState.beginForegroundMaintenanceCancellation()
         for task in maintenance.mutationFollowups { await task.value }
         let checkpoint = AsyncTestCheckpoint()
         defer { Task { await checkpoint.release() } }
-        appState.beforeOnboardingSnapshotReadForTesting = { _ in await checkpoint.pause() }
+        reads.beforeOnboardingSnapshot = { _ in await checkpoint.pause() }
         let refresh = Task { try await appState.refreshAccounts(refreshUnreadSummaries: false) }
         await checkpoint.waitUntilPaused()
-        appState.beforeOnboardingSnapshotReadForTesting = nil
+        reads.beforeOnboardingSnapshot = nil
         _ = try await appState.importIdentity(
             "nsec12kcgs78l06p30jz7z7h3n2x2cy99nw2z6zspjdp7qc206887mwvs95lnkx"
         )
@@ -126,7 +127,8 @@ struct AppStateBootstrapTests {
     }
 
     @Test func openChatsKeepsSetupWhenItsAccountIsExcludedAndCanRetry() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let reads = AccountRefreshReadsStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
         let appState = seeded.appState
         let account = seeded.accounts[0]
         let maintenance = appState.beginForegroundMaintenanceCancellation()
@@ -144,7 +146,7 @@ struct AppStateBootstrapTests {
         appState.signInAttempts.begin(account.accountIdHex)
         appState.pendingAccountSetup = model
         appState.isAccountSetupPresented = true
-        appState.beforeOnboardingSnapshotReadForTesting = { accountID in
+        reads.beforeOnboardingSnapshot = { accountID in
             if accountID == account.accountIdHex { throw CocoaError(.fileReadCorruptFile) }
         }
 
@@ -160,7 +162,7 @@ struct AppStateBootstrapTests {
         #expect(!model.canFinish)
         #expect(!appState.isFinishingAccountSetup)
 
-        appState.beforeOnboardingSnapshotReadForTesting = nil
+        reads.beforeOnboardingSnapshot = nil
         await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
         try await eventually { model.canFinish }
         try #require(model.canFinish)
@@ -175,7 +177,8 @@ struct AppStateBootstrapTests {
     }
 
     @Test func olderRefreshCannotDiscardSetupRestoredAfterFinishFailure() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let reads = AccountRefreshReadsStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
         let appState = seeded.appState
         let account = seeded.accounts[0]
         let maintenance = appState.beginForegroundMaintenanceCancellation()
@@ -192,17 +195,17 @@ struct AppStateBootstrapTests {
         appState.pendingAccountSetup = model
         let checkpoint = AsyncTestCheckpoint()
         defer { Task { await checkpoint.release() } }
-        appState.beforeOnboardingSnapshotReadForTesting = { _ in
+        reads.beforeOnboardingSnapshot = { _ in
             await checkpoint.pause()
             throw CocoaError(.fileReadCorruptFile)
         }
         let refresh = Task { try await appState.refreshAccounts(refreshUnreadSummaries: false) }
         await checkpoint.waitUntilPaused()
-        appState.beforeAccountRefreshForTesting = { throw CocoaError(.fileReadCorruptFile) }
+        reads.beforeListAccounts = { throw CocoaError(.fileReadCorruptFile) }
         await appState.finishAccountSetup()
         try #require(appState.pendingAccountSetup === model)
-        appState.beforeAccountRefreshForTesting = nil
-        appState.beforeOnboardingSnapshotReadForTesting = nil
+        reads.beforeListAccounts = nil
+        reads.beforeOnboardingSnapshot = nil
         await checkpoint.release()
         try await refresh.value
         #expect(appState.pendingAccountSetup === model)
@@ -214,10 +217,12 @@ struct AppStateBootstrapTests {
 
     @Test(arguments: [false, true])
     func foregroundAccountRefreshRetriesAndReleasesFailedRuntime(exhaustRetries: Bool) async throws {
+        let reads = AccountRefreshReadsStub()
         let appState = try ownedAppState(
             client: try ownedTestClient(), notifications: deniedNotifications(),
             accountDefaults: accountDefaults, runtimeRetrySleeper: { _ in },
-            runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy(delays: [.zero])
+            runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy(delays: [.zero]),
+            accountRefreshReads: reads.reads
         )
         appState.setAppSceneActive(true)
         await appState.bootstrap()
@@ -226,7 +231,7 @@ struct AppStateBootstrapTests {
         let generation = appState.runtimeGeneration
         var attempts = 0
         var retainedClient: MarmotClient?
-        appState.beforeAccountRefreshForTesting = {
+        reads.beforeListAccounts = {
             attempts += 1
             retainedClient = appState.client
             if exhaustRetries || attempts == 1 { throw MarmotKitError.StorageBusy(details: "test contention") }
@@ -236,7 +241,7 @@ struct AppStateBootstrapTests {
         if exhaustRetries {
             #expect(appState.client == nil)
             if case .failed = appState.phase {} else { Issue.record("Expected a recoverable startup failure") }
-            appState.beforeAccountRefreshForTesting = nil
+            reads.beforeListAccounts = nil
             // Keep the failed handle alive: Retry must still be able to reopen its root.
             #expect(retainedClient != nil)
             await appState.bootstrap()
@@ -245,7 +250,7 @@ struct AppStateBootstrapTests {
         #expect(!appState.runtimeSuspendedForBackground)
         #expect(appState.runtimeGeneration > generation)
         #expect(appState.client != nil)
-        appState.beforeAccountRefreshForTesting = nil
+        reads.beforeListAccounts = nil
         appState.setAppSceneActive(false)
         await appState.startRuntimeSuspension().value
     }
@@ -257,13 +262,14 @@ struct AppStateBootstrapTests {
         .AccountSetupRecoveryRequired,
     ])
     func unreadableCheckpointOnlyGatesItsOwnIdentity(error: MarmotKitError) async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let reads = AccountRefreshReadsStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
         let appState = seeded.appState
         let healthy = seeded.accounts[0]
         let broken = try await appState.importIdentity(
             "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn"
         )
-        appState.beforeOnboardingSnapshotReadForTesting = { accountID in
+        reads.beforeOnboardingSnapshot = { accountID in
             if accountID == broken.accountIdHex { throw error }
         }
         try await appState.refreshAccounts(refreshUnreadSummaries: false)
@@ -277,7 +283,7 @@ struct AppStateBootstrapTests {
         #expect(durable?.count == 2)
 
         // The failed read must not delete or reset the durable checkpoint.
-        appState.beforeOnboardingSnapshotReadForTesting = nil
+        reads.beforeOnboardingSnapshot = nil
         try await appState.refreshAccounts(refreshUnreadSummaries: false)
         #expect(appState.pendingAccountSetup == nil)
         #expect(appState.accountSetupSnapshots.contains { $0.accountIdHex == broken.accountIdHex && !$0.ready })
@@ -299,11 +305,13 @@ struct AppStateBootstrapTests {
         original.setAppSceneActive(false)
         await original.startRuntimeSuspension().value
         accountDefaults.set(broken.label, forKey: AccountStore.activeAccountKey)
+        let reads = AccountRefreshReadsStub()
         let appState = try ownedAppState(
             client: try reopenedClient(rootPath: root, relayUrls: relays),
-            notifications: deniedNotifications(), accountDefaults: accountDefaults
+            notifications: deniedNotifications(), accountDefaults: accountDefaults,
+            accountRefreshReads: reads.reads
         )
-        appState.beforeOnboardingSnapshotReadForTesting = { accountID in
+        reads.beforeOnboardingSnapshot = { accountID in
             if !healthyAvailable || accountID == broken.accountIdHex {
                 throw MarmotKitError.OnboardingActionUnavailable
             }
@@ -325,7 +333,7 @@ struct AppStateBootstrapTests {
         if !healthyAvailable {
             #expect(appState.accounts.isEmpty)
             #expect(appState.accountSetupSnapshots.isEmpty)
-            appState.beforeOnboardingSnapshotReadForTesting = nil
+            reads.beforeOnboardingSnapshot = nil
             try await appState.refreshAccounts(refreshUnreadSummaries: false)
             #expect(appState.accounts.map(\.accountIdHex) == [healthy.accountIdHex])
             #expect(appState.pendingAccountSetup == nil)
@@ -362,11 +370,12 @@ struct AppStateBootstrapTests {
 
     @Test(arguments: [false, true])
     func unreadableIdentityCannotStaySelectedOrBeActivatedAfterSignIn(signIn: Bool) async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let reads = AccountRefreshReadsStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
         let appState = seeded.appState
         let account = seeded.accounts[0]
         if signIn { #expect(await appState.signOut()) }
-        appState.beforeOnboardingSnapshotReadForTesting = { _ in
+        reads.beforeOnboardingSnapshot = { _ in
             throw MarmotKitError.Runtime(details: "test checkpoint")
         }
         if signIn {
@@ -379,7 +388,7 @@ struct AppStateBootstrapTests {
         #expect(appState.pendingAccountSetup == nil)
         #expect(appState.client != nil)
         #expect(RootPresentation.resolve(phase: appState.phase, activeAccountRef: nil) == (signIn ? .onboarding : .profileSelection))
-        appState.beforeOnboardingSnapshotReadForTesting = nil
+        reads.beforeOnboardingSnapshot = nil
         try await appState.refreshAccounts(refreshUnreadSummaries: false)
         await appState.activateAccount(account.label)
         #expect(appState.activeAccountRef == account.label)
@@ -392,6 +401,7 @@ struct AppStateBootstrapTests {
         .StorageBusy(details: "test contention"), .KeystoreUnavailable(details: "test contention"),
     ])
     func transientCheckpointFailureStillRetriesAtLaunchAndResume(error: MarmotKitError) async throws {
+        let reads = AccountRefreshReadsStub()
         let seedClient = try ownedTestClient()
         do {
             try await seedClient.startRuntime()
@@ -407,10 +417,11 @@ struct AppStateBootstrapTests {
         let appState = try ownedAppState(
             client: try TestRuntimeScope.own(seedClient.freshRuntime()), notifications: deniedNotifications(),
             accountDefaults: accountDefaults, runtimeRetrySleeper: { _ in },
-            runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy(delays: [.zero])
+            runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy(delays: [.zero]),
+            accountRefreshReads: reads.reads
         )
         var attempts = 0
-        appState.beforeOnboardingSnapshotReadForTesting = { _ in
+        reads.beforeOnboardingSnapshot = { _ in
             attempts += 1
             if attempts == 1 { throw error }
         }
@@ -433,10 +444,11 @@ struct AppStateBootstrapTests {
     }
 
     @Test func cancelledCheckpointRefreshKeepsTheLastCompleteProjection() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let reads = AccountRefreshReadsStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
         let appState = seeded.appState
         let originalIDs = appState.accounts.map(\.accountIdHex)
-        appState.beforeOnboardingSnapshotReadForTesting = { _ in throw CancellationError() }
+        reads.beforeOnboardingSnapshot = { _ in throw CancellationError() }
         await #expect(throws: CancellationError.self) {
             try await appState.refreshAccounts(refreshUnreadSummaries: false)
         }
@@ -1647,9 +1659,10 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    /// The resume-tail badge refresh runs in its own task; suspension must
-    /// drain it so no unread-summary FFI read is in flight when the runtime
-    /// shuts down.
+    /// The resume-tail badge refresh runs in its own task. Suspension takes it
+    /// over and drains it after storage closes, so the task can't outlive
+    /// suspension. This checks the takeover; the drain clears the task before
+    /// awaiting it, so the await itself isn't observed.
     @Test func suspensionDrainsScheduledUnreadSummaryRefresh() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
@@ -2093,6 +2106,47 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func laterLeavesAnUnlinkedProfileSignedOutWhenTheRefreshFails() async throws {
+        let reads = AccountRefreshReadsStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
+        reads.beforeListAccounts = { throw URLError(.notConnectedToInternet) }
+
+        await appState.leaveUnlinkedAccount(accountIdHex: account.accountIdHex)
+        reads.beforeListAccounts = nil
+
+        // The chooser offers only rows that aren't signed out.
+        let row = try #require(appState.accounts.first { $0.accountIdHex == account.accountIdHex })
+        #expect(row.signedOut && row.unlinked)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.phase == .onboarding)
+
+        await stopReadyRuntime(appState)
+    }
+
+    /// A Remove from an unlinked notice must not wipe a copy of that profile
+    /// that was signed in again since, active or not.
+    @Test(arguments: [true, false])
+    func aStaleUnlinkedRemovalWipesNothing(active: Bool) async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
+        if !active { #expect(await appState.signOut()) }
+
+        await #expect(throws: ProfileNotUnlinkedError.self) {
+            try await appState.removeUnlinkedAccount(accountRef: account.accountIdHex)
+        }
+
+        #expect(!appState.isAccountExitInProgress)
+        #expect(try await appState.client?.listAccounts().map(\.accountIdHex) == [account.accountIdHex])
+        #expect(appState.activeAccountRef == (active ? account.label : nil))
+
+        await stopReadyRuntime(appState)
+    }
+
     @Test func explicitPushDisableSupersedesAnInterruptedExitsRestore() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
@@ -2305,7 +2359,8 @@ struct AppStateBootstrapTests {
         relayUrls: [String] = MarmotClient.unreachableTestRelays,
         catchUp: NotificationCatchUpStub? = nil,
         timings: HostPerformanceRecorderStub? = nil,
-        sweepSleeper: ControlledSleeper? = nil
+        sweepSleeper: ControlledSleeper? = nil,
+        refreshReads: AccountRefreshReadsStub? = nil
     ) throws -> AppState {
         resetPersistedActiveAccountRef()
         return try ownedAppState(
@@ -2316,7 +2371,8 @@ struct AppStateBootstrapTests {
             notificationCatchUpCalls: catchUp?.calls ?? .live,
             hostPerformanceRecorder: timings?.recorder ?? RuntimeLifecycle.recordHostPerformanceOnClient,
             retentionSweepSleep: sweepSleeper.map { sleeper in { try await sleeper.sleep(.nanoseconds($0)) } }
-                ?? MessageRetentionSweeper.taskSleep
+                ?? MessageRetentionSweeper.taskSleep,
+            accountRefreshReads: refreshReads?.reads ?? .live
         )
     }
 
@@ -2343,7 +2399,8 @@ struct AppStateBootstrapTests {
         notificationCatchUpCalls: NotificationCatchUpCalls = .live,
         hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
             RuntimeLifecycle.recordHostPerformanceOnClient,
-        retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep
+        retentionSweepSleep: @escaping MessageRetentionSweeper.Sleep = MessageRetentionSweeper.taskSleep,
+        accountRefreshReads: AccountRefreshReads = .live
     ) throws -> AppState {
         try TestRuntimeScope.own(AppState.test(
             client: client,
@@ -2354,7 +2411,8 @@ struct AppStateBootstrapTests {
             runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy,
             notificationCatchUpCalls: notificationCatchUpCalls,
             hostPerformanceRecorder: hostPerformanceRecorder,
-            retentionSweepSleep: retentionSweepSleep
+            retentionSweepSleep: retentionSweepSleep,
+            accountRefreshReads: accountRefreshReads
         ))
     }
 
@@ -2366,10 +2424,12 @@ struct AppStateBootstrapTests {
         notifications: AppNotifications? = nil,
         catchUp: NotificationCatchUpStub? = nil,
         timings: HostPerformanceRecorderStub? = nil,
-        sweepSleeper: ControlledSleeper? = nil
+        sweepSleeper: ControlledSleeper? = nil,
+        refreshReads: AccountRefreshReadsStub? = nil
     ) async throws -> (appState: AppState, accounts: [AccountSummaryFfi]) {
         let appState = try testAppState(
-            notifications: notifications, catchUp: catchUp, timings: timings, sweepSleeper: sweepSleeper
+            notifications: notifications, catchUp: catchUp, timings: timings, sweepSleeper: sweepSleeper,
+            refreshReads: refreshReads
         )
         await appState.bootstrap()
         #expect(appState.phase == .onboarding)
