@@ -13,9 +13,12 @@ struct ChatPreviewActions {
         await model.start()
     }
 
-    func send(_ text: String, replyTo: String? = nil, incoming: Bool = false) {
+    var incomingSampleSender: String? {
+        windows.chats.first { $0.id == id }?.incomingSampleSender
+    }
+
+    func send(_ text: String, replyTo: String? = nil, from author: String = ChatPreviewThread.owner) {
         windows.change(id) { chat in
-            let author = incoming ? ChatPreviewThread.peer : ChatPreviewThread.owner
             let line: PreviewLine
             if let replyTo, let index = chat.messages.firstIndex(where: { $0.timeline.messageIdHex == replyTo }) {
                 line = PreviewLine(text, .reply(index), by: author)

@@ -13,6 +13,12 @@ nonisolated struct ChatPreviewThread {
     private var nextMessageNumber = 1
     private let people: [(String, String)]
     private let hasLeft: Bool
+
+    var incomingSampleSender: String? {
+        guard !hasLeft else { return nil }
+        return people.first { $0.0 != Self.owner }?.0
+    }
+
     let number: Int
     let id: String
     let title: String

@@ -1602,7 +1602,9 @@ struct ConversationView: View {
                                         Button("Replay slow load") { Task { await fixture.replay(.slow, using: viewModel) } }
                                         Button("Show load failure") { Task { await fixture.replay(.failed, using: viewModel) } }
                                     }
-                                    Button("Receive sample message") { fixture.send("Just arrived. Are you nearby?", incoming: true) }
+                                    if let sender = fixture.incomingSampleSender {
+                                        Button("Receive sample message") { fixture.send("Just arrived. Are you nearby?", from: sender) }
+                                    }
                                 } label: { Label("Preview controls", systemImage: "ellipsis.circle") }
                                     .labelStyle(.iconOnly)
                                     .padding(.trailing, 16)
