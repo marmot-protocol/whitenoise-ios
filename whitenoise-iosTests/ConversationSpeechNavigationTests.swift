@@ -91,9 +91,11 @@ struct ConversationSpeechNavigationTests {
         await speech.revalidate(in: current) { _, _ in false }
         speech.stageTranscript("Gate 12", id: "message", recording: recording, scope: opening)
         #expect(speech.retentionCheck(in: current) != previousCheck)
+        #expect(speech.transcribingID == "message")
         #expect(speech.transcripts["message"]?.isVerified(in: current) == false)
         await speech.revalidate(in: current) { id, source in id == "message" && source == recording }
         #expect(speech.transcripts["message"]?.isVerified(in: current) == true)
+        #expect(speech.transcribingID == nil)
     }
 
     @Test func uncertainRetentionHidesTextAndOnlyConfirmedAbsenceDiscardsIt() throws {

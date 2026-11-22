@@ -147,7 +147,9 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     private var reading: (id: String, sourceText: String)?
     var readingID: String? { reading?.id }
     private(set) var readingProgress = 0.0
-    private(set) var transcribingID: String?
+    private var recognizingID: String?
+    private var verifyingID: String?
+    var transcribingID: String? { recognizingID ?? verifyingID }
     private(set) var transcripts: [String: Transcript] = [:]
     struct VoiceRequest: Equatable {
         let scope: Scope
@@ -239,15 +241,15 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
 
     func transcribe(id: String, recording: Recording, scope: Scope, data: @escaping () async throws -> Data,
                     isCurrent: @escaping () -> Bool, onError: @escaping () -> Void) {
-        guard #available(iOS 26, *), transcription == nil else { return }
+        guard #available(iOS 26, *), transcribingID == nil else { return }
         let request = UUID()
         requestID = request
-        transcribingID = id
+        recognizingID = id
         transcribingRecording = recording
         transcription = Task {
             defer {
                 if requestID == request {
-                    transcribingID = nil
+                    recognizingID = nil
                     transcribingRecording = nil
                     transcription = nil
                     requestID = nil
@@ -272,6 +274,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     /// Publication wakes the check even if the attachment revision changed during recognition.
     func stageTranscript(_ text: String, id: String, recording: Recording, scope: Scope) {
         transcripts[id] = Transcript(scope: scope, recording: recording, text: text, verified: false)
+        verifyingID = id
         lastPublication = UUID()
     }
 
@@ -295,6 +298,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     func updateRetention(_ held: Bool?, id: String, recording: Recording, scope: Scope) {
         guard let transcript = transcripts[id], transcript.recording == recording else { return }
         transcripts[id] = transcript.revalidated(held: held, in: scope)
+        if verifyingID == id { verifyingID = nil }
     }
 
     func setTranscriptVisible(_ visible: Bool, id: String) {
@@ -305,20 +309,24 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         if let reading, currentText(reading.id) != reading.sourceText { stopReading() }
         if let transcribingID, let transcribingRecording, !audioMatches(transcribingID, transcribingRecording) { cancelTranscription() }
         let removed = transcripts.compactMap { id, value in audioMatches(id, value.recording) ? nil : id }
-        for id in removed { transcripts.removeValue(forKey: id) }
+        for id in removed {
+            transcripts.removeValue(forKey: id)
+            if verifyingID == id { verifyingID = nil }
+        }
     }
 
     private func cancelTranscription() {
         requestID = nil
         transcription?.cancel()
         transcription = nil
-        transcribingID = nil
+        recognizingID = nil
         transcribingRecording = nil
     }
 
     func reset() {
         stopReading()
         cancelTranscription()
+        verifyingID = nil
         transcripts.removeAll()
         checkedVoice = nil
     }
