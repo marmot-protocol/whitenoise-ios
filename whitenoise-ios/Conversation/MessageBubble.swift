@@ -3486,14 +3486,26 @@ private struct MessageDocumentAttachmentView: View {
     let onLoadMedia: ConversationMediaLoader
 
     @Environment(\.scenePhase) private var scenePhase
-    private struct OpenDocument: Identifiable {
-        let preview: MessageDocumentPreview
-        let item: MessageMediaAttachment
-        let loader: ConversationMediaLoader
-        var id: UUID { preview.id }
+    private struct DocumentSource: Equatable {
+        let id: String
+        let reference: MediaAttachmentReferenceFfi?
+        let source: AttachmentHandoffSource
+
+        init(_ item: MessageMediaAttachment) {
+            id = item.id
+            reference = item.reference
+            source = AttachmentHandoffSource(item)
+        }
+
+        func continues(_ previous: Self, outgoing: Bool) -> Bool {
+            guard id == previous.id, reference == previous.reference else { return false }
+            if outgoing, reference != nil, previous.source == .none { return true }
+            if case .hint = previous.source, case .target(let target) = source { return previous.source.matches(target) }
+            return false
+        }
     }
 
-    @State private var preview: OpenDocument?
+    @State private var preview: MessageDocumentPreview?
     @State private var openingID: UUID?
     @State private var openingTask: Task<Void, Never>?
     @State private var contactName: String?
@@ -3585,10 +3597,8 @@ private struct MessageDocumentAttachmentView: View {
             if let contactName { transcriptSearch?.registerContactName(contactName, for: item.id, in: confirmedID) }
         }
         .sheet(item: $preview) { document in
-            if let current = preview, current.id == document.id {
-                MessageDocumentPreviewSheet(preview: current.preview, item: current.item, loader: current.loader)
-                    .appAppearance()
-            }
+            MessageDocumentPreviewSheet(preview: document, item: item, loader: onLoadMedia)
+                .appAppearance()
         }
         .sheet(item: $share.file) { file in
             ActivityShareSheet(items: [file.url], onComplete: file.finish)
@@ -3598,19 +3608,8 @@ private struct MessageDocumentAttachmentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { cancelDocumentOpen() }
         }
-        .onChange(of: item.id) { _, _ in resetDocument() }
-        .onChange(of: AttachmentHandoffSource(item)) { previous, current in
-            if let document = preview, isFromMe, previous == .none, current != .none,
-               item.reference != nil, document.item.reference == item.reference, document.item.id == item.id {
-                // Delivery can confirm the same PDF while its reader is already open.
-                preview = OpenDocument(preview: document.preview, item: item, loader: onLoadMedia)
-            } else if case .hint = previous, case .target(let target) = current, previous.matches(target) {
-                if let document = preview {
-                    preview = OpenDocument(preview: document.preview, item: item, loader: onLoadMedia)
-                }
-            } else {
-                resetDocument()
-            }
+        .onChange(of: DocumentSource(item)) { previous, current in
+            if !current.continues(previous, outgoing: isFromMe) { resetDocument() }
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))) {
@@ -3670,7 +3669,7 @@ private struct MessageDocumentAttachmentView: View {
             if let document = try await share.openDocument(item, using: onLoadMedia, demand: demand,
                 isCurrent: isCurrent, didReadSize: { byteCount = $0 }), isCurrent() {
                 if case .contact(let card) = document.content { contactName = card.name }
-                preview = OpenDocument(preview: document, item: item, loader: onLoadMedia)
+                preview = document
             }
         } catch is CancellationError {
             return
