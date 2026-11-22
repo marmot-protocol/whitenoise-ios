@@ -443,8 +443,6 @@ final class ConversationViewModel {
     )
     @ObservationIgnored private var customEmojiAvailability: (generation: Int, reactionArtwork: Int, scope: CustomEmojiScope,
                                                               available: Bool)?
-    // Lazy so its timeline-index closure can capture a fully initialized
-    // store; first touched on the post-start apply/mark paths.
     #if DEBUG
     @ObservationIgnored var fixtureActions: ChatPreviewActions?
     #endif
@@ -461,6 +459,9 @@ final class ConversationViewModel {
         #endif
         return appState?.canUseRuntimeForLocalForegroundWork == true
     }
+
+    // Lazy so its timeline-index closure can capture a fully initialized
+    // store; first touched on the post-start apply/mark paths.
     @ObservationIgnored private lazy var readMarker = ConversationReadMarker(
         groupIdHex: group.groupIdHex,
         appState: readMarkerAppState,

@@ -68,7 +68,7 @@ struct MessageInfoSheet: View {
     private var senderCard: some View {
         HStack(spacing: 12) {
             senderAvatar
-            .frame(width: 48, height: 48)
+                .frame(width: 48, height: 48)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -157,20 +157,13 @@ struct MessageInfoSheet: View {
         .padding(.vertical, 14)
     }
 
-    @ViewBuilder private var senderAvatar: some View {
+    private var senderAvatar: AvatarBubble {
         #if DEBUG
         if let presentedSender {
-            AvatarBubble(seed: record.sender, title: presentedSender.name, pictureImage: presentedSender.image)
-        } else {
-            liveSenderAvatar
+            return AvatarBubble(seed: record.sender, title: presentedSender.name, pictureImage: presentedSender.image)
         }
-        #else
-        liveSenderAvatar
         #endif
-    }
-
-    private var liveSenderAvatar: some View {
-        AvatarBubble(seed: record.sender, title: senderName, pictureURL: appState.avatarURL(forAccountIdHex: record.sender))
+        return AvatarBubble(seed: record.sender, title: senderName, pictureURL: appState.avatarURL(forAccountIdHex: record.sender))
     }
 
     private var senderName: String {
