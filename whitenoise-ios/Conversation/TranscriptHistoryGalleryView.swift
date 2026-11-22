@@ -263,7 +263,7 @@ struct TranscriptHistoryGalleryView: View {
         let selectedID = history.selectedItemID ?? gallery.initialItemID
         let edges = history.pages.extensions(around: gallery.items, excluding: window.messageIDs,
                                              atLiveTail: window.atTail,
-                                             preserving: selectedID)
+                                             preserving: selectedID, heldGIF: openingItem.isGIF ? openingItem : nil)
         guard !edges.older.isEmpty || !edges.newer.isEmpty || history.resumeItemID != nil else { return gallery }
         if !edges.includesWindow { captions.removeAll() }
         var messages = edges.includesWindow ? gallery.messageIdByItemID : [:]

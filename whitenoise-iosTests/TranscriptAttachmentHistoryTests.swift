@@ -128,6 +128,33 @@ struct TranscriptAttachmentHistoryTests {
         }
     }
 
+    @Test func aConfirmedLocalPhotoKeepsItsSelectionWhenOnlyHistoryHoldsIt() throws {
+        let photo = entry("confirmed", slot: 2)
+        let live = try #require(MessageMediaAttachment.displayItems(fromOutcomes: [photo.attachment], ownerId: "msg:temporary",
+            messageId: photo.messageIdHex, sourceMessageId: photo.sourceMessageIdHex).first)
+        let retained = try #require(TranscriptHistorySlot(photo)).attachment
+        #expect(live.id != retained.id)
+        let selected = live.transcriptItem
+        var pages = TranscriptHistoryPages()
+        pages.append([photo])
+        let result = pages.extensions(around: [], excluding: [], preserving: selected.id)
+        #expect(result.older.map(\.attachment.id) == [selected.id])
+        #expect(result.older.first?.target == selected.localTarget)
+    }
+
+    @Test func onlyTheExplicitlyOpenedGIFFollowsTheSelectionIntoHistory() throws {
+        let held = entry("held", mediaType: "image/gif")
+        let selected = try #require(TranscriptHistorySlot(held)).attachment
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("other", mediaType: "image/gif"), held])
+        let result = pages.extensions(around: [], excluding: [], preserving: selected.id, heldGIF: selected)
+        #expect(result.older.map(\.attachment.id) == [selected.id])
+        var replaced = held
+        replaced.sourceMessageIdHex = "changed"
+        let stale = try #require(TranscriptHistorySlot(replaced)).attachment
+        #expect(pages.extensions(around: [], excluding: [], preserving: selected.id, heldGIF: stale).older.isEmpty)
+    }
+
     @Test func waitsForAnExactOverlapBeforeShowingNewerPages() throws {
         let anchor = entry("anchor", slot: 2)
         let window = [try #require(TranscriptHistorySlot(anchor)).attachment]

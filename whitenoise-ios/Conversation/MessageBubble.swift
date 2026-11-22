@@ -3460,6 +3460,7 @@ private struct MessageDocumentAttachmentView: View {
     @Environment(\.actionRowMeasurementKey) private var measurementKey
     @Environment(\.mediaOpenIntent) private var openIntent
     @Environment(\.timelinePreviewSearch) private var transcriptSearch
+    @Environment(\.locale) private var locale
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     let item: MessageMediaAttachment
     let isFromMe: Bool
@@ -3597,7 +3598,7 @@ private struct MessageDocumentAttachmentView: View {
     private var fileDetail: String {
         let type = fileExtension.isEmpty ? MediaAttachmentPolicy.canonicalMediaType(item.mediaType) : fileExtension.uppercased()
         guard let count = item.localData?.count ?? liftedDetails?.size ?? byteCount else { return type }
-        return "\(type) • \(count.formatted(.byteCount(style: .file)))"
+        return "\(type) • \(count.formatted(.byteCount(style: .file).locale(locale)))"
     }
 
     private var fileExtension: String {

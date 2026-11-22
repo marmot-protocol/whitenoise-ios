@@ -272,7 +272,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// Waveform analysis and on-device transcription both need the whole encoded recording.
     static let audioAnalysisByteLimit = 16 * 1024 * 1024
 
-    let id: String
+    private(set) var id: String
     let reference: MediaAttachmentReferenceFfi?
     let fileName: String
     let mediaType: String
@@ -332,6 +332,16 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
 
     var isAudio: Bool {
         MediaAttachmentPolicy.canonicalMediaType(mediaType).hasPrefix("audio/")
+    }
+
+    /// Identifies the same sourced slot in a live row and the native history.
+    /// A confirmed local send can keep its temporary row ID in the live window.
+    var transcriptItem: Self {
+        guard let reference, let messageID = localTarget?.messageIdHex ?? sourceHint?.messageID,
+              let index = localTarget?.attachmentIndex ?? sourceHint?.slot else { return self }
+        var copy = self
+        copy.id = Self.displayItemID(reference: reference, index: index, ownerId: TimelineItem.messageRowId(forMessageIdHex: messageID))
+        return copy
     }
 
     /// A content-hash overlay can display a matching own send on another message.
@@ -406,15 +416,13 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         }
     }
 
+    private static func displayItemID(reference: MediaAttachmentReferenceFfi, index: UInt32, ownerId: String) -> String {
+        [ownerId, reference.plaintextSha256, String(reference.sourceEpoch), String(index)].joined(separator: ":")
+    }
+
     private static func displayItem(reference: MediaAttachmentReferenceFfi, index: UInt32, ownerId: String) -> MessageMediaAttachment {
-        let id = [
-            ownerId,
-            reference.plaintextSha256,
-            String(reference.sourceEpoch),
-            String(index),
-        ].joined(separator: ":")
-        return MessageMediaAttachment(
-            id: id,
+        MessageMediaAttachment(
+            id: displayItemID(reference: reference, index: index, ownerId: ownerId),
             reference: reference,
             fileName: displayFileName(reference.fileName),
             mediaType: reference.mediaType,

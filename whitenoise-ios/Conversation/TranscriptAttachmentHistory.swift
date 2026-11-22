@@ -105,11 +105,13 @@ struct TranscriptHistoryPages {
     /// Extend each edge only once the native cursor has reached that exact slot. In particular, a
     /// recent page cannot appear adjacent to an old search result while intervening pages are missing.
     func extensions(around window: [MessageMediaAttachment],
-                    excluding windowMessages: Set<String>, atLiveTail: Bool = false, preserving selectedID: String? = nil) -> Edges {
+                    excluding windowMessages: Set<String>, atLiveTail: Bool = false, preserving selectedID: String? = nil,
+                    heldGIF: MessageMediaAttachment? = nil) -> Edges {
         let chronological = newestFirst.reversed().flatMap { byMessage[$0] ?? [] }
         // A held GIF can anchor its own window. Other GIFs still play inline.
         func isGalleryPage(_ slot: TranscriptHistorySlot) -> Bool {
-            !windowMessages.contains(slot.target.messageIdHex) && !slot.attachment.isGIF
+            !windowMessages.contains(slot.target.messageIdHex) && (!slot.attachment.isGIF ||
+                (heldGIF?.localTarget == slot.target && heldGIF?.reference == slot.attachment.reference))
         }
         let first = window.first { $0.localTarget != nil }
         let last = window.last { $0.localTarget != nil }

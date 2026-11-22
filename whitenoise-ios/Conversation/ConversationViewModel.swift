@@ -1067,8 +1067,9 @@ final class ConversationViewModel {
                   !(appState?.streamingDebugEnabled == true && MessageSemantics.debugStyle(for: record).isUserVisibleBubble == false),
                   groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row)?.kind != .operation else { continue }
             guard !timelineStore.isHidden(record.messageIdHex), !timelineStore.isBlockedAuthor(record.sender) else { continue }
-            for (index, media) in mediaItems(for: row).enumerated() {
-                guard media.isTranscriptGalleryMedia || (row.id == gifRowID && media.isGIF && media.rejectionKind == nil) else { continue }
+            for (index, attachment) in mediaItems(for: row).enumerated() {
+                guard attachment.isTranscriptGalleryMedia || (row.id == gifRowID && attachment.isGIF && attachment.rejectionKind == nil) else { continue }
+                let media = attachment.transcriptItem
                 guard captions[media.id] == nil else { continue }
                 items.append(media)
                 if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }

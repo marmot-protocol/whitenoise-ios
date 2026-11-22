@@ -716,7 +716,7 @@ struct ConversationView: View {
 
         init(item: MessageMediaAttachment, scope: MessageBubble.MediaOpenScope, initialData: Data?,
              row: TimelineItem, media: [MessageMediaAttachment], gifRowID: String? = nil) {
-            self.item = item
+            self.item = item.transcriptItem
             self.scope = scope
             self.initialData = initialData
             self.gifRowID = gifRowID
@@ -5107,7 +5107,7 @@ struct ConversationView: View {
             return row
         }
         guard let row = currentRow() else { return }
-        if model.mediaItems(for: row).contains(where: { $0.canUseBytesPrepared(for: target.item) }) {
+        if model.mediaItems(for: row).contains(where: { $0.transcriptItem.canUseBytesPrepared(for: target.item) }) {
             transcriptMedia = target
             return
         }
@@ -5119,7 +5119,7 @@ struct ConversationView: View {
             guard let confirmed = await gallery.confirmedSelection(for: pending), mediaOpenIntent.current == intent,
                   let current = currentRow() else { return }
             let slots = model.mediaItems(for: current)
-            guard let visible = slots.first(where: { $0.canUseBytesPrepared(for: confirmed) && $0.localTarget == confirmed.localTarget }) else { return }
+            guard let visible = slots.first(where: { $0.transcriptItem.canUseBytesPrepared(for: confirmed) && $0.localTarget == confirmed.localTarget }) else { return }
             transcriptMedia = TranscriptMediaTarget(item: visible, scope: target.scope, initialData: pending.data, row: current, media: slots)
         }
     }
