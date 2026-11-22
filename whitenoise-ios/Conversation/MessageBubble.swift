@@ -171,8 +171,14 @@ nonisolated enum TranscriptMessagePreview {
         // Signal weights each newline as 16 UTF-8 bytes. Stop at the first
         // exceeded budget, including our existing inline rendering limit.
         var estimate = 0
+        var previousWasCR = false
         for byte in text.utf8 {
-            estimate += byte == 10 ? 16 : 1
+            if byte == 13 || byte == 10 {
+                if byte == 13 || !previousWasCR { estimate += 16 }
+            } else {
+                estimate += 1
+            }
+            previousWasCR = byte == 13
             if estimate > 8192 { return true }
         }
         return exceedsInlineLimit(text)

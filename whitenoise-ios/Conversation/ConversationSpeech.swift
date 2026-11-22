@@ -34,11 +34,11 @@ nonisolated enum MessageSpeechAction: String, Hashable {
 
 nonisolated enum MessageSpeechPresentation {
     static func hasBlankText(_ record: AppMessageRecordFfi) -> Bool {
-        record.plaintext.unicodeScalars.allSatisfy(CharacterSet.whitespacesAndNewlines.contains)
+        !ContentSanitizer.hasNonWhitespaceText(record.plaintext)
     }
 
-    static func voiceAttachment(for record: AppMessageRecordFfi, myAccountID: String?, media: [MessageMediaAttachment]) -> MessageMediaAttachment? {
-        guard !MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountID), hasBlankText(record),
+    static func receivedAudio(for record: AppMessageRecordFfi, myAccountID: String?, media: [MessageMediaAttachment]) -> MessageMediaAttachment? {
+        guard !MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountID),
               media.count == 1, let audio = media.first, audio.kind == .audio, audio.rejectionKind == nil else { return nil }
         return audio
     }
@@ -103,6 +103,16 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     struct Scope: Equatable {
         let route: Route
         let revision: Int
+    }
+
+    struct RetentionCheck: Equatable {
+        let scope: Scope
+        let publication: UUID?
+    }
+
+    private var lastPublication: UUID?
+    func retentionCheck(in scope: Scope) -> RetentionCheck {
+        RetentionCheck(scope: scope, publication: lastPublication)
     }
 
     struct Recording: Equatable {
@@ -228,7 +238,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func transcribe(id: String, recording: Recording, scope: Scope, data: @escaping () async throws -> Data,
-                    revalidate: @escaping (Transcript) async -> Transcript?, onError: @escaping () -> Void) {
+                    isCurrent: @escaping () -> Bool, onError: @escaping () -> Void) {
         guard #available(iOS 26, *), transcription == nil else { return }
         let request = UUID()
         requestID = request
@@ -248,15 +258,21 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
                 try Task.checkCancellation()
                 let text = try await LocalVoiceRecognition.transcript(data: bytes)
                 try Task.checkCancellation()
-                let recognized = Transcript(scope: scope, recording: recording, text: text, verified: false)
-                guard let current = await revalidate(recognized), !Task.isCancelled, requestID == request else { return }
-                transcripts[id] = current
+                guard requestID == request, isCurrent() else { return }
+                stageTranscript(text, id: id, recording: recording, scope: scope)
             } catch is CancellationError {
                 return
             } catch {
                 if !Task.isCancelled, requestID == request { onError() }
             }
         }
+    }
+
+    /// Keep recognized words hidden until a check of their original slot completes.
+    /// Publication wakes the check even if the attachment revision changed during recognition.
+    func stageTranscript(_ text: String, id: String, recording: Recording, scope: Scope) {
+        transcripts[id] = Transcript(scope: scope, recording: recording, text: text, verified: false)
+        lastPublication = UUID()
     }
 
     /// A revised attachment presentation immediately hides derived text. Restore

@@ -1078,7 +1078,7 @@ struct ConversationView: View {
                 longMessageTarget = nil
                 speech.reset()
             }
-            .task(id: speechScope) { await revalidateSpeech(in: speechScope) }
+            .task(id: speech.retentionCheck(in: speechScope)) { await revalidateSpeech(in: speechScope) }
             .sheet(item: $longMessageTarget) { target in
                 NavigationStack {
                     longMessageReader(target)
@@ -4784,8 +4784,10 @@ struct ConversationView: View {
 
     private func voiceAvailabilityRequest(for item: TimelineItem, in model: ConversationViewModel) -> ConversationSpeech.VoiceRequest {
         let audio: MessageMediaAttachment?
-        if case .message(let record, _) = item.kind {
-            audio = voiceAttachment(id: record.messageIdHex, in: model)
+        if case .message(let target, _) = item.kind, let row = speechRow(target.messageIdHex, in: model),
+           case .message(let record, _) = row.kind,
+           MessageSpeechPresentation.hasBlankText(record) || speech.transcripts[record.messageIdHex] != nil {
+            audio = recordingAttachment(id: record.messageIdHex, in: model)
         } else {
             audio = nil
         }
@@ -4803,11 +4805,11 @@ struct ConversationView: View {
     private func retainedRecording(_ recording: ConversationSpeech.Recording, id: String, model: ConversationViewModel,
                                    scope: ConversationSpeech.Scope) async -> Bool? {
         guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
-        guard let media = voiceAttachment(id: id, in: model), recording.matches(media) else { return false }
+        guard let media = recordingAttachment(id: id, in: model), recording.matches(media) else { return false }
         do {
             let source = try await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState)
             guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
-            return source?.target == recording.target && recording.matches(voiceAttachment(id: id, in: model))
+            return source?.target == recording.target && recording.matches(recordingAttachment(id: id, in: model))
         } catch is LocalVoiceAttachment.SizeError {
             return scope == speechScope && viewModel === model && !Task.isCancelled ? false : nil
         } catch {
@@ -4821,14 +4823,14 @@ struct ConversationView: View {
         return model.timeline[index]
     }
 
-    private func voiceAttachment(id: String, in model: ConversationViewModel) -> MessageMediaAttachment? {
+    private func recordingAttachment(id: String, in model: ConversationViewModel) -> MessageMediaAttachment? {
         guard let row = speechRow(id, in: model), case .message(let record, _) = row.kind else { return nil }
-        return MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: model.myAccountId, media: model.mediaItems(for: row))
+        return MessageSpeechPresentation.receivedAudio(for: record, myAccountID: model.myAccountId, media: model.mediaItems(for: row))
     }
 
     private func visibleVoiceTranscript(for record: AppMessageRecordFfi, in model: ConversationViewModel) -> String? {
         guard let transcript = speech.transcripts[record.messageIdHex], transcript.isVerified(in: speechScope), transcript.visible,
-              transcript.recording.matches(voiceAttachment(id: record.messageIdHex, in: model)) else { return nil }
+              transcript.recording.matches(recordingAttachment(id: record.messageIdHex, in: model)) else { return nil }
         return transcript.text
     }
 
@@ -4836,16 +4838,17 @@ struct ConversationView: View {
         let id = target.messageIdHex
         guard self.viewModel === model, let row = speechRow(id, in: model),
               case .message(let record, _) = row.kind else { return [] }
-        if speech.readingID == id { return [.stop] }
         let media = model.mediaItems(for: row)
-        if let audio = MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: model.myAccountId, media: media) {
+        var voiceActions: [MessageSpeechAction] = []
+        if let audio = MessageSpeechPresentation.receivedAudio(for: record, myAccountID: model.myAccountId, media: media) {
             let transcript = speech.transcripts[id]
             let verified = transcript?.isVerified(in: speechScope) == true && transcript?.recording.matches(audio) == true
             let supportsTranscription: Bool = if #available(iOS 26, *) { true } else { false }
-            return MessageSpeechPresentation.voiceActions(isTranscribing: speech.transcribingID == id,
+            voiceActions = MessageSpeechPresentation.voiceActions(isTranscribing: speech.transcribingID == id,
                 transcriptVisible: verified ? transcript?.visible : nil,
-                offersTranscribe: supportsTranscription)
+                offersTranscribe: supportsTranscription && MessageSpeechPresentation.hasBlankText(record))
         }
+        if speech.readingID == id { return [.stop] + voiceActions }
         func standaloneEmoji() -> Bool {
             guard media.isEmpty, model.replyPreview(for: record) == nil else { return false }
             return SingleCustomEmojiMessagePresentation.shortcode(in: record.plaintext, resolvable: model.customEmoji(for: row).shortcodes) != nil
@@ -4857,7 +4860,7 @@ struct ConversationView: View {
             }
         }
         return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId,
-                                                     standaloneEmoji: standaloneEmoji(), hasSpokenText: hasSpokenText())
+                                                     standaloneEmoji: standaloneEmoji(), hasSpokenText: hasSpokenText()) + voiceActions
     }
 
     private func checkVoiceAvailability(for target: AppMessageRecordFfi, in model: ConversationViewModel) async {
@@ -4865,8 +4868,9 @@ struct ConversationView: View {
         speech.checkedVoice = nil
         guard #available(iOS 26, *), self.viewModel === model, let row = speechRow(target.messageIdHex, in: model),
               case .message(let record, _) = row.kind,
-              let audio = voiceAttachment(id: record.messageIdHex, in: model) else { return }
+              let audio = recordingAttachment(id: record.messageIdHex, in: model) else { return }
         let request = voiceAvailabilityRequest(for: row, in: model)
+        guard request.attachmentID != nil else { return }
         func isCurrent() -> Bool {
             !Task.isCancelled && self.viewModel === model && actionsPhase != .returning
                 && actionsTarget?.record.messageIdHex == record.messageIdHex && request == voiceAvailabilityRequest(for: row, in: model)
@@ -4900,7 +4904,7 @@ struct ConversationView: View {
             return
         }
         let recording = ConversationSpeech.Recording(displayID: audio.id, target: source.target)
-        guard recording.matches(voiceAttachment(id: record.messageIdHex, in: model)) else { return }
+        guard recording.matches(recordingAttachment(id: record.messageIdHex, in: model)) else { return }
         speech.checkedVoice = (request, .available(recording, source))
     }
 
@@ -4939,15 +4943,11 @@ struct ConversationView: View {
                 let openingScope = checked.request.scope
                 speech.transcribe(id: id, recording: recording, scope: openingScope, data: {
                     guard self.viewModel === model, speechScope == openingScope,
-                          recording.matches(voiceAttachment(id: id, in: model)) else { throw CancellationError() }
+                          recording.matches(recordingAttachment(id: id, in: model)) else { throw CancellationError() }
                     return try await source.data(in: appState)
-                }, revalidate: { transcript in
-                    let scope = speechScope
-                    guard scope.route == openingScope.route else { return nil }
-                    let held = await retainedRecording(recording, id: id, model: model, scope: scope)
-                    let current = speechScope
-                    guard viewModel === model, recording.matches(voiceAttachment(id: id, in: model)) else { return nil }
-                    return transcript.revalidated(held: current == scope ? held : nil, in: current)
+                }, isCurrent: {
+                    viewModel === model && speechScope.route == openingScope.route
+                        && recording.matches(recordingAttachment(id: id, in: model))
                 }, onError: { appState.present(.warning(L10n.string("Couldn’t transcribe this recording."))) })
             }
         case .transcribing: break
@@ -4959,7 +4959,7 @@ struct ConversationView: View {
             guard let row = speechRow(id, in: model), case .message(let record, _) = row.kind else { return nil }
             return record.plaintext
         }, audioMatches: { id, recording in
-            recording.matches(voiceAttachment(id: id, in: model))
+            recording.matches(recordingAttachment(id: id, in: model))
         })
     }
 
