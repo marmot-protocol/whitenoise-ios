@@ -218,7 +218,7 @@ nonisolated enum TranscriptMessagePreview {
             if character.isNewline { newlines += 1 }
             return newlines <= 15
         }
-        return String(visible).trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(visible)
     }
 
     static func sourceChunk(_ remaining: Substring) -> Substring {
@@ -1286,7 +1286,7 @@ struct MessageBubble: View {
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
             // stream bubbles, pre-markdown history) keep the plain path.
-            let text = AttributedString(snippet.map { $0 + "…" } ?? sanitizedBodyText)
+            let text = AttributedString(snippet.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) + "…" } ?? sanitizedBodyText)
             if actionBodySize != nil {
                 liftedInlineText(text)
             } else {
@@ -1490,7 +1490,8 @@ struct MessageBubble: View {
 
     private func reactionLabel(_ tally: ConversationViewModel.ReactionTally) -> some View {
         HStack(spacing: 2) {
-            CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex, pointSize: 14)
+            CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex,
+                                     pointSize: 14, maximumPointSize: ReactionPillPresentation.height - 2)
                 .font(.system(size: 14, weight: .bold))
             if tally.count > 1 {
                 Text(L10n.formatted("%lld", Int64(tally.count)))
@@ -3054,7 +3055,8 @@ private struct MessageVideoAttachmentView: View {
                 // Metadata can come from identical bytes in another message. Admit this
                 // slot under the Videos preference without decoding the movie again.
                 guard lastRead?.request != request, await onLoadMedia.admitAutomaticAttachment(item) != nil, !Task.isCancelled else { return }
-                lastRead = (request, false)
+                // A local hash overlay can disappear independently of this request.
+                if item.localData == nil { lastRead = (request, false) }
                 return
             }
             let epoch = MessageMediaCache.currentProducerEpoch()
@@ -3063,11 +3065,11 @@ private struct MessageVideoAttachmentView: View {
                 data = try await onLoadMedia.videoPreviewData(for: item)
             } catch AttachmentReadError.previewLimitExceeded(let size) {
                 // An unknown size can become available later. Known oversize files get a poster on playback.
-                if size != nil, !Task.isCancelled { lastRead = (request, true) }
+                if size != nil, item.localData == nil, !Task.isCancelled { lastRead = (request, true) }
                 return
             } catch { return }
             guard !Task.isCancelled else { return }
-            lastRead = (request, false)
+            if item.localData == nil { lastRead = (request, false) }
             guard let url = await onLoadMedia.playbackFileURL(for: item, data: data, producerEpoch: epoch),
                   !Task.isCancelled else { return }
             if needsDuration {

@@ -79,6 +79,19 @@ struct TranscriptMessagePreviewTests {
         #expect(TranscriptMessagePreview.snippet(lines + boundary) == String(lines.dropLast(2)))
     }
 
+    @Test func indentedCodeExcerptKeepsTheCharactersAfterItsIndentation() throws {
+        let indentation = String(repeating: " ", count: 500)
+        let source = indentation + String(repeating: "x", count: 100)
+        let prefix = try #require(TranscriptMessagePreview.snippet(source))
+        let blocks = MarkdownDisplayBlock.excerpt([.codeBlock(AttributedString(source), language: nil)],
+                                                 characterBudget: prefix.count, countingBlockSeparators: true)
+        guard case .codeBlock(let code, _) = blocks.first else {
+            Issue.record("Missing formatted code excerpt")
+            return
+        }
+        #expect(String(code.characters) == indentation + String(repeating: "x", count: 12) + "…")
+    }
+
     @Test func longReaderAccountsForNewlinesAndTheExistingInlineRenderLimit() {
         let text = String(repeating: "🌲", count: 2044)
         #expect(!TranscriptMessagePreview.requiresReader(text + "\n"))

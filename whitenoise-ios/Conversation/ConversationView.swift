@@ -4936,6 +4936,14 @@ struct ConversationView: View {
                               y: layout.groupCenterY + (usesPreviewPosition ? 0 : rowFrame.midY - layout.previewCenterY))
                     .allowsHitTesting(presented)
                 }
+                .onChange(of: proxy.size.width) {
+                    // A held message is anchored to a snapshot of the row and bubble before the lift.
+                    guard actionsTarget?.id == target.id else { return }
+                    actionsTarget = nil
+                    actionsReturnGeometry = nil
+                    cancelActionFrameMeasurement()
+                    resumeComposerFocusAfterActions()
+                }
                 .onChange(of: isExcerpt) { _, needsExcerpt in
                     actionsCrossfadeExcerpt = needsExcerpt
                 }

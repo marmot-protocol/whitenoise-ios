@@ -145,7 +145,7 @@ struct TranscriptAttachmentHistoryTests {
         pages.append([photo])
         let result = pages.extensions(around: [], excluding: [], preserving: selected.id)
         #expect(result.older.map(\.attachment.id) == [selected.id])
-        #expect(result.older.first?.target == selected.localTarget)
+        #expect(result.older.first?.target == live.localTarget)
     }
 
     @Test func theVerifiedGIFStillOpensFromHistoryIfItsOriginalSourceArrivesAfterConfirmation() throws {
