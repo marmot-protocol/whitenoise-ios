@@ -490,7 +490,7 @@ struct AccountSetupTests {
     ) -> AccountSetupDeviceNoticePresentation {
         let packages = publishedAt.enumerated().map { index, publishedAt in
             OnboardingDevicePackageFfi(slotId: "slot-\(index)", keyPackageRefHex: nil, eventIdHex: hex("\(index)"),
-                                       publishedAt: publishedAt, expiresAt: nil, usable: true)
+                                       publishedAt: publishedAt, expiresAt: nil, usable: true, client: nil)
         }
         return AccountSetupDeviceNoticePresentation(
             OnboardingSingleDeviceNoticeFfi(discovery: discovery, otherPackages: packages,
@@ -655,6 +655,37 @@ struct AccountSetupTests {
         await model.drain()
     }
 
+    @Test func onlyDeviceGroupBuildsAcknowledgeTheSingleDeviceStepThemselves() {
+        var value = snapshot()
+        value.steps[0].step = .singleDevice
+        value.steps[0].status = .needsInput
+        value.steps[0].actions = [.continueAnyway]
+        #expect(AccountSetupPolicy.automaticAction(value) == nil)
+        guard case .acknowledge(let revision, _) = AccountSetupPolicy.automaticAction(
+            value, acknowledgesSingleDevice: true
+        ) else {
+            Issue.record("expected an acknowledgement")
+            return
+        }
+        // Bound to the snapshot MDK offered it in.
+        #expect(revision == value.revision)
+        value.steps[0].actions = [.retry]
+        #expect(AccountSetupPolicy.automaticAction(value, acknowledgesSingleDevice: true) == nil)
+    }
+
+    @Test func deviceGroupBuildsHideTheSingleDeviceRowUnlessItNeedsTheUser() {
+        var steps = snapshot().steps
+        steps[0].step = .singleDevice
+        let shown = { (acknowledges: Bool, review: OnboardingStepFfi?) in
+            AccountSetupPresentation.visibleSteps(steps, acknowledgesSingleDevice: acknowledges, reviewStep: review)
+                .contains { $0.step == .singleDevice }
+        }
+        #expect(shown(false, nil))
+        #expect(!shown(true, nil))
+        // An acknowledgement that failed leaves the step to the user.
+        #expect(shown(true, .singleDevice))
+    }
+
     @Test func profileIsNeverAutomaticallySkippedOrPublished() {
         var value = snapshot()
         value.steps[0].step = .profile
@@ -740,6 +771,21 @@ struct AccountSetupTests {
             return proposed
         })
         #expect(approvedRevision == proposed.revision)
+    }
+
+    /// Use Default Relays approves in one tap, unless MDK built the proposal on
+    /// an inconclusive check: then the user reviews it and confirms the risk.
+    @Test(arguments: [false, true])
+    func defaultRelaysStopAtReviewAfterAnInconclusiveCheck(inconclusive: Bool) async throws {
+        var proposed = proposalSnapshot(step: .relays)
+        proposed.proposal?.inconclusive = inconclusive
+        var approved = false
+        let result = try await AccountSetupPublication.publish(step: .relays, propose: { proposed }, approve: { _, _ in
+            approved = true
+            return proposed
+        })
+        #expect(approved == !inconclusive)
+        #expect(result.proposal?.inconclusive == inconclusive)
     }
 
     @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])

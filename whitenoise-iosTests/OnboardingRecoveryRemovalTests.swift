@@ -66,13 +66,20 @@ struct OnboardingRecoveryRemovalTests {
     }
 
     @Test func successfulRecoveryStaysSuccessfulWhenAccountRefreshFails() async throws {
-        let (state, client) = try await makeState()
+        let reads = AccountRefreshReadsStub()
+        let (state, client) = try await makeState(refreshReads: reads)
         try await closing(client) {
             let account = try await makeBrokenAccount(client)
             try await state.refreshAccounts(refreshUnreadSummaries: false)
-            state.beforeAccountRefreshForTesting = { throw URLError(.notConnectedToInternet) }
+            var failedRefreshes = 0
+            reads.beforeListAccounts = {
+                failedRefreshes += 1
+                throw URLError(.notConnectedToInternet)
+            }
 
             try await state.recoverOnboardingSetup(accountID: account.accountIdHex)
+
+            #expect(failedRefreshes == 1)
 
             #expect(state.onboardingRecoveryAccounts.isEmpty)
             #expect(try await !client.onboardingRecoveryRequired(accountRef: account.label))
@@ -130,7 +137,9 @@ struct OnboardingRecoveryRemovalTests {
         }
     }
 
-    private func makeState(existingClient: MarmotClient? = nil) async throws -> (AppState, MarmotClient) {
+    private func makeState(
+        existingClient: MarmotClient? = nil, refreshReads: AccountRefreshReadsStub? = nil
+    ) async throws -> (AppState, MarmotClient) {
         // The scope closes a fresh client even if bootstrap throws before a test's `closing`.
         let client = try existingClient ?? TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot: true)
         let state = AppState.test(
@@ -140,7 +149,8 @@ struct OnboardingRecoveryRemovalTests {
                 authorizationStatusProvider: { .denied },
                 remoteNotificationRegistrar: {}
             ),
-            accountDefaults: IsolatedAccountDefaults.make()
+            accountDefaults: IsolatedAccountDefaults.make(),
+            accountRefreshReads: refreshReads?.reads ?? .live
         )
         state.setAppSceneActive(true)
         await state.bootstrap()

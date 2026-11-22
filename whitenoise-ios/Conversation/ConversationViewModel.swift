@@ -923,6 +923,10 @@ final class ConversationViewModel {
         timelineStore.messageClusterPresentation(for: item)
     }
 
+    func historyImportBoundary(before item: TimelineItem) -> HistoryImportOrigin? {
+        timelineStore.historyImportBoundary(before: item)
+    }
+
     /// All aggregated reaction tallies (full dict). Used by reaction tests.
     var reactions: [String: [ReactionTally]] { timelineStore.reactions }
 
@@ -1644,8 +1648,7 @@ final class ConversationViewModel {
     }
 
     func isMessageMine(_ message: AppMessageRecordFfi) -> Bool {
-        guard let myAccountId, !myAccountId.isEmpty else { return false }
-        return message.sender.caseInsensitiveCompare(myAccountId) == .orderedSame
+        MessageOwnership.isMine(direction: message.direction, sender: message.sender, myAccountId: myAccountId)
     }
 
     static func nextLiveSubscriptionRetryDelay(after delay: UInt64) -> UInt64 {
@@ -2230,7 +2233,8 @@ final class ConversationViewModel {
             retentionSeconds: record.retentionSeconds,
             retentionExpiresAt: record.retentionExpiresAt,
             recordedAt: record.timelineAt,
-            receivedAt: record.receivedAt
+            receivedAt: record.receivedAt,
+            invalidated: record.invalidationStatus != nil
         )
     }
 
@@ -2647,7 +2651,8 @@ final class ConversationViewModel {
             retentionSeconds: r.message.retentionSeconds,
             retentionExpiresAt: r.message.retentionExpiresAt,
             recordedAt: r.message.recordedAt > 0 ? r.message.recordedAt : now,
-            receivedAt: r.message.receivedAt > 0 ? r.message.receivedAt : now
+            receivedAt: r.message.receivedAt > 0 ? r.message.receivedAt : now,
+            invalidated: false
         )
     }
 
@@ -3386,7 +3391,8 @@ final class ConversationViewModel {
         guard MessageEditingPolicy.canEdit(
                 message,
                 isDeleted: isDeleted(message.messageIdHex),
-                canSendMessages: canSendMessages
+                canSendMessages: canSendMessages,
+                myAccountId: myAccountId
               ),
               let outgoing = preparedComposerText(content).flatMap(MessageEditingPolicy.normalizedContent),
               let appState,
@@ -3746,6 +3752,8 @@ final class ConversationViewModel {
                 )
             }
         } catch {
+            // Nothing to remove: the reaction is already gone, as the optimistic change shows.
+            if alreadyMine, case .ReactionNotFound = error as? MarmotKitError { return }
             // Revert the optimistic change.
             if let addedKey { timelineStore.reactionProjections.removeRecord(forKey: addedKey) }
             for removal in removals {

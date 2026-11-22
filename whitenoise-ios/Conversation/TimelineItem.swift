@@ -84,6 +84,8 @@ nonisolated enum MessageClusterProjection {
 
     static func presentations(
         for timeline: [TimelineItem],
+        historyImportBoundaries: [String: HistoryImportOrigin] = [:],
+        myAccountId: String? = nil,
         calendar: Calendar = .autoupdatingCurrent
     ) -> [String: MessageClusterPresentation] {
         struct PreviousMessage {
@@ -106,11 +108,13 @@ nonisolated enum MessageClusterProjection {
                 continue
             }
 
-            let outgoing = record.direction == "sent"
+            let outgoing = MessageOwnership.isMine(
+                direction: record.direction, sender: record.sender, myAccountId: myAccountId
+            )
             let date = Date(timeIntervalSince1970: TimeInterval(item.timestamp))
             let day = calendar.startOfDay(for: date)
             let continuesPrevious: Bool
-            if let previous {
+            if let previous, historyImportBoundaries[item.id] == nil {
                 continuesPrevious = previous.sender == record.sender
                     && previous.outgoing == outgoing
                     && previous.day == day
@@ -144,7 +148,7 @@ nonisolated enum MessageClusterProjection {
 
     private static func isClusterable(_ record: AppMessageRecordFfi) -> Bool {
         switch MessageSemantics.classify(record) {
-        case .chat, .reply, .media, .streamFinal, .poll:
+        case .chat, .reply, .media, .streamFinal, .poll, .unsupportedEvent:
             return true
         case .reaction, .delete, .edit, .agentStreamStart,
              .agentActivity, .agentOperation, .groupSystem, .unknown:

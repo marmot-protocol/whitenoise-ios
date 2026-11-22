@@ -249,7 +249,12 @@ final class TimelineStore {
     @ObservationIgnored let editProjections = ConversationEditProjectionCache()
     @ObservationIgnored private var timelineSignature: [TimelineItemSignature] = []
     @ObservationIgnored private var clusterCalendar: Calendar?
+    @ObservationIgnored private var clusterAccountId: String?
     @ObservationIgnored private var messageClusterPresentations: [String: MessageClusterPresentation] = [:]
+    /// Rows MDK imported from another device or a backup, by message id.
+    @ObservationIgnored private var historyImportOrigins: [String: HistoryImportOrigin] = [:]
+    /// Where imported history gives way to live messages, by timeline item id.
+    @ObservationIgnored private var historyImportBoundaries: [String: HistoryImportOrigin] = [:]
 
     @ObservationIgnored private weak var appState: AppState?
     @ObservationIgnored private let timings: TimelineStoreTimings
@@ -327,8 +332,10 @@ final class TimelineStore {
         let agentStatus: String?
         let agentOperation: String?
         let agentOperationName: String?
+        let invalidated: Bool
 
         init(_ record: AppMessageRecordFfi) {
+            invalidated = record.invalidated
             messageIdHex = record.messageIdHex
             direction = record.direction
             sender = record.sender
@@ -401,6 +408,7 @@ final class TimelineStore {
         let messageIdHex: String
         let targetId: String
         let source: ReplyPreviewSourceSignature
+        var targetUnsupported = false
     }
 
     private struct ReplyPreviewDisplayCacheEntry {
@@ -478,11 +486,20 @@ final class TimelineStore {
 
     func messageClusterPresentation(for item: TimelineItem, calendar: Calendar = .current) -> MessageClusterPresentation {
         _ = timelineProjectionGeneration
-        if clusterCalendar != calendar {
-            messageClusterPresentations = MessageClusterProjection.presentations(for: timeline, calendar: calendar)
+        let accountId = myAccountId
+        if clusterCalendar != calendar || clusterAccountId != accountId {
+            messageClusterPresentations = MessageClusterProjection.presentations(
+                for: timeline, historyImportBoundaries: historyImportBoundaries, myAccountId: accountId, calendar: calendar
+            )
             clusterCalendar = calendar
+            clusterAccountId = accountId
         }
         return messageClusterPresentations[item.id] ?? .none
+    }
+
+    func historyImportBoundary(before item: TimelineItem) -> HistoryImportOrigin? {
+        _ = timelineProjectionGeneration
+        return historyImportBoundaries[item.id]
     }
 
     func markdownDisplayBlocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
@@ -510,6 +527,11 @@ final class TimelineStore {
         }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
             guard !isBlockedAuthor(preview.sender) else { return nil }
+            // A kind 1111 is a comment only with a numeric `k` tag, which the
+            // projected quote doesn't carry: decide from the loaded target.
+            // A deleted target has no tags left; it reads as deleted.
+            let targetUnsupported = preview.kind == MessageSemantics.kindComment && !preview.deleted
+                && messageById[targetId].map { MessageSemantics.classify($0) == .unsupportedEvent } == true
             let key = ReplyPreviewDisplayCacheKey(
                 messageIdHex: record.messageIdHex,
                 targetId: targetId,
@@ -523,21 +545,23 @@ final class TimelineStore {
                     media: preview.media,
                     deleted: preview.deleted,
                     deletionSource: preview.deletionSource
-                )
+                ),
+                targetUnsupported: targetUnsupported
             )
             if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
                 return cached.value
             }
             let name = resolvedAccountDisplayName(preview.sender)
             let isPoll = !preview.deleted && preview.sticker == nil && preview.kind == MessageSemantics.kindPoll
-            let text = ContentSanitizer.compactSingleLine(
-                isPoll ? MessagePreview.pollTitle(question: preview.plaintext) : MessagePreview.body(
-                    preview,
-                    mentionDisplayName: mentionDisplayNameResolver,
-                    systemEventNaming: systemEventNaming
-                ),
-                maxLength: 120
-            ) ?? ""
+            let previewText: String
+            if targetUnsupported {
+                previewText = MessagePreview.unsupportedEventLabel
+            } else if isPoll {
+                previewText = MessagePreview.pollTitle(question: preview.plaintext)
+            } else {
+                previewText = MessagePreview.body(preview, mentionDisplayName: mentionDisplayNameResolver, systemEventNaming: systemEventNaming)
+            }
+            let text = ContentSanitizer.compactSingleLine(previewText, maxLength: 120) ?? ""
             let media = preview.deleted
                 ? nil
                 : MessageMediaAttachment.displayItems(
@@ -988,6 +1012,16 @@ final class TimelineStore {
         claimProjectedLocalSends(in: [record])
         var projectionChanged = false
         let appRecord = ConversationViewModel.appMessageRecord(from: record)
+        if !record.messageIdHex.isEmpty {
+            let origin = HistoryImportOrigin(importedFrom: record.importedFrom, provenance: record.historyImportProvenance)
+            let previous = historyImportOrigins[record.messageIdHex]
+            historyImportOrigins[record.messageIdHex] = origin
+            // A row already shown can change origin without changing its
+            // signature, so move the divider here rather than on the next rebuild.
+            if previous != origin, timelineIndexByMessageId[record.messageIdHex] != nil {
+                rebuildHistoryImportBoundaries()
+            }
+        }
         guard !appRecord.messageIdHex.isEmpty else { return false }
         if record.hasReports { reportedMessageIDs.insert(record.messageIdHex) }
         else { reportedMessageIDs.remove(record.messageIdHex) }
@@ -1106,6 +1140,7 @@ final class TimelineStore {
     @discardableResult
     func removeTimelineRecord(messageIdHex: String, updateTimeline: Bool = true) -> Bool {
         reportedMessageIDs.remove(messageIdHex)
+        historyImportOrigins[messageIdHex] = nil
         let existed = messageById[messageIdHex] != nil
         let affectedEditTargets = editProjections.removeRecord(messageIdHex: messageIdHex)
         messageById[messageIdHex] = nil
@@ -1300,6 +1335,9 @@ final class TimelineStore {
         case .poll:
             // A malformed poll has no projection; the bubble shows the unsupported state.
             return row(record)
+        case .unsupportedEvent:
+            // Another client's kind: a card says something arrived and shows its raw event.
+            return row(record)
         case .groupSystem:
             if preparedOrder != nil,
                groupSystemByMessageId[record.messageIdHex]?.provenance != .authenticatedGroupState {
@@ -1352,7 +1390,7 @@ final class TimelineStore {
         guard timelineSignature != nextSignature else { return false }
         timeline = next
         timelineSignature = nextSignature
-        clusterCalendar = nil
+        rebuildHistoryImportBoundaries()
         return true
     }
 
@@ -1379,8 +1417,13 @@ final class TimelineStore {
         } else {
             timelineSignature = timeline.map(TimelineItemSignature.init)
         }
-        clusterCalendar = nil
+        rebuildHistoryImportBoundaries()
         return true
+    }
+
+    private func rebuildHistoryImportBoundaries() {
+        historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: timeline, origins: historyImportOrigins)
+        clusterCalendar = nil
     }
 
     private static func timelineIndexesByMessageId(
@@ -1636,7 +1679,8 @@ final class TimelineStore {
             retentionSeconds: record.retentionSeconds,
             retentionExpiresAt: record.retentionExpiresAt,
             recordedAt: record.recordedAt,
-            receivedAt: record.receivedAt
+            receivedAt: record.receivedAt,
+            invalidated: false
         )
         if !realId.isEmpty {
             // A confirmed real-id row is still an optimistic local echo until
@@ -1715,7 +1759,13 @@ final class TimelineStore {
         for record: AppMessageRecordFfi,
         invalidated: Bool
     ) -> MessageStatus {
-        guard record.direction == "sent" else { return .received }
+        // Another of this account's devices sent it (live or imported): sent, never pending.
+        guard record.direction == "sent" else {
+            let isMine = MessageOwnership.isMine(
+                direction: record.direction, sender: record.sender, myAccountId: myAccountId
+            )
+            return isMine && !invalidated ? .sent : .received
+        }
         guard !invalidated else { return .failed }
         guard undeliveredOwnMessageIds.contains(record.messageIdHex) else { return .sent }
         return .sending

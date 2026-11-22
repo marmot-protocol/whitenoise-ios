@@ -372,6 +372,8 @@ struct ConversationTimelineProjectionTests {
         #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindChat))
         #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindPoll))
         #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindGroupSystem))
+        // MarmotKit 0.18.0 refuses a read marker on a NIP-22 comment.
+        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindComment))
         #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindReaction))
         #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindDelete))
         #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindEdit))

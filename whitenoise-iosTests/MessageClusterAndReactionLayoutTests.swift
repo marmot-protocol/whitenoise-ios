@@ -134,6 +134,18 @@ struct MessageClusterProjectionTests {
         #expect(!own.reservesIdentityLane && !own.showsAvatar && !own.showsSenderName)
     }
 
+    @Test func ownMessagesFromTwoDevicesShareAnOutgoingCluster() throws {
+        let me = hex("ab")
+        let sent = item(id: "01", sender: me, timestamp: 100, direction: "sent")
+        let linkedDevice = item(id: "02", sender: me, timestamp: 101)
+        let result = MessageClusterProjection.presentations(for: [sent, linkedDevice], myAccountId: me, calendar: calendar)
+        let first = try #require(result[sent.id])
+        let last = try #require(result[linkedDevice.id])
+
+        #expect(!first.endsCluster && !last.startsCluster && last.endsCluster)
+        #expect(!last.reservesIdentityLane && !last.showsSenderName && !last.showsAvatar)
+    }
+
     @Test func visibleUnreadDividerSplitsAnOtherwiseContinuousCluster() throws {
         let timeline = (1...3).map { item(id: "message\($0)", sender: "maya", timestamp: UInt64($0)) }
         let clusters = MessageClusterProjection.presentations(for: timeline, calendar: calendar)

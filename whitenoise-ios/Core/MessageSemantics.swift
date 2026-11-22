@@ -18,6 +18,8 @@ nonisolated enum MessageSemantics {
     static let kindReaction: UInt64 = 7
     static let kindChat: UInt64 = 9
     static let kindEdit: UInt64 = 1009
+    /// A NIP-22 comment, as other clients send thread replies.
+    static let kindComment: UInt64 = 1111
     static let kindPoll: UInt64 = 1068
     static let kindAgentStreamStart: UInt64 = 1200
     static let kindAgentActivity: UInt64 = 1201
@@ -71,7 +73,10 @@ nonisolated enum MessageSemantics {
         case agentOperation
         /// Durable group-system chrome; not a chat bubble.
         case groupSystem
-        /// Anything we don't render as a bubble or index.
+        /// An event of a kind this app doesn't know, such as another client's
+        /// app-defined kind. Shown as a card so the reader knows something arrived.
+        case unsupportedEvent
+        /// A known kind whose tags are malformed; never rendered as a bubble.
         case unknown
     }
 
@@ -119,8 +124,29 @@ nonisolated enum MessageSemantics {
                 return .reply(targetMessageId: target)
             }
             return .chat
+        case kindComment:
+            // Threads are shown one level deep: a comment is a reply to its
+            // parent (the first lowercase `e`), as MDK projects it. Without a
+            // numeric `k` tag it is not a NIP-22 comment, and MDK treats it as
+            // another app's kind.
+            guard isNIP22Comment(tags) else { return .unsupportedEvent }
+            if hasTag(imetaTag, in: tags), let media = mediaAttachments(from: tags) {
+                return .media(media)
+            }
+            if let parent = firstValue(of: eventRefTag, in: tags) {
+                return .reply(targetMessageId: parent)
+            }
+            return .chat
         default:
-            return .unknown
+            return .unsupportedEvent
+        }
+    }
+
+    /// MDK's test for a NIP-22 comment: any `k` tag naming a numeric kind,
+    /// digits only (Swift's parser would also take a sign).
+    private static func isNIP22Comment(_ tags: [MessageTagFfi]) -> Bool {
+        allValues(of: "k", in: tags).contains { value in
+            !value.isEmpty && value.utf8.allSatisfy(isAsciiDigit) && UInt64(value) != nil
         }
     }
 
@@ -132,7 +158,16 @@ nonisolated enum MessageSemantics {
         classify(kind: message.kind, tags: message.tags)
     }
 
+    /// A kind this app has no rendering for at all, such as another client's app-defined kind.
+    /// A reply preview carries no tags, so a comment there reads as one; a
+    /// quote checks its loaded target's tags (`TimelineStore.replyPreview`).
+    static func isUnsupportedEventKind(_ kind: UInt64) -> Bool {
+        kind != kindComment && classify(kind: kind, tags: []) == .unsupportedEvent
+    }
+
     /// Kinds a person sends as their own conversation message: chat and polls.
+    /// MarmotKit 0.18.0 doesn't count NIP-22 comments as chat activity, so
+    /// they can't carry the read marker.
     static func isUserMessageKind(_ kind: UInt64) -> Bool {
         kind == kindChat || kind == kindPoll
     }
