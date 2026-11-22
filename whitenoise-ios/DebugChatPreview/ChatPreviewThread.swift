@@ -12,11 +12,12 @@ nonisolated struct ChatPreviewThread {
     private(set) var firstUnreadIndex: Int?
     private var nextMessageNumber = 1
     private let people: [(String, String)]
-    private let hasLeft: Bool
+    private let currentMemberIDs: [String]
+    private var hasLeft: Bool { !currentMemberIDs.contains(Self.owner) }
 
     var incomingSampleSender: String? {
         guard !hasLeft else { return nil }
-        return people.first { $0.0 != Self.owner }?.0
+        return currentMemberIDs.first { $0 != Self.owner }
     }
 
     let number: Int
@@ -27,15 +28,16 @@ nonisolated struct ChatPreviewThread {
     private(set) var messages: [ConversationMessageFfi] = []
 
     init(_ number: Int, _ title: String, direct: Bool = false, firstUnread: Int? = nil, openingDaysAgo: [Int] = [],
-         people: [(String, String)]? = nil, hasLeft: Bool = false, disappearingMessageSecs: UInt64 = 0, _ lines: [PreviewLine]) {
+         people: [(String, String)]? = nil, formerMembers: Set<String> = [], disappearingMessageSecs: UInt64 = 0, _ lines: [PreviewLine]) {
         let groupID = String(format: "%064x", number)
         self.number = number
         id = groupID
         self.title = title
         self.isDirect = direct
-        self.hasLeft = hasLeft
         self.disappearingMessageSecs = disappearingMessageSecs
         self.people = people ?? Array(Self.members.prefix(direct ? 2 : 3))
+        let memberIDs = direct ? [Self.owner, Self.peer] : self.people.map(\.0)
+        currentMemberIDs = memberIDs.filter { !formerMembers.contains($0) }
         firstUnreadIndex = firstUnread
         let interval = firstUnread == nil ? 40 : 1_800
         let now = Self.catalogTime
@@ -154,7 +156,7 @@ nonisolated struct ChatPreviewThread {
                 avatar: .placeholder(stableSeed: key, source: .peerFallback), hasCachedProfile: true, avatarAsset: nil)
         }
         return .init(revision: .init(generation: id, sequence: 1),
-            header: .init(selected: presentation, memberCount: isDirect ? 2 : UInt64(identities.count - (hasLeft ? 1 : 0)), archived: false, epoch: 1,
+            header: .init(selected: presentation, memberCount: UInt64(currentMemberIDs.count), archived: false, epoch: 1,
                 lifecycle: .stable, disbanding: false, unrecoverable: false,
                 capabilities: .init(participation: hasLeft ? .left : .active, isSelfAdmin: false, isLastAdmin: false, canSend: !hasLeft,
                     canInvite: false, canEditGroup: false, canLeave: false, requiresSelfDemoteBeforeLeave: false,

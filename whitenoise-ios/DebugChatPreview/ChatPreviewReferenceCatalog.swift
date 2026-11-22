@@ -250,7 +250,7 @@ extension ChatPreviewThread {
 
     private static var referenceEvents: Self {
         let start = referenceNow - 40_000
-        return Self(31, "Group - Events Only", people: referencePeople, [
+        return Self(31, "Group - Events Only", people: referencePeople, formerMembers: [elias], [
             .init("Maya Chen added Elias Moreno", .groupEvent("member_added", subject: elias), at: start),
             .init("Elias Moreno was made an admin", .groupEvent("admin_added", subject: elias), at: start + 60),
             .init("Elias Moreno left", .groupEvent("member_left", subject: elias), by: elias, at: start + 120),
@@ -259,7 +259,7 @@ extension ChatPreviewThread {
 
     private static var referenceLeftGroup: Self {
         let start = referenceNow - 3_600
-        return Self(32, "Group - Left", people: [(owner, "Marmota"), (peer, "Maya Chen"), (elias, "Elias Moreno")], hasLeft: true, [
+        return Self(32, "Group - Left", people: [(owner, "Marmota"), (peer, "Maya Chen"), (elias, "Elias Moreno")], formerMembers: [owner], [
             .init("Maya Chen added you", .groupEvent("member_added", subject: owner), at: start + 60),
             .init("STATE-03: Group history remains readable after leaving.", at: start + 180),
             .init("You left the group.", .groupEvent("member_left", subject: owner), by: owner, at: start + 300),
@@ -294,7 +294,7 @@ extension ChatPreviewThread {
         let earlyHistory = referenceNow - 120 * 86_400
         let yesterday = referenceNow - 86_400
         let today = referenceNow - 7_200
-        return Self(34, "Weekend Walks", people: referencePeople + [(referenceLeo, "Leo Martins")], [
+        return Self(34, "Weekend Walks", people: referencePeople + [(referenceLeo, "Leo Martins")], formerMembers: [referenceLeo], [
             .init("Thanks for setting this up.", at: old + 180),
             .init("That photo is from our first riverside route.", at: earlyHistory + 360),
             .init("I still like that path best.", at: earlyHistory + 420),
