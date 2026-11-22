@@ -16,22 +16,16 @@ nonisolated struct MediaViewerControlState: Equatable {
     let hasPreparedMedia: Bool
     let hasForwardingContext: Bool
     let hasSourceMessage: Bool
-    let hasBundledShareFile: Bool
 
-    init(hasPreparedMedia: Bool, hasForwardingContext: Bool, hasSourceMessage: Bool = false, hasBundledShareFile: Bool = false) {
+    init(hasPreparedMedia: Bool, hasForwardingContext: Bool, hasSourceMessage: Bool = false) {
         self.hasPreparedMedia = hasPreparedMedia
         self.hasForwardingContext = hasForwardingContext
         self.hasSourceMessage = hasSourceMessage
-        self.hasBundledShareFile = hasBundledShareFile
     }
 
     var canSave: Bool { hasPreparedMedia }
 
-    var canShare: Bool { hasPreparedMedia || hasBundledShareFile }
-
-    func canShareFromTranscript(hasHistoryControls: Bool) -> Bool {
-        hasBundledShareFile || (hasHistoryControls && hasPreparedMedia)
-    }
+    var canShare: Bool { hasPreparedMedia }
 
     var canForward: Bool { hasPreparedMedia && hasForwardingContext }
 

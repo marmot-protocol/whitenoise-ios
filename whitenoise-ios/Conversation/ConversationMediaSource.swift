@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import MarmotKit
 
@@ -15,3 +16,4 @@ protocol ConversationMediaSource: AnyObject {
 }
 
 extension ConversationMediaDownloader: ConversationMediaSource {}
+#endif

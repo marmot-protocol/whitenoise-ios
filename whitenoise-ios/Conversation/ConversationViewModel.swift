@@ -290,10 +290,7 @@ final class ConversationViewModel {
     private(set) var openingTargetUnavailable = false
     private(set) var initialWindowUnreadMessageId: String?
     private(set) var conversationWindow: ConversationWindowSnapshotFfi?
-    private var windowSubscription: (any ConversationWindowFeed)?
-    typealias ProjectionClientResolver = @MainActor (AppState) throws -> any ConversationProjectionClient
-    @ObservationIgnored private let projectionClient: ProjectionClientResolver
-    @ObservationIgnored private let canReadLocalWindow: @MainActor (AppState) -> Bool
+    private var windowSubscription: ActiveConversationWindow?
     @ObservationIgnored private var windowCursor: ProjectionSequenceCursor?
     @ObservationIgnored private var windowLifetime = UUID()
     private var startRequest = UUID()
@@ -312,7 +309,14 @@ final class ConversationViewModel {
     @ObservationIgnored var windowDidChange: (() -> Void)?
     private(set) var windowIdentities: [String: ConversationIdentityFfi] = [:]
     private(set) var windowReactions: [String: ConversationReactionsFfi] = [:]
-    @ObservationIgnored private let mediaDownloader: any ConversationMediaSource
+    #if DEBUG
+    @ObservationIgnored private lazy var mediaDownloader: any ConversationMediaSource = {
+        if fixtureActions != nil { return ChatPreviewMedia() }
+        return ConversationMediaDownloader()
+    }()
+    #else
+    @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
+    #endif
     /// Captures no view model: a fetch can outlast the conversation's screen.
     @ObservationIgnored private lazy var mediaPrefetcher = ConversationMediaPrefetcher {
         [mediaDownloader, groupIdHex = group.groupIdHex, weak appState] media in
@@ -444,10 +448,22 @@ final class ConversationViewModel {
     #if DEBUG
     @ObservationIgnored var fixtureActions: ChatPreviewActions?
     #endif
-    private let marksMessagesRead: Bool
+    private var readMarkerAppState: AppState? {
+        #if DEBUG
+        if fixtureActions != nil { return nil }
+        #endif
+        return appState
+    }
+
+    private var canReadLocalWindow: Bool {
+        #if DEBUG
+        if fixtureActions != nil { return true }
+        #endif
+        return appState?.canUseRuntimeForLocalForegroundWork == true
+    }
     @ObservationIgnored private lazy var readMarker = ConversationReadMarker(
         groupIdHex: group.groupIdHex,
-        appState: marksMessagesRead ? appState : nil,
+        appState: readMarkerAppState,
         timelineIndex: { [weak timelineStore] messageIdHex in
             timelineStore?.timelineIndex(forMessageIdHex: messageIdHex)
         },
@@ -1166,11 +1182,7 @@ final class ConversationViewModel {
         timelineTimings: TimelineStoreTimings? = nil,
         composerMarmotCalls: ComposerMarmotCalls = .live,
         inviteDeclineCalls: InviteDeclineCalls = .live,
-        groupCalls: ConversationGroupCalls = .live,
-        projectionClient: @escaping ProjectionClientResolver = { try $0.currentMarmotClient() },
-        canReadLocalWindow: @escaping @MainActor (AppState) -> Bool = { $0.canUseRuntimeForLocalForegroundWork },
-        marksMessagesRead: Bool = true,
-        mediaSource: (any ConversationMediaSource)? = nil
+        groupCalls: ConversationGroupCalls = .live
     ) {
         self.appState = appState
         self.moderationAccountRef = appState.activeAccountRef
@@ -1184,10 +1196,6 @@ final class ConversationViewModel {
         self.durableRetryOperations = durableRetryOperations
         self.inviteDeclineCalls = inviteDeclineCalls
         self.groupCalls = groupCalls
-        self.projectionClient = projectionClient
-        self.canReadLocalWindow = canReadLocalWindow
-        self.marksMessagesRead = marksMessagesRead
-        self.mediaDownloader = mediaSource ?? ConversationMediaDownloader()
         let hiddenMessageIds = appState.activeAccountRef.map {
             MessageHideStore.hiddenMessageIds(accountRef: $0, groupIdHex: group.groupIdHex)
         } ?? []
@@ -1238,7 +1246,7 @@ final class ConversationViewModel {
         guard !isLocallyReset, let appState,
               let accountRef = appState.activeAccountRef
         else { return }
-        let canLoadLocalSnapshot = canReadLocalWindow(appState)
+        let canLoadLocalSnapshot = canReadLocalWindow
         let canStartLiveWork = appState.canUseRuntimeForForegroundWork
         let startDecision = ConversationRuntimeStartDecision.evaluate(
             canLoadLocalSnapshot: canLoadLocalSnapshot,
@@ -1765,9 +1773,10 @@ final class ConversationViewModel {
     }
 
     private func startLiveTimeline(accountRef: String) {
-        guard let appState, canReadLocalWindow(appState) else { return }
-        let resolveProjectionClient = projectionClient
-        let canReadLocalWindow = self.canReadLocalWindow
+        guard let appState, canReadLocalWindow else { return }
+        #if DEBUG
+        let fixtureWindows = fixtureActions?.windows
+        #endif
         let groupIdHex = group.groupIdHex
         let lifetime = windowLifetime
         timelineTask = Task { [weak self, weak appState] in
@@ -1782,11 +1791,18 @@ final class ConversationViewModel {
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
             while !Task.isCancelled {
                 do {
-                    guard let appState, canReadLocalWindow(appState),
+                    guard let appState, self?.canReadLocalWindow == true,
                           appState.activeAccountRef == accountRef else { return }
-                    let client = try resolveProjectionClient(appState)
+                    #if DEBUG
+                    let client: any ConversationProjectionClient
+                    if let fixtureWindows { client = fixtureWindows }
+                    else { client = try appState.currentMarmotClient() }
+                    let openWindow = client.openConversationWindowFeed
+                    #else
+                    let openWindow = try appState.currentMarmotClient().openConversationWindow
+                    #endif
                     openTiming = .some(appState.productAnalytics.beginTiming())
-                    let window: any ConversationWindowFeed
+                    let window: ActiveConversationWindow
                     var targetUnavailable = false
                     do {
                         let target: String?
@@ -1795,12 +1811,10 @@ final class ConversationViewModel {
                             else { target = nil }
                         } else { target = self?.openingMessageId }
                         let mode: ConversationOpenModeFfi = target != nil ? .message : (self?.conversationWindow == nil ? .automatic : .latest)
-                        window = try await client.openConversationWindowFeed(accountRef: accountRef, groupIdHex: groupIdHex,
-                            mode: mode, messageIdHex: target)
+                        window = try await openWindow(accountRef, groupIdHex, mode, target)
                     } catch MarmotKitError.ConversationWindowMessageNotRetained {
                         targetUnavailable = true
-                        window = try await client.openConversationWindowFeed(accountRef: accountRef, groupIdHex: groupIdHex,
-                                                                            mode: .latest, messageIdHex: nil)
+                        window = try await openWindow(accountRef, groupIdHex, .latest, nil)
                     }
                     guard !Task.isCancelled, self?.windowLifetime == lifetime,
                           appState.activeAccountRef == accountRef else {
@@ -1841,7 +1855,7 @@ final class ConversationViewModel {
                             guard let snapshot = next else { break }
                             guard !Task.isCancelled, self?.windowLifetime == lifetime,
                                   appState.activeAccountRef == accountRef,
-                                  canReadLocalWindow(appState) else { break }
+                                  self?.canReadLocalWindow == true else { break }
                             self?.acceptConversationWindow(snapshot, from: window)
                             retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
                         }
@@ -1870,7 +1884,7 @@ final class ConversationViewModel {
         }
     }
 
-    private func acceptConversationWindow(_ snapshot: ConversationWindowSnapshotFfi, from window: any ConversationWindowFeed) {
+    private func acceptConversationWindow(_ snapshot: ConversationWindowSnapshotFfi, from window: ActiveConversationWindow) {
         guard windowSubscription === window,
               windowCursor?.accept(generation: snapshot.revision.generation, sequence: snapshot.revision.sequence) == true else { return }
         if let previous = conversationWindow, previous.revision.generation == snapshot.revision.generation {

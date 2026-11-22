@@ -1565,6 +1565,7 @@ struct ConversationView: View {
     @ViewBuilder private var messageSheetContent: some View {
         #if DEBUG
         if let fixture {
+            // Sample chats reuse the transcript with their own header, menu and screen lifecycle.
             timeline
                 .compatibleTopSafeAreaBar {
                     if viewModel?.search.isActive == true {
@@ -2709,13 +2710,6 @@ struct ConversationView: View {
             for: interactionsEnabled ? viewModel.markdownDisplayBlocks(for: item) : nil,
             appState: appState
         )
-    }
-
-    private func allowsAutomaticMediaLoad(_ type: MediaAutoDownloadType) -> Bool {
-        #if DEBUG
-        if previewsTimeline { return true } // All fixture bytes are in the app bundle.
-        #endif
-        return MediaAutoDownloadStore.shared.shouldAutoDownload(type)
     }
 
     private func clusterPresentation(for item: TimelineItem, model: ConversationViewModel) -> MessageClusterPresentation {
@@ -5180,7 +5174,7 @@ struct ConversationView: View {
 
     private func mediaLoader(for viewModel: ConversationViewModel, documentRowID: String? = nil) -> ConversationMediaLoader {
         let opening = MessageBubble.MediaOpenScope(viewModel, appState: appState)
-        let loader = ConversationMediaLoader(allowsAutomaticLoad: allowsAutomaticMediaLoad) { media in
+        let loader = ConversationMediaLoader { media in
             try await viewModel.data(for: media)
         } openHandoff: { media, control in
             try await viewModel.openHandoff(for: media, control: control)

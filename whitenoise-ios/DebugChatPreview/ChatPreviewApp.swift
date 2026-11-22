@@ -116,11 +116,9 @@ private struct ChatPreviewDestination: View {
                 group.disappearingMessageSecs = thread.disappearingMessageSecs
             }
             let model = ConversationViewModel(appState: session.state, group: group,
-                initialTitle: item.title, initialOtherMember: item.directPeerAccountIdHex,
-                projectionClient: { _ in windows }, canReadLocalWindow: { _ in true },
-                marksMessagesRead: false, mediaSource: ChatPreviewMedia())
-            model.stickerAssets = ChatPreviewStickers.store()
+                initialTitle: item.title, initialOtherMember: item.directPeerAccountIdHex)
             model.fixtureActions = actions
+            model.stickerAssets = ChatPreviewStickers.store()
             self.model = model
         }
     }

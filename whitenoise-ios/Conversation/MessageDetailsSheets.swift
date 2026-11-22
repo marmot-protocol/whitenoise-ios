@@ -31,7 +31,9 @@ struct MessageInfoSheet: View {
     let record: AppMessageRecordFfi
     let status: MessageStatus
     var conversation: ConversationViewModel?
+    #if DEBUG
     var presentedSender: (name: String, image: UIImage?)? = nil
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -65,12 +67,7 @@ struct MessageInfoSheet: View {
 
     private var senderCard: some View {
         HStack(spacing: 12) {
-            AvatarBubble(
-                seed: record.sender,
-                title: senderName,
-                pictureURL: presentedSender == nil ? appState.avatarURL(forAccountIdHex: record.sender) : nil,
-                pictureImage: presentedSender?.image
-            )
+            senderAvatar
             .frame(width: 48, height: 48)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -160,8 +157,27 @@ struct MessageInfoSheet: View {
         .padding(.vertical, 14)
     }
 
+    @ViewBuilder private var senderAvatar: some View {
+        #if DEBUG
+        if let presentedSender {
+            AvatarBubble(seed: record.sender, title: presentedSender.name, pictureImage: presentedSender.image)
+        } else {
+            liveSenderAvatar
+        }
+        #else
+        liveSenderAvatar
+        #endif
+    }
+
+    private var liveSenderAvatar: some View {
+        AvatarBubble(seed: record.sender, title: senderName, pictureURL: appState.avatarURL(forAccountIdHex: record.sender))
+    }
+
     private var senderName: String {
-        presentedSender?.name ?? appState.displayName(forAccountIdHex: record.sender)
+        #if DEBUG
+        if let presentedSender { return presentedSender.name }
+        #endif
+        return appState.displayName(forAccountIdHex: record.sender)
     }
 
     private var isFromMe: Bool {

@@ -1,5 +1,7 @@
 import MarmotKit
 
+#if DEBUG
+
 /// The retained window consumed by the conversation, including viewport commands.
 nonisolated protocol ConversationWindowFeed: AnyObject, Sendable {
     func snapshot() -> ConversationWindowSnapshotFfi?
@@ -32,3 +34,8 @@ extension MarmotClient: ConversationProjectionClient {
                                          mode: mode, messageIdHex: messageIdHex)
     }
 }
+
+typealias ActiveConversationWindow = any ConversationWindowFeed
+#else
+typealias ActiveConversationWindow = ConversationWindowSubscription
+#endif

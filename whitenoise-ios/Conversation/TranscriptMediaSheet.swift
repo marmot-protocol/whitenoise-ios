@@ -15,6 +15,7 @@ struct TranscriptMediaSheet<Page: View>: View {
     let isZoomed: Bool
     let showsChrome: Bool
     let controls: MediaViewerControlState
+    let canShare: Bool
     let onClose: () -> Void
     let onSave: () -> Void
     let onShare: () -> Void
@@ -81,7 +82,7 @@ struct TranscriptMediaSheet<Page: View>: View {
                             }
                             HStack {
                                 MessageMediaGalleryButton(title: "Share", systemImage: "square.and.arrow.up", action: onShare)
-                                    .disabled(!controls.canShareFromTranscript(hasHistoryControls: history != nil))
+                                    .disabled(!canShare)
                                 Spacer()
                                 MessageMediaGalleryButton(title: "Forward", systemImage: "arrowshape.turn.up.right", action: { verified(onForward) })
                                     .disabled(history == nil || !controls.canForward)

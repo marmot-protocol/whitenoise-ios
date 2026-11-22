@@ -37,7 +37,7 @@ enum ConversationWindowCommand: Equatable {
     case jump(String)
     case page(ConversationPageDirectionFfi)
 
-    func execute(on window: any ConversationWindowFeed, revision: ConversationWindowRevisionFfi) async throws -> ConversationWindowSnapshotFfi {
+    func execute(on window: ActiveConversationWindow, revision: ConversationWindowRevisionFfi) async throws -> ConversationWindowSnapshotFfi {
         switch self {
         case .anchor(let id): return try await window.setVisibleAnchor(revision: revision, messageIdHex: id, timeoutMs: 0)
         case .latest: return try await window.returnToLatest(revision: revision, timeoutMs: 0)

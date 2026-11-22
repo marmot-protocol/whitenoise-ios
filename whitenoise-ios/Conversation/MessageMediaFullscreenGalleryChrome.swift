@@ -3,6 +3,7 @@ import SwiftUI
 struct MessageMediaFullscreenGalleryChrome: View {
     let pageCountLabel: String?
     let controlState: MediaViewerControlState
+    let canShare: Bool
     let onClose: () -> Void
     let onSave: () -> Void
     let onShare: () -> Void
@@ -43,7 +44,7 @@ struct MessageMediaFullscreenGalleryChrome: View {
                     systemImage: "square.and.arrow.up",
                     action: onShare
                 )
-                .disabled(!controlState.canShare)
+                .disabled(!canShare)
 
                 Spacer(minLength: 0)
 
@@ -126,6 +127,7 @@ private struct MessageMediaGalleryMoreMenu: View {
             hasForwardingContext: true,
             hasSourceMessage: true
         ),
+        canShare: true,
         onClose: {},
         onSave: {},
         onShare: {},
@@ -139,6 +141,7 @@ private struct MessageMediaGalleryMoreMenu: View {
     MessageMediaFullscreenGalleryChrome(
         pageCountLabel: nil,
         controlState: MediaViewerControlState(hasPreparedMedia: false, hasForwardingContext: false),
+        canShare: false,
         onClose: {},
         onSave: {},
         onShare: {},

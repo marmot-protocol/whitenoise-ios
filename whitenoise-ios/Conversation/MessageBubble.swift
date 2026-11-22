@@ -76,13 +76,16 @@ final class ConversationMediaLoader {
     var bundledFile: ((MessageMediaAttachment) -> URL?)?
     #endif
 
-    let allowsAutomaticLoad: @MainActor (MediaAutoDownloadType) -> Bool
+    func allowsAutomaticLoad(_ type: MediaAutoDownloadType) -> Bool {
+        #if DEBUG
+        if bundledFile != nil { return true }
+        #endif
+        return MediaAutoDownloadStore.shared.shouldAutoDownload(type)
+    }
 
-    init(allowsAutomaticLoad: @escaping @MainActor (MediaAutoDownloadType) -> Bool = { MediaAutoDownloadStore.shared.shouldAutoDownload($0) },
-         _ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil,
+    init(_ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil,
          canShareDocument: @escaping @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool = { _, _ in true },
          automaticAttachmentByteCount: @escaping (MessageMediaAttachment) async -> Int? = { $0.localData?.count }) {
-        self.allowsAutomaticLoad = allowsAutomaticLoad
         self.load = load
         self.openHandoff = openHandoff
         self.canShareDocument = canShareDocument
@@ -4071,7 +4074,7 @@ struct MessageMediaFullscreenGalleryView: View {
         Group {
             if gallery.transcriptCaptions != nil {
                 TranscriptMediaSheet(gallery: gallery, selection: Binding(get: { selectedItemID }, set: select),
-                    isZoomed: zoomedItemID != nil, showsChrome: chrome.isVisible, controls: controlState,
+                    isZoomed: zoomedItemID != nil, showsChrome: chrome.isVisible, controls: controlState, canShare: canShareSelection,
                     onClose: onDismiss, onSave: saveSelectedMedia, onShare: shareSelectedMedia,
                     onForward: { forwardMedia = currentPreparedMedia }, onGoToMessage: goToSelectedMessage,
                     page: page)
@@ -4204,7 +4207,7 @@ struct MessageMediaFullscreenGalleryView: View {
             if chrome.isVisible {
                 MessageMediaFullscreenGalleryChrome(
                     pageCountLabel: gallery.items.count > 1 ? pageCountLabel : nil,
-                    controlState: controlState,
+                    controlState: controlState, canShare: canShareSelection,
                     onClose: onDismiss,
                     onSave: saveSelectedMedia,
                     onShare: shareSelectedMedia,
@@ -4236,11 +4239,17 @@ struct MessageMediaFullscreenGalleryView: View {
     }
     #endif
 
+    private var canShareSelection: Bool {
+        #if DEBUG
+        if isChatFixture { return bundledShareURL != nil }
+        #endif
+        return controlState.canShare && (gallery.transcriptCaptions == nil || transcriptHistory != nil)
+    }
+
     private var controlState: MediaViewerControlState {
         #if DEBUG
         if isChatFixture {
-            return .init(hasPreparedMedia: false, hasForwardingContext: false, hasSourceMessage: sourceMessageIdHex != nil,
-                         hasBundledShareFile: bundledShareURL != nil)
+            return .init(hasPreparedMedia: false, hasForwardingContext: false, hasSourceMessage: sourceMessageIdHex != nil)
         }
         #endif
         return MediaViewerControlState(
