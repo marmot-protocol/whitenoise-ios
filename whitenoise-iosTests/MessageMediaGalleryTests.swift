@@ -12,9 +12,10 @@ import Synchronization
 struct MessageMediaGalleryTests {
 
     @Test func tappingAVideoInChatPlaysItAndSwipingWaitsForAnotherPlayTap() {
-        final class TestPlayer: AVPlayer, @unchecked Sendable {
-            var plays = 0
-            override func play() { plays += 1 }
+        nonisolated final class TestPlayer: AVPlayer {
+            let playCount = Mutex(0)
+            var plays: Int { playCount.withLock { $0 } }
+            override func play() { playCount.withLock { $0 += 1 } }
             override func pause() {}
         }
         let player = TestPlayer()
@@ -37,6 +38,24 @@ struct MessageMediaGalleryTests {
         let restored = TranscriptMediaSelection(openingID: selection.selectedID)
         MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: restored.demand(for: restored.selectedID, allowsOpeningDemand: false))
         #expect(player.plays == 2)
+
+        var outgoing = TranscriptMediaSelection(openingID: "draft")
+        let pending = PendingVideoPlayback()
+        pending.request(.explicit)
+        outgoing.confirm("confirmed slot", resumeVideo: pending.wantsPlayback == true)
+        let confirmedDemand = outgoing.demand(for: outgoing.selectedID, allowsOpeningDemand: true)
+        #expect(confirmedDemand == .automatic)
+        MessageMediaFullscreenGalleryPresentation.prepareVideo(player, demand: confirmedDemand,
+            resumeConfirmed: outgoing.resumingVideoID == outgoing.selectedID)
+        #expect(player.plays == 3)
+        outgoing.select("another video")
+        outgoing.select("confirmed slot")
+        #expect(outgoing.resumingVideoID == nil)
+
+        let paused = AVPlayer()
+        pending.observe(paused)
+        pending.detach(paused)
+        #expect(pending.wantsPlayback == false)
     }
 
     @Test func confirmedPhotoMustMatchTheSelectedDraftsRowSlotAndBytes() async throws {
