@@ -1803,7 +1803,7 @@ struct ConversationView: View {
                     dismissRequest: composerDismissRequest,
                     onInputFocusChange: { isComposerInputFocused = $0 },
                     mentionCandidates: mentionCandidates,
-                    submissionEnabled: editSubmissionEnabled && (editSession != nil || composerHasSavedDraft),
+                    submissionEnabled: composerSubmissionEnabled,
                     submissionAccessibilityLabel: editSession == nil
                         ? L10n.string("Send")
                         : L10n.string("Save edit"),
@@ -3453,6 +3453,14 @@ struct ConversationView: View {
 
     private func refreshComposerTextOverage() {
         composerTextOverage = OutgoingSendSizePolicy.textOverage(viewModel?.preparedComposerText(draft))
+    }
+
+    private var composerSubmissionEnabled: Bool {
+        #if DEBUG
+        // Sample messages stay in the in-memory feed and have no persisted draft to hydrate.
+        if previewsTimeline { return true }
+        #endif
+        return editSubmissionEnabled && (editSession != nil || composerHasSavedDraft)
     }
 
     private var editSubmissionEnabled: Bool {
