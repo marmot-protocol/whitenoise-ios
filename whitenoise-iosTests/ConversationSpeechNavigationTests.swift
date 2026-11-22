@@ -102,6 +102,42 @@ struct ConversationSpeechNavigationTests {
         #expect(speech.transcribingID == nil)
     }
 
+    @Test func anOlderLookupCannotHideWordsThatTheMenuJustVerified() async {
+        let speech = ConversationSpeech()
+        let scope = ConversationSpeech.Scope(route: .init(groupID: "chat", modelID: nil, account: "me", runtimeGeneration: 1), revision: 4)
+        let recording = ConversationSpeech.Recording(displayID: "audio", target: .init(
+            messageIdHex: "message", sourceMessageIdHex: "original", attachmentIndex: 0))
+        speech.stageTranscript("Meet at six", id: "message", recording: recording, scope: scope)
+        await speech.revalidate(in: scope) { id, recording in
+            speech.updateRetention(true, id: id, recording: recording, scope: scope)
+            return nil
+        }
+        #expect(speech.transcripts["message"]?.display(in: scope) == .text("Meet at six"))
+        #expect(speech.transcribingID == nil)
+    }
+
+    @Test(arguments: [true, false])
+    func aDefinitiveLookupStillAppliesAfterAnInconclusiveMenuCheck(held: Bool) async {
+        let speech = ConversationSpeech()
+        let route = ConversationSpeech.Route(groupID: "chat", modelID: nil, account: "me", runtimeGeneration: 1)
+        let original = ConversationSpeech.Scope(route: route, revision: 1)
+        let revised = ConversationSpeech.Scope(route: route, revision: 2)
+        let recording = ConversationSpeech.Recording(displayID: "audio", target: .init(
+            messageIdHex: "message", sourceMessageIdHex: "original", attachmentIndex: 0))
+        speech.stageTranscript("Gate 12", id: "message", recording: recording, scope: original)
+        speech.updateRetention(true, id: "message", recording: recording, scope: original)
+        await speech.revalidate(in: revised) { id, recording in
+            speech.updateRetention(nil, id: id, recording: recording, scope: revised)
+            #expect(speech.transcripts[id]?.display(in: revised) == .checkFailed)
+            return held
+        }
+        if held {
+            #expect(speech.transcripts["message"]?.display(in: revised) == .text("Gate 12"))
+        } else {
+            #expect(speech.transcripts["message"] == nil)
+        }
+    }
+
     @Test func uncertainRetentionHidesTextAndOnlyConfirmedAbsenceDiscardsIt() throws {
         let route = ConversationSpeech.Route(groupID: "chat", modelID: nil, account: "me", runtimeGeneration: 1)
         let original = ConversationSpeech.Scope(route: route, revision: 4)
@@ -110,10 +146,11 @@ struct ConversationSpeechNavigationTests {
             messageIdHex: "message", sourceMessageIdHex: "original", attachmentIndex: 0))
         let transcript = ConversationSpeech.Transcript(scope: original, recording: recording, text: "Meet at six")
         let uncertain = try #require(transcript.revalidated(held: nil, in: revised))
-        #expect(!uncertain.isVerified(in: revised))
+        #expect(transcript.display(in: revised) == nil)
+        #expect(uncertain.display(in: revised) == .checkFailed)
         let restored = try #require(uncertain.revalidated(held: true, in: revised))
         #expect(restored.isVerified(in: revised))
-        #expect(restored.text == transcript.text)
+        #expect(restored.display(in: revised) == .text("Meet at six"))
         #expect(restored.revalidated(held: false, in: revised) == nil)
     }
 
