@@ -568,7 +568,7 @@ struct MessageBubble: View {
         if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
             // Beyond the formatter's budget, read the authored source in viewport-sized batches.
             LongMessageSourceText(text: record.plaintext)
-                .id(record.plaintext)
+                .id(Data(record.plaintext.utf8))
         } else {
             messageBodyContent(snippet: nil)
         }
@@ -856,7 +856,9 @@ struct MessageBubble: View {
     }
 
     private var textBubble: some View {
-        let fitsQuote = replyPreview != nil && showsStandardBody && sharedLocation == nil && linkPreviewURL == nil
+        let location = showsStandardBody ? sharedLocation : nil
+        let previewURL = showsStandardBody && location == nil ? linkPreviewURL : nil
+        let fitsQuote = replyPreview != nil && showsStandardBody && location == nil && previewURL == nil
         return MessageTextBubbleLayout(fitsQuote: fitsQuote, widensForReactions: widensTextForReactions) {
             VStack(alignment: .leading, spacing: 0) {
                 if let debugStyle {
@@ -872,14 +874,14 @@ struct MessageBubble: View {
                         .padding(.vertical, density.metrics.bubbleVerticalInset)
                     if let debugStyle { debugTagsFooter(debugStyle) }
                 } else if showsStandardBody {
-                    if let sharedLocation {
-                        sharedLocationBody(sharedLocation)
+                    if let location {
+                        sharedLocationBody(location)
                     } else {
-                        if let linkPreviewURL {
-                            LinkPreviewCard(url: linkPreviewURL, isFromMe: isFromMe) {
-                                _ = handleMessageLink(linkPreviewURL)
+                        if let previewURL {
+                            LinkPreviewCard(url: previewURL, isFromMe: isFromMe) {
+                                _ = handleMessageLink(previewURL)
                             }
-                            .id(linkPreviewURL)
+                            .id(previewURL)
                         }
                         messageBodyText(hasReply: replyPreview != nil)
                     }
@@ -1312,10 +1314,11 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var bubbleMetadataRow: some View {
-        if status == .failed, !isDeleted, let onFailedTap {
+        if let notice = MessageFailureNotice(status: status, isDeleted: isDeleted, isEdited: isEdited,
+                                            hasReports: hasReports, action: onFailedTap) {
             VStack(alignment: .trailing, spacing: 0) {
                 if showsReactionStrip { reactionMetadata(showsTimestamp: false) }
-                failedNotice(action: onFailedTap)
+                failedNotice(notice)
             }
         } else if !showsReactionStrip {
             if showsMetadataFooter {
@@ -1326,9 +1329,9 @@ struct MessageBubble: View {
         }
     }
 
-    private func failedNotice(action: @escaping () -> Void) -> some View {
+    private func failedNotice(_ notice: MessageFailureNotice) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Button(action: action) {
+            Button(action: notice.action) {
                 MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: .failed, isFromMe: true)
                     .multilineTextAlignment(.trailing)
             }
@@ -1336,7 +1339,7 @@ struct MessageBubble: View {
             .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
                 showMessageActions?(.failureNotice)
             })
-            if isEdited || hasReports {
+            if notice.showsTimestamp {
                 MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
                     showsDeliveryStatus: false, hasReports: hasReports,
                     onViewEditHistory: onViewEditHistory)

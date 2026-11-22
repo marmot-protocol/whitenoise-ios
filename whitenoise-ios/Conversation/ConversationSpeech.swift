@@ -43,14 +43,13 @@ nonisolated enum MessageSpeechPresentation {
         return audio
     }
 
-    static func textActions(for record: AppMessageRecordFfi, myAccountID: String?, isReading: Bool, standaloneEmoji: @autoclosure () -> Bool,
+    static func textActions(for record: AppMessageRecordFfi, myAccountID: String?, standaloneEmoji: @autoclosure () -> Bool,
                             hasSpokenText: @autoclosure () -> Bool) -> [MessageSpeechAction] {
         guard !MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountID), !hasBlankText(record) else { return [] }
         switch MessageSemantics.classify(record) {
         case .chat, .reply, .media, .streamFinal:
             guard SharedLocationText.location(from: record.plaintext) == nil,
                   RemoteGiphyMedia.parse(wireText: record.plaintext) == nil else { return [] }
-            if isReading { return [.stop] }
             return !standaloneEmoji() && hasSpokenText() ? [.read] : []
         default: return []
         }
@@ -73,12 +72,23 @@ struct ConversationSpeechSession<Route: Equatable>: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(speech)
-            .onDisappear { speech.reset() }
+            .background { SpeechSessionLifetime(speech: speech).frame(width: 0, height: 0) }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { speech.reset() }
             }
             .onChange(of: route) { speech.reset() }
     }
+}
+
+/// A full-screen cover can hide the stack without removing it. End speech
+/// when SwiftUI dismantles the stack, including while a detail covers the chat.
+private struct SpeechSessionLifetime: UIViewRepresentable {
+    let speech: ConversationSpeech
+
+    func makeCoordinator() -> ConversationSpeech { speech }
+    func makeUIView(context: Context) -> UIView { UIView(frame: .zero) }
+    func updateUIView(_ view: UIView, context: Context) {}
+    static func dismantleUIView(_ view: UIView, coordinator: ConversationSpeech) { coordinator.reset() }
 }
 
 @Observable @MainActor
@@ -124,7 +134,8 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    private(set) var readingID: String?
+    private var reading: (id: String, sourceText: String)?
+    var readingID: String? { reading?.id }
     private(set) var readingProgress = 0.0
     private(set) var transcribingID: String?
     private(set) var transcripts: [String: Transcript] = [:]
@@ -149,16 +160,16 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     @ObservationIgnored private var transcription: Task<Void, Never>?
     @ObservationIgnored private var requestID: UUID?
 
-    func read(markdown: String, id: String, onEmpty: @escaping () -> Void) {
+    func read(markdown: String, id: String, sourceText: String, onEmpty: @escaping () -> Void) {
         stopReading()
-        readingID = id
+        reading = (id, sourceText)
         readingPreparation = Task { [weak self] in
             guard !Task.isCancelled else { return }
             let prepared = await Self.prepareReading(markdown)
             guard !Task.isCancelled, let self else { return }
             readingPreparation = nil
             guard prepared.length > 0 else {
-                readingID = nil
+                reading = nil
                 onEmpty()
                 return
             }
@@ -187,7 +198,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer?.stopSpeaking(at: .immediate)
         synthesizer = nil
         activeUtterance = nil
-        readingID = nil
+        reading = nil
         readingProgress = 0
     }
 
@@ -216,8 +227,8 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    func transcribe(id: String, recording: Recording, data: @escaping () async throws -> Data,
-                    verifiedScope: @escaping () async -> Scope?, onError: @escaping () -> Void) {
+    func transcribe(id: String, recording: Recording, scope: Scope, data: @escaping () async throws -> Data,
+                    revalidate: @escaping (Transcript) async -> Transcript?, onError: @escaping () -> Void) {
         guard #available(iOS 26, *), transcription == nil else { return }
         let request = UUID()
         requestID = request
@@ -237,8 +248,9 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
                 try Task.checkCancellation()
                 let text = try await LocalVoiceRecognition.transcript(data: bytes)
                 try Task.checkCancellation()
-                guard let scope = await verifiedScope(), !Task.isCancelled, requestID == request else { return }
-                transcripts[id] = Transcript(scope: scope, recording: recording, text: text)
+                let recognized = Transcript(scope: scope, recording: recording, text: text, verified: false)
+                guard let current = await revalidate(recognized), !Task.isCancelled, requestID == request else { return }
+                transcripts[id] = current
             } catch is CancellationError {
                 return
             } catch {
@@ -273,8 +285,8 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         transcripts[id]?.visible = visible
     }
 
-    func prune(visibleMessage: (String) -> Bool, audioMatches: (String, Recording) -> Bool) {
-        if let readingID, !visibleMessage(readingID) { stopReading() }
+    func prune(currentText: (String) -> String?, audioMatches: (String, Recording) -> Bool) {
+        if let reading, currentText(reading.id) != reading.sourceText { stopReading() }
         if let transcribingID, let transcribingRecording, !audioMatches(transcribingID, transcribingRecording) { cancelTranscription() }
         let removed = transcripts.compactMap { id, value in audioMatches(id, value.recording) ? nil : id }
         for id in removed { transcripts.removeValue(forKey: id) }

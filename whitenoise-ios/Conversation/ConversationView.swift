@@ -1100,7 +1100,10 @@ struct ConversationView: View {
             .onChange(of: AttachmentPresentationState.shared.revision) { _, _ in
                 viewModel?.search.refreshAfterTimelineChange()
             }
-            .onChange(of: speechScope.route) { speech.reset() }
+            .onChange(of: speechScope.route) {
+                longMessageTarget = nil
+                speech.reset()
+            }
             .task(id: speechScope) { await revalidateSpeech(in: speechScope) }
             .sheet(item: $longMessageTarget) { target in
                 NavigationStack {
@@ -2699,7 +2702,7 @@ struct ConversationView: View {
             cluster.reservesIdentityLane = false
             cluster.showsAvatar = false
         }
-        let selectionInset = record.direction == "sent" ? Self.selectionIndicatorSize : Self.receivedSelectionInset
+        let selectionInset = viewModel.isMessageMine(record) ? Self.selectionIndicatorSize : Self.receivedSelectionInset
         let incompleteMarkdown = viewModel.timelineStore.markdownProjections.isTruncated(for: item)
         let mediaScope = MessageBubble.MediaOpenScope(viewModel, appState: appState)
         let mediaItems = viewModel.mediaItems(for: item)
@@ -4707,8 +4710,9 @@ struct ConversationView: View {
                 let actionMenuHeight = MessageActionsPresentation.visibleActionHeight(
                     actionCount: actionCount, containerHeight: proxy.size.height, showsReactions: canInteract
                 )
-                let alignsTrailing = messageActionsAlignTrailing(record: target.record)
-                let bubbleEdge = alignsTrailing ? bubbleGlobalFrame.maxX : bubbleGlobalFrame.minX
+                let outgoing = viewModel.isMessageMine(target.record)
+                let alignsRight = layoutDirection == .leftToRight ? outgoing : !outgoing
+                let bubbleEdge = alignsRight ? bubbleGlobalFrame.maxX : bubbleGlobalFrame.minX
                 let liftedEdge = bubbleEdge - containerGlobalFrame.minX
                 let layout = MessageActionsOverlayLayout.resolve(
                     sourceFrame: sourceFrame,
@@ -4740,7 +4744,7 @@ struct ConversationView: View {
                 )
                 let surfaceWidth = canInteract ? max(MessageActionsPresentation.menuWidth, reactionWidth) : MessageActionsPresentation.menuWidth
                 let menuCenterX = MessageActionsPresentation.menuCenterX(
-                    bubbleEdge: liftedEdge, alignsRight: alignsTrailing,
+                    bubbleEdge: liftedEdge, alignsRight: alignsRight,
                     surfaceWidth: surfaceWidth, containerWidth: proxy.size.width)
                 ZStack {
                     Rectangle()
@@ -4787,7 +4791,7 @@ struct ConversationView: View {
                         status: target.status,
                         rowId: rowId,
                         previewHeight: layout.previewHeight, bubbleWidth: bubbleGlobalFrame.width,
-                        alignsTrailing: target.record.direction == "sent",
+                        alignsTrailing: outgoing,
                         surfaceWidth: surfaceWidth,
                         maximumActionHeight: actionMenuHeight, onOpenGIF: openGIF,
                         viewModel: viewModel
@@ -4882,6 +4886,7 @@ struct ConversationView: View {
         let id = target.messageIdHex
         guard self.viewModel === model, let row = speechRow(id, in: model),
               case .message(let record, _) = row.kind else { return [] }
+        if speech.readingID == id { return [.stop] }
         let media = model.mediaItems(for: row)
         if let audio = MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: model.myAccountId, media: media) {
             let transcript = speech.transcripts[id]
@@ -4901,7 +4906,7 @@ struct ConversationView: View {
                 block.textFields(includeCodeLanguage: false).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             }
         }
-        return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId, isReading: speech.readingID == id,
+        return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId,
                                                      standaloneEmoji: standaloneEmoji(), hasSpokenText: hasSpokenText())
     }
 
@@ -4965,7 +4970,7 @@ struct ConversationView: View {
         dismissActions(resumingComposerFocus: true)
         switch action {
         case .read:
-            speech.read(markdown: model.copyBody(of: current), id: id) {
+            speech.read(markdown: model.copyBody(of: current), id: id, sourceText: current.plaintext) {
                 appState.present(.warning(L10n.string("This message has no text to read aloud.")))
             }
         case .stop: speech.stopReading()
@@ -4982,15 +4987,17 @@ struct ConversationView: View {
                 appState.present(.warning(reason))
             case .available(let recording, let source):
                 let openingScope = checked.request.scope
-                speech.transcribe(id: id, recording: recording, data: {
+                speech.transcribe(id: id, recording: recording, scope: openingScope, data: {
                     guard self.viewModel === model, speechScope == openingScope,
                           recording.matches(voiceAttachment(id: id, in: model)) else { throw CancellationError() }
                     return try await source.data(in: appState)
-                }, verifiedScope: {
+                }, revalidate: { transcript in
                     let scope = speechScope
-                    guard scope.route == openingScope.route,
-                          await retainedRecording(recording, id: id, model: model, scope: scope) == true else { return nil }
-                    return scope
+                    guard scope.route == openingScope.route else { return nil }
+                    let held = await retainedRecording(recording, id: id, model: model, scope: scope)
+                    let current = speechScope
+                    guard viewModel === model, recording.matches(voiceAttachment(id: id, in: model)) else { return nil }
+                    return transcript.revalidated(held: current == scope ? held : nil, in: current)
                 }, onError: { appState.present(.warning(L10n.string("Couldn’t transcribe this recording."))) })
             }
         case .transcribing: break
@@ -4998,7 +5005,10 @@ struct ConversationView: View {
     }
 
     private func pruneSpeech(in model: ConversationViewModel) {
-        speech.prune(visibleMessage: { speechRow($0, in: model) != nil }, audioMatches: { id, recording in
+        speech.prune(currentText: { id in
+            guard let row = speechRow(id, in: model), case .message(let record, _) = row.kind else { return nil }
+            return record.plaintext
+        }, audioMatches: { id, recording in
             recording.matches(voiceAttachment(id: id, in: model))
         })
     }
@@ -5140,14 +5150,6 @@ struct ConversationView: View {
         } admitAutomaticAttachment: { media in
             await viewModel.admitAutomaticAttachment(for: media)
         }
-    }
-
-    private func messageActionsAlignTrailing(record: AppMessageRecordFfi) -> Bool {
-        let outgoing = MessageOwnership.isMine(
-            direction: record.direction, sender: record.sender,
-            myAccountId: appState.activeAccount?.accountIdHex
-        )
-        return layoutDirection == .leftToRight ? outgoing : !outgoing
     }
 
     private func actionsMenu(
