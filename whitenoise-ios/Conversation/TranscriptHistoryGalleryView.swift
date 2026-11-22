@@ -269,7 +269,7 @@ struct TranscriptHistoryGalleryView: View {
         var messages = edges.includesWindow ? gallery.messageIdByItemID : [:]
         func include(_ slot: TranscriptHistorySlot) -> MessageMediaAttachment? {
             guard slot.isVisible(in: conversation.timelineStore), captions[slot.attachment.id] == nil else { return nil }
-            let name = conversation.gallerySenderName(slot.sender, outgoing: conversation.myAccountId == slot.sender)
+            let name = conversation.gallerySenderName(slot.sender)
             captions[slot.attachment.id] = .init(sender: name, date: Date(timeIntervalSince1970: TimeInterval(slot.timestamp)))
             messages[slot.attachment.id] = slot.target.messageIdHex
             return slot.attachment

@@ -1043,8 +1043,8 @@ final class ConversationViewModel {
     }
 
     /// Window and retained pages share this cache-only caption. Opening the gallery never requests a profile.
-    func gallerySenderName(_ sender: String, outgoing: Bool) -> String {
-        if outgoing { return L10n.string("You") }
+    func gallerySenderName(_ sender: String, direction: String = "received") -> String {
+        if MessageOwnership.isMine(direction: direction, sender: sender, myAccountId: myAccountId) { return L10n.string("You") }
         let name = windowIdentities[sender]?.displayName ?? appState?.cachedKnownDisplayName(forAccountIdHex: sender)
         return IdentityPresentation.resolve(accountIdHex: sender, knownName: name).text
     }
@@ -1072,7 +1072,7 @@ final class ConversationViewModel {
                 guard captions[media.id] == nil else { continue }
                 items.append(media)
                 if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }
-                captions[media.id] = .init(sender: gallerySenderName(record.sender, outgoing: record.direction == "sent"),
+                captions[media.id] = .init(sender: gallerySenderName(record.sender, direction: record.direction),
                     date: Date(timeIntervalSince1970: TimeInterval(row.timestamp)),
                     outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
             }
