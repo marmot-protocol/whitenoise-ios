@@ -3485,25 +3485,6 @@ private struct MessageDocumentAttachmentView: View {
     let onLoadMedia: ConversationMediaLoader
 
     @Environment(\.scenePhase) private var scenePhase
-    private struct DocumentSource: Equatable {
-        let id: String
-        let reference: MediaAttachmentReferenceFfi?
-        let source: AttachmentHandoffSource
-
-        init(_ item: MessageMediaAttachment) {
-            id = item.id
-            reference = item.reference
-            source = AttachmentHandoffSource(item)
-        }
-
-        func continues(_ previous: Self, outgoing: Bool) -> Bool {
-            guard id == previous.id, reference == previous.reference else { return false }
-            if outgoing, reference != nil, previous.source == .none { return true }
-            if case .hint = previous.source, case .target(let target) = source { return previous.source.matches(target) }
-            return false
-        }
-    }
-
     @State private var preview: MessageDocumentPreview?
     @State private var openingID: UUID?
     @State private var openingTask: Task<Void, Never>?
@@ -3607,7 +3588,7 @@ private struct MessageDocumentAttachmentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { cancelDocumentOpen() }
         }
-        .onChange(of: DocumentSource(item)) { previous, current in
+        .onChange(of: DocumentPreviewSource(item)) { previous, current in
             if !current.continues(previous, outgoing: isFromMe) { resetDocument() }
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,

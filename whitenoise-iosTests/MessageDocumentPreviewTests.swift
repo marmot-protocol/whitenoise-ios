@@ -1,4 +1,5 @@
 import Foundation
+import MarmotKit
 import PDFKit
 import Testing
 import UIKit
@@ -6,6 +7,19 @@ import UIKit
 
 @MainActor
 struct MessageDocumentPreviewTests {
+    @Test func anOpenDocumentSurvivesSendConfirmationAndClosesWhenTheKnownSourceIsReplaced() throws {
+        let reference = MediaAttachmentReferenceFfi(locators: [], ciphertextSha256: "", plaintextSha256: "report",
+            nonceHex: "", fileName: "Report.pdf", mediaType: "application/pdf", version: .v1, sourceEpoch: 1, dim: nil, thumbhash: nil)
+        var item = try #require(MessageMediaAttachment.displayItems(from: [reference], ownerId: "outgoing").first)
+        let pending = DocumentPreviewSource(item)
+        item.localTarget = .init(messageIdHex: "message", sourceMessageIdHex: "first", attachmentIndex: 0)
+        let confirmed = DocumentPreviewSource(item)
+        #expect(confirmed.continues(pending, outgoing: true))
+        #expect(!confirmed.continues(pending, outgoing: false))
+        item.localTarget?.sourceMessageIdHex = "replacement"
+        #expect(!DocumentPreviewSource(item).continues(confirmed, outgoing: true))
+    }
+
     @Test func pdfPreviewAcceptsAnUnencryptedDocumentAndRejectsAnEncryptedOne() async throws {
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 120, height: 120))
         let pdf = renderer.pdfData { context in context.beginPage() }

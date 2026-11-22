@@ -3,6 +3,26 @@ import MarmotKit
 import PDFKit
 import SwiftUI
 
+nonisolated struct DocumentPreviewSource: Equatable {
+    let id: String
+    let reference: MediaAttachmentReferenceFfi?
+    let source: AttachmentHandoffSource
+
+    init(_ item: MessageMediaAttachment) {
+        id = item.id
+        reference = item.reference
+        source = AttachmentHandoffSource(item)
+    }
+
+    func continues(_ previous: Self, outgoing: Bool) -> Bool {
+        guard id == previous.id, reference == previous.reference else { return false }
+        if source == previous.source { return true }
+        if outgoing, reference != nil, previous.source == .none { return true }
+        if case .hint = previous.source, case .target(let target) = source { return previous.source.matches(target) }
+        return false
+    }
+}
+
 nonisolated enum DocumentPreviewFormat {
     case pdf, text, contact
 
