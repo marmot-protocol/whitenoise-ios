@@ -654,6 +654,48 @@ struct ConversationDraftStoreTests {
 }
 
 @MainActor
+@Suite(.serialized, .marmotRuntimeConcurrencyLimit)
+struct ConversationDraftStoreBindingTests {
+    /// MDK keeps what a save leaves out, so an attachment removed from the
+    /// composer must leave the saved draft, while the others stay.
+    @Test func anAttachmentRemovedInTheComposerLeavesTheSavedDraft() async throws {
+        try await withTestClient { client in
+            let defaults = try #require(UserDefaults(suiteName: "DraftRemovalTests.\(UUID())"))
+            let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+            let state = AppState.test(client: client, conversationDraftStore: store,
+                accountDefaults: defaults, erasureDefaults: defaults)
+            state.setPhase(.ready)
+            let watchdog = MarmotFixtureWatchdog.start("Draft removal did not complete", breaking: client)
+            defer { watchdog.cancel() }
+            try await client.startRuntime()
+            let account = try await client.marmot.createIdentityWithProfile(
+                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
+            ).account
+            let groupIdHex = try await client.createGroupWithOptionsDetailed(accountRef: account.label, name: "Drafts",
+                memberRefs: [], options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0))
+                .requireCreated().groupIdHex
+            let kept = MediaDraftAttachment(fileName: "kept.txt", mediaType: "text/plain", data: Data("kept".utf8), dim: nil)
+            let removed = MediaDraftAttachment(fileName: "removed.txt", mediaType: "text/plain", data: Data("gone".utf8), dim: nil)
+            @MainActor func save(_ attachments: [MediaDraftAttachment]) async {
+                store.setDraft(ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil,
+                                                         mediaAttachments: attachments),
+                               accountRef: account.label, groupIdHex: groupIdHex)
+                await store.flush()
+            }
+            func savedIDs() async throws -> [String]? {
+                try await client.selectedMessageDraft(accountRef: account.label, groupIdHex: groupIdHex)
+                    .draft?.mediaAttachments.map(\.id)
+            }
+
+            await save([kept, removed])
+            #expect(try await savedIDs() == [kept.id.uuidString, removed.id.uuidString])
+            await save([kept])
+            #expect(try await savedIDs() == [kept.id.uuidString])
+        }
+    }
+}
+
+@MainActor
 private final class DraftPersistenceProbe: ConversationDraftPersistence {
     private var drafts: [ConversationDraftKey: MessageDraftFfi] = [:]
     private(set) var summaryLoadCount = 0

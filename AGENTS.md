@@ -235,13 +235,15 @@ an inline draft attachment's bytes on each save, so one over `maxDraftAttachment
 goes into the draft as a file: `ConversationDraftStore.stageLargeAttachments` has
 MDK copy it in (`stageMessageDraftAttachmentFile`, one write at a time per draft),
 and saves keep it by id (`saveMessageDraftInputsIfRevision`, `.retained`), never
-inline. A reopened draft reads it back in chunks into a mapped private copy. Until
+inline. Since MarmotKit 0.19.0 a save keeps every attachment it doesn't name, so
+one the user removed from the composer is sent as `.removed`
+(`MessageDraftAttachmentInputs.inputs(removingUnnamed:)`); never list kept ids. A reopened draft reads it back in chunks into a mapped private copy. Until
 the copy lands, or if it fails, the attachment is left out of saves and its message
 sends without a draft revision, as before: no recovery copy, and a failed send stays
 in its bubble. From a draft send's tap until it claims its revision, composer edits are only
-recorded (a save would drop its files), and a claimed revision that doesn't hold exactly
+recorded (a save would move the revision it claims), and a claimed revision that doesn't hold exactly
 its attachments fails the send. A composer that hasn't received its
-saved draft writes with `keepsSavedFiles`, so its saves keep every attachment the draft holds, inline or file; its
+saved draft writes with `keepsSavedFiles`, so its saves remove nothing and MDK keeps every attachment the draft holds; its
 read holds the draft's write slot and returns an earlier edit with the saved
 attachments, and once a read fails its writes stop keeping them. Until it has the draft, the
 composer may be typed in but sends nothing and takes no attachments. The read waits
