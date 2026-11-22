@@ -103,7 +103,8 @@ struct ConversationSpeechNavigationTests {
     }
 
     @available(iOS 26, *)
-    @Test func poppingPastAnOpenDetailClearsTheChatsSpeechSession() async throws {
+    @Test(arguments: [false, true])
+    func leavingTheChatClearsSpeechEvenWhenADetailCoversIt(removingStack: Bool) async throws {
         let model = SpeechStackHarness.Model()
         let host = UIHostingController(rootView: SpeechStackHarness(model: model))
         try await withHostedWindow(host) { window in
@@ -133,7 +134,11 @@ struct ConversationSpeechNavigationTests {
             try await settleLayout(window) { model.visible }
             #expect(model.visible == "details")
             #expect(model.speech.transcribingID == "voice-note")
-            model.path = []
+            if removingStack {
+                model.showsStack = false
+            } else {
+                model.path = []
+            }
             try await settleLayout(window) { model.speech.transcribingID == nil }
             try await cancelled.wait()
             #expect(model.speech.transcribingID == nil)
@@ -144,6 +149,7 @@ struct ConversationSpeechNavigationTests {
 private struct SpeechStackHarness: View {
     @Observable @MainActor final class Model {
         var path: [ChatsListView.ChatNavigationTarget] = []
+        var showsStack = true
         var showsDetails = false
         var showsMedia = false
         let coverOpened = TestLatch()
@@ -154,6 +160,10 @@ private struct SpeechStackHarness: View {
     @Bindable var model: Model
 
     var body: some View {
+        if model.showsStack { stack }
+    }
+
+    private var stack: some View {
         NavigationStack(path: $model.path) {
             Text("Chats")
                 .navigationDestination(for: ChatsListView.ChatNavigationTarget.self) { target in
