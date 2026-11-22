@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
@@ -77,6 +78,23 @@ struct TranscriptAttachmentHistoryTests {
         #expect(connected.older.map(\.target.messageIdHex) == ["selected", "newer"])
     }
 
+    @Test func theOppositeWindowEdgeCannotDisconnectASelectedOlderPhoto() throws {
+        let selected = entry("older"), latest = entry("latest"), late = entry("late")
+        let selectedID = try #require(TranscriptHistorySlot(selected)).attachment.id
+        let window = try [late, latest].map { try #require(TranscriptHistorySlot($0)).attachment }
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("after"), latest, selected])
+        let disconnected = pages.extensions(around: window, excluding: ["late", "latest"], preserving: selectedID)
+        #expect(!disconnected.includesWindow)
+        #expect(disconnected.older.map(\.attachment.id) == [selectedID])
+        var refreshed = TranscriptHistoryPages()
+        refreshed.append([entry("after"), latest, late, selected])
+        let connected = refreshed.extensions(around: window, excluding: ["late", "latest"], preserving: selectedID)
+        #expect(connected.includesWindow)
+        #expect(connected.older.map(\.attachment.id) == [selectedID])
+        #expect(connected.newer.map(\.target.messageIdHex) == ["after"])
+    }
+
     @Test func refreshingNewerPhotosKeepsTheSelectedOlderPhotoAcrossPageBoundaries() throws {
         let anchor = entry("visible")
         let window = [try #require(TranscriptHistorySlot(anchor)).attachment]
@@ -109,6 +127,59 @@ struct TranscriptAttachmentHistoryTests {
                 #expect(edges.newer.map(\.target.messageIdHex) == ["newer"])
             }
         }
+    }
+
+    @Test func aConfirmedLocalPhotoKeepsItsSelectionWhenOnlyHistoryHoldsIt() throws {
+        let photo = entry("confirmed", slot: 2)
+        let live = try #require(MessageMediaAttachment.displayItems(fromOutcomes: [photo.attachment], ownerId: "msg:temporary",
+            messageId: photo.messageIdHex, sourceMessageId: photo.sourceMessageIdHex).first)
+        let retained = try #require(TranscriptHistorySlot(photo)).attachment
+        #expect(live.id != retained.id)
+        let unsourced = try #require(MessageMediaAttachment.displayItems(fromOutcomes: [photo.attachment], ownerId: "msg:temporary",
+            messageId: photo.messageIdHex, sourceMessageId: nil).first)
+        let selected = unsourced.transcriptItem(in: photo.messageIdHex)
+        #expect(selected.localTarget == nil)
+        #expect(selected.sourceHint == nil)
+        #expect(live.transcriptItem(in: photo.messageIdHex).canUseBytesPrepared(for: selected))
+        var pages = TranscriptHistoryPages()
+        pages.append([photo])
+        let result = pages.extensions(around: [], excluding: [], preserving: selected.id)
+        #expect(result.older.map(\.attachment.id) == [selected.id])
+        #expect(result.older.first?.target == selected.localTarget)
+    }
+
+    @Test func theVerifiedGIFStillOpensFromHistoryIfItsOriginalSourceArrivesAfterConfirmation() throws {
+        let held = entry("held", mediaType: "image/gif")
+        let sourced = try #require(TranscriptHistorySlot(held)).attachment
+        var intermediate = sourced
+        intermediate.localTarget = nil
+        let draft = MediaDraftAttachment(fileName: "draft.gif", mediaType: "image/gif", data: Data([1]), dim: nil).displayItem
+        let slot = MessageMediaGallery.OutgoingSlot(rowID: "msg:temporary", index: 0)
+        let pending = MessageMediaGallery.PendingSelection(id: draft.id, slot: slot, data: Data([1]))
+        func gallery(_ item: MessageMediaAttachment) throws -> MessageMediaGallery {
+            try #require(MessageMediaGallery(transcriptItems: [item], openingID: item.id, initialData: nil,
+                messages: [item.id: "held"], captions: [item.id: .init(sender: "You", date: .now, outgoingSlot: slot)]))
+        }
+        var heldGIF = TranscriptHeldGIF()
+        heldGIF.didSelect(intermediate.id, in: try gallery(intermediate), opening: draft, pending: pending)
+        heldGIF.updateSource(in: try gallery(sourced), opening: draft)
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("other", mediaType: "image/gif"), held])
+        let result = pages.extensions(around: [], excluding: [], preserving: intermediate.id, heldGIF: heldGIF.confirmed)
+        #expect(result.older.map(\.target) == [sourced.localTarget])
+    }
+
+    @Test func onlyTheExplicitlyOpenedGIFFollowsTheSelectionIntoHistory() throws {
+        let held = entry("held", mediaType: "image/gif")
+        let selected = try #require(TranscriptHistorySlot(held)).attachment
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("other", mediaType: "image/gif"), held])
+        let result = pages.extensions(around: [], excluding: [], preserving: selected.id, heldGIF: selected)
+        #expect(result.older.map(\.attachment.id) == [selected.id])
+        var replaced = held
+        replaced.sourceMessageIdHex = "changed"
+        let stale = try #require(TranscriptHistorySlot(replaced)).attachment
+        #expect(pages.extensions(around: [], excluding: [], preserving: selected.id, heldGIF: stale).older.isEmpty)
     }
 
     @Test func waitsForAnExactOverlapBeforeShowingNewerPages() throws {

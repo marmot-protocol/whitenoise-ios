@@ -716,7 +716,8 @@ struct ConversationView: View {
 
         init(item: MessageMediaAttachment, scope: MessageBubble.MediaOpenScope, initialData: Data?,
              row: TimelineItem, media: [MessageMediaAttachment], gifRowID: String? = nil) {
-            self.item = item
+            if case .message(let record, _) = row.kind { self.item = item.transcriptItem(in: record.messageIdHex) }
+            else { self.item = item }
             self.scope = scope
             self.initialData = initialData
             self.gifRowID = gifRowID
@@ -1110,7 +1111,10 @@ struct ConversationView: View {
             .onChange(of: AttachmentPresentationState.shared.revision) { _, _ in
                 viewModel?.search.refreshAfterTimelineChange()
             }
-            .onChange(of: speechScope.route) { speech.reset() }
+            .onChange(of: speechScope.route) {
+                longMessageTarget = nil
+                speech.reset()
+            }
             .task(id: speechScope) { await revalidateSpeech(in: speechScope) }
             .sheet(item: $longMessageTarget) { target in
                 NavigationStack {
@@ -1186,7 +1190,7 @@ struct ConversationView: View {
                         onRemoveOwnReactions: {
                             Task {
                                 await viewModel.removeOwnReactions(from: target.record)
-                                if viewModel.reactions(for: target.messageIdHex).isEmpty {
+                                if reactionDetailsTarget?.id == target.id, viewModel.reactions(for: target.messageIdHex).isEmpty {
                                     reactionDetailsTarget = nil
                                 }
                             }
@@ -2719,7 +2723,7 @@ struct ConversationView: View {
                 if canReply(to: record, viewModel: viewModel) {
                     Button("Reply") { beginReply(to: record, viewModel: viewModel) }
                 }
-                if !MessageSpeechPresentation.hasBlankText(record) {
+                if MessagePreview.canCopyFromMessageMenu(record) {
                     Button("Copy") {
                         SensitiveClipboard.copyLocalOnly(viewModel.copyBody(of: record))
                         Haptics.tap()
@@ -2808,9 +2812,10 @@ struct ConversationView: View {
             cluster.reservesIdentityLane = false
             cluster.showsAvatar = false
         }
-        let selectionInset = record.direction == "sent" ? Self.selectionIndicatorSize : Self.receivedSelectionInset
+        let selectionInset = viewModel.isMessageMine(record) ? Self.selectionIndicatorSize : Self.receivedSelectionInset
         let incompleteMarkdown = viewModel.timelineStore.markdownProjections.isTruncated(for: item)
         let mediaScope = MessageBubble.MediaOpenScope(viewModel, appState: appState)
+        let mediaItems = viewModel.mediaItems(for: item)
         return MessageBubble(
             record: record,
             status: status,
@@ -2824,7 +2829,7 @@ struct ConversationView: View {
             clusterPresentation: cluster,
             showsSenderIdentity: showsSenderIdentity,
             replyPreview: viewModel.replyPreview(for: record),
-            mediaItems: viewModel.mediaItems(for: item),
+            mediaItems: mediaItems,
             voiceTranscript: visibleVoiceTranscript(for: record, in: viewModel),
             transcribingVoice: speech.transcribingID == record.messageIdHex,
             readingSpeech: speech.readingID == record.messageIdHex ? speech : nil,
@@ -2864,11 +2869,8 @@ struct ConversationView: View {
             onLoadMedia: mediaLoader(for: viewModel, documentRowID: item.id),
             mediaOpenScope: mediaScope,
             onOpenTranscriptMedia: { media, data in
-                guard mediaScope.isCurrent(self.viewModel, appState: appState), !viewModel.isDeleted(record.messageIdHex),
-                      let current = viewModel.timeline.first(where: { $0.id == item.id }) else { return }
-                let slots = viewModel.mediaItems(for: current)
-                guard slots.contains(where: { $0.canUseBytesPrepared(for: media) }) else { return }
-                transcriptMedia = TranscriptMediaTarget(item: media, scope: mediaScope, initialData: data, row: current, media: slots)
+                let target = TranscriptMediaTarget(item: media, scope: mediaScope, initialData: data, row: item, media: mediaItems)
+                openTranscriptMedia(target, rowID: item.id, in: viewModel)
             },
             mediaForwardingContext: forwardingContext(for: viewModel),
             onGoToMessage: { messageIdHex in
@@ -4838,8 +4840,9 @@ struct ConversationView: View {
                 let actionMenuHeight = MessageActionsPresentation.visibleActionHeight(
                     actionCount: actionCount, containerHeight: proxy.size.height, showsReactions: canInteract
                 )
-                let alignsTrailing = messageActionsAlignTrailing(record: target.record)
-                let bubbleEdge = alignsTrailing ? bubbleGlobalFrame.maxX : bubbleGlobalFrame.minX
+                let outgoing = viewModel.isMessageMine(target.record)
+                let alignsRight = layoutDirection == .leftToRight ? outgoing : !outgoing
+                let bubbleEdge = alignsRight ? bubbleGlobalFrame.maxX : bubbleGlobalFrame.minX
                 let liftedEdge = bubbleEdge - containerGlobalFrame.minX
                 let layout = MessageActionsOverlayLayout.resolve(
                     sourceFrame: sourceFrame,
@@ -4871,7 +4874,7 @@ struct ConversationView: View {
                 )
                 let surfaceWidth = canInteract ? max(MessageActionsPresentation.menuWidth, reactionWidth) : MessageActionsPresentation.menuWidth
                 let menuCenterX = MessageActionsPresentation.menuCenterX(
-                    bubbleEdge: liftedEdge, alignsRight: alignsTrailing,
+                    bubbleEdge: liftedEdge, alignsRight: alignsRight,
                     surfaceWidth: surfaceWidth, containerWidth: proxy.size.width)
                 ZStack {
                     Rectangle()
@@ -4918,7 +4921,7 @@ struct ConversationView: View {
                         status: target.status,
                         rowId: rowId,
                         previewHeight: layout.previewHeight, bubbleWidth: bubbleGlobalFrame.width,
-                        alignsTrailing: target.record.direction == "sent",
+                        alignsTrailing: outgoing,
                         surfaceWidth: surfaceWidth,
                         maximumActionHeight: actionMenuHeight, onOpenGIF: openGIF,
                         viewModel: viewModel
@@ -4995,6 +4998,8 @@ struct ConversationView: View {
             let source = try await localVoiceSource(for: media)
             guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
             return source?.target == recording.target && recording.matches(voiceAttachment(id: id, in: model))
+        } catch is LocalVoiceAttachment.SizeError {
+            return scope == speechScope && viewModel === model && !Task.isCancelled ? false : nil
         } catch {
             return nil
         }
@@ -5021,6 +5026,7 @@ struct ConversationView: View {
         let id = target.messageIdHex
         guard self.viewModel === model, let row = speechRow(id, in: model),
               case .message(let record, _) = row.kind else { return [] }
+        if speech.readingID == id { return [.stop] }
         let media = model.mediaItems(for: row)
         if let audio = MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: model.myAccountId, media: media) {
             let transcript = speech.transcripts[id]
@@ -5028,7 +5034,7 @@ struct ConversationView: View {
             let supportsTranscription: Bool = if #available(iOS 26, *) { true } else { false }
             return MessageSpeechPresentation.voiceActions(isTranscribing: speech.transcribingID == id,
                 transcriptVisible: verified ? transcript?.visible : nil,
-                offersTranscribe: supportsTranscription && speech.transcribingID == nil)
+                offersTranscribe: supportsTranscription)
         }
         func standaloneEmoji() -> Bool {
             guard media.isEmpty, model.replyPreview(for: record) == nil else { return false }
@@ -5040,7 +5046,7 @@ struct ConversationView: View {
                 block.textFields(includeCodeLanguage: false).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             }
         }
-        return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId, isReading: speech.readingID == id,
+        return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId,
                                                      standaloneEmoji: standaloneEmoji(), hasSpokenText: hasSpokenText())
     }
 
@@ -5060,9 +5066,10 @@ struct ConversationView: View {
             source = try await localVoiceSource(for: audio)
         } catch {
             guard isCurrent() else { return }
-            speech.checkedVoice = (request, .unavailable(L10n.string("Couldn’t transcribe this recording.")))
+            let sizeError = error as? LocalVoiceAttachment.SizeError
+            speech.checkedVoice = (request, .unavailable(sizeError?.message ?? L10n.string("Couldn’t transcribe this recording.")))
             if let transcript = speech.transcripts[record.messageIdHex] {
-                speech.updateRetention(nil, id: record.messageIdHex, recording: transcript.recording, scope: scope)
+                speech.updateRetention(sizeError == nil ? nil : false, id: record.messageIdHex, recording: transcript.recording, scope: scope)
             }
             return
         }
@@ -5092,11 +5099,18 @@ struct ConversationView: View {
         guard let row = speechRow(id, in: model), case .message(let current, _) = row.kind,
               speechActions(for: current, in: model).contains(action) else { return }
         let checked = speech.checkedVoice
-        if action == .transcribe, checked?.request != voiceAvailabilityRequest(for: row, in: model) { return }
+        if action == .transcribe {
+            if speech.transcribingID != nil {
+                dismissActions(resumingComposerFocus: true)
+                appState.present(.warning(L10n.string("Wait for the current transcription to finish.")))
+                return
+            }
+            guard checked?.request == voiceAvailabilityRequest(for: row, in: model) else { return }
+        }
         dismissActions(resumingComposerFocus: true)
         switch action {
         case .read:
-            speech.read(markdown: model.copyBody(of: current), id: id) {
+            speech.read(markdown: model.copyBody(of: current), id: id, sourceText: current.plaintext) {
                 appState.present(.warning(L10n.string("This message has no text to read aloud.")))
             }
         case .stop: speech.stopReading()
@@ -5113,15 +5127,17 @@ struct ConversationView: View {
                 appState.present(.warning(reason))
             case .available(let recording, let source):
                 let openingScope = checked.request.scope
-                speech.transcribe(id: id, recording: recording, data: {
+                speech.transcribe(id: id, recording: recording, scope: openingScope, data: {
                     guard self.viewModel === model, speechScope == openingScope,
                           recording.matches(voiceAttachment(id: id, in: model)) else { throw CancellationError() }
                     return try await source.data(in: appState)
-                }, verifiedScope: {
+                }, revalidate: { transcript in
                     let scope = speechScope
-                    guard scope.route == openingScope.route,
-                          await retainedRecording(recording, id: id, model: model, scope: scope) == true else { return nil }
-                    return scope
+                    guard scope.route == openingScope.route else { return nil }
+                    let held = await retainedRecording(recording, id: id, model: model, scope: scope)
+                    let current = speechScope
+                    guard viewModel === model, recording.matches(voiceAttachment(id: id, in: model)) else { return nil }
+                    return transcript.revalidated(held: current == scope ? held : nil, in: current)
                 }, onError: { appState.present(.warning(L10n.string("Couldn’t transcribe this recording."))) })
             }
         case .transcribing: break
@@ -5129,7 +5145,10 @@ struct ConversationView: View {
     }
 
     private func pruneSpeech(in model: ConversationViewModel) {
-        speech.prune(visibleMessage: { speechRow($0, in: model) != nil }, audioMatches: { id, recording in
+        speech.prune(currentText: { id in
+            guard let row = speechRow(id, in: model), case .message(let record, _) = row.kind else { return nil }
+            return record.plaintext
+        }, audioMatches: { id, recording in
             recording.matches(voiceAttachment(id: id, in: model))
         })
     }
@@ -5147,7 +5166,7 @@ struct ConversationView: View {
                 hasRetryableSend: viewModel.canRetryFailedSend(rowId: rowId)
             ),
             canInteract: viewModel.canSendMessages,
-            canCopy: !MessageSpeechPresentation.hasBlankText(record),
+            canCopy: MessagePreview.canCopyFromMessageMenu(record),
             canForward: hasLiveDestinations && MessageForwardingPolicy.forwardableText(for: record) != nil,
             canEdit: hasLiveDestinations && MessageEditingPolicy.canEdit(
                 record,
@@ -5220,6 +5239,32 @@ struct ConversationView: View {
         }
     }
 
+    private func openTranscriptMedia(_ target: TranscriptMediaTarget, rowID: String, in model: ConversationViewModel) {
+        func currentRow() -> (row: TimelineItem, slots: [MessageMediaAttachment])? {
+            guard target.scope.isCurrent(viewModel, appState: appState),
+                  let row = model.timeline.first(where: { $0.id == rowID }), case .message(let record, _) = row.kind,
+                  !model.isDeleted(record.messageIdHex), !model.timelineStore.isHidden(record.messageIdHex),
+                  !model.timelineStore.isBlockedAuthor(record.sender) else { return nil }
+            return (row, model.mediaItems(for: row).map { $0.transcriptItem(in: record.messageIdHex) })
+        }
+        guard let current = currentRow() else { return }
+        if current.slots.contains(where: { $0.canUseBytesPrepared(for: target.item) }) {
+            transcriptMedia = target
+            return
+        }
+        // A tap can finish decoding after the outgoing attachment has been confirmed.
+        guard let pending = target.pending,
+              let gallery = model.transcriptMediaGallery(opening: target.id, initialData: nil) else { return }
+        let intent = mediaOpenIntent.current
+        Task {
+            guard let confirmed = await gallery.confirmedSelection(for: pending), mediaOpenIntent.current == intent,
+                  let updated = currentRow(), let visible = updated.slots.first(where: {
+                      $0.canUseBytesPrepared(for: confirmed) && $0.localTarget == confirmed.localTarget
+                  }) else { return }
+            transcriptMedia = TranscriptMediaTarget(item: visible, scope: target.scope, initialData: pending.data, row: updated.row, media: updated.slots)
+        }
+    }
+
     private func mediaLoader(for viewModel: ConversationViewModel, documentRowID: String? = nil) -> ConversationMediaLoader {
         let opening = MessageBubble.MediaOpenScope(viewModel, appState: appState)
         let loader = ConversationMediaLoader { media in
@@ -5257,14 +5302,6 @@ struct ConversationView: View {
         return loader
     }
 
-    private func messageActionsAlignTrailing(record: AppMessageRecordFfi) -> Bool {
-        let outgoing = MessageOwnership.isMine(
-            direction: record.direction, sender: record.sender,
-            myAccountId: appState.activeAccount?.accountIdHex
-        )
-        return layoutDirection == .leftToRight ? outgoing : !outgoing
-    }
-
     private func actionsMenu(
         for record: AppMessageRecordFfi,
         status: MessageStatus,
@@ -5287,7 +5324,7 @@ struct ConversationView: View {
                 )
             } ?? false,
             canInteract: viewModel.canSendMessages,
-            canCopy: !MessageSpeechPresentation.hasBlankText(record),
+            canCopy: MessagePreview.canCopyFromMessageMenu(record),
             canForward: hasLiveDestinations && MessageForwardingPolicy.forwardableText(for: record) != nil,
             canEdit: hasLiveDestinations && MessageEditingPolicy.canEdit(
                 record,
@@ -5302,10 +5339,10 @@ struct ConversationView: View {
             canViewVotes: hasLiveDestinations && canViewPollVotes(for: record, viewModel: viewModel),
             onOpenGIF: onOpenGIF,
             speechActions: speechActions(for: record, in: viewModel),
-            transcribeCheckFinished: speech.checkedVoice.map { checked in
+            canTapTranscribe: speech.transcribingID != nil || (speech.checkedVoice.map { checked in
                 guard let row = speechRow(record.messageIdHex, in: viewModel) else { return false }
                 return checked.request == voiceAvailabilityRequest(for: row, in: viewModel)
-            } ?? false,
+            } ?? false),
             onSpeechAction: { performSpeechAction($0, for: record, in: viewModel) },
             quickReactions: appState.quickReactions,
             selectedReaction: selectedReaction?.emoji,

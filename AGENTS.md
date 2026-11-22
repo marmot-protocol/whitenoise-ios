@@ -562,6 +562,8 @@ Do not add a second storage path for data Marmot already owns.
   `TEST_RUNNER_WN_TEST_GATE_CORES=3` in `tests.yml`, so it runs 1 permit on
   any runner; the same setting reproduces CI's single permit locally. It
   changes only the permit count, not the CPUs the simulator gets.
+- On CI, `scripts/test.sh` boots the simulator after the build instead of
+  alongside it; the comment there says why, and the measurements are in #1378.
 - Open runtimes with `withTestClient`, `OwnedTestClient` (stored fixtures) or
   `TestRuntimeScope.own` under `.closesTestRuntimes`; reopen a root with
   `closing`. Never leave a `MarmotClient.testClient()` unclosed. SwiftLint's

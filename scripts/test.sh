@@ -82,8 +82,14 @@ phase() {
   return "$status"
 }
 
-# Booting the simulator is dead time on the critical path, so overlap it with
-# the build instead of letting `xcodebuild test` serialize the two.
+# Booting the simulator is dead time on the critical path, so local runs overlap
+# it with the build instead of letting `xcodebuild test` serialize the two. CI
+# boots it once the build is done instead. On the 3-core, 7 GB runner a first
+# boot running alongside the build stalls it: package resolution alone takes
+# minutes instead of seconds. The tests then start while the simulator is still
+# settling, so CI's test phase runs longer than the tests need; the shorter
+# build outweighs that. Measurements are in #1378; measure on the runner before
+# changing the order there.
 boot_pid=""
 case "$DESTINATION" in
   *id=*)
@@ -92,15 +98,27 @@ case "$DESTINATION" in
     ;;
   *) udid="" ;;
 esac
-if [ -n "$udid" ]; then
+
+if [ -n "$udid" ] && [ -z "${CI:-}" ]; then
   xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 &
   boot_pid=$!
 fi
+
+# Best effort, like the background boot: the test run still boots the simulator
+# itself if this fails, but say why it failed.
+boot_simulator() {
+  local output
+  if ! output=$(xcrun simctl bootstatus "$udid" -b 2>&1); then
+    echo "warning: simctl bootstatus failed: $output" >&2
+  fi
+}
 
 phase "build-for-testing" run build-for-testing "${xcodebuild_args[@]}" "${build_settings[@]}"
 
 if [ -n "$boot_pid" ]; then
   wait "$boot_pid" || true
+elif [ -n "$udid" ]; then
+  phase "simulator-boot" boot_simulator
 fi
 
 phase "test-without-building" run test-without-building \

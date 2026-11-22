@@ -105,11 +105,13 @@ struct TranscriptHistoryPages {
     /// Extend each edge only once the native cursor has reached that exact slot. In particular, a
     /// recent page cannot appear adjacent to an old search result while intervening pages are missing.
     func extensions(around window: [MessageMediaAttachment],
-                    excluding windowMessages: Set<String>, atLiveTail: Bool = false, preserving selectedID: String? = nil) -> Edges {
+                    excluding windowMessages: Set<String>, atLiveTail: Bool = false, preserving selectedID: String? = nil,
+                    heldGIF: MessageMediaAttachment? = nil) -> Edges {
         let chronological = newestFirst.reversed().flatMap { byMessage[$0] ?? [] }
         // A held GIF can anchor its own window. Other GIFs still play inline.
         func isGalleryPage(_ slot: TranscriptHistorySlot) -> Bool {
-            !windowMessages.contains(slot.target.messageIdHex) && !slot.attachment.isGIF
+            !windowMessages.contains(slot.target.messageIdHex) && (!slot.attachment.isGIF ||
+                (heldGIF?.localTarget == slot.target && heldGIF?.reference == slot.attachment.reference))
         }
         let first = window.first { $0.localTarget != nil }
         let last = window.last { $0.localTarget != nil }
@@ -122,11 +124,14 @@ struct TranscriptHistoryPages {
             // Pending sends in a confirmed live tail follow the native sequence.
             return Edges(older: chronological.filter(isGalleryPage))
         }
-        if firstOverlap == nil, lastOverlap == nil, let selectedID,
-           chronological.contains(where: { $0.attachment.id == selectedID && isGalleryPage($0) }) {
-            // The selected retained segment is still contiguous. A replacement window
-            // belongs in it only after one of its edges reaches a matching source slot.
-            return Edges(older: chronological.filter(isGalleryPage), includesWindow: false)
+        if let selectedID, contains(attachmentID: selectedID), !window.contains(where: { $0.id == selectedID }),
+           let selected = chronological.firstIndex(where: { $0.attachment.id == selectedID && isGalleryPage($0) }),
+           firstOverlap.map({ selected < $0 }) != true, lastOverlap.map({ selected > $0 }) != true {
+            // Stop at an intervening window message. Otherwise filtering out the
+            // window would put two disconnected parts of history next to each other.
+            let start = chronological[..<selected].lastIndex { windowMessages.contains($0.target.messageIdHex) }.map { $0 + 1 } ?? 0
+            let end = chronological[(selected + 1)...].firstIndex { windowMessages.contains($0.target.messageIdHex) } ?? chronological.endIndex
+            return Edges(older: chronological[start..<end].filter(isGalleryPage), includesWindow: false)
         }
         return Edges(older: firstOverlap.map { chronological[..<$0].filter(isGalleryPage) } ?? [],
                      newer: lastOverlap.map { chronological.suffix(from: $0 + 1).filter(isGalleryPage) } ?? [])
@@ -349,10 +354,11 @@ final class TranscriptAttachmentHistory {
         guard !Task.isCancelled, let baseline = pager.baseline, self.scope == scope,
               scope == Scope(appState: appState, group: scope.group) else { return }
         let ticket = generation
+        let startingRevision = revision
         validationSequence &+= 1
         let sequence = validationSequence
         func isCurrent() -> Bool {
-            ticket == generation && sequence == validationSequence && !Task.isCancelled
+            ticket == generation && startingRevision == revision && sequence == validationSequence && !Task.isCancelled
                 && scope == Scope(appState: appState, group: scope.group)
         }
         do {

@@ -11,7 +11,7 @@ struct ConversationSpeechNavigationTests {
             sender: "peer", plaintext: "Meet at six", contentTokens: .emptyDocument, kind: MessageSemantics.kindChat,
             tags: [], recordedAt: 1, receivedAt: 1)
         func actions(emoji: Bool = false, spoken: Bool = true) -> [MessageSpeechAction] {
-            MessageSpeechPresentation.textActions(for: record, myAccountID: nil, isReading: false, standaloneEmoji: emoji, hasSpokenText: spoken)
+            MessageSpeechPresentation.textActions(for: record, myAccountID: nil, standaloneEmoji: emoji, hasSpokenText: spoken)
         }
         #expect(actions() == [.read])
         record.sticker = .init(packCoordinate: "pack", shortcode: "wave", plaintextSha256: "hash")
@@ -47,13 +47,31 @@ struct ConversationSpeechNavigationTests {
         #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: true, offersTranscribe: false) == [.hide, .copy])
     }
 
+    @Test func aRetainedRecordingAtTheSizeLimitCanBeReadAndALargerOneGetsASizeError() throws {
+        let limit = UInt64(MessageMediaAttachment.audioAnalysisByteLimit)
+        try LocalVoiceAttachment.validateSize(limit)
+        #expect(throws: LocalVoiceAttachment.SizeError.tooLarge) { try LocalVoiceAttachment.validateSize(limit + 1) }
+        #expect(throws: LocalVoiceAttachment.SizeError.empty) { try LocalVoiceAttachment.validateSize(0) }
+    }
+
     @Test func readingMarkupWithNoSpokenTextExplainsWhyPlaybackDidNotStart() async throws {
         let speech = ConversationSpeech()
         let empty = TestLatch()
-        speech.read(markdown: String(repeating: "[](https://example.com)", count: 400), id: "message") {
+        let markup = String(repeating: "[](https://example.com)", count: 400)
+        speech.read(markdown: markup, id: "message", sourceText: markup) {
             empty.signal()
         }
         try await empty.wait()
+        #expect(speech.readingID == nil)
+    }
+
+    @Test func editingTheActiveMessageStopsReadingItsOldWords() {
+        let speech = ConversationSpeech()
+        let text = "Meet at the old address"
+        speech.read(markdown: text, id: "message", sourceText: text) { Issue.record("The message contained text") }
+        speech.prune(currentText: { _ in text }, audioMatches: { _, _ in false })
+        #expect(speech.readingID == "message")
+        speech.prune(currentText: { _ in "Meet at the new address" }, audioMatches: { _, _ in false })
         #expect(speech.readingID == nil)
     }
 
@@ -85,7 +103,8 @@ struct ConversationSpeechNavigationTests {
     }
 
     @available(iOS 26, *)
-    @Test func poppingPastAnOpenDetailClearsTheChatsSpeechSession() async throws {
+    @Test(arguments: [false, true])
+    func leavingTheChatClearsSpeechEvenWhenADetailCoversIt(removingStack: Bool) async throws {
         let model = SpeechStackHarness.Model()
         let host = UIHostingController(rootView: SpeechStackHarness(model: model))
         try await withHostedWindow(host) { window in
@@ -97,18 +116,29 @@ struct ConversationSpeechNavigationTests {
             let cancelled = TestLatch()
             let recording = ConversationSpeech.Recording(displayID: "audio", target: .init(
                 messageIdHex: "voice-note", sourceMessageIdHex: "source", attachmentIndex: 0))
-            model.speech.transcribe(id: "voice-note", recording: recording, data: {
+            let route = ConversationSpeech.Route(groupID: "chat", modelID: nil, account: nil, runtimeGeneration: 0)
+            model.speech.transcribe(id: "voice-note", recording: recording, scope: .init(route: route, revision: 0), data: {
                 started.signal()
                 defer { if Task.isCancelled { cancelled.signal() } }
                 try await parkUntilCancelled()
                 return Data()
-            }, verifiedScope: { nil }, onError: { Issue.record("Cancelled transcription reported an error") })
+            }, revalidate: { _ in nil }, onError: { Issue.record("Cancelled transcription reported an error") })
             try await started.wait()
+            model.showsMedia = true
+            try await model.coverOpened.wait()
+            #expect(model.speech.transcribingID == "voice-note")
+            model.showsMedia = false
+            try await model.coverDismissed.wait()
+            #expect(model.speech.transcribingID == "voice-note")
             model.showsDetails = true
             try await settleLayout(window) { model.visible }
             #expect(model.visible == "details")
             #expect(model.speech.transcribingID == "voice-note")
-            model.path = []
+            if removingStack {
+                model.showsStack = false
+            } else {
+                model.path = []
+            }
             try await settleLayout(window) { model.speech.transcribingID == nil }
             try await cancelled.wait()
             #expect(model.speech.transcribingID == nil)
@@ -119,17 +149,28 @@ struct ConversationSpeechNavigationTests {
 private struct SpeechStackHarness: View {
     @Observable @MainActor final class Model {
         var path: [ChatsListView.ChatNavigationTarget] = []
+        var showsStack = true
         var showsDetails = false
+        var showsMedia = false
+        let coverOpened = TestLatch()
+        let coverDismissed = TestLatch()
         var visible = ""
         let speech = ConversationSpeech()
     }
     @Bindable var model: Model
 
     var body: some View {
+        if model.showsStack { stack }
+    }
+
+    private var stack: some View {
         NavigationStack(path: $model.path) {
             Text("Chats")
                 .navigationDestination(for: ChatsListView.ChatNavigationTarget.self) { target in
                     Text(target.groupIdHex)
+                        .fullScreenCover(isPresented: $model.showsMedia, onDismiss: { model.coverDismissed.signal() }) {
+                            Text("Media").onAppear { model.coverOpened.signal() }
+                        }
                         .onAppear { model.visible = target.groupIdHex }
                         .navigationDestination(isPresented: $model.showsDetails) {
                             Text("Details").onAppear { model.visible = "details" }

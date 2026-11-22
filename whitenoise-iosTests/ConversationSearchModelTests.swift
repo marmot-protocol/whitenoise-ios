@@ -5,18 +5,28 @@ import Testing
 
 @MainActor
 struct ConversationSearchModelTests {
-    @Test func aLoadedContactNameIsSearchableWhenTheFileHasAGenericType() throws {
+    @Test func confirmedGenericVCardKeepsItsSearchableNameWithDocumentDownloadsOff() async throws {
         let app = AppState.test()
         let viewModel = ConversationViewModel(appState: app, group: group(name: "Chat"))
         let reference = encryptedMediaReference(fileName: "person.vcf", mediaType: "application/octet-stream", sourceEpoch: 1)
-        let record = timelineRecord(messageIdHex: hex("ac"), timelineAt: 1, media: [reference])
+        let card = Data("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Avery Stone\r\nN:Stone;Avery;;;\r\nEND:VCARD\r\n".utf8)
+        let draft = MediaDraftAttachment(fileName: "person.vcf", mediaType: "text/vcard", data: card, dim: nil)
+        viewModel.timelineStore.mediaProjections.retainOwnSend(draft.displayItem, plaintextSha256: reference.plaintextSha256)
+        let record = timelineRecord(messageIdHex: hex("ac"), direction: "sent", timelineAt: 1, media: [reference])
         viewModel.applyTimelinePage(.init(messages: [record], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
         let row = try #require(viewModel.timeline.first { $0.id == TimelineItem.messageRowId(forMessageIdHex: record.messageIdHex) })
         let contact = try #require(viewModel.mediaItems(for: row).first)
         viewModel.search.activate()
         viewModel.search.query = "Avery"
         #expect(viewModel.search.currentMatch == nil)
-        viewModel.search.registerContactName("Avery Stone", for: contact.id, in: record.messageIdHex)
+        #expect(contact.id != draft.displayItem.id)
+        let loader = ConversationMediaLoader { _ in
+            Issue.record("A locally available contact should not request an attachment")
+            throw AttachmentReadError.unavailable
+        }
+        let metadata = await loader.prefetchDocument(contact, isVisible: true, allowed: false)
+        let name = try #require(metadata?.contactName)
+        viewModel.search.registerContactName(name, for: contact.id, in: record.messageIdHex)
         #expect(viewModel.search.currentMatch?.messageIdHex == record.messageIdHex)
 
         viewModel.timelineStore.applyConversationWindowPage(.init(messages: [], hasMoreBefore: false, hasMoreAfter: false))

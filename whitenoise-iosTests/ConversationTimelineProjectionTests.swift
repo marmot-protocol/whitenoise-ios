@@ -973,7 +973,7 @@ struct ConversationTimelineProjectionTests {
             placement: .window
         )
         #expect(status() == .sent)
-        #expect(MessageFooterPresentation.value(for: try #require(status()), isFromMe: true).systemImage == "checkmark.circle.fill")
+        #expect(MessageFooterPresentation.value(for: try #require(status()), isFromMe: true).accessibilityLabel == L10n.string("Sent"))
         #expect(!viewModel.canRetryFailedSend(rowId: rowId))
     }
 

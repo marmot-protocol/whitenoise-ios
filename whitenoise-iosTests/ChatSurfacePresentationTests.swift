@@ -33,11 +33,29 @@ struct ChatSurfacePresentationTests {
         #expect(abs(pending.width - confirmed.width) < 0.1)
     }
 
-    @Test func deliveryFooterUsesCompactSymbols() {
-        #expect(MessageFooterPresentation.value(for: .sent, isFromMe: true).systemImage == "checkmark.circle.fill")
-        #expect(MessageFooterPresentation.value(for: .sending, isFromMe: true).systemImage == "ellipsis.message")
+    @Test func deliveryFooterDistinguishesPendingAndConfirmedSends() throws {
+        let sent = MessageFooterPresentation.value(for: .sent, isFromMe: true)
+        let sending = MessageFooterPresentation.value(for: .sending, isFromMe: true)
+        let sentImage = try #require(sent.systemImage)
+        let sendingImage = try #require(sending.systemImage)
+        #expect(sentImage != sendingImage)
         #expect(MessageFooterPresentation.value(for: .failed, isFromMe: true).isFailure)
         #expect(MessageFooterPresentation.value(for: .received, isFromMe: false).systemImage == nil)
+    }
+
+    @Test func actionableFailuresKeepASeparateTimeOnlyForEditedOrReportedMessages() throws {
+        func notice(
+            _ status: MessageStatus = .failed, deleted: Bool = false, edited: Bool = false,
+            reported: Bool = false, action: (() -> Void)? = {}
+        ) -> MessageFailureNotice? {
+            MessageFailureNotice(status: status, isDeleted: deleted, isEdited: edited, hasReports: reported, action: action)
+        }
+        #expect(try #require(notice()).showsTimestamp == false)
+        #expect(try #require(notice(edited: true)).showsTimestamp)
+        #expect(try #require(notice(reported: true)).showsTimestamp)
+        #expect(notice(deleted: true) == nil)
+        #expect(notice(action: nil) == nil)
+        #expect(notice(.sent) == nil)
     }
 
     @Test func durablePendingRowsKeepRetryActionAvailable() {

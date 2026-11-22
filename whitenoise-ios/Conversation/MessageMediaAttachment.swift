@@ -272,7 +272,8 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// Waveform analysis and on-device transcription both need the whole encoded recording.
     static let audioAnalysisByteLimit = 16 * 1024 * 1024
 
-    let id: String
+    private(set) var id: String
+    let displayIndex: UInt32?
     let reference: MediaAttachmentReferenceFfi?
     let fileName: String
     let mediaType: String
@@ -298,8 +299,10 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         durationSeconds: Double? = nil,
         waveformSamples: [CGFloat] = [],
         rejectionKind: MediaAttachmentRejectionKindFfi? = nil,
-        localTarget: AttachmentLocalTargetFfi? = nil
+        localTarget: AttachmentLocalTargetFfi? = nil,
+        displayIndex: UInt32? = nil
     ) {
+        self.displayIndex = displayIndex
         self.id = id
         self.reference = reference
         self.fileName = fileName
@@ -332,6 +335,15 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
 
     var isAudio: Bool {
         MediaAttachmentPolicy.canonicalMediaType(mediaType).hasPrefix("audio/")
+    }
+
+    /// Identifies the same sourced slot in a live row and the native history.
+    /// A confirmed local send can keep its temporary row ID in the live window.
+    func transcriptItem(in messageID: String) -> Self {
+        guard !messageID.isEmpty, let reference, let index = localTarget?.attachmentIndex ?? sourceHint?.slot ?? displayIndex else { return self }
+        var copy = self
+        copy.id = Self.displayItemID(reference: reference, index: index, ownerId: TimelineItem.messageRowId(forMessageIdHex: messageID))
+        return copy
     }
 
     /// A content-hash overlay can display a matching own send on another message.
@@ -406,15 +418,13 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         }
     }
 
+    private static func displayItemID(reference: MediaAttachmentReferenceFfi, index: UInt32, ownerId: String) -> String {
+        [ownerId, reference.plaintextSha256, String(reference.sourceEpoch), String(index)].joined(separator: ":")
+    }
+
     private static func displayItem(reference: MediaAttachmentReferenceFfi, index: UInt32, ownerId: String) -> MessageMediaAttachment {
-        let id = [
-            ownerId,
-            reference.plaintextSha256,
-            String(reference.sourceEpoch),
-            String(index),
-        ].joined(separator: ":")
-        return MessageMediaAttachment(
-            id: id,
+        MessageMediaAttachment(
+            id: displayItemID(reference: reference, index: index, ownerId: ownerId),
             reference: reference,
             fileName: displayFileName(reference.fileName),
             mediaType: reference.mediaType,
@@ -422,7 +432,8 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
             localData: nil,
             thumbnail: nil,
             durationSeconds: nil,
-            waveformSamples: []
+            waveformSamples: [],
+            displayIndex: index
         )
     }
 

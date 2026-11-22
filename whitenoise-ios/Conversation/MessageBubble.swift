@@ -54,6 +54,7 @@ struct TimelineMediaTaskID: Equatable {
     let contentID: String
     let isVisible: Bool
     var policyRevision: String = ""
+    var target: AttachmentLocalTargetFfi?
 }
 
 /// Reference box for the media-load callback. Passing the bare async closure
@@ -142,14 +143,23 @@ final class ConversationMediaLoader {
 
     @discardableResult
     func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool, hasContactName: Bool = false) async -> (size: Int, contactName: String?)? {
-        guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return nil }
+        guard isVisible, media.kind == .document || media.kind == .unsupported else { return nil }
         guard !hasContactName, DocumentPreviewFormat(for: media) == .contact else {
+            guard allowed else { return nil }
             return await admitAutomaticAttachment(media).map { ($0, nil) }
         }
-        var requested = media
-        requested.previewByteLimit = DocumentPreviewFormat.contact.byteLimit
+        let limit = DocumentPreviewFormat.contact.byteLimit
         do {
-            let bytes = try await data(for: requested, demand: .automatic)
+            let bytes: Data
+            if let local = media.localData {
+                guard local.count <= limit else { return (local.count, nil) }
+                bytes = local
+            } else {
+                guard allowed else { return nil }
+                var requested = media
+                requested.previewByteLimit = limit
+                bytes = try await data(for: requested, demand: .automatic)
+            }
             try Task.checkCancellation()
             let name = await Task.detached(priority: .utility) { SharedContactPreview(data: bytes)?.name }.value
             try Task.checkCancellation()
@@ -419,7 +429,7 @@ struct MessageBubble: View {
     /// Set when the message has viewable edit history; makes the inline "Edited"
     /// label tap to open the history sheet, the same sheet the actions menu opens.
     var onViewEditHistory: (() -> Void)? = nil
-    /// Set for a failed outgoing message; a tap on the bubble opens the
+    /// Tapping the failure notice or a failed text bubble opens the
     /// retry/discard sheet.
     var onFailedTap: (() -> Void)? = nil
     var onSenderAvatarTap: (() -> Void)? = nil
@@ -592,7 +602,7 @@ struct MessageBubble: View {
         if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
             // Beyond the formatter's budget, read the authored source in viewport-sized batches.
             LongMessageSourceText(text: record.plaintext)
-                .id(record.plaintext)
+                .id(Data(record.plaintext.utf8))
         } else {
             messageBodyContent(snippet: nil)
         }
@@ -880,7 +890,9 @@ struct MessageBubble: View {
     }
 
     private var textBubble: some View {
-        let fitsQuote = replyPreview != nil && showsStandardBody && sharedLocation == nil && linkPreviewURL == nil
+        let location = showsStandardBody ? sharedLocation : nil
+        let previewURL = showsStandardBody && location == nil ? linkPreviewURL : nil
+        let fitsQuote = replyPreview != nil && showsStandardBody && location == nil && previewURL == nil
         return MessageTextBubbleLayout(fitsQuote: fitsQuote, widensForReactions: widensTextForReactions) {
             VStack(alignment: .leading, spacing: 0) {
                 if let debugStyle {
@@ -896,14 +908,14 @@ struct MessageBubble: View {
                         .padding(.vertical, density.metrics.bubbleVerticalInset)
                     if let debugStyle { debugTagsFooter(debugStyle) }
                 } else if showsStandardBody {
-                    if let sharedLocation {
-                        sharedLocationBody(sharedLocation)
+                    if let location {
+                        sharedLocationBody(location)
                     } else {
-                        if let linkPreviewURL {
-                            LinkPreviewCard(url: linkPreviewURL, isFromMe: isFromMe) {
-                                _ = handleMessageLink(linkPreviewURL)
+                        if let previewURL {
+                            LinkPreviewCard(url: previewURL, isFromMe: isFromMe) {
+                                _ = handleMessageLink(previewURL)
                             }
-                            .id(linkPreviewURL)
+                            .id(previewURL)
                         }
                         messageBodyText(hasReply: replyPreview != nil)
                     }
@@ -1240,8 +1252,6 @@ struct MessageBubble: View {
         }
     }
 
-    private static let excerptBudgets = [768, 512, 384, 320, 256, 208, 168, 132, 100, 72, 48, 28, 12, 4]
-
     @ViewBuilder
     private func messageBodyTextContent(snippet: String?) -> some View {
         if let blocks = markdownBlocks {
@@ -1254,11 +1264,10 @@ struct MessageBubble: View {
                 if actionBodySize != nil, visible.count == 1, let inline = visible[0].inlineText, customEmoji.isEmpty {
                     liftedInlineText(inline)
                 } else if actionBodySize != nil {
-                    let length = visible.reduce(0) { $0 + $1.menuExcerptLength }
                     ViewThatFits(in: .vertical) {
                         // The measured body exceeds this frame. Start with a bounded
                         // excerpt and keep whole code or quote lines where possible.
-                        ForEach(Self.excerptBudgets.filter { $0 < length }, id: \.self) { budget in
+                        ForEach(MarkdownDisplayBlock.menuExcerptBudgets(for: visible), id: \.self) { budget in
                             MarkdownMessageView(blocks: MarkdownDisplayBlock.excerpt(visible, characterBudget: budget, emoji: customEmoji.shortcodes),
                                                 quoteBar: quoteColor)
                         }
@@ -1342,10 +1351,11 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var bubbleMetadataRow: some View {
-        if status == .failed, !isDeleted, let onFailedTap {
+        if let notice = MessageFailureNotice(status: status, isDeleted: isDeleted, isEdited: isEdited,
+                                            hasReports: hasReports, action: onFailedTap) {
             VStack(alignment: .trailing, spacing: 0) {
                 if showsReactionStrip { reactionMetadata(showsTimestamp: false) }
-                failedNotice(action: onFailedTap)
+                failedNotice(notice)
             }
         } else if !showsReactionStrip {
             if showsMetadataFooter {
@@ -1356,9 +1366,9 @@ struct MessageBubble: View {
         }
     }
 
-    private func failedNotice(action: @escaping () -> Void) -> some View {
+    private func failedNotice(_ notice: MessageFailureNotice) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Button(action: action) {
+            Button(action: notice.action) {
                 MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: .failed, isFromMe: true)
                     .multilineTextAlignment(.trailing)
             }
@@ -1366,7 +1376,7 @@ struct MessageBubble: View {
             .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
                 showMessageActions?(.failureNotice)
             })
-            if isEdited || hasReports {
+            if notice.showsTimestamp {
                 MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
                     showsDeliveryStatus: false, hasReports: hasReports,
                     onViewEditHistory: onViewEditHistory)
@@ -2966,6 +2976,7 @@ private struct MessageVideoAttachmentView: View {
     @State private var localDuration: Double?
     @State private var posterDecodeFailed = false
     @State private var durationReadFailed = false
+    @State private var lastRead: (request: TimelineMediaTaskID, overPreviewLimit: Bool)?
     @Environment(\.displayScale) private var displayScale
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
 
@@ -2990,6 +3001,11 @@ private struct MessageVideoAttachmentView: View {
     private var playedPoster: UIImage? {
         MessageVideoThumbnailDecoder.cachedThumbnail(for: thumbnailCacheKey,
             maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize)
+    }
+
+    private var previewRequest: TimelineMediaTaskID {
+        TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, target: item.localTarget)
     }
 
     var body: some View {
@@ -3027,22 +3043,32 @@ private struct MessageVideoAttachmentView: View {
             if let playedPoster { previewThumbnail = playedPoster }
             localDuration = MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey)
         }
-        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
-            guard isTimelineRowVisible, onLoadMedia.allowsAutomaticLoad(.video) else { return }
+        .task(id: previewRequest) {
+            let request = previewRequest
+            guard request.isVisible, onLoadMedia.allowsAutomaticLoad(.video),
+                  lastRead?.request != request || lastRead?.overPreviewLimit != true else { return }
             let needsPoster = displayThumbnail == nil && !posterDecodeFailed
             let needsDuration = showsBadges && showsDuration && !durationReadFailed && item.durationSeconds == nil
                 && localDuration == nil && MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey) == nil
             guard needsPoster || needsDuration else {
                 // Metadata can come from identical bytes in another message. Admit this
                 // slot under the Videos preference without decoding the movie again.
-                await onLoadMedia.admitAutomaticAttachment(item)
+                guard lastRead?.request != request, await onLoadMedia.admitAutomaticAttachment(item) != nil, !Task.isCancelled else { return }
+                lastRead = (request, false)
                 return
             }
             let epoch = MessageMediaCache.currentProducerEpoch()
-            guard let data = try? await onLoadMedia.videoPreviewData(for: item),
-                  !Task.isCancelled,
-                  let url = await onLoadMedia.playbackFileURL(for: item, data: data, producerEpoch: epoch),
+            let data: Data
+            do {
+                data = try await onLoadMedia.videoPreviewData(for: item)
+            } catch AttachmentReadError.previewLimitExceeded(let size) {
+                // An unknown size can become available later. Known oversize files get a poster on playback.
+                if size != nil, !Task.isCancelled { lastRead = (request, true) }
+                return
+            } catch { return }
+            guard !Task.isCancelled else { return }
+            lastRead = (request, false)
+            guard let url = await onLoadMedia.playbackFileURL(for: item, data: data, producerEpoch: epoch),
                   !Task.isCancelled else { return }
             if needsDuration {
                 let time = try? await AVURLAsset(url: url).load(.duration)
@@ -3505,6 +3531,7 @@ private struct MessageDocumentAttachmentView: View {
     #if DEBUG
     @Environment(\.isChatFixture) private var isChatFixture
     #endif
+    @Environment(\.locale) private var locale
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     let item: MessageMediaAttachment
     let isFromMe: Bool
@@ -3661,7 +3688,7 @@ private struct MessageDocumentAttachmentView: View {
     private var fileDetail: String {
         let type = fileExtension.isEmpty ? MediaAttachmentPolicy.canonicalMediaType(item.mediaType) : fileExtension.uppercased()
         guard let count = item.localData?.count ?? liftedDetails?.size ?? byteCount else { return type }
-        return "\(type) • \(count.formatted(.byteCount(style: .file)))"
+        return "\(type) • \(count.formatted(.byteCount(style: .file).locale(locale)))"
     }
 
     private var fileExtension: String {

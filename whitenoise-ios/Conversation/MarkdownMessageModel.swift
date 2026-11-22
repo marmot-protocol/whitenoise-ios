@@ -41,6 +41,11 @@ extension MarkdownDisplayBlock {
         }
     }
 
+    static func menuExcerptBudgets(for blocks: [Self]) -> [Int] {
+        let length = blocks.reduce(0) { $0 + $1.menuExcerptLength }
+        return [768, 512, 384, 320, 256, 208, 168, 132, 100, 72, 48, 28, 12, 4, 2, 1].filter { $0 < length }
+    }
+
     /// Keep the original block and inline styling up to the visible excerpt's tail.
     static func excerpt(_ blocks: [Self], characterBudget: Int,
                         emoji: Set<CustomEmojiShortcode> = [], countingBlockSeparators: Bool = false) -> [Self] {

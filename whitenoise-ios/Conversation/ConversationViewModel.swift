@@ -1067,8 +1067,8 @@ final class ConversationViewModel {
     }
 
     /// Window and retained pages share this cache-only caption. Opening the gallery never requests a profile.
-    func gallerySenderName(_ sender: String, outgoing: Bool) -> String {
-        if outgoing { return L10n.string("You") }
+    func gallerySenderName(_ sender: String, direction: String = "received") -> String {
+        if MessageOwnership.isMine(direction: direction, sender: sender, myAccountId: myAccountId) { return L10n.string("You") }
         let name = windowIdentities[sender]?.displayName ?? appState?.cachedKnownDisplayName(forAccountIdHex: sender)
         return IdentityPresentation.resolve(accountIdHex: sender, knownName: name).text
     }
@@ -1098,13 +1098,14 @@ final class ConversationViewModel {
                   !(appState?.streamingDebugEnabled == true && MessageSemantics.debugStyle(for: record).isUserVisibleBubble == false),
                   groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row)?.kind != .operation else { continue }
             guard !timelineStore.isHidden(record.messageIdHex), !timelineStore.isBlockedAuthor(record.sender) else { continue }
-            for (index, media) in mediaItems(for: row).enumerated() {
-                guard media.isTranscriptGalleryMedia || (row.id == gifRowID && media.isGIF && media.rejectionKind == nil),
-                      isAvailableInGallery(media) else { continue }
+            for (index, attachment) in mediaItems(for: row).enumerated() {
+                guard attachment.isTranscriptGalleryMedia || (row.id == gifRowID && attachment.isGIF && attachment.rejectionKind == nil),
+                      isAvailableInGallery(attachment) else { continue }
+                let media = attachment.transcriptItem(in: record.messageIdHex)
                 guard captions[media.id] == nil else { continue }
                 items.append(media)
                 if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }
-                captions[media.id] = .init(sender: gallerySenderName(record.sender, outgoing: record.direction == "sent"),
+                captions[media.id] = .init(sender: gallerySenderName(record.sender, direction: record.direction),
                     date: Date(timeIntervalSince1970: TimeInterval(row.timestamp)),
                     outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
             }
@@ -2524,14 +2525,19 @@ final class ConversationViewModel {
         timeline.compactMap { item in
             guard case .message(let record, _) = item.kind,
                   !record.messageIdHex.isEmpty,
-                  MessagePreview.isPreviewable(record),
                   !isDeleted(record.messageIdHex)
             else { return nil }
+            let activity = record.kind == MessageSemantics.kindAgentActivity ? agentEventDisplay(for: item) : nil
+            guard activity != nil || MessagePreview.isPreviewable(record) else { return nil }
             var labels: [String] = []
             if context.showsIdentity, clusterAtUnreadBoundary(for: item).showsSenderName {
                 // Search only identities already available to the row, without requesting a profile.
                 labels.append(IdentityPresentation.text(accountIdHex: record.sender, knownName: conversationWindow == nil
                     ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender) : windowIdentities[record.sender]?.displayName))
+            }
+            if let activity {
+                if let status = activity.visibleActivityStatus { labels.append(status) }
+                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: activity.primaryText, labels: labels)
             }
             if record.kind == MessageSemantics.kindPoll {
                 let poll = poll(for: record.messageIdHex)
