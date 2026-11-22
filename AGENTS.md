@@ -549,13 +549,8 @@ Do not add a second storage path for data Marmot already owns.
   `TEST_RUNNER_WN_TEST_GATE_CORES=3` in `tests.yml`, so it runs 1 permit on
   any runner; the same setting reproduces CI's single permit locally. It
   changes only the permit count, not the CPUs the simulator gets.
-- `scripts/test.sh` boots the simulator while the build runs by default. CI
-  sets `WN_TEST_BOOT_SIMULATOR=after-build` in `tests.yml` instead: on its
-  3-core, 7 GB runner the build took about three times as long with a first
-  boot running alongside it (#1378). The tests then start while the simulator
-  is still settling, so CI's test phase is several minutes longer than the
-  tests themselves need; that is expected. Don't move the boot back alongside
-  the build on CI without measuring it there.
+- On CI, `scripts/test.sh` boots the simulator after the build instead of
+  alongside it; the comment there says why, and the measurements are in #1378.
 - Open runtimes with `withTestClient`, `OwnedTestClient` (stored fixtures) or
   `TestRuntimeScope.own` under `.closesTestRuntimes`; reopen a root with
   `closing`. Never leave a `MarmotClient.testClient()` unclosed. SwiftLint's

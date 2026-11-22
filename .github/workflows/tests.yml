@@ -62,12 +62,6 @@ jobs:
       # D2 on #1202 keeps CI at one runtime permit; pin it so a runner with more
       # cores doesn't raise it.
       TEST_RUNNER_WN_TEST_GATE_CORES: "3"
-      # Boot the simulator after the build, not alongside it. Over ten rounds on
-      # this runner (#1378) that took 29 minutes on average from job start to
-      # the end of the tests, against 35: the build drops from about 21 minutes
-      # to 7, which outweighs the test phase growing from about 12 minutes to
-      # 18 while the simulator settles after its first boot.
-      WN_TEST_BOOT_SIMULATOR: after-build
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
       WN_TEST_SOURCE_PACKAGES: ${{ github.workspace }}/build/SourcePackages
       WN_TEST_COMPILATION_CACHE: ${{ github.workspace }}/build/CompilationCache
