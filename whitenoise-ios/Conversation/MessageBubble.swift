@@ -3921,6 +3921,19 @@ struct MessageMediaGallery: Identifiable {
         }
     }
 
+    enum Confirmation {
+        case superseded
+        case unavailable
+        case confirmed(MessageMediaAttachment)
+    }
+
+    func finishVerification(_ request: Replacement, pending: PendingSelection, verified: Bool) -> Confirmation {
+        let candidate = confirmedItem(for: pending)
+        guard request == Replacement(selectedID: pending.id, candidate: candidate) else { return .superseded }
+        guard verified, let candidate else { return .unavailable }
+        return .confirmed(candidate)
+    }
+
     struct PendingSelection {
         let id: String
         let slot: OutgoingSlot
@@ -4214,9 +4227,12 @@ struct MessageMediaFullscreenGalleryView: View {
             }
             let verified = await gallery.confirmedSelection(for: pendingSelection)
             guard let latest = currentGalleryMissing(request.selectedID) else { return }
-            let replacement = latest.confirmedItem(for: pendingSelection)
-            guard request == MessageMediaGallery.Replacement(selectedID: pendingSelection.id, candidate: replacement) else { return }
-            guard verified != nil, let replacement else { onDismiss(); return }
+            let replacement: MessageMediaAttachment
+            switch latest.finishVerification(request, pending: pendingSelection, verified: verified != nil) {
+            case .superseded: return
+            case .unavailable: onDismiss(); return
+            case .confirmed(let item): replacement = item
+            }
             preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
                 contentType: UTType(mimeType: replacement.mediaType) ?? .data)
             let wasPlaying = pendingVideo.wantsPlayback ?? selection.demand(for: pendingSelection.id,
@@ -4739,6 +4755,10 @@ private struct MessageMediaFullscreenImagePage: View {
                             onTap: onToggleChrome, onZoomChanged: onZoomChanged,
                             gifData: playback?.data, playbackID: playback?.id, onGIFCompletion: playback?.finish)
                     }
+                } else if isLoading, waitingForTap {
+                    Button { loadRequest += 1 } label: { ProgressView().padding(8) }
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel(L10n.string("Tap to download"))
                 } else if isLoading {
                     ProgressView()
                 } else if couldNotDecode {
@@ -4801,7 +4821,7 @@ private struct MessageMediaFullscreenImagePage: View {
             return
         }
 
-        isLoading = demand.isUserInitiated
+        isLoading = true
         waitingForTap = !demand.isUserInitiated
         didFail = false
         defer { if !Task.isCancelled { isLoading = false } }
