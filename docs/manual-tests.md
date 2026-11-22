@@ -1941,7 +1941,11 @@ Marmot root. Automated simulator checks do not replace these device checks.
       is outside the preview. With more reactors or reaction kinds than the bubble
       previews, hold a chip to open Reactions directly with that emoji selected.
       Releasing the hold keeps the count and your selection intact. The overflow
-      pill opens All. With several reaction kinds on a narrow bubble, check that
+      pill opens All. Compare a single emoji and `+3`: both capsules have the
+      same height and minimum width, with 3 pt between neighbors. A longer
+      count widens only its own capsule. Tap just below each pill and on either
+      side of the gap midpoint to check that the intended reaction opens or toggles.
+      With several reaction kinds on a narrow bubble, check that
       the leading tally stays visible even when your less-popular reaction is
       in overflow. Open All to find yours.
       Both views include every reactor. Tap an available emoji
