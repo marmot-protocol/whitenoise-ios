@@ -8,6 +8,7 @@ extension EnvironmentValues {
 /// navigation title and the source used by the current page's actions.
 struct TranscriptMediaSheet<Page: View>: View {
     @Environment(\.transcriptHistoryControls) private var history
+    @Environment(\.locale) private var locale
     @State private var actionRead: Task<Void, Never>?
     @State private var actionFailure: LocalizedStringKey?
     let gallery: MessageMediaGallery
@@ -43,7 +44,7 @@ struct TranscriptMediaSheet<Page: View>: View {
                         if let caption = gallery.transcriptCaptions?[selection] {
                             VStack(spacing: 0) {
                                 Text(caption.sender).font(.headline)
-                                Text(caption.date.formatted(date: .abbreviated, time: .shortened))
+                                Text(caption.date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale)))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }
