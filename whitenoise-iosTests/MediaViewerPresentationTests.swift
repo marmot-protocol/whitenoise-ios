@@ -18,6 +18,15 @@ struct MediaViewerPresentationTests {
         #expect(chrome.isVisible)
     }
 
+    @Test func transcriptShareNeedsPreparedBytesAndRetainedHistoryControls() {
+        let loaded = MediaViewerControlState(hasPreparedMedia: true, hasForwardingContext: false)
+        #expect(!loaded.canShareFromTranscript(hasHistoryControls: false))
+        #expect(loaded.canShareFromTranscript(hasHistoryControls: true))
+
+        let loading = MediaViewerControlState(hasPreparedMedia: false, hasForwardingContext: false)
+        #expect(!loading.canShareFromTranscript(hasHistoryControls: true))
+    }
+
     @Test func savingAndSharingWaitForDecryptedBytes() {
         let pending = MediaViewerControlState(
             hasPreparedMedia: false,

@@ -4243,7 +4243,10 @@ struct MessageMediaFullscreenGalleryView: View {
         #if DEBUG
         if isChatFixture { return bundledShareURL != nil }
         #endif
-        return controlState.canShare && (gallery.transcriptCaptions == nil || transcriptHistory != nil)
+        if gallery.transcriptCaptions != nil {
+            return controlState.canShareFromTranscript(hasHistoryControls: transcriptHistory != nil)
+        }
+        return controlState.canShare
     }
 
     private var controlState: MediaViewerControlState {

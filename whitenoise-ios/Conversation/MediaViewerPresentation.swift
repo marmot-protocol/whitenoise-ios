@@ -27,6 +27,10 @@ nonisolated struct MediaViewerControlState: Equatable {
 
     var canShare: Bool { hasPreparedMedia }
 
+    func canShareFromTranscript(hasHistoryControls: Bool) -> Bool {
+        hasHistoryControls && canShare
+    }
+
     var canForward: Bool { hasPreparedMedia && hasForwardingContext }
 
     /// Unlike saving and sharing this never becomes available while the page
