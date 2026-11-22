@@ -5,7 +5,7 @@ import MarmotKit
 /// semantic shapes the UI cares about.
 ///
 /// Inner MLS messages are unsigned Nostr events: the FFI record carries the
-/// Nostr `kind` (9 chat, 7 reaction, 5 delete, 1009 edit, 1068 poll, 1200 stream-start) and the raw
+/// Nostr `kind` (9 chat, 7 reaction, 5 delete, 1009 edit, 1068 poll) and the raw
 /// `tags`. Host apps branch on those instead of a fixed payload enum — this
 /// type is that branch, kept in one place so the timeline, chat-list preview,
 /// and bubble all classify a record identically.
@@ -21,27 +21,15 @@ nonisolated enum MessageSemantics {
     /// A NIP-22 comment, as other clients send thread replies.
     static let kindComment: UInt64 = 1111
     static let kindPoll: UInt64 = 1068
-    static let kindAgentStreamStart: UInt64 = 1200
     static let kindAgentActivity: UInt64 = 1201
     static let kindAgentOperation: UInt64 = 1202
     static let kindGroupSystem: UInt64 = 1210
 
-    // Tag names. `e`/`q` are standard Nostr reference tags; the `stream-*` /
-    // `imeta` sets are owned by their respective features.
+    // Tag names. `e`/`q` are standard Nostr reference tags; `imeta` describes
+    // encrypted media.
     static let eventRefTag = "e"
     static let quoteRefTag = "q"
     static let imetaTag = "imeta"
-    static let streamTag = "stream"
-    static let streamTypeTag = "stream-type"
-    static let streamFinalKindTag = "final-kind"
-    static let streamHashTag = "stream-hash"
-    static let streamStartTag = "stream-start"
-    static let streamChunksTag = "stream-chunks"
-    static let streamRouteTag = "route"
-    static let streamBrokerTag = "broker"
-    static let streamTypeText = "text"
-    static let streamFinalKindChat = "9"
-    static let streamRouteQuic = "quic"
 
     /// The semantic classification of a message record.
     enum Kind: Equatable {
@@ -51,10 +39,6 @@ nonisolated enum MessageSemantics {
         case reply(targetMessageId: String)
         /// A kind-9 media message described by one or more ordered `imeta` tags.
         case media([MediaAttachmentReferenceFfi])
-        /// A kind-9 agent-stream final: carries a `stream` tag. The body
-        /// (plaintext) is the full transcript; it replaces the live preview
-        /// keyed by `streamId`.
-        case streamFinal(streamId: String)
         /// A kind-7 reaction. Emoji lives in `content` (plaintext); empty
         /// content means an un-react (delete of the reaction event).
         case reaction(targetMessageId: String)
@@ -65,8 +49,6 @@ nonisolated enum MessageSemantics {
         /// A kind-1068 poll. MDK validates it and projects the tally onto the
         /// timeline row; the question is the plaintext.
         case poll
-        /// A kind-1200 agent-stream start (opens the live QUIC preview).
-        case agentStreamStart(StreamStart)
         /// Durable agent activity/status chrome; not a chat bubble.
         case agentActivity
         /// Durable agent operation chrome; not a chat bubble.
@@ -78,13 +60,6 @@ nonisolated enum MessageSemantics {
         case unsupportedEvent
         /// A known kind whose tags are malformed; never rendered as a bubble.
         case unknown
-    }
-
-    /// A kind-1200 agent-stream start projected from its tags.
-    struct StreamStart: Equatable {
-        var streamId: String
-        var route: String
-        var brokers: [String]
     }
 
     /// Classify a record by branching on its `kind` and reading `tags`.
@@ -99,9 +74,6 @@ nonisolated enum MessageSemantics {
         case kindEdit:
             guard let target = firstValue(of: eventRefTag, in: tags) else { return .unknown }
             return .edit(targetMessageId: target)
-        case kindAgentStreamStart:
-            guard let start = streamStart(from: tags) else { return .unknown }
-            return .agentStreamStart(start)
         case kindAgentActivity:
             return .agentActivity
         case kindAgentOperation:
@@ -111,11 +83,8 @@ nonisolated enum MessageSemantics {
         case kindPoll:
             return .poll
         case kindChat:
-            // Order matters: a stream-final is a kind-9 with a `stream` tag; a
-            // reply has both `e` and `q`; media has an `imeta` tag.
-            if let streamId = streamFinalId(from: tags) {
-                return .streamFinal(streamId: streamId)
-            }
+            // Order matters: media has an `imeta` tag; a reply has both `e`
+            // and `q`.
             if hasTag(imetaTag, in: tags) {
                 guard let media = mediaAttachments(from: tags) else { return .chat }
                 return .media(media)
@@ -125,15 +94,15 @@ nonisolated enum MessageSemantics {
             }
             return .chat
         case kindComment:
-            // Threads are shown one level deep: a comment is a reply to its
-            // parent (the first lowercase `e`), as MDK projects it. Without a
-            // numeric `k` tag it is not a NIP-22 comment, and MDK treats it as
+            // This app has no thread view: a thread message shows inline as a
+            // reply to its parent, as MDK projects it. A comment without a
+            // parent reads like chat; a kind 1111 that isn't a comment is
             // another app's kind.
             guard isNIP22Comment(tags) else { return .unsupportedEvent }
             if hasTag(imetaTag, in: tags), let media = mediaAttachments(from: tags) {
                 return .media(media)
             }
-            if let parent = firstValue(of: eventRefTag, in: tags) {
+            if let parent = threadParent(in: tags) {
                 return .reply(targetMessageId: parent)
             }
             return .chat
@@ -142,12 +111,21 @@ nonisolated enum MessageSemantics {
         }
     }
 
-    /// MDK's test for a NIP-22 comment: any `k` tag naming a numeric kind,
-    /// digits only (Swift's parser would also take a sign).
+    /// MDK's test for a NIP-22 comment: a lowercase `e` tag, or a `k` tag
+    /// naming a numeric kind (White Noise Linux sent thread messages without
+    /// `k` until 2026-11-17).
     private static func isNIP22Comment(_ tags: [MessageTagFfi]) -> Bool {
-        allValues(of: "k", in: tags).contains { value in
+        hasTag(eventRefTag, in: tags) || allValues(of: "k", in: tags).contains { value in
             !value.isEmpty && value.utf8.allSatisfy(isAsciiDigit) && UInt64(value) != nil
         }
+    }
+
+    /// The parent a thread message answers: the value of its first lowercase
+    /// `e`, which MDK takes as authoritative even when it has no value.
+    private static func threadParent(in tags: [MessageTagFfi]) -> String? {
+        guard let first = tags.first(where: { $0.values.first == eventRefTag }),
+              first.values.count > 1, !first.values[1].isEmpty else { return nil }
+        return first.values[1]
     }
 
     static func classify(_ record: AppMessageRecordFfi) -> Kind {
@@ -159,17 +137,22 @@ nonisolated enum MessageSemantics {
     }
 
     /// A kind this app has no rendering for at all, such as another client's app-defined kind.
-    /// A reply preview carries no tags, so a comment there reads as one; a
-    /// quote checks its loaded target's tags (`TimelineStore.replyPreview`).
+    /// Previews carry no tags: the chat list shows only chat activity, so a
+    /// kind 1111 there is a thread message, and a quote decides from MDK's
+    /// `thread` (`TimelineStore.replyPreview`).
     static func isUnsupportedEventKind(_ kind: UInt64) -> Bool {
         kind != kindComment && classify(kind: kind, tags: []) == .unsupportedEvent
     }
 
-    /// Kinds a person sends as their own conversation message: chat and polls.
-    /// MarmotKit 0.18.0 doesn't count NIP-22 comments as chat activity, so
-    /// they can't carry the read marker.
-    static func isUserMessageKind(_ kind: UInt64) -> Bool {
-        kind == kindChat || kind == kindPoll
+    /// What MDK counts as chat activity a person sends: chat, polls and
+    /// thread messages (a kind 1111 with a parent). Only these move the
+    /// unread count and can carry the read marker.
+    static func isChatActivity(kind: UInt64, tags: [MessageTagFfi]) -> Bool {
+        kind == kindChat || kind == kindPoll || (kind == kindComment && threadParent(in: tags) != nil)
+    }
+
+    static func isChatActivity(_ record: AppMessageRecordFfi) -> Bool {
+        isChatActivity(kind: record.kind, tags: record.tags)
     }
 
     static func isTypedAgentEventKind(_ kind: UInt64) -> Bool {
@@ -197,18 +180,6 @@ nonisolated enum MessageSemantics {
             guard tag.values.first == name, tag.values.count > 1 else { return nil }
             return tag.values[1]
         }
-    }
-
-    /// The `stream` id if this kind-9 is a complete stream-final. The current
-    /// text-stream profile requires `stream`, `stream-start`, `stream-hash`,
-    /// and `stream-chunks`; partial stream-ish tags are just normal chat text.
-    private static func streamFinalId(from tags: [MessageTagFfi]) -> String? {
-        guard let streamId = normalizedStreamId(firstValue(of: streamTag, in: tags)),
-              Hex.normalized32Bytes(firstValue(of: streamStartTag, in: tags)) != nil,
-              Hex.normalized32Bytes(firstValue(of: streamHashTag, in: tags)) != nil,
-              validUnsignedDecimal(firstValue(of: streamChunksTag, in: tags))
-        else { return nil }
-        return streamId
     }
 
     static func supportsEncryptedMediaVersion(_ version: EncryptedMediaVersionFfi?) -> Bool {
@@ -317,33 +288,6 @@ nonisolated enum MessageSemantics {
     static let maxImetaFileNameBytes = 255
     static let maxImetaMediaTypeBytes = 127
     static let maxImetaTags = MediaDraftProcessor.maxAttachmentCount + 2
-
-    private static func streamStart(from tags: [MessageTagFfi]) -> StreamStart? {
-        guard let streamId = normalizedStreamId(firstValue(of: streamTag, in: tags)),
-              firstValue(of: streamTypeTag, in: tags) == streamTypeText,
-              firstValue(of: streamFinalKindTag, in: tags) == streamFinalKindChat
-        else { return nil }
-        guard let route = firstValue(of: streamRouteTag, in: tags)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        else { return nil }
-        guard route == streamRouteQuic else { return nil }
-        let brokers = allValues(of: streamBrokerTag, in: tags)
-        return StreamStart(streamId: streamId, route: route, brokers: brokers)
-    }
-
-    static func normalizedStreamId(_ raw: String?) -> String? {
-        Hex.normalized32Bytes(raw)
-    }
-
-    private static func validUnsignedDecimal(_ raw: String?) -> Bool {
-        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
-        let bytes = value.utf8
-        guard !bytes.isEmpty,
-              bytes.allSatisfy(isAsciiDigit)
-        else { return false }
-        return UInt64(value) != nil
-    }
 
     private static func isAsciiDigit(_ byte: UInt8) -> Bool {
         (0x30...0x39).contains(byte)

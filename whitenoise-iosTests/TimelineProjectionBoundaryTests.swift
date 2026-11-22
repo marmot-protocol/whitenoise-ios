@@ -140,7 +140,6 @@ struct TimelineProjectionBoundaryTests {
                 kind: MessageSemantics.kindChat,
                 mediaJson: nil,
                 media: [reference],
-                agentTextStreamJson: nil,
                 deleted: false
             )
         )
@@ -597,7 +596,6 @@ struct TimelineProjectionBoundaryTests {
             replyPreview: replyPreview,
             mediaJson: nil,
             media: media,
-            agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             edit: nil,

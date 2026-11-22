@@ -398,7 +398,7 @@ private final class SendHarness {
             groupIdHex: harnessGroupId, sender: "", plaintext: text,
             contentTokens: .emptyDocument, kind: MessageSemantics.kindChat, tags: [],
             timelineAt: timelineAt, receivedAt: timelineAt, replyToMessageIdHex: nil, replyPreview: nil,
-            mediaJson: nil, media: [], agentTextStreamJson: nil, groupSystem: nil,
+            mediaJson: nil, media: [], groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []), edit: nil,
             deleted: false, deletedByMessageIdHex: nil, invalidationStatus: nil
         )

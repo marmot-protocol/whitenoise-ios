@@ -153,7 +153,7 @@ Install a formal release or a dated nightly using its version:
 ./scripts/sync-bindings.sh 0.14.0-nightly.20261022
 ```
 
-The app pins the formal MarmotKit 0.18.0 release. Nightlies are for testing only
+The app pins the formal MarmotKit 0.19.0 release. Nightlies are for testing only
 and are deleted after 30 days; pin a formal release before shipping. For local
 reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
@@ -344,6 +344,12 @@ unread/pin updates. Reopen when the account-store epoch changes. Cancel native
 Resolve just-created destinations from the creation cache immediately, then overlay
 the keyed presented row. Unrelated live updates must not discard that keyed read;
 preserve a newer target row and reject account/runtime/handle replacements.
+The app has no thread view. A NIP-22 thread message (kind 1111 with a parent)
+shows inline as a reply quoting its parent and counts as chat activity like
+kind 9 (unread, read marker), as MDK does; a kind 1111 without a parent is not
+activity, and one that isn't a comment is an unsupported event. A quote of a
+kind 1111 follows MDK's `thread`. Answer any row with `replyToMessage`, never
+`sendThreadMessage`.
 Start a chat with one person through `startDirectConversation`, which reuses or
 creates the canonical direct chat and is safe to retry; seed the creation cache
 from a `chatListRow` read after it. Only the chooser's explicit Start New
@@ -529,7 +535,7 @@ Do not add a second storage path for data Marmot already owns.
 - Markdown display blocks are cacheable per message content and profile refresh generation; do not call `MarkdownMessageBuilder.displayBlocks` directly from bubble body paths.
 - Markdown timestamps are formatted at build time, never persisted. Rows that render one also key on `MarkdownTimestampRenderClock.generation` (locale, time zone, language, clock, resume); rows without one must not rebuild. Visible `relative` timestamps refresh through the conversation's single `RelativeTimestampRefreshScheduler` task only while on screen and active. Previews, reply quotes and notifications are not refreshed, so they render `relative` as absolute text.
 - Markdown preview/plain-text walkers must budget table rows and cells, including empty cells, so hostile ASTs cannot bypass node limits.
-- Developer-mode streaming debug may show agent-stream MLS events and live QUIC update rows in the conversation timeline. Console logs for agent streams should log sizes, counts, hashes, and stream ids rather than plaintext message content.
+- Developer-mode Chat Debug Mode may show non-chat MLS events (reactions, deletes, edits, agent and unknown kinds) with debug styling in the conversation timeline. MDK 0.19.0 retired the QUIC agent text stream; agent replies are ordinary durable messages, so don't rebuild a live-preview path.
 - Build user-visible date formats from localized templates rather than raw `DateFormatter.dateFormat` patterns.
 - When a sheet folds typed pending input into a submit action, abort on invalid pending input before clearing validation errors or starting async work.
 - Recipient-staging sheets should parse with `AddMembersPresentation`, normalize through Marmot to `MemberRefFfi`, and deduplicate staged recipients by `accountIdHex` rather than raw input text.

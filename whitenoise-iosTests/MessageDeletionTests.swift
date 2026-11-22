@@ -802,13 +802,11 @@ struct MessageDeletionTests {
                     kind: MessageSemantics.kindChat,
                     mediaJson: nil,
                     media: [],
-                    agentTextStreamJson: nil,
                     deleted: false
                 )
             } : nil,
             mediaJson: nil,
             media: [],
-            agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             edit: nil,
