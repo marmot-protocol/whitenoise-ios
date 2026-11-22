@@ -202,7 +202,7 @@ nonisolated enum TranscriptMessagePreview {
             if character.isNewline { newlines += 1 }
             return newlines <= 15
         }
-        return String(visible).trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(visible)
     }
 
     static func sourceChunk(_ remaining: Substring) -> Substring {
@@ -1253,7 +1253,7 @@ struct MessageBubble: View {
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
             // stream bubbles, pre-markdown history) keep the plain path.
-            let text = AttributedString(snippet.map { $0 + "…" } ?? sanitizedBodyText)
+            let text = AttributedString(snippet.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) + "…" } ?? sanitizedBodyText)
             if actionBodySize != nil {
                 liftedInlineText(text)
             } else {
@@ -1454,7 +1454,8 @@ struct MessageBubble: View {
 
     private func reactionLabel(_ tally: ConversationViewModel.ReactionTally) -> some View {
         HStack(spacing: 2) {
-            CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex, pointSize: 14)
+            CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex,
+                                     pointSize: 14, maximumPointSize: ReactionPillPresentation.height - 2)
                 .font(.system(size: 14, weight: .bold))
             if tally.count > 1 {
                 Text(L10n.formatted("%lld", Int64(tally.count)))
