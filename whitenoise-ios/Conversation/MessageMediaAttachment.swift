@@ -350,7 +350,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// Opening a sourced transcript page must still go through that page's original slot.
     var forTranscriptPage: Self {
         var copy = self
-        if localTarget != nil { copy.localData = nil }
+        if AttachmentHandoffSource(self) != .none { copy.localData = nil }
         return copy
     }
 
@@ -358,7 +358,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// A replacement for a previously known slot must prepare its own bytes.
     func canUseBytesPrepared(for earlier: Self) -> Bool {
         guard id == earlier.id, reference == earlier.reference else { return false }
-        if localTarget == earlier.localTarget { return true }
+        if localTarget == earlier.localTarget { return localTarget != nil || sourceHint == earlier.sourceHint }
         return earlier.localTarget == nil && localTarget != nil && reference != nil
             && (earlier.sourceHint == nil || earlier.sourceHint == sourceHint)
     }

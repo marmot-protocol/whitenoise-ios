@@ -54,7 +54,7 @@ struct TimelineMediaTaskID: Equatable {
     let contentID: String
     let isVisible: Bool
     var policyRevision: String = ""
-    var target: AttachmentLocalTargetFfi?
+    var source: AttachmentHandoffSource = .none
 }
 
 /// Reference box for the media-load callback. Passing the bare async closure
@@ -2955,7 +2955,7 @@ private struct MessageVideoAttachmentView: View {
 
     private var previewRequest: TimelineMediaTaskID {
         TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, target: item.localTarget)
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))
     }
 
     var body: some View {
@@ -3136,7 +3136,7 @@ private struct MessageAudioAttachmentView: View {
 
     private var prefetchID: TimelineMediaTaskID {
         TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-                            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)
+                            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))
     }
 
     init(
@@ -3596,14 +3596,13 @@ private struct MessageDocumentAttachmentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { cancelDocumentOpen() }
         }
-        .onChange(of: item.id) { _, _ in
-            closeDocument()
-            byteCount = nil
-            contactName = nil
-            didFail = false
+        .onChange(of: item.id) { _, _ in resetDocument() }
+        .onChange(of: AttachmentHandoffSource(item)) { previous, current in
+            if case .hint = previous, case .target(let target) = current, previous.matches(target) { return }
+            resetDocument()
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))) {
             guard liftedDocuments == nil else { return }
             let metadata = await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
                 allowed: MediaAutoDownloadStore.shared.shouldAutoDownload(.document), hasContactName: displayName != nil)
@@ -3670,6 +3669,13 @@ private struct MessageDocumentAttachmentView: View {
         } catch {
             if isCurrent() { didFail = true }
         }
+    }
+
+    private func resetDocument() {
+        closeDocument()
+        byteCount = nil
+        contactName = nil
+        didFail = false
     }
 
     private func cancelDocumentOpen() {

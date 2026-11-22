@@ -46,6 +46,13 @@ struct MessageMediaGalleryTests {
         #expect(receivedCopy.localData == draft.localData)
         #expect(receivedCopy.forTranscriptPage.localData == nil)
         #expect(receivedCopy.forTranscriptPage.localTarget == source.localTarget)
+        var hinted = pending
+        hinted.sourceHint = .init(messageID: "message", slot: 0)
+        let hintedCopy = sends.overlay(hinted)
+        #expect(hintedCopy.localData == draft.localData)
+        #expect(hintedCopy.forTranscriptPage.localData == nil)
+        #expect(hintedCopy.forTranscriptPage.sourceHint == hinted.sourceHint)
+        #expect(!hintedCopy.canUseBytesPrepared(for: pending))
         #expect(draft.forTranscriptPage.localData == draft.localData)
         var edited = source
         edited.localTarget?.sourceMessageIdHex = "replacement"
