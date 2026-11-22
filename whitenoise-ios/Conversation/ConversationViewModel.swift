@@ -2461,14 +2461,19 @@ final class ConversationViewModel {
         timeline.compactMap { item in
             guard case .message(let record, _) = item.kind,
                   !record.messageIdHex.isEmpty,
-                  MessagePreview.isPreviewable(record),
                   !isDeleted(record.messageIdHex)
             else { return nil }
+            let activity = record.kind == MessageSemantics.kindAgentActivity ? agentEventDisplay(for: item) : nil
+            guard activity != nil || MessagePreview.isPreviewable(record) else { return nil }
             var labels: [String] = []
             if context.showsIdentity, clusterAtUnreadBoundary(for: item).showsSenderName {
                 // Search only identities already available to the row, without requesting a profile.
                 labels.append(IdentityPresentation.text(accountIdHex: record.sender, knownName: conversationWindow == nil
                     ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender) : windowIdentities[record.sender]?.displayName))
+            }
+            if let activity {
+                if let status = activity.visibleActivityStatus { labels.append(status) }
+                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: activity.primaryText, labels: labels)
             }
             if record.kind == MessageSemantics.kindPoll {
                 let poll = poll(for: record.messageIdHex)

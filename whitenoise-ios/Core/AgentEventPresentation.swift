@@ -26,6 +26,12 @@ nonisolated enum AgentEventPresentation {
         var secondaryText: String?
         var iconName: String
         var reportsWorkInProgress = false
+
+        var showsStatusInIcon: Bool { reportsWorkInProgress || iconName == AgentEventPresentation.completedIcon }
+
+        var visibleActivityStatus: String? {
+            showsStatusInIcon || secondaryText == primaryText ? nil : secondaryText
+        }
     }
 
     static func display(for record: AppMessageRecordFfi) -> Display? {

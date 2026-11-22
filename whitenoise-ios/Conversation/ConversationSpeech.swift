@@ -346,6 +346,22 @@ struct LocalVoiceAttachment {
     private let client: MarmotClient
     let target: AttachmentLocalTargetFfi
 
+    enum SizeError: Error {
+        case empty, tooLarge
+
+        var message: String {
+            switch self {
+            case .empty: L10n.string("Couldn’t transcribe this recording.")
+            case .tooLarge: L10n.string("This recording is too large to transcribe.")
+            }
+        }
+    }
+
+    static func validateSize(_ byteCount: UInt64) throws {
+        guard byteCount > 0 else { throw SizeError.empty }
+        guard byteCount <= MessageMediaAttachment.audioAnalysisByteLimit else { throw SizeError.tooLarge }
+    }
+
     static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState) async throws -> Self? {
         guard let account = app.activeAccountRef else { return nil }
         let client = try app.currentMarmotClient()
@@ -365,9 +381,10 @@ struct LocalVoiceAttachment {
     private func isAvailable(in app: AppState) async throws -> Bool {
         guard app.client === client, app.activeAccountRef == account else { return false }
         let assets = try await client.marmot.attachmentLocalAssets(accountRef: account, groupIdHex: group, targets: [target])
-        guard let asset = assets.first, asset.reference != nil,
-              asset.byteCount > 0, asset.byteCount <= MessageMediaAttachment.audioAnalysisByteLimit else { return false }
-        return !Task.isCancelled && app.client === client && app.activeAccountRef == account
+        guard !Task.isCancelled, app.client === client, app.activeAccountRef == account else { throw CancellationError() }
+        guard let asset = assets.first, asset.reference != nil else { return false }
+        try Self.validateSize(asset.byteCount)
+        return true
     }
 
     func data(in app: AppState) async throws -> Data {

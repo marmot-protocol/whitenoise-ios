@@ -147,6 +147,21 @@ struct TimelineProjectionBoundaryTests {
         #expect(model.search.matches.isEmpty)
     }
 
+    @Test func searchCanSelectTheAgentNameOnTheActivityThatStartsItsCluster() {
+        let app = AppState.test()
+        let model = ConversationViewModel(appState: app, group: testGroup())
+        var activity = timelineRecord(messageIdHex: hexId(1), plaintext: #"{"status":"thinking","text":"Checking the route"}"#)
+        activity.kind = MessageSemantics.kindAgentActivity
+        app.seedDiscoveredProfile(profileMetadata(displayName: "Trail guide"), forAccountIdHex: activity.sender)
+        let answer = timelineRecord(messageIdHex: hexId(2), plaintext: "Take the east path")
+        model.applyTimelinePage(.init(messages: [activity, answer], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        for query in ["Trail guide", "Checking"] {
+            model.search.query = query
+            #expect(model.search.matches.map(\.messageIdHex) == [activity.messageIdHex])
+        }
+    }
+
     @Test func searchMatchesTheDocumentFilenameButSkipsUnlabeledMediaTiles() {
         let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
         let image = mediaReference(sourceEpoch: 42)
