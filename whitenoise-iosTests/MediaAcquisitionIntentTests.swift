@@ -70,10 +70,10 @@ struct MediaAcquisitionIntentTests {
         }
         #expect(bytesRead == 0)
         let contact = attachment("text/vcard", localData: card)
-        let metadata = await loader.prefetchDocument(contact, isVisible: true, allowed: true)
+        let metadata = await loader.prefetchDocument(contact, isVisible: true, allowed: false)
         #expect(metadata?.size == card.count)
         #expect(metadata?.contactName?.contains("Avery") == true)
-        #expect(bytesRead == card.count)
+        #expect(bytesRead == 0)
     }
 
     @Test func selectedPageRetryCarriesTheRetryDemand() async throws {

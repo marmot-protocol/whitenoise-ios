@@ -2702,6 +2702,7 @@ struct ConversationView: View {
         let selectionInset = record.direction == "sent" ? Self.selectionIndicatorSize : Self.receivedSelectionInset
         let incompleteMarkdown = viewModel.timelineStore.markdownProjections.isTruncated(for: item)
         let mediaScope = MessageBubble.MediaOpenScope(viewModel, appState: appState)
+        let mediaItems = viewModel.mediaItems(for: item)
         return MessageBubble(
             record: record,
             status: status,
@@ -2715,7 +2716,7 @@ struct ConversationView: View {
             clusterPresentation: cluster,
             showsSenderIdentity: showsSenderIdentity,
             replyPreview: viewModel.replyPreview(for: record),
-            mediaItems: viewModel.mediaItems(for: item),
+            mediaItems: mediaItems,
             voiceTranscript: visibleVoiceTranscript(for: record, in: viewModel),
             transcribingVoice: speech.transcribingID == record.messageIdHex,
             readingSpeech: speech.readingID == record.messageIdHex ? speech : nil,
@@ -2755,11 +2756,8 @@ struct ConversationView: View {
             onLoadMedia: mediaLoader(for: viewModel, documentRowID: item.id),
             mediaOpenScope: mediaScope,
             onOpenTranscriptMedia: { media, data in
-                guard mediaScope.isCurrent(self.viewModel, appState: appState), !viewModel.isDeleted(record.messageIdHex),
-                      let current = viewModel.timeline.first(where: { $0.id == item.id }) else { return }
-                let slots = viewModel.mediaItems(for: current)
-                guard slots.contains(where: { $0.canUseBytesPrepared(for: media) }) else { return }
-                transcriptMedia = TranscriptMediaTarget(item: media, scope: mediaScope, initialData: data, row: current, media: slots)
+                let target = TranscriptMediaTarget(item: media, scope: mediaScope, initialData: data, row: item, media: mediaItems)
+                openTranscriptMedia(target, rowID: item.id, in: viewModel)
             },
             mediaForwardingContext: forwardingContext(for: viewModel),
             onGoToMessage: { messageIdHex in
@@ -5087,6 +5085,32 @@ struct ConversationView: View {
         MediaForwardingContext(viewModel: viewModel) {
             if let forwardDestinationProvider { return try await forwardDestinationProvider() }
             return try await viewModel.forwardDestinations()
+        }
+    }
+
+    private func openTranscriptMedia(_ target: TranscriptMediaTarget, rowID: String, in model: ConversationViewModel) {
+        func currentRow() -> TimelineItem? {
+            guard target.scope.isCurrent(viewModel, appState: appState),
+                  let row = model.timeline.first(where: { $0.id == rowID }), case .message(let record, _) = row.kind,
+                  !model.isDeleted(record.messageIdHex), !model.timelineStore.isHidden(record.messageIdHex),
+                  !model.timelineStore.isBlockedAuthor(record.sender) else { return nil }
+            return row
+        }
+        guard let row = currentRow() else { return }
+        if model.mediaItems(for: row).contains(where: { $0.canUseBytesPrepared(for: target.item) }) {
+            transcriptMedia = target
+            return
+        }
+        // A tap can finish decoding after the outgoing attachment has been confirmed.
+        guard let pending = target.pending,
+              let gallery = model.transcriptMediaGallery(opening: target.id, initialData: nil) else { return }
+        let intent = mediaOpenIntent.current
+        Task {
+            guard let confirmed = await gallery.confirmedSelection(for: pending), mediaOpenIntent.current == intent,
+                  let current = currentRow() else { return }
+            let slots = model.mediaItems(for: current)
+            guard let visible = slots.first(where: { $0.canUseBytesPrepared(for: confirmed) && $0.localTarget == confirmed.localTarget }) else { return }
+            transcriptMedia = TranscriptMediaTarget(item: visible, scope: target.scope, initialData: pending.data, row: current, media: slots)
         }
     }
 

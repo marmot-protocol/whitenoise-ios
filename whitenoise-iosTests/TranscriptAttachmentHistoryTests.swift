@@ -77,6 +77,22 @@ struct TranscriptAttachmentHistoryTests {
         #expect(connected.older.map(\.target.messageIdHex) == ["selected", "newer"])
     }
 
+    @Test func theOppositeWindowEdgeCannotDisconnectASelectedOlderPhoto() throws {
+        let selected = entry("older"), latest = entry("latest"), late = entry("late")
+        let selectedID = try #require(TranscriptHistorySlot(selected)).attachment.id
+        let window = try [late, latest].map { try #require(TranscriptHistorySlot($0)).attachment }
+        var pages = TranscriptHistoryPages()
+        pages.append([latest, selected])
+        let disconnected = pages.extensions(around: window, excluding: ["late", "latest"], preserving: selectedID)
+        #expect(!disconnected.includesWindow)
+        #expect(disconnected.older.map(\.attachment.id) == [selectedID])
+        var refreshed = TranscriptHistoryPages()
+        refreshed.append([latest, late, selected])
+        let connected = refreshed.extensions(around: window, excluding: ["late", "latest"], preserving: selectedID)
+        #expect(connected.includesWindow)
+        #expect(connected.older.map(\.attachment.id) == [selectedID])
+    }
+
     @Test func refreshingNewerPhotosKeepsTheSelectedOlderPhotoAcrossPageBoundaries() throws {
         let anchor = entry("visible")
         let window = [try #require(TranscriptHistorySlot(anchor)).attachment]

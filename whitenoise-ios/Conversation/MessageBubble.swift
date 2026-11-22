@@ -126,14 +126,23 @@ final class ConversationMediaLoader {
 
     @discardableResult
     func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool, hasContactName: Bool = false) async -> (size: Int, contactName: String?)? {
-        guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return nil }
+        guard isVisible, media.kind == .document || media.kind == .unsupported else { return nil }
         guard !hasContactName, DocumentPreviewFormat(for: media) == .contact else {
+            guard allowed else { return nil }
             return await admitAutomaticAttachment(media).map { ($0, nil) }
         }
-        var requested = media
-        requested.previewByteLimit = DocumentPreviewFormat.contact.byteLimit
+        let limit = DocumentPreviewFormat.contact.byteLimit
         do {
-            let bytes = try await data(for: requested, demand: .automatic)
+            let bytes: Data
+            if let local = media.localData {
+                guard local.count <= limit else { return (local.count, nil) }
+                bytes = local
+            } else {
+                guard allowed else { return nil }
+                var requested = media
+                requested.previewByteLimit = limit
+                bytes = try await data(for: requested, demand: .automatic)
+            }
             try Task.checkCancellation()
             let name = await Task.detached(priority: .utility) { SharedContactPreview(data: bytes)?.name }.value
             try Task.checkCancellation()

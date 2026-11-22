@@ -122,10 +122,10 @@ struct TranscriptHistoryPages {
             // Pending sends in a confirmed live tail follow the native sequence.
             return Edges(older: chronological.filter(isGalleryPage))
         }
-        if firstOverlap == nil, lastOverlap == nil, let selectedID,
-           chronological.contains(where: { $0.attachment.id == selectedID && isGalleryPage($0) }) {
-            // The selected retained segment is still contiguous. A replacement window
-            // belongs in it only after one of its edges reaches a matching source slot.
+        if let selectedID, contains(attachmentID: selectedID), !window.contains(where: { $0.id == selectedID }),
+           let selected = chronological.firstIndex(where: { $0.attachment.id == selectedID && isGalleryPage($0) }),
+           firstOverlap.map({ selected < $0 }) != true, lastOverlap.map({ selected > $0 }) != true {
+            // Stay in the selected segment until the window edge on its side matches.
             return Edges(older: chronological.filter(isGalleryPage), includesWindow: false)
         }
         return Edges(older: firstOverlap.map { chronological[..<$0].filter(isGalleryPage) } ?? [],
@@ -349,10 +349,11 @@ final class TranscriptAttachmentHistory {
         guard !Task.isCancelled, let baseline = pager.baseline, self.scope == scope,
               scope == Scope(appState: appState, group: scope.group) else { return }
         let ticket = generation
+        let startingRevision = revision
         validationSequence &+= 1
         let sequence = validationSequence
         func isCurrent() -> Bool {
-            ticket == generation && sequence == validationSequence && !Task.isCancelled
+            ticket == generation && startingRevision == revision && sequence == validationSequence && !Task.isCancelled
                 && scope == Scope(appState: appState, group: scope.group)
         }
         do {
