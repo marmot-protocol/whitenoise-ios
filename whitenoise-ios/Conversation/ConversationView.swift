@@ -2719,8 +2719,7 @@ struct ConversationView: View {
             showsSenderIdentity: showsSenderIdentity,
             replyPreview: viewModel.replyPreview(for: record),
             mediaItems: mediaItems,
-            voiceTranscript: visibleVoiceTranscript(for: record, in: viewModel),
-            transcribingVoice: speech.transcribingID == record.messageIdHex,
+            voiceTranscript: voiceTranscriptDisplay(for: record, in: viewModel),
             readingSpeech: speech.readingID == record.messageIdHex ? speech : nil,
             customEmoji: viewModel.customEmoji(for: item),
             markdownBlocks: viewModel.markdownDisplayBlocks(for: item),
@@ -4885,10 +4884,11 @@ struct ConversationView: View {
         return MessageSpeechPresentation.receivedAudio(for: record, myAccountID: model.myAccountId, media: model.mediaItems(for: row))
     }
 
-    private func visibleVoiceTranscript(for record: AppMessageRecordFfi, in model: ConversationViewModel) -> String? {
-        guard let transcript = speech.transcripts[record.messageIdHex], transcript.isVerified(in: speechScope), transcript.visible,
-              transcript.recording.matches(recordingAttachment(id: record.messageIdHex, in: model)) else { return nil }
-        return transcript.text
+    private func voiceTranscriptDisplay(for record: AppMessageRecordFfi, in model: ConversationViewModel) -> VoiceTranscriptDisplay? {
+        let id = record.messageIdHex
+        if speech.transcribingID == id { return .transcribing }
+        guard let transcript = speech.transcripts[id], transcript.recording.matches(recordingAttachment(id: id, in: model)) else { return nil }
+        return transcript.display(in: speechScope)
     }
 
     private func speechActions(for target: AppMessageRecordFfi, in model: ConversationViewModel) -> [MessageSpeechAction] {
@@ -4932,6 +4932,7 @@ struct ConversationView: View {
             !Task.isCancelled && self.viewModel === model && actionsPhase != .returning
                 && actionsTarget?.record.messageIdHex == record.messageIdHex && request == voiceAvailabilityRequest(for: row, in: model)
         }
+        let wasVerified = speech.transcripts[record.messageIdHex]?.isVerified(in: scope) == true
         let source: LocalVoiceAttachment?
         do {
             source = try await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState)
@@ -4940,7 +4941,8 @@ struct ConversationView: View {
             let sizeError = error as? LocalVoiceAttachment.SizeError
             speech.checkedVoice = (request, .unavailable(sizeError?.message ?? L10n.string("Couldn’t transcribe this recording.")))
             if let transcript = speech.transcripts[record.messageIdHex] {
-                speech.updateRetention(sizeError == nil ? nil : false, id: record.messageIdHex, recording: transcript.recording, scope: scope)
+                speech.updateRetention(sizeError == nil ? nil : false, id: record.messageIdHex, recording: transcript.recording,
+                                       scope: scope, wasVerified: wasVerified)
             }
             return
         }
@@ -4987,7 +4989,7 @@ struct ConversationView: View {
         case .stop: speech.stopReading()
         case .show, .hide: speech.setTranscriptVisible(action == .show, id: id)
         case .copy:
-            if let text = visibleVoiceTranscript(for: current, in: model) {
+            if case .text(let text) = voiceTranscriptDisplay(for: current, in: model) {
                 SensitiveClipboard.copyLocalOnly(text)
                 Haptics.tap()
             }

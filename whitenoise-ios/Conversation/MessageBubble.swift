@@ -307,7 +307,6 @@ extension MessageBubble: Equatable {
             && lhs.usesReviewLayout == rhs.usesReviewLayout
             && lhs.agentActivity == rhs.agentActivity
             && lhs.voiceTranscript == rhs.voiceTranscript
-            && lhs.transcribingVoice == rhs.transcribingVoice
             && lhs.readingSpeech === rhs.readingSpeech
             && lhs.displaysReader == rhs.displaysReader
             && lhs.incompleteMarkdown == rhs.incompleteMarkdown
@@ -370,6 +369,7 @@ struct MessageBubble: View {
     }
 
     @Environment(\.messageActionBodySize) private var actionBodySize
+    @Environment(\.messageActionHoldsEnabled) private var messageActionHoldsEnabled
     @Environment(\.actionRowMeasurementKey) private var actionRowMeasurementKey
     @Environment(AppState.self) private var appState
     @Environment(\.appDensity) private var density
@@ -389,8 +389,7 @@ struct MessageBubble: View {
     var showsSenderIdentity = true
     var replyPreview: ConversationReplyPreview? = nil
     var mediaItems: [MessageMediaAttachment] = []
-    var voiceTranscript: String?
-    var transcribingVoice = false
+    var voiceTranscript: VoiceTranscriptDisplay?
     var readingSpeech: ConversationSpeech?
     /// NIP-30 custom emoji drawn inline in the body; their attachments are
     /// already excluded from `mediaItems`.
@@ -1029,18 +1028,28 @@ struct MessageBubble: View {
     private var mediaAttachments: some View {
         VStack(alignment: .leading, spacing: 6) {
             attachmentContent
-            if transcribingVoice {
+            switch voiceTranscript {
+            case .transcribing:
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
                     Text("Transcribing…").font(.caption)
                 }
-            } else if let voiceTranscript {
+            case .text(let words):
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Transcribed").font(.caption2).foregroundStyle(.secondary)
-                    Text(voiceTranscript).font(.body)
+                    Text(words).font(.body)
                 }
                 .padding(.horizontal, 6)
                 .padding(.bottom, 3)
+            case .checkFailed:
+                let hint: LocalizedStringKey = messageActionHoldsEnabled && showMessageActions != nil
+                    ? "Couldn’t verify the recording. Touch and hold this message to try again." : "Couldn’t verify the recording."
+                Text(hint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.bottom, 3)
+            case nil: EmptyView()
             }
         }
     }
