@@ -13,6 +13,20 @@ struct ReactionMetadataFittingTests {
         #expect(!ReactionPillPresentation.canRemoveIndividually("🥾", from: [mine, other], omittedKinds: 0))
     }
 
+    @Test func chipTapUsesTheDisplayedEmojiAndProtectsOtherOwnedKinds() {
+        func action(_ emoji: String, mine: Bool = false, omitted: UInt64 = 0, repeatable: Bool = false) -> ReactionPillPresentation.TapAction {
+            let tally = ConversationViewModel.ReactionTally(emoji: emoji, count: 2, mine: mine)
+            return ReactionPillPresentation.tapAction(for: tally, in: [tally], omittedKinds: omitted) { _ in repeatable }
+        }
+        #expect(action("❤️") == .toggle)
+        #expect(action("1") == .showDetails)
+        #expect(action("©") == .showDetails)
+        #expect(action(":party:", repeatable: true) == .toggle)
+        #expect(action(":party:") == .showDetails)
+        #expect(action(":party:", mine: true) == .toggle)
+        #expect(action(":party:", mine: true, omitted: 1) == .showDetails)
+    }
+
     @Test func keepsEveryPillWhenTheMetadataRowFits() {
         let fit = ReactionMetadataFitting.fit(
             reactionWidths: [30, 30, 30],
@@ -63,7 +77,6 @@ struct ReactionMetadataFittingTests {
         )
 
         #expect(fit == ReactionMetadataFit(visibleReactionCount: 2, hiddenReactionCount: 3))
-        #expect(ReactionPillPresentation.maximumRenderedPills == 4)
     }
 }
 

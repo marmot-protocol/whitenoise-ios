@@ -4,7 +4,6 @@ import MarmotKit
 /// Question, options with live tallies, and voting for one poll bubble.
 struct PollMessageContent: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
     let poll: PollProjectionFfi
     let isFromMe: Bool
     /// Nil when the viewer cannot vote here (inactive group, pending row).
@@ -102,20 +101,17 @@ struct PollMessageContent: View {
     }
 
     private func resultBar(fraction: Double) -> some View {
-        let scale: CGFloat = 2.5
-        let trackScheme: ColorScheme = isFromMe ? (colorScheme == .light ? .dark : .light) : colorScheme
-        return GeometryReader { bounds in
-            // Scale both axes to keep the native bar’s ends round at the larger size.
-            ProgressView(value: fraction)
-                .progressViewStyle(.linear)
-                .tint(.primary)
-                .environment(\.colorScheme, trackScheme)
-                .frame(width: bounds.size.width / scale)
-                .scaleEffect(scale, anchor: .leading)
-                .frame(height: bounds.size.height)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: fraction)
-        }
-        .frame(height: 10)
-        .accessibilityHidden(true)
+        Capsule()
+            .fill(secondaryForeground.opacity(0.25))
+            .overlay(alignment: .leading) {
+                GeometryReader { bounds in
+                    Capsule()
+                        .fill(foreground)
+                        .frame(width: bounds.size.width * fraction)
+                }
+            }
+            .frame(height: 10)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: fraction)
+            .accessibilityHidden(true)
     }
 }

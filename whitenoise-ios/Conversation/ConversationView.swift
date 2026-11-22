@@ -677,6 +677,7 @@ struct ConversationView: View {
     @State private var openAddMembersOnDetails = false
     @State private var actionsTarget: ActionsTarget?
     @State private var emojiPickerTarget: ActionsTarget?
+    @State private var detailsAfterEmojiPicker: ReactionDetailsTarget?
     @State private var composerCustomEmojiPicker: ComposerCustomEmojiPicker?
     @State private var messageInfoTarget: ActionsTarget?
     @State private var reactionDetailsTarget: ReactionDetailsTarget?
@@ -1010,6 +1011,9 @@ struct ConversationView: View {
                 }
             }
             .overlay { messageActionsOverlay }
+            .onChange(of: actionTargetUnavailable) { _, unavailable in
+                if unavailable { dismissActions(resumingComposerFocus: true) }
+            }
             // An isPresented push fights navigation-path swaps: unwind it
             // before the pending chat replaces the stack, or the details page
             // re-asserts itself over the new conversation.
@@ -1048,7 +1052,12 @@ struct ConversationView: View {
 
     private var conversationMessageSheets: some View {
         conversationChromeView
-            .sheet(item: $emojiPickerTarget) { target in
+            .sheet(item: $emojiPickerTarget, onDismiss: {
+                if let details = detailsAfterEmojiPicker {
+                    detailsAfterEmojiPicker = nil
+                    reactionDetailsTarget = details
+                }
+            }) { target in
                 if let viewModel {
                     EmojiPickerSheet(
                         quickReactions: appState.quickReactions,
@@ -1056,10 +1065,10 @@ struct ConversationView: View {
                         customEmoji: viewModel.canSendMediaAttachments ? viewModel.customEmojiSendables : [],
                         emojiSets: viewModel.canSendMediaAttachments ? appState.emojiSetLibrary : nil,
                         onPick: { emoji in
-                            Task { await viewModel.toggleReaction(emoji, on: target.record) }
-                            // Custom emoji belong to this chat, not the device-wide recents.
-                            if CustomEmojiShortcode(reactionContent: emoji) == nil {
-                                appState.addRecentReaction(emoji)
+                            Task { @MainActor in
+                                await handlePickedReaction(emoji, on: target.record, viewModel: viewModel) { details in
+                                    detailsAfterEmojiPicker = details
+                                }
                             }
                         }
                     )
@@ -2521,24 +2530,30 @@ struct ConversationView: View {
         guard viewModel.canSendMessages, !isSelectingMessages, !viewModel.search.isActive,
               current.contains(where: { $0.emoji == emoji && $0.mine == tapped.mine && $0.reactionMessageIdHex == tapped.reactionMessageIdHex }) else { return }
 
-        let shortcode = CustomEmojiShortcode(reactionContent: emoji)
-        let canToggle: Bool
-        if tapped.mine {
-            // MDK's unreact clears every reaction this account has on the message.
-            canToggle = ReactionPillPresentation.canRemoveIndividually(
-                emoji, from: current, omittedKinds: viewModel.windowReactions[id]?.omittedKinds ?? 0
-            )
-        } else if let shortcode {
-            canToggle = viewModel.canRepeatReaction(shortcode, reactionID: tapped.reactionMessageIdHex)
-        } else {
-            canToggle = emoji.count == 1 && emoji == ContentSanitizer.reactionEmoji(emoji)
-                && emoji.unicodeScalars.contains { ($0.properties.isEmoji && $0.value > 127) || $0.value == 0x20E3 }
+        let action = ReactionPillPresentation.tapAction(for: tapped, in: current,
+            omittedKinds: viewModel.windowReactions[id]?.omittedKinds ?? 0) { shortcode in
+            viewModel.canRepeatReaction(shortcode, reactionID: tapped.reactionMessageIdHex)
         }
-        guard canToggle else {
+        guard action == .toggle else {
             reactionDetailsTarget = ReactionDetailsTarget(record: record, initialEmoji: emoji)
             return
         }
-        if !tapped.mine && shortcode == nil { appState.addRecentReaction(emoji) }
+        if !tapped.mine && CustomEmojiShortcode(reactionContent: emoji) == nil { appState.addRecentReaction(emoji) }
+        await viewModel.toggleReaction(emoji, on: record)
+    }
+
+    private func handlePickedReaction(_ emoji: String, on record: AppMessageRecordFfi, viewModel: ConversationViewModel,
+                                      beforeToggle: (ReactionDetailsTarget?) -> Void) async {
+        let id = record.messageIdHex
+        let current = viewModel.reactions(for: id)
+        let mine = current.contains { $0.emoji == emoji && $0.mine }
+        // Unreact removes every one of this account's reactions on the message.
+        if mine && !ReactionPillPresentation.canRemoveIndividually(emoji, from: current, omittedKinds: viewModel.windowReactions[id]?.omittedKinds ?? 0) {
+            beforeToggle(ReactionDetailsTarget(record: record, initialEmoji: emoji))
+            return
+        }
+        beforeToggle(nil)
+        if !mine && CustomEmojiShortcode(reactionContent: emoji) == nil { appState.addRecentReaction(emoji) }
         await viewModel.toggleReaction(emoji, on: record)
     }
 
@@ -4444,7 +4459,7 @@ struct ConversationView: View {
     private func completePendingActionsPresentationIfMeasured(_ preferences: [RowFramePreference]) {
         guard let key = measuredActionRowFrameKey,
               let sourceFrame = preferences.first(where: { $0.key == key && $0.part == .row })?.frame else { return }
-        let bodySize = preferences.first { $0.key == key && $0.part == .body }?.frame?.size
+        let bodySize = preferences.first { $0.key == key && $0.part == .body }?.frame.size
         // The row may move while the menu is open, for example when the keyboard closes.
         if actionsTarget != nil {
             actionsReturnGeometry = (sourceFrame, bodySize)
@@ -4478,19 +4493,14 @@ struct ConversationView: View {
         else { composerFocusSuspendedForActions = false }
     }
 
-    private var messageActionsOverlay: some View {
-        let unavailable = actionsTarget.map { target in
-            guard let viewModel, let rowID = target.rowId else { return true }
-            return viewModel.isDeleted(target.record.messageIdHex) || !viewModel.timeline.contains { $0.id == rowID }
-        } ?? false
-        return presentedMessageActionsOverlay
-            .onChange(of: unavailable) { _, unavailable in
-                if unavailable { dismissActions(resumingComposerFocus: true) }
-            }
+    private var actionTargetUnavailable: Bool {
+        guard let target = actionsTarget else { return false }
+        guard let viewModel, let rowID = target.rowId else { return true }
+        return viewModel.isDeleted(target.record.messageIdHex) || !viewModel.timeline.contains { $0.id == rowID }
     }
 
     @ViewBuilder
-    private var presentedMessageActionsOverlay: some View {
+    private var messageActionsOverlay: some View {
         if let viewModel,
            let target = actionsTarget,
            let rowId = target.rowId,
@@ -4759,11 +4769,13 @@ struct ConversationView: View {
                 Task { await viewModel.retryFailedSend(rowId: rowId) }
             },
             onReact: { emoji in
-                Task { await viewModel.toggleReaction(emoji, on: record) }
-                if CustomEmojiShortcode(reactionContent: emoji) == nil && selectedReaction?.emoji != emoji {
-                    appState.addRecentReaction(emoji)
+                Task { @MainActor in
+                    guard actionsPhase == .presented, actionsTarget?.record.messageIdHex == record.messageIdHex else { return }
+                    await handlePickedReaction(emoji, on: record, viewModel: viewModel) { details in
+                        dismissActions(resumingComposerFocus: details == nil)
+                        if let details { reactionDetailsTarget = details }
+                    }
                 }
-                dismissActions(resumingComposerFocus: true)
             },
             onReply: {
                 dismissActions()
@@ -4914,7 +4926,7 @@ struct RowFramePreference: Equatable {
     enum Part: Equatable { case row, bubble, body }
     var part: Part = .row
     let key: String
-    var frame: CGRect? = nil
+    let frame: CGRect
 }
 
 struct RowFramesKey: PreferenceKey {

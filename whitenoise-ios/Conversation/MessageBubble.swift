@@ -1228,7 +1228,7 @@ struct MessageBubble: View {
             .background(mine ? Color(.systemGray4) : Color(.secondarySystemBackground), in: Capsule())
             .overlay { Capsule().strokeBorder(Color(.opaqueSeparator), lineWidth: 1) }
             .fixedSize()
-            .padding(.bottom, 9)
+            .frame(minWidth: 44, minHeight: 44)
             // The strip proposes zero width to omitted chips, including their hit targets.
             .frame(minWidth: 0, maxWidth: .infinity)
             .clipped()
@@ -1238,7 +1238,6 @@ struct MessageBubble: View {
                     .onEnded { _ in onShowReactionDetails(emoji) }
                     .exclusively(before: TapGesture().onEnded(onTap))
             )
-            .padding(.top, 9)
     }
 
     private func reactionLabel(_ tally: ConversationViewModel.ReactionTally) -> some View {
