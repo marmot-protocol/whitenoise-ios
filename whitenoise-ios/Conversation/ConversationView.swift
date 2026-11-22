@@ -4911,7 +4911,7 @@ struct ConversationView: View {
         dismissActions(resumingComposerFocus: true)
         switch action {
         case .read:
-            speech.read(markdown: model.copyBody(of: current), id: id) {
+            speech.read(markdown: model.copyBody(of: current), id: id, sourceText: current.plaintext) {
                 appState.present(.warning(L10n.string("This message has no text to read aloud.")))
             }
         case .stop: speech.stopReading()
@@ -4946,7 +4946,10 @@ struct ConversationView: View {
     }
 
     private func pruneSpeech(in model: ConversationViewModel) {
-        speech.prune(visibleMessage: { speechRow($0, in: model) != nil }, audioMatches: { id, recording in
+        speech.prune(currentText: { id in
+            guard let row = speechRow(id, in: model), case .message(let record, _) = row.kind else { return nil }
+            return record.plaintext
+        }, audioMatches: { id, recording in
             recording.matches(voiceAttachment(id: id, in: model))
         })
     }

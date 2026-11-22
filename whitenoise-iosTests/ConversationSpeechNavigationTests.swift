@@ -57,10 +57,21 @@ struct ConversationSpeechNavigationTests {
     @Test func readingMarkupWithNoSpokenTextExplainsWhyPlaybackDidNotStart() async throws {
         let speech = ConversationSpeech()
         let empty = TestLatch()
-        speech.read(markdown: String(repeating: "[](https://example.com)", count: 400), id: "message") {
+        let markup = String(repeating: "[](https://example.com)", count: 400)
+        speech.read(markdown: markup, id: "message", sourceText: markup) {
             empty.signal()
         }
         try await empty.wait()
+        #expect(speech.readingID == nil)
+    }
+
+    @Test func editingTheActiveMessageStopsReadingItsOldWords() {
+        let speech = ConversationSpeech()
+        let text = "Meet at the old address"
+        speech.read(markdown: text, id: "message", sourceText: text) { Issue.record("The message contained text") }
+        speech.prune(currentText: { _ in text }, audioMatches: { _, _ in false })
+        #expect(speech.readingID == "message")
+        speech.prune(currentText: { _ in "Meet at the new address" }, audioMatches: { _, _ in false })
         #expect(speech.readingID == nil)
     }
 

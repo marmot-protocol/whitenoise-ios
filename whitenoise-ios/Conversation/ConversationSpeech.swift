@@ -123,7 +123,8 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    private(set) var readingID: String?
+    private var reading: (id: String, sourceText: String)?
+    var readingID: String? { reading?.id }
     private(set) var readingProgress = 0.0
     private(set) var transcribingID: String?
     private(set) var transcripts: [String: Transcript] = [:]
@@ -148,16 +149,16 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     @ObservationIgnored private var transcription: Task<Void, Never>?
     @ObservationIgnored private var requestID: UUID?
 
-    func read(markdown: String, id: String, onEmpty: @escaping () -> Void) {
+    func read(markdown: String, id: String, sourceText: String, onEmpty: @escaping () -> Void) {
         stopReading()
-        readingID = id
+        reading = (id, sourceText)
         readingPreparation = Task { [weak self] in
             guard !Task.isCancelled else { return }
             let prepared = await Self.prepareReading(markdown)
             guard !Task.isCancelled, let self else { return }
             readingPreparation = nil
             guard prepared.length > 0 else {
-                readingID = nil
+                reading = nil
                 onEmpty()
                 return
             }
@@ -186,7 +187,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer?.stopSpeaking(at: .immediate)
         synthesizer = nil
         activeUtterance = nil
-        readingID = nil
+        reading = nil
         readingProgress = 0
     }
 
@@ -273,8 +274,8 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         transcripts[id]?.visible = visible
     }
 
-    func prune(visibleMessage: (String) -> Bool, audioMatches: (String, Recording) -> Bool) {
-        if let readingID, !visibleMessage(readingID) { stopReading() }
+    func prune(currentText: (String) -> String?, audioMatches: (String, Recording) -> Bool) {
+        if let reading, currentText(reading.id) != reading.sourceText { stopReading() }
         if let transcribingID, let transcribingRecording, !audioMatches(transcribingID, transcribingRecording) { cancelTranscription() }
         let removed = transcripts.compactMap { id, value in audioMatches(id, value.recording) ? nil : id }
         for id in removed { transcripts.removeValue(forKey: id) }
