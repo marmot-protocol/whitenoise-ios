@@ -488,7 +488,7 @@ final class TimelineStore {
         let accountId = myAccountId
         if clusterCalendar != calendar || clusterAccountId != accountId {
             messageClusterPresentations = MessageClusterProjection.presentations(
-                for: timeline, myAccountId: accountId, calendar: calendar
+                for: timeline, historyImportBoundaries: historyImportBoundaries, myAccountId: accountId, calendar: calendar
             )
             clusterCalendar = calendar
             clusterAccountId = accountId
@@ -1013,7 +1013,7 @@ final class TimelineStore {
             // A row already shown can change origin without changing its
             // signature, so move the divider here rather than on the next rebuild.
             if previous != origin, timelineIndexByMessageId[record.messageIdHex] != nil {
-                historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: timeline, origins: historyImportOrigins)
+                rebuildHistoryImportBoundaries()
             }
         }
         guard !appRecord.messageIdHex.isEmpty else { return false }
@@ -1384,8 +1384,7 @@ final class TimelineStore {
         guard timelineSignature != nextSignature else { return false }
         timeline = next
         timelineSignature = nextSignature
-        clusterCalendar = nil
-        historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: next, origins: historyImportOrigins)
+        rebuildHistoryImportBoundaries()
         return true
     }
 
@@ -1412,9 +1411,13 @@ final class TimelineStore {
         } else {
             timelineSignature = timeline.map(TimelineItemSignature.init)
         }
-        clusterCalendar = nil
-        historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: timeline, origins: historyImportOrigins)
+        rebuildHistoryImportBoundaries()
         return true
+    }
+
+    private func rebuildHistoryImportBoundaries() {
+        historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: timeline, origins: historyImportOrigins)
+        clusterCalendar = nil
     }
 
     private static func timelineIndexesByMessageId(

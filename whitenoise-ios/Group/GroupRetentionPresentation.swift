@@ -80,7 +80,19 @@ nonisolated enum GroupRetentionPresentation {
     }
 
     static func compactLabel(seconds: UInt64, locale: Locale = AppLanguage.currentLocale) -> String {
-        GroupSystemEventPresentation.retentionDurationText(seconds: seconds, locale: locale, unitsStyle: .abbreviated)
+        let week = CustomUnit.weeks.secondsPerUnit
+        if seconds > 0, seconds.isMultiple(of: week) {
+            var calendar = Calendar.autoupdatingCurrent
+            calendar.locale = locale
+            let formatter = DateComponentsFormatter()
+            formatter.calendar = calendar
+            formatter.unitsStyle = .abbreviated
+            formatter.allowedUnits = [.weekOfMonth]
+            if let label = formatter.string(from: DateComponents(weekOfMonth: Int(seconds / week))) {
+                return label
+            }
+        }
+        return GroupSystemEventPresentation.retentionDurationText(seconds: seconds, locale: locale, unitsStyle: .abbreviated)
     }
 
     static func label(seconds: UInt64) -> String {

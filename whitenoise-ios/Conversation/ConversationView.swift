@@ -1899,6 +1899,9 @@ struct ConversationView: View {
             }
             .lineLimit(1)
         case .retention(let seconds, let memberSubtitle):
+            let duration = GroupRetentionPresentation.label(seconds: seconds)
+            let label = memberSubtitle.map { L10n.formatted("%@, Disappearing messages: %@", $0, duration) }
+                ?? L10n.formatted("Disappearing messages: %@", duration)
             HStack(spacing: 3) {
                 if let memberSubtitle {
                     Text(memberSubtitle)
@@ -1912,10 +1915,7 @@ struct ConversationView: View {
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel([memberSubtitle, L10n.formatted(
-                "Disappearing messages: %@",
-                GroupRetentionPresentation.label(seconds: seconds)
-            )].compactMap { $0 }.joined(separator: ", "))
+            .accessibilityLabel(label)
         case .subtitle(let value):
             // No placeholder line when there is no subtitle (direct messages):
             // reserving the space pushes the name off vertical center.

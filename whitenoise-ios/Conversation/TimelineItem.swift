@@ -84,6 +84,7 @@ nonisolated enum MessageClusterProjection {
 
     static func presentations(
         for timeline: [TimelineItem],
+        historyImportBoundaries: [String: HistoryImportOrigin] = [:],
         myAccountId: String? = nil,
         calendar: Calendar = .autoupdatingCurrent
     ) -> [String: MessageClusterPresentation] {
@@ -113,7 +114,7 @@ nonisolated enum MessageClusterProjection {
             let date = Date(timeIntervalSince1970: TimeInterval(item.timestamp))
             let day = calendar.startOfDay(for: date)
             let continuesPrevious: Bool
-            if let previous {
+            if let previous, historyImportBoundaries[item.id] == nil {
                 continuesPrevious = previous.sender == record.sender
                     && previous.outgoing == outgoing
                     && previous.day == day
