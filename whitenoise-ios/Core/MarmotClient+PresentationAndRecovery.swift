@@ -1,3 +1,4 @@
+import Foundation
 import MarmotKit
 
 extension MarmotClient {
@@ -83,14 +84,27 @@ extension MarmotClient {
         }.value
     }
 
+    /// Saves `snapshot`, keeping each attachment MDK holds as a file by its
+    /// id (`retainedIDs`) and leaving out large ones it doesn't hold yet.
     func saveMessageDraftIfRevision(accountRef: String, revision: MessageDraftRevisionFfi,
-        snapshot: ConversationDraftSnapshot) async throws -> SelectedMessageDraftFfi {
-        let attachments = snapshot.mediaAttachments.map(\.messageDraftAttachment)
+        snapshot: ConversationDraftSnapshot, retainedIDs: Set<String> = [],
+        keeping kept: [String] = []) async throws -> SelectedMessageDraftFfi {
+        let attachments = MessageDraftAttachmentInputs.inputs(for: snapshot.mediaAttachments, retainedIDs: retainedIDs, keeping: kept)
         return try await Task.detached(priority: .utility) { [marmot] in
-            try marmot.saveMessageDraftIfRevision(accountRef: accountRef, revision: revision,
+            try marmot.saveMessageDraftInputsIfRevision(accountRef: accountRef, revision: revision,
                 content: snapshot.canonicalText, replyToMessageIdHex: snapshot.replyToMessageIdHex,
                 mediaAttachments: attachments)
         }.value
+    }
+
+    /// Copies `attachment` into the account's encrypted media store as a
+    /// file-backed attachment of the draft `revision` selects.
+    func stageMessageDraftAttachment(accountRef: String, revision: MessageDraftRevisionFfi,
+        attachment: MediaDraftAttachment, sourcePath: String,
+        control: MediaFileTransferControlFfi) async throws -> SelectedMessageDraftFfi {
+        try await marmot.stageMessageDraftAttachmentFile(accountRef: accountRef, revision: revision,
+            request: MessageDraftAttachmentInputs.fileRequest(for: attachment, sourcePath: sourcePath),
+            control: control)
     }
 
     func clearMessageDraftIfRevision(accountRef: String, revision: MessageDraftRevisionFfi) async throws -> SelectedMessageDraftFfi {
@@ -100,21 +114,38 @@ extension MarmotClient {
     }
 
     func hydrateSelectedDraft(accountRef: String, selected: SelectedMessageDraftFfi) async throws -> MessageDraftFfi? {
-        try await Task.detached(priority: .utility) { [marmot] in
-            guard let draft = selected.draft else { return nil }
-            let attachments = try draft.mediaAttachments.map { item in
-                guard let bytes = try marmot.messageDraftAttachmentIfRevision(accountRef: accountRef,
-                    revision: selected.revision, attachmentId: item.id) else {
+        guard let draft = selected.draft else { return nil }
+        var attachments: [MessageDraftAttachmentFfi] = []
+        for item in draft.mediaAttachments {
+            let bytes: Data
+            if item.fileBacked {
+                // Mapped from a private copy, never resident: it can be 512 MiB.
+                // Written off the MainActor, where this async method would otherwise run.
+                let copy = Task.detached(priority: .utility) { [marmot] in
+                    try await PickedMediaFile.mappedData(expectedSize: item.plaintextSize) { offset in
+                        try await marmot.readMessageDraftAttachment(accountRef: accountRef, revision: selected.revision,
+                            attachmentId: item.id, offset: offset, limit: MessageDraftAttachmentInputs.readChunkBytes)
+                    }
+                }
+                // Leaving the chat stops the copy and removes the partial file.
+                bytes = try await withTaskCancellationHandler { try await copy.value } onCancel: { copy.cancel() }
+            } else {
+                let inline = try await Task.detached(priority: .utility) { [marmot] in
+                    try marmot.messageDraftAttachmentIfRevision(accountRef: accountRef,
+                        revision: selected.revision, attachmentId: item.id)
+                }.value
+                guard let inline else {
                     throw MarmotKitError.InvalidMessageDraft(details: "Draft attachment is unavailable.")
                 }
-                return MessageDraftAttachmentFfi(id: item.id, fileName: item.fileName, mediaType: item.mediaType,
-                    plaintext: bytes, dim: item.dim, thumbhash: item.thumbhash,
-                    durationSeconds: item.durationSeconds, waveformSamples: item.waveformSamples)
+                bytes = inline
             }
-            return MessageDraftFfi(groupIdHex: draft.groupIdHex, content: draft.content,
-                replyToMessageIdHex: draft.replyToMessageIdHex, mediaAttachments: attachments,
-                createdAtMs: draft.createdAtMs, updatedAtMs: draft.updatedAtMs)
-        }.value
+            attachments.append(MessageDraftAttachmentFfi(id: item.id, fileName: item.fileName, mediaType: item.mediaType,
+                plaintext: bytes, dim: item.dim, thumbhash: item.thumbhash,
+                durationSeconds: item.durationSeconds, waveformSamples: item.waveformSamples))
+        }
+        return MessageDraftFfi(groupIdHex: draft.groupIdHex, content: draft.content,
+            replyToMessageIdHex: draft.replyToMessageIdHex, mediaAttachments: attachments,
+            createdAtMs: draft.createdAtMs, updatedAtMs: draft.updatedAtMs)
     }
 
     func sendMessageDraft(accountRef: String, revision: MessageDraftRevisionFfi,

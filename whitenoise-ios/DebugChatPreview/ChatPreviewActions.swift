@@ -24,12 +24,21 @@ struct ChatPreviewActions {
         }
     }
 
-    func react(_ emoji: String, to messageID: String) {
+    func setReaction(_ emoji: String?, on messageID: String) {
         windows.change(id) { chat in
             chat.update(messageID) { message in
                 var items = message.references.reactions.items
                 let owner = ChatPreviewThread.owner
-                if items.contains(where: { $0.emoji == emoji && $0.viewerReacted }) {
+                if let emoji {
+                    if let index = items.firstIndex(where: { $0.emoji == emoji }) {
+                        guard !items[index].viewerReacted else { return }
+                        items[index].viewerReacted = true
+                        items[index].reactors.append(owner)
+                        items[index].count += 1
+                    } else {
+                        items.append(.init(emoji: emoji, count: 1, reactors: [owner], viewerReacted: true, reactionMessageIdHex: nil))
+                    }
+                } else {
                     // The live unreact operation clears this viewer's reactions on the target.
                     for index in items.indices where items[index].viewerReacted {
                         items[index].viewerReacted = false
@@ -37,12 +46,6 @@ struct ChatPreviewActions {
                         items[index].count -= 1
                     }
                     items.removeAll { $0.count == 0 }
-                } else if let index = items.firstIndex(where: { $0.emoji == emoji }) {
-                    items[index].viewerReacted = true
-                    items[index].reactors.append(owner)
-                    items[index].count += 1
-                } else {
-                    items.append(.init(emoji: emoji, count: 1, reactors: [owner], viewerReacted: true, reactionMessageIdHex: nil))
                 }
                 message.references.reactions = .init(totalCount: items.reduce(0) { $0 + $1.count },
                     totalKinds: UInt64(items.count), items: items, omittedKinds: 0)

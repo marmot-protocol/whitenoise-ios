@@ -24,6 +24,9 @@ final class GroupDetailsViewModel {
     var maintenanceStatus: GroupMaintenanceStatusFfi?
     var maintenanceStatusError: String?
     var pendingConfirmation: GroupDetailsConfirmation?
+    /// Whether members' linked devices may join; nil until read or without device groups.
+    var accountDevicesActivation: AccountDevicesActivationFfi?
+    var confirmsEnableAccountDevices = false
     /// Asks before acknowledging MDK's advisory refusals of a group change.
     @ObservationIgnored let advisoryPrompter = GroupChangeAdvisoryPrompter()
     var membershipActionInFlight = false
@@ -451,6 +454,52 @@ final class GroupDetailsViewModel {
         }
     }
 
+    /// Reads whether an admin may let members' linked devices join this chat.
+    /// Advisory: `enableAccountDevices` checks again.
+    func loadAccountDevicesActivation(using appState: AppState) async {
+        guard let conversation, let accountRef = appState.activeAccountRef,
+              let client = try? appState.currentMarmotClient() else {
+            accountDevicesActivation = nil
+            return
+        }
+        let groupIdHex = conversation.group.groupIdHex
+        let generation = appState.runtimeGeneration
+        let activation = try? await marmotCalls.accountDevicesActivation(client, accountRef, groupIdHex)
+        // A read from a replaced runtime or another profile is stale.
+        guard conversation.group.groupIdHex == groupIdHex, appState.runtimeGeneration == generation,
+              appState.activeAccountRef == accountRef else { return }
+        accountDevicesActivation = activation
+    }
+
+    func enableAccountDevices(using appState: AppState) async {
+        guard let conversation, let accountRef = appState.activeAccountRef else { return }
+        guard !membershipActionInFlight else { return }
+        membershipActionInFlight = true
+        defer { membershipActionInFlight = false }
+        let groupIdHex = conversation.group.groupIdHex
+        do {
+            appState.present(.warning(
+                L10n.string("Turning on linked devices…"),
+                message: L10n.string("Publishing group update.")
+            ))
+            let result = try await performGroupChange(accountRef: accountRef, using: appState) { client in
+                try await self.marmotCalls.enableAccountDevices(client, accountRef, groupIdHex)
+            }
+            conversation.applyGroupMutation(result)
+            onGroupChanged(conversation.group)
+            await loadAccountDevicesActivation(using: appState)
+            Haptics.success()
+            appState.present(.success(
+                L10n.string("Linked devices turned on"),
+                message: L10n.string("Members’ linked devices can now join this chat.")
+            ))
+        } catch {
+            await refreshAfterFailedMutation(using: appState)
+            await loadAccountDevicesActivation(using: appState)
+            handleActionError(error, title: L10n.string("Couldn’t turn on linked devices"), using: appState)
+        }
+    }
+
     /// Load the shared and addable groups for this direct peer. The profile
     /// group row excludes direct chats from its presentation.
     func loadSharedGroups(using appState: AppState, force: Bool = false) async {
@@ -850,6 +899,9 @@ final class GroupDetailsViewModel {
                 "%lld members must update White Noise before you can end this group.",
                 Int64(memberIds.count)
             )
+        case .AccountDevicesActivationRefused(_, let reason):
+            return AccountDevicesActivationPresentation.blocker(reason)
+                ?? L10n.string("Linked devices can’t be turned on for this chat right now.")
         case .DisbandingNotEnabled:
             return L10n.string("Group ending isn't ready yet. Try again.")
         case .GroupDisbanding:

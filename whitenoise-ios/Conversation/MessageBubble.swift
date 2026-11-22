@@ -71,7 +71,7 @@ final class ConversationMediaLoader {
     private let load: (MessageMediaAttachment) async throws -> Data
     private let openHandoff: OpenHandoff?
     let canShareDocument: @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool
-    fileprivate let automaticAttachmentByteCount: (MessageMediaAttachment) async -> Int?
+    private let admitAutomatic: (MessageMediaAttachment) async -> Int?
     #if DEBUG
     var bundledFile: ((MessageMediaAttachment) -> URL?)?
     #endif
@@ -85,11 +85,16 @@ final class ConversationMediaLoader {
 
     init(_ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil,
          canShareDocument: @escaping @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool = { _, _ in true },
-         automaticAttachmentByteCount: @escaping (MessageMediaAttachment) async -> Int? = { $0.localData?.count }) {
+         admitAutomaticAttachment: @escaping (MessageMediaAttachment) async -> Int? = { $0.localData?.count }) {
         self.load = load
         self.openHandoff = openHandoff
         self.canShareDocument = canShareDocument
-        self.automaticAttachmentByteCount = automaticAttachmentByteCount
+        self.admitAutomatic = admitAutomaticAttachment
+    }
+
+    @discardableResult
+    func admitAutomaticAttachment(_ item: MessageMediaAttachment) async -> Int? {
+        await admitAutomatic(item)
     }
 
     func data(for media: MessageMediaAttachment, demand: AttachmentDemand = .explicit) async throws -> Data {
@@ -139,7 +144,7 @@ final class ConversationMediaLoader {
     func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool, hasContactName: Bool = false) async -> (size: Int, contactName: String?)? {
         guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return nil }
         guard !hasContactName, DocumentPreviewFormat(for: media) == .contact else {
-            return await automaticAttachmentByteCount(media).map { ($0, nil) }
+            return await admitAutomaticAttachment(media).map { ($0, nil) }
         }
         var requested = media
         requested.previewByteLimit = DocumentPreviewFormat.contact.byteLimit
@@ -432,9 +437,15 @@ struct MessageBubble: View {
     @Environment(\.isChatFixture) private var isChatFixture
     @State private var fixtureLink: URL?
     #endif
+    @State private var showsUnsupportedEventData = false
     @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
-    private var isFromMe: Bool { !usesReviewLayout && !displaysReader && record.direction == "sent" }
+    private var isFromMe: Bool {
+        !usesReviewLayout && !displaysReader && MessageOwnership.isMine(
+            direction: record.direction, sender: record.sender,
+            myAccountId: appState.activeAccount?.accountIdHex
+        )
+    }
 
     private var bubbleMaxWidth: CGFloat? {
         sizeClass == .regular ? ChatBubbleMetrics.regularMaximumWidth : nil
@@ -510,6 +521,17 @@ struct MessageBubble: View {
         MessageMediaUploadPresentation.showsIndicator(status: status, items: mediaItems)
     }
 
+    var standaloneEmoji: String? {
+        guard agentActivity == nil, debugStyle == nil,
+              !isDeleted,
+              replyPreview == nil,
+              mediaItems.isEmpty
+        else { return nil }
+
+        guard let emoji = SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText), !offersSourceReader else { return nil }
+        return emoji
+    }
+
     private var standaloneCustomEmoji: CustomEmojiShortcode? {
         guard agentActivity == nil, debugStyle == nil,
               !isDeleted,
@@ -520,6 +542,7 @@ struct MessageBubble: View {
 
         guard let shortcode = SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes),
               !offersSourceReader else { return nil }
+        if let searchQuery, sanitizedBodyText.localizedStandardContains(searchQuery) { return nil }
         return shortcode
     }
 
@@ -651,6 +674,10 @@ struct MessageBubble: View {
                 mediaGallery = nil
             }
         }
+        .sheet(isPresented: $showsUnsupportedEventData) {
+            UnsupportedEventSheet(record: record, senderName: identityName?(record.sender))
+                .appAppearance()
+        }
     }
 
     private var senderLabel: some View {
@@ -693,10 +720,34 @@ struct MessageBubble: View {
             .background { bubbleBackground }
             .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
             .opacity(status == .sending ? 0.7 : 1)
+        } else if case .unsupportedEvent = MessageSemantics.classify(record), showsStandardBody {
+            VStack(alignment: .leading, spacing: 0) {
+                if let replyPreview {
+                    replyHeader(replyPreview)
+                }
+                UnsupportedEventCard(
+                    presentation: UnsupportedEventPresentation(record: record),
+                    isFromMe: isFromMe
+                ) {
+                    showsUnsupportedEventData = true
+                }
+            }
+            .background { bubbleBackground }
+            .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
+            .opacity(status == .sending ? 0.7 : 1)
         } else if let remoteGiphyMedia, showsStandardBody {
             remoteGiphyMessageContent(remoteGiphyMedia)
         } else if !mediaItems.isEmpty, showsStandardBody {
             mediaMessageContent
+        } else if let standaloneEmoji {
+            if status == .failed {
+                standaloneEmojiContent(standaloneEmoji)
+                    .contentShape(.rect)
+                    .onTapGesture { onFailedTap?() }
+            } else {
+                standaloneEmojiContent(standaloneEmoji)
+                    .opacity(status == .sending ? 0.7 : 1)
+            }
         } else if let standaloneCustomEmoji {
             if status == .failed {
                 standaloneCustomEmojiContent(standaloneCustomEmoji)
@@ -735,6 +786,15 @@ struct MessageBubble: View {
             StickerMessageContent(sticker: sticker, isFromMe: isFromMe)
         }
         .opacity(status == .sending ? 0.7 : 1)
+    }
+
+    private func standaloneEmojiContent(_ emoji: String) -> some View {
+        TimelineSearchText(emoji)
+            .font(.system(size: SingleEmojiMessagePresentation.fontSize))
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .accessibilityElement(children: .combine)
     }
 
     /// The ordinary bubble, with its own inline emoji or the literal
@@ -993,7 +1053,7 @@ struct MessageBubble: View {
 
     private var attachmentContent: some View {
         MessageMediaAttachmentContent(
-            items: mediaItems,
+            messageID: record.messageIdHex, items: mediaItems,
             isFromMe: isFromMe,
             isStandaloneUnsupportedAttachment: isStandaloneUnsupportedAttachment,
             status: status,
@@ -1272,7 +1332,7 @@ struct MessageBubble: View {
     private var widensTextForReactions: Bool {
         showsReactionStrip && sharedLocation == nil && linkPreviewURL == nil
             && record.sticker == nil && record.kind != MessageSemantics.kindPoll && remoteGiphyMedia == nil
-            && mediaItems.isEmpty && standaloneCustomEmoji == nil && debugStyle == nil
+            && mediaItems.isEmpty && standaloneEmoji == nil && standaloneCustomEmoji == nil && debugStyle == nil
     }
 
     private var showsMetadataFooter: Bool {
@@ -1391,7 +1451,8 @@ struct MessageBubble: View {
             }
         }
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
-        .padding(.top, -16)
+        // Only the visible capsule overlaps the lower edge of the message.
+        .padding(.top, -7)
     }
 
     private func reactionChip<Label: View>(emoji: String?, mine: Bool, onTap: @escaping () -> Void,
@@ -1405,7 +1466,7 @@ struct MessageBubble: View {
             .background(mine ? Color(.systemGray4) : Color(.secondarySystemBackground), in: Capsule())
             .overlay { Capsule().strokeBorder(Color(.opaqueSeparator), lineWidth: 1) }
             .fixedSize()
-            .padding(.bottom, 9)
+            .frame(minWidth: 44, minHeight: 44, alignment: .top)
             // The strip proposes zero width to omitted chips, including their hit targets.
             .frame(minWidth: 0, maxWidth: .infinity)
             .clipped()
@@ -1415,7 +1476,6 @@ struct MessageBubble: View {
                     .onEnded { _ in onShowReactionDetails(emoji) }
                     .exclusively(before: TapGesture().onEnded(onTap))
             )
-            .padding(.top, 9)
     }
 
     private func reactionLabel(_ tally: ConversationViewModel.ReactionTally) -> some View {
@@ -2058,6 +2118,7 @@ private struct MessageMediaRoundedTileShape: Shape {
 }
 
 private struct MessageMediaAttachmentContent: View {
+    let messageID: String
     let items: [MessageMediaAttachment]
     let isFromMe: Bool
     let isStandaloneUnsupportedAttachment: Bool
@@ -2102,7 +2163,7 @@ private struct MessageMediaAttachmentContent: View {
                         isUploading: MessageMediaUploadPresentation.isUploading(item, status: status),
                         width: maxWidth, onLoadMedia: onLoadMedia)
                 } else {
-                    MessageDocumentAttachmentView(item: item, isFromMe: isFromMe, onLoadMedia: onLoadMedia)
+                    MessageDocumentAttachmentView(messageID: messageID, item: item, isFromMe: isFromMe, onLoadMedia: onLoadMedia)
                 }
             }
         }
@@ -2975,7 +3036,7 @@ private struct MessageVideoAttachmentView: View {
             guard needsPoster || needsDuration else {
                 // Metadata can come from identical bytes in another message. Admit this
                 // slot under the Videos preference without decoding the movie again.
-                _ = await onLoadMedia.automaticAttachmentByteCount(item)
+                await onLoadMedia.admitAutomaticAttachment(item)
                 return
             }
             let epoch = MessageMediaCache.currentProducerEpoch()
@@ -3177,7 +3238,7 @@ private struct MessageAudioAttachmentView: View {
         // Metadata can come from a different message with the same audio.
         // Automatic acquisition belongs to this row’s original slot.
         guard player == nil, !isLoading, onLoadMedia.allowsAutomaticLoad(.audio),
-              let byteCount = await onLoadMedia.automaticAttachmentByteCount(item), !Task.isCancelled else { return }
+              let byteCount = await onLoadMedia.admitAutomaticAttachment(item), !Task.isCancelled else { return }
         if metadata == nil, byteCount <= MessageMediaAttachment.audioAnalysisByteLimit {
             var preview = item
             preview.previewByteLimit = MessageMediaAttachment.audioAnalysisByteLimit
@@ -3435,6 +3496,7 @@ struct LiftedDocumentDetails: Equatable {
 }
 
 private struct MessageDocumentAttachmentView: View {
+    let messageID: String
     @Environment(\.liftedDocuments) private var liftedDocuments
     @Environment(\.timelineSearchQuery) private var searchQuery
     @Environment(\.actionRowMeasurementKey) private var measurementKey
@@ -3543,7 +3605,10 @@ private struct MessageDocumentAttachmentView: View {
             }
         }
         .onChange(of: contactName) { _, name in
-            if let name { transcriptSearch?.registerContactName(name, for: item.id) }
+            if let name { transcriptSearch?.registerContactName(name, for: item.id, in: messageID) }
+        }
+        .onChange(of: messageID) { _, confirmedID in
+            if let contactName { transcriptSearch?.registerContactName(contactName, for: item.id, in: confirmedID) }
         }
         .sheet(item: $preview) { document in
             MessageDocumentPreviewSheet(preview: document.preview, item: document.item, loader: document.loader)
@@ -3855,7 +3920,7 @@ struct MessageMediaGallery: Identifiable {
         let data: Data
     }
 
-    struct Caption {
+    struct Caption: Equatable {
         let sender: String
         let date: Date
         var outgoingSlot: OutgoingSlot? = nil

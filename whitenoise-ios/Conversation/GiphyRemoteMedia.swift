@@ -496,6 +496,12 @@ struct GiphySearchPreviewView: View {
     }
 }
 
+extension RemoteGiphyMedia {
+    var displayedCredit: String {
+        attribution.map { L10n.formatted("via GIPHY · %@", $0) } ?? L10n.string("via GIPHY")
+    }
+}
+
 struct RemoteGiphyMediaView: View {
     let media: RemoteGiphyMedia
     let mayLoadAutomatically: Bool
@@ -537,7 +543,7 @@ struct RemoteGiphyMediaView: View {
             .clipped()
 
             HStack(spacing: 5) {
-                Text(media.attribution.map { L10n.formatted("via GIPHY · %@", $0) } ?? L10n.string("via GIPHY"))
+                TimelineSearchText(media.displayedCredit, keepsMatchVisible: true)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 if !mayLoadAutomatically && !loadingStore.automaticallyLoads && playback != nil {

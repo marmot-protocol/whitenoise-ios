@@ -16,6 +16,8 @@ struct AccountSetupRelayStepView: View {
     @State private var operationPrimary: PrimaryAction?
     @State private var confirmsDiscard = false
     @State private var discardAction: Action = .discard
+    /// The proposal Save Anyway was asked about; a different one needs its own review.
+    @State private var confirmedProposalKey: String?
 
     private enum Editor: String, Identifiable {
         case relays, discovery
@@ -145,6 +147,10 @@ struct AccountSetupRelayStepView: View {
             case .edit: Button(editTitle) { perform(.edit) }
             case .replaceWithDefaults:
                 Button("Replace With Default Relays", role: .destructive) { perform(.replaceWithDefaults) }
+            case .approve:
+                Button("Save Anyway", role: .destructive) {
+                    if confirmedProposalKey == proposalKey { perform(.approve) }
+                }
             default: Button("Discard Changes", role: .destructive) { perform(.discard) }
             }
             Button("Cancel", role: .cancel) {}
@@ -154,10 +160,16 @@ struct AccountSetupRelayStepView: View {
                 Text("Editing withdraws this proposal and keeps the addresses in your draft. Nothing is published until you review and save again.")
             case .replaceWithDefaults:
                 Text("We couldn’t check your inbox relays. If you already have an inbox relay list, the default relays will replace it, and relays left out will stop receiving your invitations. You’ll review the change before anything is published.")
+            case .approve:
+                Text("We couldn’t finish checking your relays, so this change is based on incomplete information. Saving publishes it anyway, and relays that don’t work could stop others from finding you or reaching your inbox.")
             default: Text("This discards the proposed relay list without publishing it.")
             }
         }
         .onChange(of: model.snapshot) { updatePresentation() }
+        .onChange(of: proposalKey) {
+            // A replaced proposal closes the warning rather than carrying it over.
+            if discardAction == .approve, confirmsDiscard, confirmedProposalKey != proposalKey { confirmsDiscard = false }
+        }
         .onChange(of: model.isBusy) { updatePresentation() }
     }
 
@@ -165,6 +177,7 @@ struct AccountSetupRelayStepView: View {
         switch discardAction {
         case .edit: return editTitle
         case .replaceWithDefaults: return "Replace With Default Relays"
+        case .approve: return "Save Without a Full Check?"
         default: return "Discard relay changes?"
         }
     }
@@ -318,10 +331,15 @@ struct AccountSetupRelayStepView: View {
     private func request(_ action: Action) {
         if recovery.needsConfirmation(action) {
             discardAction = action
+            confirmedProposalKey = proposalKey
             confirmsDiscard = true
         } else {
             perform(action)
         }
+    }
+
+    private var proposalKey: String? {
+        proposal.map { "\($0.revision):\(String(describing: presentation.snapshot.recoveryEpoch))" }
     }
 
     private func allows(_ action: OnboardingActionFfi) -> Bool { step?.actions.contains(action) == true }

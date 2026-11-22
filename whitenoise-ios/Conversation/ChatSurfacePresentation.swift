@@ -222,6 +222,26 @@ struct MessageBubbleChromeLayout: Layout {
     }
 }
 
+nonisolated enum SingleEmojiMessagePresentation {
+    static let fontSize: CGFloat = 64
+
+    static func emoji(in text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count == 1, let character = trimmed.first else { return nil }
+
+        let scalars = character.unicodeScalars
+        let hasEmojiCapableScalar = scalars.contains { $0.properties.isEmoji }
+        let requestsEmojiRendering = scalars.contains {
+            $0.properties.isEmojiPresentation
+                || $0.value == 0xFE0F
+                || $0.value == 0x20E3
+        }
+
+        guard hasEmojiCapableScalar, requestsEmojiRendering else { return nil }
+        return trimmed
+    }
+}
+
 /// A message whose whole text is one resolvable `:shortcode:` shows that
 /// custom emoji at sticker size without a bubble.
 nonisolated enum SingleCustomEmojiMessagePresentation {
@@ -374,6 +394,21 @@ nonisolated enum ReactionPillPresentation {
     static let height: CGFloat = 22
     static let minimumWidth: CGFloat = 34
     static let maximumRenderedPills = 4
+
+    enum TapAction { case toggle, showDetails }
+
+    static func tapAction(for tally: ConversationViewModel.ReactionTally, in reactions: [ConversationViewModel.ReactionTally],
+                          omittedKinds: UInt64, canRepeatCustom: (CustomEmojiShortcode) -> Bool) -> TapAction {
+        if tally.mine {
+            return canRemoveIndividually(tally.emoji, from: reactions, omittedKinds: omittedKinds) ? .toggle : .showDetails
+        }
+        if let shortcode = CustomEmojiShortcode(reactionContent: tally.emoji) {
+            return canRepeatCustom(shortcode) ? .toggle : .showDetails
+        }
+        guard ContentSanitizer.reactionEmoji(tally.emoji) == tally.emoji,
+              SingleEmojiMessagePresentation.emoji(in: tally.emoji) != nil else { return .showDetails }
+        return .toggle
+    }
 
     static func canRemoveIndividually(_ emoji: String, from reactions: [ConversationViewModel.ReactionTally],
                                       omittedKinds: UInt64) -> Bool {

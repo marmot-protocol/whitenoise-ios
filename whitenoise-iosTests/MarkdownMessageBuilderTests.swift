@@ -40,6 +40,14 @@ struct MarkdownMessageBuilderTests {
                               isBodyExpanded: true).offersSourceReader)
     }
 
+    @Test func anEmojiAtTheStartOfATruncatedDocumentKeepsTheTextBubble() {
+        let document = MarkdownDocumentFfi(blocks: [para([.text(content: "🐿️")])], truncated: true)
+        let row = record(plaintext: "🐿️ followed by omitted text", tokens: document)
+        let projection = MessageMarkdownDisplayProjection.build(for: row, mentionDisplayName: nil)
+        #expect(projection.isTruncated)
+        #expect(MessageBubble(record: row, status: .received, incompleteMarkdown: projection.isTruncated).standaloneEmoji == nil)
+    }
+
     @Test func onlyFinalizedStreamsOfferTheUnshownSource() {
         var row = record(plaintext: String(repeating: "🌲", count: 3000), tokens: doc([]))
         row.tags = [

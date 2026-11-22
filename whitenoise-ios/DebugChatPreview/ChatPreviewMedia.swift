@@ -94,7 +94,7 @@ final class ChatPreviewMedia: ConversationMediaSource {
         guard let url = Self.url(media.fileName) else { throw AttachmentReadError.unavailable }
         return try Data(contentsOf: url, options: .mappedIfSafe)
     }
-    func automaticAttachmentByteCount(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Int? {
+    func admitAutomaticAttachment(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Int? {
         if let data = media.localData { return data.count }
         return try? Self.url(media.fileName)?.resourceValues(forKeys: [.fileSizeKey]).fileSize
     }

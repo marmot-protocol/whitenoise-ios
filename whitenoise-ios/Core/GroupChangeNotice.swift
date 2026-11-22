@@ -6,6 +6,9 @@ enum GroupChangeNotice {
         if case .groupEvent(_, _, _, .queuedIntentRefused(_, let intentKind, let reason, let artifact, _)) = event {
             return refusedIntentToast(intentKind: intentKind, reason: reason, artifact: artifact)
         }
+        if case .groupEvent(_, _, _, .groupChangeNotDelivered(_, let intentKind, let reason)) = event {
+            return refusedIntentToast(intentKind: intentKind, reason: reason)
+        }
         // Retry and rejoin can't clear this; MDK restores the live state at
         // the next account open, and Quarantined Groups is Developer Tools only.
         if case .groupEvent(_, _, _, .groupHydrationQuarantined(.rewindRestoreFailed)) = event {
@@ -50,8 +53,23 @@ enum GroupChangeNotice {
         }
     }
 
+    /// The newest change MDK gave up before this launch's event subscription
+    /// existed, as its event. MDK keeps each one until it is acknowledged, and a
+    /// toast shows one at a time, so one is raised per launch.
+    static func retainedNotDeliveredEvent(
+        account: AccountSummaryFfi,
+        records: [GroupChangeNotDeliveredFfi]
+    ) -> MarmotEventFfi? {
+        records.max { $0.at < $1.at }.map {
+            .groupEvent(accountIdHex: account.accountIdHex, accountLabel: account.label, groupIdHex: $0.groupIdHex,
+                        event: .groupChangeNotDelivered(commitIdHex: $0.commitIdHex, intentKind: $0.intentKind,
+                                                        reason: $0.reason))
+        }
+    }
+
     /// A send that waited for the group to settle and was then dropped unsent:
-    /// the settled state refused it and nothing retries it. `reason` is MDK's
+    /// the settled state refused it and nothing retries it. Also a change MDK
+    /// gave up after its call returned (`not_delivered`, `refused`). `reason` is MDK's
     /// stable tag; any other detail stays out of the toast. `artifact` is set
     /// only for `event_too_large`.
     static func refusedIntentToast(
@@ -93,6 +111,10 @@ enum GroupChangeNotice {
             case .commit, .other, nil:
                 message = UserFacingError.eventTooLargeMessage(.commit)
             }
+        case "not_delivered":
+            message = L10n.string("It didn't reach any of the group's relays. Check your connection, then try again.")
+        case "refused":
+            message = L10n.string("The group's relays refused it. Check the chat, then try again.")
         default:
             message = L10n.string("The group changed while this was waiting to send. Check the chat, then try again.")
         }
@@ -114,6 +136,8 @@ struct RefusedIntentAnnouncements {
         switch event {
         case .groupEvent(_, _, _, .queuedIntentRefused(let intentIdHex, _, _, _, _)):
             key = "intent:" + intentIdHex
+        case .groupEvent(_, _, _, .groupChangeNotDelivered(let commitIdHex, _, _)):
+            key = "commit:" + commitIdHex
         case .groupEvent(let accountIdHex, _, let groupIdHex, .groupHydrationQuarantined(.rewindRestoreFailed)):
             key = "rewind:" + accountIdHex + ":" + groupIdHex
         default:

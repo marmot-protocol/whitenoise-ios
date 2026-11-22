@@ -152,8 +152,9 @@ final class ConversationMediaDownloader {
 
     func resume() { isStopped = false }
 
-    /// Reads the retained size without loading the file. A missing slot uses automatic acquisition.
-    func automaticAttachmentByteCount(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Int? {
+    /// Admits a missing original slot under its automatic download policy. Returns the retained size without reading the file.
+    @discardableResult
+    func admitAutomaticAttachment(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Int? {
         guard !isStopped, !Task.isCancelled else { return nil }
         if let data = media.localData { return data.count }
         guard let reference = media.reference, EncryptedMediaLocatorValidation.isStaticallySafe(reference.locators),

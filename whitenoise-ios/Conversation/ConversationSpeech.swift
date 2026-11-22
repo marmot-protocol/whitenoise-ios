@@ -5,7 +5,7 @@ import Observation
 import Speech
 import SwiftUI
 
-enum MessageSpeechAction: String, Hashable {
+nonisolated enum MessageSpeechAction: String, Hashable {
     case read, stop, transcribe, transcribing, show, hide, copy
 
     var title: LocalizedStringKey {
@@ -29,6 +29,37 @@ enum MessageSpeechAction: String, Hashable {
         case .hide: "text.bubble.fill"
         case .copy: "doc.on.doc"
         }
+    }
+}
+
+nonisolated enum MessageSpeechPresentation {
+    static func hasBlankText(_ record: AppMessageRecordFfi) -> Bool {
+        record.plaintext.unicodeScalars.allSatisfy(CharacterSet.whitespacesAndNewlines.contains)
+    }
+
+    static func voiceAttachment(for record: AppMessageRecordFfi, myAccountID: String?, media: [MessageMediaAttachment]) -> MessageMediaAttachment? {
+        guard !MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountID), hasBlankText(record),
+              media.count == 1, let audio = media.first, audio.kind == .audio, audio.rejectionKind == nil else { return nil }
+        return audio
+    }
+
+    static func textActions(for record: AppMessageRecordFfi, myAccountID: String?, isReading: Bool, standaloneEmoji: @autoclosure () -> Bool,
+                            hasSpokenText: @autoclosure () -> Bool) -> [MessageSpeechAction] {
+        guard !MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountID), !hasBlankText(record) else { return [] }
+        switch MessageSemantics.classify(record) {
+        case .chat, .reply, .media, .streamFinal:
+            guard SharedLocationText.location(from: record.plaintext) == nil,
+                  RemoteGiphyMedia.parse(wireText: record.plaintext) == nil else { return [] }
+            if isReading { return [.stop] }
+            return !standaloneEmoji() && hasSpokenText() ? [.read] : []
+        default: return []
+        }
+    }
+
+    static func voiceActions(isTranscribing: Bool, transcriptVisible: Bool?, offersTranscribe: Bool) -> [MessageSpeechAction] {
+        if isTranscribing { return [.transcribing] }
+        if let transcriptVisible { return transcriptVisible ? [.hide, .copy] : [.show] }
+        return offersTranscribe ? [.transcribe] : []
     }
 }
 
@@ -97,7 +128,20 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     private(set) var readingProgress = 0.0
     private(set) var transcribingID: String?
     private(set) var transcripts: [String: Transcript] = [:]
-    var availableAudio: (recording: Recording, source: LocalVoiceAttachment, scope: Scope)?
+    struct VoiceRequest: Equatable {
+        let scope: Scope
+        let messageID: String
+        let attachmentID: String?
+        let target: AttachmentLocalTargetFfi?
+        let sourceHint: AttachmentSourceHint?
+    }
+
+    enum VoiceAvailability {
+        case available(Recording, LocalVoiceAttachment)
+        case unavailable(String)
+    }
+
+    var checkedVoice: (request: VoiceRequest, result: VoiceAvailability)?
     private var transcribingRecording: Recording?
     @ObservationIgnored private var readingPreparation: Task<Void, Never>?
     @ObservationIgnored private var activeUtterance: (id: ObjectIdentifier, length: Int)?
@@ -248,7 +292,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         stopReading()
         cancelTranscription()
         transcripts.removeAll()
-        availableAudio = nil
+        checkedVoice = nil
     }
 }
 

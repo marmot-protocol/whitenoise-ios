@@ -12,7 +12,11 @@ struct AccountSetupView: View {
     var body: some View {
         List {
             Section {
-                ForEach(model.snapshot.steps, id: \.step) { step in
+                ForEach(AccountSetupPresentation.visibleSteps(
+                    model.snapshot.steps,
+                    acknowledgesSingleDevice: model.acknowledgesSingleDevice,
+                    reviewStep: reviewStep
+                ), id: \.step) { step in
                     let state = AccountSetupPresentation.checkState(step)
                     Group {
                         if state.needsAttention, reviewStep == step.step {

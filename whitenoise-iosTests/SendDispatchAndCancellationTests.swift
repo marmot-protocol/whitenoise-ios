@@ -75,6 +75,25 @@ struct SendDispatchAndCancellationTests {
         #expect(MediaDraftProcessor.sendsThroughDraft([fits]))
         #expect(!MediaDraftProcessor.sendsThroughDraft([fits, large]))
         #expect(MediaDraftProcessor.maxDraftAttachmentBytes < MediaDraftProcessor.maxAttachmentBytes)
+        // Once MDK holds the large one as a file, the draft holds the message.
+        #expect(MediaDraftProcessor.sendsThroughDraft([fits, large], fileBackedIDs: [large.id.uuidString]))
+    }
+
+    /// A save keeps an attachment MDK holds as a file by id, carries small ones
+    /// inline, and never carries a large one's bytes, which MDK would copy.
+    @Test func draftSavesKeepFilesByIdAndNeverCarryLargeBytes() {
+        let small = attachment(bytes: 10)
+        let staged = attachment(bytes: MediaDraftProcessor.maxDraftAttachmentBytes + 1)
+        let copying = attachment(bytes: MediaDraftProcessor.maxDraftAttachmentBytes + 1)
+
+        let inputs = MessageDraftAttachmentInputs.inputs(
+            for: [small, staged, copying], retainedIDs: [staged.id.uuidString]
+        )
+
+        #expect(inputs == [.inline(attachment: small.messageDraftAttachment), .retained(id: staged.id.uuidString)])
+        #expect(!MessageDraftAttachmentInputs.needsStaging(small))
+        #expect(MessageDraftAttachmentInputs.needsStaging(copying))
+        #expect(!MessageDraftAttachmentInputs.needsStaging(attachment(bytes: MediaDraftProcessor.maxAttachmentBytes + 1)))
     }
 
     @Test func serverSizeRejectionOfASingleUploadIdentifiesThatAttachment() {

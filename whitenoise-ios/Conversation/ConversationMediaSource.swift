@@ -7,7 +7,7 @@ import MarmotKit
 @MainActor
 protocol ConversationMediaSource: AnyObject {
     func data(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async throws -> Data
-    func automaticAttachmentByteCount(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Int?
+    func admitAutomaticAttachment(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Int?
     func fetchAhead(_ media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async -> Bool
     func openHandoff(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?,
                      control: MediaFileTransferControlFfi) async throws -> AttachmentHandoffLease?

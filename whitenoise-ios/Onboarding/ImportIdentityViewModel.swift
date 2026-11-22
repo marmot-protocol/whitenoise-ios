@@ -27,9 +27,12 @@ final class ImportIdentityViewModel {
     var identity = ""
     var isImporting = false
     var showIncompleteSetupRecoveryConfirmation = false
+    var showUnlinkedRemovalConfirmation = false
 
     @ObservationIgnored
     private var recoveryConfirmationContinuation: CheckedContinuation<Bool, Never>?
+    @ObservationIgnored
+    private var unlinkedRemovalContinuation: CheckedContinuation<Bool, Never>?
 
     /// Set by the view's paste interception at a genuine user paste; nil when
     /// the nsec was typed/autofilled or never pasted. Gates the deferred clear.
@@ -57,10 +60,19 @@ final class ImportIdentityViewModel {
                 try await appState.importIdentity(trimmed)
                 if appState.pendingAccountSetup != nil { return }
             } catch {
-                guard Self.requiresIncompleteSetupRecovery(error) else { throw error }
-                Haptics.error()
-                guard await requestIncompleteSetupRecoveryConfirmation() else { return }
-                try await appState.recoverIncompleteIdentity(trimmed)
+                if let unlinkedRef = Self.unlinkedAccountRef(error) {
+                    // Another device unlinked this one: remove that copy, then sign in anew.
+                    Haptics.error()
+                    guard await requestUnlinkedRemovalConfirmation() else { return }
+                    try await appState.removeUnlinkedAccount(accountRef: unlinkedRef)
+                    try await appState.importIdentity(trimmed)
+                    if appState.pendingAccountSetup != nil { return }
+                } else {
+                    guard Self.requiresIncompleteSetupRecovery(error) else { throw error }
+                    Haptics.error()
+                    guard await requestIncompleteSetupRecoveryConfirmation() else { return }
+                    try await appState.recoverIncompleteIdentity(trimmed)
+                }
             }
             Haptics.success()
             appState.present(.success(L10n.string("Welcome back"), message: L10n.string("Identity imported.")))
@@ -75,6 +87,28 @@ final class ImportIdentityViewModel {
         guard let marmotError = error as? MarmotKitError else { return false }
         if case .AccountSetupRecoveryRequired = marmotError { return true }
         return false
+    }
+
+    /// The profile MDK refused because another device unlinked this one.
+    static func unlinkedAccountRef(_ error: Error) -> String? {
+        guard let marmotError = error as? MarmotKitError,
+              case .AccountUnlinked(let accountRef) = marmotError else { return nil }
+        return accountRef
+    }
+
+    func requestUnlinkedRemovalConfirmation() async -> Bool {
+        guard unlinkedRemovalContinuation == nil else { return false }
+        return await withCheckedContinuation { continuation in
+            unlinkedRemovalContinuation = continuation
+            showUnlinkedRemovalConfirmation = true
+        }
+    }
+
+    func resolveUnlinkedRemovalConfirmation(approved: Bool) {
+        let continuation = unlinkedRemovalContinuation
+        unlinkedRemovalContinuation = nil
+        showUnlinkedRemovalConfirmation = false
+        continuation?.resume(returning: approved)
     }
 
     func requestIncompleteSetupRecoveryConfirmation() async -> Bool {
@@ -167,6 +201,7 @@ final class ImportIdentityViewModel {
     /// shadow copy — every exit from the sheet clears the secret.
     func scrubDismissedImportState(pasteboard: any SensitivePasteboard = UIPasteboard.general) {
         resolveIncompleteSetupRecoveryConfirmation(approved: false)
+        resolveUnlinkedRemovalConfirmation(approved: false)
         identity = ""
         SensitiveClipboard.clear(matching: pastedClipboardToken, from: pasteboard)
         clearPastedClipboardToken()

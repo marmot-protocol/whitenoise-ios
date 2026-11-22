@@ -92,10 +92,13 @@ generated binding source or vendor binary in this app to bypass that work.
   geography, audit logs, public profile/media uploads, relay/push services,
   GIPHY and explicit image search. Consent does not automatically exempt a data
   category from disclosure. Include retention and deletion behavior.
-- Confirm encryption export classification/documentation for the bundled
-  MLS/SQLCipher/native cryptography. `ITSAppUsesNonExemptEncryption` is currently
-  unset; do not set it to `NO` merely because HTTPS is exempt. Use an approved
-  classification and Apple's compliance code if required. See
+- Encryption export: the app's `Info.plist` sets `ITSAppUsesNonExemptEncryption`
+  to `NO`, recording the answer previously given in App Store Connect for each
+  build (the extension inherits the app's answer). That is a legal declaration for
+  the bundled MLS/SQLCipher/native cryptography, not just HTTPS: keep the export
+  classification behind it current (for example, any annual self-classification
+  report a mass-market exemption requires), and change the key if the
+  classification changes. See
   [Apple's encryption key guidance](https://developer.apple.com/documentation/bundleresources/information-property-list/itsappusesnonexemptencryption).
 - Validate the signed production archive in Xcode/App Store Connect and inspect
   its generated privacy report, nested SDK resources, app/NSE entitlements and
