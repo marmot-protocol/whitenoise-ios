@@ -163,7 +163,7 @@ struct TranscriptHistoryGalleryView: View {
                 history.select(itemID, inWindow: gallery.transcriptCaptions?[itemID] != nil)
                 if openingItem.isGIF, openingItem.localTarget == nil, confirmedGIF == nil, let pending = openingSelection,
                    gallery.transcriptCaptions?[itemID]?.outgoingSlot == pending.slot,
-                   let item = gallery.items.first(where: { $0.id == itemID && $0.isGIF && $0.localTarget != nil }) {
+                   let item = gallery.items.first(where: { $0.id == itemID && $0.isGIF && $0.reference != nil }) {
                     confirmedGIF = item
                 }
             }, verify: { [activeScope] item in try await self.verify(item, in: activeScope) },
@@ -241,8 +241,9 @@ struct TranscriptHistoryGalleryView: View {
         if old.window != new.window || window == nil {
             guard let gallery = conversation.transcriptMediaGallery(opening: openingItem.id, initialData: initialData, openingItem: openingItem,
                 includingGIFsIn: gifRowID, allowsEmptyWindow: true) else { return }
-            if openingItem.isGIF, openingItem.localTarget == nil, confirmedGIF == nil,
-               let sourced = gallery.items.first(where: { $0.isGIF && $0.localTarget != nil && $0.canUseBytesPrepared(for: openingItem) }) {
+            let held = confirmedGIF ?? openingItem
+            if held.isGIF, held.localTarget == nil,
+               let sourced = gallery.items.first(where: { $0.isGIF && $0.localTarget != nil && $0.canUseBytesPrepared(for: held) }) {
                 confirmedGIF = sourced
             }
             let ids = Set(conversation.timeline.compactMap { row -> String? in
