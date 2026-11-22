@@ -262,9 +262,12 @@ struct CustomEmojiReactionLabel: View {
             case .noArtwork:
                 loaded = nil
                 noArtwork = artworkID
-            case .image, nil:
+            case .image:
                 loaded = nil
                 noArtwork = nil
+            case nil:
+                // A transient lookup failure says nothing new about this reaction.
+                break
             }
         }
     }

@@ -1268,7 +1268,8 @@ struct MessageBubble: View {
 
     private func reactionLabel(_ tally: ConversationViewModel.ReactionTally) -> some View {
         HStack(spacing: 2) {
-            CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex, pointSize: 14)
+            CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex,
+                                     pointSize: 14, maximumPointSize: ReactionPillPresentation.height - 2)
                 .font(.system(size: 14, weight: .bold))
             if tally.count > 1 {
                 Text(L10n.formatted("%lld", Int64(tally.count)))
