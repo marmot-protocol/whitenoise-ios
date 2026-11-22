@@ -430,6 +430,7 @@ final class TimelineStore {
         let targetId: String
         let source: ReplyPreviewSourceSignature
         var targetUnsupported = false
+        var targetHasMalformedPoll = false
     }
 
     private struct ReplyPreviewDisplayCacheEntry {
@@ -546,6 +547,11 @@ final class TimelineStore {
         guard let targetId = replyTargetId(for: record) else {
             return nil
         }
+        let loadedTarget = messageById[targetId]
+        let malformedPoll = loadedTarget?.kind == MessageSemantics.kindPoll && pollByMessageId[targetId] == nil
+        func pollTitle(_ question: String) -> String {
+            malformedPoll ? L10n.string("This poll can’t be displayed.") : MessagePreview.pollTitle(question: question)
+        }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
             guard !isBlockedAuthor(preview.sender) else { return nil }
             let sourceMessageID = mediaProjections.sourceMessageID(for: preview.messageIdHex)
@@ -553,7 +559,7 @@ final class TimelineStore {
             // projected quote doesn't carry: decide from the loaded target.
             // A deleted target has no tags left; it reads as deleted.
             let targetUnsupported = preview.kind == MessageSemantics.kindComment && !preview.deleted
-                && messageById[targetId].map { MessageSemantics.classify($0) == .unsupportedEvent } == true
+                && loadedTarget.map { MessageSemantics.classify($0) == .unsupportedEvent } == true
             let key = ReplyPreviewDisplayCacheKey(
                 messageIdHex: record.messageIdHex,
                 targetId: targetId,
@@ -569,7 +575,7 @@ final class TimelineStore {
                     deleted: preview.deleted,
                     deletionSource: preview.deletionSource
                 ),
-                targetUnsupported: targetUnsupported
+                targetUnsupported: targetUnsupported, targetHasMalformedPoll: malformedPoll
             )
             if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
                 return cached.value
@@ -579,7 +585,7 @@ final class TimelineStore {
             let text = replyExcerpt(tokens: preview.contentTokens, isText: !preview.deleted && preview.kind == MessageSemantics.kindChat
                 && preview.sticker == nil && !RemoteGiphyMedia.isEnvelopeText(preview.plaintext)) {
                 if targetUnsupported { return MessagePreview.unsupportedEventLabel }
-                if isPoll { return MessagePreview.pollTitle(question: preview.plaintext) }
+                if isPoll { return pollTitle(preview.plaintext) }
                 return MessagePreview.body(
                     preview,
                     mentionDisplayName: mentionDisplayNameResolver,
@@ -601,7 +607,7 @@ final class TimelineStore {
             replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
             return value
         }
-        guard let storedTarget = messageById[targetId] else {
+        guard let storedTarget = loadedTarget else {
             guard !isHidden(targetId) else { return nil }
             return ConversationReplyPreview(name: L10n.string("Message"), text: L10n.string("Message unavailable"), media: nil)
         }
@@ -616,7 +622,8 @@ final class TimelineStore {
                 sourceMessageID: mediaProjections.sourceMessageID(for: targetId),
                 deleted: targetDeleted,
                 deletionSource: deletedProjections.source(for: targetId)
-            )
+            ),
+            targetHasMalformedPoll: malformedPoll
         )
         if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
             return cached.value
@@ -627,7 +634,7 @@ final class TimelineStore {
             ? MessageDeletionPresentation.text(source: deletedProjections.source(for: targetId))
             : replyExcerpt(tokens: target.contentTokens, isText: target.kind == MessageSemantics.kindChat
                 && target.sticker == nil && !RemoteGiphyMedia.isEnvelopeText(target.plaintext)) {
-                    isPoll ? MessagePreview.pollTitle(question: target.plaintext) : displayBody(of: target)
+                    isPoll ? pollTitle(target.plaintext) : displayBody(of: target)
                 }
         let media = targetDeleted
             ? nil

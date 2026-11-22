@@ -2656,7 +2656,7 @@ struct ConversationView: View {
             cluster.reservesIdentityLane = false
             cluster.showsAvatar = false
         }
-        let selectionInset = record.direction == "sent" ? Self.selectionIndicatorSize : Self.receivedSelectionInset
+        let selectionInset = viewModel.isMessageMine(record) ? Self.selectionIndicatorSize : Self.receivedSelectionInset
         let incompleteMarkdown = viewModel.timelineStore.markdownProjections.isTruncated(for: item)
         return MessageBubble(
             record: record,
@@ -4652,8 +4652,9 @@ struct ConversationView: View {
                 let actionMenuHeight = MessageActionsPresentation.visibleActionHeight(
                     actionCount: actionCount, containerHeight: proxy.size.height, showsReactions: canInteract
                 )
-                let alignsTrailing = messageActionsAlignTrailing(record: target.record)
-                let bubbleEdge = alignsTrailing ? bubbleGlobalFrame.maxX : bubbleGlobalFrame.minX
+                let outgoing = viewModel.isMessageMine(target.record)
+                let alignsRight = layoutDirection == .leftToRight ? outgoing : !outgoing
+                let bubbleEdge = alignsRight ? bubbleGlobalFrame.maxX : bubbleGlobalFrame.minX
                 let liftedEdge = bubbleEdge - containerGlobalFrame.minX
                 let layout = MessageActionsOverlayLayout.resolve(
                     sourceFrame: sourceFrame,
@@ -4685,7 +4686,7 @@ struct ConversationView: View {
                 )
                 let surfaceWidth = canInteract ? max(MessageActionsPresentation.menuWidth, reactionWidth) : MessageActionsPresentation.menuWidth
                 let menuCenterX = MessageActionsPresentation.menuCenterX(
-                    bubbleEdge: liftedEdge, alignsRight: alignsTrailing,
+                    bubbleEdge: liftedEdge, alignsRight: alignsRight,
                     surfaceWidth: surfaceWidth, containerWidth: proxy.size.width)
                 ZStack {
                     Rectangle()
@@ -4731,7 +4732,7 @@ struct ConversationView: View {
                         status: target.status,
                         rowId: rowId,
                         previewHeight: layout.previewHeight, bubbleWidth: bubbleGlobalFrame.width,
-                        alignsTrailing: target.record.direction == "sent",
+                        alignsTrailing: outgoing,
                         surfaceWidth: surfaceWidth,
                         maximumActionHeight: actionMenuHeight,
                         viewModel: viewModel
@@ -5025,14 +5026,6 @@ struct ConversationView: View {
     private func openPollVotes(for record: AppMessageRecordFfi, viewModel: ConversationViewModel) {
         guard let poll = viewModel.poll(for: record.messageIdHex) else { return }
         pollVotesTarget = PollVotesTarget(messageIdHex: record.messageIdHex, options: poll.options)
-    }
-
-    private func messageActionsAlignTrailing(record: AppMessageRecordFfi) -> Bool {
-        let outgoing = MessageOwnership.isMine(
-            direction: record.direction, sender: record.sender,
-            myAccountId: appState.activeAccount?.accountIdHex
-        )
-        return layoutDirection == .leftToRight ? outgoing : !outgoing
     }
 
     private func actionsMenu(
