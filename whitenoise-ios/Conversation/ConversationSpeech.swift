@@ -32,6 +32,12 @@ nonisolated enum MessageSpeechAction: String, Hashable {
     }
 }
 
+nonisolated enum VoiceTranscriptDisplay: Equatable {
+    case transcribing
+    case text(String)
+    case checkFailed
+}
+
 nonisolated enum MessageSpeechPresentation {
     static func hasBlankText(_ record: AppMessageRecordFfi) -> Bool {
         !ContentSanitizer.hasNonWhitespaceText(record.plaintext)
@@ -135,11 +141,16 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
 
         func isVerified(in current: Scope) -> Bool { verified && scope == current }
 
+        func display(in current: Scope) -> VoiceTranscriptDisplay? {
+            guard visible, scope == current else { return nil }
+            return verified ? .text(text) : .checkFailed
+        }
+
         func revalidated(held: Bool?, in current: Scope) -> Self? {
             guard held != false, scope.route == current.route else { return nil }
             var next = self
             next.verified = held == true
-            if next.verified { next.scope = current }
+            next.scope = current
             return next
         }
     }
@@ -290,13 +301,16 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
             guard !Task.isCancelled else { return }
             let held = transcript.scope.route == scope.route ? await isHeld(id, transcript.recording) : false
             guard !Task.isCancelled else { return }
-            guard transcripts[id]?.scope == transcript.scope, transcripts[id]?.recording == transcript.recording else { continue }
+            guard let current = transcripts[id], current.recording == transcript.recording,
+                  current.scope == transcript.scope || current.scope == scope else { continue }
             updateRetention(held, id: id, recording: transcript.recording, scope: scope)
         }
     }
 
-    func updateRetention(_ held: Bool?, id: String, recording: Recording, scope: Scope) {
+    func updateRetention(_ held: Bool?, id: String, recording: Recording, scope: Scope, wasVerified: Bool = false) {
         guard let transcript = transcripts[id], transcript.recording == recording else { return }
+        // An overlapping check can verify this recording while the lookup is suspended.
+        if held == nil, !wasVerified, transcript.isVerified(in: scope) { return }
         transcripts[id] = transcript.revalidated(held: held, in: scope)
         if verifyingID == id { verifyingID = nil }
     }
