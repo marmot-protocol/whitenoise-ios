@@ -3577,7 +3577,7 @@ private struct MessageDocumentAttachmentView: View {
                     ProgressView()
                         .controlSize(.small)
                         .tint(isFromMe ? MessageBubblePalette.sentForeground : .accentColor)
-                } else if (liftedDetails?.didFail ?? didFail) || fixtureUnavailable {
+                } else if showsFailure {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.caption.weight(.semibold))
                         .frame(width: 20, height: 24)
@@ -3596,7 +3596,9 @@ private struct MessageDocumentAttachmentView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open attachment")
+        #if DEBUG
         .disabled(fixtureUnavailable)
+        #endif
         .background {
             if let key = measurementKey {
                 let details = LiftedDocumentDetails(id: item.id, revision: AttachmentPresentationState.shared.revision,
@@ -3630,7 +3632,10 @@ private struct MessageDocumentAttachmentView: View {
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
-            guard liftedDocuments == nil, !fixtureUnavailable else { return }
+            #if DEBUG
+            guard !fixtureUnavailable else { return }
+            #endif
+            guard liftedDocuments == nil else { return }
             let metadata = await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
                 allowed: onLoadMedia.allowsAutomaticLoad(.document), hasContactName: displayName != nil)
             if !Task.isCancelled, let metadata {
@@ -3640,11 +3645,17 @@ private struct MessageDocumentAttachmentView: View {
         }
     }
 
+    #if DEBUG
     private var fixtureUnavailable: Bool {
+        isChatFixture && ChatPreviewMedia.url(item.fileName) == nil
+    }
+    #endif
+
+    private var showsFailure: Bool {
         #if DEBUG
-        if isChatFixture { return ChatPreviewMedia.url(item.fileName) == nil }
+        if fixtureUnavailable { return true }
         #endif
-        return false
+        return liftedDetails?.didFail ?? didFail
     }
 
     private var fileDetail: String {

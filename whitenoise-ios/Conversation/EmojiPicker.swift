@@ -137,9 +137,11 @@ private final class EmojiPickerModel: ObservableObject {
     }
 }
 
+#if DEBUG
 extension EnvironmentValues {
     @Entry var emojiRecentsDefaults: UserDefaults = .standard
 }
+#endif
 
 private enum EmojiRecents {
     static let key = "chat.emoji-picker.recents"
@@ -319,7 +321,11 @@ struct ComposerEmojiPanel: View {
 }
 
 private struct EmojiPickerContent: View {
+    #if DEBUG
     @Environment(\.emojiRecentsDefaults) private var recentsDefaults
+    #else
+    private var recentsDefaults: UserDefaults { .standard }
+    #endif
     let showsSearchField: Bool
     var customEmoji: [CustomEmojiSendable] = []
     var onConfigure: (() -> Void)?
