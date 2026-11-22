@@ -337,6 +337,24 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         MediaAttachmentPolicy.canonicalMediaType(mediaType).hasPrefix("audio/")
     }
 
+    struct InlineRow: Identifiable {
+        enum ID: Hashable {
+            case attachment(String)
+            case outgoingDocument(UInt32)
+        }
+        let id: ID
+        let item: MessageMediaAttachment
+    }
+
+    static func inlineRows(_ items: [Self], outgoing: Bool) -> [InlineRow] {
+        items.enumerated().compactMap { index, item in
+            guard !item.isTranscriptGalleryMedia else { return nil }
+            let document = item.rejectionKind == nil && (item.kind == .document || item.kind == .unsupported)
+            let slot = item.localTarget?.attachmentIndex ?? item.sourceHint?.slot ?? item.displayIndex ?? UInt32(index)
+            return InlineRow(id: outgoing && document ? .outgoingDocument(slot) : .attachment(item.id), item: item)
+        }
+    }
+
     /// Identifies the same sourced slot in a live row and the native history.
     /// A confirmed local send can keep its temporary row ID in the live window.
     func transcriptItem(in messageID: String) -> Self {

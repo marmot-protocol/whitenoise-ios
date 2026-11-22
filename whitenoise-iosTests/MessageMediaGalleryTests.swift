@@ -87,6 +87,19 @@ struct MessageMediaGalleryTests {
             data: draft.data)) == nil)
     }
 
+    @Test func replacingASourceDuringDraftVerificationInvalidatesTheCandidateEvenWithTheSameDisplayID() throws {
+        var reference = encryptedMediaReference(fileName: "photo.jpg", mediaType: "image/jpeg", sourceEpoch: 1)
+        let item = try #require(MessageMediaAttachment.displayItems(from: [reference], ownerId: "row").first)
+        let expected = MessageMediaGallery.Replacement(selectedID: "draft", candidate: item)
+        var updated = item
+        updated.localTarget = .init(messageIdHex: "message", sourceMessageIdHex: "source", attachmentIndex: 0)
+        #expect(MessageMediaGallery.Replacement(selectedID: "draft", candidate: updated) != expected)
+        reference.fileName = "renamed.jpg"
+        let renamed = try #require(MessageMediaAttachment.displayItems(from: [reference], ownerId: "row").first)
+        #expect(renamed.id == item.id)
+        #expect(MessageMediaGallery.Replacement(selectedID: "draft", candidate: renamed) != expected)
+    }
+
     @Test func aPreparedPhotoAcceptsItsFirstOriginalSlotAndRejectsAReplacement() throws {
         var ref = MediaAttachmentReferenceFfi(locators: [], ciphertextSha256: "", plaintextSha256: "photo",
             nonceHex: "", fileName: "photo.png", mediaType: "image/png", version: .v1,

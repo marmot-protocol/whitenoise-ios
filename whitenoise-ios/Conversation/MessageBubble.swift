@@ -2126,7 +2126,8 @@ private struct MessageMediaAttachmentContent: View {
                 MessageMediaGrid(items: album, isFromMe: isFromMe, maxWidth: maxWidth, onLoadMedia: onLoadMedia,
                     onOpenImage: onOpenImage, onOpenVideo: onOpenVideo)
             }
-            ForEach(items.filter { !$0.isTranscriptGalleryMedia }) { item in
+            ForEach(MessageMediaAttachment.inlineRows(items, outgoing: isFromMe)) { row in
+                let item = row.item
                 if item.rejectionKind == .unsupportedFormat {
                     HStack(spacing: 6) {
                         Image(systemName: "doc")
@@ -3500,6 +3501,7 @@ private struct MessageDocumentAttachmentView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var preview: MessageDocumentPreview?
+    @State private var openedDraftDigest: String?
     @State private var openingID: UUID?
     @State private var openingTask: Task<Void, Never>?
     @State private var contactName: String?
@@ -3603,7 +3605,9 @@ private struct MessageDocumentAttachmentView: View {
             if phase == .background { cancelDocumentOpen() }
         }
         .onChange(of: DocumentPreviewSource(item)) { previous, current in
-            if !current.continues(previous, outgoing: isFromMe) { resetDocument() }
+            if !current.continues(previous, outgoing: isFromMe, openedDraftDigest: preview == nil ? nil : openedDraftDigest) {
+                resetDocument()
+            }
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))) {
@@ -3662,6 +3666,15 @@ private struct MessageDocumentAttachmentView: View {
         do {
             if let document = try await share.openDocument(item, using: onLoadMedia, demand: demand,
                 isCurrent: isCurrent, didReadSize: { byteCount = $0 }), isCurrent() {
+                // The already-parsed draft is within its format's preview budget. Its digest lets
+                // the reader transfer to the same confirmed slot even if the local overlay was evicted.
+                if isFromMe, item.reference == nil, let bytes = item.localData {
+                    let digest = await MediaPlaintextHash.digest(bytes)
+                    guard isCurrent() else { return }
+                    openedDraftDigest = digest
+                } else {
+                    openedDraftDigest = nil
+                }
                 if case .contact(let card) = document.content { contactName = card.name }
                 preview = document
             }
@@ -3693,6 +3706,7 @@ private struct MessageDocumentAttachmentView: View {
 
     private func closeDocument() {
         cancelDocumentOpen()
+        openedDraftDigest = nil
         preview = nil
         share.close()
     }
@@ -3889,6 +3903,22 @@ struct MessageMediaGallery: Identifiable {
     struct OutgoingSlot: Equatable {
         let rowID: String
         let index: UInt32
+    }
+
+    struct Replacement: Equatable {
+        let selectedID: String
+        let id: String?
+        let reference: MediaAttachmentReferenceFfi?
+        let target: AttachmentLocalTargetFfi?
+        let hint: AttachmentSourceHint?
+
+        init(selectedID: String, candidate: MessageMediaAttachment?) {
+            self.selectedID = selectedID
+            id = candidate?.id
+            reference = candidate?.reference
+            target = candidate?.localTarget
+            hint = candidate?.sourceHint
+        }
     }
 
     struct PendingSelection {
@@ -4125,6 +4155,7 @@ struct MessageMediaFullscreenGalleryView: View {
     var onGoToMessage: ((String) -> Void)?
     let onDismiss: () -> Void
 
+    private let currentTranscriptGallery: (() -> MessageMediaGallery?)?
     @State private var pendingSelection: MessageMediaGallery.PendingSelection?
     @State private var pendingVideo = PendingVideoPlayback()
     @State private var selection: TranscriptMediaSelection
@@ -4146,6 +4177,7 @@ struct MessageMediaFullscreenGalleryView: View {
     init(
         gallery: MessageMediaGallery,
         openingSelection: MessageMediaGallery.PendingSelection? = nil,
+        currentTranscriptGallery: (() -> MessageMediaGallery?)? = nil,
         onLoadMedia: ConversationMediaLoader,
         forwardingContext: MediaForwardingContext? = nil,
         onGoToMessage: ((String) -> Void)? = nil,
@@ -4158,6 +4190,7 @@ struct MessageMediaFullscreenGalleryView: View {
         self.onDismiss = onDismiss
         _selection = State(initialValue: TranscriptMediaSelection(openingID: gallery.initialItemID))
         _pendingSelection = State(initialValue: gallery.pendingSelection(for: gallery.initialItemID) ?? openingSelection)
+        self.currentTranscriptGallery = currentTranscriptGallery
     }
 
     var body: some View {
@@ -4172,15 +4205,18 @@ struct MessageMediaFullscreenGalleryView: View {
                 fullscreenContent
             }
         }
-        .task(id: missingSelectionReplacementID) {
+        .task(id: missingSelectionReplacement) {
             guard gallery.transcriptCaptions != nil, selectedItem == nil else { return }
             guard let pendingSelection, pendingSelection.id == selectedItemID else {
                 onDismiss()
                 return
             }
-            let replacement = await gallery.confirmedSelection(for: pendingSelection)
+            let expected = missingSelectionReplacement
+            let verified = await gallery.confirmedSelection(for: pendingSelection)
             guard !Task.isCancelled, selectedItemID == pendingSelection.id else { return }
-            guard let replacement else { onDismiss(); return }
+            let replacement = currentTranscriptGallery?()?.confirmedItem(for: pendingSelection)
+            guard expected == MessageMediaGallery.Replacement(selectedID: pendingSelection.id, candidate: replacement) else { return }
+            guard verified != nil, let replacement else { onDismiss(); return }
             preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
                 contentType: UTType(mimeType: replacement.mediaType) ?? .data)
             let wasPlaying = pendingVideo.wantsPlayback ?? selection.demand(for: pendingSelection.id,
@@ -4252,9 +4288,9 @@ struct MessageMediaFullscreenGalleryView: View {
         pendingSelection = gallery.pendingSelection(for: id)
     }
 
-    private var missingSelectionReplacementID: String? {
+    private var missingSelectionReplacement: MessageMediaGallery.Replacement? {
         guard gallery.transcriptCaptions != nil, gallery.transcriptCaptions?[selectedItemID] == nil else { return nil }
-        return pendingSelection.flatMap { gallery.confirmedItem(for: $0)?.id } ?? selectedItemID
+        return .init(selectedID: selectedItemID, candidate: pendingSelection.flatMap { gallery.confirmedItem(for: $0) })
     }
 
     private func page(_ item: MessageMediaAttachment) -> some View {
@@ -4715,7 +4751,10 @@ private struct MessageMediaFullscreenImagePage: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .task(id: isSelected ? loadRequest : nil) {
-                guard isSelected else { return }
+                guard isSelected else {
+                    isLoading = false
+                    return
+                }
                 let demand = loadRequest != handledLoadRequest ? .userTap(afterFailure: didFail) : selectionDemand
                 handledLoadRequest = loadRequest
                 await loadImageIfNeeded(viewSize: proxy.size, scale: displayScale, demand: demand)
@@ -4756,9 +4795,10 @@ private struct MessageMediaFullscreenImagePage: View {
             return
         }
 
-        isLoading = true
+        isLoading = demand.isUserInitiated
+        waitingForTap = !demand.isUserInitiated
         didFail = false
-        defer { isLoading = false }
+        defer { if !Task.isCancelled { isLoading = false } }
         do {
             guard let data = try await onLoadMedia.selectedPageData(for: item, isSelected: isSelected,
                 demand: demand) else { return }

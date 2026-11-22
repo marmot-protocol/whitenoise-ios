@@ -124,7 +124,8 @@ struct TranscriptHistoryGalleryView: View {
                 }
             } else if let gallery = window?.gallery, let expanded {
                 let visible = scoped && !history.validationFailed ? expanded : gallery
-                MessageMediaFullscreenGalleryView(gallery: visible, openingSelection: openingSelection, onLoadMedia: onLoadMedia,
+                MessageMediaFullscreenGalleryView(gallery: visible, openingSelection: openingSelection,
+                    currentTranscriptGallery: { self.window?.gallery }, onLoadMedia: onLoadMedia,
                     forwardingContext: forwardingContext, onGoToMessage: onGoToMessage, onDismiss: onDismiss)
                     .id(projectedViewer)
                     .environment(\.transcriptHistoryControls, scoped ? controls(for: visible, window: gallery) : nil)
