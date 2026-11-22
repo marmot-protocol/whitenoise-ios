@@ -1209,6 +1209,7 @@ struct MessageBubble: View {
                                 Text(L10n.string("Reactions"))
                             } else {
                                 Text("+\(hiddenCount)")
+                                    .font(.system(size: ReactionPillPresentation.symbolSize, weight: .bold).monospacedDigit())
                             }
                         }
                         .layoutValue(key: ReactionMetadataSubviewRoleKey.self, value: .overflow(hiddenCount))
@@ -1217,6 +1218,7 @@ struct MessageBubble: View {
             }
             .buttonStyle(.plain)
             .clipped()
+            .contentShape(.rect)
             .accessibilityRepresentation {
                 Button(L10n.string("Reactions")) { onShowReactionDetails(nil) }
                     .accessibilityValue(L10n.plural("%lld reactions", Int64(totalCount)))
@@ -1254,7 +1256,7 @@ struct MessageBubble: View {
             .background(mine ? Color(.systemGray4) : Color(.secondarySystemBackground), in: Capsule())
             .overlay { Capsule().strokeBorder(Color(.opaqueSeparator), lineWidth: 1) }
             .fixedSize()
-            .frame(minWidth: 44, minHeight: 44, alignment: .top)
+            .frame(height: 44, alignment: .top)
             // The strip proposes zero width to omitted chips, including their hit targets.
             .frame(minWidth: 0, maxWidth: .infinity)
             .clipped()
@@ -1269,8 +1271,8 @@ struct MessageBubble: View {
     private func reactionLabel(_ tally: ConversationViewModel.ReactionTally) -> some View {
         HStack(spacing: 2) {
             CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex,
-                                     pointSize: 14, maximumPointSize: ReactionPillPresentation.height - 2)
-                .font(.system(size: 14, weight: .bold))
+                                     pointSize: ReactionPillPresentation.symbolSize, maximumPointSize: ReactionPillPresentation.height - 2)
+                .font(.system(size: ReactionPillPresentation.symbolSize, weight: .bold))
             if tally.count > 1 {
                 Text(L10n.formatted("%lld", Int64(tally.count)))
             }
@@ -1506,12 +1508,14 @@ private struct ReactionPillLayout: Layout {
         var x = alignsLeading ? bounds.minX : max(bounds.minX, bounds.maxX - fit.requiredWidth)
         for index in reactionIndices {
             let size = cache.sizes[index]
+            // Center each capsule in a touch target that reaches halfway into each gap.
+            let slotWidth = size.width + ReactionMetadataFitting.pillSpacing
             subviews[index].place(
-                at: CGPoint(x: x, y: bounds.midY - size.height / 2),
+                at: CGPoint(x: x - ReactionMetadataFitting.pillSpacing / 2, y: bounds.midY - size.height / 2),
                 anchor: .topLeading,
-                proposal: ProposedViewSize(size)
+                proposal: ProposedViewSize(width: slotWidth, height: size.height)
             )
-            x += size.width + ReactionMetadataFitting.pillSpacing
+            x += slotWidth
         }
     }
 
