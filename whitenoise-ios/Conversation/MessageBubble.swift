@@ -2958,9 +2958,15 @@ private struct MessageVideoAttachmentView: View {
             maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize)
     }
 
-    private var previewRequest: TimelineMediaTaskID {
-        TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))
+    private struct PreviewRequest: Equatable {
+        let media: TimelineMediaTaskID
+        let showsDuration: Bool
+    }
+
+    private var previewRequest: PreviewRequest {
+        PreviewRequest(media: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item)),
+            showsDuration: showsBadges && showsDuration)
     }
 
     var body: some View {
@@ -2999,7 +3005,7 @@ private struct MessageVideoAttachmentView: View {
             localDuration = MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey)
         }
         .task(id: previewRequest) {
-            let request = previewRequest
+            let request = previewRequest.media
             guard request.isVisible, MediaAutoDownloadStore.shared.shouldAutoDownload(.video),
                   lastRead?.request != request || lastRead?.overPreviewLimit != true else { return }
             let needsPoster = displayThumbnail == nil && !posterDecodeFailed
@@ -4516,7 +4522,8 @@ private struct MessageMediaFullscreenVideoPage: View {
         let productTicket = appState.productAnalytics.ticket()
         var productOutcome: ProductOutcome = .cancelled
         defer { appState.productAnalytics.record(.attachment(.open, productOutcome), ticket: productTicket) }
-        isLoading = true
+        // An automatic read may be waiting on backoff. Play can take over through the same task ID.
+        isLoading = demand.isUserInitiated
         didFail = false
         defer { if !Task.isCancelled { isLoading = false } }
         do {
