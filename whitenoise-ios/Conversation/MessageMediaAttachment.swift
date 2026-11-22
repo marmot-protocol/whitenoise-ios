@@ -350,7 +350,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// Opening a sourced transcript page must still go through that page's original slot.
     var forTranscriptPage: Self {
         var copy = self
-        if localTarget != nil { copy.localData = nil }
+        if AttachmentHandoffSource(self) != .none { copy.localData = nil }
         return copy
     }
 
@@ -358,7 +358,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// A replacement for a previously known slot must prepare its own bytes.
     func canUseBytesPrepared(for earlier: Self) -> Bool {
         guard id == earlier.id, reference == earlier.reference else { return false }
-        if localTarget == earlier.localTarget { return true }
+        if localTarget == earlier.localTarget { return localTarget != nil || sourceHint == earlier.sourceHint }
         return earlier.localTarget == nil && localTarget != nil && reference != nil
             && (earlier.sourceHint == nil || earlier.sourceHint == sourceHint)
     }
@@ -645,13 +645,13 @@ nonisolated enum MessageDraftAttachmentInputs {
 
     /// Each attachment MDK already holds as a file is kept by id. Others go
     /// inline while drafts can hold their bytes; a large one MDK doesn't hold
-    /// yet is left out, so the save never carries its bytes. Attachments the
-    /// draft holds whose ids are in `kept` and that `attachments` don't name
-    /// are kept after them, by id and in order.
+    /// yet is left out, so the save never carries its bytes. MDK keeps every
+    /// attachment a save doesn't name, after the named ones, so each one in
+    /// `removing` (the draft's) that `attachments` don't name is removed.
     static func inputs(
         for attachments: [MediaDraftAttachment],
         retainedIDs: Set<String>,
-        keeping kept: [String] = []
+        removingUnnamed removing: [String] = []
     ) -> [MessageDraftAttachmentInputFfi] {
         let named = Set(attachments.map(\.id.uuidString))
         return attachments.compactMap { attachment in
@@ -659,7 +659,7 @@ nonisolated enum MessageDraftAttachmentInputs {
             if retainedIDs.contains(id) { return .retained(id: id) }
             guard MediaDraftProcessor.persistsInDraft(attachment) else { return nil }
             return .inline(attachment: attachment.messageDraftAttachment)
-        } + kept.filter { !named.contains($0) }.map { .retained(id: $0) }
+        } + removing.filter { !named.contains($0) }.map { .removed(id: $0) }
     }
 
     /// A large attachment drafts can hold only as a file, which MDK copies in.

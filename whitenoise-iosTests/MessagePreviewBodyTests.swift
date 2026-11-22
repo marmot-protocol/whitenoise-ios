@@ -5,7 +5,7 @@ import Testing
 
 /// `MessagePreview.body(_ record:)` and `MessagePreview.isPreviewable(_:)` must
 /// agree on which records carry displayable text. A reaction's emoji, a delete
-/// tombstone, or a kind-1200 stream-start signal must never surface as message
+/// tombstone or an edit must never surface as message
 /// body — that is the divergence these tests pin (see issue #367).
 struct MessagePreviewBodyTests {
     @Test func reactionRecordHasNoBodyAndIsNotPreviewable() {
@@ -54,30 +54,6 @@ struct MessagePreviewBodyTests {
         #expect(MessagePreview.copyBody(record) == "")
     }
 
-    @Test func agentStreamStartRecordHasNoBodyAndIsNotPreviewable() {
-        // A valid stream-start needs a 32-byte (64-char) hex stream id plus the
-        // text/quic/final-kind tags; otherwise it would degrade to .unknown.
-        let streamId = String(repeating: "ab", count: 32)
-        let record = previewRecord(
-            kind: MessageSemantics.kindAgentStreamStart,
-            plaintext: "kind-1200-signal-should-not-render",
-            tags: [
-                MessageTagFfi(values: [MessageSemantics.streamTag, streamId]),
-                MessageTagFfi(values: [MessageSemantics.streamTypeTag, MessageSemantics.streamTypeText]),
-                MessageTagFfi(values: [MessageSemantics.streamFinalKindTag, MessageSemantics.streamFinalKindChat]),
-                MessageTagFfi(values: [MessageSemantics.streamRouteTag, MessageSemantics.streamRouteQuic]),
-            ]
-        )
-
-        guard case .agentStreamStart = MessageSemantics.classify(record) else {
-            Issue.record("Expected the record to classify as .agentStreamStart")
-            return
-        }
-        #expect(MessagePreview.isPreviewable(record) == false)
-        #expect(MessagePreview.body(record) == "")
-        #expect(MessagePreview.copyBody(record) == "")
-    }
-
     /// Another client's kind previews as a label, never as its raw content.
     @Test func unsupportedEventPreviewsAsALabelNotItsContent() {
         let record = previewRecord(
@@ -108,7 +84,6 @@ struct MessagePreviewBodyTests {
             kind: 9999,
             mediaJson: nil,
             media: [],
-            agentTextStreamJson: nil,
             deleted: false
         )
 
@@ -169,18 +144,12 @@ struct MessagePreviewBodyTests {
         #expect(MessagePreview.copyBody(record) == source)
     }
 
-    @Test func copyPreservesReplyStreamAndMediaCaptionSources() {
+    @Test func copyPreservesReplyAndMediaCaptionSources() {
         let source = "First paragraph\n\n" + String(repeating: "more text\n", count: 150) + "\tLast line\n"
         let variants: [[MessageTagFfi]] = [
             [
                 MessageTagFfi(values: [MessageSemantics.eventRefTag, hex("cc")]),
                 MessageTagFfi(values: [MessageSemantics.quoteRefTag, hex("cc")]),
-            ],
-            [
-                MessageTagFfi(values: [MessageSemantics.streamTag, hex("ab")]),
-                MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("bc")]),
-                MessageTagFfi(values: [MessageSemantics.streamHashTag, hex("cd")]),
-                MessageTagFfi(values: [MessageSemantics.streamChunksTag, "3"]),
             ],
             [encryptedMediaTag()],
         ]
@@ -191,18 +160,6 @@ struct MessagePreviewBodyTests {
             )
             #expect(MessagePreview.copyBody(record) == source)
         }
-    }
-
-    @Test func copyPreservesGiphyShapedCompletedAgentResponse() {
-        let source = "https://media1.giphy.com/media/abc/giphy.mp4?cid=client&rid=giphy.mp4\nvia GIPHY · Creator"
-        let record = message(id: hex("aa"), plaintext: source, tags: [
-            MessageTagFfi(values: [MessageSemantics.streamTag, hex("ab")]),
-            MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("bc")]),
-            MessageTagFfi(values: [MessageSemantics.streamHashTag, hex("cd")]),
-            MessageTagFfi(values: [MessageSemantics.streamChunksTag, "3"]),
-        ])
-
-        #expect(MessagePreview.copyBody(record) == source)
     }
 
     @Test func copyPreservesGiphyShapedMediaCaption() {
@@ -356,7 +313,6 @@ private func timelineReplyPreview(mediaJson: String) -> TimelineReplyPreviewFfi 
         plaintext: "",
         kind: MessageSemantics.kindChat,
         mediaJson: mediaJson,
-        agentTextStreamJson: nil,
         deleted: false
     )
 }

@@ -20,7 +20,7 @@ struct HistoryNoticeAndPendingEditTests {
             groupIdHex: group, sender: String(repeating: "a", count: 64), plaintext: "Lunch?",
             contentTokens: .emptyDocument, kind: kind, tags: [],
             timelineAt: 1, receivedAt: 1, replyToMessageIdHex: nil, replyPreview: nil,
-            mediaJson: nil, media: [], agentTextStreamJson: nil, groupSystem: nil, poll: poll,
+            mediaJson: nil, media: [], groupSystem: nil, poll: poll,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []), edit: nil,
             deleted: false, deletedByMessageIdHex: nil, invalidationStatus: nil
         )

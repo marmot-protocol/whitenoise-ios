@@ -65,6 +65,7 @@ final class ConversationReadMarker {
                   pendingIndex: pendingWatermarkMessageIdHex.flatMap(timelineIndex),
                   flushedIndex: flushedWatermarkMessageIdHex.flatMap(timelineIndex),
                   kind: record.kind,
+                  tags: record.tags,
                   isDeleted: isDeleted
               ) != nil
         else { return }
@@ -87,12 +88,12 @@ final class ConversationReadMarker {
         flushedWatermarkMessageIdHex = messageIdHex
     }
 
-    /// Kinds that render as their own user-visible timeline row and can
-    /// therefore carry the read watermark. Reactions, deletes and edits mutate
-    /// another row rather than occupying one, and agent stream events are
-    /// developer-mode only.
-    nonisolated static func canAdvanceWatermark(kind: UInt64) -> Bool {
-        MessageSemantics.isUserMessageKind(kind) || kind == MessageSemantics.kindGroupSystem
+    /// Rows that can carry the read watermark: MDK's chat activity (chat,
+    /// polls, thread messages) and group-system rows. Reactions, deletes and
+    /// edits mutate another row rather than occupying one, and MDK refuses a
+    /// kind 1111 without a parent.
+    nonisolated static func canAdvanceWatermark(kind: UInt64, tags: [MessageTagFfi]) -> Bool {
+        MessageSemantics.isChatActivity(kind: kind, tags: tags) || kind == MessageSemantics.kindGroupSystem
     }
 
     /// The accepted watermark position, or nil when the candidate is ineligible
@@ -104,10 +105,11 @@ final class ConversationReadMarker {
         pendingIndex: Int?,
         flushedIndex: Int?,
         kind: UInt64,
+        tags: [MessageTagFfi],
         isDeleted: Bool
     ) -> Int? {
         guard !isDeleted,
-              canAdvanceWatermark(kind: kind),
+              canAdvanceWatermark(kind: kind, tags: tags),
               let candidateIndex
         else { return nil }
         if let pendingIndex, candidateIndex <= pendingIndex { return nil }
@@ -133,6 +135,7 @@ final class ConversationReadMarker {
             pendingIndex: failedIndex,
             flushedIndex: nil,
             kind: MessageSemantics.kindChat,
+            tags: [],
             isDeleted: false
         ) != nil
         return newerCandidateIsQueued ? nil : failedMessageIdHex
@@ -153,6 +156,7 @@ final class ConversationReadMarker {
                 pendingIndex: newest?.index,
                 flushedIndex: nil,
                 kind: record.kind,
+                tags: record.tags,
                 isDeleted: isDeleted(record.messageIdHex)
             ) else { continue }
             newest = (record, index)

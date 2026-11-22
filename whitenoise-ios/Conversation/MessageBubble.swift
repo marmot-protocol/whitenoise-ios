@@ -54,7 +54,7 @@ struct TimelineMediaTaskID: Equatable {
     let contentID: String
     let isVisible: Bool
     var policyRevision: String = ""
-    var target: AttachmentLocalTargetFfi?
+    var source: AttachmentHandoffSource = .none
 }
 
 /// Reference box for the media-load callback. Passing the bare async closure
@@ -598,8 +598,17 @@ struct MessageBubble: View {
         }
     }
 
+    var readerShowsSource: Bool {
+        if incompleteMarkdown { return true }
+        guard markdownBlocks == nil else { return false }
+        if TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) { return true }
+        guard record.plaintext.utf8.count > ContentSanitizer.maxMessageScalars else { return false }
+        let scalars = record.plaintext.unicodeScalars
+        return scalars.prefix(ContentSanitizer.maxMessageScalars).endIndex != scalars.endIndex
+    }
+
     @ViewBuilder private var readerBody: some View {
-        if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
+        if readerShowsSource {
             // Beyond the formatter's budget, read the authored source in viewport-sized batches.
             LongMessageSourceText(text: record.plaintext)
                 .id(Data(record.plaintext.utf8))
@@ -1145,22 +1154,12 @@ struct MessageBubble: View {
 
     /// The complete source stays reachable for a durable row even when search expands the projected text.
     var offersSourceReader: Bool {
-        !usesReviewLayout && !isLiveStream
+        !usesReviewLayout
             && (incompleteMarkdown || TranscriptMessagePreview.requiresReader(record.plaintext))
     }
 
-    private var isLiveStream: Bool {
-        status == .streaming || (record.direction == "received" && record.messageIdHex.isEmpty)
-    }
-
-    private var isStreamBody: Bool {
-        if isLiveStream { return true }
-        if case .streamFinal = MessageSemantics.classify(record) { return true }
-        return false
-    }
-
     private func messageBodyText(hasReply: Bool, richWidth: CGFloat? = nil) -> some View {
-        let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil && !isStreamBody {
+        let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil {
             TranscriptMessagePreview.snippet(markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }
                 .joined(separator: "\n") ?? sanitizedBodyText)
         } else { nil }
@@ -1285,7 +1284,7 @@ struct MessageBubble: View {
             })
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
-            // stream bubbles, pre-markdown history) keep the plain path.
+            // sends, pre-markdown history) keep the plain path.
             let text = AttributedString(snippet.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) + "…" } ?? sanitizedBodyText)
             if actionBodySize != nil {
                 liftedInlineText(text)
@@ -3006,7 +3005,7 @@ private struct MessageVideoAttachmentView: View {
 
     private var previewRequest: TimelineMediaTaskID {
         TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, target: item.localTarget)
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))
     }
 
     var body: some View {
@@ -3187,7 +3186,7 @@ private struct MessageAudioAttachmentView: View {
 
     private var prefetchID: TimelineMediaTaskID {
         TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-                            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)
+                            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))
     }
 
     init(
@@ -3540,14 +3539,7 @@ private struct MessageDocumentAttachmentView: View {
     let onLoadMedia: ConversationMediaLoader
 
     @Environment(\.scenePhase) private var scenePhase
-    private struct OpenDocument: Identifiable {
-        let preview: MessageDocumentPreview
-        let item: MessageMediaAttachment
-        let loader: ConversationMediaLoader
-        var id: UUID { preview.id }
-    }
-
-    @State private var preview: OpenDocument?
+    @State private var preview: MessageDocumentPreview?
     @State private var openingID: UUID?
     @State private var openingTask: Task<Void, Never>?
     @State private var contactName: String?
@@ -3642,7 +3634,7 @@ private struct MessageDocumentAttachmentView: View {
             if let contactName { transcriptSearch?.registerContactName(contactName, for: item.id, in: confirmedID) }
         }
         .sheet(item: $preview) { document in
-            MessageDocumentPreviewSheet(preview: document.preview, item: document.item, loader: document.loader)
+            MessageDocumentPreviewSheet(preview: document, item: item, loader: onLoadMedia)
                 .appAppearance()
         }
         .sheet(item: $share.file) { file in
@@ -3653,14 +3645,11 @@ private struct MessageDocumentAttachmentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { cancelDocumentOpen() }
         }
-        .onChange(of: item.id) { _, _ in
-            closeDocument()
-            byteCount = nil
-            contactName = nil
-            didFail = false
+        .onChange(of: DocumentPreviewSource(item)) { previous, current in
+            if !current.continues(previous, outgoing: isFromMe) { resetDocument() }
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))) {
             #if DEBUG
             guard !fixtureUnavailable else { return }
             #endif
@@ -3733,7 +3722,7 @@ private struct MessageDocumentAttachmentView: View {
             if let document = try await share.openDocument(item, using: onLoadMedia, demand: demand,
                 isCurrent: isCurrent, didReadSize: { byteCount = $0 }), isCurrent() {
                 if case .contact(let card) = document.content { contactName = card.name }
-                preview = OpenDocument(preview: document, item: item, loader: onLoadMedia)
+                preview = document
             }
         } catch is CancellationError {
             return
@@ -3743,6 +3732,13 @@ private struct MessageDocumentAttachmentView: View {
         } catch {
             if isCurrent() { didFail = true }
         }
+    }
+
+    private func resetDocument() {
+        closeDocument()
+        byteCount = nil
+        contactName = nil
+        didFail = false
     }
 
     private func cancelDocumentOpen() {

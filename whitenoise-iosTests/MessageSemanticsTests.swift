@@ -23,9 +23,9 @@ struct MessageSemanticsTests {
         #expect(MessagePreview.body(record) == "hello from the inner content")
     }
 
-    /// Threads show one level deep: a NIP-22 comment is a reply to its parent,
+    /// Threads show one level deep: a thread message is a reply to its parent,
     /// the first lowercase `e` (the uppercase `E` is the thread root).
-    @Test func aNIP22CommentIsAReplyToItsParent() {
+    @Test func aThreadMessageIsAReplyToItsParent() {
         let root = hex("01")
         let parent = hex("02")
         func comment(_ tags: [[String]]) -> MessageSemantics.Kind {
@@ -33,15 +33,31 @@ struct MessageSemanticsTests {
         }
         #expect(comment([["E", root], ["K", "9"], ["e", parent], ["k", "1111"]]) == .reply(targetMessageId: parent))
         #expect(comment([["e", root], ["k", "1068"]]) == .reply(targetMessageId: root))
+        // White Noise Linux's older forms, with no numeric `k`, are thread messages too.
+        #expect(comment([["e", parent]]) == .reply(targetMessageId: parent))
+        #expect(comment([["e", parent], ["k", "not a kind"]]) == .reply(targetMessageId: parent))
+        // The first `e` names the parent even without a value: then there is none.
+        #expect(comment([["e"], ["e", parent], ["k", "9"]]) == .chat)
         // A comment on something other than an event still shows as a message.
         #expect(comment([["k", "30023"]]) == .chat)
-        // Without a numeric `k` it isn't a NIP-22 comment, as MDK decides.
-        #expect(comment([["e", parent]]) == .unsupportedEvent)
-        #expect(comment([["e", parent], ["k", "not a kind"]]) == .unsupportedEvent)
-        #expect(comment([["e", parent], ["k", "-0"]]) == .unsupportedEvent)
-        #expect(comment([["e", parent], ["k", "+9"]]) == .unsupportedEvent)
-        #expect(comment([["e", parent], ["k", " 9"]]) == .unsupportedEvent)
-        #expect(comment([["e", parent], ["K", "9"]]) == .unsupportedEvent)
+        // Neither a lowercase `e` nor a numeric `k`: another app's kind 1111.
+        #expect(comment([["k", "not a kind"]]) == .unsupportedEvent)
+        #expect(comment([["k", " 9"]]) == .unsupportedEvent)
+        #expect(comment([["E", root], ["K", "9"], ["q", parent]]) == .unsupportedEvent)
+    }
+
+    /// MDK counts a kind 1111 as chat activity only when it has a parent.
+    @Test func onlyThreadMessagesWithAParentAreChatActivity() {
+        func activity(_ kind: UInt64, _ tags: [[String]] = []) -> Bool {
+            MessageSemantics.isChatActivity(kind: kind, tags: tags.map { MessageTagFfi(values: $0) })
+        }
+        #expect(activity(MessageSemantics.kindChat))
+        #expect(activity(MessageSemantics.kindPoll))
+        #expect(activity(MessageSemantics.kindComment, [["e", hex("02")]]))
+        #expect(!activity(MessageSemantics.kindComment, [["k", "9"]]))
+        #expect(!activity(MessageSemantics.kindComment, [["e"], ["e", hex("02")]]))
+        #expect(!activity(MessageSemantics.kindReaction, [["e", hex("02")]]))
+        #expect(!activity(MessageSemantics.kindGroupSystem))
     }
 
     @Test func aCommentPreviewsAsItsText() {
@@ -52,13 +68,12 @@ struct MessageSemanticsTests {
         )
         #expect(MessagePreview.isPreviewable(record))
         #expect(MessagePreview.body(record) == "agreed")
-        // A reply quote has no tags to check, so a comment there reads as text too.
+        // The chat list shows a kind 1111 only as chat activity, so it reads as text there too.
         #expect(!MessageSemantics.isUnsupportedEventKind(MessageSemantics.kindComment))
     }
 
     @Test func decodedUnsignedEventControlsDoNotPreviewAsText() {
         let target = hex("44")
-        let streamId = hex("ab")
         let reaction = unsignedEventRecord(
             plaintext: "+",
             kind: MessageSemantics.kindReaction,
@@ -68,16 +83,6 @@ struct MessageSemanticsTests {
             plaintext: "",
             kind: MessageSemantics.kindDelete,
             tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, target])]
-        )
-        let streamStart = unsignedEventRecord(
-            plaintext: "",
-            kind: MessageSemantics.kindAgentStreamStart,
-            tags: [
-                MessageTagFfi(values: [MessageSemantics.streamTag, streamId]),
-                MessageTagFfi(values: ["stream-type", "text"]),
-                MessageTagFfi(values: ["final-kind", "9"]),
-                MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
-            ]
         )
         let agentActivity = unsignedEventRecord(
             plaintext: #"{"v":1,"status":"thinking","text":"Thinking"}"#,
@@ -102,7 +107,6 @@ struct MessageSemanticsTests {
         #expect(MessageSemantics.classify(groupSystem) == .groupSystem)
         #expect(!MessagePreview.isPreviewable(reaction))
         #expect(!MessagePreview.isPreviewable(deletion))
-        #expect(!MessagePreview.isPreviewable(streamStart))
         #expect(!MessagePreview.isPreviewable(agentActivity))
         #expect(!MessagePreview.isPreviewable(agentOperation))
         #expect(!MessagePreview.isPreviewable(groupSystem))
@@ -119,43 +123,29 @@ struct MessageSemanticsTests {
             kind: MessageSemantics.kindAgentOperation,
             mediaJson: nil,
             media: [],
-            agentTextStreamJson: nil,
             deleted: false
         )
 
         #expect(MessagePreview.body(preview) == "Searching")
     }
 
-    @Test func decodedUnsignedEventStreamFinalPreviewsTranscript() {
-        let streamId = hex("ab")
+    /// MDK retired the QUIC agent stream: a kind 9 carrying the old
+    /// stream-final tags is an ordinary chat message.
+    @Test func retiredStreamFinalTagsReadAsPlainChat() {
         let record = unsignedEventRecord(
             plaintext: "complete answer",
             kind: MessageSemantics.kindChat,
             tags: [
-                MessageTagFfi(values: [MessageSemantics.streamTag, streamId]),
-                MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("cc")]),
-                MessageTagFfi(values: [MessageSemantics.streamHashTag, hex("55")]),
-                MessageTagFfi(values: [MessageSemantics.streamChunksTag, "2"]),
-            ]
-        )
-
-        #expect(MessageSemantics.classify(record) == .streamFinal(streamId: streamId))
-        #expect(MessagePreview.isPreviewable(record))
-        #expect(MessagePreview.body(record) == "complete answer")
-    }
-
-    @Test func incompleteStreamFinalIsPlainChatNotAStreamFinal() {
-        let record = unsignedEventRecord(
-            plaintext: "complete answer",
-            kind: MessageSemantics.kindChat,
-            tags: [
-                MessageTagFfi(values: [MessageSemantics.streamTag, hex("ab")]),
-                MessageTagFfi(values: [MessageSemantics.streamHashTag, hex("55")]),
-                MessageTagFfi(values: [MessageSemantics.streamChunksTag, "2"]),
+                MessageTagFfi(values: ["stream", hex("ab")]),
+                MessageTagFfi(values: ["stream-start", hex("cc")]),
+                MessageTagFfi(values: ["stream-hash", hex("55")]),
+                MessageTagFfi(values: ["stream-chunks", "2"]),
             ]
         )
 
         #expect(MessageSemantics.classify(record) == .chat)
+        #expect(MessagePreview.isPreviewable(record))
+        #expect(MessagePreview.body(record) == "complete answer")
     }
 
     @Test func mediaReferenceUsesMdkCanonicalV2MediaTypeValidation() {

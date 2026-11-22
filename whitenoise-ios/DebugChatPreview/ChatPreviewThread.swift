@@ -63,7 +63,7 @@ nonisolated struct ChatPreviewThread {
             retentionSeconds: nil, retentionExpiresAt: nil, direction: sender == Self.owner ? "sent" : "received",
             groupIdHex: id, sender: sender, plaintext: line.text, contentTokens: .emptyDocument,
             kind: MessageSemantics.kindChat, tags: [], sticker: nil, timelineAt: time, receivedAt: time,
-            replyToMessageIdHex: nil, replyPreview: nil, mediaJson: nil, media: [], agentTextStreamJson: nil,
+            replyToMessageIdHex: nil, replyPreview: nil, thread: nil, mediaJson: nil, media: [],
             groupSystem: nil, reactions: .init(byEmoji: [], userReactions: []), edit: nil, deleted: false,
             deletionSource: .unknown, deletedByMessageIdHex: nil, invalidationStatus: nil,
             recipientConfirmed: false, importedFrom: nil, historyImportProvenance: nil)

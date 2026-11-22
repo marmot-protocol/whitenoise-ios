@@ -53,7 +53,7 @@ extension ChatPreviewThread {
             Self(4, "04 · Emoji & Stickers", [.init("🥾"), .init("👩🏽‍🚀 👨‍👩‍👧‍👦"), .init(":marmot:"), .init("Trail crew :wn: 🎒"),
                 .init("", .sticker), .init("", .sticker, by: owner), .init(":marmot_wave:", .reply(0), by: third)]),
             Self(5, "05 · People & Mentions", [.init("Are you joining us?", .mention), .init("Yes!", by: owner), .init("Me too.", by: third)]),
-            Self(6, "06 · Replies & Long Messages", [.init("Which route did you take?"), .init(long, .reply(0), by: owner), .init("I'll save this.", .reply(1))]),
+            Self(6, "06 · Replies & Long Messages", [.init("Which route did you take?"), .init(long, .reply(0, inThread: true), by: owner), .init("I'll save this.", .reply(1, inThread: true))]),
             Self(7, "07 · Photos & Albums", [.init("At the studio", .media(["tall-portrait.jpg"])),
                 .init("", .media(["studio-panorama.jpg"])), photos,
                 .init("Same subject from another angle", .reply(0), .media(["tall-portrait.jpg"]), by: owner),

@@ -46,7 +46,8 @@ struct AgentEventPresentationTests {
     }
 
     @MainActor
-    @Test func progressFinishesOnlyAfterTheSameAgentAnswersTheSameRequest() throws {
+    @Test(arguments: [MessageSemantics.kindChat, MessageSemantics.kindComment])
+    func progressFinishesOnlyAfterTheSameAgentAnswersTheSameRequest(answerKind: UInt64) throws {
         let model = ConversationViewModel(appState: AppState.test(), group: testAgentGroup())
         let request = hex("31")
         let bot = hex("11")
@@ -59,6 +60,7 @@ struct AgentEventPresentationTests {
         let unrelatedAnswer = timelineRecord(messageIdHex: hex("23"), groupIdHex: hex("bb"), sender: bot,
                                              timelineAt: 3, replyToMessageIdHex: hex("32"))
         let answer = timelineRecord(messageIdHex: hex("24"), groupIdHex: hex("bb"), sender: bot,
+                                    kind: answerKind, tags: [.init(values: ["e", request])],
                                     timelineAt: 4, replyToMessageIdHex: request)
 
         func show(_ records: [TimelineMessageRecordFfi]) {

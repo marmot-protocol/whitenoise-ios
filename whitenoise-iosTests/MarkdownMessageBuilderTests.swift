@@ -40,26 +40,32 @@ struct MarkdownMessageBuilderTests {
                               isBodyExpanded: true).offersSourceReader)
     }
 
+    @Test func plainReaderPreservesTheTailOfOneOversizedGrapheme() {
+        let source = "a" + String(repeating: "\u{301}", count: ContentSanitizer.maxMessageScalars) + "TAIL"
+        let row = record(plaintext: source, tokens: doc([]))
+        #expect(!ContentSanitizer.messageBody(source).hasSuffix("TAIL"))
+        #expect(MessageBubble(record: row, status: .received).readerShowsSource)
+    }
+
+    @Test func longSourceWithCompleteFormattedLinksKeepsThemTappableInTheReader() throws {
+        let destination = "https://example.org/" + String(repeating: "x", count: 100)
+        let source = String(repeating: "[Map](\(destination)) ", count: 80)
+        let links: [MarkdownInlineFfi] = Array(repeating: .link(dest: destination, title: nil, children: [.text(content: "Map")],
+                                                               classification: .web), count: 80)
+        let row = record(plaintext: source, tokens: doc([para(links)]))
+        let projection = MessageMarkdownDisplayProjection.build(for: row, mentionDisplayName: nil)
+        let blocks = try #require(projection.blocks)
+        #expect(!projection.isTruncated)
+        #expect(TranscriptMessagePreview.requiresReader(source))
+        #expect(!MessageBubble(record: row, status: .received, markdownBlocks: blocks).readerShowsSource)
+    }
+
     @Test func anEmojiAtTheStartOfATruncatedDocumentKeepsTheTextBubble() {
         let document = MarkdownDocumentFfi(blocks: [para([.text(content: "🐿️")])], truncated: true)
         let row = record(plaintext: "🐿️ followed by omitted text", tokens: document)
         let projection = MessageMarkdownDisplayProjection.build(for: row, mentionDisplayName: nil)
         #expect(projection.isTruncated)
         #expect(MessageBubble(record: row, status: .received, incompleteMarkdown: projection.isTruncated).standaloneEmoji == nil)
-    }
-
-    @Test func onlyFinalizedStreamsOfferTheUnshownSource() {
-        var row = record(plaintext: String(repeating: "🌲", count: 3000), tokens: doc([]))
-        row.tags = [
-            .init(values: ["stream", String(repeating: "ab", count: 32)]),
-            .init(values: ["stream-start", String(repeating: "cc", count: 32)]),
-            .init(values: ["stream-hash", String(repeating: "55", count: 32)]),
-            .init(values: ["stream-chunks", "2"])
-        ]
-        #expect(MessageBubble(record: row, status: .received).offersSourceReader)
-        #expect(!MessageBubble(record: row, status: .streaming).offersSourceReader)
-        row.plaintext = "Finished"
-        #expect(!MessageBubble(record: row, status: .received).offersSourceReader)
     }
 
     private func para(_ inlines: [MarkdownInlineFfi]) -> MarkdownBlockFfi {

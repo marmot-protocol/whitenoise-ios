@@ -5,7 +5,7 @@ import MarmotKit
 /// Authored examples carry the same typed sidecars as a retained conversation row.
 nonisolated struct PreviewLine {
     enum Detail {
-        case markdown([MarkdownBlockFfi]), mention, reply(Int), edited, reported, pending, failed, deleted, expires
+        case markdown([MarkdownBlockFfi]), mention, reply(Int, inThread: Bool = false), edited, reported, pending, failed, deleted, expires
         case missingReply, namedMentions([(String, String)])
         case reactionParticipants([(String, [String])])
         case reactions([String]), media([String]), rejectedMedia, sticker, poll(closed: Bool, type: PollTypeFfi = .singleChoice), malformedPoll
@@ -61,14 +61,26 @@ nonisolated struct PreviewLine {
                 let missing = String(repeating: "fe", count: 32)
                 row.replyToMessageIdHex = missing
                 row.tags = ["e", "q"].map { .init(values: [$0, missing]) }
-            case let .reply(index):
+            case let .reply(index, inThread):
                 let parent = history[index].timeline
                 row.replyToMessageIdHex = parent.messageIdHex
-                row.tags = ["e", "q"].map { .init(values: [$0, parent.messageIdHex]) }
-                row.replyPreview = .init(messageIdHex: parent.messageIdHex, sender: parent.sender,
+                if inThread {
+                    let root = parent.thread.flatMap { thread in
+                        history.first { $0.timeline.messageIdHex == thread.rootMessageIdHex }?.timeline
+                    } ?? parent
+                    row.kind = MessageSemantics.kindComment
+                    row.thread = .init(rootMessageIdHex: root.messageIdHex, parentMessageIdHex: parent.messageIdHex)
+                    row.tags = [
+                        ["E", root.messageIdHex], ["K", String(root.kind)], ["P", root.sender],
+                        ["e", parent.messageIdHex], ["k", String(parent.kind)], ["p", parent.sender],
+                    ].map { .init(values: $0) }
+                } else {
+                    row.tags = ["e", "q"].map { .init(values: [$0, parent.messageIdHex]) }
+                }
+                row.replyPreview = .init(messageIdHex: parent.messageIdHex, replyToMessageIdHex: parent.replyToMessageIdHex, sender: parent.sender,
                     plaintext: parent.plaintext, contentTokens: parent.contentTokens, kind: parent.kind, sticker: parent.sticker,
-                    mediaJson: parent.mediaJson, media: parent.media, agentTextStreamJson: nil,
-                    deleted: parent.deleted, deletionSource: parent.deletionSource, invalidationStatus: nil)
+                    mediaJson: parent.mediaJson, media: parent.media,
+                    deleted: parent.deleted, deletionSource: parent.deletionSource, invalidationStatus: parent.invalidationStatus, thread: parent.thread)
                 message.references.replyAuthor = parent.sender
             case .edited:
                 row.edit = .init(editCount: 1, latestEditMessageIdHex: String(repeating: "ed", count: 32), editedAt: row.timelineAt + 10)
