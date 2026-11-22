@@ -237,6 +237,7 @@ struct MarkdownPlainTextTests {
     @Test func replyPreviewBodyFlattensWhenTokensPresent() {
         let preview = TimelineReplyPreviewFfi(
             messageIdHex: "01",
+            replyToMessageIdHex: nil,
             sender: "11",
             plaintext: "`code` reply",
             contentTokens: doc([
@@ -249,10 +250,10 @@ struct MarkdownPlainTextTests {
             sticker: nil,
             mediaJson: nil,
             media: [],
-            agentTextStreamJson: nil,
             deleted: false,
             deletionSource: .unknown,
-            invalidationStatus: nil
+            invalidationStatus: nil,
+            thread: nil
         )
         #expect(MessagePreview.body(preview) == "code reply")
     }

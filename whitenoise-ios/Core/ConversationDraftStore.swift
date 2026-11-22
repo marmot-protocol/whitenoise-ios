@@ -311,8 +311,7 @@ final class ConversationDraftStore {
         let revision: UInt64
         let operation: PendingOperation
         /// Written by a composer that hasn't received the saved draft: the
-        /// write keeps every file MDK holds that it doesn't name, since
-        /// leaving one out would have MDK delete it.
+        /// write removes nothing, so MDK keeps every attachment it doesn't name.
         let keepsSavedFiles: Bool
     }
 
@@ -946,8 +945,8 @@ final class ConversationDraftStore {
     }
 
     /// `keepsSavedFiles`: the composer hasn't received the saved draft yet
-    /// (its read hasn't finished, or hasn't started), so the write keeps every
-    /// file MDK holds that the snapshot doesn't name.
+    /// (its read hasn't finished, or hasn't started), so the write removes
+    /// nothing and MDK keeps every attachment the snapshot doesn't name.
     func setDraft(
         _ snapshot: ConversationDraftSnapshot,
         accountRef: String,
@@ -1164,19 +1163,22 @@ final class ConversationDraftStore {
                 if let cached = selections[key] { selected = cached }
                 else { selected = try await liveClient.selectedMessageDraft(accountRef: key.accountRef, groupIdHex: key.groupIdHex) }
                 let held = MessageDraftAttachmentInputs.fileBackedIDs(in: selected)
-                // Everything the draft holds, inline or as a file, in its order:
-                // the composer can't have left out what it never received.
-                let kept = pending.keepsSavedFiles ? (selected.draft?.mediaAttachments.map(\.id) ?? []) : []
+                let draftIDs = selected.draft?.mediaAttachments.map(\.id) ?? []
+                // MDK keeps what a save leaves out. A composer that has the draft
+                // removes what it no longer shows; one that hasn't received it
+                // can't have removed anything.
+                let removing = pending.keepsSavedFiles ? [] : draftIDs
                 let saved: SelectedMessageDraftFfi
                 switch pending.operation {
                 case .save(let snapshot):
                     saved = try await liveClient.saveMessageDraftIfRevision(accountRef: key.accountRef,
-                        revision: selected.revision, snapshot: snapshot, retainedIDs: held, keeping: kept)
-                case .delete where !kept.isEmpty:
+                        revision: selected.revision, snapshot: snapshot, retainedIDs: held, removingUnnamed: removing)
+                case .delete where pending.keepsSavedFiles && !draftIDs.isEmpty:
+                    // Clearing the text the composer had keeps the attachments it never received.
                     saved = try await liveClient.saveMessageDraftIfRevision(accountRef: key.accountRef,
                         revision: selected.revision,
                         snapshot: ConversationDraftSnapshot(canonicalText: "", replyToMessageIdHex: nil, mediaAttachments: []),
-                        retainedIDs: held, keeping: kept)
+                        retainedIDs: held)
                 case .delete:
                     saved = try await liveClient.clearMessageDraftIfRevision(accountRef: key.accountRef, revision: selected.revision)
                 }

@@ -136,7 +136,7 @@ struct TimelineProjectionBoundaryTests {
             messageIdHex: hexId(22), plaintext: "Another reply", replyToMessageIdHex: offscreenPollID,
             replyPreview: TimelineReplyPreviewFfi(
                 messageIdHex: offscreenPollID, sender: poll.sender, plaintext: "", kind: poll.kind,
-                mediaJson: nil, media: [], agentTextStreamJson: nil, deleted: false
+                mediaJson: nil, media: [], deleted: false
             )
         )
         viewModel.applyTimelinePage(
@@ -158,7 +158,7 @@ struct TimelineProjectionBoundaryTests {
         let fallback = timelineRecord(messageIdHex: hexId(21), plaintext: "Reply", replyToMessageIdHex: poll.messageIdHex)
         let projected = timelineRecord(messageIdHex: hexId(22), plaintext: "Another reply", replyToMessageIdHex: poll.messageIdHex,
             replyPreview: .init(messageIdHex: poll.messageIdHex, sender: poll.sender, plaintext: poll.plaintext,
-                                kind: poll.kind, mediaJson: nil, media: [], agentTextStreamJson: nil, deleted: false))
+                                kind: poll.kind, mediaJson: nil, media: [], deleted: false))
         viewModel.applyTimelinePage(.init(messages: [poll, fallback, projected], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
         for reply in [fallback, projected] {
             let record = try #require(viewModel.record(for: reply.messageIdHex))
@@ -186,7 +186,6 @@ struct TimelineProjectionBoundaryTests {
                 kind: MessageSemantics.kindChat,
                 mediaJson: nil,
                 media: [reference],
-                agentTextStreamJson: nil,
                 deleted: false
             )
         )
@@ -643,7 +642,6 @@ struct TimelineProjectionBoundaryTests {
             replyPreview: replyPreview,
             mediaJson: nil,
             media: media,
-            agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             edit: nil,

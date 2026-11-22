@@ -1066,7 +1066,7 @@ struct MessageBubble: View {
             })
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
-            // stream bubbles, pre-markdown history) keep the plain path.
+            // sends, pre-markdown history) keep the plain path.
             let text = AttributedString(sanitizedBodyText)
             if actionBodySize != nil {
                 liftedInlineText(text)

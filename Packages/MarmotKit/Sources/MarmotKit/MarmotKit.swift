@@ -974,344 +974,6 @@ public func FfiConverterTypeAccountAttentionSubscription_lower(_ value: AccountA
 
 
 
-/**
- * A live agent-text-stream watch. Drive `next()` in a `while let` loop to fill
- * a bubble; it yields `Chunk` deltas then a terminal `Finished`/`Failed`,
- * after which it returns `None`.
- */
-public protocol AgentStreamSubscriptionProtocol: AnyObject, Sendable {
-
-    func next() async  -> AgentStreamUpdateFfi?
-
-    /**
-     * The resolved stream id this watch is following (hex).
-     */
-    func streamIdHex()  -> String
-
-}
-/**
- * A live agent-text-stream watch. Drive `next()` in a `while let` loop to fill
- * a bubble; it yields `Chunk` deltas then a terminal `Finished`/`Failed`,
- * after which it returns `None`.
- */
-open class AgentStreamSubscription: AgentStreamSubscriptionProtocol, @unchecked Sendable {
-    fileprivate let pointer: UnsafeMutableRawPointer!
-
-    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoPointer {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
-        self.pointer = pointer
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noPointer: NoPointer) {
-        self.pointer = nil
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
-        return try! rustCall { uniffi_marmot_uniffi_fn_clone_agentstreamsubscription(self.pointer, $0) }
-    }
-    // No primary constructor declared for this class.
-
-    deinit {
-        guard let pointer = pointer else {
-            return
-        }
-
-        try! rustCall { uniffi_marmot_uniffi_fn_free_agentstreamsubscription(pointer, $0) }
-    }
-
-
-
-
-open func next()async  -> AgentStreamUpdateFfi?  {
-    return
-        try!  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_agentstreamsubscription_next(
-                    self.uniffiClonePointer()
-
-                )
-            },
-            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterOptionTypeAgentStreamUpdateFfi.lift,
-            errorHandler: nil
-
-        )
-}
-
-    /**
-     * The resolved stream id this watch is following (hex).
-     */
-open func streamIdHex() -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_marmot_uniffi_fn_method_agentstreamsubscription_stream_id_hex(self.uniffiClonePointer(),$0
-    )
-})
-}
-
-
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeAgentStreamSubscription: FfiConverter {
-
-    typealias FfiType = UnsafeMutableRawPointer
-    typealias SwiftType = AgentStreamSubscription
-
-    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> AgentStreamSubscription {
-        return AgentStreamSubscription(unsafeFromRawPointer: pointer)
-    }
-
-    public static func lower(_ value: AgentStreamSubscription) -> UnsafeMutableRawPointer {
-        return value.uniffiClonePointer()
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentStreamSubscription {
-        let v: UInt64 = try readInt(&buf)
-        // The Rust code won't compile if a pointer won't fit in a UInt64.
-        // We have to go via `UInt` because that's the thing that's the size of a pointer.
-        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
-        if (ptr == nil) {
-            throw UniffiInternalError.unexpectedNullPointer
-        }
-        return try lift(ptr!)
-    }
-
-    public static func write(_ value: AgentStreamSubscription, into buf: inout [UInt8]) {
-        // This fiddling is because `Int` is the thing that's the same size as a pointer.
-        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
-        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAgentStreamSubscription_lift(_ pointer: UnsafeMutableRawPointer) throws -> AgentStreamSubscription {
-    return try FfiConverterTypeAgentStreamSubscription.lift(pointer)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAgentStreamSubscription_lower(_ value: AgentStreamSubscription) -> UnsafeMutableRawPointer {
-    return FfiConverterTypeAgentStreamSubscription.lower(value)
-}
-
-
-
-
-
-
-public protocol AgentTextPublisherProtocol: AnyObject, Sendable {
-
-    func append(kind: PublisherRecordFfi, text: String) async throws  -> PublisherAckFfi
-
-    func cancel() async
-
-    func finish() async throws  -> SendSummaryFfi
-
-    func info()  -> PublisherInfoFfi
-
-}
-open class AgentTextPublisher: AgentTextPublisherProtocol, @unchecked Sendable {
-    fileprivate let pointer: UnsafeMutableRawPointer!
-
-    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoPointer {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
-        self.pointer = pointer
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noPointer: NoPointer) {
-        self.pointer = nil
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
-        return try! rustCall { uniffi_marmot_uniffi_fn_clone_agenttextpublisher(self.pointer, $0) }
-    }
-    // No primary constructor declared for this class.
-
-    deinit {
-        guard let pointer = pointer else {
-            return
-        }
-
-        try! rustCall { uniffi_marmot_uniffi_fn_free_agenttextpublisher(pointer, $0) }
-    }
-
-
-
-
-open func append(kind: PublisherRecordFfi, text: String)async throws  -> PublisherAckFfi  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_agenttextpublisher_append(
-                    self.uniffiClonePointer(),
-                    FfiConverterTypePublisherRecordFfi_lower(kind),FfiConverterString.lower(text)
-                )
-            },
-            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypePublisherAckFfi_lift,
-            errorHandler: FfiConverterTypeMarmotKitError_lift
-        )
-}
-
-open func cancel()async   {
-    return
-        try!  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_agenttextpublisher_cancel(
-                    self.uniffiClonePointer()
-
-                )
-            },
-            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
-            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
-            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: nil
-
-        )
-}
-
-open func finish()async throws  -> SendSummaryFfi  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_agenttextpublisher_finish(
-                    self.uniffiClonePointer()
-
-                )
-            },
-            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeSendSummaryFfi_lift,
-            errorHandler: FfiConverterTypeMarmotKitError_lift
-        )
-}
-
-open func info() -> PublisherInfoFfi  {
-    return try!  FfiConverterTypePublisherInfoFfi_lift(try! rustCall() {
-    uniffi_marmot_uniffi_fn_method_agenttextpublisher_info(self.uniffiClonePointer(),$0
-    )
-})
-}
-
-
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeAgentTextPublisher: FfiConverter {
-
-    typealias FfiType = UnsafeMutableRawPointer
-    typealias SwiftType = AgentTextPublisher
-
-    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> AgentTextPublisher {
-        return AgentTextPublisher(unsafeFromRawPointer: pointer)
-    }
-
-    public static func lower(_ value: AgentTextPublisher) -> UnsafeMutableRawPointer {
-        return value.uniffiClonePointer()
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentTextPublisher {
-        let v: UInt64 = try readInt(&buf)
-        // The Rust code won't compile if a pointer won't fit in a UInt64.
-        // We have to go via `UInt` because that's the thing that's the size of a pointer.
-        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
-        if (ptr == nil) {
-            throw UniffiInternalError.unexpectedNullPointer
-        }
-        return try lift(ptr!)
-    }
-
-    public static func write(_ value: AgentTextPublisher, into buf: inout [UInt8]) {
-        // This fiddling is because `Int` is the thing that's the same size as a pointer.
-        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
-        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAgentTextPublisher_lift(_ pointer: UnsafeMutableRawPointer) throws -> AgentTextPublisher {
-    return try FfiConverterTypeAgentTextPublisher.lift(pointer)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAgentTextPublisher_lower(_ value: AgentTextPublisher) -> UnsafeMutableRawPointer {
-    return FfiConverterTypeAgentTextPublisher.lower(value)
-}
-
-
-
-
-
-
 public protocol AttachmentHistoryCursorProtocol: AnyObject, Sendable {
 
 }
@@ -4599,8 +4261,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * caller should cancel any active UI subscriptions for the group before
      * invoking the wipe. The runtime removes the active transport route, then
      * transactionally drops the chat-list/account projection, plaintext app
-     * events, timeline rows, agent-stream projection rows, push-token rows, and
-     * cached encrypted-media epoch secrets. MLS/OpenMLS group state is left
+     * events, timeline rows, push-token rows, and cached encrypted-media epoch
+     * secrets. MLS/OpenMLS group state is left
      * intact; a future fresh group delivery can recreate a local chat row.
      * Returns true if any local rows or a live route were removed.
      */
@@ -5294,12 +4956,6 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func onboardingSnapshot(accountRef: String) throws  -> OnboardingSnapshotFfi?
 
     /**
-     * Publish a new stream start and return a handle for appending records.
-     * No exporter secret or framing state crosses the foreign boundary.
-     */
-    func openAgentPublisher(accountRef: String, groupIdHex: String, options: PublisherOptionsFfi) async throws  -> AgentTextPublisher
-
-    /**
      * Write a plaintext copy of one retained attachment for an OS surface
      * that needs a real file (package installer, share sheet, "open with",
      * Quick Look) and lend it under a lease. `None` means the attachment is
@@ -5885,10 +5541,14 @@ public protocol MarmotProtocol: AnyObject, Sendable {
 
     /**
      * `save_message_draft_if_revision` for drafts with file-backed
-     * attachments: each input is a new inline body or an attachment the
-     * draft already holds, kept by id. Saving text never copies a retained
-     * body. Leaving a file-backed attachment out deletes its file; an id
-     * the draft does not hold is `InvalidMessageDraft`.
+     * attachments: each input is a new inline body, an attachment the draft
+     * already holds, kept by id, or the id of one to remove. Saving text
+     * never copies a retained body. Every attachment the save does not name
+     * stays, after the named ones in their stored order, so a save never
+     * drops one the host did not know about. `Removed` deletes one and its
+     * file; `Inline` with a held id replaces its body and releases a file it
+     * had. Retaining an id the draft does not hold is
+     * `InvalidMessageDraft`; removing one changes nothing.
      */
     func saveMessageDraftInputsIfRevision(accountRef: String, revision: MessageDraftRevisionFfi, content: String, replyToMessageIdHex: String?, mediaAttachments: [MessageDraftAttachmentInputFfi]) throws  -> SelectedMessageDraftFfi
 
@@ -6016,6 +5676,17 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Use one opaque token per logical submission; timeline rows echo it locally.
      */
     func sendTextWithClientToken(accountRef: String, groupIdHex: String, text: String, clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
+     * Send a NIP-22 thread message (kind 1111) answering
+     * `parent_message_id`: text, already-uploaded attachments (each with
+     * its upload's `source_epoch_identity`), or both, plus application tags
+     * such as NIP-30 `emoji`. MDK builds the thread's `E`/`K`/`P` and
+     * `e`/`k` tags from the parent's row and refuses them in `tags`. A
+     * client without a thread view answers with `reply_to_message`, also
+     * when the target is a thread message.
+     */
+    func sendThreadMessage(accountRef: String, groupIdHex: String, parentMessageId: String, text: String, attachments: [MediaAttachmentReferenceFfi], tags: [[String]]) async throws  -> SendSummaryFfi
 
     /**
      * Publish the new inbox list to the account relays and public indexers.
@@ -6293,14 +5964,6 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func start() async throws
 
     /**
-     * Anchor a live agent text stream start in the encrypted group history.
-     * Host apps pass the broker candidate(s) they will publish to, such as
-     * `quic://quic-broker.ipf.dev:4450`; omit `stream_id_hex` to let Rust
-     * generate a 32-byte stream id.
-     */
-    func startAgentTextStream(accountRef: String, groupIdHex: String, streamIdHex: String?, quicCandidates: [String]) async throws  -> AgentStreamStartFfi
-
-    /**
      * On a new device: ask a device of this account already signed in to
      * link this one. With existing trust, this moves only this device;
      * `snapshot.moves` distinguishes Joining from Made. Show "waiting"
@@ -6462,8 +6125,7 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Materialized conversation timeline for a group or account-wide tail.
      *
      * This is the app-facing aggregated view: kind-9 chat/reply/media rows,
-     * kind-1200 stream-start rows, stream-final metadata pointing back to the
-     * start, reaction summaries, delete tombstones, and pagination flags. Raw
+     * reaction summaries, delete tombstones, and pagination flags. Raw
      * kind-7/kind-5 events remain available through `messages(...)` for
      * diagnostics.
      *
@@ -6742,22 +6404,6 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * `refresh_user_relay_lists` to fetch.
      */
     func userRelayLists(accountIdHex: String) throws  -> AccountRelayListsFfi
-
-    /**
-     * Watch a live agent text stream over the brokered QUIC channel. Pass
-     * `stream_id_hex = None` to follow the latest stream in the group (the
-     * common case when reacting to an AgentStreamStarted event). The returned
-     * subscription yields incremental `Chunk`s then a terminal `Finished` /
-     * `Failed`. `server_cert_der` pins a self-signed broker cert (else the
-     * bundled public-CA roots, not the OS trust store); `insecure_local` is
-     * loopback-only for testing.
-     *
-     * `async` only so the underlying runtime call can spawn the QUIC
-     * subscriber task via `tokio::spawn` (which needs an active runtime); the
-     * method itself does not await. Mirrors `subscribe_chats` /
-     * `subscribe_messages`.
-     */
-    func watchAgentTextStream(accountRef: String, groupIdHex: String, streamIdHex: String?, serverCertDer: Data?, insecureLocal: Bool) async throws  -> AgentStreamSubscription
 
     /**
      * One initial snapshot and subsequent status/availability revision wakes.
@@ -8900,8 +8546,8 @@ open func deleteAuditLogFile(path: String)async throws  -> AuditLogDeleteResultF
      * caller should cancel any active UI subscriptions for the group before
      * invoking the wipe. The runtime removes the active transport route, then
      * transactionally drops the chat-list/account projection, plaintext app
-     * events, timeline rows, agent-stream projection rows, push-token rows, and
-     * cached encrypted-media epoch secrets. MLS/OpenMLS group state is left
+     * events, timeline rows, push-token rows, and cached encrypted-media epoch
+     * secrets. MLS/OpenMLS group state is left
      * intact; a future fresh group delivery can recreate a local chat row.
      * Returns true if any local rows or a live route were removed.
      */
@@ -10790,27 +10436,6 @@ open func onboardingSnapshot(accountRef: String)throws  -> OnboardingSnapshotFfi
 }
 
     /**
-     * Publish a new stream start and return a handle for appending records.
-     * No exporter secret or framing state crosses the foreign boundary.
-     */
-open func openAgentPublisher(accountRef: String, groupIdHex: String, options: PublisherOptionsFfi)async throws  -> AgentTextPublisher  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_marmot_open_agent_publisher(
-                    self.uniffiClonePointer(),
-                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterTypePublisherOptionsFfi_lower(options)
-                )
-            },
-            pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
-            completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
-            freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
-            liftFunc: FfiConverterTypeAgentTextPublisher_lift,
-            errorHandler: FfiConverterTypeMarmotKitError_lift
-        )
-}
-
-    /**
      * Write a plaintext copy of one retained attachment for an OS surface
      * that needs a real file (package installer, share sheet, "open with",
      * Quick Look) and lend it under a lease. `None` means the attachment is
@@ -12580,10 +12205,14 @@ open func saveMessageDraftIfRevision(accountRef: String, revision: MessageDraftR
 
     /**
      * `save_message_draft_if_revision` for drafts with file-backed
-     * attachments: each input is a new inline body or an attachment the
-     * draft already holds, kept by id. Saving text never copies a retained
-     * body. Leaving a file-backed attachment out deletes its file; an id
-     * the draft does not hold is `InvalidMessageDraft`.
+     * attachments: each input is a new inline body, an attachment the draft
+     * already holds, kept by id, or the id of one to remove. Saving text
+     * never copies a retained body. Every attachment the save does not name
+     * stays, after the named ones in their stored order, so a save never
+     * drops one the host did not know about. `Removed` deletes one and its
+     * file; `Inline` with a held id replaces its body and releases a file it
+     * had. Retaining an id the draft does not hold is
+     * `InvalidMessageDraft`; removing one changes nothing.
      */
 open func saveMessageDraftInputsIfRevision(accountRef: String, revision: MessageDraftRevisionFfi, content: String, replyToMessageIdHex: String?, mediaAttachments: [MessageDraftAttachmentInputFfi])throws  -> SelectedMessageDraftFfi  {
     return try  FfiConverterTypeSelectedMessageDraftFfi_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
@@ -12988,6 +12617,32 @@ open func sendTextWithClientToken(accountRef: String, groupIdHex: String, text: 
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Send a NIP-22 thread message (kind 1111) answering
+     * `parent_message_id`: text, already-uploaded attachments (each with
+     * its upload's `source_epoch_identity`), or both, plus application tags
+     * such as NIP-30 `emoji`. MDK builds the thread's `E`/`K`/`P` and
+     * `e`/`k` tags from the parent's row and refuses them in `tags`. A
+     * client without a thread view answers with `reply_to_message`, also
+     * when the target is a thread message.
+     */
+open func sendThreadMessage(accountRef: String, groupIdHex: String, parentMessageId: String, text: String, attachments: [MediaAttachmentReferenceFfi], tags: [[String]])async throws  -> SendSummaryFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_send_thread_message(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(parentMessageId),FfiConverterString.lower(text),FfiConverterSequenceTypeMediaAttachmentReferenceFfi.lower(attachments),FfiConverterSequenceSequenceString.lower(tags)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -13686,29 +13341,6 @@ open func start()async throws   {
 }
 
     /**
-     * Anchor a live agent text stream start in the encrypted group history.
-     * Host apps pass the broker candidate(s) they will publish to, such as
-     * `quic://quic-broker.ipf.dev:4450`; omit `stream_id_hex` to let Rust
-     * generate a 32-byte stream id.
-     */
-open func startAgentTextStream(accountRef: String, groupIdHex: String, streamIdHex: String?, quicCandidates: [String])async throws  -> AgentStreamStartFfi  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_marmot_start_agent_text_stream(
-                    self.uniffiClonePointer(),
-                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterOptionString.lower(streamIdHex),FfiConverterSequenceString.lower(quicCandidates)
-                )
-            },
-            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeAgentStreamStartFfi_lift,
-            errorHandler: FfiConverterTypeMarmotKitError_lift
-        )
-}
-
-    /**
      * On a new device: ask a device of this account already signed in to
      * link this one. With existing trust, this moves only this device;
      * `snapshot.moves` distinguishes Joining from Made. Show "waiting"
@@ -14195,8 +13827,7 @@ open func telemetryInstallId()throws  -> String  {
      * Materialized conversation timeline for a group or account-wide tail.
      *
      * This is the app-facing aggregated view: kind-9 chat/reply/media rows,
-     * kind-1200 stream-start rows, stream-final metadata pointing back to the
-     * start, reaction summaries, delete tombstones, and pagination flags. Raw
+     * reaction summaries, delete tombstones, and pagination flags. Raw
      * kind-7/kind-5 events remain available through `messages(...)` for
      * diagnostics.
      *
@@ -14854,37 +14485,6 @@ open func userRelayLists(accountIdHex: String)throws  -> AccountRelayListsFfi  {
         FfiConverterString.lower(accountIdHex),$0
     )
 })
-}
-
-    /**
-     * Watch a live agent text stream over the brokered QUIC channel. Pass
-     * `stream_id_hex = None` to follow the latest stream in the group (the
-     * common case when reacting to an AgentStreamStarted event). The returned
-     * subscription yields incremental `Chunk`s then a terminal `Finished` /
-     * `Failed`. `server_cert_der` pins a self-signed broker cert (else the
-     * bundled public-CA roots, not the OS trust store); `insecure_local` is
-     * loopback-only for testing.
-     *
-     * `async` only so the underlying runtime call can spawn the QUIC
-     * subscriber task via `tokio::spawn` (which needs an active runtime); the
-     * method itself does not await. Mirrors `subscribe_chats` /
-     * `subscribe_messages`.
-     */
-open func watchAgentTextStream(accountRef: String, groupIdHex: String, streamIdHex: String?, serverCertDer: Data?, insecureLocal: Bool)async throws  -> AgentStreamSubscription  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_marmot_watch_agent_text_stream(
-                    self.uniffiClonePointer(),
-                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterOptionString.lower(streamIdHex),FfiConverterOptionData.lower(serverCertDer),FfiConverterBool.lower(insecureLocal)
-                )
-            },
-            pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
-            completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
-            freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
-            liftFunc: FfiConverterTypeAgentStreamSubscription_lift,
-            errorHandler: FfiConverterTypeMarmotKitError_lift
-        )
 }
 
     /**
@@ -18602,84 +18202,6 @@ public func FfiConverterTypeAccountUnreadFfi_lift(_ buf: RustBuffer) throws -> A
 #endif
 public func FfiConverterTypeAccountUnreadFfi_lower(_ value: AccountUnreadFfi) -> RustBuffer {
     return FfiConverterTypeAccountUnreadFfi.lower(value)
-}
-
-
-public struct AgentStreamStartFfi {
-    public var streamIdHex: String
-    public var published: UInt32
-    public var messageIds: [String]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(streamIdHex: String, published: UInt32, messageIds: [String]) {
-        self.streamIdHex = streamIdHex
-        self.published = published
-        self.messageIds = messageIds
-    }
-}
-
-#if compiler(>=6)
-extension AgentStreamStartFfi: Sendable {}
-#endif
-
-
-extension AgentStreamStartFfi: Equatable, Hashable {
-    public static func ==(lhs: AgentStreamStartFfi, rhs: AgentStreamStartFfi) -> Bool {
-        if lhs.streamIdHex != rhs.streamIdHex {
-            return false
-        }
-        if lhs.published != rhs.published {
-            return false
-        }
-        if lhs.messageIds != rhs.messageIds {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(streamIdHex)
-        hasher.combine(published)
-        hasher.combine(messageIds)
-    }
-}
-
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeAgentStreamStartFfi: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentStreamStartFfi {
-        return
-            try AgentStreamStartFfi(
-                streamIdHex: FfiConverterString.read(from: &buf),
-                published: FfiConverterUInt32.read(from: &buf),
-                messageIds: FfiConverterSequenceString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: AgentStreamStartFfi, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.streamIdHex, into: &buf)
-        FfiConverterUInt32.write(value.published, into: &buf)
-        FfiConverterSequenceString.write(value.messageIds, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAgentStreamStartFfi_lift(_ buf: RustBuffer) throws -> AgentStreamStartFfi {
-    return try FfiConverterTypeAgentStreamStartFfi.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAgentStreamStartFfi_lower(_ value: AgentStreamStartFfi) -> RustBuffer {
-    return FfiConverterTypeAgentStreamStartFfi.lower(value)
 }
 
 
@@ -39992,230 +39514,6 @@ public func FfiConverterTypePublicEventPreviewFfi_lower(_ value: PublicEventPrev
 }
 
 
-public struct PublisherAckFfi {
-    public var chunkCount: UInt64
-    /**
-     * A preview transport error does not discard the accepted transcript.
-     */
-    public var liveError: String?
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(chunkCount: UInt64,
-        /**
-         * A preview transport error does not discard the accepted transcript.
-         */liveError: String?) {
-        self.chunkCount = chunkCount
-        self.liveError = liveError
-    }
-}
-
-#if compiler(>=6)
-extension PublisherAckFfi: Sendable {}
-#endif
-
-
-extension PublisherAckFfi: Equatable, Hashable {
-    public static func ==(lhs: PublisherAckFfi, rhs: PublisherAckFfi) -> Bool {
-        if lhs.chunkCount != rhs.chunkCount {
-            return false
-        }
-        if lhs.liveError != rhs.liveError {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(chunkCount)
-        hasher.combine(liveError)
-    }
-}
-
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypePublisherAckFfi: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherAckFfi {
-        return
-            try PublisherAckFfi(
-                chunkCount: FfiConverterUInt64.read(from: &buf),
-                liveError: FfiConverterOptionString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: PublisherAckFfi, into buf: inout [UInt8]) {
-        FfiConverterUInt64.write(value.chunkCount, into: &buf)
-        FfiConverterOptionString.write(value.liveError, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherAckFfi_lift(_ buf: RustBuffer) throws -> PublisherAckFfi {
-    return try FfiConverterTypePublisherAckFfi.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherAckFfi_lower(_ value: PublisherAckFfi) -> RustBuffer {
-    return FfiConverterTypePublisherAckFfi.lower(value)
-}
-
-
-public struct PublisherInfoFfi {
-    public var streamIdHex: String
-    public var startMessageIdHex: String
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(streamIdHex: String, startMessageIdHex: String) {
-        self.streamIdHex = streamIdHex
-        self.startMessageIdHex = startMessageIdHex
-    }
-}
-
-#if compiler(>=6)
-extension PublisherInfoFfi: Sendable {}
-#endif
-
-
-extension PublisherInfoFfi: Equatable, Hashable {
-    public static func ==(lhs: PublisherInfoFfi, rhs: PublisherInfoFfi) -> Bool {
-        if lhs.streamIdHex != rhs.streamIdHex {
-            return false
-        }
-        if lhs.startMessageIdHex != rhs.startMessageIdHex {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(streamIdHex)
-        hasher.combine(startMessageIdHex)
-    }
-}
-
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypePublisherInfoFfi: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherInfoFfi {
-        return
-            try PublisherInfoFfi(
-                streamIdHex: FfiConverterString.read(from: &buf),
-                startMessageIdHex: FfiConverterString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: PublisherInfoFfi, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.streamIdHex, into: &buf)
-        FfiConverterString.write(value.startMessageIdHex, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherInfoFfi_lift(_ buf: RustBuffer) throws -> PublisherInfoFfi {
-    return try FfiConverterTypePublisherInfoFfi.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherInfoFfi_lower(_ value: PublisherInfoFfi) -> RustBuffer {
-    return FfiConverterTypePublisherInfoFfi.lower(value)
-}
-
-
-public struct PublisherOptionsFfi {
-    public var candidate: String
-    public var serverCertDer: Data?
-    public var trust: PublisherTrustFfi
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(candidate: String, serverCertDer: Data?, trust: PublisherTrustFfi) {
-        self.candidate = candidate
-        self.serverCertDer = serverCertDer
-        self.trust = trust
-    }
-}
-
-#if compiler(>=6)
-extension PublisherOptionsFfi: Sendable {}
-#endif
-
-
-extension PublisherOptionsFfi: Equatable, Hashable {
-    public static func ==(lhs: PublisherOptionsFfi, rhs: PublisherOptionsFfi) -> Bool {
-        if lhs.candidate != rhs.candidate {
-            return false
-        }
-        if lhs.serverCertDer != rhs.serverCertDer {
-            return false
-        }
-        if lhs.trust != rhs.trust {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(candidate)
-        hasher.combine(serverCertDer)
-        hasher.combine(trust)
-    }
-}
-
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypePublisherOptionsFfi: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherOptionsFfi {
-        return
-            try PublisherOptionsFfi(
-                candidate: FfiConverterString.read(from: &buf),
-                serverCertDer: FfiConverterOptionData.read(from: &buf),
-                trust: FfiConverterTypePublisherTrustFfi.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: PublisherOptionsFfi, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.candidate, into: &buf)
-        FfiConverterOptionData.write(value.serverCertDer, into: &buf)
-        FfiConverterTypePublisherTrustFfi.write(value.trust, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherOptionsFfi_lift(_ buf: RustBuffer) throws -> PublisherOptionsFfi {
-    return try FfiConverterTypePublisherOptionsFfi.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherOptionsFfi_lower(_ value: PublisherOptionsFfi) -> RustBuffer {
-    return FfiConverterTypePublisherOptionsFfi.lower(value)
-}
-
-
 public struct PushRegistrationFfi {
     public var accountRef: String
     public var accountIdHex: String
@@ -42529,8 +41827,10 @@ public struct SelectedMessageDraftAttachmentFfi {
     public var waveformSamples: [Double]
     /**
      * The body is a staged file in the media store, not inline bytes:
-     * read it with `read_message_draft_attachment` or a handoff, and keep
-     * it across saves with `MessageDraftAttachmentInputFfi::Retained`.
+     * read it with `read_message_draft_attachment` or a handoff.
+     * `save_message_draft_inputs_if_revision` keeps it unless the save names
+     * it `Removed` or saves new `Inline` bytes under its id;
+     * `save_message_draft_if_revision` replaces the whole list and drops it.
      */
     public var fileBacked: Bool
 
@@ -42539,8 +41839,10 @@ public struct SelectedMessageDraftAttachmentFfi {
     public init(id: String, fileName: String, mediaType: String, plaintextSize: UInt64, dim: String?, thumbhash: String?, durationSeconds: Double?, waveformSamples: [Double],
         /**
          * The body is a staged file in the media store, not inline bytes:
-         * read it with `read_message_draft_attachment` or a handoff, and keep
-         * it across saves with `MessageDraftAttachmentInputFfi::Retained`.
+         * read it with `read_message_draft_attachment` or a handoff.
+         * `save_message_draft_inputs_if_revision` keeps it unless the save names
+         * it `Removed` or saves new `Inline` bytes under its id;
+         * `save_message_draft_if_revision` replaces the whole list and drops it.
          */fileBacked: Bool = false) {
         self.id = id
         self.fileName = fileName
@@ -44027,8 +43329,16 @@ public struct TimelineMessageRecordFfi {
      * Local wall-clock time when this device observed or created the row.
      */
     public var receivedAt: UInt64
+    /**
+     * What a client without a thread view quotes: the inline-reply target,
+     * or a thread message's parent.
+     */
     public var replyToMessageIdHex: String?
     public var replyPreview: TimelineReplyPreviewFfi?
+    /**
+     * Where this row sits in a NIP-22 thread; `None` outside threads.
+     */
+    public var thread: TimelineThreadRefFfi?
     public var mediaJson: String?
     /**
      * Ordered per-attachment outcomes for this message, built from its `imeta`
@@ -44041,10 +43351,9 @@ public struct TimelineMessageRecordFfi {
      * the message text and its valid sibling attachments are unaffected.
      */
     public var media: [MediaAttachmentOutcomeFfi]
-    public var agentTextStreamJson: String?
     /**
      * Parsed view of kind-1210 group system rows. `None` for chat, reactions,
-     * stream rows, and malformed/free-text kind-1210 assertions.
+     * and malformed/free-text kind-1210 assertions.
      */
     public var groupSystem: GroupSystemEventFfi?
     public var reactions: TimelineReactionSummaryFfi
@@ -44122,7 +43431,14 @@ public struct TimelineMessageRecordFfi {
          */timelineAt: UInt64,
         /**
          * Local wall-clock time when this device observed or created the row.
-         */receivedAt: UInt64, replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?, mediaJson: String?,
+         */receivedAt: UInt64,
+        /**
+         * What a client without a thread view quotes: the inline-reply target,
+         * or a thread message's parent.
+         */replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?,
+        /**
+         * Where this row sits in a NIP-22 thread; `None` outside threads.
+         */thread: TimelineThreadRefFfi?, mediaJson: String?,
         /**
          * Ordered per-attachment outcomes for this message, built from its `imeta`
          * tags + its own `source_epoch` with the same parser and error mapping as
@@ -44132,10 +43448,10 @@ public struct TimelineMessageRecordFfi {
          * unsupported `imeta` attachment is a `Rejected` outcome at its position
          * with a typed `rejection.kind` (mdk#1787): render a placeholder for it;
          * the message text and its valid sibling attachments are unaffected.
-         */media: [MediaAttachmentOutcomeFfi], agentTextStreamJson: String?,
+         */media: [MediaAttachmentOutcomeFfi],
         /**
          * Parsed view of kind-1210 group system rows. `None` for chat, reactions,
-         * stream rows, and malformed/free-text kind-1210 assertions.
+         * and malformed/free-text kind-1210 assertions.
          */groupSystem: GroupSystemEventFfi?, reactions: TimelineReactionSummaryFfi, edit: TimelineEditSummaryFfi?, deleted: Bool, deletionSource: DeletionSourceFfi, deletedByMessageIdHex: String?,
         /**
          * Set when convergence invalidated this message (it landed on a losing
@@ -44182,9 +43498,9 @@ public struct TimelineMessageRecordFfi {
         self.receivedAt = receivedAt
         self.replyToMessageIdHex = replyToMessageIdHex
         self.replyPreview = replyPreview
+        self.thread = thread
         self.mediaJson = mediaJson
         self.media = media
-        self.agentTextStreamJson = agentTextStreamJson
         self.groupSystem = groupSystem
         self.reactions = reactions
         self.edit = edit
@@ -44265,13 +43581,13 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         if lhs.replyPreview != rhs.replyPreview {
             return false
         }
+        if lhs.thread != rhs.thread {
+            return false
+        }
         if lhs.mediaJson != rhs.mediaJson {
             return false
         }
         if lhs.media != rhs.media {
-            return false
-        }
-        if lhs.agentTextStreamJson != rhs.agentTextStreamJson {
             return false
         }
         if lhs.groupSystem != rhs.groupSystem {
@@ -44328,9 +43644,9 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         hasher.combine(receivedAt)
         hasher.combine(replyToMessageIdHex)
         hasher.combine(replyPreview)
+        hasher.combine(thread)
         hasher.combine(mediaJson)
         hasher.combine(media)
-        hasher.combine(agentTextStreamJson)
         hasher.combine(groupSystem)
         hasher.combine(reactions)
         hasher.combine(edit)
@@ -44373,9 +43689,9 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
                 receivedAt: FfiConverterUInt64.read(from: &buf),
                 replyToMessageIdHex: FfiConverterOptionString.read(from: &buf),
                 replyPreview: FfiConverterOptionTypeTimelineReplyPreviewFfi.read(from: &buf),
+                thread: FfiConverterOptionTypeTimelineThreadRefFfi.read(from: &buf),
                 mediaJson: FfiConverterOptionString.read(from: &buf),
                 media: FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.read(from: &buf),
-                agentTextStreamJson: FfiConverterOptionString.read(from: &buf),
                 groupSystem: FfiConverterOptionTypeGroupSystemEventFfi.read(from: &buf),
                 reactions: FfiConverterTypeTimelineReactionSummaryFfi.read(from: &buf),
                 edit: FfiConverterOptionTypeTimelineEditSummaryFfi.read(from: &buf),
@@ -44410,9 +43726,9 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.receivedAt, into: &buf)
         FfiConverterOptionString.write(value.replyToMessageIdHex, into: &buf)
         FfiConverterOptionTypeTimelineReplyPreviewFfi.write(value.replyPreview, into: &buf)
+        FfiConverterOptionTypeTimelineThreadRefFfi.write(value.thread, into: &buf)
         FfiConverterOptionString.write(value.mediaJson, into: &buf)
         FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.write(value.media, into: &buf)
-        FfiConverterOptionString.write(value.agentTextStreamJson, into: &buf)
         FfiConverterOptionTypeGroupSystemEventFfi.write(value.groupSystem, into: &buf)
         FfiConverterTypeTimelineReactionSummaryFfi.write(value.reactions, into: &buf)
         FfiConverterOptionTypeTimelineEditSummaryFfi.write(value.edit, into: &buf)
@@ -44784,6 +44100,10 @@ public func FfiConverterTypeTimelineReactionSummaryFfi_lower(_ value: TimelineRe
 
 public struct TimelineReplyPreviewFfi {
     public var messageIdHex: String
+    /**
+     * The previewed message's own reply target, as on its timeline row.
+     */
+    public var replyToMessageIdHex: String?
     public var sender: String
     public var plaintext: String
     public var contentTokens: MarkdownDocumentFfi
@@ -44799,7 +44119,6 @@ public struct TimelineReplyPreviewFfi {
      * previewed message has no media.
      */
     public var media: [MediaAttachmentOutcomeFfi]
-    public var agentTextStreamJson: String?
     public var deleted: Bool
     public var deletionSource: DeletionSourceFfi
     /**
@@ -44807,10 +44126,17 @@ public struct TimelineReplyPreviewFfi {
      * fields are intentionally preserved so the application controls display.
      */
     public var invalidationStatus: String?
+    /**
+     * Where the previewed message sits in a NIP-22 thread.
+     */
+    public var thread: TimelineThreadRefFfi?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messageIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, sticker: StickerRefFfi?, mediaJson: String?,
+    public init(messageIdHex: String,
+        /**
+         * The previewed message's own reply target, as on its timeline row.
+         */replyToMessageIdHex: String?, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, sticker: StickerRefFfi?, mediaJson: String?,
         /**
          * Ordered per-attachment outcomes for the previewed message, built from
          * its `imeta` tags + its own `source_epoch` with the same parser and error
@@ -44818,12 +44144,16 @@ public struct TimelineReplyPreviewFfi {
          * entry is downloadable; a `Rejected` entry keeps its position and carries
          * a typed reason so the preview can show a placeholder. Empty when the
          * previewed message has no media.
-         */media: [MediaAttachmentOutcomeFfi], agentTextStreamJson: String?, deleted: Bool, deletionSource: DeletionSourceFfi,
+         */media: [MediaAttachmentOutcomeFfi], deleted: Bool, deletionSource: DeletionSourceFfi,
         /**
          * Convergence invalidation reason for the previewed message. The content
          * fields are intentionally preserved so the application controls display.
-         */invalidationStatus: String?) {
+         */invalidationStatus: String?,
+        /**
+         * Where the previewed message sits in a NIP-22 thread.
+         */thread: TimelineThreadRefFfi?) {
         self.messageIdHex = messageIdHex
+        self.replyToMessageIdHex = replyToMessageIdHex
         self.sender = sender
         self.plaintext = plaintext
         self.contentTokens = contentTokens
@@ -44831,10 +44161,10 @@ public struct TimelineReplyPreviewFfi {
         self.sticker = sticker
         self.mediaJson = mediaJson
         self.media = media
-        self.agentTextStreamJson = agentTextStreamJson
         self.deleted = deleted
         self.deletionSource = deletionSource
         self.invalidationStatus = invalidationStatus
+        self.thread = thread
     }
 }
 
@@ -44846,6 +44176,9 @@ extension TimelineReplyPreviewFfi: Sendable {}
 extension TimelineReplyPreviewFfi: Equatable, Hashable {
     public static func ==(lhs: TimelineReplyPreviewFfi, rhs: TimelineReplyPreviewFfi) -> Bool {
         if lhs.messageIdHex != rhs.messageIdHex {
+            return false
+        }
+        if lhs.replyToMessageIdHex != rhs.replyToMessageIdHex {
             return false
         }
         if lhs.sender != rhs.sender {
@@ -44869,9 +44202,6 @@ extension TimelineReplyPreviewFfi: Equatable, Hashable {
         if lhs.media != rhs.media {
             return false
         }
-        if lhs.agentTextStreamJson != rhs.agentTextStreamJson {
-            return false
-        }
         if lhs.deleted != rhs.deleted {
             return false
         }
@@ -44881,11 +44211,15 @@ extension TimelineReplyPreviewFfi: Equatable, Hashable {
         if lhs.invalidationStatus != rhs.invalidationStatus {
             return false
         }
+        if lhs.thread != rhs.thread {
+            return false
+        }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(messageIdHex)
+        hasher.combine(replyToMessageIdHex)
         hasher.combine(sender)
         hasher.combine(plaintext)
         hasher.combine(contentTokens)
@@ -44893,10 +44227,10 @@ extension TimelineReplyPreviewFfi: Equatable, Hashable {
         hasher.combine(sticker)
         hasher.combine(mediaJson)
         hasher.combine(media)
-        hasher.combine(agentTextStreamJson)
         hasher.combine(deleted)
         hasher.combine(deletionSource)
         hasher.combine(invalidationStatus)
+        hasher.combine(thread)
     }
 }
 
@@ -44910,6 +44244,7 @@ public struct FfiConverterTypeTimelineReplyPreviewFfi: FfiConverterRustBuffer {
         return
             try TimelineReplyPreviewFfi(
                 messageIdHex: FfiConverterString.read(from: &buf),
+                replyToMessageIdHex: FfiConverterOptionString.read(from: &buf),
                 sender: FfiConverterString.read(from: &buf),
                 plaintext: FfiConverterString.read(from: &buf),
                 contentTokens: FfiConverterTypeMarkdownDocumentFfi.read(from: &buf),
@@ -44917,15 +44252,16 @@ public struct FfiConverterTypeTimelineReplyPreviewFfi: FfiConverterRustBuffer {
                 sticker: FfiConverterOptionTypeStickerRefFfi.read(from: &buf),
                 mediaJson: FfiConverterOptionString.read(from: &buf),
                 media: FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.read(from: &buf),
-                agentTextStreamJson: FfiConverterOptionString.read(from: &buf),
                 deleted: FfiConverterBool.read(from: &buf),
                 deletionSource: FfiConverterTypeDeletionSourceFfi.read(from: &buf),
-                invalidationStatus: FfiConverterOptionString.read(from: &buf)
+                invalidationStatus: FfiConverterOptionString.read(from: &buf),
+                thread: FfiConverterOptionTypeTimelineThreadRefFfi.read(from: &buf)
         )
     }
 
     public static func write(_ value: TimelineReplyPreviewFfi, into buf: inout [UInt8]) {
         FfiConverterString.write(value.messageIdHex, into: &buf)
+        FfiConverterOptionString.write(value.replyToMessageIdHex, into: &buf)
         FfiConverterString.write(value.sender, into: &buf)
         FfiConverterString.write(value.plaintext, into: &buf)
         FfiConverterTypeMarkdownDocumentFfi.write(value.contentTokens, into: &buf)
@@ -44933,10 +44269,10 @@ public struct FfiConverterTypeTimelineReplyPreviewFfi: FfiConverterRustBuffer {
         FfiConverterOptionTypeStickerRefFfi.write(value.sticker, into: &buf)
         FfiConverterOptionString.write(value.mediaJson, into: &buf)
         FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.write(value.media, into: &buf)
-        FfiConverterOptionString.write(value.agentTextStreamJson, into: &buf)
         FfiConverterBool.write(value.deleted, into: &buf)
         FfiConverterTypeDeletionSourceFfi.write(value.deletionSource, into: &buf)
         FfiConverterOptionString.write(value.invalidationStatus, into: &buf)
+        FfiConverterOptionTypeTimelineThreadRefFfi.write(value.thread, into: &buf)
     }
 }
 
@@ -44953,6 +44289,93 @@ public func FfiConverterTypeTimelineReplyPreviewFfi_lift(_ buf: RustBuffer) thro
 #endif
 public func FfiConverterTypeTimelineReplyPreviewFfi_lower(_ value: TimelineReplyPreviewFfi) -> RustBuffer {
     return FfiConverterTypeTimelineReplyPreviewFfi.lower(value)
+}
+
+
+/**
+ * A row's place in a NIP-22 thread: set for every thread message (kind
+ * 1111), and for a chat, sticker or poll that joined a thread. A client
+ * without a thread view ignores it and quotes `reply_to_message_id_hex`.
+ */
+public struct TimelineThreadRefFfi {
+    /**
+     * The message the thread hangs from.
+     */
+    public var rootMessageIdHex: String
+    /**
+     * The message this one answers; the root for a top-level thread message.
+     */
+    public var parentMessageIdHex: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The message the thread hangs from.
+         */rootMessageIdHex: String,
+        /**
+         * The message this one answers; the root for a top-level thread message.
+         */parentMessageIdHex: String) {
+        self.rootMessageIdHex = rootMessageIdHex
+        self.parentMessageIdHex = parentMessageIdHex
+    }
+}
+
+#if compiler(>=6)
+extension TimelineThreadRefFfi: Sendable {}
+#endif
+
+
+extension TimelineThreadRefFfi: Equatable, Hashable {
+    public static func ==(lhs: TimelineThreadRefFfi, rhs: TimelineThreadRefFfi) -> Bool {
+        if lhs.rootMessageIdHex != rhs.rootMessageIdHex {
+            return false
+        }
+        if lhs.parentMessageIdHex != rhs.parentMessageIdHex {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(rootMessageIdHex)
+        hasher.combine(parentMessageIdHex)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTimelineThreadRefFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TimelineThreadRefFfi {
+        return
+            try TimelineThreadRefFfi(
+                rootMessageIdHex: FfiConverterString.read(from: &buf),
+                parentMessageIdHex: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TimelineThreadRefFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.rootMessageIdHex, into: &buf)
+        FfiConverterString.write(value.parentMessageIdHex, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTimelineThreadRefFfi_lift(_ buf: RustBuffer) throws -> TimelineThreadRefFfi {
+    return try FfiConverterTypeTimelineThreadRefFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTimelineThreadRefFfi_lower(_ value: TimelineThreadRefFfi) -> RustBuffer {
+    return FfiConverterTypeTimelineThreadRefFfi.lower(value)
 }
 
 
@@ -46783,133 +46206,6 @@ public func FfiConverterTypeAccountSetupReadinessFfi_lower(_ value: AccountSetup
 
 
 extension AccountSetupReadinessFfi: Equatable, Hashable {}
-
-
-
-
-
-
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-/**
- * One update from a live agent-text-stream watch. `Chunk.text` is an
- * incremental fragment; `Finished.text` is the complete transcript.
- */
-
-public enum AgentStreamUpdateFfi {
-
-    case chunk(seq: UInt64, text: String
-    )
-    case status(seq: UInt64, status: String
-    )
-    case progress(seq: UInt64, text: String
-    )
-    case record(seq: UInt64, recordType: UInt8, text: String
-    )
-    case finished(text: String, transcriptHashHex: String, chunkCount: UInt64
-    )
-    case failed(message: String
-    )
-}
-
-
-#if compiler(>=6)
-extension AgentStreamUpdateFfi: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeAgentStreamUpdateFfi: FfiConverterRustBuffer {
-    typealias SwiftType = AgentStreamUpdateFfi
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentStreamUpdateFfi {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-
-        case 1: return .chunk(seq: try FfiConverterUInt64.read(from: &buf), text: try FfiConverterString.read(from: &buf)
-        )
-
-        case 2: return .status(seq: try FfiConverterUInt64.read(from: &buf), status: try FfiConverterString.read(from: &buf)
-        )
-
-        case 3: return .progress(seq: try FfiConverterUInt64.read(from: &buf), text: try FfiConverterString.read(from: &buf)
-        )
-
-        case 4: return .record(seq: try FfiConverterUInt64.read(from: &buf), recordType: try FfiConverterUInt8.read(from: &buf), text: try FfiConverterString.read(from: &buf)
-        )
-
-        case 5: return .finished(text: try FfiConverterString.read(from: &buf), transcriptHashHex: try FfiConverterString.read(from: &buf), chunkCount: try FfiConverterUInt64.read(from: &buf)
-        )
-
-        case 6: return .failed(message: try FfiConverterString.read(from: &buf)
-        )
-
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: AgentStreamUpdateFfi, into buf: inout [UInt8]) {
-        switch value {
-
-
-        case let .chunk(seq,text):
-            writeInt(&buf, Int32(1))
-            FfiConverterUInt64.write(seq, into: &buf)
-            FfiConverterString.write(text, into: &buf)
-
-
-        case let .status(seq,status):
-            writeInt(&buf, Int32(2))
-            FfiConverterUInt64.write(seq, into: &buf)
-            FfiConverterString.write(status, into: &buf)
-
-
-        case let .progress(seq,text):
-            writeInt(&buf, Int32(3))
-            FfiConverterUInt64.write(seq, into: &buf)
-            FfiConverterString.write(text, into: &buf)
-
-
-        case let .record(seq,recordType,text):
-            writeInt(&buf, Int32(4))
-            FfiConverterUInt64.write(seq, into: &buf)
-            FfiConverterUInt8.write(recordType, into: &buf)
-            FfiConverterString.write(text, into: &buf)
-
-
-        case let .finished(text,transcriptHashHex,chunkCount):
-            writeInt(&buf, Int32(5))
-            FfiConverterString.write(text, into: &buf)
-            FfiConverterString.write(transcriptHashHex, into: &buf)
-            FfiConverterUInt64.write(chunkCount, into: &buf)
-
-
-        case let .failed(message):
-            writeInt(&buf, Int32(6))
-            FfiConverterString.write(message, into: &buf)
-
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAgentStreamUpdateFfi_lift(_ buf: RustBuffer) throws -> AgentStreamUpdateFfi {
-    return try FfiConverterTypeAgentStreamUpdateFfi.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAgentStreamUpdateFfi_lower(_ value: AgentStreamUpdateFfi) -> RustBuffer {
-    return FfiConverterTypeAgentStreamUpdateFfi.lower(value)
-}
-
-
-extension AgentStreamUpdateFfi: Equatable, Hashable {}
 
 
 
@@ -54789,9 +54085,7 @@ extension MarkdownTimestampStyleFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * Top-level event firehose, FFI-shaped. Agent streams collapse to a single
- * "agent stream activity" variant — host apps do not differentiate them at
- * the surface level for v1.
+ * Top-level event firehose, FFI-shaped.
  */
 
 public enum MarmotEventFfi {
@@ -54807,8 +54101,6 @@ public enum MarmotEventFfi {
     case groupEvent(accountIdHex: String, accountLabel: String, groupIdHex: String, event: GroupEventKindFfi
     )
     case accountError(accountIdHex: String, accountLabel: String, message: String
-    )
-    case agentStreamActivity(accountIdHex: String, accountLabel: String
     )
     /**
      * A canonical create or confirmed Add still owes a Welcome to `recipient_hex`;
@@ -54951,43 +54243,40 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
         case 6: return .accountError(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
 
-        case 7: return .agentStreamActivity(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 7: return .welcomeDeliveryPending(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), messageIdHex: try FfiConverterString.read(from: &buf), recipientHex: try FfiConverterString.read(from: &buf), sizeClass: try FfiConverterOptionTypeEventSizeClassFfi.read(from: &buf)
         )
 
-        case 8: return .welcomeDeliveryPending(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), messageIdHex: try FfiConverterString.read(from: &buf), recipientHex: try FfiConverterString.read(from: &buf), sizeClass: try FfiConverterOptionTypeEventSizeClassFfi.read(from: &buf)
+        case 8: return .epochStallEscalated(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), stalledEpoch: try FfiConverterUInt64.read(from: &buf), arms: try FfiConverterUInt32.read(from: &buf)
         )
 
-        case 9: return .epochStallEscalated(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), stalledEpoch: try FfiConverterUInt64.read(from: &buf), arms: try FfiConverterUInt32.read(from: &buf)
+        case 9: return .groupChangeSuperseded(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), commitIdHex: try FfiConverterString.read(from: &buf), kind: try FfiConverterString.read(from: &buf), outcome: try FfiConverterString.read(from: &buf), reason: try FfiConverterString.read(from: &buf)
         )
 
-        case 10: return .groupChangeSuperseded(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), commitIdHex: try FfiConverterString.read(from: &buf), kind: try FfiConverterString.read(from: &buf), outcome: try FfiConverterString.read(from: &buf), reason: try FfiConverterString.read(from: &buf)
+        case 10: return .historyNoticesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 11: return .historyNoticesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 11: return .linkedDevicesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 12: return .linkedDevicesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 12: return .keyPackageRefreshOverdueChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 13: return .keyPackageRefreshOverdueChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 13: return .unrecognizedSignInsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 14: return .unrecognizedSignInsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 14: return .compromiseWarningChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 15: return .compromiseWarningChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 15: return .deviceLinkChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 16: return .deviceLinkChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 16: return .chatHistoryImportsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 17: return .chatHistoryImportsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 17: return .recoveryStatusChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 18: return .recoveryStatusChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
-        )
-
-        case 19: return .deviceUnlinked(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 18: return .deviceUnlinked(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -55037,14 +54326,8 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
             FfiConverterString.write(message, into: &buf)
 
 
-        case let .agentStreamActivity(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(7))
-            FfiConverterString.write(accountIdHex, into: &buf)
-            FfiConverterString.write(accountLabel, into: &buf)
-
-
         case let .welcomeDeliveryPending(accountIdHex,accountLabel,groupIdHex,messageIdHex,recipientHex,sizeClass):
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(7))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
             FfiConverterString.write(groupIdHex, into: &buf)
@@ -55054,7 +54337,7 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
 
 
         case let .epochStallEscalated(accountIdHex,accountLabel,groupIdHex,stalledEpoch,arms):
-            writeInt(&buf, Int32(9))
+            writeInt(&buf, Int32(8))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
             FfiConverterString.write(groupIdHex, into: &buf)
@@ -55063,7 +54346,7 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
 
 
         case let .groupChangeSuperseded(accountIdHex,accountLabel,groupIdHex,commitIdHex,kind,outcome,reason):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
             FfiConverterString.write(groupIdHex, into: &buf)
@@ -55074,55 +54357,55 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
 
 
         case let .historyNoticesChanged(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
         case let .linkedDevicesChanged(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(12))
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
         case let .keyPackageRefreshOverdueChanged(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
         case let .unrecognizedSignInsChanged(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(13))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
         case let .compromiseWarningChanged(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
         case let .deviceLinkChanged(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(15))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
         case let .chatHistoryImportsChanged(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(16))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
         case let .recoveryStatusChanged(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(17))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
         case let .deviceUnlinked(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(19))
+            writeInt(&buf, Int32(18))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
@@ -57068,10 +56351,11 @@ extension MemberResolutionStatusFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * One attachment of a revisioned draft save: a new inline body, or an
- * attachment the draft already holds, kept by id with its body untouched.
- * Retain every file-backed attachment (`file_backed` on the selected
- * draft) by id; leaving one out deletes its staged file.
+ * One attachment of a revisioned draft save: a new inline body, an
+ * attachment the draft already holds, kept by id with its body untouched,
+ * or the id of one to remove. An attachment the save does not name stays
+ * in the draft. `Removed` deletes one (and its staged file); `Inline` with
+ * a held id replaces its body and releases a staged file it had.
  */
 
 public enum MessageDraftAttachmentInputFfi {
@@ -57079,6 +56363,8 @@ public enum MessageDraftAttachmentInputFfi {
     case inline(attachment: MessageDraftAttachmentFfi
     )
     case retained(id: String
+    )
+    case removed(id: String
     )
 }
 
@@ -57103,6 +56389,9 @@ public struct FfiConverterTypeMessageDraftAttachmentInputFfi: FfiConverterRustBu
         case 2: return .retained(id: try FfiConverterString.read(from: &buf)
         )
 
+        case 3: return .removed(id: try FfiConverterString.read(from: &buf)
+        )
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -57118,6 +56407,11 @@ public struct FfiConverterTypeMessageDraftAttachmentInputFfi: FfiConverterRustBu
 
         case let .retained(id):
             writeInt(&buf, Int32(2))
+            FfiConverterString.write(id, into: &buf)
+
+
+        case let .removed(id):
+            writeInt(&buf, Int32(3))
             FfiConverterString.write(id, into: &buf)
 
         }
@@ -57158,18 +56452,10 @@ extension MessageDraftAttachmentInputFfi: Equatable, Hashable {}
 public enum MessageUpdateFfi {
 
     /**
-     * A raw message update: chat, reply, media, reaction, delete, or the kind-9
-     * stream-final. Materialized timeline pages also include kind-1200 stream
-     * starts as `TimelineMessageRecordFfi` rows.
+     * A raw message update: chat, reply, media, reaction, delete, or any
+     * other received app event.
      */
     case message(received: RuntimeMessageReceivedFfi
-    )
-    /**
-     * A kind-1200 agent text stream start — the signal to open the QUIC
-     * preview for raw message subscribers. Its stream id, route, and brokers
-     * live on `message.tags`.
-     */
-    case agentStreamStarted(received: RuntimeMessageReceivedFfi
     )
 }
 
@@ -57191,9 +56477,6 @@ public struct FfiConverterTypeMessageUpdateFfi: FfiConverterRustBuffer {
         case 1: return .message(received: try FfiConverterTypeRuntimeMessageReceivedFfi.read(from: &buf)
         )
 
-        case 2: return .agentStreamStarted(received: try FfiConverterTypeRuntimeMessageReceivedFfi.read(from: &buf)
-        )
-
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -57204,11 +56487,6 @@ public struct FfiConverterTypeMessageUpdateFfi: FfiConverterRustBuffer {
 
         case let .message(received):
             writeInt(&buf, Int32(1))
-            FfiConverterTypeRuntimeMessageReceivedFfi.write(received, into: &buf)
-
-
-        case let .agentStreamStarted(received):
-            writeInt(&buf, Int32(2))
             FfiConverterTypeRuntimeMessageReceivedFfi.write(received, into: &buf)
 
         }
@@ -60868,153 +60146,6 @@ extension PublicEventPreviewStateFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum PublisherRecordFfi {
-
-    case text
-    case status
-    case progress
-}
-
-
-#if compiler(>=6)
-extension PublisherRecordFfi: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypePublisherRecordFfi: FfiConverterRustBuffer {
-    typealias SwiftType = PublisherRecordFfi
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherRecordFfi {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-
-        case 1: return .text
-
-        case 2: return .status
-
-        case 3: return .progress
-
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: PublisherRecordFfi, into buf: inout [UInt8]) {
-        switch value {
-
-
-        case .text:
-            writeInt(&buf, Int32(1))
-
-
-        case .status:
-            writeInt(&buf, Int32(2))
-
-
-        case .progress:
-            writeInt(&buf, Int32(3))
-
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherRecordFfi_lift(_ buf: RustBuffer) throws -> PublisherRecordFfi {
-    return try FfiConverterTypePublisherRecordFfi.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherRecordFfi_lower(_ value: PublisherRecordFfi) -> RustBuffer {
-    return FfiConverterTypePublisherRecordFfi.lower(value)
-}
-
-
-extension PublisherRecordFfi: Equatable, Hashable {}
-
-
-
-
-
-
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-
-public enum PublisherTrustFfi {
-
-    case publicOnly
-    case allowLoopback
-}
-
-
-#if compiler(>=6)
-extension PublisherTrustFfi: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypePublisherTrustFfi: FfiConverterRustBuffer {
-    typealias SwiftType = PublisherTrustFfi
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherTrustFfi {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-
-        case 1: return .publicOnly
-
-        case 2: return .allowLoopback
-
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: PublisherTrustFfi, into buf: inout [UInt8]) {
-        switch value {
-
-
-        case .publicOnly:
-            writeInt(&buf, Int32(1))
-
-
-        case .allowLoopback:
-            writeInt(&buf, Int32(2))
-
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherTrustFfi_lift(_ buf: RustBuffer) throws -> PublisherTrustFfi {
-    return try FfiConverterTypePublisherTrustFfi.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePublisherTrustFfi_lower(_ value: PublisherTrustFfi) -> RustBuffer {
-    return FfiConverterTypePublisherTrustFfi.lower(value)
-}
-
-
-extension PublisherTrustFfi: Equatable, Hashable {}
-
-
-
-
-
-
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-
 public enum PushPlatformFfi {
 
     case apns
@@ -62532,8 +61663,6 @@ public enum TimelineUpdateTriggerFfi {
     case reactionRemoved
     case messageDeleted
     case replyPreviewChanged
-    case agentStreamStarted
-    case agentStreamFinished
     case agentActivity
     case agentOperation
     case groupSystem
@@ -62570,23 +61699,19 @@ public struct FfiConverterTypeTimelineUpdateTriggerFfi: FfiConverterRustBuffer {
 
         case 6: return .replyPreviewChanged
 
-        case 7: return .agentStreamStarted
+        case 7: return .agentActivity
 
-        case 8: return .agentStreamFinished
+        case 8: return .agentOperation
 
-        case 9: return .agentActivity
+        case 9: return .groupSystem
 
-        case 10: return .agentOperation
+        case 10: return .customEvent
 
-        case 11: return .groupSystem
+        case 11: return .deliveryOrSendStateChanged
 
-        case 12: return .customEvent
+        case 12: return .receiptChanged
 
-        case 13: return .deliveryOrSendStateChanged
-
-        case 14: return .receiptChanged
-
-        case 15: return .snapshotRefresh
+        case 13: return .snapshotRefresh
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -62620,40 +61745,32 @@ public struct FfiConverterTypeTimelineUpdateTriggerFfi: FfiConverterRustBuffer {
             writeInt(&buf, Int32(6))
 
 
-        case .agentStreamStarted:
+        case .agentActivity:
             writeInt(&buf, Int32(7))
 
 
-        case .agentStreamFinished:
+        case .agentOperation:
             writeInt(&buf, Int32(8))
 
 
-        case .agentActivity:
+        case .groupSystem:
             writeInt(&buf, Int32(9))
 
 
-        case .agentOperation:
+        case .customEvent:
             writeInt(&buf, Int32(10))
 
 
-        case .groupSystem:
+        case .deliveryOrSendStateChanged:
             writeInt(&buf, Int32(11))
 
 
-        case .customEvent:
+        case .receiptChanged:
             writeInt(&buf, Int32(12))
 
 
-        case .deliveryOrSendStateChanged:
-            writeInt(&buf, Int32(13))
-
-
-        case .receiptChanged:
-            writeInt(&buf, Int32(14))
-
-
         case .snapshotRefresh:
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(13))
 
         }
     }
@@ -64444,6 +63561,30 @@ fileprivate struct FfiConverterOptionTypeTimelineReplyPreviewFfi: FfiConverterRu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeTimelineThreadRefFfi: FfiConverterRustBuffer {
+    typealias SwiftType = TimelineThreadRefFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeTimelineThreadRefFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeTimelineThreadRefFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeUserProfileMetadataFfi: FfiConverterRustBuffer {
     typealias SwiftType = UserProfileMetadataFfi?
 
@@ -64484,30 +63625,6 @@ fileprivate struct FfiConverterOptionTypeUserSearchUpdateFfi: FfiConverterRustBu
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeUserSearchUpdateFfi.read(from: &buf)
-        default: throw UniffiInternalError.unexpectedOptionalTag
-        }
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterOptionTypeAgentStreamUpdateFfi: FfiConverterRustBuffer {
-    typealias SwiftType = AgentStreamUpdateFfi?
-
-    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
-        guard let value = value else {
-            writeInt(&buf, Int8(0))
-            return
-        }
-        writeInt(&buf, Int8(1))
-        FfiConverterTypeAgentStreamUpdateFfi.write(value, into: &buf)
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
-        switch try readInt(&buf) as Int8 {
-        case 0: return nil
-        case 1: return try FfiConverterTypeAgentStreamUpdateFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -68095,24 +67212,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_accountattentionsubscription_snapshot() != 40254) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_agentstreamsubscription_next() != 31162) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_marmot_uniffi_checksum_method_agentstreamsubscription_stream_id_hex() != 57056) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_marmot_uniffi_checksum_method_agenttextpublisher_append() != 61007) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_marmot_uniffi_checksum_method_agenttextpublisher_cancel() != 13026) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_marmot_uniffi_checksum_method_agenttextpublisher_finish() != 21671) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_marmot_uniffi_checksum_method_agenttextpublisher_info() != 54665) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_marmot_uniffi_checksum_method_attachmenthistoryversion_change_since() != 56996) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -68521,7 +67620,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_delete_audit_log_file() != 6934) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_delete_group_local() != 3764) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_delete_group_local() != 50311) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_delete_message() != 13951) {
@@ -68806,9 +67905,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_onboarding_snapshot() != 30406) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_open_agent_publisher() != 14224) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_open_attachment_handoff() != 41576) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -69067,7 +68163,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_save_message_draft_if_revision() != 664) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_save_message_draft_inputs_if_revision() != 25078) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_save_message_draft_inputs_if_revision() != 61771) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_schedule_group_self_update() != 23804) {
@@ -69125,6 +68221,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_text_with_client_token() != 6606) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_thread_message() != 1696) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_account_inbox_relays() != 59864) {
@@ -69229,9 +68328,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_start() != 63391) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_start_agent_text_stream() != 35574) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_start_device_link() != 7888) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -69313,7 +68409,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_telemetry_install_id() != 24501) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_timeline_messages() != 46608) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_timeline_messages() != 50662) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_turn_off_backups() != 48327) {
@@ -69398,9 +68494,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_user_relay_lists() != 26650) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_watch_agent_text_stream() != 15795) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_watch_backup_restore() != 57986) {

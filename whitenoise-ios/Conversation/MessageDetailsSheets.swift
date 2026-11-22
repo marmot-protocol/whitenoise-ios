@@ -9,7 +9,6 @@ enum MessageInfoPresentation {
         case .sending: L10n.string("Sending…")
         case .sent: L10n.string("Sent")
         case .failed: L10n.string("Not delivered")
-        case .streaming: L10n.string("Streaming…")
         }
     }
 
@@ -182,7 +181,6 @@ struct MessageInfoSheet: View {
         case .sending: "clock"
         case .sent: "checkmark.circle.fill"
         case .failed: "exclamationmark.circle.fill"
-        case .streaming: "ellipsis.bubble.fill"
         }
     }
 }
