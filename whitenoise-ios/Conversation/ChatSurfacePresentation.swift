@@ -399,6 +399,7 @@ nonisolated struct ReactionSummaryPresentation: Equatable {
 nonisolated enum ReactionPillPresentation {
     static let height: CGFloat = 22
     static let minimumWidth: CGFloat = 34
+    static let symbolSize: CGFloat = 14
     static let maximumRenderedPills = 4
 
     enum TapAction { case toggle, showDetails }
