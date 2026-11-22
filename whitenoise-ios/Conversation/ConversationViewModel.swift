@@ -1036,6 +1036,13 @@ final class ConversationViewModel {
         timelineStore.editHistory(for: messageIdHex)
     }
 
+    /// Window and retained pages share this cache-only caption. Opening the gallery never requests a profile.
+    func gallerySenderName(_ sender: String, outgoing: Bool) -> String {
+        if outgoing { return L10n.string("You") }
+        let name = windowIdentities[sender]?.displayName ?? appState?.cachedKnownDisplayName(forAccountIdHex: sender)
+        return IdentityPresentation.resolve(accountIdHex: sender, knownName: name).text
+    }
+
     func firstGalleryGIF(in row: TimelineItem) -> MessageMediaAttachment? {
         mediaItems(for: row).first { $0.isGIF && $0.rejectionKind == nil }
     }
@@ -1059,8 +1066,7 @@ final class ConversationViewModel {
                 guard captions[media.id] == nil else { continue }
                 items.append(media)
                 if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }
-                let name = IdentityPresentation.resolve(accountIdHex: record.sender, knownName: windowIdentities[record.sender]?.displayName).text
-                captions[media.id] = .init(sender: record.direction == "sent" ? L10n.string("You") : name,
+                captions[media.id] = .init(sender: gallerySenderName(record.sender, outgoing: record.direction == "sent"),
                     date: Date(timeIntervalSince1970: TimeInterval(row.timestamp)),
                     outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
             }
@@ -1181,6 +1187,11 @@ final class ConversationViewModel {
         self.search = ConversationSearchModel()
         self.search.analytics = appState.productAnalytics
         search.entriesProvider = { [weak self] in self?.searchableTimelineEntries() ?? [] }
+        search.containsContact = { [weak self] messageID, attachmentID in
+            guard let self, let index = timelineStore.timelineIndex(forMessageIdHex: messageID),
+                  timeline.indices.contains(index), !isDeleted(messageID) else { return false }
+            return mediaItems(for: timeline[index]).contains { $0.id == attachmentID }
+        }
         search.hasMoreBefore = { [weak self] in self?.hasMoreBefore ?? false }
         search.loadOlderPage = { [weak self] in await self?.loadOlderTimelinePage() }
         streamWatcher.sink = timelineStore
@@ -2477,8 +2488,8 @@ final class ConversationViewModel {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
-    func automaticAttachmentByteCount(for media: MessageMediaAttachment) async -> Int? {
-        await mediaDownloader.automaticAttachmentByteCount(for: media, groupIdHex: group.groupIdHex, appState: appState)
+    func admitAutomaticAttachment(for media: MessageMediaAttachment) async -> Int? {
+        await mediaDownloader.admitAutomaticAttachment(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
     /// Requests the images in rows just beyond the viewport under the same

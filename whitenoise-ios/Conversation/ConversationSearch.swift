@@ -222,32 +222,45 @@ final class ConversationSearchModel {
         return observation
     }
 
-    // Names come only from vCards the conversation has already been allowed to render.
-    @ObservationIgnored private let displayedContactNames = NSCache<NSString, NSString>()
+    // Keep a loaded card's name for as long as its source is in this window, including
+    // when SwiftUI recycles the row. Memory pressure must not change the search results.
+    private struct ContactLabel {
+        let messageID: String
+        let name: String
+    }
+    @ObservationIgnored private var displayedContactNames: [String: ContactLabel] = [:]
     @ObservationIgnored private var contactRevision: Int?
+    @ObservationIgnored var containsContact: ((String, String) -> Bool)?
 
     private func updateContactRevision() {
         let revision = AttachmentPresentationState.shared.revision
         if revision != contactRevision {
-            displayedContactNames.removeAllObjects()
-            displayedContactNames.countLimit = 512
+            displayedContactNames.removeAll()
             contactRevision = revision
         }
     }
 
-    func registerContactName(_ name: String, for attachmentID: String) {
+    func registerContactName(_ name: String, for attachmentID: String, in messageID: String) {
         updateContactRevision()
-        guard displayedContactNames.object(forKey: attachmentID as NSString) as String? != name else { return }
-        displayedContactNames.setObject(name as NSString, forKey: attachmentID as NSString)
+        guard containsContact?(messageID, attachmentID) == true, displayedContactNames[attachmentID]?.name != name else { return }
+        displayedContactNames[attachmentID] = ContactLabel(messageID: messageID, name: name)
         refreshAfterSearchableContentChange()
     }
 
     func displayedContactName(for attachmentID: String) -> String? {
         updateContactRevision()
-        return displayedContactNames.object(forKey: attachmentID as NSString) as String?
+        return displayedContactNames[attachmentID]?.name
     }
 
     func refreshAfterTimelineChange() {
+        updateContactRevision()
+        if let containsContact, !displayedContactNames.isEmpty {
+            displayedContactNames = displayedContactNames.filter { containsContact($0.value.messageID, $0.key) }
+        }
+        refreshMatches()
+    }
+
+    private func refreshMatches() {
         guard isActive, hasQuery else { return }
         let anchorId = currentMatch?.itemId
         matches = currentMatches()
@@ -258,7 +271,7 @@ final class ConversationSearchModel {
 
     func refreshAfterSearchableContentChange(allowScrollTo: (String) -> Bool = { _ in true }) {
         let previousID = currentMatch?.itemId
-        refreshAfterTimelineChange()
+        refreshMatches()
         if olderPageRequest?.query != query, let match = currentMatch, previousID != match.itemId,
            allowScrollTo(match.messageIdHex) { requestScrollToCurrentMatch() }
     }

@@ -686,6 +686,14 @@ final class TimelineStore {
         return !record.deleted && record.direction == "sent" && record.sourceMessageIdHex == nil
     }
 
+    struct AttachmentVisibility: Equatable {
+        var hidden, blocked, deleted: Set<String>
+    }
+
+    var attachmentVisibility: AttachmentVisibility {
+        AttachmentVisibility(hidden: hiddenMessageIds, blocked: blockedAuthorIds, deleted: deletedProjections.deletedMessageIds)
+    }
+
     func isHidden(_ messageIdHex: String) -> Bool {
         _ = timelineProjectionGeneration
         guard let messageId = Hex.normalized32Bytes(messageIdHex) else { return false }

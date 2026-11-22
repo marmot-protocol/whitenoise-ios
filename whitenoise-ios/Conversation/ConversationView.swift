@@ -1107,10 +1107,9 @@ struct ConversationView: View {
                 if let target = transcriptMedia, target.scope.generation != generation { transcriptMedia = nil }
             }
             .sheet(item: $transcriptMedia, onDismiss: { mediaOpenIntent.invalidate() }) { target in
-                if let viewModel, target.scope.isCurrent(viewModel, appState: appState),
-                   let gallery = viewModel.transcriptMediaGallery(opening: target.id, initialData: target.initialData, openingItem: target.item,
-                                                                includingGIFsIn: target.gifRowID, allowsEmptyWindow: true) {
-                    TranscriptHistoryGalleryView(gallery: gallery, conversation: viewModel, openingSelection: target.pending, gifRowID: target.gifRowID, onLoadMedia: mediaLoader(for: viewModel),
+                if let viewModel, target.scope.isCurrent(viewModel, appState: appState) {
+                    TranscriptHistoryGalleryView(openingItem: target.item, initialData: target.initialData, conversation: viewModel,
+                        openingSelection: target.pending, gifRowID: target.gifRowID, onLoadMedia: mediaLoader(for: viewModel),
                         forwardingContext: forwardingContext(for: viewModel),
                         onGoToMessage: { navigateToTimelineMessage($0, viewModel: viewModel) },
                         onDismiss: { transcriptMedia = nil })
@@ -5072,8 +5071,8 @@ struct ConversationView: View {
             guard isPresented() else { return false }
             guard let scope = AttachmentHistoryPager.Scope(appState: appState, group: viewModel.group.groupIdHex) else { return false }
             return try await scope.stillRetains(target, in: appState) && isPresented()
-        } automaticAttachmentByteCount: { media in
-            await viewModel.automaticAttachmentByteCount(for: media)
+        } admitAutomaticAttachment: { media in
+            await viewModel.admitAutomaticAttachment(for: media)
         }
     }
 

@@ -31,7 +31,7 @@ struct MediaAcquisitionIntentTests {
         let loader = ConversationMediaLoader({ item in
             requests.append(item.demand)
             throw AttachmentReadError.unavailable
-        }, automaticAttachmentByteCount: { _ in
+        }, admitAutomaticAttachment: { _ in
             sizeRequests += 1
             return nil
         })
@@ -60,8 +60,8 @@ struct MediaAcquisitionIntentTests {
             let data = try await downloader.data(for: item, groupIdHex: "group", appState: nil)
             bytesRead += data.count
             return data
-        }, automaticAttachmentByteCount: { item in
-            await downloader.automaticAttachmentByteCount(for: item, groupIdHex: "group", appState: nil)
+        }, admitAutomaticAttachment: { item in
+            await downloader.admitAutomaticAttachment(for: item, groupIdHex: "group", appState: nil)
         })
         for type in ["application/pdf", "text/plain", "application/zip"] {
             let document = attachment(type, localData: Data(repeating: 1, count: 1024))

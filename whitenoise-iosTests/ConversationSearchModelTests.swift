@@ -1,9 +1,29 @@
 import Foundation
+import MarmotKit
 import Testing
 @testable import whitenoise_ios
 
 @MainActor
 struct ConversationSearchModelTests {
+    @Test func aLoadedContactNameIsSearchableWhenTheFileHasAGenericType() throws {
+        let app = AppState.test()
+        let viewModel = ConversationViewModel(appState: app, group: group(name: "Chat"))
+        let reference = encryptedMediaReference(fileName: "person.vcf", mediaType: "application/octet-stream", sourceEpoch: 1)
+        let record = timelineRecord(messageIdHex: hex("ac"), timelineAt: 1, media: [reference])
+        viewModel.applyTimelinePage(.init(messages: [record], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        let row = try #require(viewModel.timeline.first { $0.id == TimelineItem.messageRowId(forMessageIdHex: record.messageIdHex) })
+        let contact = try #require(viewModel.mediaItems(for: row).first)
+        viewModel.search.registerContactName("Avery Stone", for: contact.id, in: record.messageIdHex)
+        viewModel.search.activate()
+        viewModel.search.query = "Avery"
+        #expect(viewModel.search.currentMatch?.messageIdHex == record.messageIdHex)
+
+        viewModel.timelineStore.applyConversationWindowPage(.init(messages: [], hasMoreBefore: false, hasMoreAfter: false))
+        viewModel.search.refreshAfterTimelineChange()
+        #expect(viewModel.search.displayedContactName(for: contact.id) == nil)
+        #expect(viewModel.search.currentMatch == nil)
+    }
+
 
     /// A fake loaded window: entries in timeline order plus an older backlog
     /// that pages in one slice per `loadOlderPage` call.

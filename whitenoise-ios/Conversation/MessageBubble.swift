@@ -71,16 +71,21 @@ final class ConversationMediaLoader {
     private let load: (MessageMediaAttachment) async throws -> Data
     private let openHandoff: OpenHandoff?
     let canShareDocument: @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool
-    fileprivate let automaticAttachmentByteCount: (MessageMediaAttachment) async -> Int?
+    private let admitAutomatic: (MessageMediaAttachment) async -> Int?
 
 
     init(_ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil,
          canShareDocument: @escaping @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool = { _, _ in true },
-         automaticAttachmentByteCount: @escaping (MessageMediaAttachment) async -> Int? = { $0.localData?.count }) {
+         admitAutomaticAttachment: @escaping (MessageMediaAttachment) async -> Int? = { $0.localData?.count }) {
         self.load = load
         self.openHandoff = openHandoff
         self.canShareDocument = canShareDocument
-        self.automaticAttachmentByteCount = automaticAttachmentByteCount
+        self.admitAutomatic = admitAutomaticAttachment
+    }
+
+    @discardableResult
+    func admitAutomaticAttachment(_ item: MessageMediaAttachment) async -> Int? {
+        await admitAutomatic(item)
     }
 
     func data(for media: MessageMediaAttachment, demand: AttachmentDemand = .explicit) async throws -> Data {
@@ -123,7 +128,7 @@ final class ConversationMediaLoader {
     func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool, hasContactName: Bool = false) async -> (size: Int, contactName: String?)? {
         guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return nil }
         guard !hasContactName, DocumentPreviewFormat(for: media) == .contact else {
-            return await automaticAttachmentByteCount(media).map { ($0, nil) }
+            return await admitAutomaticAttachment(media).map { ($0, nil) }
         }
         var requested = media
         requested.previewByteLimit = DocumentPreviewFormat.contact.byteLimit
@@ -482,6 +487,17 @@ struct MessageBubble: View {
         MessageMediaUploadPresentation.showsIndicator(status: status, items: mediaItems)
     }
 
+    var standaloneEmoji: String? {
+        guard agentActivity == nil, debugStyle == nil,
+              !isDeleted,
+              replyPreview == nil,
+              mediaItems.isEmpty
+        else { return nil }
+
+        guard let emoji = SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText), !offersSourceReader else { return nil }
+        return emoji
+    }
+
     private var standaloneCustomEmoji: CustomEmojiShortcode? {
         guard agentActivity == nil, debugStyle == nil,
               !isDeleted,
@@ -664,6 +680,15 @@ struct MessageBubble: View {
             remoteGiphyMessageContent(remoteGiphyMedia)
         } else if !mediaItems.isEmpty, showsStandardBody {
             mediaMessageContent
+        } else if let standaloneEmoji {
+            if status == .failed {
+                standaloneEmojiContent(standaloneEmoji)
+                    .contentShape(.rect)
+                    .onTapGesture { onFailedTap?() }
+            } else {
+                standaloneEmojiContent(standaloneEmoji)
+                    .opacity(status == .sending ? 0.7 : 1)
+            }
         } else if let standaloneCustomEmoji {
             if status == .failed {
                 standaloneCustomEmojiContent(standaloneCustomEmoji)
@@ -702,6 +727,18 @@ struct MessageBubble: View {
             StickerMessageContent(sticker: sticker, isFromMe: isFromMe)
         }
         .opacity(status == .sending ? 0.7 : 1)
+    }
+
+    /// The ordinary bubble, with its own inline emoji or the literal
+    /// shortcode, shows until the large image loads, and stays if it never
+    /// does (auto-download off, a failed read).
+    private func standaloneEmojiContent(_ emoji: String) -> some View {
+        Text(emoji)
+            .font(.system(size: SingleEmojiMessagePresentation.fontSize))
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .accessibilityElement(children: .combine)
     }
 
     /// The ordinary bubble, with its own inline emoji or the literal
@@ -960,7 +997,7 @@ struct MessageBubble: View {
 
     private var attachmentContent: some View {
         MessageMediaAttachmentContent(
-            items: mediaItems,
+            messageID: record.messageIdHex, items: mediaItems,
             isFromMe: isFromMe,
             isStandaloneUnsupportedAttachment: isStandaloneUnsupportedAttachment,
             status: status,
@@ -1236,7 +1273,7 @@ struct MessageBubble: View {
     private var widensTextForReactions: Bool {
         showsReactionStrip && sharedLocation == nil && linkPreviewURL == nil
             && record.sticker == nil && record.kind != MessageSemantics.kindPoll && remoteGiphyMedia == nil
-            && mediaItems.isEmpty && standaloneCustomEmoji == nil && debugStyle == nil
+            && mediaItems.isEmpty && standaloneEmoji == nil && standaloneCustomEmoji == nil && debugStyle == nil
     }
 
     private var showsMetadataFooter: Bool {
@@ -2022,6 +2059,7 @@ private struct MessageMediaRoundedTileShape: Shape {
 }
 
 private struct MessageMediaAttachmentContent: View {
+    let messageID: String
     let items: [MessageMediaAttachment]
     let isFromMe: Bool
     let isStandaloneUnsupportedAttachment: Bool
@@ -2066,7 +2104,7 @@ private struct MessageMediaAttachmentContent: View {
                         isUploading: MessageMediaUploadPresentation.isUploading(item, status: status),
                         width: maxWidth, onLoadMedia: onLoadMedia)
                 } else {
-                    MessageDocumentAttachmentView(item: item, isFromMe: isFromMe, onLoadMedia: onLoadMedia)
+                    MessageDocumentAttachmentView(messageID: messageID, item: item, isFromMe: isFromMe, onLoadMedia: onLoadMedia)
                 }
             }
         }
@@ -2924,7 +2962,7 @@ private struct MessageVideoAttachmentView: View {
             guard needsPoster || needsDuration else {
                 // Metadata can come from identical bytes in another message. Admit this
                 // slot under the Videos preference without decoding the movie again.
-                _ = await onLoadMedia.automaticAttachmentByteCount(item)
+                await onLoadMedia.admitAutomaticAttachment(item)
                 return
             }
             let epoch = MessageMediaCache.currentProducerEpoch()
@@ -3126,7 +3164,7 @@ private struct MessageAudioAttachmentView: View {
         // Metadata can come from a different message with the same audio.
         // Automatic acquisition belongs to this row’s original slot.
         guard player == nil, !isLoading, MediaAutoDownloadStore.shared.shouldAutoDownload(.audio),
-              let byteCount = await onLoadMedia.automaticAttachmentByteCount(item), !Task.isCancelled else { return }
+              let byteCount = await onLoadMedia.admitAutomaticAttachment(item), !Task.isCancelled else { return }
         if metadata == nil, byteCount <= MessageMediaAttachment.audioAnalysisByteLimit {
             var preview = item
             preview.previewByteLimit = MessageMediaAttachment.audioAnalysisByteLimit
@@ -3384,6 +3422,7 @@ struct LiftedDocumentDetails: Equatable {
 }
 
 private struct MessageDocumentAttachmentView: View {
+    let messageID: String
     @Environment(\.liftedDocuments) private var liftedDocuments
     @Environment(\.timelineSearchQuery) private var searchQuery
     @Environment(\.actionRowMeasurementKey) private var measurementKey
@@ -3488,7 +3527,7 @@ private struct MessageDocumentAttachmentView: View {
             }
         }
         .onChange(of: contactName) { _, name in
-            if let name { transcriptSearch?.registerContactName(name, for: item.id) }
+            if let name { transcriptSearch?.registerContactName(name, for: item.id, in: messageID) }
         }
         .sheet(item: $preview) { document in
             MessageDocumentPreviewSheet(preview: document.preview, item: document.item, loader: document.loader)
@@ -3793,7 +3832,7 @@ struct MessageMediaGallery: Identifiable {
         let data: Data
     }
 
-    struct Caption {
+    struct Caption: Equatable {
         let sender: String
         let date: Date
         var outgoingSlot: OutgoingSlot? = nil

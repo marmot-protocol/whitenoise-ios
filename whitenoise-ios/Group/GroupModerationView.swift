@@ -372,7 +372,7 @@ struct GroupModerationView: View {
                 else { return false }
                 return GroupModerationModel.mediaItems(for: message, reportIdHex: entry.id).contains { $0.isSameDocumentSource(as: media, leasedTarget: target) }
             },
-            automaticAttachmentByteCount: conversation.automaticAttachmentByteCount(for:))
+            admitAutomaticAttachment: conversation.admitAutomaticAttachment(for:))
     }
 
     private var refreshKey: String {

@@ -222,6 +222,26 @@ struct MessageBubbleChromeLayout: Layout {
     }
 }
 
+nonisolated enum SingleEmojiMessagePresentation {
+    static let fontSize: CGFloat = 64
+
+    static func emoji(in text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count == 1, let character = trimmed.first else { return nil }
+
+        let scalars = character.unicodeScalars
+        let hasEmojiCapableScalar = scalars.contains { $0.properties.isEmoji }
+        let requestsEmojiRendering = scalars.contains {
+            $0.properties.isEmojiPresentation
+                || $0.value == 0xFE0F
+                || $0.value == 0x20E3
+        }
+
+        guard hasEmojiCapableScalar, requestsEmojiRendering else { return nil }
+        return trimmed
+    }
+}
+
 /// A message whose whole text is one resolvable `:shortcode:` shows that
 /// custom emoji at sticker size without a bubble.
 nonisolated enum SingleCustomEmojiMessagePresentation {

@@ -186,6 +186,27 @@ struct ChatSurfacePresentationTests {
         #expect(ReplyPreviewLayout.closeHitSize >= 44)
     }
 
+    @Test func singleEmojiMessagesUseStickerPresentation() {
+        #expect(SingleEmojiMessagePresentation.emoji(in: "😀") == "😀")
+        #expect(SingleEmojiMessagePresentation.emoji(in: "  ❤️\n") == "❤️")
+        #expect(SingleEmojiMessagePresentation.emoji(in: "👨‍👩‍👧‍👦") == "👨‍👩‍👧‍👦")
+        #expect(SingleEmojiMessagePresentation.emoji(in: "👍🏽") == "👍🏽")
+        #expect(SingleEmojiMessagePresentation.emoji(in: "1️⃣") == "1️⃣")
+        #expect(SingleEmojiMessagePresentation.emoji(in: "🇮🇹") == "🇮🇹")
+        #expect(SingleEmojiMessagePresentation.fontSize == 64)
+        #expect(SingleCustomEmojiMessagePresentation.side == 112)
+    }
+
+    @Test func stickerPresentationRejectsTextAndMultipleEmoji() {
+        #expect(SingleEmojiMessagePresentation.emoji(in: "") == nil)
+        #expect(SingleEmojiMessagePresentation.emoji(in: "A") == nil)
+        #expect(SingleEmojiMessagePresentation.emoji(in: "1") == nil)
+        #expect(SingleEmojiMessagePresentation.emoji(in: "©") == nil)
+        #expect(SingleEmojiMessagePresentation.emoji(in: "😀😀") == nil)
+        #expect(SingleEmojiMessagePresentation.emoji(in: "😀 hello") == nil)
+        #expect(SingleEmojiMessagePresentation.emoji(in: "\u{FE0F}") == nil)
+    }
+
     @Test func singleResolvableCustomEmojiStandsAloneAtStickerSize() throws {
         let marmot = try #require(CustomEmojiShortcode("marmot"))
         let wave = try #require(CustomEmojiShortcode("wave"))
