@@ -4826,6 +4826,7 @@ struct ConversationView: View {
         let id = target.messageIdHex
         guard self.viewModel === model, let row = speechRow(id, in: model),
               case .message(let record, _) = row.kind else { return [] }
+        if speech.readingID == id { return [.stop] }
         let media = model.mediaItems(for: row)
         if let audio = MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: model.myAccountId, media: media) {
             let transcript = speech.transcripts[id]
@@ -4845,7 +4846,7 @@ struct ConversationView: View {
                 block.textFields(includeCodeLanguage: false).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             }
         }
-        return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId, isReading: speech.readingID == id,
+        return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId,
                                                      standaloneEmoji: standaloneEmoji(), hasSpokenText: hasSpokenText())
     }
 
@@ -4926,15 +4927,17 @@ struct ConversationView: View {
                 appState.present(.warning(reason))
             case .available(let recording, let source):
                 let openingScope = checked.request.scope
-                speech.transcribe(id: id, recording: recording, data: {
+                speech.transcribe(id: id, recording: recording, scope: openingScope, data: {
                     guard self.viewModel === model, speechScope == openingScope,
                           recording.matches(voiceAttachment(id: id, in: model)) else { throw CancellationError() }
                     return try await source.data(in: appState)
-                }, verifiedScope: {
+                }, revalidate: { transcript in
                     let scope = speechScope
-                    guard scope.route == openingScope.route,
-                          await retainedRecording(recording, id: id, model: model, scope: scope) == true else { return nil }
-                    return scope
+                    guard scope.route == openingScope.route else { return nil }
+                    let held = await retainedRecording(recording, id: id, model: model, scope: scope)
+                    let current = speechScope
+                    guard viewModel === model, recording.matches(voiceAttachment(id: id, in: model)) else { return nil }
+                    return transcript.revalidated(held: current == scope ? held : nil, in: current)
                 }, onError: { appState.present(.warning(L10n.string("Couldn’t transcribe this recording."))) })
             }
         case .transcribing: break

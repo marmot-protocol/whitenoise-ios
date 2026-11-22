@@ -43,14 +43,13 @@ nonisolated enum MessageSpeechPresentation {
         return audio
     }
 
-    static func textActions(for record: AppMessageRecordFfi, myAccountID: String?, isReading: Bool, standaloneEmoji: @autoclosure () -> Bool,
+    static func textActions(for record: AppMessageRecordFfi, myAccountID: String?, standaloneEmoji: @autoclosure () -> Bool,
                             hasSpokenText: @autoclosure () -> Bool) -> [MessageSpeechAction] {
         guard !MessageOwnership.isMine(direction: record.direction, sender: record.sender, myAccountId: myAccountID), !hasBlankText(record) else { return [] }
         switch MessageSemantics.classify(record) {
         case .chat, .reply, .media, .streamFinal:
             guard SharedLocationText.location(from: record.plaintext) == nil,
                   RemoteGiphyMedia.parse(wireText: record.plaintext) == nil else { return [] }
-            if isReading { return [.stop] }
             return !standaloneEmoji() && hasSpokenText() ? [.read] : []
         default: return []
         }
@@ -216,8 +215,8 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    func transcribe(id: String, recording: Recording, data: @escaping () async throws -> Data,
-                    verifiedScope: @escaping () async -> Scope?, onError: @escaping () -> Void) {
+    func transcribe(id: String, recording: Recording, scope: Scope, data: @escaping () async throws -> Data,
+                    revalidate: @escaping (Transcript) async -> Transcript?, onError: @escaping () -> Void) {
         guard #available(iOS 26, *), transcription == nil else { return }
         let request = UUID()
         requestID = request
@@ -237,8 +236,9 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
                 try Task.checkCancellation()
                 let text = try await LocalVoiceRecognition.transcript(data: bytes)
                 try Task.checkCancellation()
-                guard let scope = await verifiedScope(), !Task.isCancelled, requestID == request else { return }
-                transcripts[id] = Transcript(scope: scope, recording: recording, text: text)
+                let recognized = Transcript(scope: scope, recording: recording, text: text, verified: false)
+                guard let current = await revalidate(recognized), !Task.isCancelled, requestID == request else { return }
+                transcripts[id] = current
             } catch is CancellationError {
                 return
             } catch {

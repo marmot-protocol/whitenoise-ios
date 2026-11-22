@@ -496,7 +496,7 @@ struct MessageBubble: View {
         if incompleteMarkdown || TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) {
             // Beyond the formatter's budget, read the authored source in viewport-sized batches.
             LongMessageSourceText(text: record.plaintext)
-                .id(record.plaintext)
+                .id(Data(record.plaintext.utf8))
         } else {
             messageBodyContent(snippet: nil)
         }
