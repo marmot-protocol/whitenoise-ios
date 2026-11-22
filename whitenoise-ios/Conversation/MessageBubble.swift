@@ -340,7 +340,7 @@ struct MessageBubble: View {
     /// Set when the message has viewable edit history; makes the inline "Edited"
     /// label tap to open the history sheet, the same sheet the actions menu opens.
     var onViewEditHistory: (() -> Void)? = nil
-    /// Set for a failed outgoing message; a tap on the bubble opens the
+    /// Tapping the failure notice or a failed text bubble opens the
     /// retry/discard sheet.
     var onFailedTap: (() -> Void)? = nil
     var onSenderAvatarTap: (() -> Void)? = nil
@@ -1213,8 +1213,6 @@ struct MessageBubble: View {
         }
     }
 
-    private static let excerptBudgets = [768, 512, 384, 320, 256, 208, 168, 132, 100, 72, 48, 28, 12, 4]
-
     @ViewBuilder
     private func messageBodyTextContent(snippet: String?) -> some View {
         if let blocks = markdownBlocks {
@@ -1227,11 +1225,10 @@ struct MessageBubble: View {
                 if actionBodySize != nil, visible.count == 1, let inline = visible[0].inlineText, customEmoji.isEmpty {
                     liftedInlineText(inline)
                 } else if actionBodySize != nil {
-                    let length = visible.reduce(0) { $0 + $1.menuExcerptLength }
                     ViewThatFits(in: .vertical) {
                         // The measured body exceeds this frame. Start with a bounded
                         // excerpt and keep whole code or quote lines where possible.
-                        ForEach(Self.excerptBudgets.filter { $0 < length }, id: \.self) { budget in
+                        ForEach(MarkdownDisplayBlock.menuExcerptBudgets(for: visible), id: \.self) { budget in
                             MarkdownMessageView(blocks: MarkdownDisplayBlock.excerpt(visible, characterBudget: budget, emoji: customEmoji.shortcodes),
                                                 quoteBar: quoteColor)
                         }

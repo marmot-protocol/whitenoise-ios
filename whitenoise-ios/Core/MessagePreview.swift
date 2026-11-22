@@ -85,6 +85,12 @@ enum MessagePreview {
         }
     }
 
+    static func canCopyFromMessageMenu(_ record: AppMessageRecordFfi) -> Bool {
+        if record.plaintext.unicodeScalars.contains(where: { !CharacterSet.whitespacesAndNewlines.contains($0) }) { return true }
+        // Unsupported cards copy the event envelope, even when its content is empty.
+        return MessageSemantics.classify(record) == .unsupportedEvent
+    }
+
     /// Copy full authored text, independent of preview and rendering budgets,
     /// resolving canonical mentions to the names shown in the conversation.
     /// Parsed tokens can be incomplete and preview flattening loses line breaks,
