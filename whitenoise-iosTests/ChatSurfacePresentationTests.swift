@@ -193,7 +193,7 @@ struct ChatSurfacePresentationTests {
         #expect(SingleEmojiMessagePresentation.emoji(in: "👍🏽") == "👍🏽")
         #expect(SingleEmojiMessagePresentation.emoji(in: "1️⃣") == "1️⃣")
         #expect(SingleEmojiMessagePresentation.emoji(in: "🇮🇹") == "🇮🇹")
-        #expect(SingleEmojiMessagePresentation.fontSize < SingleCustomEmojiMessagePresentation.side)
+        #expect(SingleEmojiMessagePresentation.fontSize >= 56)
     }
 
     @Test func stickerPresentationRejectsTextAndMultipleEmoji() {
@@ -213,6 +213,7 @@ struct ChatSurfacePresentationTests {
         #expect(SingleCustomEmojiMessagePresentation.shortcode(in: ":marmot:", resolvable: resolvable) == marmot)
         #expect(SingleCustomEmojiMessagePresentation.shortcode(in: "  :wave:\n", resolvable: resolvable) == wave)
         #expect(SingleCustomEmojiMessagePresentation.shortcode(in: "😀", resolvable: resolvable) == nil)
+        #expect(SingleCustomEmojiMessagePresentation.side > SingleEmojiMessagePresentation.fontSize)
     }
 
     @Test func customEmojiWithTextOrUnresolvedStaysInBubble() throws {
