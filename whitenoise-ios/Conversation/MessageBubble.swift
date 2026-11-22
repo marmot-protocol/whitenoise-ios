@@ -3585,8 +3585,10 @@ private struct MessageDocumentAttachmentView: View {
             if let contactName { transcriptSearch?.registerContactName(contactName, for: item.id, in: confirmedID) }
         }
         .sheet(item: $preview) { document in
-            MessageDocumentPreviewSheet(preview: document.preview, item: document.item, loader: document.loader)
-                .appAppearance()
+            if let current = preview, current.id == document.id {
+                MessageDocumentPreviewSheet(preview: current.preview, item: current.item, loader: current.loader)
+                    .appAppearance()
+            }
         }
         .sheet(item: $share.file) { file in
             ActivityShareSheet(items: [file.url], onComplete: file.finish)
@@ -3598,8 +3600,17 @@ private struct MessageDocumentAttachmentView: View {
         }
         .onChange(of: item.id) { _, _ in resetDocument() }
         .onChange(of: AttachmentHandoffSource(item)) { previous, current in
-            if case .hint = previous, case .target(let target) = current, previous.matches(target) { return }
-            resetDocument()
+            if let document = preview, isFromMe, previous == .none, current != .none,
+               item.reference != nil, document.item.reference == item.reference, document.item.id == item.id {
+                // Delivery can confirm the same PDF while its reader is already open.
+                preview = OpenDocument(preview: document.preview, item: item, loader: onLoadMedia)
+            } else if case .hint = previous, case .target(let target) = current, previous.matches(target) {
+                if let document = preview {
+                    preview = OpenDocument(preview: document.preview, item: item, loader: onLoadMedia)
+                }
+            } else {
+                resetDocument()
+            }
         }
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))) {
