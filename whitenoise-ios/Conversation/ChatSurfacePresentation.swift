@@ -306,6 +306,18 @@ nonisolated enum MessageExpirationPresentation {
     }
 }
 
+/// A failed send replaces its usual timestamp with the action that opens its options.
+struct MessageFailureNotice {
+    let action: () -> Void
+    let showsTimestamp: Bool
+
+    init?(status: MessageStatus, isDeleted: Bool, isEdited: Bool, hasReports: Bool, action: (() -> Void)?) {
+        guard status == .failed, !isDeleted, let action else { return nil }
+        self.action = action
+        showsTimestamp = isEdited || hasReports
+    }
+}
+
 struct MessageFooterPresentation: Equatable {
     let systemImage: String?
     let accessibilityLabel: String?

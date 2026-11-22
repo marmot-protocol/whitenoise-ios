@@ -639,7 +639,9 @@ struct MessageBubble: View {
     }
 
     private var textBubble: some View {
-        let fitsQuote = replyPreview != nil && showsStandardBody && sharedLocation == nil && linkPreviewURL == nil
+        let location = showsStandardBody ? sharedLocation : nil
+        let previewURL = showsStandardBody && location == nil ? linkPreviewURL : nil
+        let fitsQuote = replyPreview != nil && showsStandardBody && location == nil && previewURL == nil
         return MessageTextBubbleLayout(fitsQuote: fitsQuote) {
             VStack(alignment: .leading, spacing: 0) {
                 if let debugStyle {
@@ -649,14 +651,14 @@ struct MessageBubble: View {
                     replyHeader(replyPreview)
                 }
                 if showsStandardBody {
-                    if let sharedLocation {
-                        sharedLocationBody(sharedLocation)
+                    if let location {
+                        sharedLocationBody(location)
                     } else {
-                        if let linkPreviewURL {
-                            LinkPreviewCard(url: linkPreviewURL, isFromMe: isFromMe) {
-                                _ = handleMessageLink(linkPreviewURL)
+                        if let previewURL {
+                            LinkPreviewCard(url: previewURL, isFromMe: isFromMe) {
+                                _ = handleMessageLink(previewURL)
                             }
-                            .id(linkPreviewURL)
+                            .id(previewURL)
                         }
                         messageBodyText(hasReply: replyPreview != nil)
                     }
@@ -1037,9 +1039,10 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var bubbleMetadataRow: some View {
-        if status == .failed, !isDeleted, let onFailedTap {
+        if let notice = MessageFailureNotice(status: status, isDeleted: isDeleted, isEdited: isEdited,
+                                            hasReports: hasReports, action: onFailedTap) {
             VStack(alignment: .trailing, spacing: 2) {
-                failedNotice(action: onFailedTap)
+                failedNotice(notice)
                 if !reactions.isEmpty || omittedReactionKinds > 0 {
                     reactionMetadata(showsTimestamp: false)
                 }
@@ -1051,14 +1054,14 @@ struct MessageBubble: View {
         }
     }
 
-    private func failedNotice(action: @escaping () -> Void) -> some View {
+    private func failedNotice(_ notice: MessageFailureNotice) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Button(action: action) {
+            Button(action: notice.action) {
                 MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: status, isFromMe: isFromMe)
                     .multilineTextAlignment(.trailing)
             }
             .buttonStyle(.plain)
-            if isEdited || hasReports {
+            if notice.showsTimestamp {
                 MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
                                       showsDeliveryStatus: false, hasReports: hasReports, onViewEditHistory: onViewEditHistory)
             }
