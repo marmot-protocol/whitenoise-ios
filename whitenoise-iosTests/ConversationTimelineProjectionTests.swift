@@ -226,6 +226,7 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: nil,
             flushedIndex: nil,
             kind: MessageSemantics.kindChat,
+            tags: [],
             isDeleted: false
         ) == 12)
         #expect(ConversationReadMarker.nextWatermarkIndex(
@@ -233,6 +234,7 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: nil,
             flushedIndex: 12,
             kind: MessageSemantics.kindChat,
+            tags: [],
             isDeleted: false
         ) == nil)
         #expect(ConversationReadMarker.nextWatermarkIndex(
@@ -240,6 +242,7 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: nil,
             flushedIndex: 12,
             kind: MessageSemantics.kindChat,
+            tags: [],
             isDeleted: false
         ) == nil)
         #expect(ConversationReadMarker.nextWatermarkIndex(
@@ -247,6 +250,7 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: 12,
             flushedIndex: nil,
             kind: MessageSemantics.kindChat,
+            tags: [],
             isDeleted: false
         ) == 13)
         #expect(ConversationReadMarker.nextWatermarkIndex(
@@ -254,6 +258,7 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: 12,
             flushedIndex: nil,
             kind: MessageSemantics.kindChat,
+            tags: [],
             isDeleted: false
         ) == nil)
     }
@@ -264,6 +269,7 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: nil,
             flushedIndex: nil,
             kind: MessageSemantics.kindReaction,
+            tags: [],
             isDeleted: false
         ) == nil)
         #expect(ConversationReadMarker.nextWatermarkIndex(
@@ -271,6 +277,7 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: nil,
             flushedIndex: nil,
             kind: MessageSemantics.kindChat,
+            tags: [],
             isDeleted: true
         ) == nil)
         #expect(ConversationReadMarker.nextWatermarkIndex(
@@ -278,6 +285,7 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: nil,
             flushedIndex: nil,
             kind: MessageSemantics.kindChat,
+            tags: [],
             isDeleted: false
         ) == nil)
     }
@@ -357,6 +365,7 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: nil,
             flushedIndex: 4,
             kind: MessageSemantics.kindGroupSystem,
+            tags: [],
             isDeleted: false
         ) == 5)
         #expect(ConversationReadMarker.nextWatermarkIndex(
@@ -364,20 +373,25 @@ struct ConversationTimelineProjectionTests {
             pendingIndex: nil,
             flushedIndex: 4,
             kind: MessageSemantics.kindGroupSystem,
+            tags: [],
             isDeleted: true
         ) == nil)
     }
 
     @Test func readWatermarkAcceptsOnlyUserVisibleRowKinds() {
-        #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindChat))
-        #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindPoll))
-        #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindGroupSystem))
-        // MarmotKit 0.18.0 refuses a read marker on a NIP-22 comment.
-        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindComment))
-        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindReaction))
-        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindDelete))
-        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindEdit))
-        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindAgentActivity))
+        func canAdvance(_ kind: UInt64, _ tags: [[String]] = []) -> Bool {
+            ConversationReadMarker.canAdvanceWatermark(kind: kind, tags: tags.map { MessageTagFfi(values: $0) })
+        }
+        #expect(canAdvance(MessageSemantics.kindChat))
+        #expect(canAdvance(MessageSemantics.kindPoll))
+        #expect(canAdvance(MessageSemantics.kindGroupSystem))
+        // A thread message carries the marker; MDK refuses a kind 1111 without a parent.
+        #expect(canAdvance(MessageSemantics.kindComment, [["e", hex("02")], ["k", "9"]]))
+        #expect(!canAdvance(MessageSemantics.kindComment, [["k", "9"]]))
+        #expect(!canAdvance(MessageSemantics.kindReaction))
+        #expect(!canAdvance(MessageSemantics.kindDelete))
+        #expect(!canAdvance(MessageSemantics.kindEdit))
+        #expect(!canAdvance(MessageSemantics.kindAgentActivity))
     }
 
     @Test func newestVisibleWatermarkCandidateTakesGroupSystemTail() {
@@ -535,7 +549,6 @@ struct ConversationTimelineProjectionTests {
                 kind: MessageSemantics.kindChat,
                 mediaJson: nil,
                 media: [],
-                agentTextStreamJson: nil,
                 deleted: false
             ),
             reactions: TimelineReactionSummaryFfi(
@@ -619,7 +632,6 @@ struct ConversationTimelineProjectionTests {
                 kind: MessageSemantics.kindChat,
                 mediaJson: nil,
                 media: [],
-                agentTextStreamJson: nil,
                 deleted: false
             )
         )

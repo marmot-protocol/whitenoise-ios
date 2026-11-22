@@ -324,7 +324,7 @@ struct MessageFooterPresentation: Equatable {
     let isFailure: Bool
 
     static func value(for status: MessageStatus, isFromMe: Bool) -> Self {
-        guard isFromMe || status == .streaming else {
+        guard isFromMe else {
             return Self(systemImage: nil, accessibilityLabel: nil, isFailure: false)
         }
 
@@ -341,12 +341,6 @@ struct MessageFooterPresentation: Equatable {
                 accessibilityLabel: L10n.string("Not delivered"),
                 isFailure: true
             )
-        case .streaming:
-            return Self(
-                systemImage: "waveform",
-                accessibilityLabel: L10n.string("Streaming…"),
-                isFailure: false
-            )
         }
     }
 }
@@ -357,7 +351,7 @@ nonisolated enum MessageRetryPresentation {
         switch status {
         case .sending, .failed:
             return true
-        case .received, .sent, .streaming:
+        case .received, .sent:
             return false
         }
     }

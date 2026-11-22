@@ -418,7 +418,7 @@ struct PollVotesModelTests {
             groupIdHex: Self.group, sender: Self.voter(9), plaintext: "Lunch?",
             contentTokens: .emptyDocument, kind: kind, tags: [],
             timelineAt: 1, receivedAt: 1, replyToMessageIdHex: nil, replyPreview: nil,
-            mediaJson: nil, media: [], agentTextStreamJson: nil, groupSystem: nil, poll: poll,
+            mediaJson: nil, media: [], groupSystem: nil, poll: poll,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []), edit: nil,
             deleted: deleted, deletedByMessageIdHex: nil, invalidationStatus: nil
         )

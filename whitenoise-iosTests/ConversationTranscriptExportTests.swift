@@ -16,23 +16,20 @@ struct ConversationTranscriptExportTests {
                 plaintext: "final answer",
                 kind: MessageSemantics.kindChat,
                 tags: [
-                    MessageTagFfi(values: [MessageSemantics.streamTag, String(repeating: "ab", count: 32)]),
+                    MessageTagFfi(values: ["client", "agent"]),
                 ],
-                timelineAt: 2,
-                agentTextStreamJson: #"{"stream_id_hex":"bbbb","status":"finalized"}"#
+                timelineAt: 2
             ),
             timelineRecord(
                 messageIdHex: firstId,
                 sourceMessageIdHex: .absent,
                 sender: hex("99"),
                 plaintext: "",
-                kind: MessageSemantics.kindAgentStreamStart,
+                kind: MessageSemantics.kindAgentActivity,
                 tags: [
-                    MessageTagFfi(values: [MessageSemantics.streamTag, String(repeating: "ab", count: 32)]),
-                    MessageTagFfi(values: ["stream-type", "text"]),
+                    MessageTagFfi(values: ["status", "thinking"]),
                 ],
-                timelineAt: 1,
-                agentTextStreamJson: #"{"stream_id_hex":"bbbb","status":"started"}"#
+                timelineAt: 1
             ),
         ]
 
@@ -44,11 +41,11 @@ struct ConversationTranscriptExportTests {
 
         #expect(document.eventCount == 2)
         #expect(document.events[0].messageIdHex == firstId)
-        #expect(document.events[0].kind == MessageSemantics.kindAgentStreamStart)
+        #expect(document.events[0].kind == MessageSemantics.kindAgentActivity)
         #expect(document.events[1].messageIdHex == secondId)
         #expect(document.events[1].kind == MessageSemantics.kindChat)
         #expect(document.events[1].content == "final answer")
-        #expect(document.events[1].tags.first?.first == MessageSemantics.streamTag)
+        #expect(document.events[1].tags.first == ["client", "agent"])
 
         let data = try ConversationTranscriptExport.encodeJSON(document)
         let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])

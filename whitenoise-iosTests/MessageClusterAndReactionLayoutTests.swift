@@ -141,7 +141,7 @@ struct MessageClusterProjectionTests {
     @Test func nonterminalRowsKeepActionableMetadata() {
         var cluster = MessageClusterPresentation.none
         cluster.endsCluster = false
-        for status: MessageStatus in [.sending, .failed, .streaming] {
+        for status: MessageStatus in [.sending, .failed] {
             #expect(cluster.showsFooter(status: status, isDeleted: false, isEdited: false, reported: false))
         }
         #expect(!cluster.showsFooter(status: .received, isDeleted: false, isEdited: false, reported: false))

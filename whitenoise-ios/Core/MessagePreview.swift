@@ -5,7 +5,7 @@ import MarmotKit
 ///
 /// The conversation screen filters control events and renders structured
 /// payloads; the chats list must do the same so it never shows a bare
-/// reaction/delete (or a kind-1200 stream-start signal) as the preview.
+/// reaction/delete as the preview.
 enum MessagePreview {
     // Reply-preview media JSON is peer-controlled. Keep the raw byte budget
     // small because JSONSerialization materializes the whole blob before the
@@ -21,14 +21,13 @@ enum MessagePreview {
     /// An event of a kind the app can't render; its content is never shown as text.
     static var unsupportedEventLabel: String { L10n.string("Unsupported event") }
 
-    /// Whether a record should drive the chat-list preview. Skips agent-stream
-    /// start signals and non-textual events (reactions, deletes). A kind-9
-    /// stream-final is a real message and previews like any other chat.
+    /// Whether a record should drive the chat-list preview. Skips non-textual
+    /// events (reactions, deletes, edits) and typed agent/system chrome.
     static func isPreviewable(_ record: AppMessageRecordFfi) -> Bool {
         switch MessageSemantics.classify(record) {
-        case .reaction, .delete, .edit, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
+        case .reaction, .delete, .edit, .agentActivity, .agentOperation, .groupSystem, .unknown:
             return false
-        case .chat, .reply, .media, .streamFinal, .poll, .unsupportedEvent:
+        case .chat, .reply, .media, .poll, .unsupportedEvent:
             return true
         }
     }
@@ -65,8 +64,8 @@ enum MessagePreview {
                 currentAccountIdHex: systemEventNaming.currentAccountIdHex,
                 displayName: systemEventNaming.displayName
             ) ?? ""
-        case .chat, .reply, .streamFinal:
-            // Reply text, stream transcript, and plain chat all live in plaintext.
+        case .chat, .reply:
+            // Reply text and plain chat both live in plaintext.
             if let label = RemoteGiphyMedia.envelopePreviewText(for: record.plaintext) {
                 return label
             }
@@ -75,12 +74,12 @@ enum MessagePreview {
                 tokens: record.contentTokens,
                 mentionDisplayName: mentionDisplayName
             )
-        case .reaction, .delete, .edit, .agentStreamStart, .unknown:
-            // Not previewable/displayable text: a reaction's emoji, a delete
-            // tombstone, or a kind-1200 stream-start signal must never surface
-            // as message body. Mirrors `isPreviewable(_:)` so the
-            // previewable/displayable classification has a single source of
-            // truth and never renders a bare reaction/stream-start as a preview.
+        case .reaction, .delete, .edit, .unknown:
+            // Not previewable/displayable text: a reaction's emoji or a delete
+            // tombstone must never surface as message body. Mirrors
+            // `isPreviewable(_:)` so the previewable/displayable classification
+            // has a single source of truth and never renders a bare reaction
+            // as a preview.
             return ""
         }
     }
@@ -96,7 +95,7 @@ enum MessagePreview {
         systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
     ) -> String {
         switch MessageSemantics.classify(record) {
-        case .streamFinal, .media:
+        case .media:
             if !record.plaintext.isEmpty {
                 return copyText(record.plaintext, mentionDisplayName: mentionDisplayName)
             }

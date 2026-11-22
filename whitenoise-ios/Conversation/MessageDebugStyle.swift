@@ -1,10 +1,9 @@
 import SwiftUI
 import MarmotKit
 
-/// Visual grouping for streaming-debug timeline rows.
+/// Visual grouping for chat-debug timeline rows.
 enum MessageDebugCategory: Hashable {
     case userVisible
-    case streamSignaling
     case agentChrome
     case groupSystem
     case control
@@ -13,7 +12,6 @@ enum MessageDebugCategory: Hashable {
     var label: String {
         switch self {
         case .userVisible: "User-visible"
-        case .streamSignaling: "Stream signal"
         case .agentChrome: "Agent chrome"
         case .groupSystem: "Group system"
         case .control: "Control"
@@ -24,7 +22,6 @@ enum MessageDebugCategory: Hashable {
     var accentColor: Color {
         switch self {
         case .userVisible: .green
-        case .streamSignaling: .orange
         case .agentChrome: .purple
         case .groupSystem: .gray
         case .control: .yellow
@@ -33,7 +30,7 @@ enum MessageDebugCategory: Hashable {
     }
 }
 
-/// Debug chrome applied to message bubbles when streaming debug is enabled.
+/// Debug chrome applied to message bubbles when chat debug mode is enabled.
 struct MessageDebugStyle: Hashable {
     let category: MessageDebugCategory
     let kindLabel: String
@@ -49,9 +46,9 @@ extension MessageSemantics {
 
     static func isUserVisibleBubble(_ kind: Kind) -> Bool {
         switch kind {
-        case .chat, .reply, .media, .streamFinal, .poll, .unsupportedEvent:
+        case .chat, .reply, .media, .poll, .unsupportedEvent:
             return true
-        case .reaction, .delete, .edit, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
+        case .reaction, .delete, .edit, .agentActivity, .agentOperation, .groupSystem, .unknown:
             return false
         }
     }
@@ -68,10 +65,8 @@ extension MessageSemantics {
 
     private static func debugCategory(for kind: Kind) -> MessageDebugCategory {
         switch kind {
-        case .chat, .reply, .media, .streamFinal, .poll, .unsupportedEvent:
+        case .chat, .reply, .media, .poll, .unsupportedEvent:
             return .userVisible
-        case .agentStreamStart:
-            return .streamSignaling
         case .agentActivity, .agentOperation:
             return .agentChrome
         case .groupSystem:
@@ -89,12 +84,10 @@ extension MessageSemantics {
         case .chat: name = "chat"
         case .reply: name = "reply"
         case .media: name = "media"
-        case .streamFinal: name = "stream-final"
         case .reaction: name = "reaction"
         case .delete: name = "delete"
         case .edit: name = "edit"
         case .poll: name = "poll"
-        case .agentStreamStart: name = "agent-stream-start"
         case .agentActivity: name = "agent-activity"
         case .agentOperation: name = "agent-operation"
         case .groupSystem: name = "group-system"
@@ -114,17 +107,6 @@ extension MessageSemantics {
 
     private static func debugDetailText(for record: AppMessageRecordFfi, semantics: Kind) -> String {
         switch semantics {
-        case .agentStreamStart(let start):
-            var lines = [
-                "stream: \(start.streamId)",
-                "route: \(start.route)",
-            ]
-            if start.brokers.isEmpty {
-                lines.append("brokers: (none)")
-            } else {
-                lines.append(contentsOf: start.brokers.map { "broker: \($0)" })
-            }
-            return lines.joined(separator: "\n")
         case .reaction(let target):
             return "target: \(target)\nemoji: \(record.plaintext.isEmpty ? "(un-react)" : record.plaintext)"
         case .delete(let target):
@@ -133,8 +115,6 @@ extension MessageSemantics {
             return "target: \(target)\n\(formattedPlaintext(record.plaintext))"
         case .reply(let target):
             return "reply-to: \(target)\n\(formattedPlaintext(record.plaintext))"
-        case .streamFinal(let streamId):
-            return "stream: \(streamId)\n\(formattedPlaintext(record.plaintext))"
         case .media:
             if !record.plaintext.isEmpty {
                 return "caption: \(record.plaintext)"

@@ -3,13 +3,11 @@ import MarmotKit
 
 /// Delivery state for a message bubble. Inbound messages are `.received`
 /// (no indicator shown); our own messages move .sending → .sent, or .failed.
-/// `.streaming` is a live agent-text-stream bubble still filling in.
 nonisolated enum MessageStatus: Hashable {
     case received
     case sending
     case sent
     case failed
-    case streaming
 }
 
 /// One renderable row in a conversation. Either a message bubble or a
@@ -18,7 +16,6 @@ struct TimelineItem: Identifiable, Hashable {
     enum Kind: Hashable {
         case message(record: AppMessageRecordFfi, status: MessageStatus)
         case systemEvent(SystemEvent)
-        case streamDebugEvent(StreamDebugTimelineEvent)
     }
 
     let id: String
@@ -26,13 +23,6 @@ struct TimelineItem: Identifiable, Hashable {
     let timestamp: UInt64
 
     var rowFrameKey: String { id }
-}
-
-/// A live QUIC agent-stream update surfaced in streaming-debug mode.
-struct StreamDebugTimelineEvent: Hashable {
-    let streamId: String
-    let eventKind: String
-    let detail: String
 }
 
 /// System-rendered timeline events. We don't carry a full enum from the FFI
@@ -69,7 +59,7 @@ nonisolated struct MessageClusterPresentation: Equatable, Hashable {
 
     func showsFooter(status: MessageStatus, isDeleted: Bool, isEdited: Bool, reported: Bool) -> Bool {
         endsCluster || isDeleted || isEdited || reported
-            || status == .sending || status == .failed || status == .streaming
+            || status == .sending || status == .failed
     }
 
     static let none = Self(
@@ -148,9 +138,9 @@ nonisolated enum MessageClusterProjection {
 
     private static func isClusterable(_ record: AppMessageRecordFfi) -> Bool {
         switch MessageSemantics.classify(record) {
-        case .chat, .reply, .media, .streamFinal, .poll, .unsupportedEvent:
+        case .chat, .reply, .media, .poll, .unsupportedEvent:
             return true
-        case .reaction, .delete, .edit, .agentStreamStart,
+        case .reaction, .delete, .edit,
              .agentActivity, .agentOperation, .groupSystem, .unknown:
             return false
         }
@@ -187,7 +177,7 @@ extension TimelineItem {
     /// a freshly-generated id would change on each rebuild, forcing spurious
     /// diffs and leaking the markdown/media/reaction projection caches keyed by
     /// the prior id (#411). Rows that have no server message id (optimistic
-    /// sends, live stream bubbles) must use `pendingMessage(tempId:record:)` or
+    /// sends) must use `pendingMessage(tempId:record:)` or
     /// build the row directly with an explicit stable id instead.
     static func message(_ record: AppMessageRecordFfi, status: MessageStatus? = nil) -> TimelineItem {
         assert(
@@ -220,24 +210,6 @@ extension TimelineItem {
         TimelineItem(
             id: "evt:\(id)",
             kind: .systemEvent(event),
-            timestamp: timestamp
-        )
-    }
-
-    static func streamDebugEvent(
-        id: String,
-        streamId: String,
-        eventKind: String,
-        detail: String,
-        timestamp: UInt64
-    ) -> TimelineItem {
-        TimelineItem(
-            id: id,
-            kind: .streamDebugEvent(StreamDebugTimelineEvent(
-                streamId: streamId,
-                eventKind: eventKind,
-                detail: detail
-            )),
             timestamp: timestamp
         )
     }
