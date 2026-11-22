@@ -729,9 +729,6 @@ struct MessageBubble: View {
         .opacity(status == .sending ? 0.7 : 1)
     }
 
-    /// The ordinary bubble, with its own inline emoji or the literal
-    /// shortcode, shows until the large image loads, and stays if it never
-    /// does (auto-download off, a failed read).
     private func standaloneEmojiContent(_ emoji: String) -> some View {
         Text(emoji)
             .font(.system(size: SingleEmojiMessagePresentation.fontSize))
@@ -3528,6 +3525,9 @@ private struct MessageDocumentAttachmentView: View {
         }
         .onChange(of: contactName) { _, name in
             if let name { transcriptSearch?.registerContactName(name, for: item.id, in: messageID) }
+        }
+        .onChange(of: messageID) { _, confirmedID in
+            if let contactName { transcriptSearch?.registerContactName(contactName, for: item.id, in: confirmedID) }
         }
         .sheet(item: $preview) { document in
             MessageDocumentPreviewSheet(preview: document.preview, item: document.item, loader: document.loader)
