@@ -74,6 +74,7 @@ struct TranscriptHistoryGalleryView: View {
     @State private var window: Window?
     @State private var expanded: MessageMediaGallery?
     @State private var projectedViewer = 0
+    @State private var confirmedGIF: MessageMediaAttachment?
 
     private var projectionInputs: Inputs {
         Inputs(window: WindowRevision(timeline: conversation.timelineProjectionGeneration,
@@ -160,6 +161,11 @@ struct TranscriptHistoryGalleryView: View {
             checkedWithoutOverlap: progress, pageFailed: history.pageFailed || history.validationFailed,
             allowsOpeningDemand: !history.hasPaged, didSelect: { itemID in
                 history.select(itemID, inWindow: gallery.transcriptCaptions?[itemID] != nil)
+                if openingItem.isGIF, openingItem.localTarget == nil, confirmedGIF == nil, let pending = openingSelection,
+                   gallery.transcriptCaptions?[itemID]?.outgoingSlot == pending.slot,
+                   let item = gallery.items.first(where: { $0.id == itemID && $0.isGIF && $0.localTarget != nil }) {
+                    confirmedGIF = item
+                }
             }, verify: { [activeScope] item in try await self.verify(item, in: activeScope) },
             verifyForward: { [activeScope] item, pending in
                 try await self.verifyForward(item, pending: pending, in: activeScope)
@@ -235,6 +241,10 @@ struct TranscriptHistoryGalleryView: View {
         if old.window != new.window || window == nil {
             guard let gallery = conversation.transcriptMediaGallery(opening: openingItem.id, initialData: initialData, openingItem: openingItem,
                 includingGIFsIn: gifRowID, allowsEmptyWindow: true) else { return }
+            if openingItem.isGIF, openingItem.localTarget == nil, confirmedGIF == nil,
+               let sourced = gallery.items.first(where: { $0.isGIF && $0.localTarget != nil && $0.canUseBytesPrepared(for: openingItem) }) {
+                confirmedGIF = sourced
+            }
             let ids = Set(conversation.timeline.compactMap { row -> String? in
                 guard case .message(let record, _) = row.kind else { return nil }
                 return record.messageIdHex
@@ -263,7 +273,7 @@ struct TranscriptHistoryGalleryView: View {
         let selectedID = history.selectedItemID ?? gallery.initialItemID
         let edges = history.pages.extensions(around: gallery.items, excluding: window.messageIDs,
                                              atLiveTail: window.atTail,
-                                             preserving: selectedID, heldGIF: openingItem.isGIF ? openingItem : nil)
+                                             preserving: selectedID, heldGIF: confirmedGIF ?? (openingItem.isGIF ? openingItem : nil))
         guard !edges.older.isEmpty || !edges.newer.isEmpty || history.resumeItemID != nil else { return gallery }
         if !edges.includesWindow { captions.removeAll() }
         var messages = edges.includesWindow ? gallery.messageIdByItemID : [:]

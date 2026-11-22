@@ -134,7 +134,12 @@ struct TranscriptAttachmentHistoryTests {
             messageId: photo.messageIdHex, sourceMessageId: photo.sourceMessageIdHex).first)
         let retained = try #require(TranscriptHistorySlot(photo)).attachment
         #expect(live.id != retained.id)
-        let selected = live.transcriptItem
+        let unsourced = try #require(MessageMediaAttachment.displayItems(fromOutcomes: [photo.attachment], ownerId: "msg:temporary",
+            messageId: photo.messageIdHex, sourceMessageId: nil).first)
+        let selected = unsourced.transcriptItem(in: photo.messageIdHex)
+        #expect(selected.localTarget == nil)
+        #expect(selected.sourceHint == nil)
+        #expect(live.transcriptItem(in: photo.messageIdHex).canUseBytesPrepared(for: selected))
         var pages = TranscriptHistoryPages()
         pages.append([photo])
         let result = pages.extensions(around: [], excluding: [], preserving: selected.id)

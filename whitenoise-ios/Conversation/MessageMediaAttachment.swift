@@ -273,6 +273,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     static let audioAnalysisByteLimit = 16 * 1024 * 1024
 
     private(set) var id: String
+    let displayIndex: UInt32?
     let reference: MediaAttachmentReferenceFfi?
     let fileName: String
     let mediaType: String
@@ -298,8 +299,10 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         durationSeconds: Double? = nil,
         waveformSamples: [CGFloat] = [],
         rejectionKind: MediaAttachmentRejectionKindFfi? = nil,
-        localTarget: AttachmentLocalTargetFfi? = nil
+        localTarget: AttachmentLocalTargetFfi? = nil,
+        displayIndex: UInt32? = nil
     ) {
+        self.displayIndex = displayIndex
         self.id = id
         self.reference = reference
         self.fileName = fileName
@@ -336,9 +339,8 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
 
     /// Identifies the same sourced slot in a live row and the native history.
     /// A confirmed local send can keep its temporary row ID in the live window.
-    var transcriptItem: Self {
-        guard let reference, let messageID = localTarget?.messageIdHex ?? sourceHint?.messageID,
-              let index = localTarget?.attachmentIndex ?? sourceHint?.slot else { return self }
+    func transcriptItem(in messageID: String) -> Self {
+        guard !messageID.isEmpty, let reference, let index = localTarget?.attachmentIndex ?? sourceHint?.slot ?? displayIndex else { return self }
         var copy = self
         copy.id = Self.displayItemID(reference: reference, index: index, ownerId: TimelineItem.messageRowId(forMessageIdHex: messageID))
         return copy
@@ -430,7 +432,8 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
             localData: nil,
             thumbnail: nil,
             durationSeconds: nil,
-            waveformSamples: []
+            waveformSamples: [],
+            displayIndex: index
         )
     }
 

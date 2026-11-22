@@ -1069,7 +1069,7 @@ final class ConversationViewModel {
             guard !timelineStore.isHidden(record.messageIdHex), !timelineStore.isBlockedAuthor(record.sender) else { continue }
             for (index, attachment) in mediaItems(for: row).enumerated() {
                 guard attachment.isTranscriptGalleryMedia || (row.id == gifRowID && attachment.isGIF && attachment.rejectionKind == nil) else { continue }
-                let media = attachment.transcriptItem
+                let media = attachment.transcriptItem(in: record.messageIdHex)
                 guard captions[media.id] == nil else { continue }
                 items.append(media)
                 if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }

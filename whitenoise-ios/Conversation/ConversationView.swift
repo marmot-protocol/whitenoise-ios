@@ -716,7 +716,8 @@ struct ConversationView: View {
 
         init(item: MessageMediaAttachment, scope: MessageBubble.MediaOpenScope, initialData: Data?,
              row: TimelineItem, media: [MessageMediaAttachment], gifRowID: String? = nil) {
-            self.item = item.transcriptItem
+            if case .message(let record, _) = row.kind { self.item = item.transcriptItem(in: record.messageIdHex) }
+            else { self.item = item }
             self.scope = scope
             self.initialData = initialData
             self.gifRowID = gifRowID
@@ -5099,15 +5100,15 @@ struct ConversationView: View {
     }
 
     private func openTranscriptMedia(_ target: TranscriptMediaTarget, rowID: String, in model: ConversationViewModel) {
-        func currentRow() -> TimelineItem? {
+        func currentRow() -> (row: TimelineItem, slots: [MessageMediaAttachment])? {
             guard target.scope.isCurrent(viewModel, appState: appState),
                   let row = model.timeline.first(where: { $0.id == rowID }), case .message(let record, _) = row.kind,
                   !model.isDeleted(record.messageIdHex), !model.timelineStore.isHidden(record.messageIdHex),
                   !model.timelineStore.isBlockedAuthor(record.sender) else { return nil }
-            return row
+            return (row, model.mediaItems(for: row).map { $0.transcriptItem(in: record.messageIdHex) })
         }
-        guard let row = currentRow() else { return }
-        if model.mediaItems(for: row).contains(where: { $0.transcriptItem.canUseBytesPrepared(for: target.item) }) {
+        guard let current = currentRow() else { return }
+        if current.slots.contains(where: { $0.canUseBytesPrepared(for: target.item) }) {
             transcriptMedia = target
             return
         }
@@ -5117,10 +5118,10 @@ struct ConversationView: View {
         let intent = mediaOpenIntent.current
         Task {
             guard let confirmed = await gallery.confirmedSelection(for: pending), mediaOpenIntent.current == intent,
-                  let current = currentRow() else { return }
-            let slots = model.mediaItems(for: current)
-            guard let visible = slots.first(where: { $0.transcriptItem.canUseBytesPrepared(for: confirmed) && $0.localTarget == confirmed.localTarget }) else { return }
-            transcriptMedia = TranscriptMediaTarget(item: visible, scope: target.scope, initialData: pending.data, row: current, media: slots)
+                  let updated = currentRow(), let visible = updated.slots.first(where: {
+                      $0.canUseBytesPrepared(for: confirmed) && $0.localTarget == confirmed.localTarget
+                  }) else { return }
+            transcriptMedia = TranscriptMediaTarget(item: visible, scope: target.scope, initialData: pending.data, row: updated.row, media: updated.slots)
         }
     }
 
