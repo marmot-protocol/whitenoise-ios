@@ -2293,13 +2293,13 @@ final class ConversationViewModel {
         let showsIdentity: Bool
         let accountID: String?
         let unreadDividerID: String?
-        let streamingDebug: Bool
+        let showsDebugStyle: Bool
         let showsLinkPreviews: Bool
     }
 
     var searchRowContext: SearchRowContext {
         SearchRowContext(showsIdentity: !groupDisplay.isDirectMessage, accountID: myAccountId, unreadDividerID: visibleUnreadDividerID,
-                         streamingDebug: timelineStore.streamingDebugEnabled, showsLinkPreviews: LinkPreviewSettingsStore.shared.showsPreviews)
+                         showsDebugStyle: appState?.streamingDebugEnabled == true, showsLinkPreviews: LinkPreviewSettingsStore.shared.showsPreviews)
     }
 
     func clusterAtUnreadBoundary(for item: TimelineItem) -> MessageClusterPresentation {
@@ -2383,7 +2383,7 @@ final class ConversationViewModel {
                 hasReply: replyPreview(for: record) != nil, hasMedia: !media.isEmpty)
             if standaloneSticker {
                 text = ""
-            } else if !context.streamingDebug, record.sticker == nil, media.isEmpty, let gif = RemoteGiphyMedia.parse(wireText: record.plaintext) {
+            } else if !context.showsDebugStyle, record.sticker == nil, media.isEmpty, let gif = RemoteGiphyMedia.parse(wireText: record.plaintext) {
                 text = gif.displayedCredit
             } else if media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
                 text = L10n.string("Location")
@@ -2395,7 +2395,7 @@ final class ConversationViewModel {
                 let blocks = markdownDisplayBlocks(for: item)
                 text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
                     ?? (media.isEmpty || !record.plaintext.isEmpty ? ContentSanitizer.messageBody(displayBody(of: record)) : "")
-                if media.isEmpty, !context.streamingDebug, context.showsLinkPreviews {
+                if media.isEmpty, !context.showsDebugStyle, context.showsLinkPreviews {
                     previewURL = LinkPreviewMetadata.previewURL(in: blocks)
                 }
             }
