@@ -1626,6 +1626,7 @@ struct ConversationView: View {
         #if DEBUG
         if previewsTimeline {
             conversationMessageSheets
+                .onChange(of: draft) { refreshComposerTextOverage() }
                 .onChange(of: viewModel?.conversationWindow?.revision) {
                     if let target = reactionDetailsTarget, let viewModel, viewModel.reactions(for: target.messageIdHex).isEmpty {
                         reactionDetailsTarget = nil
@@ -1809,7 +1810,7 @@ struct ConversationView: View {
                     dismissRequest: composerDismissRequest,
                     onInputFocusChange: { isComposerInputFocused = $0 },
                     mentionCandidates: mentionCandidates,
-                    submissionEnabled: composerSubmissionEnabled,
+                    submissionEnabled: editSubmissionEnabled && composerDraftReadyForSubmission,
                     submissionAccessibilityLabel: editSession == nil
                         ? L10n.string("Send")
                         : L10n.string("Save edit"),
@@ -3459,12 +3460,12 @@ struct ConversationView: View {
         composerTextOverage = OutgoingSendSizePolicy.textOverage(viewModel?.preparedComposerText(draft))
     }
 
-    private var composerSubmissionEnabled: Bool {
+    private var composerDraftReadyForSubmission: Bool {
         #if DEBUG
         // Sample messages stay in the in-memory feed and have no persisted draft to hydrate.
         if previewsTimeline { return true }
         #endif
-        return editSubmissionEnabled && (editSession != nil || composerHasSavedDraft)
+        return editSession != nil || composerHasSavedDraft
     }
 
     private var editSubmissionEnabled: Bool {
@@ -3524,6 +3525,17 @@ struct ConversationView: View {
     }
 
     private func send() {
+        guard viewModel?.canSendMessages == true else { return }
+        guard composerDraftReadyForSubmission else { return }
+        // Reject over-limit text before any snapshot, staging, edit or send so
+        // the draft, reply target and attachments stay exactly as they are.
+        if let viewModel,
+           let rejection = ConversationSendPreparation.textRejection(
+               forOutgoing: viewModel.preparedComposerText(draft)
+           ) {
+            presentComposerSizeRejection(rejection)
+            return
+        }
         #if DEBUG
         if let fixture {
             let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3535,17 +3547,6 @@ struct ConversationView: View {
             return
         }
         #endif
-        guard viewModel?.canSendMessages == true else { return }
-        guard editSession != nil || composerHasSavedDraft else { return }
-        // Reject over-limit text before any snapshot, staging, edit or send so
-        // the draft, reply target and attachments stay exactly as they are.
-        if let viewModel,
-           let rejection = ConversationSendPreparation.textRejection(
-               forOutgoing: viewModel.preparedComposerText(draft)
-           ) {
-            presentComposerSizeRejection(rejection)
-            return
-        }
         if let editSession, editSubmissionEnabled, let viewModel {
             let editedContent = draft
             // The save restores the preserved draft when it lands; dictation
