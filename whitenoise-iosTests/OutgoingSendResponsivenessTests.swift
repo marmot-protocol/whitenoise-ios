@@ -263,12 +263,13 @@ struct OutgoingSendResponsivenessTests {
         reference.mediaType = "text/plain"
         reference.fileName = "notes.txt"
         var durable = harness.ownRecord(id: hexId(12), text: "", timelineAt: 70, delivered: true, token: "album")
-        durable.media = [.accepted(attachmentIndex: 0, reference: mediaReference(plaintextSha256: "photo")),
+        durable.media = [.accepted(attachmentIndex: 0, reference: mediaReference(plaintextSha256: String(repeating: "a", count: 64))),
                          .accepted(attachmentIndex: 1, reference: reference)]
         harness.installWindow([durable])
         let confirmedRow = try #require(harness.store.timeline.first)
         let confirmed = try #require(MessageMediaAttachment.inlineRows(harness.store.mediaItems(for: confirmedRow), outgoing: true).first)
         #expect(initialRow.id == confirmedRow.id)
+        #expect(initial.id == .outgoingDocument(1))
         #expect(initial.id == confirmed.id)
         #expect(initial.item.id != confirmed.item.id)
         #expect(confirmed.item.localData == nil)

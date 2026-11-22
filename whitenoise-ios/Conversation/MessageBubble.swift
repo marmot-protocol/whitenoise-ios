@@ -4194,6 +4194,7 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     var body: some View {
+        let replacementRequest = missingSelectionReplacement
         Group {
             if gallery.transcriptCaptions != nil {
                 TranscriptMediaSheet(gallery: gallery, selection: Binding(get: { selectedItemID }, set: select),
@@ -4205,17 +4206,16 @@ struct MessageMediaFullscreenGalleryView: View {
                 fullscreenContent
             }
         }
-        .task(id: missingSelectionReplacement) {
-            guard gallery.transcriptCaptions != nil, selectedItem == nil else { return }
-            guard let pendingSelection, pendingSelection.id == selectedItemID else {
+        .task(id: replacementRequest) {
+            guard let request = replacementRequest, currentGalleryMissing(request.selectedID) != nil else { return }
+            guard let pendingSelection, pendingSelection.id == request.selectedID else {
                 onDismiss()
                 return
             }
-            let expected = missingSelectionReplacement
             let verified = await gallery.confirmedSelection(for: pendingSelection)
-            guard !Task.isCancelled, selectedItemID == pendingSelection.id else { return }
-            let replacement = currentTranscriptGallery?()?.confirmedItem(for: pendingSelection)
-            guard expected == MessageMediaGallery.Replacement(selectedID: pendingSelection.id, candidate: replacement) else { return }
+            guard let latest = currentGalleryMissing(request.selectedID) else { return }
+            let replacement = latest.confirmedItem(for: pendingSelection)
+            guard request == MessageMediaGallery.Replacement(selectedID: pendingSelection.id, candidate: replacement) else { return }
             guard verified != nil, let replacement else { onDismiss(); return }
             preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
                 contentType: UTType(mimeType: replacement.mediaType) ?? .data)
@@ -4286,6 +4286,12 @@ struct MessageMediaFullscreenGalleryView: View {
         if selectedItemID != id { pendingVideo = PendingVideoPlayback() }
         selection.select(id)
         pendingSelection = gallery.pendingSelection(for: id)
+    }
+
+    private func currentGalleryMissing(_ id: String) -> MessageMediaGallery? {
+        guard !Task.isCancelled, selectedItemID == id, let visible = currentTranscriptGallery?(),
+              visible.transcriptCaptions?[id] == nil else { return nil }
+        return visible
     }
 
     private var missingSelectionReplacement: MessageMediaGallery.Replacement? {

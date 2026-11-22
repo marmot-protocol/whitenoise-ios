@@ -107,6 +107,12 @@ struct TranscriptHistoryGalleryView: View {
         return .init(appState: appState, group: conversation.group.groupIdHex)
     }
 
+    private var visibleGallery: MessageMediaGallery? {
+        guard let window, let expanded else { return nil }
+        if let scope, scope == activeScope, !history.validationFailed { return expanded }
+        return window.gallery
+    }
+
     var body: some View {
         let currentScope = scope
         let scoped = currentScope != nil && currentScope == activeScope
@@ -122,10 +128,9 @@ struct TranscriptHistoryGalleryView: View {
                     Button("Retry") { validate() }
                     Button("Close", action: onDismiss)
                 }
-            } else if let gallery = window?.gallery, let expanded {
-                let visible = scoped && !history.validationFailed ? expanded : gallery
+            } else if let gallery = window?.gallery, let visible = visibleGallery {
                 MessageMediaFullscreenGalleryView(gallery: visible, openingSelection: openingSelection,
-                    currentTranscriptGallery: { self.window?.gallery }, onLoadMedia: onLoadMedia,
+                    currentTranscriptGallery: { self.visibleGallery }, onLoadMedia: onLoadMedia,
                     forwardingContext: forwardingContext, onGoToMessage: onGoToMessage, onDismiss: onDismiss)
                     .id(projectedViewer)
                     .environment(\.transcriptHistoryControls, scoped ? controls(for: visible, window: gallery) : nil)
