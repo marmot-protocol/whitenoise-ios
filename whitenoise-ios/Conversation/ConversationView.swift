@@ -1101,7 +1101,7 @@ struct ConversationView: View {
                         onRemoveOwnReactions: {
                             Task {
                                 await viewModel.removeOwnReactions(from: target.record)
-                                if viewModel.reactions(for: target.messageIdHex).isEmpty {
+                                if reactionDetailsTarget?.id == target.id, viewModel.reactions(for: target.messageIdHex).isEmpty {
                                     reactionDetailsTarget = nil
                                 }
                             }
@@ -2510,7 +2510,7 @@ struct ConversationView: View {
                 if canReply(to: record, viewModel: viewModel) {
                     Button("Reply") { beginReply(to: record, viewModel: viewModel) }
                 }
-                if !hasBlankMessageText(record) {
+                if MessagePreview.canCopyFromMessageMenu(record) {
                     Button("Copy") {
                         SensitiveClipboard.copyLocalOnly(viewModel.copyBody(of: record))
                         Haptics.tap()
@@ -4682,10 +4682,6 @@ struct ConversationView: View {
         }
     }
 
-    private func hasBlankMessageText(_ record: AppMessageRecordFfi) -> Bool {
-        record.plaintext.unicodeScalars.allSatisfy(CharacterSet.whitespacesAndNewlines.contains)
-    }
-
     private func messageActionCount(
         for record: AppMessageRecordFfi,
         status: MessageStatus,
@@ -4698,7 +4694,7 @@ struct ConversationView: View {
                 hasRetryableSend: viewModel.canRetryFailedSend(rowId: rowId)
             ),
             canInteract: viewModel.canSendMessages,
-            canCopy: !hasBlankMessageText(record),
+            canCopy: MessagePreview.canCopyFromMessageMenu(record),
             canForward: MessageForwardingPolicy.forwardableText(for: record) != nil,
             canEdit: MessageEditingPolicy.canEdit(
                 record,
@@ -4791,7 +4787,7 @@ struct ConversationView: View {
                 )
             } ?? false,
             canInteract: viewModel.canSendMessages,
-            canCopy: !hasBlankMessageText(record),
+            canCopy: MessagePreview.canCopyFromMessageMenu(record),
             canForward: MessageForwardingPolicy.forwardableText(for: record) != nil,
             canEdit: MessageEditingPolicy.canEdit(
                 record,

@@ -81,6 +81,17 @@ struct MessageActionsOverlayLayoutTests {
         #expect(excerpt == [.paragraph(AttributedString("A :party_parrot:…"))])
     }
 
+    @Test func aShortTallListCanPreviewJustTheFirstItem() {
+        let items = ["A", "B", "C", "D"].map {
+            MarkdownDisplayListItem(marker: .bullet, blocks: [.paragraph(AttributedString($0))])
+        }
+        let list: [MarkdownDisplayBlock] = [.list(items: items, tight: false)]
+        let candidates = MarkdownDisplayBlock.menuExcerptBudgets(for: list).map {
+            MarkdownDisplayBlock.excerpt(list, characterBudget: $0)
+        }
+        #expect(candidates.contains([.list(items: [.init(marker: .bullet, blocks: [.paragraph(AttributedString("A…"))])], tight: false)]))
+    }
+
     @Test func aMarkdownExcerptPreservesTheQuotationAndCodeBlockAtItsTail() {
         let source: [MarkdownDisplayBlock] = [
             .paragraph(AttributedString("Intro")),
