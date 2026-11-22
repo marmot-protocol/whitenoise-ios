@@ -94,8 +94,10 @@ struct TranscriptMessagePreviewTests {
 
     @Test func longReaderAccountsForNewlinesAndTheExistingInlineRenderLimit() {
         let text = String(repeating: "🌲", count: 2044)
-        #expect(!TranscriptMessagePreview.requiresReader(text + "\n"))
-        #expect(TranscriptMessagePreview.requiresReader(text + "\nx"))
+        for newline in ["\n", "\r", "\r\n"] {
+            #expect(!TranscriptMessagePreview.requiresReader(text + newline))
+            #expect(TranscriptMessagePreview.requiresReader(text + newline + "x"))
+        }
         #expect(TranscriptMessagePreview.requiresReader(String(repeating: "a", count: 8001)))
     }
 

@@ -5,6 +5,17 @@ import Testing
 
 @MainActor
 struct ConversationSearchModelTests {
+    @Test func anActivityWithADocumentIsSearchableByItsDisplayedFilename() {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: group(name: "Chat"))
+        let document = encryptedMediaReference(fileName: "route-plan.pdf", mediaType: "application/pdf", sourceEpoch: 1)
+        let activity = timelineRecord(messageIdHex: hex("ac"), plaintext: #"{"status":"thinking","text":"Checking the map"}"#,
+                                      kind: MessageSemantics.kindAgentActivity, timelineAt: 1, media: [document])
+        viewModel.applyTimelinePage(.init(messages: [activity], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        viewModel.search.activate()
+        viewModel.search.query = "route-plan"
+        #expect(viewModel.search.currentMatch?.messageIdHex == activity.messageIdHex)
+    }
+
     @Test func confirmedGenericVCardKeepsItsSearchableNameWithDocumentDownloadsOff() async throws {
         let app = AppState.test()
         let viewModel = ConversationViewModel(appState: app, group: group(name: "Chat"))

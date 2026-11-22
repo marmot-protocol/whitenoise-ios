@@ -26,6 +26,8 @@ struct ConversationSpeechNavigationTests {
         #expect(actions().isEmpty)
         record.plaintext = "   "
         #expect(actions().isEmpty)
+        record.plaintext = "\u{202E}\u{FEFF}\t"
+        #expect(actions().isEmpty)
         record.direction = "sent"
         record.plaintext = "Meet at six"
         #expect(actions().isEmpty)
@@ -36,15 +38,22 @@ struct ConversationSpeechNavigationTests {
             sender: "peer", plaintext: "", contentTokens: .emptyDocument, kind: MessageSemantics.kindChat,
             tags: [], recordedAt: 1, receivedAt: 1)
         let audio = MessageMediaAttachment(id: "audio", reference: nil, fileName: "voice.m4a", mediaType: "audio/mp4", dim: nil, localData: nil)
-        #expect(MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: nil, media: [audio])?.id == audio.id)
-        #expect(MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: nil, media: [audio, audio]) == nil)
+        func actions(visible: Bool? = nil, supported: Bool = true) -> [MessageSpeechAction] {
+            MessageSpeechPresentation.voiceActions(for: record, isTranscribing: false, transcriptVisible: visible, supportsTranscription: supported)
+        }
+        #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: nil, media: [audio])?.id == audio.id)
+        #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: nil, media: [audio, audio]) == nil)
+        #expect(actions(supported: false).isEmpty)
+        #expect(actions() == [.transcribe])
+        record.plaintext = "The gate number changed"
+        #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: nil, media: [audio])?.id == audio.id)
+        #expect(actions().isEmpty)
+        #expect(actions(visible: true) == [.hide, .copy])
+        #expect(actions(visible: false) == [.show])
         record.sender = String(repeating: "ab", count: 32)
-        #expect(MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: record.sender, media: [audio]) == nil)
+        #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: record.sender, media: [audio]) == nil)
         record.direction = "sent"
-        #expect(MessageSpeechPresentation.voiceAttachment(for: record, myAccountID: nil, media: [audio]) == nil)
-        #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: nil, offersTranscribe: false).isEmpty)
-        #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: nil, offersTranscribe: true) == [.transcribe])
-        #expect(MessageSpeechPresentation.voiceActions(isTranscribing: false, transcriptVisible: true, offersTranscribe: false) == [.hide, .copy])
+        #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: nil, media: [audio]) == nil)
     }
 
     @Test func aRetainedRecordingAtTheSizeLimitCanBeReadAndALargerOneGetsASizeError() throws {
@@ -73,6 +82,24 @@ struct ConversationSpeechNavigationTests {
         #expect(speech.readingID == "message")
         speech.prune(currentText: { _ in "Meet at the new address" }, audioMatches: { _, _ in false })
         #expect(speech.readingID == nil)
+    }
+
+    @Test func aNewTranscriptGetsCheckedEvenIfItsOpeningRevisionAlreadyChanged() async throws {
+        let speech = ConversationSpeech()
+        let route = ConversationSpeech.Route(groupID: "chat", modelID: nil, account: "me", runtimeGeneration: 1)
+        let opening = ConversationSpeech.Scope(route: route, revision: 1)
+        let current = ConversationSpeech.Scope(route: route, revision: 2)
+        let recording = ConversationSpeech.Recording(displayID: "audio", target: .init(
+            messageIdHex: "message", sourceMessageIdHex: "source", attachmentIndex: 0))
+        let previousCheck = speech.retentionCheck(in: current)
+        await speech.revalidate(in: current) { _, _ in false }
+        speech.stageTranscript("Gate 12", id: "message", recording: recording, scope: opening)
+        #expect(speech.retentionCheck(in: current) != previousCheck)
+        #expect(speech.transcribingID == "message")
+        #expect(speech.transcripts["message"]?.isVerified(in: current) == false)
+        await speech.revalidate(in: current) { id, source in id == "message" && source == recording }
+        #expect(speech.transcripts["message"]?.isVerified(in: current) == true)
+        #expect(speech.transcribingID == nil)
     }
 
     @Test func uncertainRetentionHidesTextAndOnlyConfirmedAbsenceDiscardsIt() throws {
@@ -122,7 +149,7 @@ struct ConversationSpeechNavigationTests {
                 defer { if Task.isCancelled { cancelled.signal() } }
                 try await parkUntilCancelled()
                 return Data()
-            }, revalidate: { _ in nil }, onError: { Issue.record("Cancelled transcription reported an error") })
+            }, isCurrent: { true }, onError: { Issue.record("Cancelled transcription reported an error") })
             try await started.wait()
             model.showsMedia = true
             try await model.coverOpened.wait()
