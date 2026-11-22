@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
@@ -145,6 +146,27 @@ struct TranscriptAttachmentHistoryTests {
         let result = pages.extensions(around: [], excluding: [], preserving: selected.id)
         #expect(result.older.map(\.attachment.id) == [selected.id])
         #expect(result.older.first?.target == selected.localTarget)
+    }
+
+    @Test func theVerifiedGIFStillOpensFromHistoryIfItsOriginalSourceArrivesAfterConfirmation() throws {
+        let held = entry("held", mediaType: "image/gif")
+        let sourced = try #require(TranscriptHistorySlot(held)).attachment
+        var intermediate = sourced
+        intermediate.localTarget = nil
+        let draft = MediaDraftAttachment(fileName: "draft.gif", mediaType: "image/gif", data: Data([1]), dim: nil).displayItem
+        let slot = MessageMediaGallery.OutgoingSlot(rowID: "msg:temporary", index: 0)
+        let pending = MessageMediaGallery.PendingSelection(id: draft.id, slot: slot, data: Data([1]))
+        func gallery(_ item: MessageMediaAttachment) throws -> MessageMediaGallery {
+            try #require(MessageMediaGallery(transcriptItems: [item], openingID: item.id, initialData: nil,
+                messages: [item.id: "held"], captions: [item.id: .init(sender: "You", date: .now, outgoingSlot: slot)]))
+        }
+        var heldGIF = TranscriptHeldGIF()
+        heldGIF.didSelect(intermediate.id, in: try gallery(intermediate), opening: draft, pending: pending)
+        heldGIF.updateSource(in: try gallery(sourced), opening: draft)
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("other", mediaType: "image/gif"), held])
+        let result = pages.extensions(around: [], excluding: [], preserving: intermediate.id, heldGIF: heldGIF.confirmed)
+        #expect(result.older.map(\.target) == [sourced.localTarget])
     }
 
     @Test func onlyTheExplicitlyOpenedGIFFollowsTheSelectionIntoHistory() throws {

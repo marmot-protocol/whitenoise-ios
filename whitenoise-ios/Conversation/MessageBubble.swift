@@ -54,6 +54,7 @@ struct TimelineMediaTaskID: Equatable {
     let contentID: String
     let isVisible: Bool
     var policyRevision: String = ""
+    var target: AttachmentLocalTargetFfi?
 }
 
 /// Reference box for the media-load callback. Passing the bare async closure
@@ -2924,6 +2925,7 @@ private struct MessageVideoAttachmentView: View {
     @State private var localDuration: Double?
     @State private var posterDecodeFailed = false
     @State private var durationReadFailed = false
+    @State private var lastRead: (request: TimelineMediaTaskID, overPreviewLimit: Bool)?
     @Environment(\.displayScale) private var displayScale
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
 
@@ -2948,6 +2950,11 @@ private struct MessageVideoAttachmentView: View {
     private var playedPoster: UIImage? {
         MessageVideoThumbnailDecoder.cachedThumbnail(for: thumbnailCacheKey,
             maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize)
+    }
+
+    private var previewRequest: TimelineMediaTaskID {
+        TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, target: item.localTarget)
     }
 
     var body: some View {
@@ -2985,22 +2992,32 @@ private struct MessageVideoAttachmentView: View {
             if let playedPoster { previewThumbnail = playedPoster }
             localDuration = MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey)
         }
-        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
-            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
-            guard isTimelineRowVisible, MediaAutoDownloadStore.shared.shouldAutoDownload(.video) else { return }
+        .task(id: previewRequest) {
+            let request = previewRequest
+            guard request.isVisible, MediaAutoDownloadStore.shared.shouldAutoDownload(.video),
+                  lastRead?.request != request || lastRead?.overPreviewLimit != true else { return }
             let needsPoster = displayThumbnail == nil && !posterDecodeFailed
             let needsDuration = showsBadges && showsDuration && !durationReadFailed && item.durationSeconds == nil
                 && localDuration == nil && MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey) == nil
             guard needsPoster || needsDuration else {
                 // Metadata can come from identical bytes in another message. Admit this
                 // slot under the Videos preference without decoding the movie again.
-                await onLoadMedia.admitAutomaticAttachment(item)
+                guard lastRead?.request != request, await onLoadMedia.admitAutomaticAttachment(item) != nil, !Task.isCancelled else { return }
+                lastRead = (request, false)
                 return
             }
             let epoch = MessageMediaCache.currentProducerEpoch()
-            guard let data = try? await onLoadMedia.videoPreviewData(for: item),
-                  !Task.isCancelled,
-                  let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: epoch),
+            let data: Data
+            do {
+                data = try await onLoadMedia.videoPreviewData(for: item)
+            } catch AttachmentReadError.previewLimitExceeded(let size) {
+                // An unknown size can become available later. Known oversize files get a poster on playback.
+                if size != nil, !Task.isCancelled { lastRead = (request, true) }
+                return
+            } catch { return }
+            guard !Task.isCancelled else { return }
+            lastRead = (request, false)
+            guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: epoch),
                   !Task.isCancelled else { return }
             if needsDuration {
                 let time = try? await AVURLAsset(url: url).load(.duration)

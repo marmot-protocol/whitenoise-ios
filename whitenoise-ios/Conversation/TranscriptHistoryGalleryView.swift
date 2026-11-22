@@ -17,6 +17,26 @@ extension EnvironmentValues {
     @Entry var transcriptHistoryControls: TranscriptHistoryControls?
 }
 
+/// Keeps the explicitly opened GIF in history if its draft confirms and the live row moves away.
+struct TranscriptHeldGIF {
+    private(set) var confirmed: MessageMediaAttachment?
+
+    mutating func didSelect(_ id: String, in gallery: MessageMediaGallery,
+                            opening: MessageMediaAttachment, pending: MessageMediaGallery.PendingSelection?) {
+        guard opening.isGIF, opening.localTarget == nil, confirmed == nil, let pending,
+              gallery.transcriptCaptions?[id]?.outgoingSlot == pending.slot,
+              let item = gallery.items.first(where: { $0.id == id && $0.isGIF && $0.reference != nil }) else { return }
+        confirmed = item
+    }
+
+    mutating func updateSource(in gallery: MessageMediaGallery, opening: MessageMediaAttachment) {
+        let held = confirmed ?? opening
+        guard held.isGIF, held.localTarget == nil,
+              let sourced = gallery.items.first(where: { $0.isGIF && $0.localTarget != nil && $0.canUseBytesPrepared(for: held) }) else { return }
+        confirmed = sourced
+    }
+}
+
 struct TranscriptHistoryGalleryView: View {
     let openingItem: MessageMediaAttachment
     let initialData: Data?
@@ -74,7 +94,7 @@ struct TranscriptHistoryGalleryView: View {
     @State private var window: Window?
     @State private var expanded: MessageMediaGallery?
     @State private var projectedViewer = 0
-    @State private var confirmedGIF: MessageMediaAttachment?
+    @State private var heldGIF = TranscriptHeldGIF()
 
     private var projectionInputs: Inputs {
         Inputs(window: WindowRevision(timeline: conversation.timelineProjectionGeneration,
@@ -161,11 +181,7 @@ struct TranscriptHistoryGalleryView: View {
             checkedWithoutOverlap: progress, pageFailed: history.pageFailed || history.validationFailed,
             allowsOpeningDemand: !history.hasPaged, didSelect: { itemID in
                 history.select(itemID, inWindow: gallery.transcriptCaptions?[itemID] != nil)
-                if openingItem.isGIF, openingItem.localTarget == nil, confirmedGIF == nil, let pending = openingSelection,
-                   gallery.transcriptCaptions?[itemID]?.outgoingSlot == pending.slot,
-                   let item = gallery.items.first(where: { $0.id == itemID && $0.isGIF && $0.reference != nil }) {
-                    confirmedGIF = item
-                }
+                heldGIF.didSelect(itemID, in: gallery, opening: openingItem, pending: openingSelection)
             }, verify: { [activeScope] item in try await self.verify(item, in: activeScope) },
             verifyForward: { [activeScope] item, pending in
                 try await self.verifyForward(item, pending: pending, in: activeScope)
@@ -241,11 +257,7 @@ struct TranscriptHistoryGalleryView: View {
         if old.window != new.window || window == nil {
             guard let gallery = conversation.transcriptMediaGallery(opening: openingItem.id, initialData: initialData, openingItem: openingItem,
                 includingGIFsIn: gifRowID, allowsEmptyWindow: true) else { return }
-            let held = confirmedGIF ?? openingItem
-            if held.isGIF, held.localTarget == nil,
-               let sourced = gallery.items.first(where: { $0.isGIF && $0.localTarget != nil && $0.canUseBytesPrepared(for: held) }) {
-                confirmedGIF = sourced
-            }
+            heldGIF.updateSource(in: gallery, opening: openingItem)
             let ids = Set(conversation.timeline.compactMap { row -> String? in
                 guard case .message(let record, _) = row.kind else { return nil }
                 return record.messageIdHex
@@ -274,7 +286,7 @@ struct TranscriptHistoryGalleryView: View {
         let selectedID = history.selectedItemID ?? gallery.initialItemID
         let edges = history.pages.extensions(around: gallery.items, excluding: window.messageIDs,
                                              atLiveTail: window.atTail,
-                                             preserving: selectedID, heldGIF: confirmedGIF ?? (openingItem.isGIF ? openingItem : nil))
+                                             preserving: selectedID, heldGIF: self.heldGIF.confirmed ?? (openingItem.isGIF ? openingItem : nil))
         guard !edges.older.isEmpty || !edges.newer.isEmpty || history.resumeItemID != nil else { return gallery }
         if !edges.includesWindow { captions.removeAll() }
         var messages = edges.includesWindow ? gallery.messageIdByItemID : [:]
