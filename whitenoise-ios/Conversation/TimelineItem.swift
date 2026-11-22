@@ -164,7 +164,7 @@ extension TimelineItem {
     /// stable `"msg:"` prefix rather than a per-call UUID — still idempotent,
     /// though the `message(_:status:)` factory asserts against that degenerate
     /// input in debug.
-    static func messageRowId(forMessageIdHex messageIdHex: String) -> String {
+    nonisolated static func messageRowId(forMessageIdHex messageIdHex: String) -> String {
         "msg:\(messageIdHex)"
     }
 

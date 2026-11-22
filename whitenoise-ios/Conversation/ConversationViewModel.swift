@@ -2410,10 +2410,6 @@ final class ConversationViewModel {
                 labels.append(IdentityPresentation.text(accountIdHex: record.sender, knownName: conversationWindow == nil
                     ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender) : windowIdentities[record.sender]?.displayName))
             }
-            if let activity {
-                if let status = activity.visibleActivityStatus { labels.append(status) }
-                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: activity.primaryText, labels: labels)
-            }
             if record.kind == MessageSemantics.kindPoll {
                 let poll = poll(for: record.messageIdHex)
                 labels += poll?.options.map { ContentSanitizer.messageBody($0.label) } ?? []
@@ -2429,6 +2425,17 @@ final class ConversationViewModel {
             let text: String
             var previewURL: URL?
             var contactIDs: [String] = []
+            if !media.isEmpty, !context.showsDebugStyle || MessageSemantics.debugStyle(for: record).isUserVisibleBubble {
+                for attachment in media where attachment.rejectionKind == nil && (attachment.kind == .document || attachment.kind == .unsupported) {
+                    labels.append(attachment.fileName)
+                    if DocumentPreviewFormat(for: attachment) == .contact { contactIDs.append(attachment.id) }
+                }
+            }
+            if let activity {
+                if let status = activity.visibleActivityStatus { labels.append(status) }
+                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: activity.primaryText, labels: labels,
+                                               contactAttachmentIDs: contactIDs)
+            }
             let standaloneSticker = record.sticker != nil && StickerBubbleLayout.standsAlone(plaintext: record.plaintext,
                 hasReply: replyPreview(for: record) != nil, hasMedia: !media.isEmpty)
             if standaloneSticker {
@@ -2438,10 +2445,6 @@ final class ConversationViewModel {
             } else if media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
                 text = L10n.string("Location")
             } else {
-                for attachment in media where attachment.rejectionKind == nil && (attachment.kind == .document || attachment.kind == .unsupported) {
-                    labels.append(attachment.fileName)
-                    if DocumentPreviewFormat(for: attachment) == .contact { contactIDs.append(attachment.id) }
-                }
                 let blocks = markdownDisplayBlocks(for: item)
                 text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
                     ?? (media.isEmpty || !record.plaintext.isEmpty ? ContentSanitizer.messageBody(displayBody(of: record)) : "")
