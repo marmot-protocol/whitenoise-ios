@@ -182,6 +182,7 @@ private struct MessageTextBubbleLayout: Layout {
         let ideal = fitsQuote ? content.sizeThatFits(.unspecified).width : nil
         let width = MessageBubbleReplyLayout.textWidth(proposed: proposal.width, ideal: ideal)
         let size = content.sizeThatFits(.init(width: width, height: nil))
+        // The chrome measures the bubble with no height first, then supplies its final width for the reaction strip at placement.
         if widensForReactions, proposal.height != nil, let width = proposal.width {
             return CGSize(width: width, height: size.height)
         }
@@ -194,17 +195,6 @@ private struct MessageTextBubbleLayout: Layout {
 }
 
 nonisolated enum TranscriptMessagePreview {
-    static func snippet(_ text: String) -> String? {
-        let prefix = text.prefix(512)
-        guard prefix.endIndex != text.endIndex else { return nil }
-        var newlines = 0
-        let visible = prefix.prefix { character in
-            if character.isNewline { newlines += 1 }
-            return newlines <= 15
-        }
-        return String(visible)
-    }
-
     static func sourceChunk(_ remaining: Substring) -> Substring {
         let chunk = remaining.prefix(2048)
         guard chunk.endIndex != remaining.endIndex,
@@ -271,17 +261,23 @@ nonisolated enum MessageBodyCollapsePresentation {
     static let maxCollapsedLines = 12
     static let collapsedBodyMaxHeight: CGFloat = 260
 
+    /// A CR/LF pair is one Swift Character and starts a single new line.
+    static func snippet(_ body: @autoclosure () -> String, isExpanded: Bool = false) -> String? {
+        guard !isExpanded else { return nil }
+        let text = body()
+        var remainingLines = maxCollapsedLines
+        for (offset, entry) in text.indices.enumerated() {
+            if offset == maxCollapsedCharacters { return String(text[..<entry]) }
+            if text[entry].isNewline {
+                remainingLines -= 1
+                if remainingLines == 0 { return String(text[..<entry]) }
+            }
+        }
+        return nil
+    }
+
     static func shouldCollapse(_ text: String) -> Bool {
-        text.count > maxCollapsedCharacters || lineCount(text) > maxCollapsedLines
-    }
-
-    static func isCollapsed(_ text: String, isExpanded: Bool) -> Bool {
-        shouldCollapse(text) && !isExpanded
-    }
-
-    static func lineCount(_ text: String) -> Int {
-        guard !text.isEmpty else { return 0 }
-        return text.split(separator: "\n", omittingEmptySubsequences: false).count
+        snippet(text) != nil
     }
 }
 
@@ -610,7 +606,6 @@ struct MessageBubble: View {
                 )
                 .environment(\.avatarMonogramFont, .subheadline.weight(.semibold))
                 .padding(.trailing, 7)
-                .alignmentGuide(.messageSurfaceBottom) { $0[.bottom] }
                 .zIndex(1)
             }
 
@@ -1145,25 +1140,22 @@ struct MessageBubble: View {
     }
 
     private func messageBodyText(hasReply: Bool, richWidth: CGFloat? = nil) -> some View {
-        let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil {
-            TranscriptMessagePreview.snippet(markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }
-                .joined(separator: "\n") ?? sanitizedBodyText)
-        } else { nil }
-        let isCollapsed = usesReviewLayout && MessageBodyCollapsePresentation.isCollapsed(
-            sanitizedBodyText,
-            isExpanded: isBodyExpanded
+        let snippet = MessageBodyCollapsePresentation.snippet(
+            markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }.joined(separator: "\n") ?? sanitizedBodyText,
+            isExpanded: isBodyExpanded || searchQuery != nil
         )
+        let fadesReviewExcerpt = usesReviewLayout && snippet != nil
         return VStack(alignment: .leading, spacing: 5) {
             messageBodyContent(snippet: snippet)
                 // The body mask also needs room for mention corners outside the text bounds.
                 .padding(.horizontal, TimelineTextRenderer.mentionHorizontalOutset)
                 .frame(
-                    maxHeight: isCollapsed ? MessageBodyCollapsePresentation.collapsedBodyMaxHeight : nil,
+                    maxHeight: fadesReviewExcerpt ? MessageBodyCollapsePresentation.collapsedBodyMaxHeight : nil,
                     alignment: .topLeading
                 )
                 .clipped()
                 .mask {
-                    if isCollapsed {
+                    if fadesReviewExcerpt {
                         LinearGradient(
                             stops: [
                                 .init(color: .black, location: 0),
@@ -1179,7 +1171,7 @@ struct MessageBubble: View {
                 }
                 .padding(.horizontal, -TimelineTextRenderer.mentionHorizontalOutset)
 
-            if isCollapsed || snippet != nil || offersSourceReader {
+            if snippet != nil || offersSourceReader {
                 Button {
                     onExpandBody()
                 } label: {
@@ -1420,7 +1412,6 @@ struct MessageBubble: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
             .clipped()
             .contentShape(.rect)
             .accessibilityRepresentation {

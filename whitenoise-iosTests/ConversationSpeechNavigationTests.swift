@@ -56,11 +56,34 @@ struct ConversationSpeechNavigationTests {
         #expect(MessageSpeechPresentation.receivedAudio(for: record, myAccountID: nil, media: [audio]) == nil)
     }
 
+    @Test func voiceAvailabilityPreservesTheRecordingFailureBeforeCheckingTheLanguageModel() {
+        let target = AttachmentLocalTargetFfi(messageIdHex: "msg", sourceMessageIdHex: "src", attachmentIndex: 0)
+        typealias Lookup = Result<AttachmentLocalTargetFfi, VoiceTranscriptionIssue>
+        let local = Lookup.success(target)
+        #expect(VoiceTranscriptionCheck.availability(of: local, hasInstalledModel: true) == .success(target))
+        #expect(VoiceTranscriptionCheck.availability(of: local, hasInstalledModel: false) == .failure(.missingModel))
+        for reason in [VoiceTranscriptionIssue.needsDownload, .tooLarge, .empty, .checkFailed] {
+            #expect(VoiceTranscriptionCheck.availability(of: Lookup.failure(reason), hasInstalledModel: false) == .failure(reason))
+        }
+    }
+
+    @Test func onlyTheOriginalRecordingRestoresRecognizedWords() {
+        let target = AttachmentLocalTargetFfi(messageIdHex: "msg", sourceMessageIdHex: "old", attachmentIndex: 0)
+        let recording = ConversationSpeech.Recording(displayID: "audio", target: target)
+        var audio = MessageMediaAttachment(id: "audio", reference: nil, fileName: "voice.m4a", mediaType: "audio/mp4", dim: nil, localData: nil)
+        audio.localTarget = target
+        #expect(VoiceTranscriptionCheck.retained(.success(target), recording: recording, media: audio) == true)
+        #expect(VoiceTranscriptionCheck.retained(.failure(.checkFailed), recording: recording, media: audio) == nil)
+        #expect(VoiceTranscriptionCheck.retained(.failure(.needsDownload), recording: recording, media: audio) == false)
+        audio.localTarget?.sourceMessageIdHex = "replacement"
+        #expect(VoiceTranscriptionCheck.retained(.success(target), recording: recording, media: audio) == false)
+    }
+
     @Test func aRetainedRecordingAtTheSizeLimitCanBeReadAndALargerOneGetsASizeError() throws {
         let limit = UInt64(MessageMediaAttachment.audioAnalysisByteLimit)
         try LocalVoiceAttachment.validateSize(limit)
-        #expect(throws: LocalVoiceAttachment.SizeError.tooLarge) { try LocalVoiceAttachment.validateSize(limit + 1) }
-        #expect(throws: LocalVoiceAttachment.SizeError.empty) { try LocalVoiceAttachment.validateSize(0) }
+        #expect(throws: VoiceTranscriptionIssue.tooLarge) { try LocalVoiceAttachment.validateSize(limit + 1) }
+        #expect(throws: VoiceTranscriptionIssue.empty) { try LocalVoiceAttachment.validateSize(0) }
     }
 
     @Test func readingMarkupWithNoSpokenTextExplainsWhyPlaybackDidNotStart() async throws {

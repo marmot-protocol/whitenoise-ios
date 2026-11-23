@@ -70,7 +70,7 @@ struct TimelinePinnedDateModifier: ViewModifier {
                             .wnLiftedChrome(in: Capsule())
                             .padding(.vertical, TimelineDatePinning.verticalPadding)
                             .offset(y: presentation.offset)
-                            .opacity(presentation.opacity * (dimsForSearch ? 0.28 : 1))
+                            .opacity(presentation.opacity * (dimsForSearch ? ChatBubbleMetrics.dimmedSearchOpacity : 1))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

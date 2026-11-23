@@ -5,6 +5,20 @@ import Testing
 
 @MainActor
 struct MessageActionsOverlayLayoutTests {
+    @Test func menuFollowsEitherBubbleEdgeAndStopsAtTheScreenMargins() {
+        let container: CGFloat = 400
+        let menu: CGFloat = 120
+        let margin = MessageActionsPresentation.horizontalMargin
+        func center(_ edge: CGFloat, alignsRight: Bool) -> CGFloat {
+            MessageActionsPresentation.menuCenterX(bubbleEdge: edge, alignsRight: alignsRight, surfaceWidth: menu, containerWidth: container)
+        }
+        let edge = container / 2
+        #expect(center(edge, alignsRight: false) - menu / 2 == edge)
+        #expect(center(edge, alignsRight: true) + menu / 2 == edge)
+        #expect(center(0, alignsRight: false) - menu / 2 == margin)
+        #expect(center(container, alignsRight: true) + menu / 2 == container - margin)
+    }
+
     @Test func messageActionsOverlayKeepsReactionsAboveAndActionsBelowMessage() {
         let source = CGRect(x: 0, y: 220, width: 390, height: 96)
         let layout = MessageActionsOverlayLayout.resolve(
@@ -172,16 +186,20 @@ struct MessageActionsOverlayLayoutTests {
     }
 
     @Test func mediaThatExceedsTheAvailableHeightIsCroppedAtOriginalSize() {
+        let containerHeight: CGFloat = 760
+        let source = CGRect(x: 0, y: 650, width: 390, height: 300)
         let layout = MessageActionsOverlayLayout.resolve(
-            sourceFrame: CGRect(x: 0, y: 650, width: 390, height: 300),
-            containerHeight: 760,
+            sourceFrame: source,
+            containerHeight: containerHeight,
             actionMenuHeight: 420,
             showsReactions: true
         )
 
         #expect(layout.excerptBodyHeight == nil)
         #expect(layout.previewIsTruncated)
-        #expect(layout.previewHeight == 236)
+        #expect(layout.previewHeight < source.height)
+        #expect(layout.groupTop == MessageActionsPresentation.verticalMargin)
+        #expect(layout.groupTop + layout.groupHeight == containerHeight - MessageActionsPresentation.verticalMargin)
     }
 
     @Test func messageActionsOverlayKeyboardSizedContainerStillRendersAReadablePreview() {
