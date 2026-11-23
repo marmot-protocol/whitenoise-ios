@@ -627,6 +627,7 @@ enum InviteDeclinePlan: Equatable {
 struct ConversationView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceTranscriptMotion
     @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.appDensity) private var density
     let chat: AppGroupRecordFfi
@@ -679,13 +680,21 @@ struct ConversationView: View {
     @State private var openAddMembersOnDetails = false
     @State private var actionsTarget: ActionsTarget?
     @State private var emojiPickerTarget: ActionsTarget?
+    @State private var detailsAfterEmojiPicker: ReactionDetailsTarget?
     @State private var composerCustomEmojiPicker: ComposerCustomEmojiPicker?
     @State private var messageInfoTarget: ActionsTarget?
     @State private var reactionDetailsTarget: ReactionDetailsTarget?
     @State private var pollVotesTarget: PollVotesTarget?
     @State private var forwardTarget: ActionsTarget?
     @State private var forwardSelectionTarget: ForwardSelectionTarget?
+    private static let selectionIndicatorSize: CGFloat = 44
+    // With the 16 pt timeline margin, received bubbles begin at 56 pt in selection.
+    private static let receivedSelectionInset: CGFloat = 40
     @State private var isSelectingMessages = false
+    private enum ActionsPhase { case source, presented, returning }
+    @State private var actionsPhase: ActionsPhase = .source
+    @State private var actionsCrossfadeExcerpt = false
+    @State private var actionsReturnGeometry: (row: CGRect, body: CGSize?)?
     @State private var selectedMessageIds = Set<String>()
     @State private var showBatchDeleteConfirmation = false
     @State private var showStepDownDeclineConfirmation = false
@@ -701,7 +710,6 @@ struct ConversationView: View {
     @State private var deleteTarget: ActionsTarget?
     @State private var failedSendTarget: FailedSendTarget?
     @State private var senderProfileTarget: SenderProfileTarget?
-    @State private var rowFrames = RowFrameStore()
     @State private var conversationViewport = ChatListViewport()
     @State private var timelineTopRowDay = TimelineTopRowDay()
     @State private var blockedUsers = BlockedUsersModel()
@@ -773,18 +781,27 @@ struct ConversationView: View {
         let status: MessageStatus
         let rowId: String?
         let sourceFrame: CGRect?
+        let bubbleFrame: CGRect?
+        let bodySize: CGSize?
+        let pressedSurface: MessageActionSurface?
         let id = UUID()
 
         init(
             record: AppMessageRecordFfi,
             status: MessageStatus,
             rowId: String? = nil,
-            sourceFrame: CGRect? = nil
+            sourceFrame: CGRect? = nil,
+            bubbleFrame: CGRect? = nil,
+            bodySize: CGSize? = nil,
+            pressedSurface: MessageActionSurface? = nil
         ) {
             self.record = record
             self.status = status
             self.rowId = rowId
             self.sourceFrame = sourceFrame
+            self.bubbleFrame = bubbleFrame
+            self.bodySize = bodySize
+            self.pressedSurface = pressedSurface
         }
     }
 
@@ -793,6 +810,7 @@ struct ConversationView: View {
         let status: MessageStatus
         let rowId: String
         let rowFrameKey: String
+        let pressedSurface: MessageActionSurface?
     }
 
     private struct DownArrowStopAnchor: Equatable {
@@ -996,6 +1014,9 @@ struct ConversationView: View {
                 }
             }
             .overlay { messageActionsOverlay }
+            .onChange(of: actionTargetUnavailable) { _, unavailable in
+                if unavailable { dismissActions(resumingComposerFocus: true) }
+            }
             // An isPresented push fights navigation-path swaps: unwind it
             // before the pending chat replaces the stack, or the details page
             // re-asserts itself over the new conversation.
@@ -1034,7 +1055,12 @@ struct ConversationView: View {
 
     private var conversationMessageSheets: some View {
         conversationChromeView
-            .sheet(item: $emojiPickerTarget) { target in
+            .sheet(item: $emojiPickerTarget, onDismiss: {
+                if let details = detailsAfterEmojiPicker {
+                    detailsAfterEmojiPicker = nil
+                    reactionDetailsTarget = details
+                }
+            }) { target in
                 if let viewModel {
                     EmojiPickerSheet(
                         quickReactions: appState.quickReactions,
@@ -1042,10 +1068,10 @@ struct ConversationView: View {
                         customEmoji: viewModel.canSendMediaAttachments ? viewModel.customEmojiSendables : [],
                         emojiSets: viewModel.canSendMediaAttachments ? appState.emojiSetLibrary : nil,
                         onPick: { emoji in
-                            Task { await viewModel.toggleReaction(emoji, on: target.record) }
-                            // Custom emoji belong to this chat, not the device-wide recents.
-                            if CustomEmojiShortcode(reactionContent: emoji) == nil {
-                                appState.addRecentReaction(emoji)
+                            Task { @MainActor in
+                                await handlePickedReaction(emoji, on: target.record, viewModel: viewModel) { details in
+                                    detailsAfterEmojiPicker = details
+                                }
                             }
                         }
                     )
@@ -1072,10 +1098,10 @@ struct ConversationView: View {
                         messageIdHex: target.messageIdHex,
                         viewModel: viewModel,
                         initialEmoji: target.initialEmoji,
-                        onRemoveOwnReaction: { emoji in
+                        onRemoveOwnReactions: {
                             Task {
-                                await viewModel.toggleReaction(emoji, on: target.record)
-                                if viewModel.reactions(for: target.messageIdHex).isEmpty {
+                                await viewModel.removeOwnReactions(from: target.record)
+                                if reactionDetailsTarget?.id == target.id, viewModel.reactions(for: target.messageIdHex).isEmpty {
                                     reactionDetailsTarget = nil
                                 }
                             }
@@ -1487,6 +1513,9 @@ struct ConversationView: View {
                 dictationInstallWatch = nil
                 viewModel?.search.end()
                 cancelPendingTimelineFollowUpWork()
+                actionsTarget = nil
+                actionsReturnGeometry = nil
+                composerFocusSuspendedForActions = false
                 dismissKeyboard()
                 if let editSession {
                     persistDraft(
@@ -2049,6 +2078,7 @@ struct ConversationView: View {
                                                 ))
                                                 .onAppear { finishTimelineJump(reaching: item.id) }
                                         }
+                                        .modifier(MessageActionRowStacking())
                                         .padding(.top, dayHeaders[item.id] == nil && clusterPresentation(for: item, model: viewModel).startsCluster
                                             ? density.metrics.timelineClusterSpacing - density.metrics.timelineRowSpacing : 0)
                                     }
@@ -2137,8 +2167,7 @@ struct ConversationView: View {
                             }
                         }
                         .onPreferenceChange(RowFramesKey.self) { preferences in
-                            rowFrames.replace(with: preferences)
-                            completePendingActionsPresentationIfMeasured()
+                            completePendingActionsPresentationIfMeasured(preferences)
                         }
                         .onScrollTargetVisibilityChange(
                             idType: String.self,
@@ -2394,37 +2423,51 @@ struct ConversationView: View {
             && actionsTarget == nil
             && allowsActions
             && !viewModel.isDeleted(record.messageIdHex)
+        let fadesSource = actionsCrossfadeExcerpt || reduceTranscriptMotion
+        let hidesSource = actionsTarget?.rowId == item.id
+            && (actionsPhase == .presented || (actionsPhase == .returning && !fadesSource))
         messageBubble(
             for: item,
             record: record,
             status: status,
             viewModel: viewModel,
-            showsSenderIdentity: showsSenderIdentity
+            showsSenderIdentity: showsSenderIdentity,
+            usesSelectionLayout: isSelectingMessages,
+            showMessageActions: allowsActions && !viewModel.isDeleted(record.messageIdHex) && (!record.messageIdHex.isEmpty || status == .failed) ? { surface in
+                Haptics.tap()
+                beginActionsPresentation(for: record, status: status, rowId: item.id, rowFrameKey: item.rowFrameKey, pressedSurface: surface)
+            } : nil
         )
+        .environment(\.messageActionHoldsEnabled, interactionsEnabled && !popTransition.isNavigating)
+        // The live row fades underneath an excerpt. Hold its press state through that fade.
+        .environment(\.pressedMessageActionSurface,
+                     actionsCrossfadeExcerpt && actionsPhase == .presented && actionsTarget?.rowId == item.id
+                        ? actionsTarget?.pressedSurface : nil)
+        .environment(\.actionRowMeasurementKey, measuredActionRowFrameKey == item.rowFrameKey ? item.rowFrameKey : nil)
         .replySwipeToReply(
             isEnabled: interactionsEnabled && canReply(to: record, viewModel: viewModel),
             isNavigating: popTransition.isNavigating
         ) {
             beginReply(to: record, viewModel: viewModel)
         }
-        .padding(.leading, isSelectingMessages ? 36 : 0)
-        .opacity(
-            actionsTarget?.rowId == item.id ? 0 : 1
-        )
+        .animation(fadesSource ? MessageActionsPresentation.returnAnimation(reduceMotion: reduceTranscriptMotion) : nil) {
+            $0.opacity(hidesSource ? 0 : 1)
+        }
         .overlay {
             if isSelectingMessages {
                 let selected = selectedMessageIds.contains(record.messageIdHex)
                 ZStack(alignment: .leading) {
                     Color.clear
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.title2)
+                        .font(.title3)
                         .foregroundStyle(
                             selected
                                 ? WNNeutralAccent.color(for: colorScheme)
-                                : Color.secondary.opacity(0.55)
+                                : Color.secondary
                         )
-                        .padding(.leading, 8)
+                        .frame(width: Self.selectionIndicatorSize, height: Self.selectionIndicatorSize)
                 }
+                .transition(.move(edge: .leading).combined(with: .opacity))
                 .contentShape(.rect)
                 .onTapGesture { toggleMessageSelection(record.messageIdHex) }
                 .accessibilityElement()
@@ -2436,6 +2479,7 @@ struct ConversationView: View {
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
+        .animation(reduceTranscriptMotion ? nil : .easeInOut(duration: 0.2), value: isSelectingMessages)
         .background {
             if allowsActions, measuredActionRowFrameKey == item.rowFrameKey {
                 GeometryReader { geo in
@@ -2451,20 +2495,6 @@ struct ConversationView: View {
                 }
             }
         }
-        .onLongPressGesture {
-            guard !isSelectingMessages,
-                  !viewModel.search.isActive,
-                  allowsActions,
-                  !record.messageIdHex.isEmpty,
-                  !viewModel.isDeleted(record.messageIdHex) else { return }
-            Haptics.tap()
-            beginActionsPresentation(
-                for: record,
-                status: status,
-                rowId: item.id,
-                rowFrameKey: item.rowFrameKey
-            )
-        }
         .accessibilityActions {
             if interactionsEnabled {
                 Button("Show actions") {
@@ -2478,7 +2508,7 @@ struct ConversationView: View {
                 if canReply(to: record, viewModel: viewModel) {
                     Button("Reply") { beginReply(to: record, viewModel: viewModel) }
                 }
-                if !record.plaintext.isEmpty {
+                if MessagePreview.canCopyFromMessageMenu(record) {
                     Button("Copy") {
                         SensitiveClipboard.copyLocalOnly(viewModel.copyBody(of: record))
                         Haptics.tap()
@@ -2500,25 +2530,69 @@ struct ConversationView: View {
             rowID: item.id, timeline: model.timeline, firstUnreadIndex: index)
     }
 
+    private func handleReactionTap(_ tapped: ConversationViewModel.ReactionTally, on record: AppMessageRecordFfi,
+                                   viewModel: ConversationViewModel) async {
+        let id = record.messageIdHex
+        let emoji = tapped.emoji
+        let current = viewModel.reactions(for: id)
+        guard viewModel.canSendMessages, !isSelectingMessages, !viewModel.search.isActive,
+              current.contains(where: { $0.emoji == emoji && $0.mine == tapped.mine && $0.reactionMessageIdHex == tapped.reactionMessageIdHex }) else { return }
+
+        let action = ReactionPillPresentation.tapAction(for: tapped, in: current,
+            omittedKinds: viewModel.windowReactions[id]?.omittedKinds ?? 0) { shortcode in
+            viewModel.canRepeatReaction(shortcode, reactionID: tapped.reactionMessageIdHex)
+        }
+        guard action == .toggle else {
+            reactionDetailsTarget = ReactionDetailsTarget(record: record, initialEmoji: emoji)
+            return
+        }
+        if !tapped.mine && CustomEmojiShortcode(reactionContent: emoji) == nil { appState.addRecentReaction(emoji) }
+        await viewModel.toggleReaction(emoji, on: record)
+    }
+
+    private func handlePickedReaction(_ emoji: String, on record: AppMessageRecordFfi, viewModel: ConversationViewModel,
+                                      beforeToggle: (ReactionDetailsTarget?) -> Void) async {
+        let id = record.messageIdHex
+        let current = viewModel.reactions(for: id)
+        let mine = current.contains { $0.emoji == emoji && $0.mine }
+        // Unreact removes every one of this account's reactions on the message.
+        if mine && !ReactionPillPresentation.canRemoveIndividually(emoji, from: current, omittedKinds: viewModel.windowReactions[id]?.omittedKinds ?? 0) {
+            beforeToggle(ReactionDetailsTarget(record: record, initialEmoji: emoji))
+            return
+        }
+        beforeToggle(nil)
+        if !mine && CustomEmojiShortcode(reactionContent: emoji) == nil { appState.addRecentReaction(emoji) }
+        await viewModel.toggleReaction(emoji, on: record)
+    }
+
     private func messageBubble(
         for item: TimelineItem,
         record: AppMessageRecordFfi,
         status: MessageStatus,
         viewModel: ConversationViewModel,
-        showsSenderIdentity: Bool
+        showsSenderIdentity: Bool,
+        usesSelectionLayout: Bool,
+        showMessageActions: ((MessageActionSurface) -> Void)? = nil
     ) -> some View {
         let debugStyle = appState.streamingDebugEnabled
             ? MessageSemantics.debugStyle(for: record)
             : nil
+        var cluster = clusterPresentation(for: item, model: viewModel)
+        if usesSelectionLayout {
+            cluster.reservesIdentityLane = false
+            cluster.showsAvatar = false
+        }
+        let selectionInset = viewModel.isMessageMine(record) ? Self.selectionIndicatorSize : Self.receivedSelectionInset
         return MessageBubble(
             record: record,
             status: status,
+            showMessageActions: showMessageActions,
             debugStyle: debugStyle,
             isDeleted: viewModel.isDeleted(record.messageIdHex),
             deletionSource: viewModel.timelineStore.deletedProjections.source(for: record.messageIdHex),
             isEdited: viewModel.isEdited(record.messageIdHex),
             hasReports: viewModel.hasReports(record.messageIdHex),
-            clusterPresentation: clusterPresentation(for: item, model: viewModel),
+            clusterPresentation: cluster,
             showsSenderIdentity: showsSenderIdentity,
             replyPreview: viewModel.replyPreview(for: record),
             mediaItems: viewModel.mediaItems(for: item),
@@ -2535,6 +2609,9 @@ struct ConversationView: View {
             identityName: viewModel.windowDisplayName,
             identityAvatar: viewModel.windowAvatarURL,
             identityAvatarAsset: { viewModel.windowIdentities[$0]?.avatarAsset },
+            onTapReaction: viewModel.canSendMessages && !isSelectingMessages && !viewModel.search.isActive && !record.messageIdHex.isEmpty ? { tally in
+                Task { await handleReactionTap(tally, on: record, viewModel: viewModel) }
+            } : nil,
             onShowReactionDetails: { emoji in
                 reactionDetailsTarget = ReactionDetailsTarget(
                     record: record,
@@ -2589,6 +2666,7 @@ struct ConversationView: View {
             }
         )
         .equatable()
+        .padding(.leading, usesSelectionLayout ? selectionInset : 0)
         .environment(\.customEmojiStore, viewModel.customEmojiStore)
         .environment(\.stickerAssets, viewModel.stickerAssets)
         .environment(\.stickerLibrary, viewModel.stickerLibrary)
@@ -4392,8 +4470,13 @@ struct ConversationView: View {
         for record: AppMessageRecordFfi,
         status: MessageStatus,
         rowId: String,
-        rowFrameKey: String
+        rowFrameKey: String,
+        pressedSurface: MessageActionSurface? = nil
     ) {
+        if record.messageIdHex.isEmpty, status == .failed {
+            failedSendTarget = FailedSendTarget(rowId: rowId)
+            return
+        }
         if isComposerInputFocused {
             composerFocusSuspendedForActions = true
             dismissKeyboard()
@@ -4402,7 +4485,7 @@ struct ConversationView: View {
             record: record,
             status: status,
             rowId: rowId,
-            rowFrameKey: rowFrameKey
+            rowFrameKey: rowFrameKey, pressedSurface: pressedSurface
         )
         measuredActionRowFrameKey = rowFrameKey
         scheduleActionFrameMeasurementClear(rowFrameKey: rowFrameKey)
@@ -4414,33 +4497,47 @@ struct ConversationView: View {
         requestComposerFocus()
     }
 
-    private func completePendingActionsPresentationIfMeasured() {
-        guard let pending = pendingActionsPresentation,
-              let sourceFrame = rowFrames.frames[pending.rowFrameKey]
-        else { return }
+    private func completePendingActionsPresentationIfMeasured(_ preferences: [RowFramePreference]) {
+        guard let key = measuredActionRowFrameKey,
+              let sourceFrame = preferences.first(where: { $0.key == key && $0.part == .row })?.frame else { return }
+        let bodySize = preferences.first { $0.key == key && $0.part == .body }?.frame.size
+        // The row may move while the menu is open, for example when the keyboard closes.
+        if actionsTarget != nil {
+            actionsReturnGeometry = (sourceFrame, bodySize)
+            return
+        }
+        guard let pending = pendingActionsPresentation, pending.rowFrameKey == key,
+              let bubbleFrame = preferences.first(where: { $0.key == key && $0.part == .bubble })?.frame else { return }
         pendingActionFrameMeasurementClearTask?.cancel()
         pendingActionFrameMeasurementClearTask = nil
         pendingActionsPresentation = nil
-        measuredActionRowFrameKey = nil
-        withAnimation(.easeOut(duration: 0.18)) {
-            actionsTarget = ActionsTarget(
-                record: pending.record,
-                status: pending.status,
-                rowId: pending.rowId,
-                sourceFrame: sourceFrame
-            )
-        }
+        actionsReturnGeometry = (sourceFrame, bodySize)
+        actionsPhase = .source
+        actionsTarget = ActionsTarget(record: pending.record, status: pending.status, rowId: pending.rowId,
+                                     sourceFrame: sourceFrame, bubbleFrame: bubbleFrame,
+                                     bodySize: bodySize,
+                                     pressedSurface: pending.pressedSurface)
     }
 
     private func dismissActions(resumingComposerFocus: Bool = false) {
-        withAnimation(.easeIn(duration: 0.14)) {
+        guard let target = actionsTarget, actionsPhase != .returning else { return }
+        withAnimation(MessageActionsPresentation.returnAnimation(reduceMotion: reduceTranscriptMotion),
+                      completionCriteria: .logicallyComplete) {
+            actionsPhase = .returning
+        } completion: {
+            guard actionsTarget?.id == target.id else { return }
             actionsTarget = nil
+            measuredActionRowFrameKey = nil
+            actionsReturnGeometry = nil
         }
-        if resumingComposerFocus {
-            resumeComposerFocusAfterActions()
-        } else {
-            composerFocusSuspendedForActions = false
-        }
+        if resumingComposerFocus { resumeComposerFocusAfterActions() }
+        else { composerFocusSuspendedForActions = false }
+    }
+
+    private var actionTargetUnavailable: Bool {
+        guard let target = actionsTarget else { return false }
+        guard let viewModel, let rowID = target.rowId else { return true }
+        return viewModel.isDeleted(target.record.messageIdHex) || !viewModel.timeline.contains { $0.id == rowID }
     }
 
     @ViewBuilder
@@ -4449,6 +4546,7 @@ struct ConversationView: View {
            let target = actionsTarget,
            let rowId = target.rowId,
            let sourceGlobalFrame = target.sourceFrame,
+           let bubbleGlobalFrame = target.bubbleFrame,
            let item = viewModel.timeline.first(where: { $0.id == rowId }) {
             GeometryReader { proxy in
                 let containerGlobalFrame = proxy.frame(in: .global)
@@ -4456,6 +4554,11 @@ struct ConversationView: View {
                     dx: -containerGlobalFrame.minX,
                     dy: -containerGlobalFrame.minY
                 )
+                let returnFrame = (actionsReturnGeometry?.row ?? sourceGlobalFrame).offsetBy(
+                    dx: -containerGlobalFrame.minX, dy: -containerGlobalFrame.minY)
+                let presented = actionsPhase == .presented
+                let rowFrame = actionsPhase == .returning ? returnFrame : sourceFrame
+                let bodySize = actionsPhase == .returning ? actionsReturnGeometry?.body ?? target.bodySize : target.bodySize
                 let canInteract = viewModel.canSendMessages
                 let actionCount = messageActionCount(
                     for: target.record,
@@ -4466,13 +4569,26 @@ struct ConversationView: View {
                 let actionMenuHeight = MessageActionsPresentation.visibleActionHeight(
                     actionCount: actionCount, containerHeight: proxy.size.height, showsReactions: canInteract
                 )
+                let outgoing = viewModel.isMessageMine(target.record)
+                let alignsRight = layoutDirection == .leftToRight ? outgoing : !outgoing
+                let bubbleEdge = alignsRight ? bubbleGlobalFrame.maxX : bubbleGlobalFrame.minX
+                let liftedEdge = bubbleEdge - containerGlobalFrame.minX
                 let layout = MessageActionsOverlayLayout.resolve(
                     sourceFrame: sourceFrame,
                     containerHeight: proxy.size.height,
                     actionMenuHeight: actionMenuHeight,
-                    showsReactions: canInteract
+                    showsReactions: canInteract, bodyHeight: target.bodySize?.height
                 )
-                let alignsTrailing = messageActionsAlignTrailing(record: target.record)
+                // An excerpt has different text and may represent a row several screens tall.
+                // Crossfade it in place so its text, bubble and menu stay together.
+                let isExcerpt = layout.excerptBodyHeight != nil
+                let usesPreviewPosition = isExcerpt || presented || reduceTranscriptMotion
+                // Only the visible part of a scrolled row lifts above the transcript.
+                // Include the settled preview when the menu places it beyond that viewport.
+                let viewport = conversationViewport.visibleFrameInWindow?.offsetBy(
+                    dx: -containerGlobalFrame.minX, dy: -containerGlobalFrame.minY) ?? CGRect(origin: .zero, size: proxy.size)
+                let clipTop = usesPreviewPosition ? min(viewport.minY, layout.previewCenterY - layout.previewHeight / 2) : viewport.minY
+                let clipBottom = usesPreviewPosition ? max(viewport.maxY, layout.previewCenterY + layout.previewHeight / 2) : viewport.maxY
                 let selectedReaction = viewModel.reactions(for: target.record.messageIdHex)
                     .first(where: \.mine)?.emoji
                 let displayedReactionCount = appState.quickReactions.count
@@ -4485,18 +4601,16 @@ struct ConversationView: View {
                         proxy.size.width - MessageActionsPresentation.horizontalMargin * 2
                     )
                 )
-                let surfaceWidth = max(MessageActionsPresentation.menuWidth, reactionWidth)
-                let menuCenterX = alignsTrailing
-                    ? proxy.size.width
-                        - MessageActionsPresentation.horizontalMargin
-                        - surfaceWidth / 2
-                    : MessageActionsPresentation.horizontalMargin
-                        + surfaceWidth / 2
-
+                let surfaceWidth = canInteract ? max(MessageActionsPresentation.menuWidth, reactionWidth) : MessageActionsPresentation.menuWidth
+                let menuCenterX = MessageActionsPresentation.menuCenterX(
+                    bubbleEdge: liftedEdge, alignsRight: alignsRight,
+                    surfaceWidth: surfaceWidth, containerWidth: proxy.size.width)
                 ZStack {
                     Rectangle()
                         .fill(.regularMaterial)
-                        .overlay(Color.primary.opacity(0.08))
+                        .overlay(Color.primary.opacity(presented ? 0.08 : 0))
+                        .opacity(presented ? 1 : 0)
+                        .animation(.easeOut(duration: reduceTranscriptMotion ? 0.15 : (presented ? 0.21 : 0.25)), value: presented)
                         .ignoresSafeArea()
                         .contentShape(.rect)
                         .onTapGesture { dismissActions(resumingComposerFocus: true) }
@@ -4506,16 +4620,27 @@ struct ConversationView: View {
                         record: target.record,
                         status: target.status,
                         viewModel: viewModel,
-                        showsSenderIdentity: !viewModel.groupDisplay.isDirectMessage
+                        showsSenderIdentity: !viewModel.groupDisplay.isDirectMessage,
+                        usesSelectionLayout: actionsPhase == .returning && isSelectingMessages
                     )
-                    .frame(width: sourceFrame.width, height: sourceFrame.height, alignment: .top)
+                    .environment(\.messageActionBodySize, layout.excerptBodyHeight.flatMap { height in
+                        bodySize.map { CGSize(width: $0.width, height: height) }
+                    })
+                    .environment(\.pressedMessageActionSurface, actionsPhase == .source && !isExcerpt ? target.pressedSurface : nil)
+                    .frame(width: rowFrame.width, height: isExcerpt ? layout.previewHeight : rowFrame.height, alignment: .top)
                     .messageActionsPreviewTruncation(
-                        contentHeight: layout.previewContentHeight,
+                        contentHeight: isExcerpt || presented ? layout.previewHeight : rowFrame.height,
                         isTruncated: layout.previewIsTruncated
                     )
-                    .scaleEffect(layout.previewScale)
-                    .position(x: sourceFrame.midX, y: layout.previewCenterY)
-                    .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+                    .position(x: layoutDirection == .rightToLeft ? proxy.size.width - rowFrame.midX : rowFrame.midX,
+                              y: usesPreviewPosition ? layout.previewCenterY : rowFrame.midY)
+                    .shadow(color: .black.opacity(presented ? 0.2 : 0), radius: 12, y: 4)
+                    .opacity((isExcerpt || reduceTranscriptMotion) && !presented ? 0 : 1)
+                    .mask {
+                        Rectangle()
+                            .frame(height: max(0, clipBottom - clipTop))
+                            .position(x: proxy.size.width / 2, y: (clipTop + clipBottom) / 2)
+                    }
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
 
@@ -4523,8 +4648,8 @@ struct ConversationView: View {
                         for: target.record,
                         status: target.status,
                         rowId: rowId,
-                        previewHeight: layout.previewHeight,
-                        alignsTrailing: alignsTrailing,
+                        previewHeight: layout.previewHeight, bubbleWidth: bubbleGlobalFrame.width,
+                        alignsTrailing: outgoing,
                         surfaceWidth: surfaceWidth,
                         maximumActionHeight: actionMenuHeight,
                         viewModel: viewModel
@@ -4533,12 +4658,34 @@ struct ConversationView: View {
                         width: surfaceWidth,
                         height: layout.groupHeight
                     )
-                    .position(x: menuCenterX, y: layout.groupCenterY)
+                    .position(x: layoutDirection == .rightToLeft ? proxy.size.width - menuCenterX : menuCenterX,
+                              y: layout.groupCenterY + (usesPreviewPosition ? 0 : rowFrame.midY - layout.previewCenterY))
+                    .allowsHitTesting(presented)
+                }
+                .onChange(of: proxy.size.width) {
+                    // A held message is anchored to a snapshot of the row and bubble before the lift.
+                    guard actionsTarget?.id == target.id else { return }
+                    actionsTarget = nil
+                    actionsReturnGeometry = nil
+                    cancelActionFrameMeasurement()
+                    resumeComposerFocusAfterActions()
+                }
+                .onChange(of: isExcerpt) { _, needsExcerpt in
+                    actionsCrossfadeExcerpt = needsExcerpt
+                }
+                .onAppear {
+                    guard actionsPhase == .source else { return }
+                    actionsCrossfadeExcerpt = isExcerpt
+                    withAnimation(MessageActionsPresentation.openAnimation(reduceMotion: reduceTranscriptMotion)) {
+                        actionsPhase = .presented
+                    }
                 }
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
-            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            .transition(.identity)
+            .allowsHitTesting(actionsPhase != .returning)
             .accessibilityElement(children: .contain)
+            .accessibilityAction(.escape) { dismissActions(resumingComposerFocus: true) }
         }
     }
 
@@ -4554,6 +4701,7 @@ struct ConversationView: View {
                 hasRetryableSend: viewModel.canRetryFailedSend(rowId: rowId)
             ),
             canInteract: viewModel.canSendMessages,
+            canCopy: MessagePreview.canCopyFromMessageMenu(record),
             canForward: MessageForwardingPolicy.forwardableText(for: record) != nil,
             canEdit: MessageEditingPolicy.canEdit(
                 record,
@@ -4617,25 +4765,20 @@ struct ConversationView: View {
         pollVotesTarget = PollVotesTarget(messageIdHex: record.messageIdHex, options: poll.options)
     }
 
-    private func messageActionsAlignTrailing(record: AppMessageRecordFfi) -> Bool {
-        let outgoing = MessageOwnership.isMine(
-            direction: record.direction, sender: record.sender,
-            myAccountId: appState.activeAccount?.accountIdHex
-        )
-        return layoutDirection == .leftToRight ? outgoing : !outgoing
-    }
-
     private func actionsMenu(
         for record: AppMessageRecordFfi,
         status: MessageStatus,
         rowId: String? = nil,
         previewHeight: CGFloat,
+        bubbleWidth: CGFloat,
         alignsTrailing: Bool,
         surfaceWidth: CGFloat,
         maximumActionHeight: CGFloat,
         viewModel: ConversationViewModel
     ) -> some View {
-        MessageActionsMenu(
+        let selectedReaction = viewModel.reactions(for: record.messageIdHex).first(where: \.mine)
+        return MessageActionsMenu(
+            presented: actionsPhase == .presented, bubbleWidth: bubbleWidth,
             canRetry: rowId.map {
                 MessageRetryPresentation.isAvailable(
                     status: status,
@@ -4643,6 +4786,7 @@ struct ConversationView: View {
                 )
             } ?? false,
             canInteract: viewModel.canSendMessages,
+            canCopy: MessagePreview.canCopyFromMessageMenu(record),
             canForward: MessageForwardingPolicy.forwardableText(for: record) != nil,
             canEdit: MessageEditingPolicy.canEdit(
                 record,
@@ -4656,7 +4800,8 @@ struct ConversationView: View {
             canBlock: canBlockAuthor(of: record, viewModel: viewModel),
             canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
             quickReactions: appState.quickReactions,
-            selectedReaction: viewModel.reactions(for: record.messageIdHex).first(where: \.mine)?.emoji,
+            selectedReaction: selectedReaction?.emoji,
+            selectedReactionMessageId: selectedReaction?.reactionMessageIdHex,
             previewHeight: previewHeight,
             alignsTrailing: alignsTrailing,
             surfaceWidth: surfaceWidth,
@@ -4667,9 +4812,13 @@ struct ConversationView: View {
                 Task { await viewModel.retryFailedSend(rowId: rowId) }
             },
             onReact: { emoji in
-                Task { await viewModel.toggleReaction(emoji, on: record) }
-                appState.addRecentReaction(emoji)
-                dismissActions(resumingComposerFocus: true)
+                Task { @MainActor in
+                    guard actionsPhase == .presented, actionsTarget?.record.messageIdHex == record.messageIdHex else { return }
+                    await handlePickedReaction(emoji, on: record, viewModel: viewModel) { details in
+                        dismissActions(resumingComposerFocus: details == nil)
+                        if let details { reactionDetailsTarget = details }
+                    }
+                }
             },
             onReply: {
                 dismissActions()
@@ -4726,25 +4875,9 @@ struct ConversationView: View {
                 openPollVotes(for: record, viewModel: viewModel)
             }
         )
+        .environment(\.customEmojiStore, viewModel.customEmojiStore)
     }
 
-}
-
-/// Holds the latest on-screen frame of each message row. A reference type so
-/// scroll-driven updates don't churn SwiftUI state; we only read it on demand
-/// when a long press needs to decide which way the actions popover should open.
-private final class RowFrameStore {
-    private(set) var frames: [String: CGRect] = [:]
-
-    func replace(with preferences: [RowFramePreference]) {
-        var next: [String: CGRect] = [:]
-        next.reserveCapacity(preferences.count)
-        for preference in preferences {
-            next[preference.key] = preference.frame
-        }
-        guard frames != next else { return }
-        frames = next
-    }
 }
 
 /// Tracks only visibility edge changes so scrolling does not publish every
@@ -4832,12 +4965,14 @@ private struct UnreadMessagesDivider: View {
     }
 }
 
-private struct RowFramePreference: Equatable {
+struct RowFramePreference: Equatable {
+    enum Part: Equatable { case row, bubble, body }
+    var part: Part = .row
     let key: String
     let frame: CGRect
 }
 
-private struct RowFramesKey: PreferenceKey {
+struct RowFramesKey: PreferenceKey {
     static let defaultValue: [RowFramePreference] = []
     static func reduce(value: inout [RowFramePreference], nextValue: () -> [RowFramePreference]) {
         value.append(contentsOf: nextValue())

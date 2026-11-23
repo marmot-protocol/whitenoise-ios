@@ -26,6 +26,20 @@ struct PollPresentationTests {
         )
     }
 
+    @Test func footerShowsParticipantCountAndTheAvailableVotingAction() {
+        let single = Self.poll(votes: [1, 0, 0], participants: 1)
+        let multiple = Self.poll(type: .multipleChoice, votes: [2, 1, 1], participants: 2)
+        let singleFooter = PollPresentation.footerText(for: single, isOpen: true)
+        let multipleFooter = PollPresentation.footerText(for: multiple, isOpen: true)
+        let closedFooter = PollPresentation.footerText(for: multiple, isOpen: false)
+        #expect(singleFooter.hasPrefix(L10n.plural("%lld votes", single.participants)))
+        #expect(singleFooter.hasSuffix(L10n.string("Select one")))
+        #expect(multipleFooter.hasPrefix(L10n.plural("%lld votes", multiple.participants)))
+        #expect(multipleFooter.hasSuffix(L10n.string("Select one or more")))
+        #expect(closedFooter.hasPrefix(L10n.plural("%lld votes", multiple.participants)))
+        #expect(closedFooter.hasSuffix(L10n.string("Poll closed")))
+    }
+
     // MARK: Selection
 
     @Test func singleChoiceTapReplacesTheVoteAndIgnoresTheCurrentChoice() {

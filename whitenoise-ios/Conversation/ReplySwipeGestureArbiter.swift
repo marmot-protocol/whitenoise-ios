@@ -10,6 +10,7 @@ final class ReplySwipeGestureArbiter: NSObject, UIGestureRecognizerDelegate {
     /// Mirrors `InteractivePopTransitionState.isNavigating`, so a pop that has
     /// begun or completed keeps row gestures out.
     var isNavigating = false
+    var rightToLeft = false
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
@@ -20,9 +21,9 @@ final class ReplySwipeGestureArbiter: NSObject, UIGestureRecognizerDelegate {
         guard let reference = Self.referenceView(for: pan) else { return false }
         guard !ReplySwipe.isInLeadingEdgeNavigationRegion(
             startLocation: Self.startLocation(of: pan, in: reference),
-            in: reference.bounds
+            in: reference.bounds, rightToLeft: rightToLeft
         ) else { return false }
-        return ReplySwipe.shouldBegin(velocity: pan.velocity(in: pan.view))
+        return ReplySwipe.shouldBegin(velocity: pan.velocity(in: pan.view), rightToLeft: rightToLeft)
     }
 
     func gestureRecognizer(

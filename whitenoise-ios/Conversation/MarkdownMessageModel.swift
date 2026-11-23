@@ -21,6 +21,82 @@ enum MarkdownDisplayBlock: Equatable {
     case thematicBreak
 }
 
+extension MarkdownDisplayBlock {
+    var inlineText: AttributedString? {
+        switch self {
+        case .paragraph(let text), .heading(let text): text
+        default: nil
+        }
+    }
+
+    /// The menu excerpt counts at least one character per leaf, including empty blocks.
+    var menuExcerptLength: Int {
+        switch self {
+        case .paragraph(let text), .heading(let text), .codeBlock(let text): max(1, text.characters.count)
+        case .blockQuote(let blocks): blocks.reduce(0) { $0 + $1.menuExcerptLength }
+        case .list(let items, _): items.reduce(0) { sum, item in
+            sum + item.blocks.reduce(0) { $0 + $1.menuExcerptLength }
+        }
+        case .thematicBreak: 1
+        }
+    }
+
+    static func menuExcerptBudgets(for blocks: [Self]) -> [Int] {
+        let length = blocks.reduce(0) { $0 + $1.menuExcerptLength }
+        return [768, 512, 384, 320, 256, 208, 168, 132, 100, 72, 48, 28, 12, 4, 2, 1].filter { $0 < length }
+    }
+
+    /// Keep the original block and inline styling up to the visible excerpt's tail.
+    static func excerpt(_ blocks: [Self], characterBudget: Int,
+                        emoji: Set<CustomEmojiShortcode> = []) -> [Self] {
+        guard characterBudget > 0 else { return [.paragraph(AttributedString("…"))] }
+        var remaining = characterBudget
+
+        func textPrefix(_ text: AttributedString) -> AttributedString {
+            let prefix = text.characters.prefix(remaining)
+            remaining -= max(1, prefix.count)
+            guard remaining <= 0 else { return text }
+            var end = prefix.endIndex
+            if !emoji.isEmpty, end < text.endIndex {
+                // Only a token that straddles the cut can lose its closing colon.
+                let cut = prefix.count
+                let characters = text.characters.prefix(cut + CustomEmojiShortcode.maxLength + 2)
+                let matches = CustomEmojiText.matches(in: Array(characters), resolvable: emoji)
+                if let match = matches.first(where: { $0.range.lowerBound < cut && cut < $0.range.upperBound }) {
+                    end = text.characters.index(text.startIndex, offsetBy: match.range.upperBound)
+                }
+            }
+            return AttributedString(text[text.startIndex..<end]) + AttributedString("…")
+        }
+
+        func blockPrefix(_ blocks: [Self]) -> [Self] {
+            var result: [Self] = []
+            for block in blocks {
+                guard remaining > 0 else { break }
+                switch block {
+                case .paragraph(let text): result.append(.paragraph(textPrefix(text)))
+                case .heading(let text): result.append(.heading(textPrefix(text)))
+                case .codeBlock(let code): result.append(.codeBlock(textPrefix(code)))
+                case .blockQuote(let nested): result.append(.blockQuote(blockPrefix(nested)))
+                case .list(let items, let tight):
+                    var prefix: [MarkdownDisplayListItem] = []
+                    for item in items {
+                        guard remaining > 0 else { break }
+                        prefix.append(.init(marker: item.marker,
+                            blocks: blockPrefix(item.blocks)))
+                    }
+                    result.append(.list(items: prefix, tight: tight))
+                case .thematicBreak:
+                    remaining -= 1
+                    result.append(remaining == 0 ? .paragraph(AttributedString("…")) : block)
+                }
+            }
+            return result
+        }
+        return blockPrefix(blocks)
+    }
+}
+
 struct MarkdownDisplayListItem: Equatable {
     enum Marker: Equatable {
         case bullet

@@ -1,7 +1,20 @@
 import SwiftUI
 import MarmotKit
 
+extension EnvironmentValues {
+    @Entry var actionRowMeasurementKey: String?
+    @Entry var messageActionBodySize: CGSize?
+}
+
 nonisolated enum MessageActionsPresentation {
+    static func openAnimation(reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.30, bounce: 0.08)
+    }
+
+    static func returnAnimation(reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.25, bounce: 0)
+    }
+
     static let actionHeight: CGFloat = 50
     static let reactionHeight: CGFloat = 56
     static let actionVerticalPadding: CGFloat = 10
@@ -9,12 +22,13 @@ nonisolated enum MessageActionsPresentation {
     static let menuWidth: CGFloat = 250
     static let horizontalMargin: CGFloat = 16
     static let verticalMargin: CGFloat = 12
+    static let maximumExcerptBodyHeight: CGFloat = 220
     static let minimumPreviewHeight: CGFloat = 100
-    static let minimumPreviewScale: CGFloat = 0.7
 
     static func actionCount(
         canRetry: Bool,
         canInteract: Bool,
+        canCopy: Bool = true,
         canForward: Bool,
         canEdit: Bool,
         canViewEditHistory: Bool,
@@ -23,7 +37,8 @@ nonisolated enum MessageActionsPresentation {
         canBlock: Bool = false,
         canViewVotes: Bool = false
     ) -> Int {
-        var count = 3 // Copy, Info, and Select.
+        var count = 2 // Info and Select are always present.
+        if canCopy { count += 1 }
         if canRetry { count += 1 }
         if canInteract { count += 1 }
         if canForward { count += 1 }
@@ -46,6 +61,14 @@ nonisolated enum MessageActionsPresentation {
         return min(actionMenuHeight(actionCount: actionCount), max(actionHeight, containerHeight - reserved))
     }
 
+    static func menuCenterX(bubbleEdge: CGFloat, alignsRight: Bool, surfaceWidth: CGFloat, containerWidth: CGFloat) -> CGFloat {
+        let half = surfaceWidth / 2
+        let minimum = horizontalMargin + half
+        let maximum = containerWidth - minimum
+        guard maximum >= minimum else { return containerWidth / 2 }
+        return min(maximum, max(minimum, bubbleEdge + (alignsRight ? -half : half)))
+    }
+
     static func reactionWidth(itemCount: Int, maximumWidth: CGFloat) -> CGFloat {
         min(maximumWidth, CGFloat(itemCount) * 44 + 12)
     }
@@ -54,9 +77,8 @@ nonisolated enum MessageActionsPresentation {
 nonisolated struct MessageActionsOverlayLayout: Equatable {
     let groupTop: CGFloat
     let previewHeight: CGFloat
-    let previewContentHeight: CGFloat
+    let excerptBodyHeight: CGFloat?
     let previewIsTruncated: Bool
-    let previewScale: CGFloat
     let previewCenterY: CGFloat
     let groupCenterY: CGFloat
     let groupHeight: CGFloat
@@ -65,7 +87,8 @@ nonisolated struct MessageActionsOverlayLayout: Equatable {
         sourceFrame: CGRect,
         containerHeight: CGFloat,
         actionMenuHeight: CGFloat,
-        showsReactions: Bool
+        showsReactions: Bool,
+        bodyHeight: CGFloat? = nil
     ) -> Self {
         let reactionHeight = showsReactions ? MessageActionsPresentation.reactionHeight : 0
         let reactionGap = showsReactions ? MessageActionsPresentation.surfaceGap : 0
@@ -80,13 +103,19 @@ nonisolated struct MessageActionsOverlayLayout: Equatable {
                 - fixedHeight
         )
         let sourceHeight = max(sourceFrame.height, 1)
-        let fittedScale = min(1, availablePreviewHeight / sourceHeight)
-        let isTruncated = fittedScale < MessageActionsPresentation.minimumPreviewScale
-        let previewScale = max(MessageActionsPresentation.minimumPreviewScale, fittedScale)
-        let previewContentHeight = isTruncated
-            ? availablePreviewHeight / previewScale
-            : sourceHeight
-        let previewHeight = isTruncated ? availablePreviewHeight : sourceHeight * previewScale
+        let needsCrop = sourceHeight - availablePreviewHeight > 0.5
+        var previewHeight = needsCrop ? availablePreviewHeight : sourceHeight
+        var excerptBodyHeight: CGFloat?
+        if let bodyHeight, bodyHeight > MessageActionsPresentation.maximumExcerptBodyHeight || needsCrop {
+            // Preserve the quote, media and footer when there is room for a readable excerpt.
+            let chromeHeight = max(0, sourceHeight - bodyHeight)
+            let budget = min(MessageActionsPresentation.maximumExcerptBodyHeight,
+                             availablePreviewHeight - chromeHeight)
+            if budget >= min(44, bodyHeight), budget < bodyHeight - 0.5 {
+                excerptBodyHeight = budget
+                previewHeight = chromeHeight + budget
+            }
+        }
         let groupHeight = fixedHeight + previewHeight
         let preferredTop = sourceFrame.minY - reactionHeight - reactionGap
         let maximumTop = max(
@@ -102,9 +131,8 @@ nonisolated struct MessageActionsOverlayLayout: Equatable {
         return Self(
             groupTop: groupTop,
             previewHeight: previewHeight,
-            previewContentHeight: previewContentHeight,
-            previewIsTruncated: isTruncated,
-            previewScale: previewScale,
+            excerptBodyHeight: excerptBodyHeight,
+            previewIsTruncated: excerptBodyHeight != nil || needsCrop,
             previewCenterY: previewTop + previewHeight / 2,
             groupCenterY: groupTop + groupHeight / 2,
             groupHeight: groupHeight
@@ -116,8 +144,12 @@ nonisolated struct MessageActionsOverlayLayout: Equatable {
 /// The transparent middle keeps the reaction capsule and action panel from
 /// acquiring shared popover chrome.
 struct MessageActionsMenu: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let presented: Bool
+    let bubbleWidth: CGFloat
     let canRetry: Bool
     let canInteract: Bool
+    var canCopy = true
     let canForward: Bool
     let canEdit: Bool
     let canViewEditHistory: Bool
@@ -127,6 +159,7 @@ struct MessageActionsMenu: View {
     var canViewVotes: Bool = false
     let quickReactions: [String]
     let selectedReaction: String?
+    var selectedReactionMessageId: String? = nil
     let previewHeight: CGFloat
     let alignsTrailing: Bool
     let surfaceWidth: CGFloat
@@ -177,7 +210,7 @@ struct MessageActionsMenu: View {
                     if canViewVotes {
                         actionRow("View votes", systemImage: "person.2", action: onViewVotes)
                     }
-                    actionRow("Copy", systemImage: "doc.on.doc", action: onCopy)
+                    if canCopy { actionRow("Copy", systemImage: "doc.on.doc", action: onCopy) }
                     actionRow("Select", systemImage: "checkmark.circle", action: onSelect)
                     actionRow("Info", systemImage: "info.circle", action: onInfo)
 
@@ -194,7 +227,7 @@ struct MessageActionsMenu: View {
                 .padding(.vertical, MessageActionsPresentation.actionVerticalPadding)
             }
             .frame(height: maximumActionHeight ?? MessageActionsPresentation.actionMenuHeight(
-                actionCount: MessageActionsPresentation.actionCount(canRetry: canRetry, canInteract: canInteract,
+                actionCount: MessageActionsPresentation.actionCount(canRetry: canRetry, canInteract: canInteract, canCopy: canCopy,
                     canForward: canForward, canEdit: canEdit, canViewEditHistory: canViewEditHistory,
                     canDelete: canDelete, canReport: canReport, canBlock: canBlock, canViewVotes: canViewVotes)
             ))
@@ -202,28 +235,36 @@ struct MessageActionsMenu: View {
             .frame(width: MessageActionsPresentation.menuWidth)
             .compatibleInputRoundedChrome(cornerRadius: 32, interactive: false)
             .shadow(color: .black.opacity(0.16), radius: 18, y: 7)
+            .scaleEffect(reduceMotion || presented ? 1 : 0.2, anchor: alignsTrailing ? .topTrailing : .topLeading)
+            .opacity(presented ? 1 : 0)
+            .animation(reduceMotion ? .easeOut(duration: 0.15) :
+                (presented ? .spring(duration: 0.25, bounce: 0.05) : .easeOut(duration: 0.10)), value: presented)
         }
         .frame(width: surfaceWidth)
     }
 
     private var reactionRow: some View {
         HStack(spacing: 0) {
-            ForEach(displayedQuickReactions, id: \.self) { emoji in
+            ForEach(Array(displayedQuickReactions.enumerated()), id: \.element) { index, emoji in
                 Button {
                     onReact(emoji)
                 } label: {
-                    Text(emoji)
-                        .font(.system(size: 27))
+                    CustomEmojiReactionLabel(emoji: emoji,
+                        reactionMessageIdHex: emoji == selectedReaction ? selectedReactionMessageId : nil,
+                        pointSize: 28, maximumPointSize: MessageActionsPresentation.reactionHeight - 12)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .font(.system(size: 28))
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background {
                             if selectedReaction == emoji {
                                 Circle().fill(Color(uiColor: .systemFill))
-                                    .frame(width: 38, height: 38)
                             }
                         }
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
+                .modifier(ReactionAppearance(presented: presented, index: index, reduceMotion: reduceMotion))
                 .accessibilityValue(selectedReaction == emoji ? "Selected" : "")
                 .accessibilityAddTraits(selectedReaction == emoji ? .isSelected : [])
             }
@@ -239,12 +280,22 @@ struct MessageActionsMenu: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            .modifier(ReactionAppearance(presented: presented, index: displayedQuickReactions.count, reduceMotion: reduceMotion))
             .accessibilityLabel("More reactions")
         }
         .padding(6)
         .frame(width: reactionWidth)
         .compatibleInputCapsuleChrome(interactive: false)
         .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
+        .scaleEffect(x: reduceMotion || presented ? 1 : 0.1, y: reduceMotion || presented ? 1 : 0.6,
+                     anchor: UnitPoint(x: alignsTrailing ? 1 - reactionAnchor : reactionAnchor, y: 1))
+        .opacity(presented ? 1 : 0)
+        .animation(reduceMotion ? .easeOut(duration: 0.15) :
+            (presented ? .spring(duration: 0.30, bounce: 0.06).delay(0.13) : .easeOut(duration: 0.15)), value: presented)
+    }
+
+    private var reactionAnchor: CGFloat {
+        min(1, bubbleWidth / max(1, reactionWidth))
     }
 
     private var reactionWidth: CGFloat {
@@ -276,6 +327,21 @@ struct MessageActionsMenu: View {
             .contentShape(.rect)
         }
         .foregroundStyle(role == .destructive ? Color.red : Color.primary)
+    }
+}
+
+private struct ReactionAppearance: ViewModifier {
+    let presented: Bool
+    let index: Int
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(reduceMotion || presented ? 1 : 0.55)
+            .opacity(presented ? 1 : 0)
+            .animation(reduceMotion ? .easeOut(duration: 0.15) :
+                (presented ? .easeOut(duration: 0.16).delay(0.20 + Double(index) * 0.009) : .easeOut(duration: 0.09)),
+                value: presented)
     }
 }
 

@@ -404,7 +404,7 @@ microphone on a Mac without one.
       change the vote, and confirm tallies, voter count and your selection update
       live on both devices. A single-choice tap on the current answer does
       nothing; a multiple-choice poll never lets the last selection be removed.
-- [ ] A poll with an end time shows "Ends …", then "Final results" after the
+- [ ] A poll with an end time shows "Ends …", then "Poll closed" after the
       deadline, and no longer accepts votes, including while it stays on
       screen across the deadline. Relaunch before and after expiry.
 - [ ] A malformed kind-1068 row shows "This poll can’t be displayed." rather
@@ -426,8 +426,9 @@ microphone on a Mac without one.
       appears at once, survives relaunch, and publishes after the original.
       Rapid repeated edits that hit MDK's rate limit keep the edit text for a
       retry.
-- [ ] Chat list and reply previews read "📊 Poll: <question>". Polls offer no
-      Edit or Forward. Check a group with media disabled for the Poll entry.
+- [ ] The chat list shows "📊 Poll: <question>". A reply quoting that poll shows
+      the same chart icon as the poll header beside "Poll: <question>".
+      Polls offer no Edit or Forward. Check a group with media disabled for the Poll entry.
 - [ ] Existing users with usage sharing on see the consent sheet once, because
       the metrics destination changed; declined users are not re-prompted.
 - [ ] With usage sharing on, launch, switch profiles, open chats (including
@@ -1938,9 +1939,21 @@ Marmot root. Automated simulator checks do not replace these device checks.
       delivery and notification behavior with a second test identity.
 - [ ] Reactions show the full count and your selected state even when your identity
       is outside the preview. With more reactors or reaction kinds than the bubble
-      previews, tapping a chip or the overflow pill opens Reactions listing every
-      reactor (not a truncated preview), with All and per-emoji counts matching the
-      bubble. A fast read shows no spinner flash; the tapped emoji stays selected.
+      previews, hold a chip to open Reactions directly with that emoji selected.
+      Releasing the hold keeps the count and your selection intact. The overflow
+      pill opens All. Compare a single emoji and `+3`: both capsules have the
+      same height and minimum width, with 3 pt between neighbors. A longer
+      count widens only its own capsule. Tap just below each pill and on either
+      side of the gap midpoint to check that the intended reaction opens or toggles.
+      With several reaction kinds on a narrow bubble, check that
+      the leading tally stays visible even when your less-popular reaction is
+      in overflow. Open All to find yours.
+      Both views include every reactor. Tap an available emoji
+      to add it and tap your sole reaction to remove it. If other reactions of
+      yours could also be removed, the chip and quick menu both open details.
+      In the sheet, Remove all my reactions clears every reaction you added to
+      that message, including kinds outside the preview. Other people’s reactions
+      remain. A fast read shows no spinner flash.
       With the sheet open, a reaction added, changed or removed on another device
       (including one outside the two-name preview) updates the list. Removing your
       own reaction updates it immediately. Blocked reactors are not listed. A

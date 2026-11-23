@@ -104,12 +104,18 @@ nonisolated enum MessageBubbleReplyLayout {
 /// so that a short quote and a short reply can share a narrow bubble.
 private struct MessageTextBubbleLayout: Layout {
     let fitsQuote: Bool
+    var widensForReactions = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let content = subviews.first else { return .zero }
         let ideal = fitsQuote ? content.sizeThatFits(.unspecified).width : nil
         let width = MessageBubbleReplyLayout.textWidth(proposed: proposal.width, ideal: ideal)
-        return content.sizeThatFits(.init(width: width, height: nil))
+        let size = content.sizeThatFits(.init(width: width, height: nil))
+        // The chrome measures the bubble with no height first, then supplies its final width for the reaction strip at placement.
+        if widensForReactions, proposal.height != nil, let width = proposal.width {
+            return CGSize(width: width, height: size.height)
+        }
+        return size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -170,6 +176,7 @@ extension MessageBubble: Equatable {
     static func == (lhs: MessageBubble, rhs: MessageBubble) -> Bool {
         lhs.record == rhs.record
             && lhs.status == rhs.status
+            && (lhs.showMessageActions == nil) == (rhs.showMessageActions == nil)
             && lhs.debugStyle == rhs.debugStyle
             && lhs.isDeleted == rhs.isDeleted
             && lhs.deletionSource == rhs.deletionSource
@@ -195,6 +202,7 @@ extension MessageBubble: Equatable {
             && (lhs.mediaForwardingContext == nil) == (rhs.mediaForwardingContext == nil)
             && (lhs.onGoToMessage == nil) == (rhs.onGoToMessage == nil)
             && (lhs.onViewEditHistory == nil) == (rhs.onViewEditHistory == nil)
+            && (lhs.onTapReaction == nil) == (rhs.onTapReaction == nil)
             && (lhs.onFailedTap == nil) == (rhs.onFailedTap == nil)
             && (lhs.onSenderAvatarTap == nil) == (rhs.onSenderAvatarTap == nil)
     }
@@ -213,12 +221,15 @@ extension MessageBubble: Equatable {
 }
 
 struct MessageBubble: View {
+    @Environment(\.messageActionBodySize) private var actionBodySize
+    @Environment(\.actionRowMeasurementKey) private var actionRowMeasurementKey
     @Environment(AppState.self) private var appState
     @Environment(\.appDensity) private var density
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.openURL) private var openURL
     let record: AppMessageRecordFfi
     let status: MessageStatus
+    var showMessageActions: ((MessageActionSurface) -> Void)?
     var debugStyle: MessageDebugStyle? = nil
     var isDeleted: Bool = false
     var deletionSource: DeletionSourceFfi = .unknown
@@ -242,6 +253,7 @@ struct MessageBubble: View {
     var identityName: ((String) -> String)? = nil
     var identityAvatar: ((String) -> URL?)? = nil
     var identityAvatarAsset: ((String) -> AvatarAssetFfi?)? = nil
+    var onTapReaction: ((ConversationViewModel.ReactionTally) -> Void)?
     var onShowReactionDetails: (String?) -> Void = { _ in }
     var onReplyPreviewTap: () -> Void = {}
     var onLoadMedia = ConversationMediaLoader { _ in Data() }
@@ -252,7 +264,7 @@ struct MessageBubble: View {
     /// Set when the message has viewable edit history; makes the inline "Edited"
     /// label tap to open the history sheet, the same sheet the actions menu opens.
     var onViewEditHistory: (() -> Void)? = nil
-    /// Set for a failed outgoing message; a tap on the bubble opens the
+    /// Tapping the failure notice or a failed text bubble opens the
     /// retry/discard sheet.
     var onFailedTap: (() -> Void)? = nil
     var onSenderAvatarTap: (() -> Void)? = nil
@@ -382,6 +394,7 @@ struct MessageBubble: View {
                 )
                 .environment(\.avatarMonogramFont, .subheadline.weight(.semibold))
                 .padding(.trailing, 7)
+                .zIndex(1)
             }
 
             VStack(alignment: isFromMe ? .trailing : .leading, spacing: 4) {
@@ -393,21 +406,37 @@ struct MessageBubble: View {
                     }
                 }
 
-                MessageBubbleChromeLayout(isFromMe: isFromMe, spacing: density.metrics.bubbleMetadataSpacing) {
+                MessageBubbleChromeLayout(isFromMe: isFromMe, spacing: 0, widensTextForReactions: widensTextForReactions) {
                     messageSurface
+                        .alignmentGuide(.messageSurfaceBottom) { $0[.bottom] }
+                        .modifier(MessageActionHold(isEnabled: showMessageActions != nil) {
+                            showMessageActions?(.bubble)
+                        })
+                        .background(alignment: .leading) { BubbleReplyIndicator() }
                         .background(alignment: .bottomTrailing) {
                             if !showsMetadataFooter {
-                                Color.clear.frame(width: 1, height: 1)
+                                Color.clear
+                                    .frame(width: 1, height: 1)
                                     .accessibilityRepresentation {
                                         messageMetadataFooter.accessibilityElement(children: .combine)
                                     }
                                     .allowsHitTesting(false)
                             }
                         }
+                        .background {
+                            if let key = actionRowMeasurementKey {
+                                GeometryReader { proxy in
+                                    Color.clear.preference(key: RowFramesKey.self, value: [
+                                        RowFramePreference(part: .bubble, key: key, frame: proxy.frame(in: .global))
+                                    ])
+                                }
+                            }
+                        }
                     bubbleMetadataRow
                 }
             }
             .frame(maxWidth: bubbleMaxWidth, alignment: isFromMe ? .trailing : .leading)
+            .modifier(ReplySwipeContentOffset())
             .layoutPriority(1)
 
             if !isFromMe { Spacer(minLength: oppositeInset) }
@@ -460,9 +489,10 @@ struct MessageBubble: View {
         } else if let sticker = record.sticker, showsStandardBody {
             stickerMessageContent(StickerKey(sticker))
         } else if record.kind == MessageSemantics.kindPoll, showsStandardBody {
-            VStack(alignment: .leading, spacing: 0) {
+            let rich = poll != nil || replyPreview != nil
+            VStack(alignment: .leading, spacing: MessageBubbleReplyLayout.cardOuterInset) {
                 if let replyPreview {
-                    replyHeader(replyPreview)
+                    replyCard(replyPreview)
                 }
                 if let poll {
                     PollMessageContent(poll: poll, isFromMe: isFromMe, onVote: onPollVote,
@@ -472,10 +502,12 @@ struct MessageBubble: View {
                     Label(L10n.string("This poll can’t be displayed."), systemImage: "chart.bar.xaxis")
                         .font(.subheadline)
                         .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-                        .padding(.horizontal, density.metrics.bubbleHorizontalInset)
-                        .padding(.vertical, density.metrics.bubbleVerticalInset)
+                        .padding(.horizontal, rich ? MessageBubbleReplyLayout.cardOuterInset : density.metrics.bubbleHorizontalInset)
+                        .padding(.vertical, rich ? 2 : density.metrics.bubbleVerticalInset)
                 }
             }
+            .frame(width: rich ? MessageBubbleReplyLayout.richContentWidth : nil, alignment: .leading)
+            .padding(rich ? MessageBubbleReplyLayout.cardOuterInset : 0)
             .background { bubbleBackground }
             .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
             .opacity(status == .sending ? 0.7 : 1)
@@ -641,7 +673,7 @@ struct MessageBubble: View {
         let location = showsStandardBody ? sharedLocation : nil
         let previewURL = showsStandardBody && location == nil ? linkPreviewURL : nil
         let fitsQuote = replyPreview != nil && showsStandardBody && location == nil && previewURL == nil
-        return MessageTextBubbleLayout(fitsQuote: fitsQuote) {
+        return MessageTextBubbleLayout(fitsQuote: fitsQuote, widensForReactions: widensTextForReactions) {
             VStack(alignment: .leading, spacing: 0) {
                 if let debugStyle {
                     debugHeader(debugStyle)
@@ -888,11 +920,17 @@ struct MessageBubble: View {
                 Text(preview.name)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(MessageBubblePalette.foreground(isFromMe: isFromMe))
-                Text(preview.text)
-                    .font(.caption)
-                    .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                Group {
+                    if preview.isPoll {
+                        Label(preview.text, systemImage: "chart.bar.xaxis")
+                    } else {
+                        Text(preview.text)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
             if let media = preview.media {
@@ -976,6 +1014,18 @@ struct MessageBubble: View {
             width: richContent ? MessageBubbleReplyLayout.richContentWidth : nil,
             alignment: .leading
         )
+        // Measure a reply body on the same width as its quote so a lifted excerpt keeps both edges.
+        .frame(maxWidth: hasReply ? .infinity : nil, alignment: .leading)
+        .frame(width: actionBodySize?.width, height: actionBodySize?.height, alignment: .topLeading)
+        .background {
+            if let key = actionRowMeasurementKey {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: RowFramesKey.self, value: [
+                        RowFramePreference(part: .body, key: key, frame: CGRect(origin: .zero, size: proxy.size))
+                    ])
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -991,10 +1041,24 @@ struct MessageBubble: View {
     @ViewBuilder
     private var messageBodyTextContent: some View {
         if let blocks = markdownBlocks {
-            MarkdownMessageView(
-                blocks: blocks,
-                quoteBar: isFromMe ? MessageBubblePalette.sentForeground.opacity(0.8) : Color.accentColor
-            )
+            let quoteColor = isFromMe ? MessageBubblePalette.sentForeground.opacity(0.8) : Color.accentColor
+            Group {
+                if actionBodySize != nil, blocks.count == 1, let inline = blocks[0].inlineText, customEmoji.isEmpty {
+                    liftedInlineText(inline)
+                } else if actionBodySize != nil {
+                    ViewThatFits(in: .vertical) {
+                        // The measured body exceeds this frame. Start with a bounded
+                        // excerpt and keep whole code or quote lines where possible.
+                        ForEach(MarkdownDisplayBlock.menuExcerptBudgets(for: blocks), id: \.self) { budget in
+                            MarkdownMessageView(blocks: MarkdownDisplayBlock.excerpt(blocks, characterBudget: budget, emoji: customEmoji.shortcodes),
+                                                quoteBar: quoteColor)
+                        }
+                        Text(verbatim: "…")
+                    }
+                } else {
+                    MarkdownMessageView(blocks: blocks, quoteBar: quoteColor)
+                }
+            }
             .tint(isFromMe ? MessageBubblePalette.sentForeground : Color.accentColor)
             .environment(\.openURL, OpenURLAction(handler: handleMessageLink))
             .environment(\.copyMessageLink, MessageLinkCopyAction { [appState] target in
@@ -1003,7 +1067,24 @@ struct MessageBubble: View {
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
             // sends, pre-markdown history) keep the plain path.
-            CustomEmojiAwareText(AttributedString(sanitizedBodyText))
+            let text = AttributedString(sanitizedBodyText)
+            if actionBodySize != nil {
+                liftedInlineText(text)
+            } else {
+                CustomEmojiAwareText(text)
+            }
+        }
+    }
+
+    /// The fixed-height lifted bubble also contains padding and can contain Read more.
+    /// Give the native text its actual remaining space so it truncates on a whole line.
+    private func liftedInlineText(_ text: AttributedString) -> some View {
+        GeometryReader { proxy in
+            let lineHeight = UIFont.preferredFont(forTextStyle: .body).lineHeight
+            MarkdownLinkText(text)
+                .lineLimit(max(1, Int(ceil(proxy.size.height / lineHeight))))
+                .truncationMode(.tail)
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
     }
 
@@ -1031,6 +1112,16 @@ struct MessageBubble: View {
             .opacity(opacity)
     }
 
+    private var showsReactionStrip: Bool {
+        !isDeleted && (!reactions.isEmpty || omittedReactionKinds > 0)
+    }
+
+    private var widensTextForReactions: Bool {
+        showsReactionStrip && sharedLocation == nil && linkPreviewURL == nil
+            && record.sticker == nil && record.kind != MessageSemantics.kindPoll && remoteGiphyMedia == nil
+            && mediaItems.isEmpty && standaloneEmoji == nil && standaloneCustomEmoji == nil && debugStyle == nil
+    }
+
     private var showsMetadataFooter: Bool {
         clusterPresentation.showsFooter(status: status, isDeleted: isDeleted, isEdited: isEdited,
                                         reported: hasReports)
@@ -1040,14 +1131,14 @@ struct MessageBubble: View {
     private var bubbleMetadataRow: some View {
         if let notice = MessageFailureNotice(status: status, isDeleted: isDeleted, isEdited: isEdited,
                                             hasReports: hasReports, action: onFailedTap) {
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 0) {
+                if showsReactionStrip { reactionMetadata(showsTimestamp: false) }
                 failedNotice(notice)
-                if !reactions.isEmpty || omittedReactionKinds > 0 {
-                    reactionMetadata(showsTimestamp: false)
-                }
             }
-        } else if (reactions.isEmpty && omittedReactionKinds == 0) || isDeleted {
-            if showsMetadataFooter { metadataWithoutReactions }
+        } else if !showsReactionStrip {
+            if showsMetadataFooter {
+                metadataWithoutReactions.padding(.top, density.metrics.bubbleMetadataSpacing)
+            }
         } else {
             reactionMetadata(showsTimestamp: showsMetadataFooter)
         }
@@ -1056,17 +1147,22 @@ struct MessageBubble: View {
     private func failedNotice(_ notice: MessageFailureNotice) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
             Button(action: notice.action) {
-                MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: status, isFromMe: isFromMe)
+                MessageMetadataFooter(caption: .failureNotice, isEdited: false, status: .failed, isFromMe: true)
                     .multilineTextAlignment(.trailing)
             }
             .buttonStyle(.plain)
+            .modifier(MessageActionHold(surface: .failureNotice, isEnabled: showMessageActions != nil) {
+                showMessageActions?(.failureNotice)
+            })
             if notice.showsTimestamp {
                 MessageMetadataFooter(caption: .timestamp(timeLabel), isEdited: isEdited, status: status, isFromMe: isFromMe,
-                                      showsDeliveryStatus: false, hasReports: hasReports, onViewEditHistory: onViewEditHistory)
+                    showsDeliveryStatus: false, hasReports: hasReports,
+                    onViewEditHistory: onViewEditHistory)
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+        .padding(.top, density.metrics.bubbleMetadataSpacing)
     }
 
     private var metadataWithoutReactions: some View {
@@ -1088,87 +1184,98 @@ struct MessageBubble: View {
     }
 
     private func reactionMetadata(showsTimestamp: Bool) -> some View {
-        let allPills = ReactionPillPresentation.sorted(reactions)
+        let allPills = reactions
         let pills = Array(allPills.prefix(ReactionPillPresentation.maximumRenderedPills))
         let preHiddenCount = allPills.count - pills.count + Int(clamping: min(omittedReactionKinds, UInt64(Int.max - allPills.count)))
         let totalCount = projectedReactionTotal.map { Int(clamping: $0) } ?? allPills.reduce(0) { $0 + $1.count }
         let mine = allPills.contains(where: \.mine)
 
         return ReactionMetadataRowLayout(reactionsOnLeadingEdge: isFromMe) {
-            Button {
-                onShowReactionDetails(nil)
-            } label: {
-                ReactionPillLayout(preHiddenReactionCount: preHiddenCount) {
-                    ForEach(Array(pills.enumerated()), id: \.element.emoji) { index, tally in
-                        reactionPill(tally)
-                            .layoutValue(
-                                key: ReactionMetadataSubviewRoleKey.self,
-                                value: .reaction(index)
-                            )
+            ReactionPillLayout(preHiddenReactionCount: preHiddenCount, alignsLeading: isFromMe) {
+                ForEach(Array(pills.enumerated()), id: \.element.emoji) { index, tally in
+                    reactionChip(emoji: tally.emoji, mine: tally.mine, onTap: {
+                        if let onTapReaction { onTapReaction(tally) } else { onShowReactionDetails(tally.emoji) }
+                    }) {
+                        reactionLabel(tally)
                     }
-                    ForEach(0...pills.count, id: \.self) { hiddenRenderedCount in
-                        let hiddenCount = preHiddenCount + hiddenRenderedCount
-                        if hiddenCount > 0 {
-                            reactionOverflowPill(
-                                hiddenCount: hiddenCount,
-                                mine: allPills.suffix(hiddenCount).contains(where: \.mine)
-                            )
-                            .layoutValue(
-                                key: ReactionMetadataSubviewRoleKey.self,
-                                value: .overflow(hiddenCount)
-                            )
+                    .layoutValue(key: ReactionMetadataSubviewRoleKey.self, value: .reaction(index))
+                }
+                ForEach(0..<max(1, pills.count), id: \.self) { hiddenRenderedCount in
+                    let hiddenCount = preHiddenCount + hiddenRenderedCount
+                    if hiddenCount > 0 {
+                        let includesMine = allPills.suffix(hiddenRenderedCount + allPills.count - pills.count).contains(where: \.mine)
+                        reactionChip(emoji: nil, mine: includesMine, onTap: { onShowReactionDetails(nil) }) {
+                            if pills.isEmpty {
+                                Text(L10n.string("Reactions"))
+                            } else {
+                                Text("+\(hiddenCount)")
+                                    .font(.system(size: ReactionPillPresentation.symbolSize, weight: .bold).monospacedDigit())
+                            }
                         }
+                        .layoutValue(key: ReactionMetadataSubviewRoleKey.self, value: .overflow(hiddenCount))
                     }
                 }
-                .clipped()
             }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(L10n.string("Reactions"))
-            .accessibilityValue(L10n.plural("%lld reactions", Int64(totalCount)))
-            .accessibilityAddTraits(mine ? .isSelected : [])
+            .clipped()
+            .contentShape(.rect)
+            .accessibilityRepresentation {
+                Button(L10n.string("Reactions")) { onShowReactionDetails(nil) }
+                    .accessibilityValue(L10n.plural("%lld reactions", Int64(totalCount)))
+                    .accessibilityAddTraits(mine ? .isSelected : [])
+                    .accessibilityActions {
+                        if let onTapReaction {
+                            ForEach(pills, id: \.emoji) { tally in
+                                let name = CustomEmojiShortcode.spokenReaction(tally.emoji)
+                                let removes = tally.mine && ReactionPillPresentation.canRemoveIndividually(
+                                    tally.emoji, from: allPills, omittedKinds: omittedReactionKinds
+                                )
+                                Button(removes ? L10n.formatted("Remove reaction %@", name) : name) { onTapReaction(tally) }
+                            }
+                        }
+                    }
+            }
 
-            if showsTimestamp { messageMetadataFooter }
+            if showsTimestamp {
+                messageMetadataFooter
+            }
         }
         .padding(.horizontal, density.metrics.bubbleHorizontalInset)
+        // Only the visible capsule overlaps the lower edge of the message.
+        .padding(.top, -7)
     }
 
-    private func reactionPill(_ tally: ConversationViewModel.ReactionTally) -> some View {
-        HStack(spacing: 3) {
-            CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex)
-                .font(.system(size: 14, weight: .bold))
-            if tally.count > 1 {
-                Text(L10n.formatted("%lld", Int64(tally.count)))
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-            }
-        }
-        .foregroundStyle(Color.primary)
-        .padding(.horizontal, 7)
-        .frame(height: 22)
-        .background(
-            tally.mine ? Color(.systemGray4) : Color(.secondarySystemBackground),
-            in: Capsule()
-        )
-        .overlay {
-            Capsule().strokeBorder(Color(.separator), lineWidth: 1)
-        }
-        .fixedSize()
-    }
-
-    private func reactionOverflowPill(hiddenCount: Int, mine: Bool) -> some View {
-        Text("+\(hiddenCount)")
+    private func reactionChip<Label: View>(emoji: String?, mine: Bool, onTap: @escaping () -> Void,
+                                           @ViewBuilder label: () -> Label) -> some View {
+        label()
             .font(.system(size: 12, weight: .bold, design: .monospaced))
             .foregroundStyle(Color.primary)
             .padding(.horizontal, 7)
-            .frame(height: 22)
-            .background(
-                mine ? Color(.systemGray4) : Color(.secondarySystemBackground),
-                in: Capsule()
-            )
-            .overlay {
-                Capsule().strokeBorder(Color(.separator), lineWidth: 1)
-            }
+            .frame(minWidth: ReactionPillPresentation.minimumWidth)
+            .frame(height: ReactionPillPresentation.height)
+            .background(mine ? Color(.systemGray4) : Color(.secondarySystemBackground), in: Capsule())
+            .overlay { Capsule().strokeBorder(Color(.opaqueSeparator), lineWidth: 1) }
             .fixedSize()
+            .frame(height: 44, alignment: .top)
+            // The strip proposes zero width to omitted chips, including their hit targets.
+            .frame(minWidth: 0, maxWidth: .infinity)
+            .clipped()
+            .contentShape(.rect)
+            .gesture(
+                LongPressGesture()
+                    .onEnded { _ in onShowReactionDetails(emoji) }
+                    .exclusively(before: TapGesture().onEnded(onTap))
+            )
+    }
+
+    private func reactionLabel(_ tally: ConversationViewModel.ReactionTally) -> some View {
+        HStack(spacing: 2) {
+            CustomEmojiReactionLabel(emoji: tally.emoji, reactionMessageIdHex: tally.reactionMessageIdHex,
+                                     pointSize: ReactionPillPresentation.symbolSize, maximumPointSize: ReactionPillPresentation.height - 2)
+                .font(.system(size: ReactionPillPresentation.symbolSize, weight: .bold))
+            if tally.count > 1 {
+                Text(L10n.formatted("%lld", Int64(tally.count)))
+            }
+        }
     }
 
     private var messageMetadataFooter: some View {
@@ -1337,6 +1444,7 @@ private struct ReactionPillLayout: Layout {
     }
 
     let preHiddenReactionCount: Int
+    let alignsLeading: Bool
 
     func makeCache(subviews: Subviews) -> Cache {
         let roles = roles(in: subviews)
@@ -1374,7 +1482,7 @@ private struct ReactionPillLayout: Layout {
         let fit = fitting(availableWidth: width, cache: cache)
         cache.resolvedWidth = width
         cache.resolvedFit = fit
-        return CGSize(width: width, height: fit.height)
+        return CGSize(width: fit.requiredWidth, height: fit.height)
     }
 
     func placeSubviews(
@@ -1392,23 +1500,21 @@ private struct ReactionPillLayout: Layout {
             cache.resolvedFit = fit
         }
         for index in subviews.indices where !fit.visibleIndices.contains(index) {
-            subviews[index].place(
-                at: CGPoint(x: bounds.minX - 10_000, y: bounds.minY),
-                anchor: .topLeading,
-                proposal: .zero
-            )
+            subviews[index].place(at: bounds.origin, anchor: .topLeading, proposal: .zero)
         }
 
         let reactionIndices = fit.reactionIndices
-        var x = bounds.minX
+        var x = alignsLeading ? bounds.minX : max(bounds.minX, bounds.maxX - fit.requiredWidth)
         for index in reactionIndices {
             let size = cache.sizes[index]
+            // Center each capsule in a touch target that reaches halfway into each gap.
+            let slotWidth = size.width + ReactionMetadataFitting.pillSpacing
             subviews[index].place(
-                at: CGPoint(x: x, y: bounds.midY - size.height / 2),
+                at: CGPoint(x: x - ReactionMetadataFitting.pillSpacing / 2, y: bounds.midY - size.height / 2),
                 anchor: .topLeading,
-                proposal: ProposedViewSize(size)
+                proposal: ProposedViewSize(width: slotWidth, height: size.height)
             )
-            x += size.width + ReactionMetadataFitting.pillSpacing
+            x += slotWidth
         }
     }
 
@@ -1476,77 +1582,65 @@ private struct ReactionPillLayout: Layout {
 }
 
 private struct ReactionMetadataRowLayout: Layout {
-    struct Cache {
-        var footerSize: CGSize?
-        var reactionSize: CGSize?
-        var resolvedWidth: CGFloat?
+    struct Measurement {
+        let width: CGFloat
+        let reactions: CGSize
+        let footer: CGSize
+        let stacksFooter: Bool
+
+        var height: CGFloat {
+            stacksFooter ? reactions.height + footer.height : max(reactions.height, footer.height)
+        }
     }
 
     let reactionsOnLeadingEdge: Bool
 
-    func makeCache(subviews: Subviews) -> Cache { Cache() }
+    func makeCache(subviews: Subviews) -> Measurement? { nil }
 
-    func updateCache(_ cache: inout Cache, subviews: Subviews) {
-        cache = Cache()
+    func updateCache(_ cache: inout Measurement?, subviews: Subviews) {
+        cache = nil
     }
 
-    func sizeThatFits(
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout Cache
-    ) -> CGSize {
-        guard !subviews.isEmpty else { return .zero }
-        let footerSize = subviews.dropFirst().first?.sizeThatFits(.unspecified) ?? .zero
-        let idealReactionSize = subviews[0].sizeThatFits(.unspecified)
-        let idealWidth = idealReactionSize.width
-            + (footerSize.width > 0 ? ReactionMetadataFitting.metadataSpacing : 0)
-            + footerSize.width
-        let width = proposal.width.map { max(0, $0) } ?? idealWidth
-        let reactionWidth = max(
-            0,
-            width - footerSize.width - (footerSize.width > 0 ? ReactionMetadataFitting.metadataSpacing : 0)
-        )
-        let reactionSize = subviews[0].sizeThatFits(
-            ProposedViewSize(width: reactionWidth, height: nil)
-        )
-        cache.footerSize = footerSize
-        cache.reactionSize = reactionSize
-        cache.resolvedWidth = width
-        return CGSize(width: width, height: max(footerSize.height, reactionSize.height))
-    }
-
-    func placeSubviews(
-        in bounds: CGRect,
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout Cache
-    ) {
-        guard !subviews.isEmpty else { return }
-        let footerSize = cache.footerSize ?? subviews.dropFirst().first?.sizeThatFits(.unspecified) ?? .zero
-        let reactionWidth = max(
-            0,
-            bounds.width - footerSize.width - (footerSize.width > 0 ? ReactionMetadataFitting.metadataSpacing : 0)
-        )
-        let reactionSize: CGSize
-        if cache.resolvedWidth == bounds.width, let cached = cache.reactionSize {
-            reactionSize = cached
-        } else {
-            reactionSize = subviews[0].sizeThatFits(
-                ProposedViewSize(width: reactionWidth, height: nil)
-            )
+    private func measure(width proposedWidth: CGFloat?, subviews: Subviews) -> Measurement {
+        let strip = subviews[0]
+        let footer = subviews.dropFirst().first?.sizeThatFits(.unspecified) ?? .zero
+        let reserved = footer.width > 0 ? footer.width + ReactionMetadataFitting.metadataSpacing : 0
+        let idealWidth = (strip.sizeThatFits(.unspecified).width + reserved).rounded(.up)
+        let width = proposedWidth.flatMap { $0.isFinite ? max(0, $0) : nil } ?? idealWidth
+        let available = max(0, width - reserved)
+        var reactions = strip.sizeThatFits(.init(width: available, height: nil))
+        let stacksFooter = footer.width > 0 && reactions.width > available
+        if stacksFooter {
+            reactions = strip.sizeThatFits(.init(width: width, height: nil))
         }
-        let reactionX = reactionsOnLeadingEdge ? bounds.minX : bounds.maxX - reactionWidth
-        let footerX = reactionsOnLeadingEdge ? bounds.maxX - footerSize.width : bounds.minX
-        subviews[0].place(
-            at: CGPoint(x: reactionX, y: bounds.midY - reactionSize.height / 2),
-            anchor: .topLeading,
-            proposal: ProposedViewSize(width: reactionWidth, height: reactionSize.height)
-        )
-        subviews.dropFirst().first?.place(
-            at: CGPoint(x: footerX, y: bounds.midY - footerSize.height / 2),
-            anchor: .topLeading,
-            proposal: ProposedViewSize(footerSize)
-        )
+        return Measurement(width: max(width, reactions.width, footer.width), reactions: reactions,
+                           footer: footer, stacksFooter: stacksFooter)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Measurement?) -> CGSize {
+        let measurement = measure(width: proposal.width, subviews: subviews)
+        cache = measurement
+        return CGSize(width: measurement.width, height: measurement.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Measurement?) {
+        let row: Measurement
+        if let cache, cache.width == bounds.width {
+            row = cache
+        } else {
+            row = measure(width: bounds.width, subviews: subviews)
+        }
+        let reactionX = reactionsOnLeadingEdge ? bounds.minX : bounds.maxX - row.reactions.width
+        let reactionY = row.stacksFooter ? bounds.minY : bounds.midY - row.reactions.height / 2
+        subviews[0].place(at: CGPoint(x: reactionX, y: reactionY), anchor: .topLeading,
+                          proposal: ProposedViewSize(row.reactions))
+        if let footer = subviews.dropFirst().first {
+            let footerX = reactionsOnLeadingEdge ? bounds.maxX - row.footer.width : bounds.minX
+            let footerY = row.stacksFooter ? bounds.minY + row.reactions.height
+                : min(bounds.midY - row.footer.height / 2 + 7, bounds.maxY - row.footer.height)
+            footer.place(at: CGPoint(x: footerX, y: footerY), anchor: .topLeading,
+                         proposal: ProposedViewSize(row.footer))
+        }
     }
 }
 

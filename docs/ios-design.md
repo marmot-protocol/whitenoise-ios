@@ -179,6 +179,12 @@ guidance. Feedback is a design principle, not a native toast component.
   adequate separation. Keep essential commands available beyond gestures, and
   convey state through more than color, sound, haptics, or motion alone. Follow
   [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
+- The chat reaction strip uses 44-point-tall touch targets, with the extra height
+  below each capsule. A target spans its capsule and reaches halfway into the
+  3-point gap to its neighbor. Two minimum-width capsules (34 points each) have
+  centers 37 points apart. Centered 44-point-wide targets would overlap by 7
+  points. Reserving a separate 44-point slot for each would widen the visible
+  gap to 13 points. Keep this horizontal exception specific to the reaction strip.
 - Treat reproducible delayed feedback, blocked input, and visible hitches as
   usability defects. Follow the existing performance and async rules in AGENTS.md.
 - Compare screenshots or recordings with the supplied reference in matching

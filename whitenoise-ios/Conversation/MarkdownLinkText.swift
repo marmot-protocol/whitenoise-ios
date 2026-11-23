@@ -84,9 +84,20 @@ private struct MessageLinkHitTarget: View {
             .frame(width: region.rect.width, height: region.rect.height)
             .contentShape(.rect)
             .onTapGesture { openURL(region.target.url) }
-            .onLongPressGesture { copyMessageLink(region.target) }
+            .gesture(MessageLinkCopyHold { copyMessageLink(region.target) })
             .accessibilityHidden(true)
             .position(x: region.rect.midX, y: region.rect.midY)
+    }
+}
+
+/// The row hold waits for this more specific action when the touch lands on a link.
+struct MessageLinkCopyHold: UIGestureRecognizerRepresentable {
+    final class Recognizer: UILongPressGestureRecognizer {}
+    let copy: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> Recognizer { Recognizer() }
+    func handleUIGestureRecognizerAction(_ recognizer: Recognizer, context: Context) {
+        if recognizer.state == .began { copy() }
     }
 }
 

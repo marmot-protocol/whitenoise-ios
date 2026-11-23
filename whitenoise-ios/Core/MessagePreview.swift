@@ -84,6 +84,12 @@ enum MessagePreview {
         }
     }
 
+    static func canCopyFromMessageMenu(_ record: AppMessageRecordFfi) -> Bool {
+        if record.plaintext.unicodeScalars.contains(where: { !CharacterSet.whitespacesAndNewlines.contains($0) }) { return true }
+        // Unsupported cards copy the event envelope, even when its content is empty.
+        return MessageSemantics.classify(record) == .unsupportedEvent
+    }
+
     /// Copy full authored text, independent of preview and rendering budgets,
     /// resolving canonical mentions to the names shown in the conversation.
     /// Parsed tokens can be incomplete and preview flattening loses line breaks,
@@ -221,8 +227,14 @@ enum MessagePreview {
 
     /// The question is peer-controlled poll text; keep it to one line.
     static func pollPreview(question: String) -> String {
-        let line = ContentSanitizer.compactSingleLine(question, maxLength: 1_024) ?? ""
-        return L10n.formatted("📊 Poll: %@", line)
+        "📊 \(pollTitle(question: question))"
+    }
+
+    static func pollTitle(question: String) -> String {
+        guard let line = ContentSanitizer.compactSingleLine(question, maxLength: 1_024) else {
+            return L10n.string("Poll")
+        }
+        return L10n.formatted("Poll: %@", line)
     }
 
     static func mediaFallback(_ attachments: [MediaAttachmentReferenceFfi]) -> String {

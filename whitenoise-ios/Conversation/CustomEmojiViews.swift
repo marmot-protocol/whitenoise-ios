@@ -188,48 +188,57 @@ struct CustomEmojiReactionLabel: View {
     @ScaledMetric(relativeTo: .body) private var pointSize = CustomEmojiReactionLabel.defaultPointSize
 
     static let defaultPointSize: CGFloat = 18
+    private let maximumPointSize: CGFloat
 
     let emoji: String
     /// The reaction event whose image to show. Nil (an optimistic reaction
     /// with no event yet) has no image of its own.
     var reactionMessageIdHex: String?
 
-    @State private var loaded: (key: CustomEmojiImageKey, image: UIImage)?
+    @State private var loaded: (id: ArtworkID, image: UIImage)?
     /// The load that found no image of the reaction's own; only then may a
     /// built-in stand in, so it never paints over an image still loading.
-    @State private var noArtwork: LoadID?
+    @State private var noArtwork: ArtworkID?
 
-    private struct LoadID: Equatable {
+    private struct ArtworkID: Equatable {
         let scope: CustomEmojiScope?
         let emoji: String
         let reactionMessageIdHex: String?
         let pixelSize: Int
+    }
+
+    private struct LoadID: Equatable {
+        let artwork: ArtworkID
         let policyRevision: String
     }
 
-    init(emoji: String, reactionMessageIdHex: String? = nil) {
+    init(emoji: String, reactionMessageIdHex: String? = nil, pointSize: CGFloat = Self.defaultPointSize,
+         maximumPointSize: CGFloat = .infinity) {
+        self.maximumPointSize = maximumPointSize
+        _pointSize = ScaledMetric(wrappedValue: pointSize, relativeTo: .body)
         self.emoji = emoji
         self.reactionMessageIdHex = reactionMessageIdHex
     }
 
     var body: some View {
         let scope = store?.currentScope
-        let size = CustomEmojiInlineMetrics.pixelSize(pointSize: pointSize, scale: displayScale)
-        let loadID = LoadID(scope: scope, emoji: emoji, reactionMessageIdHex: reactionMessageIdHex, pixelSize: size,
-                            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)
+        let artworkSize = min(pointSize, maximumPointSize)
+        let size = CustomEmojiInlineMetrics.pixelSize(pointSize: artworkSize, scale: displayScale)
+        let artworkID = ArtworkID(scope: scope, emoji: emoji, reactionMessageIdHex: reactionMessageIdHex, pixelSize: size)
+        let loadID = LoadID(artwork: artworkID, policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)
         Group {
-            if let loaded, let scope, loaded.key.scope == scope, loaded.key.pixelSize == size {
+            if let loaded, loaded.id == artworkID {
                 Image(uiImage: loaded.image)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: pointSize, height: pointSize)
-            } else if scope == nil || noArtwork == loadID,
+                    .frame(width: artworkSize, height: artworkSize)
+            } else if scope == nil || noArtwork == artworkID,
                       let shortcode = CustomEmojiShortcode(reactionContent: emoji),
                       let builtin = CustomEmojiBuiltinImages.image(for: shortcode, pixelSize: size, scale: displayScale) {
                 Image(uiImage: builtin)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: pointSize, height: pointSize)
+                    .frame(width: artworkSize, height: artworkSize)
             } else {
                 Text(ContentSanitizer.reactionEmoji(emoji))
             }
@@ -245,13 +254,19 @@ struct CustomEmojiReactionLabel: View {
                 scale: displayScale,
                 policyRevision: loadID.policyRevision
             )
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, store.currentScope == scope else { return }
             switch result {
             case .image(let key, let image) where key.scope == store.currentScope:
-                loaded = (key, image)
+                loaded = (artworkID, image)
+                noArtwork = nil
             case .noArtwork:
-                noArtwork = loadID
-            case .image, nil:
+                loaded = nil
+                noArtwork = artworkID
+            case .image:
+                loaded = nil
+                noArtwork = nil
+            case nil:
+                // A transient lookup failure says nothing new about this reaction.
                 break
             }
         }

@@ -139,6 +139,7 @@ struct MessageBubbleChromeLayout: Layout {
 
     let isFromMe: Bool
     var spacing: CGFloat = 3
+    var widensTextForReactions = false
 
     func makeCache(subviews: Subviews) -> Cache {
         Cache()
@@ -203,11 +204,11 @@ struct MessageBubbleChromeLayout: Layout {
             cache.resolvedWidth = bounds.width
             cache.bubbleSize = bubbleSize
         }
-        let bubbleX = isFromMe ? bounds.maxX - bubbleSize.width : bounds.minX
+        let surfaceWidth = widensTextForReactions ? bounds.width : bubbleSize.width
         subviews[0].place(
-            at: CGPoint(x: bubbleX, y: bounds.minY),
-            anchor: .topLeading,
-            proposal: ProposedViewSize(width: bubbleSize.width, height: bubbleSize.height)
+            at: CGPoint(x: isFromMe ? bounds.maxX : bounds.minX, y: bounds.minY),
+            anchor: isFromMe ? .topTrailing : .topLeading,
+            proposal: ProposedViewSize(width: surfaceWidth, height: bubbleSize.height)
         )
         subviews.dropFirst().first?.place(
             at: CGPoint(x: bounds.minX, y: bounds.minY + bubbleSize.height + spacing),
@@ -392,17 +393,31 @@ nonisolated struct ReactionSummaryPresentation: Equatable {
 }
 
 nonisolated enum ReactionPillPresentation {
-    static let maximumRenderedPills = 7
+    static let height: CGFloat = 22
+    static let minimumWidth: CGFloat = 34
+    static let symbolSize: CGFloat = 14
+    static let maximumRenderedPills = 4
 
-    static func sorted(
-        _ reactions: [ConversationViewModel.ReactionTally]
-    ) -> [ConversationViewModel.ReactionTally] {
-        reactions.sorted {
-            if $0.mine != $1.mine { return $0.mine && !$1.mine }
-            if $0.count != $1.count { return $0.count > $1.count }
-            return $0.emoji < $1.emoji
+    enum TapAction { case toggle, showDetails }
+
+    static func tapAction(for tally: ConversationViewModel.ReactionTally, in reactions: [ConversationViewModel.ReactionTally],
+                          omittedKinds: UInt64, canRepeatCustom: (CustomEmojiShortcode) -> Bool) -> TapAction {
+        if tally.mine {
+            return canRemoveIndividually(tally.emoji, from: reactions, omittedKinds: omittedKinds) ? .toggle : .showDetails
         }
+        if let shortcode = CustomEmojiShortcode(reactionContent: tally.emoji) {
+            return canRepeatCustom(shortcode) ? .toggle : .showDetails
+        }
+        guard ContentSanitizer.reactionEmoji(tally.emoji) == tally.emoji,
+              SingleEmojiMessagePresentation.emoji(in: tally.emoji) != nil else { return .showDetails }
+        return .toggle
     }
+
+    static func canRemoveIndividually(_ emoji: String, from reactions: [ConversationViewModel.ReactionTally],
+                                      omittedKinds: UInt64) -> Bool {
+        omittedKinds == 0 && reactions.filter(\.mine).map(\.emoji) == [emoji]
+    }
+
 }
 
 nonisolated struct ReactionMetadataFit: Equatable {
@@ -425,7 +440,7 @@ nonisolated enum ReactionMetadataFitting {
         preHiddenReactionCount: Int = 0
     ) -> ReactionMetadataFit {
         guard !reactionWidths.isEmpty else {
-            return ReactionMetadataFit(visibleReactionCount: 0, hiddenReactionCount: 0)
+            return ReactionMetadataFit(visibleReactionCount: 0, hiddenReactionCount: preHiddenReactionCount)
         }
 
         let boundedWidth = max(0, availableWidth)
@@ -449,7 +464,7 @@ nonisolated enum ReactionMetadataFitting {
         let firstVisibleCount = preHiddenReactionCount > 0
             ? reactionWidths.count
             : reactionWidths.count - 1
-        for visibleCount in stride(from: firstVisibleCount, through: 0, by: -1) {
+        for visibleCount in stride(from: firstVisibleCount, through: 1, by: -1) {
             let hiddenCount = preHiddenReactionCount + reactionWidths.count - visibleCount
             guard let overflowWidth = overflowWidthForHiddenCount[hiddenCount] else { continue }
             if requiredWidth(
@@ -466,9 +481,10 @@ nonisolated enum ReactionMetadataFitting {
             }
         }
 
+        // This is the minimum strip. Its parent must allocate its measured width.
         return ReactionMetadataFit(
-            visibleReactionCount: 0,
-            hiddenReactionCount: reactionWidths.count
+            visibleReactionCount: 1,
+            hiddenReactionCount: preHiddenReactionCount + (reactionWidths.count - 1)
         )
     }
 

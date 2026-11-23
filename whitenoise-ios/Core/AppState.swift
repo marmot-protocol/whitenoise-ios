@@ -331,7 +331,7 @@ final class AppState {
     private(set) var recentReactions: [String]
     private(set) var customizedQuickReactions: [String]?
 
-    nonisolated static let defaultReactions = ["❤️", "👍", "👎", "😂", "😮", "😢"]
+    nonisolated static let defaultReactions = ["❤️", "🤘", "🔥", "😂", "🦫", "🚀"]
 
     /// The six emojis to show in the quick-reaction row. Before the user
     /// customizes it, recents are topped up with defaults; a saved selection is
