@@ -3,6 +3,7 @@ import MarmotKit
 
 /// Question, options with live tallies, and voting for one poll bubble.
 struct PollMessageContent: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let poll: PollProjectionFfi
     let isFromMe: Bool
     /// Nil when the viewer cannot vote here (inactive group, pending row).
@@ -10,14 +11,12 @@ struct PollMessageContent: View {
     /// Opens the per-voter results sheet.
     var onViewVotes: (() -> Void)? = nil
 
-    private var isMultipleChoice: Bool { poll.pollType == .multipleChoice }
     private var foreground: Color { MessageBubblePalette.foreground(isFromMe: isFromMe) }
     private var secondaryForeground: Color { MessageBubblePalette.secondaryForeground(isFromMe: isFromMe) }
 
     /// Redraws once at the deadline so an on-screen poll closes on time.
     private var deadlineSchedule: [Date] {
-        guard let endsAt = poll.endsAt, PollPresentation.isOpen(poll, now: .now) else { return [] }
-        return [Date(timeIntervalSince1970: TimeInterval(endsAt) + 1)]
+        PollPresentation.deadlineRefresh(for: poll, now: .now).map { [$0] } ?? []
     }
 
     var body: some View {
@@ -29,25 +28,26 @@ struct PollMessageContent: View {
 
     private func content(isOpen: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.subheadline)
+                    .foregroundStyle(secondaryForeground)
+                    .accessibilityLabel(L10n.string("Poll"))
                 Text(ContentSanitizer.messageBody(poll.question))
                     .font(.body.weight(.semibold))
                     .foregroundStyle(foreground)
                     .fixedSize(horizontal: false, vertical: true)
-                Label(
-                    isMultipleChoice ? L10n.string("Poll · Select one or more") : L10n.string("Poll · Select one"),
-                    systemImage: "chart.bar.xaxis"
-                )
-                .font(.caption)
-                .foregroundStyle(secondaryForeground)
             }
+            .accessibilityElement(children: .combine)
 
-            ForEach(poll.options, id: \.id) { option in
-                optionRow(option, isOpen: isOpen)
+            VStack(spacing: 0) {
+                ForEach(poll.options, id: \.id) { option in
+                    optionRow(option, isOpen: isOpen)
+                }
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                Text(footerText(isOpen: isOpen))
+                Text(PollPresentation.footerText(for: poll, isOpen: isOpen))
                     .font(.caption)
                     .foregroundStyle(secondaryForeground)
 
@@ -60,14 +60,10 @@ struct PollMessageContent: View {
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    // The 44-point target may extend into the bubble's bottom inset.
-                    .padding(.bottom, -8)
                 }
             }
         }
-        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
-        .padding(.vertical, 12)
-        .frame(width: MessageBubbleReplyLayout.richContentWidth, alignment: .leading)
+        .padding(MessageBubbleReplyLayout.cardOuterInset)
     }
 
     private func optionRow(_ option: PollOptionResultFfi, isOpen: Bool) -> some View {
@@ -78,7 +74,7 @@ struct PollMessageContent: View {
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: symbol(selected: selected))
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(selected ? foreground : secondaryForeground)
                         .accessibilityHidden(true)
                     Text(ContentSanitizer.messageBody(option.label))
@@ -91,18 +87,9 @@ struct PollMessageContent: View {
                         .accessibilityHidden(true)
                 }
                 .font(.subheadline)
-                Capsule()
-                    .fill(secondaryForeground.opacity(0.25))
-                    .frame(height: 4)
-                    .overlay(alignment: .leading) {
-                        GeometryReader { proxy in
-                            Capsule()
-                                .fill(foreground)
-                                .frame(width: proxy.size.width * fraction)
-                        }
-                    }
-                    .accessibilityHidden(true)
+                resultBar(fraction: fraction)
             }
+            .frame(minHeight: 44)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -113,25 +100,18 @@ struct PollMessageContent: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
-    private func symbol(selected: Bool) -> String {
-        switch (isMultipleChoice, selected) {
-        case (true, true): "checkmark.square.fill"
-        case (true, false): "square"
-        case (false, true): "checkmark.circle.fill"
-        case (false, false): "circle"
-        }
-    }
-
-    private func footerText(isOpen: Bool) -> String {
-        let votes = L10n.plural("%lld votes", Int64(clamping: poll.participants))
-        if !isOpen {
-            return "\(votes) · \(L10n.string("Final results"))"
-        }
-        if let endsAt = poll.endsAt {
-            let date = Date(timeIntervalSince1970: TimeInterval(endsAt))
-            let ends = L10n.formatted("Ends %@", date.formatted(date: .abbreviated, time: .shortened))
-            return "\(votes) · \(ends)"
-        }
-        return votes
+    private func resultBar(fraction: Double) -> some View {
+        Capsule()
+            .fill(secondaryForeground.opacity(0.25))
+            .overlay(alignment: .leading) {
+                GeometryReader { bounds in
+                    Capsule()
+                        .fill(foreground)
+                        .frame(width: bounds.size.width * fraction)
+                }
+            }
+            .frame(height: 10)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: fraction)
+            .accessibilityHidden(true)
     }
 }

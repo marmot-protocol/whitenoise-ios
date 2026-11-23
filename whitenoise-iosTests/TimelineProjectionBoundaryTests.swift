@@ -120,6 +120,52 @@ struct TimelineProjectionBoundaryTests {
         #expect(preview.text == "target body")
     }
 
+    @Test func quotesOfAnUntitledPollMatchWithAndWithoutAProjectedPreview() throws {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        var poll = timelineRecord(messageIdHex: hexId(20), plaintext: "")
+        poll.kind = MessageSemantics.kindPoll
+        poll.poll = PollProjectionFfi(
+            question: "", options: [.init(id: "1", label: "Yes", votes: 0), .init(id: "2", label: "No", votes: 0)],
+            pollType: .singleChoice, participants: 0, localSelection: [], creator: poll.sender, endsAt: nil, open: true
+        )
+        let fromTarget = timelineRecord(
+            messageIdHex: hexId(21), plaintext: "Reply", replyToMessageIdHex: poll.messageIdHex
+        )
+        let offscreenPollID = hexId(23)
+        let fromProjection = timelineRecord(
+            messageIdHex: hexId(22), plaintext: "Another reply", replyToMessageIdHex: offscreenPollID,
+            replyPreview: TimelineReplyPreviewFfi(
+                messageIdHex: offscreenPollID, sender: poll.sender, plaintext: "", kind: poll.kind,
+                mediaJson: nil, media: [], deleted: false
+            )
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [poll, fromTarget, fromProjection], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        for reply in [fromTarget, fromProjection] {
+            let record = try #require(viewModel.record(for: reply.messageIdHex))
+            let quote = try #require(viewModel.replyPreview(for: record))
+            #expect(quote.isPoll)
+            #expect(quote.text == L10n.string("Poll"))
+        }
+    }
+
+    @Test func quotesOfAKnownMalformedPollHideItsRawQuestion() throws {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        var poll = timelineRecord(messageIdHex: hexId(20), plaintext: "Raw question")
+        poll.kind = MessageSemantics.kindPoll
+        let fallback = timelineRecord(messageIdHex: hexId(21), plaintext: "Reply", replyToMessageIdHex: poll.messageIdHex)
+        let projected = timelineRecord(messageIdHex: hexId(22), plaintext: "Another reply", replyToMessageIdHex: poll.messageIdHex,
+            replyPreview: .init(messageIdHex: poll.messageIdHex, sender: poll.sender, plaintext: poll.plaintext,
+                                kind: poll.kind, mediaJson: nil, media: [], deleted: false))
+        viewModel.applyTimelinePage(.init(messages: [poll, fallback, projected], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        for reply in [fallback, projected] {
+            let record = try #require(viewModel.record(for: reply.messageIdHex))
+            #expect(viewModel.replyPreview(for: record)?.text == L10n.string("This poll can’t be displayed."))
+        }
+    }
+
     @Test func projectedReplyPreviewCarriesResolvedMediaWithoutAnotherLookup() throws {
         let counter = ProjectionBuildCounter()
         let viewModel = ConversationViewModel(

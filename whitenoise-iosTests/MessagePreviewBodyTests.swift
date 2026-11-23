@@ -68,6 +68,14 @@ struct MessagePreviewBodyTests {
         #expect(!MessagePreview.body(record).contains("opaque-payload"))
     }
 
+    @Test func aBlankUnsupportedEventStillOffersItsJSONForCopy() {
+        let event = previewRecord(kind: 9999, plaintext: "  ", tags: [])
+        let chat = previewRecord(kind: MessageSemantics.kindChat, plaintext: "  ", tags: [])
+        #expect(MessagePreview.canCopyFromMessageMenu(event))
+        #expect(MessagePreview.copyBody(event) == UnsupportedEventPresentation.eventJSON(for: event))
+        #expect(!MessagePreview.canCopyFromMessageMenu(chat))
+    }
+
     @Test func aReplyToAnUnsupportedEventQuotesTheLabel() {
         let preview = TimelineReplyPreviewFfi(
             messageIdHex: hex("bb"),
