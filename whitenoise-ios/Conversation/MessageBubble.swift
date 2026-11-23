@@ -393,7 +393,6 @@ struct MessageBubble: View {
                 )
                 .environment(\.avatarMonogramFont, .subheadline.weight(.semibold))
                 .padding(.trailing, 7)
-                .alignmentGuide(.messageSurfaceBottom) { $0[.bottom] }
                 .zIndex(1)
             }
 
