@@ -6,6 +6,24 @@ import Testing
 
 @MainActor
 struct TimelineProjectionBoundaryTests {
+    @Test func readerUsesUpdatedSourceBytesWhileItsRowIsLoaded() throws {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let id = hexId(1)
+        var record = timelineRecord(messageIdHex: id, plaintext: "Café")
+        model.applyTimelinePage(.init(messages: [record], hasMoreBefore: true, hasMoreAfter: false), placement: .window)
+        let row = try #require(model.timeline.first)
+        record.plaintext = "Cafe\u{301}"
+        model.applyTimelinePage(.init(messages: [record], hasMoreBefore: true, hasMoreAfter: false), placement: .window)
+        let reader = try #require(model.readerMessage(rowID: row.id, messageID: id))
+        #expect(reader.record.plaintext.utf8.elementsEqual(record.plaintext.utf8))
+        model.applyTimelinePage(.init(messages: [], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        #expect(model.readerMessage(rowID: row.id, messageID: id) == nil)
+    }
+
+    @Test func aQuoteStopsAtTheFirstRenderedLine() {
+        #expect(ConversationReplyPreview.excerpt("\n  First line  \n\nNext paragraph") == "First line")
+    }
+
     @Test func rejectedSiblingsKeepTheirSlotAndCannotBecomeDownloadable() {
         let reference = mediaReference(sourceEpoch: 42)
         let outcomes: [MediaAttachmentOutcomeFfi] = [
@@ -22,6 +40,24 @@ struct TimelineProjectionBoundaryTests {
         #expect(items[2].rejectionMessage == L10n.string("Attachment couldn’t be read"))
         let another = MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: "message-b")
         #expect(Set(items.map(\.id)).isDisjoint(with: another.map(\.id)))
+    }
+
+    @Test func changingOnlyTheSourceReplacesTheCachedAttachmentTarget() throws {
+        let cache = ConversationMediaProjectionCache()
+        let record = appRecord(messageIdHex: hexId(1), plaintext: "", tags: [])
+        let item = TimelineItem(id: "row", kind: .message(record: record, status: .received), timestamp: 0)
+        let outcomes: [MediaAttachmentOutcomeFfi] = [.accepted(attachmentIndex: 0, reference: mediaReference(sourceEpoch: 42))]
+        cache.setOutcomes(outcomes, forMessageId: record.messageIdHex, sourceMessageId: hexId(2))
+        cache.update(for: item)
+        let original = try #require(cache.items(for: item).first)
+        let recording = ConversationSpeech.Recording(displayID: original.id, target: try #require(original.localTarget))
+
+        cache.setOutcomes(outcomes, forMessageId: record.messageIdHex, sourceMessageId: hexId(3))
+        #expect(cache.update(for: item))
+        let updated = try #require(cache.items(for: item).first)
+        #expect(updated.id == original.id)
+        #expect(updated.localTarget?.sourceMessageIdHex == hexId(3))
+        #expect(!recording.matches(updated))
     }
 
     @Test func mediaCacheTreatsPresentEmptyRowProjectionAsAuthoritative() {
@@ -95,6 +131,125 @@ struct TimelineProjectionBoundaryTests {
         if let preview = viewModel.replyPreview(for: replyRecord) {
             Issue.record("Expected mirrored nil reply target to suppress tag fallback, got \(preview)")
         }
+    }
+
+    @Test(arguments: [false, true])
+    func searchCountsOnlyRowsWithAVisibleSender(inDirectChat: Bool) {
+        let app = AppState.test()
+        let me = accountSummary("Active", byte: "ab")
+        app.accountStore.accounts = [me]
+        app.activeAccountRef = me.label
+        var group = testGroup()
+        if inDirectChat { group.name = "" }
+        let model = ConversationViewModel(appState: app, group: group, initialMemberCount: 2)
+        let first = timelineRecord(messageIdHex: hexId(1), plaintext: "First message")
+        app.seedDiscoveredProfile(profileMetadata(displayName: "Dan"), forAccountIdHex: first.sender)
+        let grouped = timelineRecord(messageIdHex: hexId(2), plaintext: "Second message")
+        var own = timelineRecord(messageIdHex: hexId(3), plaintext: "My reply")
+        own.direction = "sent"
+        var ownWithMatch = timelineRecord(messageIdHex: hexId(4), plaintext: "See you soon")
+        ownWithMatch.direction = "sent"
+        var otherDevice = timelineRecord(messageIdHex: hexId(5), plaintext: "From my laptop")
+        otherDevice.sender = me.accountIdHex
+        model.applyTimelinePage(.init(messages: [first, grouped, own, ownWithMatch, otherDevice], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        model.search.query = "Dan"
+        #expect(model.search.matches.map(\.messageIdHex) == (inDirectChat ? [] : [first.messageIdHex]))
+        model.search.query = "you"
+        #expect(model.search.matches.map(\.messageIdHex) == [ownWithMatch.messageIdHex])
+        model.search.query = IdentityPresentation.text(accountIdHex: me.accountIdHex, knownName: nil)
+        #expect(model.search.matches.isEmpty)
+    }
+
+    @Test func searchCanSelectTheAgentNameOnTheActivityThatStartsItsCluster() {
+        let app = AppState.test()
+        let model = ConversationViewModel(appState: app, group: testGroup())
+        var activity = timelineRecord(messageIdHex: hexId(1), plaintext: #"{"status":"thinking","text":"Checking the route"}"#)
+        activity.kind = MessageSemantics.kindAgentActivity
+        app.seedDiscoveredProfile(profileMetadata(displayName: "Trail guide"), forAccountIdHex: activity.sender)
+        let answer = timelineRecord(messageIdHex: hexId(2), plaintext: "Take the east path")
+        model.applyTimelinePage(.init(messages: [activity, answer], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        for query in ["Trail guide", "Checking"] {
+            model.search.query = query
+            #expect(model.search.matches.map(\.messageIdHex) == [activity.messageIdHex])
+        }
+    }
+
+    @Test func searchAndSpeechUseTheInlineThreadBodyAndSkipAnUnrelatedKind1111Payload() throws {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let parent = timelineRecord(messageIdHex: hexId(70), plaintext: "Meet for lunch")
+        var thread = timelineRecord(messageIdHex: hexId(71), plaintext: "Near the station", tags: [.init(values: ["e", parent.messageIdHex])],
+                                    replyToMessageIdHex: parent.messageIdHex)
+        thread.kind = MessageSemantics.kindComment
+        var unrelated = timelineRecord(messageIdHex: hexId(72), plaintext: "Near the station")
+        unrelated.kind = MessageSemantics.kindComment
+        model.applyTimelinePage(.init(messages: [parent, thread, unrelated], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        model.search.query = "station"
+        #expect(model.search.matches.map(\.messageIdHex) == [thread.messageIdHex])
+        let reply = try #require(model.record(for: thread.messageIdHex))
+        #expect(model.replyPreview(for: reply)?.text == parent.plaintext)
+        #expect(MessageSpeechPresentation.textActions(for: reply, myAccountID: nil, standaloneEmoji: false, hasSpokenText: true) == [.read])
+        let unsupported = try #require(model.record(for: unrelated.messageIdHex))
+        #expect(MessageSpeechPresentation.textActions(for: unsupported, myAccountID: nil, standaloneEmoji: false, hasSpokenText: true).isEmpty)
+    }
+
+    @Test func searchMatchesTheDocumentFilenameButSkipsUnlabeledMediaTiles() {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let image = mediaReference(sourceEpoch: 42)
+        var document = image
+        document.mediaType = "application/pdf"
+        document.fileName = "itinerary.pdf"
+        let photo = timelineRecord(messageIdHex: hexId(1), plaintext: "", media: [image])
+        let file = timelineRecord(messageIdHex: hexId(2), plaintext: "", media: [document])
+        model.applyTimelinePage(.init(messages: [photo, file], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        for query in [image.fileName, L10n.string("Photo"), "File"] {
+            model.search.query = query
+            #expect(model.search.matches.isEmpty)
+        }
+        model.search.query = "itinerary"
+        #expect(model.search.matches.map(\.messageIdHex) == [file.messageIdHex])
+    }
+
+    @Test func searchMatchesAStickerCaptionButSkipsTheStandaloneStickerLabel() {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        var captioned = timelineRecord(messageIdHex: hexId(1), plaintext: "Meet at six")
+        captioned.sticker = .init(packCoordinate: "pack", shortcode: "wave", plaintextSha256: "hash")
+        var standalone = timelineRecord(messageIdHex: hexId(2), plaintext: "")
+        standalone.sticker = captioned.sticker
+        model.applyTimelinePage(.init(messages: [captioned, standalone], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        model.search.query = "six"
+        #expect(model.search.matches.map(\.messageIdHex) == [captioned.messageIdHex])
+        model.search.query = MessagePreview.stickerLabel
+        #expect(model.search.matches.isEmpty)
+    }
+
+    @Test func searchUsesTheVisibleGIFCreditAndLocationLabel() {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let gif = timelineRecord(messageIdHex: hexId(1), plaintext: "https://media.giphy.com/media/abc/giphy.mp4\nvia GIPHY · Otter")
+        let location = timelineRecord(messageIdHex: hexId(2), plaintext: SharedLocationText.value(latitude: 45, longitude: 20))
+        model.applyTimelinePage(.init(messages: [gif, location], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        model.search.activate()
+        model.search.query = "Otter"
+        #expect(model.search.matches.map(\.messageIdHex) == [gif.messageIdHex])
+        model.search.query = L10n.string("Location")
+        #expect(model.search.matches.map(\.messageIdHex) == [location.messageIdHex])
+        model.search.query = "giphy.mp4"
+        #expect(model.search.matches.isEmpty)
+    }
+
+    @Test func replyWithAnUnloadedTargetShowsOnlyAGenericQuote() throws {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let reply = timelineRecord(messageIdHex: hexId(4), plaintext: "My reply", replyToMessageIdHex: hexId(3))
+        model.applyTimelinePage(.init(messages: [reply], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        let record = try #require(model.record(for: reply.messageIdHex))
+        let preview = try #require(model.replyPreview(for: record))
+        #expect(preview.name == L10n.string("Message"))
+        #expect(preview.text == L10n.string("Message unavailable"))
+        #expect(preview.media == nil)
     }
 
     @Test func projectedReplyTargetCanUseLoadedTargetAsPreviewFallback() throws {
@@ -200,6 +355,11 @@ struct TimelineProjectionBoundaryTests {
         #expect(preview.media?.reference == reference)
         #expect(preview.media?.id.contains(targetID) == true)
         #expect(counter.mediaBuilds == 0)
+
+        var target = timelineRecord(messageIdHex: targetID, plaintext: "", media: [reference])
+        target.sourceMessageIdHex = hexId(35)
+        _ = viewModel.timelineStore.applyTimelineRecord(target, updateTimeline: true)
+        #expect(viewModel.replyPreview(for: replyRecord)?.media?.localTarget?.sourceMessageIdHex == hexId(35))
     }
 
     @Test func markdownProjectionCacheSkipsUnchangedWindowRows() throws {

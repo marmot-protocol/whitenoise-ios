@@ -15,21 +15,21 @@ struct UnsupportedEventCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "curlybraces")
                         .accessibilityHidden(true)
-                    Text(L10n.string("Unsupported event"))
+                    TimelineSearchText(L10n.string("Unsupported event"))
                         .fontWeight(.semibold)
-                    Text(UnsupportedEventPresentation.kindLabel(presentation.kind))
+                    TimelineSearchText(UnsupportedEventPresentation.kindLabel(presentation.kind))
                         .monospacedDigit()
                 }
                 .font(.footnote)
                 .foregroundStyle(secondary)
 
                 if let title = presentation.title {
-                    Text(verbatim: title)
+                    TimelineSearchText(title, keepsMatchVisible: true)
                         .font(.headline)
                         .foregroundStyle(MessageBubblePalette.foreground(isFromMe: isFromMe))
                 }
                 if let summary = presentation.summary {
-                    Text(verbatim: summary)
+                    TimelineSearchText(summary, keepsMatchVisible: true)
                         .font(.subheadline)
                         .foregroundStyle(secondary)
                         .lineLimit(3)

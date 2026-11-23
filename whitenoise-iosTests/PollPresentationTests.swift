@@ -90,6 +90,39 @@ struct PollPresentationTests {
         #expect(!PollPresentation.isOpen(Self.poll(open: false), now: Date(timeIntervalSince1970: 0)))
     }
 
+    @Test func searchFollowsTheDisplayedPollFooterAcrossItsDeadline() {
+        let poll = Self.poll(type: .multipleChoice, endsAt: 1_000)
+        let entry = ConversationSearchEntry(itemId: "poll-row", messageIdHex: "poll", text: poll.question, poll: poll)
+        let open = Date(timeIntervalSince1970: 999)
+        let closed = Date(timeIntervalSince1970: 1_001)
+        let instruction = L10n.string("Select one or more")
+        let status = L10n.string("Poll closed")
+
+        #expect(ConversationSearchEngine.matches(for: instruction, in: [entry], now: open).map(\.itemId) == ["poll-row"])
+        #expect(ConversationSearchEngine.matches(for: status, in: [entry], now: open).isEmpty)
+        #expect(ConversationSearchEngine.matches(for: instruction, in: [entry], now: closed).isEmpty)
+        #expect(ConversationSearchEngine.matches(for: status, in: [entry], now: closed).map(\.itemId) == ["poll-row"])
+    }
+
+    @MainActor @Test func searchWatchesTheEarliestOpenPollUntilTheQueryIsCleared() {
+        let deadline = UInt64(Date.now.timeIntervalSince1970) + 3_600
+        let later = Self.poll(endsAt: deadline + 60)
+        let earlier = Self.poll(endsAt: deadline)
+        let closed = Self.poll(endsAt: deadline - 60, open: false)
+        let search = ConversationSearchModel()
+        search.entriesProvider = {
+            [later, earlier, closed].enumerated().map { index, poll in
+                ConversationSearchEntry(itemId: String(index), messageIdHex: String(index), text: poll.question, poll: poll)
+            }
+        }
+        search.activate()
+        search.query = L10n.string("Poll closed")
+        #expect(search.matches.map(\.itemId) == ["2"])
+        #expect(search.nextPollDeadline == Date(timeIntervalSince1970: TimeInterval(deadline) + 1))
+        search.query = ""
+        #expect(search.nextPollDeadline == nil)
+    }
+
     @Test func resultFractionIsShareOfVoters() {
         #expect(PollPresentation.fraction(votes: 0, participants: 0) == 0)
         #expect(PollPresentation.fraction(votes: 1, participants: 4) == 0.25)

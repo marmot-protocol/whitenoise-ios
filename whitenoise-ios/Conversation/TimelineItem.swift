@@ -138,10 +138,10 @@ nonisolated enum MessageClusterProjection {
 
     private static func isClusterable(_ record: AppMessageRecordFfi) -> Bool {
         switch MessageSemantics.classify(record) {
-        case .chat, .reply, .media, .poll, .unsupportedEvent:
+        case .chat, .reply, .media, .poll, .agentActivity, .unsupportedEvent:
             return true
         case .reaction, .delete, .edit,
-             .agentActivity, .agentOperation, .groupSystem, .unknown:
+             .agentOperation, .groupSystem, .unknown:
             return false
         }
     }

@@ -269,6 +269,9 @@ nonisolated enum MediaAttachmentPolicy {
 }
 
 nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
+    /// Waveform analysis and on-device transcription both need the whole encoded recording.
+    static let audioAnalysisByteLimit = 16 * 1024 * 1024
+
     let id: String
     let reference: MediaAttachmentReferenceFfi?
     let fileName: String

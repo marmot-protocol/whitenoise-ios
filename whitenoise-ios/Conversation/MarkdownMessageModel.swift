@@ -15,7 +15,7 @@ typealias MarkdownMentionResolver = (MarkdownNostrEntityFfi) -> String?
 enum MarkdownDisplayBlock: Equatable {
     case paragraph(AttributedString)
     case heading(AttributedString)
-    case codeBlock(AttributedString)
+    case codeBlock(AttributedString, language: String? = nil)
     case blockQuote([MarkdownDisplayBlock])
     case list(items: [MarkdownDisplayListItem], tight: Bool)
     case thematicBreak
@@ -32,7 +32,7 @@ extension MarkdownDisplayBlock {
     /// The menu excerpt counts at least one character per leaf, including empty blocks.
     var menuExcerptLength: Int {
         switch self {
-        case .paragraph(let text), .heading(let text), .codeBlock(let text): max(1, text.characters.count)
+        case .paragraph(let text), .heading(let text), .codeBlock(let text, _): max(1, text.characters.count)
         case .blockQuote(let blocks): blocks.reduce(0) { $0 + $1.menuExcerptLength }
         case .list(let items, _): items.reduce(0) { sum, item in
             sum + item.blocks.reduce(0) { $0 + $1.menuExcerptLength }
@@ -48,13 +48,26 @@ extension MarkdownDisplayBlock {
 
     /// Keep the original block and inline styling up to the visible excerpt's tail.
     static func excerpt(_ blocks: [Self], characterBudget: Int,
-                        emoji: Set<CustomEmojiShortcode> = []) -> [Self] {
+                        emoji: Set<CustomEmojiShortcode> = [], countingBlockSeparators: Bool = false) -> [Self] {
         guard characterBudget > 0 else { return [.paragraph(AttributedString("…"))] }
+        var hasText = false
         var remaining = characterBudget
 
-        func textPrefix(_ text: AttributedString) -> AttributedString {
+        func beginField() {
+            if countingBlockSeparators && hasText { remaining -= 1 }
+            hasText = true
+        }
+
+        func consume(_ count: Int, hasFollowingBlock: Bool) {
+            remaining -= countingBlockSeparators ? count : max(1, count)
+            // One remaining separator cannot show any text from the next block.
+            if countingBlockSeparators, remaining == 1, hasFollowingBlock { remaining = 0 }
+        }
+
+        func textPrefix(_ text: AttributedString, hasFollowingBlock: Bool) -> AttributedString {
+            beginField()
             let prefix = text.characters.prefix(remaining)
-            remaining -= max(1, prefix.count)
+            consume(prefix.count, hasFollowingBlock: hasFollowingBlock)
             guard remaining <= 0 else { return text }
             var end = prefix.endIndex
             if !emoji.isEmpty, end < text.endIndex {
@@ -69,31 +82,54 @@ extension MarkdownDisplayBlock {
             return AttributedString(text[text.startIndex..<end]) + AttributedString("…")
         }
 
-        func blockPrefix(_ blocks: [Self]) -> [Self] {
+        func blockPrefix(_ blocks: [Self], hasFollowingBlock: Bool = false) -> [Self] {
             var result: [Self] = []
-            for block in blocks {
+            for (index, block) in blocks.enumerated() {
                 guard remaining > 0 else { break }
+                let more = hasFollowingBlock || index + 1 < blocks.count
                 switch block {
-                case .paragraph(let text): result.append(.paragraph(textPrefix(text)))
-                case .heading(let text): result.append(.heading(textPrefix(text)))
-                case .codeBlock(let code): result.append(.codeBlock(textPrefix(code)))
-                case .blockQuote(let nested): result.append(.blockQuote(blockPrefix(nested)))
+                case .paragraph(let text): result.append(.paragraph(textPrefix(text, hasFollowingBlock: more)))
+                case .heading(let text): result.append(.heading(textPrefix(text, hasFollowingBlock: more)))
+                case .codeBlock(let code, let language): result.append(.codeBlock(textPrefix(code, hasFollowingBlock: more), language: language))
+                case .blockQuote(let nested): result.append(.blockQuote(blockPrefix(nested, hasFollowingBlock: more)))
                 case .list(let items, let tight):
                     var prefix: [MarkdownDisplayListItem] = []
-                    for item in items {
+                    for (itemIndex, item) in items.enumerated() {
                         guard remaining > 0 else { break }
                         prefix.append(.init(marker: item.marker,
-                            blocks: blockPrefix(item.blocks)))
+                            blocks: blockPrefix(item.blocks, hasFollowingBlock: more || itemIndex + 1 < items.count)))
                     }
                     result.append(.list(items: prefix, tight: tight))
                 case .thematicBreak:
-                    remaining -= 1
-                    result.append(remaining == 0 ? .paragraph(AttributedString("…")) : block)
+                    if countingBlockSeparators {
+                        beginField()
+                        consume(1, hasFollowingBlock: more)
+                        result.append(block)
+                    } else {
+                        remaining -= 1
+                        result.append(remaining == 0 ? .paragraph(AttributedString("…")) : block)
+                    }
                 }
             }
             return result
         }
         return blockPrefix(blocks)
+    }
+
+    /// Plain labels from the budgeted display projection, retaining block and line breaks.
+    enum TextPurpose { case search, body, excerpt }
+
+    var textFields: [String] { textFields(for: .search) }
+
+    func textFields(for purpose: TextPurpose) -> [String] {
+        switch self {
+        case .paragraph(let text), .heading(let text): [String(text.characters)]
+        case .codeBlock(let code, let language): [purpose == .search ? language : nil, String(code.characters)].compactMap { $0 }
+        case .blockQuote(let blocks): blocks.flatMap { $0.textFields(for: purpose) }
+        case .list(let items, _): items.flatMap { $0.blocks.flatMap { $0.textFields(for: purpose) } }
+        // A divider occupies its own line in the layout and has no searchable or spoken text.
+        case .thematicBreak: purpose == .excerpt ? ["\u{fffc}"] : []
+        }
     }
 }
 
@@ -158,6 +194,7 @@ struct MarkdownTimestampRenderContext {
 
 struct MessageMarkdownDisplayProjection: Equatable {
     let blocks: [MarkdownDisplayBlock]?
+    var isTruncated = false
     let mentionedAccountIds: Set<String>
     var timestamps = MarkdownTimestampUsage()
 
@@ -180,10 +217,16 @@ struct MessageMarkdownDisplayProjection: Equatable {
         )
         return MessageMarkdownDisplayProjection(
             blocks: built.blocks,
+            isTruncated: built.isTruncated,
             mentionedAccountIds: mentionedAccountIds,
             timestamps: built.timestamps
         )
     }
+}
+
+nonisolated enum MarkdownMentionAttribute: AttributedStringKey {
+    typealias Value = Bool
+    static let name = "WhiteNoise.markdownMention"
 }
 
 /// The absolute, unambiguous description of a rendered timestamp run.
@@ -231,6 +274,7 @@ enum MarkdownMessageBuilder {
     ]
 
     struct Budget {
+        var usesStaticTimestamps = false
         var remainingCharacters = MarkdownMessageBuilder.maxCharacters
         var remainingNodes = MarkdownMessageBuilder.maxNodes
         var truncated = false
@@ -276,10 +320,9 @@ enum MarkdownMessageBuilder {
                 if !raw.isEmpty { truncated = true }
                 return ""
             }
-            return String(take(MarkdownMessageBuilder.boundedTextRun(
-                raw,
-                maxCharacters: remainingCharacters
-            )))
+            let run = MarkdownMessageBuilder.boundedTextRun(raw, maxCharacters: remainingCharacters)
+            if run.isTruncated { truncated = true }
+            return String(take(run.text))
         }
     }
 
@@ -296,10 +339,12 @@ enum MarkdownMessageBuilder {
     static func build(
         for document: MarkdownDocumentFfi,
         mentionDisplayName: MarkdownMentionResolver? = nil,
-        timestampContext: MarkdownTimestampRenderContext? = nil
-    ) -> (blocks: [MarkdownDisplayBlock]?, timestamps: MarkdownTimestampUsage) {
-        guard !document.blocks.isEmpty else { return (nil, MarkdownTimestampUsage()) }
+        timestampContext: MarkdownTimestampRenderContext? = nil,
+        usesStaticTimestamps: Bool = false
+    ) -> (blocks: [MarkdownDisplayBlock]?, timestamps: MarkdownTimestampUsage, isTruncated: Bool) {
+        guard !document.blocks.isEmpty else { return (nil, MarkdownTimestampUsage(), document.truncated) }
         var budget = Budget()
+        budget.usesStaticTimestamps = usesStaticTimestamps
         budget.timestampContext = timestampContext
         var blocks = walkBlocks(
             document.blocks,
@@ -307,11 +352,11 @@ enum MarkdownMessageBuilder {
             depth: 0,
             mentionDisplayName: mentionDisplayName
         )
-        guard !blocks.isEmpty else { return (nil, budget.timestamps) }
+        guard !blocks.isEmpty else { return (nil, budget.timestamps, budget.truncated || document.truncated) }
         if budget.truncated {
             blocks.append(.paragraph(AttributedString("…")))
         }
-        return (blocks, budget.timestamps)
+        return (blocks, budget.timestamps, budget.truncated || document.truncated)
     }
 
     /// Inline flattening, exposed for tests.
@@ -329,7 +374,7 @@ enum MarkdownMessageBuilder {
     }
 
     nonisolated static func truncatedBech32(_ bech32: String) -> String {
-        let clean = boundedTextRun(bech32, maxCharacters: 64)
+        let clean = boundedTextRun(bech32, maxCharacters: 64).text
         guard clean.count > 16 else { return clean }
         return "\(clean.prefix(8))…\(clean.suffix(4))"
     }
@@ -337,7 +382,7 @@ enum MarkdownMessageBuilder {
     /// Render-side scheme gate for link destinations. Returns nil (no link,
     /// children render as plain text) for disallowed or unparseable URLs.
     static func allowedLinkURL(_ raw: String) -> URL? {
-        let trimmed = boundedTextRun(raw, maxCharacters: ContentSanitizer.maxImageURLLength)
+        let trimmed = boundedTextRun(raw, maxCharacters: ContentSanitizer.maxImageURLLength).text
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let components = URLComponents(string: trimmed),
@@ -388,8 +433,9 @@ enum MarkdownMessageBuilder {
             case .thematicBreak:
                 out.append(.thematicBreak)
 
-            case .codeBlock(_, _, let content):
-                appendCodeBlock(content, to: &out, budget: &budget)
+            case .codeBlock(let kind, let info, let content):
+                let language = kind == .fenced ? boundedTextRun(info, maxCharacters: 40).text.split(whereSeparator: \.isWhitespace).first.map { String($0.prefix(40)) } : nil
+                appendCodeBlock(content, language: language, to: &out, budget: &budget)
 
             case .blockQuote(let children, _):
                 let nested = walkBlocks(
@@ -442,6 +488,7 @@ enum MarkdownMessageBuilder {
 
     private static func appendCodeBlock(
         _ content: String,
+        language: String? = nil,
         to out: inout [MarkdownDisplayBlock],
         budget: inout Budget
     ) {
@@ -451,7 +498,7 @@ enum MarkdownMessageBuilder {
         guard !piece.isEmpty, piece.contains(where: { !$0.isWhitespace }) else { return }
         var attributes = AttributeContainer()
         attributes.font = Font.body.monospaced()
-        out.append(.codeBlock(AttributedString(piece, attributes: attributes)))
+        out.append(.codeBlock(AttributedString(piece, attributes: attributes), language: language))
     }
 
     /// Tables degrade to one bold paragraph for the header and a plain
@@ -589,6 +636,7 @@ enum MarkdownMessageBuilder {
         var italic = false
         var strikethrough = false
         var monospaced = false
+        var isMention = false
         var link: URL?
         var mentionDisplayName: MarkdownMentionResolver?
 
@@ -741,13 +789,14 @@ enum MarkdownMessageBuilder {
         if context.link == nil {
             switch entity.hrp {
             case .npub, .nprofile:
-                nested.link = allowedLinkURL("nostr:\(boundedTextRun(entity.bech32, maxCharacters: 512))")
+                nested.link = allowedLinkURL("nostr:\(boundedTextRun(entity.bech32, maxCharacters: 512).text)")
             case .note, .nevent, .naddr, .nrelay:
                 break
             }
         }
         if let name = context.mentionDisplayName?(entity) {
-            nested.bold = !prefix.isEmpty
+            nested.isMention = !prefix.isEmpty && (entity.hrp == .npub || entity.hrp == .nprofile)
+            nested.bold = !nested.isMention && !prefix.isEmpty
             return append(prefix + name, to: &out, context: nested, budget: &budget)
         }
         nested.monospaced = true
@@ -766,6 +815,10 @@ enum MarkdownMessageBuilder {
         budget: inout Budget
     ) -> Bool {
         let render = budget.resolvedTimestampContext()
+        if budget.usesStaticTimestamps {
+            let text = MarkdownTimestampFormatter.staticText(unixSeconds: unixSeconds, style: style, locale: render.locale, timeZone: render.timeZone)
+            return append(text, to: &out, context: context, budget: &budget, trusted: true)
+        }
         budget.timestamps.record(unixSeconds: unixSeconds, style: style, now: render.now)
         let text = MarkdownTimestampFormatter.text(
             unixSeconds: unixSeconds,
@@ -807,13 +860,14 @@ enum MarkdownMessageBuilder {
         let piece = trusted ? String(budget.take(raw)) : budget.takeSanitizedTextRun(raw)
         guard !piece.isEmpty else { return false }
         var attributes = AttributeContainer()
-        attributes.font = context.font
+        attributes.font = context.isMention ? context.font.weight(.semibold) : context.font
+        if context.isMention { attributes[MarkdownMentionAttribute.self] = true }
         if context.strikethrough {
             attributes.strikethroughStyle = .single
         }
         if let link = context.link {
             attributes.link = link
-            attributes.underlineStyle = .single
+            if !context.isMention { attributes.underlineStyle = .single }
         }
         if codeBackground {
             attributes.backgroundColor = Color.primary.opacity(0.08)
@@ -827,11 +881,10 @@ enum MarkdownMessageBuilder {
         return true
     }
 
-    nonisolated private static func boundedTextRun(_ raw: String, maxCharacters: Int) -> String {
-        guard maxCharacters > 0, !raw.isEmpty else { return "" }
-        let maxScalars = max(maxCharacters, maxCharacters * 8)
-        let scalarPrefix = String(String.UnicodeScalarView(raw.unicodeScalars.prefix(maxScalars)))
-        return ContentSanitizer.textRun(scalarPrefix)
+    nonisolated private static func boundedTextRun(_ raw: String, maxCharacters: Int) -> (text: String, isTruncated: Bool) {
+        let scalars = raw.unicodeScalars
+        let prefix = scalars.prefix(maxCharacters * 8)
+        return (ContentSanitizer.textRun(String(prefix)), prefix.endIndex != scalars.endIndex)
     }
 
     /// Breaks are structural, not attacker text: soft → space, hard → newline,

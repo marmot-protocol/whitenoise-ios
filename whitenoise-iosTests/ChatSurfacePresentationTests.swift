@@ -150,6 +150,20 @@ struct ChatSurfacePresentationTests {
         #expect(EmojiCatalogSearch.results(in: [entry], query: "FACE joy") == [entry])
     }
 
+    @Test func aFutureRowSharesTodayUntilThatDayArrives() {
+        let cache = ConversationDaySectionProjectionCache()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let rows = [
+            TimelineItem.systemEvent(id: "today", event: .groupCreated, timestamp: 86_400),
+            TimelineItem.systemEvent(id: "future", event: .rosterChanged, timestamp: 172_800)
+        ]
+        let today = cache.sections(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 86_400))
+        #expect(today.map(\.items.count) == [2])
+        let tomorrow = cache.sections(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 172_800))
+        #expect(tomorrow.map(\.items.count) == [1, 1])
+    }
+
     @Test func timelineDaySectionsReuseGenerationAndInvalidateForCalendarContext() {
         let cache = ConversationDaySectionProjectionCache()
         var calendar = Calendar(identifier: .gregorian)
@@ -331,9 +345,26 @@ struct ChatSurfacePresentationTests {
         let older = UInt64(calendar.date(byAdding: .day, value: -4, to: now)!.timeIntervalSince1970)
 
         #expect(ConversationDateHeader.label(timestamp: today, now: now, calendar: calendar) == "Today")
+        #expect(ConversationDateHeader.label(timestamp: UInt64(now.timeIntervalSince1970 + 86_400), now: now, calendar: calendar) == "Today")
         #expect(ConversationDateHeader.label(timestamp: yesterday, now: now, calendar: calendar) == "Yesterday")
         #expect(ConversationDateHeader.label(timestamp: older, now: now, calendar: calendar) != "Today")
         #expect(ConversationDateHeader.label(timestamp: older, now: now, calendar: calendar) != "Yesterday")
+    }
+
+    @Test func dateHeaderSwitchesFromWeekdayToYearAtSixCalendarMonths() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let locale = Locale(identifier: "en_US")
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 17, hour: 18)))
+        func label(_ day: Int, hour: Int = 21) throws -> String {
+            let date = try #require(calendar.date(from: DateComponents(year: 2026, month: 5, day: day, hour: hour)))
+            return ConversationDateHeader.label(timestamp: UInt64(date.timeIntervalSince1970), now: now,
+                                                calendar: calendar, locale: locale)
+        }
+        #expect(try label(17, hour: 18).contains("2026"))
+        #expect(try !label(17).contains("2026"))
+        let recent = try label(18)
+        #expect(recent.contains("Mon") && !recent.contains("2026"))
     }
 
     @Test func composerShowsExpandedEditorForLongOrMultilineDrafts() {

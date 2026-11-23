@@ -35,9 +35,10 @@ nonisolated enum MessageActionsPresentation {
         canDelete: Bool,
         canReport: Bool = false,
         canBlock: Bool = false,
-        canViewVotes: Bool = false
+        canViewVotes: Bool = false,
+        speechActionCount: Int = 0
     ) -> Int {
-        var count = 2 // Info and Select are always present.
+        var count = 2 + speechActionCount // Info and Select are always present.
         if canCopy { count += 1 }
         if canRetry { count += 1 }
         if canInteract { count += 1 }
@@ -157,6 +158,9 @@ struct MessageActionsMenu: View {
     var canReport: Bool = false
     var canBlock: Bool = false
     var canViewVotes: Bool = false
+    var speechActions: [MessageSpeechAction] = []
+    var canTapTranscribe = false
+    var onSpeechAction: (MessageSpeechAction) -> Void = { _ in }
     let quickReactions: [String]
     let selectedReaction: String?
     var selectedReactionMessageId: String? = nil
@@ -210,6 +214,10 @@ struct MessageActionsMenu: View {
                     if canViewVotes {
                         actionRow("View votes", systemImage: "person.2", action: onViewVotes)
                     }
+                    ForEach(speechActions, id: \.self) { item in
+                        actionRow(item.title, systemImage: item.symbol) { onSpeechAction(item) }
+                            .disabled(item == .transcribing || (item == .transcribe && !canTapTranscribe))
+                    }
                     if canCopy { actionRow("Copy", systemImage: "doc.on.doc", action: onCopy) }
                     actionRow("Select", systemImage: "checkmark.circle", action: onSelect)
                     actionRow("Info", systemImage: "info.circle", action: onInfo)
@@ -229,7 +237,7 @@ struct MessageActionsMenu: View {
             .frame(height: maximumActionHeight ?? MessageActionsPresentation.actionMenuHeight(
                 actionCount: MessageActionsPresentation.actionCount(canRetry: canRetry, canInteract: canInteract, canCopy: canCopy,
                     canForward: canForward, canEdit: canEdit, canViewEditHistory: canViewEditHistory,
-                    canDelete: canDelete, canReport: canReport, canBlock: canBlock, canViewVotes: canViewVotes)
+                    canDelete: canDelete, canReport: canReport, canBlock: canBlock, canViewVotes: canViewVotes, speechActionCount: speechActions.count)
             ))
             .clipShape(.rect(cornerRadius: 32))
             .frame(width: MessageActionsPresentation.menuWidth)

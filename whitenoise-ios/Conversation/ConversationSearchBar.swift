@@ -9,17 +9,35 @@ struct ConversationSearchBar: View {
     var body: some View {
         WNSearchBar(query: $search.query, prompt: "Search messages",
                     dismissesKeyboardOnSubmit: false, onClose: onClose)
+            .task(id: search.nextPollDeadline) {
+                guard let deadline = search.nextPollDeadline else { return }
+                // MDK deadlines are unsigned timestamps and may exceed the range of a Duration.
+                while deadline.timeIntervalSinceNow > 0 {
+                    do { try await Task.sleep(for: .seconds(min(deadline.timeIntervalSinceNow, 86_400))) }
+                    catch { return }
+                }
+                guard !Task.isCancelled, search.nextPollDeadline == deadline else { return }
+                search.refreshAfterSearchableContentChange()
+            }
     }
 }
 
 struct ConversationSearchControls: View {
     @Bindable var search: ConversationSearchModel
+    let oversizedResultID: String?
 
     @ScaledMetric(relativeTo: .body) private var controlSize = WNSearchBar.Metrics.fieldHeight
 
     var body: some View {
         VStack(spacing: 4) {
-            HStack {
+            if let match = search.currentMatch, match.itemId == oversizedResultID,
+               let excerpt = ConversationSearchEngine.excerpt(in: match.matchingText, matching: search.query, leadingContext: 6) {
+                TimelineSearchText(excerpt)
+                    .environment(\.timelineSearchQuery, ConversationSearchEngine.normalizedQuery(search.query))
+                    .font(.footnote)
+                    .lineLimit(1)
+            }
+            ZStack {
                 HStack(spacing: 0) {
                     searchButton(
                         systemImage: "chevron.up",
@@ -37,14 +55,15 @@ struct ConversationSearchControls: View {
                     }
                 }
                 .compatibleInputCapsuleChrome(interactive: false)
-
-                Spacer(minLength: 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if search.hasQuery {
-                    resultCount
-                        .padding(.horizontal, 18)
-                        .frame(minHeight: controlSize)
-                        .compatibleInputCapsuleChrome(interactive: false)
+                    let buttonInset = 2 * controlSize + WNSearchBar.Metrics.rowSpacing
+                    ViewThatFits(in: .horizontal) {
+                        resultCountCapsule.fixedSize().padding(.horizontal, buttonInset)
+                        resultCountCapsule.padding(.leading, buttonInset)
+                    }
+                    .allowsHitTesting(false)
                 }
             }
 
@@ -64,6 +83,14 @@ struct ConversationSearchControls: View {
         } else {
             Text(L10n.string("No matches"))
         }
+    }
+
+    private var resultCountCapsule: some View {
+        resultCount
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 18)
+            .frame(minHeight: controlSize)
+            .compatibleInputCapsuleChrome(interactive: false)
     }
 
     private func searchButton(

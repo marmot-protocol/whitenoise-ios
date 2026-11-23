@@ -49,7 +49,7 @@ nonisolated enum MessageSemantics {
         /// A kind-1068 poll. MDK validates it and projects the tally onto the
         /// timeline row; the question is the plaintext.
         case poll
-        /// Durable agent activity/status chrome; not a chat bubble.
+        /// A durable progress update from an agent.
         case agentActivity
         /// Durable agent operation chrome; not a chat bubble.
         case agentOperation

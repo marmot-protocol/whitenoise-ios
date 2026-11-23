@@ -62,7 +62,7 @@ struct MessageBodyCollapsePresentationTests {
 
     @Test func expandingALongMessageRemovesTheInlineCollapse() {
         let body = String(repeating: "x", count: MessageBodyCollapsePresentation.maxCollapsedCharacters + 1)
-        #expect(MessageBodyCollapsePresentation.isCollapsed(body, isExpanded: false))
-        #expect(!MessageBodyCollapsePresentation.isCollapsed(body, isExpanded: true))
+        #expect(MessageBodyCollapsePresentation.snippet(body, isExpanded: false) != nil)
+        #expect(MessageBodyCollapsePresentation.snippet(body, isExpanded: true) == nil)
     }
 }

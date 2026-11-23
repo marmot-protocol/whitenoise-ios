@@ -8,6 +8,15 @@ struct ChatsListView: View {
         let isReady: Bool
     }
 
+    @State private var conversationSpeech = ConversationSpeech()
+
+    struct SpeechRoute: Equatable {
+        let chat: ChatNavigationTarget?
+        let settings: Bool
+        let account: String?
+        let generation: Int
+    }
+
     @State private var showDiagnosticsPrompt = false
     @State private var chatsVisible = false
     @State private var secondarySheetVisible = false
@@ -129,7 +138,14 @@ struct ChatsListView: View {
         }
     }
 
+
     var body: some View {
+        liveList.modifier(ConversationSpeechSession(speech: conversationSpeech,
+            route: SpeechRoute(chat: path.last, settings: showSettings, account: appState.activeAccountRef,
+                               generation: appState.runtimeGeneration)))
+    }
+
+    @ViewBuilder private var liveList: some View {
         let visibleRows = viewModel.map(currentRows) ?? []
         let visibleRowIds = Set(visibleRows.map(\.id))
         let visibleRowsKey = VisibleRowsKey(
