@@ -126,6 +126,10 @@ struct TranscriptHistoryGalleryView: View {
                     Button("Retry") { validate() }
                     Button("Close", action: onDismiss)
                 }
+            } else if restored && !history.state.hasPaged, let window, window.gallery.initialMediaData == nil {
+                // Its source changed between the retained read and this projection.
+                // Never mount the restored page with a loader that could admit a transfer.
+                Color.clear.onAppear(perform: onDismiss)
             } else if let gallery = window?.gallery, let visible = visibleGallery {
                 MessageMediaFullscreenGalleryView(gallery: visible, openingSelection: openingSelection, restored: restored, didDisplay: didDisplay,
                     currentTranscriptGallery: { self.visibleGallery }, onLoadMedia: onLoadMedia,

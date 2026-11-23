@@ -175,7 +175,14 @@ final class DocumentSharePresentation {
         let request = MediaFileTransferControlFfi()
         control = request
         defer { if control === request { control = nil } }
-        let opened = try await loader.shareFile(for: item, demand: demand, control: request)
+        var original = item
+        if item.localData != nil, AttachmentHandoffSource(item) != .none,
+           try await !loader.canShareDocument(item, nil) {
+            // Identical bytes from another send do not qualify this file for host export.
+            original = item.forTranscriptPage
+        }
+        guard control === request, !request.isCancelled(), isCurrent() else { throw CancellationError() }
+        let opened = try await loader.shareFile(for: original, demand: demand, control: request)
         do {
             guard control === request, !request.isCancelled(), isCurrent() else { throw CancellationError() }
             guard try await loader.canShareDocument(item, opened.lease?.target) else { throw AttachmentReadError.unavailable }
