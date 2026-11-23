@@ -915,6 +915,17 @@ final class ConversationViewModel {
         timelineStore.record(for: messageIdHex)
     }
 
+    func readerMessage(rowID: String, messageID: String) -> (item: TimelineItem, record: AppMessageRecordFfi, status: MessageStatus)? {
+        guard let item = timeline.first(where: { item in
+            guard case .message(let record, _) = item.kind else { return false }
+            return rowID == item.id || (!messageID.isEmpty && record.messageIdHex == messageID)
+        }), case .message(let row, let status) = item.kind, !isDeleted(row.messageIdHex),
+        !timelineStore.isBlockedAuthor(row.sender) else { return nil }
+
+        // The timeline signature can consider a byte-distinct spelling equal to the previous text.
+        return (item, record(for: row.messageIdHex) ?? row, status)
+    }
+
     func records(forRowFrameKeys rowFrameKeys: Set<String>) -> [AppMessageRecordFfi] {
         timelineStore.records(forRowFrameKeys: rowFrameKeys)
     }
