@@ -382,7 +382,6 @@ struct MessageBubble: View {
                 )
                 .environment(\.avatarMonogramFont, .subheadline.weight(.semibold))
                 .padding(.trailing, 7)
-                .alignmentGuide(.messageSurfaceBottom) { $0[.bottom] }
             }
 
             VStack(alignment: isFromMe ? .trailing : .leading, spacing: 4) {

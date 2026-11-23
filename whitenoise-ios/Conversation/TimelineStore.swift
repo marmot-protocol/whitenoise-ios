@@ -984,7 +984,7 @@ final class TimelineStore {
             // A row already shown can change origin without changing its
             // signature, so move the divider here rather than on the next rebuild.
             if previous != origin, timelineIndexByMessageId[record.messageIdHex] != nil {
-                rebuildHistoryImportBoundaries()
+                rebuildHistoryImportBoundariesAndInvalidateClusters()
             }
         }
         guard !appRecord.messageIdHex.isEmpty else { return false }
@@ -1312,7 +1312,7 @@ final class TimelineStore {
         guard timelineSignature != nextSignature else { return false }
         timeline = next
         timelineSignature = nextSignature
-        rebuildHistoryImportBoundaries()
+        rebuildHistoryImportBoundariesAndInvalidateClusters()
         return true
     }
 
@@ -1339,11 +1339,11 @@ final class TimelineStore {
         } else {
             timelineSignature = timeline.map(TimelineItemSignature.init)
         }
-        rebuildHistoryImportBoundaries()
+        rebuildHistoryImportBoundariesAndInvalidateClusters()
         return true
     }
 
-    private func rebuildHistoryImportBoundaries() {
+    private func rebuildHistoryImportBoundariesAndInvalidateClusters() {
         historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: timeline, origins: historyImportOrigins)
         clusterCalendar = nil
     }
