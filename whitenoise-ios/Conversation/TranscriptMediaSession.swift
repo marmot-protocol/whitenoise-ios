@@ -110,6 +110,9 @@ final class TranscriptMediaSession: Identifiable {
             data = bytes
         }
         _ = try current()
+        // A retained asset requires a visible indexed slot. Blocking its author hides
+        // that slot and changes the collection version in the same MDK transaction.
+        // This last read also catches a block the Swift timeline has not received yet.
         guard try await scope.stillRetains(bookmark.target, in: appState),
               try await scope.version(in: appState).changeSince(previous: baseline) != .restartRequired else {
             throw AttachmentReadError.stale

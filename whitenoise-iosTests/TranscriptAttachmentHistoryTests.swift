@@ -78,6 +78,25 @@ struct TranscriptAttachmentHistoryTests {
         #expect(state.viewerGeneration != previous && !state.pages.contains(attachmentID: id))
     }
 
+    @Test func outgoingGalleryMatchesTheOriginalPhotoSlotAfterInlineEmojiFiltering() throws {
+        let chat = group(name: "Gallery")
+        var snapshot = conversationWindowSnapshot(groupIdHex: chat.groupIdHex, title: "Gallery")
+        let model = ConversationViewModel(appState: .test(), group: chat)
+        let emojiURL = "https://blossom.example.com/party"
+        let photo = CustomEmojiFixtures.reference(url: "https://blossom.example.com/photo", sha: String(repeating: "c", count: 64))
+        var row = timelineRecord(messageIdHex: hex("a1"), sourceMessageIdHex: .absent, direction: "sent",
+            groupIdHex: chat.groupIdHex, plaintext: ":party:", tags: [.init(values: ["emoji", "party", emojiURL])], timelineAt: 1)
+        row.media = [.accepted(attachmentIndex: 0, reference: CustomEmojiFixtures.reference(url: emojiURL)),
+                     .accepted(attachmentIndex: 1, reference: photo)]
+        snapshot.messages = [conversationMessage(row)]
+        model.installConversationWindow(snapshot)
+        let outgoing = try #require(model.timeline.first)
+        let gallery = try #require(model.transcriptMediaGallery(opening: "", initialData: nil, allowsEmptyWindow: true))
+        #expect(gallery.items.count == 1)
+        let pending = MessageMediaGallery.PendingSelection(id: "draft-photo", slot: .init(rowID: outgoing.id, index: 1), data: Data())
+        #expect(gallery.confirmedItem(for: pending)?.reference == photo)
+    }
+
     @Test func resumeRequiresTheSelectedOriginalSlotInTheNewVisibleWindow() throws {
         let chat = group(name: "Gallery")
         var snapshot = conversationWindowSnapshot(groupIdHex: chat.groupIdHex, title: "Gallery")

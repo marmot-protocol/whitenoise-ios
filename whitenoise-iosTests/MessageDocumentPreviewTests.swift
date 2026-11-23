@@ -20,11 +20,17 @@ struct MessageDocumentPreviewTests {
         #expect(!DocumentPreviewSource(item).continues(confirmed, outgoing: true))
     }
 
-    @Test func pdfPreviewAcceptsAnUnencryptedDocumentAndRejectsAnEncryptedOne() async throws {
+    @Test func pdfPreviewShowsReadablePagesAndHandsOffFilesThatNeedAnOpeningPassword() async throws {
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 120, height: 120))
         let pdf = renderer.pdfData { context in context.beginPage() }
         #expect(await MessageDocumentPreview.parse(data: pdf, format: .pdf) != nil)
         let document = try #require(PDFDocument(data: pdf))
+        let readable = try #require(document.dataRepresentation(options: [
+            PDFDocumentWriteOption.userPasswordOption: "", PDFDocumentWriteOption.ownerPasswordOption: "owner"
+        ]))
+        let ownerProtected = try #require(PDFDocument(data: readable))
+        #expect(ownerProtected.isEncrypted && !ownerProtected.isLocked)
+        #expect(await MessageDocumentPreview.parse(data: readable, format: .pdf) != nil)
         let protected = try #require(document.dataRepresentation(options: [
             PDFDocumentWriteOption.userPasswordOption: "viewer", PDFDocumentWriteOption.ownerPasswordOption: "owner"
         ]))

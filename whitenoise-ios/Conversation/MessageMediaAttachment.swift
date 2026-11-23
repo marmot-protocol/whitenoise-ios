@@ -346,11 +346,15 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         let item: MessageMediaAttachment
     }
 
+    func originalSlot(at position: Int) -> UInt32 {
+        localTarget?.attachmentIndex ?? sourceHint?.slot ?? displayIndex ?? UInt32(position)
+    }
+
     static func inlineRows(_ items: [Self], outgoing: Bool) -> [InlineRow] {
         items.enumerated().compactMap { index, item in
             guard !item.isTranscriptGalleryMedia else { return nil }
             let document = item.rejectionKind == nil && (item.kind == .document || item.kind == .unsupported)
-            let slot = item.localTarget?.attachmentIndex ?? item.sourceHint?.slot ?? item.displayIndex ?? UInt32(index)
+            let slot = item.originalSlot(at: index)
             return InlineRow(id: outgoing && document ? .outgoingDocument(slot) : .attachment(item.id), item: item)
         }
     }

@@ -2907,9 +2907,11 @@ private struct MessageReplyMediaThumbnail: View {
             loadedItemID = item.id
             return
         }
-        guard onLoadMedia.allowsAutomaticLoad(.video),
-              let data = try? await onLoadMedia.videoPreviewData(for: item) else { return }
+        guard onLoadMedia.allowsAutomaticLoad(.video) else { return }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
+        let revision = AttachmentPresentationState.shared.revision
+        guard let data = try? await onLoadMedia.videoPreviewData(for: item), !Task.isCancelled,
+              revision == AttachmentPresentationState.shared.revision else { return }
         guard let url = await onLoadMedia.playbackFileURL(
             for: item,
             data: data,
@@ -2919,7 +2921,8 @@ private struct MessageReplyMediaThumbnail: View {
             url: url,
             maxPixelSize: maxPixelSize,
             scale: displayScale
-        ), !Task.isCancelled else { return }
+        ), !Task.isCancelled, producerEpoch == MessageMediaCache.currentProducerEpoch(),
+           revision == AttachmentPresentationState.shared.revision else { return }
         MessageVideoThumbnailDecoder.store(
             thumbnail,
             for: cacheKey,
@@ -3740,9 +3743,12 @@ private struct MessageDocumentAttachmentView: View {
             guard !fixtureUnavailable else { return }
             #endif
             guard liftedDocuments == nil else { return }
+            let clientID = appState.client.map(ObjectIdentifier.init)
+            let generation = appState.runtimeGeneration
             let metadata = await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
                 allowed: onLoadMedia.allowsAutomaticLoad(.document), hasContactName: displayName != nil)
-            if !Task.isCancelled, let metadata {
+            if !Task.isCancelled, appState.runtimeGeneration == generation,
+               appState.client.map(ObjectIdentifier.init) == clientID, let metadata {
                 byteCount = metadata.size
                 if let name = metadata.contactName { contactName = name }
             }

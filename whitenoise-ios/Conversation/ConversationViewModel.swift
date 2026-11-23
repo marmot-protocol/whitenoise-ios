@@ -1084,7 +1084,7 @@ final class ConversationViewModel {
                 if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }
                 captions[media.id] = .init(sender: gallerySenderName(record.sender, direction: record.direction),
                     date: Date(timeIntervalSince1970: TimeInterval(row.timestamp)),
-                    outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.localTarget?.attachmentIndex ?? media.sourceHint?.slot ?? UInt32(index)) : nil)
+                    outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.originalSlot(at: index)) : nil)
             }
         }
         let openingBytes = openingItem.flatMap { original in
@@ -1782,6 +1782,8 @@ final class ConversationViewModel {
             defer { finishOpen(.cancelled) }
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
             while !Task.isCancelled {
+                let generation = appState?.runtimeEventsGeneration
+                var openedClient: ObjectIdentifier?
                 do {
                     guard let appState, self?.canReadLocalWindow == true,
                           appState.activeAccountRef == accountRef else { return }
@@ -1794,6 +1796,7 @@ final class ConversationViewModel {
                     let client = try appState.currentMarmotClient()
                     let openWindow = client.openConversationWindow
                     #endif
+                    openedClient = ObjectIdentifier(client)
                     openTiming = .some(appState.productAnalytics.beginTiming())
                     let window: ActiveConversationWindow
                     var targetUnavailable = false
@@ -1871,7 +1874,10 @@ final class ConversationViewModel {
                     self?.windowCursor = nil
                     self?.timelineStore.setLoading(false)
                     self?.error = UserFacingError.message(for: error)
-                    if let generation = appState?.runtimeEventsGeneration { self?.windowRuntime = .failed(generation) }
+                    if let generation, let openedClient, let appState, appState.runtimeEventsGeneration == generation,
+                       appState.activeAccountRef == accountRef, appState.client.map(ObjectIdentifier.init) == openedClient {
+                        self?.windowRuntime = .failed(generation)
+                    }
                 }
                 do { try await Task.sleep(nanoseconds: retryDelay) } catch { return }
                 retryDelay = Self.nextLiveSubscriptionRetryDelay(after: retryDelay)

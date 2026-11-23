@@ -73,6 +73,12 @@ struct TranscriptHistoryGalleryView: View {
         let viewer: Int
     }
 
+    private struct ValidationInputs: Equatable {
+        let revision: UInt64
+        let historicalSelection: String?
+        let liveWindow: ConversationWindowRevisionFfi?
+    }
+
     struct Window {
         var gallery: MessageMediaGallery
         let messageIDs, durableIDs: Set<String>
@@ -127,6 +133,11 @@ struct TranscriptHistoryGalleryView: View {
         let availability = AttachmentHistoryPager.Availability(appState, group: conversation.group.groupIdHex)
         let currentScope = availability.readable
         let scoped = availability.owner != nil && availability.owner == activeScope
+        let historicalSelection = history.state.selectedFromHistory ? history.state.selectedItemID : nil
+        // The global event stream can skip a removal. Recheck an off-window selection on
+        // a swipe or a fresh live snapshot as well as the gallery's own invalidations.
+        let validation = ValidationInputs(revision: history.revision, historicalSelection: historicalSelection,
+            liveWindow: historicalSelection == nil ? nil : conversation.conversationWindow?.revision)
         Group {
             if scoped && history.state.validationFailed && history.state.selectedFromHistory {
                 ContentUnavailableView {
@@ -167,7 +178,7 @@ struct TranscriptHistoryGalleryView: View {
                 await history.validate(scope: currentScope, appState: appState)
             }
         }
-        .task(id: history.revision) {
+        .task(id: validation) {
             guard let currentScope, scenePhase == .active else { return }
             await history.validate(scope: currentScope, appState: appState)
         }
@@ -247,12 +258,12 @@ struct TranscriptHistoryGalleryView: View {
                   appState.isAppSceneActive, scenePhase == .active else { throw CancellationError() }
         }
         try checkScope()
-        func presentedItem() throws -> MessageMediaAttachment? {
+        func presentedItem() throws -> (item: MessageMediaAttachment, outgoing: Bool)? {
             if let window = conversation.transcriptMediaGallery(opening: item.id, initialData: nil, includingGIFsIn: gifRowID),
                let visible = window.items.first(where: { $0.id == item.id }) {
                 guard visible.canUseBytesPrepared(for: item),
                       allowingConfirmation || visible.localTarget == item.localTarget else { return nil }
-                return visible
+                return (visible, window.transcriptCaptions?[visible.id]?.outgoingSlot != nil)
             }
             guard let target = item.localTarget else { return nil }
             let store = conversation.timelineStore
@@ -263,17 +274,18 @@ struct TranscriptHistoryGalleryView: View {
                   }) else { return nil }
             // An invalidated history page cannot establish whether the slot was removed.
             guard let slot = history.state.pages.slot(for: item) else { throw AttachmentReadError.stale }
-            return slot.isVisible(in: store) ? slot.attachment : nil
+            return slot.isVisible(in: store) ? (slot.attachment, false) : nil
         }
         guard let presented = try presentedItem() else { return false }
-        guard let target = presented.localTarget else {
+        guard let target = presented.item.localTarget else {
+            guard presented.outgoing, presented.item.sourceHint == nil else { return false }
             if item.localData != nil { return true }
             guard let messageID = window?.gallery.messageIdByItemID[item.id], item.reference != nil else { return false }
             return conversation.timelineStore.hasUnsourcedOwnMessage(messageID)
         }
         let retained = try await history.verifyRetained(target, scope: openingScope, appState: appState)
         try checkScope()
-        return try retained && presentedItem()?.localTarget == target
+        return try retained && presentedItem()?.item.localTarget == target
     }
 
     private func updateProjection(from old: Inputs, to new: Inputs) {

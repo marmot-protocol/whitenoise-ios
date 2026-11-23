@@ -123,7 +123,7 @@ nonisolated struct MessageDocumentPreview: Identifiable {
         guard !Task.isCancelled, data.count <= format.byteLimit else { return nil }
         switch format {
         case .pdf:
-            guard let document = PDFDocument(data: data), !document.isEncrypted, document.pageCount > 0 else { return nil }
+            guard let document = PDFDocument(data: data), !document.isLocked, document.pageCount > 0 else { return nil }
             return Self(content: .pdf(document))
         case .text:
             guard let decoded = String(data: data, encoding: .utf8) else { return nil }
