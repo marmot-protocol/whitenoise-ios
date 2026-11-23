@@ -185,7 +185,7 @@ SHARED_WORDS = {
     "Online": "de", "Option %lld": "de fr", "Options": "fr", "Original": "de es pt", "Passphrase": "de it", "Photo": "fr",
     "Password": "it", "Photos": "fr", "Question": "fr", "Relay": "de es it pt", "Scan": "de",
     "Spam": "de es fr it pt tr", "Standard": "de fr it", "Status": "de pt", "Sticker": "de es it", "%@ Sticker": "de", "Sticker: %@": "de es it",
-    "Stickers": "es", "stream %@": "es it pt",
+    "Stickers": "es",
     "System": "de", "Tokens": "es pt", "USD": "de es fi fr it pt ru tr", "Version": "de fr",
     "Version %lld": "de fr", "via GIPHY": "fr pt", "via GIPHY · %@": "fr pt", "Video": "de es fi it tr",
     "Videos": "de es", "Votes": "fr", "White Noise Support": "de",
