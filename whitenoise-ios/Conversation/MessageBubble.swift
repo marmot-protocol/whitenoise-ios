@@ -353,12 +353,14 @@ extension MessageBubble: Equatable {
 struct MessageBubble: View {
     struct MediaOpenScope: Equatable {
         let model: ObjectIdentifier
+        let client: ObjectIdentifier?
         let account: String?
         let generation: Int
         let attachmentRevision: Int
 
         init(_ viewModel: ConversationViewModel, appState: AppState) {
             model = ObjectIdentifier(viewModel)
+            client = appState.client.map(ObjectIdentifier.init)
             account = appState.activeAccountRef
             generation = appState.runtimeGeneration
             attachmentRevision = AttachmentPresentationState.shared.revision
@@ -3604,7 +3606,7 @@ private struct MessageDocumentAttachmentView: View {
                 .onDisappear(perform: file.finish)
         }
         .onDisappear { closeDocument() }
-        .onChange(of: appState.runtimeEventsGeneration) { _, _ in
+        .onChange(of: appState.client.map(ObjectIdentifier.init)) { _, _ in
             // A parsed document or a leased share still belongs to the runtime that opened it.
             resetDocument()
         }

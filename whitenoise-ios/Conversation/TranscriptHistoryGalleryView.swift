@@ -109,15 +109,19 @@ struct TranscriptHistoryGalleryView: View {
         return .init(appState: appState, group: conversation.group.groupIdHex)
     }
 
+    private var owner: TranscriptAttachmentHistory.Scope? {
+        .init(ownerOf: appState, group: conversation.group.groupIdHex)
+    }
+
     private var visibleGallery: MessageMediaGallery? {
         guard let window, let expanded else { return nil }
-        if let scope, scope == activeScope, !history.state.validationFailed { return expanded }
+        if let owner, owner == activeScope, !history.state.validationFailed { return expanded }
         return window.gallery
     }
 
     var body: some View {
         let currentScope = scope
-        let scoped = currentScope != nil && currentScope == activeScope
+        let scoped = owner != nil && owner == activeScope
         Group {
             if scoped && history.state.validationFailed && history.state.selectedFromHistory {
                 ContentUnavailableView {
@@ -144,10 +148,16 @@ struct TranscriptHistoryGalleryView: View {
             updateProjection(from: old, to: new)
         }
         .task(id: currentScope) {
-            history.begin(currentScope)
-            activeScope = currentScope
+            if activeScope != owner {
+                history.begin(owner)
+                activeScope = owner
+            }
             guard let currentScope else { return }
-            await history.loadPage(scope: currentScope, appState: appState)
+            if history.state.pager.baseline == nil {
+                await history.loadPage(scope: currentScope, appState: appState)
+            } else {
+                await history.validate(scope: currentScope, appState: appState)
+            }
         }
         .task(id: history.revision) {
             guard let currentScope, scenePhase == .active else { return }

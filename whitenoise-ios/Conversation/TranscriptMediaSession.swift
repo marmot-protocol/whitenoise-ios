@@ -121,6 +121,7 @@ struct TranscriptMediaSessionView<Content: View>: View {
     private struct Context: Equatable {
         let scope: MessageBubble.MediaOpenScope
         let runtime: Int?
+        let owner: AttachmentHistoryPager.Scope?
         let window: ConversationViewModel.WindowRuntime?
         let phase: ScenePhase
         let active: Bool
@@ -128,9 +129,10 @@ struct TranscriptMediaSessionView<Content: View>: View {
 
     var body: some View {
         let now = Context(scope: .init(conversation, appState: appState), runtime: appState.runtimeEventsGeneration,
+            owner: .init(ownerOf: appState, group: conversation.group.groupIdHex),
             window: conversation.windowRuntime, phase: phase, active: appState.isAppSceneActive)
         Group {
-            if let target = session.target, target.scope == now.scope, now.runtime == target.scope.generation, phase != .background {
+            if let target = session.target, target.scope == now.scope, now.owner?.runtimeGeneration == target.scope.generation, phase != .background {
                 content(target)
             } else {
                 ProgressView()
@@ -140,7 +142,7 @@ struct TranscriptMediaSessionView<Content: View>: View {
             guard session.originalScope.matchesConversation(now.scope) else { onDismiss(); return }
             // The old runtime's decoded image, player, sheets and prepared bytes leave
             // the hierarchy immediately. Keep only the original selected slot for revalidation.
-            if now.runtime == nil || phase == .background || session.target?.scope.generation != now.scope.generation {
+            if now.owner == nil || phase == .background || session.target?.scope != now.scope {
                 session.suspend()
             }
             guard session.target == nil, phase == .active, now.active, let generation = now.runtime else { return }
