@@ -184524,68 +184524,68 @@
         }
       }
     },
-    "To remove this device you’re using, sign out instead." : {
-      "comment" : "Footer on the current device's detail explaining it is removed by signing out.",
+    "To remove this device you’re using, sign out with Wipe Local Data turned on." : {
+      "comment" : "Footer on the current device's detail: removing this device means signing out with Wipe Local Data on.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Um das Gerät zu entfernen, das du gerade verwendest, melde dich stattdessen ab."
+            "value" : "Um das Gerät zu entfernen, das du gerade verwendest, melde dich ab und aktiviere dabei „Lokale Daten löschen“."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Para eliminar el dispositivo que estás usando, cierra sesión."
+            "value" : "Para eliminar el dispositivo que estás usando, cierra sesión con «Borrar datos locales» activado."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jos haluat poistaa tämän käyttämäsi laitteen, kirjaudu sen sijaan ulos."
+            "value" : "Jos haluat poistaa tämän käyttämäsi laitteen, kirjaudu ulos niin, että Tyhjennä paikalliset tiedot on päällä."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pour supprimer l’appareil que vous utilisez, déconnectez-vous plutôt."
+            "value" : "Pour supprimer l’appareil que vous utilisez, déconnectez-vous avec « Effacer les données locales » activé."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Per rimuovere il dispositivo che stai usando, esci invece dal profilo."
+            "value" : "Per rimuovere il dispositivo che stai usando, esci dal profilo con “Cancella dati locali” attivo."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Para remover o dispositivo que você está usando, saia do perfil."
+            "value" : "Para remover o dispositivo que você está usando, saia do perfil com “Apagar dados locais” ativado."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Чтобы удалить устройство, которым вы пользуетесь, выйдите из профиля."
+            "value" : "Чтобы удалить устройство, которым вы пользуетесь, выйдите из профиля, включив «Удалить локальные данные»."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kullandığınız bu cihazı kaldırmak için bunun yerine oturumu kapatın."
+            "value" : "Kullandığınız bu cihazı kaldırmak için Yerel Verileri Sil açıkken oturumu kapatın."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "要移除你正在使用的此设备，请改为退出登录。"
+            "value" : "要移除你正在使用的此设备，请在开启“清除本地数据”后退出登录。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "若要移除你正在使用的此裝置，請改為登出。"
+            "value" : "若要移除你正在使用的此裝置，請在開啟「清除本機資料」後登出。"
           }
         }
       }

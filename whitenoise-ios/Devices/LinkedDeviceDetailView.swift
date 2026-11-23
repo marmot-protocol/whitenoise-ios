@@ -151,7 +151,7 @@ struct LinkedDeviceDetailView: View {
     /// This device can't remove itself here; point to Sign Out instead.
     private var signOutHintSection: some View {
         Section {} footer: {
-            Text("To remove this device you’re using, sign out instead.")
+            Text("To remove this device you’re using, sign out with Wipe Local Data turned on.")
         }
     }
 
