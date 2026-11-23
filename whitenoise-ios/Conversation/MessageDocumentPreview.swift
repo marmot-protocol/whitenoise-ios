@@ -147,7 +147,7 @@ final class DocumentSharePresentation {
                       isCurrent: () -> Bool, handoffItem: () -> MessageMediaAttachment, didReadSize: (Int?) -> Void) async throws -> MessageDocumentPreview? {
         let format = DocumentPreviewFormat(for: item)
         if let format {
-            var requested = item
+            var requested = item.forTranscriptPage
             requested.previewByteLimit = format.byteLimit
             do {
                 let data = try await loader.data(for: requested, demand: demand)

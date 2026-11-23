@@ -136,6 +136,11 @@ final class ConversationMediaLoader {
         do {
             let bytes: Data
             if let local = media.localData {
+                // An identical outgoing send can supply these bytes. Only reveal a contact
+                // name from that overlay while this message's own slot still retains it.
+                if AttachmentHandoffSource(media) != .none {
+                    guard let target = media.localTarget, try await canShareDocument(media, target) else { return nil }
+                }
                 guard local.count <= limit else { return (local.count, nil) }
                 bytes = local
             } else {
@@ -3482,6 +3487,7 @@ struct LiftedDocumentDetails: Equatable {
 }
 
 private struct MessageDocumentAttachmentView: View {
+    @Environment(AppState.self) private var appState
     let messageID: String
     @Environment(\.liftedDocuments) private var liftedDocuments
     @Environment(\.timelineSearchQuery) private var searchQuery
@@ -3598,6 +3604,10 @@ private struct MessageDocumentAttachmentView: View {
                 .onDisappear(perform: file.finish)
         }
         .onDisappear { closeDocument() }
+        .onChange(of: appState.runtimeEventsGeneration) { _, _ in
+            // A parsed document or a leased share still belongs to the runtime that opened it.
+            resetDocument()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { cancelDocumentOpen() }
         }

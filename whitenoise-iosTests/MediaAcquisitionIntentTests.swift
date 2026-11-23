@@ -52,6 +52,36 @@ struct MediaAcquisitionIntentTests {
         #expect(requests == [.automatic, .automatic])
     }
 
+    @Test func aReceivedContactWithAnOutgoingByteOverlayChecksItsOwnSlot() async throws {
+        let bytes = Data("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Avery Stone\r\nN:Stone;Avery;;;\r\nEND:VCARD\r\n".utf8)
+        let target = AttachmentLocalTargetFfi(messageIdHex: "received", sourceMessageIdHex: "original", attachmentIndex: 2)
+        let ref = encryptedMediaReference(fileName: "contact.vcf", mediaType: "text/vcard", sourceEpoch: 1)
+        let contact = MessageMediaAttachment(id: "received-contact", reference: ref, fileName: "contact.vcf",
+            mediaType: "text/vcard", dim: nil, localData: bytes, localTarget: target)
+        var checked: [AttachmentLocalTargetFfi] = []
+        var retained = false
+        var reads: [MessageMediaAttachment] = []
+        let loader = ConversationMediaLoader({ request in
+            reads.append(request)
+            throw AttachmentReadError.unavailable
+        }, canShareDocument: { _, source in
+            if let source { checked.append(source) }
+            return retained
+        })
+        let missing = await loader.prefetchDocument(contact, isVisible: true, allowed: true)
+        #expect(missing == nil && reads.isEmpty)
+        retained = true
+        let cached = await loader.prefetchDocument(contact, isVisible: true, allowed: false)
+        #expect(cached?.contactName == "Avery Stone" && checked == [target, target] && reads.isEmpty)
+
+        let presentation = DocumentSharePresentation()
+        await #expect(throws: AttachmentReadError.unavailable) {
+            try await presentation.openDocument(contact, using: loader, demand: .explicit,
+                isCurrent: { true }, handoffItem: { contact }, didReadSize: { _ in })
+        }
+        #expect(reads.count == 1 && reads.first?.localTarget == target && reads.first?.localData == nil)
+    }
+
     @Test func documentRowsReadOnlyTheBytesNeededForTheirLabels() async throws {
         let card = Data("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Avery Stone\r\nN:Stone;Avery;;;\r\nEND:VCARD\r\n".utf8)
         var bytesRead = 0
