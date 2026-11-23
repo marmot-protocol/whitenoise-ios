@@ -239,15 +239,15 @@ struct TranscriptHistoryState {
         scannedSlots += page.entries.count
         pagesRevision &+= 1
         pager = next
-        guard var prefix = refresh else { pages.append(page.entries); return }
-        prefix.prefix.append(page.entries)
-        if !next.canLoadMore || prefix.boundary.map({ boundary in page.entries.contains { originalSlot($0) == boundary } }) == true {
-            pages = prefix.prefix
-            coveredAdditions = prefix.version
+        guard var pending = refresh else { pages.append(page.entries); return }
+        pending.prefix.append(page.entries)
+        if !next.canLoadMore || pending.boundary.map({ boundary in page.entries.contains { originalSlot($0) == boundary } }) == true {
+            pages = pending.prefix
+            coveredAdditions = pending.version
             refresh = nil
         } else {
-            pages = prefix.prefix.includingRetainedTail(pages)
-            refresh = prefix
+            pages = pending.prefix.includingRetainedTail(pages)
+            refresh = pending
         }
     }
 
@@ -336,6 +336,10 @@ final class TranscriptAttachmentHistory {
     private func invalidateReads() {
         generation &+= 1
         read = .idle
+    }
+
+    func interruptPageRead() {
+        if isLoading { invalidateReads() }
     }
 
     private func discard() {

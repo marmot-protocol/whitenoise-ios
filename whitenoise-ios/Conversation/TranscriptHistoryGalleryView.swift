@@ -154,7 +154,10 @@ struct TranscriptHistoryGalleryView: View {
                 history.begin(availability.owner)
                 activeScope = availability.owner
             }
-            guard let currentScope else { return }
+            guard let currentScope else {
+                history.interruptPageRead()
+                return
+            }
             if history.state.pager.baseline == nil {
                 await history.loadPage(scope: currentScope, appState: appState)
             } else {

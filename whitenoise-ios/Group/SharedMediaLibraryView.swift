@@ -40,7 +40,13 @@ final class SharedMediaLibraryViewModel {
 
     func load(groupIdHex: String, using appState: AppState, force: Bool = false, nextPage: Bool = false) async {
         guard let newScope = AttachmentHistoryPager.Scope(appState: appState, group: groupIdHex) else {
-            if let owner = AttachmentHistoryPager.Scope(ownerOf: appState, group: groupIdHex), scope == owner { return }
+            if let owner = AttachmentHistoryPager.Scope(ownerOf: appState, group: groupIdHex), scope == owner {
+                if isLoading {
+                    generation &+= 1
+                    isLoading = false
+                }
+                return
+            }
             generation += 1
             scope = nil
             resetPages()
