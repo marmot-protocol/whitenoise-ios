@@ -200,11 +200,35 @@ private struct MessageTextBubbleLayout: Layout {
 }
 
 nonisolated enum TranscriptMessagePreview {
-    static func sourceChunk(_ remaining: Substring) -> Substring {
-        let chunk = remaining.prefix(2048)
-        guard chunk.endIndex != remaining.endIndex,
-              let space = chunk.suffix(512).lastIndex(where: { $0.isWhitespace }) else { return chunk }
-        return remaining[...space]
+    /// Prepare one continuous document off the UI actor. Resolve each distinct
+    /// mention against the existing profile cache without starting a profile load.
+    @concurrent
+    static func sourceText(_ raw: String, displayName: @MainActor @Sendable (String) -> String?) async throws -> String {
+        let text = ContentSanitizer.textRun(raw)
+        var start = text.startIndex
+        var search = start
+        var rendered = ""
+        var replacements: [String: String] = [:]
+        while let at = text[search...].firstIndex(of: "@") {
+            try Task.checkCancellation()
+            search = text.index(after: at)
+            guard let match = CanonicalMentionDisplayProjection.canonicalMention(in: text, at: at) else { continue }
+            let replacement: String
+            if let cached = replacements[match.npub] {
+                replacement = cached
+            } else {
+                replacement = await ContentSanitizer.displayName(displayName(match.npub)).map { "@\($0)" } ?? String(text[at..<match.endIndex])
+                replacements[match.npub] = replacement
+            }
+            rendered += text[start..<at]
+            rendered += replacement
+            start = match.endIndex
+            search = start
+        }
+        try Task.checkCancellation()
+        guard start != text.startIndex else { return text }
+        rendered += text[start...]
+        return rendered
     }
 
     /// A search result can show every indexed character and still have more authored source.
@@ -234,30 +258,45 @@ nonisolated enum TranscriptMessagePreview {
 private struct LongMessageSourceText: View {
     @Environment(AppState.self) private var appState
     let text: String
-    @State private var starts: [String.Index]
-
-    init(text: String) {
-        self.text = text
-        _starts = State(initialValue: [text.startIndex])
-    }
+    @State private var document: String?
 
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(starts, id: \.self) { start in
-                let chunk = TranscriptMessagePreview.sourceChunk(text[start...])
-                let safeText = ContentSanitizer.textRun(String(chunk))
-                let display = CanonicalMentionDisplayProjection.project(safeText) { npub in
-                    guard let id = NostrProfileReference.pubkeyHex(fromBech32: npub) else { return nil }
-                    return appState.cachedKnownDisplayName(forAccountIdHex: id)
-                }
-                Text(verbatim: display.text)
-                    .onAppear {
-                        if start == starts.last, chunk.endIndex < text.endIndex {
-                            starts.append(chunk.endIndex)
-                        }
-                    }
+        Group {
+            if let document {
+                SourceTextView(document: document)
+            } else {
+                ProgressView()
             }
         }
+        .task(id: text.contains("@") ? appState.profileRefreshGeneration : nil) {
+            guard let prepared = try? await TranscriptMessagePreview.sourceText(text, displayName: { npub in
+                guard let id = NostrProfileReference.pubkeyHex(fromBech32: npub) else { return nil }
+                return appState.cachedKnownDisplayName(forAccountIdHex: id)
+            }), !Task.isCancelled else { return }
+            document = prepared
+        }
+    }
+}
+
+/// TextKit lays out the visible viewport of a single document, including long
+/// lines that wrap across many screens.
+private struct SourceTextView: UIViewRepresentable {
+    let document: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView(usingTextLayoutManager: true)
+        view.isEditable = false
+        view.isSelectable = false
+        view.backgroundColor = .clear
+        view.font = .preferredFont(forTextStyle: .body)
+        view.adjustsFontForContentSizeCategory = true
+        view.textContainerInset = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        view.textContainer.lineFragmentPadding = 0
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        if !view.text.utf8.elementsEqual(document.utf8) { view.text = document }
     }
 }
 
@@ -310,6 +349,7 @@ extension MessageBubble: Equatable {
             && lhs.voiceTranscript == rhs.voiceTranscript
             && lhs.readingSpeech === rhs.readingSpeech
             && lhs.displaysReader == rhs.displaysReader
+            && (!lhs.displaysReader || lhs.record.plaintext.utf8.elementsEqual(rhs.record.plaintext.utf8))
             && lhs.incompleteMarkdown == rhs.incompleteMarkdown
             && lhs.clusterPresentation == rhs.clusterPresentation
             && lhs.showsSenderIdentity == rhs.showsSenderIdentity
@@ -577,6 +617,11 @@ struct MessageBubble: View {
         }
     }
 
+    /// Refresh media state in a timeline row without replacing an open reader and its scroll position.
+    func refreshingAttachments(on revision: Int) -> some View {
+        equatable().id(displaysReader ? nil : revision)
+    }
+
     var readerShowsSource: Bool {
         if incompleteMarkdown { return true }
         guard markdownBlocks == nil else { return false }
@@ -588,11 +633,15 @@ struct MessageBubble: View {
 
     @ViewBuilder private var readerBody: some View {
         if readerShowsSource {
-            // Beyond the formatter's budget, read the authored source in viewport-sized batches.
+            // TextKit owns scrolling for the source reader.
             LongMessageSourceText(text: record.plaintext)
                 .id(Data(record.plaintext.utf8))
         } else {
-            messageBodyContent(snippet: nil)
+            ScrollView {
+                messageBodyContent(snippet: nil)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
         }
     }
 
@@ -1148,7 +1197,7 @@ struct MessageBubble: View {
 
     private func messageBodyText(hasReply: Bool, richWidth: CGFloat? = nil) -> some View {
         let snippet = MessageBodyCollapsePresentation.snippet(
-            markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }.joined(separator: "\n") ?? sanitizedBodyText,
+            markdownBlocks?.flatMap { $0.textFields(for: .excerpt) }.joined(separator: "\n") ?? sanitizedBodyText,
             isExpanded: isBodyExpanded || searchQuery != nil
         )
         let fadesReviewExcerpt = usesReviewLayout && snippet != nil

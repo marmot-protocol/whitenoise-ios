@@ -2642,19 +2642,14 @@ struct ConversationView: View {
     }
 
     private func longMessageReader(_ target: LongMessageTarget) -> some View {
-        ScrollView {
+        Group {
             if let viewModel, ObjectIdentifier(viewModel) == target.modelID,
                appState.activeAccountRef == target.accountRef, appState.runtimeGeneration == target.runtimeGeneration,
-               let item = viewModel.timeline.first(where: { item in
-                   guard case .message(let record, _) = item.kind else { return false }
-                   return target.rowID == item.id || (!target.messageID.isEmpty && record.messageIdHex == target.messageID)
-               }), case .message(let record, let status) = item.kind, !viewModel.isDeleted(record.messageIdHex) {
-                messageBubble(for: item, record: record, status: status, viewModel: viewModel,
+               let message = viewModel.readerMessage(rowID: target.rowID, messageID: target.messageID) {
+                messageBubble(for: message.item, record: message.record, status: message.status, viewModel: viewModel,
                               showsSenderIdentity: false, usesSelectionLayout: false, displaysReader: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
             } else {
-                Text(L10n.string("Message unavailable")).foregroundStyle(.secondary).padding()
+                ScrollView { Text(L10n.string("Message unavailable")).foregroundStyle(.secondary).padding() }
             }
         }
         .navigationTitle(L10n.string("Message"))
@@ -2767,7 +2762,7 @@ struct ConversationView: View {
                 }
             }
         )
-        .equatable()
+        .refreshingAttachments(on: AttachmentPresentationState.shared.revision)
         .padding(.leading, usesSelectionLayout ? selectionInset : 0)
         .environment(\.timelineSearchQuery, viewModel.search.isActive && viewModel.search.matchingItemIDs.contains(item.id)
             ? ConversationSearchEngine.normalizedQuery(viewModel.search.query) : nil)
@@ -2775,7 +2770,6 @@ struct ConversationView: View {
         .environment(\.stickerAssets, viewModel.stickerAssets)
         .environment(\.stickerLibrary, viewModel.stickerLibrary)
         .environment(\.mediaUploadProgress, viewModel.composer.uploadProgress)
-        .id(AttachmentPresentationState.shared.revision)
     }
 
     private var timelineBottomSentinel: some View {
@@ -4886,7 +4880,7 @@ struct ConversationView: View {
         func hasSpokenText() -> Bool {
             guard !record.contentTokens.blocks.isEmpty, !TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) else { return true }
             return (model.markdownDisplayBlocks(for: row) ?? []).contains { block in
-                block.textFields(includeCodeLanguage: false).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                block.textFields(for: .body).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             }
         }
         return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId,

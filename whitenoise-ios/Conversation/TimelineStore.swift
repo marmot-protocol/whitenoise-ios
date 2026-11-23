@@ -634,7 +634,7 @@ final class TimelineStore {
         if isText, let blocks = MarkdownMessageBuilder.build(for: tokens, mentionDisplayName: mentionDisplayNameResolver,
                                                            usesStaticTimestamps: true).blocks {
             for block in blocks {
-                let fields = block.textFields(includeCodeLanguage: false)
+                let fields = block.textFields(for: .body)
                 for field in fields {
                     let excerpt = ConversationReplyPreview.excerpt(field)
                     if !excerpt.isEmpty { return excerpt }

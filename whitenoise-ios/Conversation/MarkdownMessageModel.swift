@@ -53,13 +53,21 @@ extension MarkdownDisplayBlock {
         var hasText = false
         var remaining = characterBudget
 
-        func textPrefix(_ text: AttributedString, hasFollowingBlock: Bool) -> AttributedString {
+        func beginField() {
             if countingBlockSeparators && hasText { remaining -= 1 }
             hasText = true
-            let prefix = text.characters.prefix(remaining)
-            remaining -= countingBlockSeparators ? prefix.count : max(1, prefix.count)
+        }
+
+        func consume(_ count: Int, hasFollowingBlock: Bool) {
+            remaining -= countingBlockSeparators ? count : max(1, count)
             // One remaining separator cannot show any text from the next block.
             if countingBlockSeparators, remaining == 1, hasFollowingBlock { remaining = 0 }
+        }
+
+        func textPrefix(_ text: AttributedString, hasFollowingBlock: Bool) -> AttributedString {
+            beginField()
+            let prefix = text.characters.prefix(remaining)
+            consume(prefix.count, hasFollowingBlock: hasFollowingBlock)
             guard remaining <= 0 else { return text }
             var end = prefix.endIndex
             if !emoji.isEmpty, end < text.endIndex {
@@ -93,8 +101,14 @@ extension MarkdownDisplayBlock {
                     }
                     result.append(.list(items: prefix, tight: tight))
                 case .thematicBreak:
-                    if !countingBlockSeparators { remaining -= 1 }
-                    result.append(remaining == 0 ? .paragraph(AttributedString("…")) : block)
+                    if countingBlockSeparators {
+                        beginField()
+                        consume(1, hasFollowingBlock: more)
+                        result.append(block)
+                    } else {
+                        remaining -= 1
+                        result.append(remaining == 0 ? .paragraph(AttributedString("…")) : block)
+                    }
                 }
             }
             return result
@@ -103,15 +117,18 @@ extension MarkdownDisplayBlock {
     }
 
     /// Plain labels from the budgeted display projection, retaining block and line breaks.
-    var textFields: [String] { textFields(includeCodeLanguage: true) }
+    enum TextPurpose { case search, body, excerpt }
 
-    func textFields(includeCodeLanguage: Bool) -> [String] {
+    var textFields: [String] { textFields(for: .search) }
+
+    func textFields(for purpose: TextPurpose) -> [String] {
         switch self {
         case .paragraph(let text), .heading(let text): [String(text.characters)]
-        case .codeBlock(let code, let language): [includeCodeLanguage ? language : nil, String(code.characters)].compactMap { $0 }
-        case .blockQuote(let blocks): blocks.flatMap { $0.textFields(includeCodeLanguage: includeCodeLanguage) }
-        case .list(let items, _): items.flatMap { $0.blocks.flatMap { $0.textFields(includeCodeLanguage: includeCodeLanguage) } }
-        case .thematicBreak: []
+        case .codeBlock(let code, let language): [purpose == .search ? language : nil, String(code.characters)].compactMap { $0 }
+        case .blockQuote(let blocks): blocks.flatMap { $0.textFields(for: purpose) }
+        case .list(let items, _): items.flatMap { $0.blocks.flatMap { $0.textFields(for: purpose) } }
+        // A divider occupies its own line in the layout and has no searchable or spoken text.
+        case .thematicBreak: purpose == .excerpt ? ["\u{fffc}"] : []
         }
     }
 }
