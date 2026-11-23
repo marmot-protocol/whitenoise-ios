@@ -285,17 +285,18 @@ struct AttachmentHandoffTests {
         var ownSend = false
         var exceedsLimit = false
         var handedOff: [AttachmentLocalTargetFfi] = []
-        var retryRequests = 0
+        var readDemands: [AttachmentDemand] = []
+        var handoffDemands: [AttachmentDemand] = []
         let bytesOverLimit = DocumentPreviewFormat.text.byteLimit + 1
         let loader = ConversationMediaLoader { requested in
-            if requested.demand == .retry { retryRequests += 1 }
+            readDemands.append(requested.demand)
             if let local = requested.localData { return local }
             if exceedsLimit, requested.previewByteLimit != nil {
                 throw AttachmentReadError.previewLimitExceeded(byteCount: bytesOverLimit)
             }
             return contents
         } openHandoff: { requested, _ in
-            if requested.demand == .retry { retryRequests += 1 }
+            handoffDemands.append(requested.demand)
             #expect(requested.localData == nil)
             if let target = requested.localTarget { handedOff.append(target) }
             return AttachmentHandoffLease(
@@ -319,6 +320,8 @@ struct AttachmentHandoffTests {
         presentation.close()
 
         handedOff.removeAll()
+        readDemands.removeAll()
+        handoffDemands.removeAll()
         exceedsLimit = true
         contents = Data("would otherwise preview".utf8)
         var reportedSize: Int?
@@ -326,7 +329,8 @@ struct AttachmentHandoffTests {
             isCurrent: { true }, handoffItem: { item }, didReadSize: { reportedSize = $0 })
         #expect(oversized == nil)
         #expect(reportedSize == bytesOverLimit)
-        #expect(retryRequests == 1)
+        #expect(readDemands == [.retry])
+        #expect(handoffDemands == [.explicit])
         #expect(handedOff == [Self.target])
         presentation.close()
 

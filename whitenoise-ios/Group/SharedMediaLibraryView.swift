@@ -28,6 +28,9 @@ final class SharedMediaLibraryViewModel {
     private var didLoad = false
     private var didLoadLinks = false
 
+    var waitingForFirstPage: Bool { items.isEmpty && (isLoading || (!didLoad && loadError == nil)) }
+    var waitingForFirstLinkScan: Bool { links.isEmpty && (isLoadingLinks || (!didLoadLinks && linksError == nil)) }
+
     /// Month titles and buckets bake in the calendar and locale at build
     /// time; a language or time-zone change while the screen stays alive
     /// re-derives them (wired via notifications in the view).
@@ -376,7 +379,7 @@ struct SharedMediaLibraryView: View {
     @ViewBuilder
     private var mediaContent: some View {
         let visual = model.visualItems
-        if model.isLoading && model.items.isEmpty {
+        if model.waitingForFirstPage {
             centeredStatus {
                 ProgressView()
             }
@@ -451,7 +454,7 @@ struct SharedMediaLibraryView: View {
     @ViewBuilder
     private var voiceSection: some View {
         let voice = SharedMediaLibraryPresentation.voiceItems(from: model.items)
-        if model.isLoading && model.items.isEmpty {
+        if model.waitingForFirstPage {
             loadingRow
         } else if let error = model.loadError, model.items.isEmpty {
             errorRow(error) {
@@ -477,7 +480,7 @@ struct SharedMediaLibraryView: View {
     @ViewBuilder
     private var filesSection: some View {
         let files = SharedMediaLibraryPresentation.fileItems(from: model.items)
-        if model.isLoading && model.items.isEmpty {
+        if model.waitingForFirstPage {
             loadingRow
         } else if let error = model.loadError, model.items.isEmpty {
             errorRow(error) {
@@ -549,7 +552,7 @@ struct SharedMediaLibraryView: View {
 
     @ViewBuilder
     private var linksSection: some View {
-        if (model.isLoadingLinks || (model.scope == nil && model.isLoading)) && model.links.isEmpty {
+        if model.waitingForFirstLinkScan {
             loadingRow
         } else if let error = model.linksError, model.links.isEmpty {
             errorRow(error) {

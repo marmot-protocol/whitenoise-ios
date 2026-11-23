@@ -276,7 +276,8 @@ struct OutgoingSendResponsivenessTests {
         let opening = try #require(OpeningDraftDocument(initial.item, outgoing: true))
         #expect(opening.update(to: confirmed.item))
         #expect(await opening.verify())
-        #expect(opening.current.localTarget == confirmed.item.localTarget)
+        #expect(opening.current.localTarget == AttachmentLocalTargetFfi(messageIdHex: durable.messageIdHex,
+            sourceMessageIdHex: durable.messageIdHex, attachmentIndex: 1))
 
         let stale = try #require(OpeningDraftDocument(initial.item, outgoing: true))
         reference.plaintextSha256 = String(repeating: "f", count: 64)

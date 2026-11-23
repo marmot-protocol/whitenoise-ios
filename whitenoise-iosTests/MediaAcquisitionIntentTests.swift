@@ -85,12 +85,11 @@ struct MediaAcquisitionIntentTests {
 
     @Test func documentRowsReadOnlyTheBytesNeededForTheirLabels() async throws {
         let card = Data("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Avery Stone\r\nN:Stone;Avery;;;\r\nEND:VCARD\r\n".utf8)
-        var bytesRead = 0
+        var bodyReadAttempts = 0
         let downloader = ConversationMediaDownloader()
         let loader = ConversationMediaLoader({ item in
-            let data = try await downloader.data(for: item, groupIdHex: "group", appState: nil)
-            bytesRead += data.count
-            return data
+            bodyReadAttempts += 1
+            return try await downloader.data(for: item, groupIdHex: "group", appState: nil)
         }, admitAutomaticAttachment: { item in
             await downloader.admitAutomaticAttachment(for: item, groupIdHex: "group", appState: nil)
         })
@@ -99,12 +98,12 @@ struct MediaAcquisitionIntentTests {
             let metadata = await loader.prefetchDocument(document, isVisible: true, allowed: true)
             #expect(metadata?.size == 1024)
         }
-        #expect(bytesRead == 0)
+        #expect(bodyReadAttempts == 0)
         let contact = attachment("text/vcard", localData: card)
         let metadata = await loader.prefetchDocument(contact, isVisible: true, allowed: false)
         #expect(metadata?.size == card.count)
         #expect(metadata?.contactName?.contains("Avery") == true)
-        #expect(bytesRead == 0)
+        #expect(bodyReadAttempts == 0)
     }
 
     @Test func selectedPageRetryCarriesTheRetryDemand() async throws {
