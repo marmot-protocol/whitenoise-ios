@@ -4108,6 +4108,12 @@ private enum MediaFullscreenDismiss {
 }
 
 nonisolated enum MessageMediaFullscreenGalleryPresentation {
+    static func videoDemand(onSelection: AttachmentDemand, waitForPlay: Bool, playRequest: Int,
+                            handledRequest: Int, afterFailure: Bool) -> AttachmentDemand? {
+        if playRequest != handledRequest { return .userTap(afterFailure: afterFailure) }
+        return waitForPlay && playRequest == 0 ? nil : onSelection
+    }
+
     @MainActor static func prepareVideo(_ player: AVPlayer, demand: AttachmentDemand, resumeConfirmed: Bool = false) {
         if demand.isUserInitiated || resumeConfirmed { player.play() } else { player.pause() }
     }
@@ -4644,8 +4650,9 @@ private struct MessageMediaFullscreenVideoPage: View {
                 releasePlayback()
                 return
             }
-            if waitsForRestoredPlay && playRequest == 0 { return }
-            let demand = playRequest != handledPlayRequest ? .userTap(afterFailure: didFail) : selectionDemand
+            guard let demand = MessageMediaFullscreenGalleryPresentation.videoDemand(onSelection: selectionDemand,
+                waitForPlay: waitsForRestoredPlay, playRequest: playRequest, handledRequest: handledPlayRequest,
+                afterFailure: didFail) else { return }
             handledPlayRequest = playRequest
             await loadVideo(demand: demand)
         }

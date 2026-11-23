@@ -229,7 +229,8 @@ struct SharedMediaLibraryView: View {
     }
 
     var body: some View {
-        let scope = AttachmentHistoryPager.Scope(appState: appState, group: conversation.group.groupIdHex)
+        let availability = AttachmentHistoryPager.Availability(appState, group: conversation.group.groupIdHex)
+        let scope = availability.readable
         VStack(spacing: 0) {
             Picker("Shared media type", selection: $category) {
                 Text("Media").tag(SharedMediaLibraryPresentation.Category.media)
@@ -261,7 +262,7 @@ struct SharedMediaLibraryView: View {
         .navigationTitle("Shared Media")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarRole(.editor)
-        .task(id: scope) {
+        .task(id: availability) {
             await model.load(groupIdHex: conversation.group.groupIdHex, using: appState)
             guard scope != nil else { return }
             while !Task.isCancelled {
@@ -280,7 +281,7 @@ struct SharedMediaLibraryView: View {
             // never fires for a region/calendar change; this one does.
             model.rebuildMonthSections()
         }
-        .task(id: category == .links ? model.scope : nil) {
+        .task(id: category == .links && model.scope == scope ? scope : nil) {
             guard category == .links, model.scope == scope, scope != nil else { return }
             await model.loadLinks(groupIdHex: conversation.group.groupIdHex, using: appState, enteringTab: true)
         }

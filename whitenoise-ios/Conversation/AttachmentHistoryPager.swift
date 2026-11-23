@@ -4,6 +4,16 @@ import MarmotKit
 /// continuation are installed together after the screen accepts the result.
 @MainActor
 struct AttachmentHistoryPager {
+    struct Availability: Equatable {
+        let owner: Scope?
+        let readable: Scope?
+
+        init(_ appState: AppState, group: String) {
+            owner = Scope(ownerOf: appState, group: group)
+            readable = appState.runtimeEventsGeneration == nil ? nil : owner
+        }
+    }
+
     struct Scope: Equatable {
         let account: String
         let accountID: String

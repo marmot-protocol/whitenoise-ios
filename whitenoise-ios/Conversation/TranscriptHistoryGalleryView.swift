@@ -121,8 +121,9 @@ struct TranscriptHistoryGalleryView: View {
     }
 
     var body: some View {
-        let currentScope = scope
-        let scoped = owner != nil && owner == activeScope
+        let availability = AttachmentHistoryPager.Availability(appState, group: conversation.group.groupIdHex)
+        let currentScope = availability.readable
+        let scoped = availability.owner != nil && availability.owner == activeScope
         Group {
             if scoped && history.state.validationFailed && history.state.selectedFromHistory {
                 ContentUnavailableView {
@@ -148,10 +149,10 @@ struct TranscriptHistoryGalleryView: View {
         .onChange(of: projectionInputs, initial: true) { old, new in
             updateProjection(from: old, to: new)
         }
-        .task(id: currentScope) {
-            if activeScope != owner {
-                history.begin(owner)
-                activeScope = owner
+        .task(id: availability) {
+            if activeScope != availability.owner {
+                history.begin(availability.owner)
+                activeScope = availability.owner
             }
             guard let currentScope else { return }
             if history.state.pager.baseline == nil {

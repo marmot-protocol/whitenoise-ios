@@ -44,6 +44,13 @@ struct MessageMediaGalleryTests {
         #expect(player.rate == 0)
     }
 
+    @Test func restoringARetainedVideoWaitsForPlayBeforeReadingItsBytes() {
+        let load = MessageMediaFullscreenGalleryPresentation.videoDemand
+        #expect(load(.automatic, true, 0, 0, false) == nil)
+        #expect(load(.automatic, true, 1, 0, false) == .explicit)
+        #expect(load(.automatic, true, 2, 1, true) == .retry)
+    }
+
     @Test func aVerifiedOutgoingVideoKeepsItsNativePlaybackIntentWithoutPromotingAcquisition() {
         let player = TestPlayer()
         var outgoing = TranscriptMediaSelection(openingID: "draft")
