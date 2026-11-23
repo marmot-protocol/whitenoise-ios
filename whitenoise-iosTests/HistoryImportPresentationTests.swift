@@ -19,6 +19,27 @@ struct HistoryImportPresentationTests {
         #expect(HistoryImportBoundaryProjection.boundaries(for: timeline, origins: allImported).isEmpty)
     }
 
+    @MainActor
+    @Test func importProvenanceSplitsAnAlreadyDisplayedMessageGroup() throws {
+        let model = ConversationViewModel(appState: AppState.test(), group: group(name: ""))
+        var older = timelineRecord(messageIdHex: hex("a1"), timelineAt: 36_000)
+        let live = timelineRecord(messageIdHex: hex("a2"), timelineAt: 36_120)
+        let store = model.timelineStore
+        store.applyConversationWindowPage(.init(messages: [older, live], hasMoreBefore: false, hasMoreAfter: false))
+        let first = try #require(model.timeline.first)
+        let last = try #require(model.timeline.last)
+        #expect(!store.messageClusterPresentation(for: first).endsCluster)
+        #expect(!store.messageClusterPresentation(for: last).startsCluster)
+
+        older.historyImportProvenance = .device(deviceSlotIdHex: slot)
+        store.applyConversationWindowPage(.init(messages: [older, live], hasMoreBefore: false, hasMoreAfter: false))
+        #expect(model.historyImportBoundary(before: last) == .device(slotIdHex: slot, label: ""))
+        let importedCluster = store.messageClusterPresentation(for: first)
+        let liveCluster = store.messageClusterPresentation(for: last)
+        #expect(importedCluster.endsCluster && importedCluster.showsAvatar)
+        #expect(liveCluster.startsCluster && liveCluster.showsSenderName)
+    }
+
     @Test func provenanceDecidesBetweenADeviceAndABackup() {
         let source = HistoryImportSourceFfi(deviceSlotIdHex: slot, deviceLabel: "Mac")
         #expect(HistoryImportOrigin(importedFrom: source, provenance: nil) == .device(slotIdHex: slot, label: "Mac"))

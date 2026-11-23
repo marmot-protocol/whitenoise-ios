@@ -60,6 +60,8 @@ nonisolated enum MessageSelectionPolicy {
 }
 
 nonisolated enum ChatBubbleMetrics {
+    static let timelineMargin: CGFloat = 16
+    static let textMaximumWidth: CGFloat = 332
     static let regularMaximumWidth: CGFloat = 560
     static let compactOppositeInset: CGFloat = 48
     static let regularOppositeInset: CGFloat = 64
@@ -118,8 +120,15 @@ nonisolated enum MessageBubbleChromeSizing {
         metadataHeight: CGFloat,
         spacing: CGFloat
     ) -> CGFloat {
-        max(0, bubbleHeight) + max(0, spacing) + max(0, metadataHeight)
+        max(0, bubbleHeight) + (metadataHeight > 0 ? max(0, spacing) + metadataHeight : 0)
     }
+}
+
+extension VerticalAlignment {
+    private enum MessageSurfaceBottom: AlignmentID {
+        static func defaultValue(in dimensions: ViewDimensions) -> CGFloat { dimensions[.bottom] }
+    }
+    static let messageSurfaceBottom = VerticalAlignment(MessageSurfaceBottom.self)
 }
 
 struct MessageBubbleChromeLayout: Layout {
@@ -144,11 +153,11 @@ struct MessageBubbleChromeLayout: Layout {
         subviews: Subviews,
         cache: inout Cache
     ) -> CGSize {
-        guard subviews.count == 2 else { return .zero }
+        guard !subviews.isEmpty else { return .zero }
 
         let widthProposal = ProposedViewSize(width: proposal.width, height: nil)
         let bubbleSize = subviews[0].sizeThatFits(widthProposal)
-        let metadataIdealSize = subviews[1].sizeThatFits(.unspecified)
+        let metadataIdealSize = subviews.dropFirst().first?.sizeThatFits(.unspecified) ?? .zero
         let width = MessageBubbleChromeSizing.width(
             proposedWidth: proposal.width,
             bubbleWidth: bubbleSize.width,
@@ -156,7 +165,7 @@ struct MessageBubbleChromeLayout: Layout {
         )
         let resolvedProposal = ProposedViewSize(width: width, height: nil)
         let resolvedBubbleSize = subviews[0].sizeThatFits(resolvedProposal)
-        let resolvedMetadataSize = subviews[1].sizeThatFits(resolvedProposal)
+        let resolvedMetadataSize = subviews.dropFirst().first?.sizeThatFits(resolvedProposal) ?? .zero
         cache.resolvedWidth = width
         cache.bubbleSize = resolvedBubbleSize
 
@@ -170,13 +179,20 @@ struct MessageBubbleChromeLayout: Layout {
         )
     }
 
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
+                           subviews: Subviews, cache: inout Cache) -> CGFloat? {
+        guard guide == .messageSurfaceBottom, let bubble = subviews.first else { return nil }
+        let height = cache.resolvedWidth == bounds.width ? cache.bubbleSize?.height : nil
+        return bounds.minY + (height ?? bubble.sizeThatFits(.init(width: bounds.width, height: nil)).height)
+    }
+
     func placeSubviews(
         in bounds: CGRect,
         proposal: ProposedViewSize,
         subviews: Subviews,
         cache: inout Cache
     ) {
-        guard subviews.count == 2 else { return }
+        guard !subviews.isEmpty else { return }
 
         let resolvedProposal = ProposedViewSize(width: bounds.width, height: nil)
         let bubbleSize: CGSize
@@ -193,7 +209,7 @@ struct MessageBubbleChromeLayout: Layout {
             anchor: .topLeading,
             proposal: ProposedViewSize(width: bubbleSize.width, height: bubbleSize.height)
         )
-        subviews[1].place(
+        subviews.dropFirst().first?.place(
             at: CGPoint(x: bounds.minX, y: bounds.minY + bubbleSize.height + spacing),
             anchor: .topLeading,
             proposal: resolvedProposal
@@ -290,6 +306,18 @@ nonisolated enum MessageExpirationPresentation {
     }
 }
 
+/// A failed send replaces its usual timestamp with the action that opens its options.
+struct MessageFailureNotice {
+    let action: () -> Void
+    let showsTimestamp: Bool
+
+    init?(status: MessageStatus, isDeleted: Bool, isEdited: Bool, hasReports: Bool, action: (() -> Void)?) {
+        guard status == .failed, !isDeleted, let action else { return nil }
+        self.action = action
+        showsTimestamp = isEdited || hasReports
+    }
+}
+
 struct MessageFooterPresentation: Equatable {
     let systemImage: String?
     let accessibilityLabel: String?
@@ -304,9 +332,9 @@ struct MessageFooterPresentation: Equatable {
         case .received:
             return Self(systemImage: nil, accessibilityLabel: nil, isFailure: false)
         case .sending:
-            return Self(systemImage: "clock", accessibilityLabel: L10n.string("Sending…"), isFailure: false)
+            return Self(systemImage: "ellipsis.message", accessibilityLabel: L10n.string("Sending…"), isFailure: false)
         case .sent:
-            return Self(systemImage: "checkmark", accessibilityLabel: L10n.string("Sent"), isFailure: false)
+            return Self(systemImage: "checkmark.circle.fill", accessibilityLabel: L10n.string("Sent"), isFailure: false)
         case .failed:
             return Self(
                 systemImage: "exclamationmark.circle.fill",
@@ -482,12 +510,18 @@ nonisolated enum MessageTombstonePresentation {
 }
 
 struct MessageMetadataFooter: View {
-    let time: String
+    enum Caption: Equatable {
+        case timestamp(String)
+        case failureNotice
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .caption) private var statusSize: CGFloat = 12
+    let caption: Caption
     let isEdited: Bool
     let status: MessageStatus
     let isFromMe: Bool
     var showsDeliveryStatus: Bool = true
-    var showsExpirationTimer: Bool = false
     var hasReports: Bool = false
     var onViewEditHistory: (() -> Void)?
 
@@ -501,7 +535,18 @@ struct MessageMetadataFooter: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Text(time)
+            if showsDeliveryStatus, let symbol = presentation.systemImage {
+                Image(systemName: symbol)
+                    .symbolEffect(.variableColor.iterative, options: .repeat(.continuous), isActive: status == .sending && !reduceMotion)
+                    .font(.system(size: statusSize, weight: .medium))
+                    .frame(width: statusSize, height: statusSize)
+                    .accessibilityLabel(presentation.accessibilityLabel ?? "")
+                    .accessibilityHidden(caption == .failureNotice)
+            }
+            switch caption {
+            case .timestamp(let time): Text(time)
+            case .failureNotice: Text("Not delivered. Tap for options.")
+            }
             if hasReports {
                 Image(systemName: "exclamationmark.bubble")
                     .accessibilityLabel(L10n.string("Reported message"))
@@ -515,21 +560,9 @@ struct MessageMetadataFooter: View {
                     Text(L10n.string("Edited"))
                 }
             }
-            if showsExpirationTimer {
-                Image(systemName: MessageExpirationPresentation.systemImage)
-                    .font(.system(size: 10, weight: .semibold))
-                    .accessibilityLabel(L10n.string("Disappearing messages"))
-            }
-            if showsDeliveryStatus, let systemImage = presentation.systemImage {
-                Image(systemName: systemImage)
-                    .font(.system(size: 10, weight: .semibold))
-                    // Clock and checkmark have different intrinsic widths.
-                    .frame(width: 12, height: 12)
-                    .accessibilityLabel(presentation.accessibilityLabel ?? "")
-            }
         }
-        .font(.caption2)
+        .font(.caption.weight(.medium))
         .foregroundStyle(resolvedForeground)
-        .fixedSize(horizontal: true, vertical: true)
+        .fixedSize(horizontal: caption != .failureNotice, vertical: true)
     }
 }
