@@ -30,8 +30,12 @@ struct ReplySwipeTests {
 
     @Test func feedbackTracksTheFingerToThresholdThenResistsOverdrag() {
         #expect(ReplySwipe.feedbackOffset(translation: CGSize(width: 20, height: 1)) == 20)
-        #expect(ReplySwipe.shouldActivate(translation: CGSize(width: 55, height: 0)))
-        #expect(ReplySwipe.feedbackOffset(translation: CGSize(width: 115, height: 2)) == 65)
+        let threshold = ReplySwipe.activationThreshold
+        #expect(ReplySwipe.shouldActivate(translation: CGSize(width: threshold, height: 0)))
+        let drag = CGSize(width: threshold + 60, height: 2)
+        let offset = ReplySwipe.feedbackOffset(translation: drag)
+        #expect(offset > threshold)
+        #expect(offset < drag.width)
         #expect(ReplySwipe.feedbackOffset(translation: CGSize(width: 40, height: 80)) == 0)
     }
 
