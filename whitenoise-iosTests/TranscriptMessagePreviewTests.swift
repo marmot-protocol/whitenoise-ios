@@ -1,4 +1,5 @@
 import Foundation
+import MarmotKit
 import SwiftUI
 import UIKit
 import Testing
@@ -65,16 +66,31 @@ struct TranscriptMessagePreviewTests {
         let paragraph = String(repeating: "a word ", count: 330) + emoji
         let unbroken = String(repeating: "x", count: 10_000)
         let source = paragraph + "\r\n\r\n" + unbroken + "\n\n" + paragraph + "\n"
-        let document = try await TranscriptMessagePreview.sourceText(source) { _ in nil }
-        let host = UIHostingController(rootView: SourceTextView(document: document))
+        let state = AppState.test()
+        func bubble(_ text: String) -> some View {
+            let record = AppMessageRecordFfi(messageIdHex: "msg", direction: "received", groupIdHex: "group", sender: "peer",
+                plaintext: text, contentTokens: .emptyDocument, kind: MessageSemantics.kindChat, tags: [], recordedAt: 1, receivedAt: 1)
+            return MessageBubble(record: record, status: .received, incompleteMarkdown: true, displaysReader: true)
+                .equatable().environment(state)
+        }
+        let original = source + "é"
+        let host = UIHostingController(rootView: bubble(original))
         try await withHostedWindow(host) { window in
             func reader(in view: UIView) -> UITextView? {
                 if let text = view as? UITextView { return text }
                 return view.subviews.lazy.compactMap { reader(in: $0) }.first
             }
+            func shows(_ expected: String) -> Bool {
+                window.layoutIfNeeded()
+                return reader(in: window)?.text.utf8.elementsEqual(expected.utf8) == true
+            }
+            try await eventually { shows(original) }
             let view = try #require(reader(in: window))
-            #expect(view.text.utf8.elementsEqual(source.utf8))
             #expect(view.contentSize.height > view.bounds.height)
+
+            let edited = source + "e\u{301}"
+            host.rootView = bubble(edited)
+            try await eventually { shows(edited) }
         }
     }
 

@@ -224,7 +224,7 @@ private struct LongMessageSourceText: View {
 
 /// TextKit lays out the visible viewport of a single document, including long
 /// lines that wrap across many screens.
-struct SourceTextView: UIViewRepresentable {
+private struct SourceTextView: UIViewRepresentable {
     let document: String
 
     func makeUIView(context: Context) -> UITextView {
@@ -240,7 +240,7 @@ struct SourceTextView: UIViewRepresentable {
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
-        if view.text != document { view.text = document }
+        if !view.text.utf8.elementsEqual(document.utf8) { view.text = document }
     }
 }
 
@@ -293,6 +293,7 @@ extension MessageBubble: Equatable {
             && lhs.voiceTranscript == rhs.voiceTranscript
             && lhs.readingSpeech === rhs.readingSpeech
             && lhs.displaysReader == rhs.displaysReader
+            && (!lhs.displaysReader || lhs.record.plaintext.utf8.elementsEqual(rhs.record.plaintext.utf8))
             && lhs.incompleteMarkdown == rhs.incompleteMarkdown
             && lhs.clusterPresentation == rhs.clusterPresentation
             && lhs.showsSenderIdentity == rhs.showsSenderIdentity

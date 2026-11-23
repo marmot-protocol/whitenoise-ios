@@ -2625,8 +2625,11 @@ struct ConversationView: View {
                let item = viewModel.timeline.first(where: { item in
                    guard case .message(let record, _) = item.kind else { return false }
                    return target.rowID == item.id || (!target.messageID.isEmpty && record.messageIdHex == target.messageID)
-               }), case .message(let record, let status) = item.kind, !viewModel.isDeleted(record.messageIdHex) {
-                messageBubble(for: item, record: record, status: status, viewModel: viewModel,
+               }), case .message(let record, let status) = item.kind, !viewModel.isDeleted(record.messageIdHex),
+               !viewModel.timelineStore.isBlockedAuthor(record.sender) {
+                // Timeline equality can ignore byte-distinct spellings of the same character.
+                let current = viewModel.record(for: record.messageIdHex) ?? record
+                messageBubble(for: item, record: current, status: status, viewModel: viewModel,
                               showsSenderIdentity: false, usesSelectionLayout: false, displaysReader: true)
             } else {
                 ScrollView { Text(L10n.string("Message unavailable")).foregroundStyle(.secondary).padding() }
