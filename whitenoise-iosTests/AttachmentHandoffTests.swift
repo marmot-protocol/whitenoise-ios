@@ -298,7 +298,9 @@ struct AttachmentHandoffTests {
             if requested.demand == .retry { retryRequests += 1 }
             #expect(requested.localData == nil)
             if let target = requested.localTarget { handedOff.append(target) }
-            return AttachmentHandoffLease(lease: self.lease, path: "/tmp/handoff/Notes.txt", releaser: releaser)
+            return AttachmentHandoffLease(
+                lease: self.lease, path: "/tmp/handoff/Notes.txt", target: requested.localTarget, releaser: releaser
+            )
         } canShareDocument: { _, leasedTarget in leasedTarget == Self.target || (ownSend && leasedTarget == nil) }
         let preview = try await presentation.openDocument(item, using: loader, demand: .explicit,
             isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
