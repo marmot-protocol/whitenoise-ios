@@ -20,7 +20,7 @@ nonisolated protocol ConversationWindowFeed: AnyObject, Sendable {
 
 nonisolated extension ConversationWindowSubscription: ConversationWindowFeed {}
 
-protocol ConversationProjectionClient {
+protocol ConversationProjectionClient: AnyObject {
     func openConversationWindowFeed(accountRef: String, groupIdHex: String,
                                     mode: ConversationOpenModeFfi, messageIdHex: String?) async throws
         -> any ConversationWindowFeed

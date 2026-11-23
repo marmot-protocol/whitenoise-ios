@@ -6,6 +6,20 @@ import Testing
 
 @MainActor
 struct TimelineProjectionBoundaryTests {
+    @Test func readerUsesUpdatedSourceBytesWhileItsRowIsLoaded() throws {
+        let model = ConversationViewModel(appState: AppState.test(), group: testGroup())
+        let id = hexId(1)
+        var record = timelineRecord(messageIdHex: id, plaintext: "Café")
+        model.applyTimelinePage(.init(messages: [record], hasMoreBefore: true, hasMoreAfter: false), placement: .window)
+        let row = try #require(model.timeline.first)
+        record.plaintext = "Cafe\u{301}"
+        model.applyTimelinePage(.init(messages: [record], hasMoreBefore: true, hasMoreAfter: false), placement: .window)
+        let reader = try #require(model.readerMessage(rowID: row.id, messageID: id))
+        #expect(reader.record.plaintext.utf8.elementsEqual(record.plaintext.utf8))
+        model.applyTimelinePage(.init(messages: [], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        #expect(model.readerMessage(rowID: row.id, messageID: id) == nil)
+    }
+
     @Test func aQuoteStopsAtTheFirstRenderedLine() {
         #expect(ConversationReplyPreview.excerpt("\n  First line  \n\nNext paragraph") == "First line")
     }

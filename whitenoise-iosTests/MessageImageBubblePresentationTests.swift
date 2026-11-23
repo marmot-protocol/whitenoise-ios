@@ -10,14 +10,23 @@ import Synchronization
 
 struct MessageImageBubblePresentationTests {
 
-    @Test func singleVisualSizeUsesTheSameCanvasForPhotosVideosAndCaptions() {
-        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: "1080x1920") == CGSize(width: 192, height: 256))
-        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: "640x360") == CGSize(width: 256, height: 144))
-        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: "32x32") == CGSize(width: 192, height: 192))
-        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: "10000x1") == CGSize(width: 256, height: 90))
+    @Test(arguments: [CGFloat(256), 300])
+    func singleMediaFitsTheAvailableWidthWhilePreservingOrdinaryAspectRatios(_ maxWidth: CGFloat) {
+        func size(_ dim: String) -> CGSize { MessageVisualMediaBubblePresentation.displaySize(maxWidth: maxWidth, dim: dim) }
+        let landscape = size("640x360"), portrait = size("800x1000")
+        #expect(landscape.width == maxWidth && portrait.height == maxWidth)
+        #expect(abs(landscape.height - landscape.width * 9 / 16) <= 1)
+        #expect(abs(portrait.width - portrait.height * 4 / 5) <= 1)
+        let narrow = size("1080x1920"), square = size("32x32"), panorama = size("10000x1")
+        #expect(narrow.width < narrow.height && narrow.height == maxWidth)
+        #expect(narrow.width > narrow.height * 9 / 16)
+        #expect(square.width == square.height && square.width < maxWidth)
+        #expect(panorama.width == maxWidth && panorama.height < landscape.height)
+        #expect(panorama.height > panorama.width / 10_000)
     }
 
     @Test func aPhotoSetsTheContentWidthWhenFilesShareItsBubble() {
+        let maxWidth: CGFloat = 300
         func item(_ name: String, _ mediaType: String, dim: String? = nil) -> MessageMediaAttachment {
             MessageMediaAttachment(id: name, reference: nil, fileName: name, mediaType: mediaType,
                                   dim: dim, localData: nil)
@@ -28,23 +37,30 @@ struct MessageImageBubblePresentationTests {
         let file = item("route.pdf", "application/pdf")
         let video = item("clip.mp4", "video/mp4", dim: "1080x1920")
 
-        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [portrait, file], maxWidth: 256) == 192)
+        let portraitWidth = MessageVisualMediaBubblePresentation.displaySize(maxWidth: maxWidth, dim: portrait.dim).width
+        #expect(portraitWidth < maxWidth)
+        func width(_ items: [MessageMediaAttachment]) -> CGFloat {
+            MessageVisualMediaBubblePresentation.contentWidth(for: items, maxWidth: maxWidth)
+        }
         let unknownFile = item("route.bin", "application/octet-stream")
         let unavailable = MessageMediaAttachment(id: "rejected", reference: nil, fileName: "Attachment",
                                                 mediaType: "", dim: nil, localData: nil, rejectionKind: .unsupportedFormat)
-        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [portrait, unavailable], maxWidth: 256) == 192)
-        for companion in [item("voice.m4a", "audio/mp4"), item("loop.gif", "image/gif")] {
-            #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [portrait, companion], maxWidth: 256) == 256)
+        for files in [[portrait, file], [portrait, unavailable], [unknownFile, portrait]] {
+            #expect(width(files) == portraitWidth)
         }
-        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [unknownFile, portrait], maxWidth: 256) == 192)
-        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [file, landscape], maxWidth: 256) == 256)
-        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [portrait, landscape, file], maxWidth: 256) == 256)
-        #expect(MessageVisualMediaBubblePresentation.contentWidth(for: [video, file], maxWidth: 256) == 256)
+        for companion in [item("voice.m4a", "audio/mp4"), item("loop.gif", "image/gif")] {
+            #expect(width([portrait, companion]) == maxWidth)
+        }
+        #expect(width([file, landscape]) == maxWidth)
+        #expect(width([portrait, landscape, file]) == maxWidth)
+        #expect(width([video, file]) == maxWidth)
     }
 
     @Test(arguments: [nil, "bad", "0x400", "20xinf"] as [String?])
     func unusableDimensionsReserveASquare(_ dimensions: String?) {
-        #expect(MessageVisualMediaBubblePresentation.displaySize(maxWidth: 256, dim: dimensions) == CGSize(width: 256, height: 256))
+        let maxWidth: CGFloat = 280
+        let size = MessageVisualMediaBubblePresentation.displaySize(maxWidth: maxWidth, dim: dimensions)
+        #expect(size.width == maxWidth && size.height == size.width)
     }
 
     // MARK: - Media cache keys

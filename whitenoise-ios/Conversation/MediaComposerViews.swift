@@ -56,19 +56,21 @@ nonisolated enum VideoPreviewOverlayPresentation {
 }
 
 struct VideoPreviewPlayOverlay: View {
+    enum Style { case preview, transcriptTile }
+
     var systemName = "play.fill"
     let diameter: CGFloat
+    var style = Style.preview
 
     var body: some View {
+        let tile = style == .transcriptTile
         Image(systemName: systemName)
-            .font(.system(
-                size: VideoPreviewOverlayPresentation.iconFontSize(for: diameter),
-                weight: .bold
-            ))
+            .font(.system(size: tile ? diameter / 2 : VideoPreviewOverlayPresentation.iconFontSize(for: diameter),
+                          weight: tile ? .semibold : .bold))
             .foregroundStyle(.white)
             .frame(width: diameter, height: diameter)
-            .background(Color.black.opacity(0.5), in: Circle())
-            .shadow(color: Color.black.opacity(0.28), radius: 8, y: 2)
+            .background(Color.black.opacity(tile ? 0.4 : 0.5), in: Circle())
+            .shadow(color: tile ? .clear : Color.black.opacity(0.28), radius: tile ? 0 : 8, y: tile ? 0 : 2)
     }
 }
 

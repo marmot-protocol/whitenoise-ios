@@ -138,70 +138,179 @@ struct TranscriptHistoryPages {
     }
 }
 
-@MainActor @Observable
-final class TranscriptAttachmentHistory {
-    private enum PageRead { case idle, loading, failed }
-    private enum CollectionState { case current, additions, unavailable }
+/// Synchronous gallery decisions. MDK supplies the page and version comparisons.
+struct TranscriptHistoryState {
+    private enum Collection { case current, additions, unavailable }
     private struct Refresh {
         var prefix = TranscriptHistoryPages()
         let boundary: AttachmentLocalTargetFfi?
         var version: AttachmentHistoryVersion?
     }
+    private enum Selection {
+        case window(String)
+        case history(String, fallback: String?)
 
-    private var read = PageRead.idle
-    private var collection = CollectionState.current
-    private(set) var pagesRevision = 0
-    private(set) var pages = TranscriptHistoryPages() { didSet { pagesRevision &+= 1 } }
-    var canLoadMore: Bool { pager.canLoadMore }
-    var isLoading: Bool { read == .loading }
-    var pageFailed: Bool { read == .failed }
-    var validationFailed: Bool { collection == .unavailable }
-    var hasAdditions: Bool { collection == .additions }
-    private(set) var scannedSlots = 0
-    private(set) var revision: UInt64 = 0
-    private(set) var hasPaged = false
-    // Selection belongs to the pager. Sample it when the collection or validation changes.
-    @ObservationIgnored private(set) var selectedItemID: String?
-    @ObservationIgnored private var lastWindowItemID: String?
-    @ObservationIgnored var resetViewerOnDiscard = false
-    private(set) var viewerGeneration = 0
-    private(set) var resumeItemID: String?
-    private var scope: Scope?
-    private var pager = AttachmentHistoryPager()
-    var isReconnectingPages: Bool { refresh != nil }
-    private var lastScannedSlot: AttachmentLocalTargetFfi?
-    private var refresh: Refresh?
-    private var additionsVersion: AttachmentHistoryVersion?
-    private var generation = 0
-    @ObservationIgnored private var validationSequence: UInt64 = 0
+        var id: String {
+            switch self {
+            case .window(let id), .history(let id, _): id
+            }
+        }
 
-    typealias Scope = AttachmentHistoryPager.Scope
-
-    func select(_ itemID: String, inWindow: Bool) {
-        hasPaged = true
-        selectedItemID = itemID
-        resetViewerOnDiscard = !inWindow
-        if inWindow { lastWindowItemID = itemID }
+        var windowID: String? {
+            switch self {
+            case .window(let id): id
+            case .history(_, let fallback): fallback
+            }
+        }
     }
 
-    func begin(_ newScope: Scope?) {
-        if scope != newScope {
-            hasPaged = false
-            selectedItemID = nil
-            lastWindowItemID = nil
+    private(set) var pages = TranscriptHistoryPages()
+    private(set) var pagesRevision = 0
+    private(set) var pager = AttachmentHistoryPager()
+    private var lastScannedSlot: AttachmentLocalTargetFfi?
+    private var refresh: Refresh?
+    private var coveredAdditions: AttachmentHistoryVersion?
+    private var collection = Collection.current
+    private(set) var scannedSlots = 0
+    var isReconnectingPages: Bool { refresh != nil }
+    var validationFailed: Bool { collection == .unavailable }
+    var hasAdditions: Bool { collection == .additions }
+
+    private var selection: Selection?
+    var selectedItemID: String? { selection?.id }
+    var selectedFromHistory: Bool {
+        if case .history = selection { return true }
+        return false
+    }
+    private(set) var hasPaged = false
+    private(set) var viewerGeneration = 0
+    private(set) var resumeItemID: String?
+
+    mutating func select(_ id: String, inWindow: Bool) {
+        hasPaged = true
+        setLocation(id, inWindow: inWindow)
+    }
+
+    /// The window can move past a displayed photo without any swipe. An
+    /// unconfirmed draft that briefly disappears has no retained page yet.
+    mutating func updateWindow(for id: String, inWindow: Bool) {
+        if inWindow || pages.contains(attachmentID: id) { setLocation(id, inWindow: inWindow) }
+    }
+
+    private mutating func setLocation(_ id: String, inWindow: Bool) {
+        selection = inWindow ? .window(id) : .history(id, fallback: selection?.windowID)
+    }
+
+    mutating func discard(changingScope: Bool = false) {
+        let restore = changingScope ? nil : selection?.windowID
+        let reset = selectedFromHistory
+        let nextViewer = viewerGeneration + (reset ? 1 : 0)
+        let nextPages = pagesRevision &+ 1
+        let paged = !changingScope && hasPaged
+        self = Self()
+        selection = restore.map(Selection.window)
+        resumeItemID = reset ? restore : nil
+        viewerGeneration = nextViewer
+        pagesRevision = nextPages
+        hasPaged = paged
+    }
+
+    mutating func startRefresh() -> Bool {
+        guard hasAdditions, refresh == nil else { return false }
+        // An exhausted snapshot must be rescanned through exhaustion. Otherwise
+        // reconnect at the last original slot, including hidden or rejected ones.
+        refresh = Refresh(boundary: pager.canLoadMore ? lastScannedSlot : nil)
+        pager = pager.fromHead()
+        collection = .current
+        scannedSlots = 0
+        return true
+    }
+
+    private func originalSlot(_ entry: AttachmentEntryFfi) -> AttachmentLocalTargetFfi {
+        let index: UInt32 = switch entry.attachment {
+        case .accepted(let index, _), .rejected(let index, _): index
         }
+        return .init(messageIdHex: entry.messageIdHex, sourceMessageIdHex: entry.sourceMessageIdHex, attachmentIndex: index)
+    }
+
+    mutating func accept(_ page: AttachmentPageFfi, next: AttachmentHistoryPager) {
+        if refresh != nil && pager.cursor == nil { refresh?.version = page.version }
+        lastScannedSlot = page.entries.last.map(originalSlot)
+        scannedSlots += page.entries.count
+        pagesRevision &+= 1
+        pager = next
+        guard var pending = refresh else { pages.append(page.entries); return }
+        pending.prefix.append(page.entries)
+        if !next.canLoadMore || pending.boundary.map({ boundary in page.entries.contains { originalSlot($0) == boundary } }) == true {
+            pages = pending.prefix
+            coveredAdditions = pending.version
+            refresh = nil
+        } else {
+            pages = pending.prefix.includingRetainedTail(pages)
+            refresh = pending
+        }
+    }
+
+    func additionsBaseline(for page: AttachmentPageFfi) -> AttachmentHistoryVersion {
+        if refresh != nil && pager.cursor == nil { return page.version }
+        return refresh?.version ?? coveredAdditions ?? pager.baseline ?? page.version
+    }
+
+    mutating func observeNewerPage() {
+        if !validationFailed { collection = .additions }
+    }
+
+    mutating func validationFailedForSelection() {
+        resumeItemID = selectedItemID
+        collection = .unavailable
+    }
+
+    var validationAdditionsBaseline: AttachmentHistoryVersion? { refresh?.version ?? coveredAdditions ?? pager.baseline }
+
+    /// A destructive change also invalidates outstanding reads in the owner.
+    mutating func validate(_ change: AttachmentHistoryChangeFfi, hasUncoveredAdditions: Bool) {
+        switch change {
+        case .restartRequired: discard()
+        case .unchanged: collection = .current
+        case .additions:
+            if (refresh == nil || pager.cursor != nil) && hasUncoveredAdditions { collection = .additions }
+            else if validationFailed { collection = .current }
+        }
+    }
+}
+
+@MainActor @Observable
+final class TranscriptAttachmentHistory {
+    typealias Scope = AttachmentHistoryPager.Scope
+    private enum PageRead { case idle, loading, failed }
+    private var read = PageRead.idle
+    private(set) var state = TranscriptHistoryState()
+    private var scope: Scope?
+    private var generation = 0
+    private(set) var revision: UInt64 = 0
+    @ObservationIgnored private var validationSequence: UInt64 = 0
+
+    var canLoadMore: Bool { state.pager.canLoadMore }
+    var isLoading: Bool { read == .loading }
+    var pageFailed: Bool { read == .failed }
+
+    func select(_ id: String, inWindow: Bool) { state.select(id, inWindow: inWindow) }
+    func updateWindow(for id: String, inWindow: Bool) { state.updateWindow(for: id, inWindow: inWindow) }
+
+    func begin(_ newScope: Scope?) {
+        state.discard(changingScope: scope != newScope)
         scope = newScope
-        discard()
+        invalidateReads()
     }
 
     // The existing runtime event stream also reports changes to rows outside the transcript window.
     func observe(_ update: RuntimeProjectionUpdateFfi) {
         guard let scope,
               update.accountIdHex == scope.accountID, update.update.groupIdHex == scope.group else { return }
-        if update.update.messages.contains(where: pages.conflicts) || update.update.changes.contains(where: { change in
+        if update.update.messages.contains(where: state.pages.conflicts) || update.update.changes.contains(where: { change in
             switch change {
-            case .remove(let id, _): pages.contains(messageID: id)
-            case .upsert(_, let row): pages.conflicts(with: row)
+            case .remove(let id, _): state.pages.contains(messageID: id)
+            case .upsert(_, let row): state.pages.conflicts(with: row)
             }
         }) {
             discard()
@@ -224,42 +333,25 @@ final class TranscriptAttachmentHistory {
         revision &+= 1
     }
 
-    private func discard() {
-        resumeItemID = resetViewerOnDiscard ? lastWindowItemID : nil
-        if resetViewerOnDiscard {
-            viewerGeneration &+= 1
-            selectedItemID = nil
-        }
-        resetViewerOnDiscard = false
+    private func invalidateReads() {
         generation &+= 1
-        pages = .init()
-        scannedSlots = 0
         read = .idle
-        collection = .current
-        pager = .init()
-        refresh = nil
-        lastScannedSlot = nil
-        additionsVersion = nil
+    }
+
+    func interruptPageRead() {
+        if isLoading { invalidateReads() }
+    }
+
+    private func discard() {
+        state.discard()
+        invalidateReads()
     }
 
     func refreshAdditions(scope: Scope, appState: AppState) async {
         guard self.scope == scope, scope == Scope(appState: appState, group: scope.group),
-              hasAdditions, refresh == nil, !isLoading else { return }
-        generation &+= 1
-        // An exhausted collection must be rescanned through exhaustion. A native page
-        // can also end without visible media, so use its original, unfiltered last slot.
-        refresh = Refresh(boundary: pager.canLoadMore ? lastScannedSlot : nil)
-        pager = pager.fromHead()
-        collection = .current
-        scannedSlots = 0
+              !isLoading, state.startRefresh() else { return }
+        invalidateReads()
         await loadPage(scope: scope, appState: appState)
-    }
-
-    private func originalSlot(_ entry: AttachmentEntryFfi) -> AttachmentLocalTargetFfi {
-        let index: UInt32 = switch entry.attachment {
-        case .accepted(let index, _), .rejected(let index, _): index
-        }
-        return .init(messageIdHex: entry.messageIdHex, sourceMessageIdHex: entry.sourceMessageIdHex, attachmentIndex: index)
     }
 
     /// One page per request. A stale native cursor may restart once at the head.
@@ -270,7 +362,7 @@ final class TranscriptAttachmentHistory {
         read = .loading
         defer { if ticket == generation, isLoading { read = .idle } }
         do {
-            let (page, next) = try await pager.readNext(in: scope, using: appState,
+            let (page, next) = try await state.pager.readNext(in: scope, using: appState,
                 isCurrent: { ticket == self.generation }, onRestart: {
                     self.discard()
                     ticket = self.generation
@@ -278,38 +370,19 @@ final class TranscriptAttachmentHistory {
                     self.read = .loading
                 })
             guard ticket == generation, (try? scope.currentClient(in: appState)) != nil else { return }
-            let firstRefreshPage = refresh != nil && pager.cursor == nil
-            let additionsBase = firstRefreshPage ? page.version : (refresh?.version ?? additionsVersion ?? pager.baseline ?? page.version)
             if revision != startingRevision {
                 let checkedRevision = revision
                 let current = try await scope.version(in: appState)
                 guard ticket == generation else { return }
-                if current.changeSince(previous: pager.baseline ?? page.version) == .restartRequired {
+                if current.changeSince(previous: state.pager.baseline ?? page.version) == .restartRequired {
                     discard()
                     read = .failed
                     return
                 }
                 guard checkedRevision == revision else { read = .failed; return }
-                if !validationFailed, current.changeSince(previous: additionsBase) == .additions { collection = .additions }
+                if current.changeSince(previous: state.additionsBaseline(for: page)) == .additions { state.observeNewerPage() }
             }
-            if firstRefreshPage { refresh?.version = page.version }
-            lastScannedSlot = page.entries.last.map(originalSlot)
-            scannedSlots += page.entries.count
-            pager = next
-            if var current = refresh {
-                current.prefix.append(page.entries)
-                let covered = current.boundary.map { boundary in page.entries.contains { originalSlot($0) == boundary } } ?? false
-                if !canLoadMore || covered {
-                    pages = current.prefix
-                    additionsVersion = current.version
-                    refresh = nil
-                } else {
-                    pages = current.prefix.includingRetainedTail(pages)
-                    refresh = current
-                }
-            } else {
-                pages.append(page.entries)
-            }
+            state.accept(page, next: next)
         } catch is CancellationError {
             return
         } catch {
@@ -329,7 +402,7 @@ final class TranscriptAttachmentHistory {
             guard startingRevision == revision else { throw AttachmentReadError.stale }
         }
         let baseline: AttachmentHistoryVersion
-        if let loaded = pager.baseline { baseline = loaded }
+        if let loaded = state.pager.baseline { baseline = loaded }
         else {
             baseline = try await scope.version(in: appState)
             try checkRead()
@@ -351,7 +424,7 @@ final class TranscriptAttachmentHistory {
     /// The collection version invalidates removed, expired, or newly hidden entries outside the
     /// current message window. Additions preserve the native pagination baseline.
     func validate(scope: Scope, appState: AppState) async {
-        guard !Task.isCancelled, let baseline = pager.baseline, self.scope == scope,
+        guard !Task.isCancelled, let baseline = state.pager.baseline, self.scope == scope,
               scope == Scope(appState: appState, group: scope.group) else { return }
         let ticket = generation
         let startingRevision = revision
@@ -364,23 +437,12 @@ final class TranscriptAttachmentHistory {
         do {
             let current = try await scope.version(in: appState)
             guard isCurrent() else { return }
-            switch current.changeSince(previous: baseline) {
-            case .restartRequired: discard()
-            case .additions:
-                // The first refreshed page establishes which additions it covers.
-                // Later pages may take several taps to reconnect to the retained
-                // gallery. Keep any newer arrivals available for the next refresh.
-                if (!isReconnectingPages || pager.cursor != nil),
-                   current.changeSince(previous: refresh?.version ?? additionsVersion ?? baseline) == .additions {
-                    collection = .additions
-                } else if validationFailed { collection = .current }
-            case .unchanged: collection = .current
-            }
+            let change = current.changeSince(previous: baseline)
+            let additions = state.validationAdditionsBaseline.map { current.changeSince(previous: $0) == .additions } ?? false
+            state.validate(change, hasUncoveredAdditions: additions)
+            if change == .restartRequired { invalidateReads() }
         } catch {
-            if isCurrent() {
-                resumeItemID = selectedItemID
-                collection = .unavailable
-            }
+            if isCurrent() { state.validationFailedForSelection() }
         }
     }
 }

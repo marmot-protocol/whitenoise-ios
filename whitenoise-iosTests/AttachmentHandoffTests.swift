@@ -277,28 +277,33 @@ struct AttachmentHandoffTests {
     }
 
     @Test func openingTextShowsAPreviewOrHandsOffItsOriginalSlot() async throws {
-        let item = MessageMediaAttachment(id: "row:0", reference: nil, fileName: "Notes.txt",
-            mediaType: "application/octet-stream", dim: nil, localData: nil, localTarget: Self.target)
+        let item = MessageMediaAttachment(id: "row:0", reference: encryptedMediaReference(fileName: "Notes.txt", mediaType: "text/plain", sourceEpoch: 1), fileName: "Notes.txt",
+            mediaType: "application/octet-stream", dim: nil, localData: Data("matching outgoing copy".utf8), localTarget: Self.target)
         let presentation = DocumentSharePresentation()
         let releaser = FakeReleaser()
         var contents = Data("notes".utf8)
+        var ownSend = false
         var exceedsLimit = false
         var handedOff: [AttachmentLocalTargetFfi] = []
         var retryRequests = 0
         let bytesOverLimit = DocumentPreviewFormat.text.byteLimit + 1
         let loader = ConversationMediaLoader { requested in
             if requested.demand == .retry { retryRequests += 1 }
+            if let local = requested.localData { return local }
             if exceedsLimit, requested.previewByteLimit != nil {
                 throw AttachmentReadError.previewLimitExceeded(byteCount: bytesOverLimit)
             }
             return contents
         } openHandoff: { requested, _ in
             if requested.demand == .retry { retryRequests += 1 }
+            #expect(requested.localData == nil)
             if let target = requested.localTarget { handedOff.append(target) }
-            return AttachmentHandoffLease(lease: self.lease, path: "/tmp/handoff/Notes.txt", releaser: releaser)
-        }
+            return AttachmentHandoffLease(
+                lease: self.lease, path: "/tmp/handoff/Notes.txt", target: requested.localTarget, releaser: releaser
+            )
+        } canShareDocument: { _, leasedTarget in leasedTarget == Self.target || (ownSend && leasedTarget == nil) }
         let preview = try await presentation.openDocument(item, using: loader, demand: .explicit,
-            isCurrent: { true }, didReadSize: { _ in })
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
         guard case .text("notes") = preview?.content else {
             Issue.record("Expected the text preview")
             return
@@ -307,7 +312,7 @@ struct AttachmentHandoffTests {
 
         contents = Data([0xff])
         let rejected = try await presentation.openDocument(item, using: loader, demand: .explicit,
-            isCurrent: { true }, didReadSize: { _ in })
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
         #expect(rejected == nil)
         #expect(handedOff == [Self.target])
         #expect(presentation.file?.url.lastPathComponent == "Notes.txt")
@@ -318,12 +323,22 @@ struct AttachmentHandoffTests {
         contents = Data("would otherwise preview".utf8)
         var reportedSize: Int?
         let oversized = try await presentation.openDocument(item, using: loader, demand: .retry,
-            isCurrent: { true }, didReadSize: { reportedSize = $0 })
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { reportedSize = $0 })
         #expect(oversized == nil)
         #expect(reportedSize == bytesOverLimit)
         #expect(retryRequests == 1)
         #expect(handedOff == [Self.target])
         presentation.close()
+
+        ownSend = true
+        handedOff.removeAll()
+        let own = try await presentation.openDocument(item, using: loader, demand: .explicit,
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
+        guard case .text("matching outgoing copy") = own?.content else {
+            Issue.record("The sender’s verified local copy should open without acquiring the upload again")
+            return
+        }
+        #expect(handedOff.isEmpty)
     }
 
     @Test func confirmedOwnSendWithHostBytesStillUsesItsSlot() {

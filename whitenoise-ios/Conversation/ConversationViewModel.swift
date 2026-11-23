@@ -261,6 +261,8 @@ final class ConversationViewModel {
     var suppressesInitialUnreadDivider = false
     var visibleUnreadDividerID: String? { suppressesInitialUnreadDivider ? nil : initialWindowUnreadMessageId }
     private(set) var initialWindowUnreadMessageId: String?
+    enum WindowRuntime: Equatable { case ready(Int), failed(Int) }
+    private(set) var windowRuntime: WindowRuntime?
     private(set) var conversationWindow: ConversationWindowSnapshotFfi?
     private var windowSubscription: ActiveConversationWindow?
     @ObservationIgnored private var windowCursor: ProjectionSequenceCursor?
@@ -937,6 +939,17 @@ final class ConversationViewModel {
 
     func record(for messageIdHex: String) -> AppMessageRecordFfi? {
         timelineStore.record(for: messageIdHex)
+    }
+
+    func readerMessage(rowID: String, messageID: String) -> (item: TimelineItem, record: AppMessageRecordFfi, status: MessageStatus)? {
+        guard let item = timeline.first(where: { item in
+            guard case .message(let record, _) = item.kind else { return false }
+            return rowID == item.id || (!messageID.isEmpty && record.messageIdHex == messageID)
+        }), case .message(let row, let status) = item.kind, !isDeleted(row.messageIdHex),
+        !timelineStore.isBlockedAuthor(row.sender) else { return nil }
+
+        // The timeline signature can consider a byte-distinct spelling equal to the previous text.
+        return (item, record(for: row.messageIdHex) ?? row, status)
     }
 
     func records(forRowFrameKeys rowFrameKeys: Set<String>) -> [AppMessageRecordFfi] {
@@ -1722,6 +1735,7 @@ final class ConversationViewModel {
     }
 
     private func stopLiveSubscriptions() async {
+        windowRuntime = nil
         windowLifetime = UUID()
         mediaPrefetcher.cancel()
         let retiringLifetime = windowLifetime
@@ -1777,7 +1791,8 @@ final class ConversationViewModel {
                     else { client = try appState.currentMarmotClient() }
                     let openWindow = client.openConversationWindowFeed
                     #else
-                    let openWindow = try appState.currentMarmotClient().openConversationWindow
+                    let client = try appState.currentMarmotClient()
+                    let openWindow = client.openConversationWindow
                     #endif
                     openTiming = .some(appState.productAnalytics.beginTiming())
                     let window: ActiveConversationWindow
@@ -1816,6 +1831,7 @@ final class ConversationViewModel {
                             }
                             self?.windowCursor = ProjectionSequenceCursor(generation: initial.revision.generation, sequence: initial.revision.sequence)
                             self?.installConversationWindow(initial)
+                            if appState.client === client { self?.windowRuntime = .ready(appState.runtimeGeneration) }
                         }
                         while !Task.isCancelled {
                             let next: ConversationWindowSnapshotFfi?
@@ -1855,6 +1871,7 @@ final class ConversationViewModel {
                     self?.windowCursor = nil
                     self?.timelineStore.setLoading(false)
                     self?.error = UserFacingError.message(for: error)
+                    if let generation = appState?.runtimeEventsGeneration { self?.windowRuntime = .failed(generation) }
                 }
                 do { try await Task.sleep(nanoseconds: retryDelay) } catch { return }
                 retryDelay = Self.nextLiveSubscriptionRetryDelay(after: retryDelay)

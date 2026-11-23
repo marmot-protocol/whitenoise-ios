@@ -4,6 +4,16 @@ import MarmotKit
 /// continuation are installed together after the screen accepts the result.
 @MainActor
 struct AttachmentHistoryPager {
+    struct Availability: Equatable {
+        let owner: Scope?
+        let readable: Scope?
+
+        init(_ appState: AppState, group: String) {
+            owner = Scope(ownerOf: appState, group: group)
+            readable = appState.runtimeEventsGeneration == nil ? nil : owner
+        }
+    }
+
     struct Scope: Equatable {
         let account: String
         let accountID: String
@@ -12,12 +22,19 @@ struct AttachmentHistoryPager {
         private let clientID: ObjectIdentifier
 
         init?(appState: AppState, group: String) {
-            guard let account = appState.activeAccountRef, let accountID = appState.activeAccount?.accountIdHex,
-                  let client = appState.client, let generation = appState.runtimeEventsGeneration else { return nil }
+            guard appState.runtimeEventsGeneration != nil else { return nil }
+            self.init(ownerOf: appState, group: group)
+        }
+
+        /// A foreground notification action can briefly reserve reads on this same
+        /// live client. Its existing presentation still belongs to the current account.
+        init?(ownerOf appState: AppState, group: String) {
+            guard appState.phaseOwnsLiveRuntime, !appState.runtimeSuspendedForBackground, let account = appState.activeAccountRef, let accountID = appState.activeAccount?.accountIdHex,
+                  let client = appState.client else { return nil }
             self.account = account
             self.accountID = accountID
             self.group = group
-            runtimeGeneration = generation
+            runtimeGeneration = appState.runtimeGeneration
             clientID = ObjectIdentifier(client)
         }
 

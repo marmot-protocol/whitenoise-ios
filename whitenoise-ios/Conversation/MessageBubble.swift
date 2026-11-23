@@ -141,6 +141,14 @@ final class ConversationMediaLoader {
         return try await data(for: media, demand: demand)
     }
 
+    /// A sourced attachment may carry matching bytes from another message. The
+    /// timeline can identify a confirmed own send whose only copy is still local.
+    func documentSource(for item: MessageMediaAttachment) async throws -> MessageMediaAttachment {
+        guard item.localData != nil, AttachmentHandoffSource(item) != .none,
+              try await !canShareDocument(item, nil) else { return item }
+        return item.forTranscriptPage
+    }
+
     @discardableResult
     func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool, hasContactName: Bool = false) async -> (size: Int, contactName: String?)? {
         guard isVisible, media.kind == .document || media.kind == .unsupported else { return nil }
@@ -152,6 +160,11 @@ final class ConversationMediaLoader {
         do {
             let bytes: Data
             if let local = media.localData {
+                // An identical outgoing send can supply these bytes. Only reveal a contact
+                // name from that overlay while this message's own slot still retains it.
+                if try await documentSource(for: media).localData == nil {
+                    guard let target = media.localTarget, try await canShareDocument(media, target) else { return nil }
+                }
                 guard local.count <= limit else { return (local.count, nil) }
                 bytes = local
             } else {
@@ -198,6 +211,7 @@ private struct MessageTextBubbleLayout: Layout {
         let ideal = fitsQuote ? content.sizeThatFits(.unspecified).width : nil
         let width = MessageBubbleReplyLayout.textWidth(proposed: proposal.width, ideal: ideal)
         let size = content.sizeThatFits(.init(width: width, height: nil))
+        // The chrome measures the bubble with no height first, then supplies its final width for the reaction strip at placement.
         if widensForReactions, proposal.height != nil, let width = proposal.width {
             return CGSize(width: width, height: size.height)
         }
@@ -210,22 +224,35 @@ private struct MessageTextBubbleLayout: Layout {
 }
 
 nonisolated enum TranscriptMessagePreview {
-    static func snippet(_ text: String) -> String? {
-        let prefix = text.prefix(512)
-        guard prefix.endIndex != text.endIndex else { return nil }
-        var newlines = 0
-        let visible = prefix.prefix { character in
-            if character.isNewline { newlines += 1 }
-            return newlines <= 15
+    /// Prepare one continuous document off the UI actor. Resolve each distinct
+    /// mention against the existing profile cache without starting a profile load.
+    @concurrent
+    static func sourceText(_ raw: String, displayName: @MainActor @Sendable (String) -> String?) async throws -> String {
+        let text = ContentSanitizer.textRun(raw)
+        var start = text.startIndex
+        var search = start
+        var rendered = ""
+        var replacements: [String: String] = [:]
+        while let at = text[search...].firstIndex(of: "@") {
+            try Task.checkCancellation()
+            search = text.index(after: at)
+            guard let match = CanonicalMentionDisplayProjection.canonicalMention(in: text, at: at) else { continue }
+            let replacement: String
+            if let cached = replacements[match.npub] {
+                replacement = cached
+            } else {
+                replacement = await ContentSanitizer.displayName(displayName(match.npub)).map { "@\($0)" } ?? String(text[at..<match.endIndex])
+                replacements[match.npub] = replacement
+            }
+            rendered += text[start..<at]
+            rendered += replacement
+            start = match.endIndex
+            search = start
         }
-        return String(visible)
-    }
-
-    static func sourceChunk(_ remaining: Substring) -> Substring {
-        let chunk = remaining.prefix(2048)
-        guard chunk.endIndex != remaining.endIndex,
-              let space = chunk.suffix(512).lastIndex(where: { $0.isWhitespace }) else { return chunk }
-        return remaining[...space]
+        try Task.checkCancellation()
+        guard start != text.startIndex else { return text }
+        rendered += text[start...]
+        return rendered
     }
 
     /// A search result can show every indexed character and still have more authored source.
@@ -255,30 +282,45 @@ nonisolated enum TranscriptMessagePreview {
 private struct LongMessageSourceText: View {
     @Environment(AppState.self) private var appState
     let text: String
-    @State private var starts: [String.Index]
-
-    init(text: String) {
-        self.text = text
-        _starts = State(initialValue: [text.startIndex])
-    }
+    @State private var document: String?
 
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(starts, id: \.self) { start in
-                let chunk = TranscriptMessagePreview.sourceChunk(text[start...])
-                let safeText = ContentSanitizer.textRun(String(chunk))
-                let display = CanonicalMentionDisplayProjection.project(safeText) { npub in
-                    guard let id = NostrProfileReference.pubkeyHex(fromBech32: npub) else { return nil }
-                    return appState.cachedKnownDisplayName(forAccountIdHex: id)
-                }
-                Text(verbatim: display.text)
-                    .onAppear {
-                        if start == starts.last, chunk.endIndex < text.endIndex {
-                            starts.append(chunk.endIndex)
-                        }
-                    }
+        Group {
+            if let document {
+                SourceTextView(document: document)
+            } else {
+                ProgressView()
             }
         }
+        .task(id: text.contains("@") ? appState.profileRefreshGeneration : nil) {
+            guard let prepared = try? await TranscriptMessagePreview.sourceText(text, displayName: { npub in
+                guard let id = NostrProfileReference.pubkeyHex(fromBech32: npub) else { return nil }
+                return appState.cachedKnownDisplayName(forAccountIdHex: id)
+            }), !Task.isCancelled else { return }
+            document = prepared
+        }
+    }
+}
+
+/// TextKit lays out the visible viewport of a single document, including long
+/// lines that wrap across many screens.
+private struct SourceTextView: UIViewRepresentable {
+    let document: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView(usingTextLayoutManager: true)
+        view.isEditable = false
+        view.isSelectable = false
+        view.backgroundColor = .clear
+        view.font = .preferredFont(forTextStyle: .body)
+        view.adjustsFontForContentSizeCategory = true
+        view.textContainerInset = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        view.textContainer.lineFragmentPadding = 0
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        if !view.text.utf8.elementsEqual(document.utf8) { view.text = document }
     }
 }
 
@@ -287,17 +329,23 @@ nonisolated enum MessageBodyCollapsePresentation {
     static let maxCollapsedLines = 12
     static let collapsedBodyMaxHeight: CGFloat = 260
 
+    /// A CR/LF pair is one Swift Character and starts a single new line.
+    static func snippet(_ body: @autoclosure () -> String, isExpanded: Bool = false) -> String? {
+        guard !isExpanded else { return nil }
+        let text = body()
+        var remainingLines = maxCollapsedLines
+        for (offset, entry) in text.indices.enumerated() {
+            if offset == maxCollapsedCharacters { return String(text[..<entry]) }
+            if text[entry].isNewline {
+                remainingLines -= 1
+                if remainingLines == 0 { return String(text[..<entry]) }
+            }
+        }
+        return nil
+    }
+
     static func shouldCollapse(_ text: String) -> Bool {
-        text.count > maxCollapsedCharacters || lineCount(text) > maxCollapsedLines
-    }
-
-    static func isCollapsed(_ text: String, isExpanded: Bool) -> Bool {
-        shouldCollapse(text) && !isExpanded
-    }
-
-    static func lineCount(_ text: String) -> Int {
-        guard !text.isEmpty else { return 0 }
-        return text.split(separator: "\n", omittingEmptySubsequences: false).count
+        snippet(text) != nil
     }
 }
 
@@ -325,6 +373,7 @@ extension MessageBubble: Equatable {
             && lhs.voiceTranscript == rhs.voiceTranscript
             && lhs.readingSpeech === rhs.readingSpeech
             && lhs.displaysReader == rhs.displaysReader
+            && (!lhs.displaysReader || lhs.record.plaintext.utf8.elementsEqual(rhs.record.plaintext.utf8))
             && lhs.incompleteMarkdown == rhs.incompleteMarkdown
             && lhs.clusterPresentation == rhs.clusterPresentation
             && lhs.showsSenderIdentity == rhs.showsSenderIdentity
@@ -368,15 +417,21 @@ extension MessageBubble: Equatable {
 struct MessageBubble: View {
     struct MediaOpenScope: Equatable {
         let model: ObjectIdentifier
+        let client: ObjectIdentifier?
         let account: String?
         let generation: Int
         let attachmentRevision: Int
 
         init(_ viewModel: ConversationViewModel, appState: AppState) {
             model = ObjectIdentifier(viewModel)
+            client = appState.client.map(ObjectIdentifier.init)
             account = appState.activeAccountRef
             generation = appState.runtimeGeneration
             attachmentRevision = AttachmentPresentationState.shared.revision
+        }
+
+        func matchesConversation(_ other: Self) -> Bool {
+            model == other.model && account != nil && account == other.account && attachmentRevision == other.attachmentRevision
         }
 
         func isCurrent(_ viewModel: ConversationViewModel?, appState: AppState) -> Bool {
@@ -603,6 +658,11 @@ struct MessageBubble: View {
         }
     }
 
+    /// Refresh media state in a timeline row without replacing an open reader and its scroll position.
+    func refreshingAttachments(on revision: Int) -> some View {
+        equatable().id(displaysReader ? nil : revision)
+    }
+
     var readerShowsSource: Bool {
         if incompleteMarkdown { return true }
         guard markdownBlocks == nil else { return false }
@@ -614,11 +674,15 @@ struct MessageBubble: View {
 
     @ViewBuilder private var readerBody: some View {
         if readerShowsSource {
-            // Beyond the formatter's budget, read the authored source in viewport-sized batches.
+            // TextKit owns scrolling for the source reader.
             LongMessageSourceText(text: record.plaintext)
                 .id(Data(record.plaintext.utf8))
         } else {
-            messageBodyContent(snippet: nil)
+            ScrollView {
+                messageBodyContent(snippet: nil)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
         }
     }
 
@@ -639,7 +703,6 @@ struct MessageBubble: View {
                 )
                 .environment(\.avatarMonogramFont, .subheadline.weight(.semibold))
                 .padding(.trailing, 7)
-                .alignmentGuide(.messageSurfaceBottom) { $0[.bottom] }
                 .zIndex(1)
             }
 
@@ -1174,25 +1237,22 @@ struct MessageBubble: View {
     }
 
     private func messageBodyText(hasReply: Bool, richWidth: CGFloat? = nil) -> some View {
-        let snippet: String? = if !usesReviewLayout && !isBodyExpanded && searchQuery == nil {
-            TranscriptMessagePreview.snippet(markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }
-                .joined(separator: "\n") ?? sanitizedBodyText)
-        } else { nil }
-        let isCollapsed = usesReviewLayout && MessageBodyCollapsePresentation.isCollapsed(
-            sanitizedBodyText,
-            isExpanded: isBodyExpanded
+        let snippet = MessageBodyCollapsePresentation.snippet(
+            markdownBlocks?.flatMap { $0.textFields(for: .excerpt) }.joined(separator: "\n") ?? sanitizedBodyText,
+            isExpanded: isBodyExpanded || searchQuery != nil
         )
+        let fadesReviewExcerpt = usesReviewLayout && snippet != nil
         return VStack(alignment: .leading, spacing: 5) {
             messageBodyContent(snippet: snippet)
                 // The body mask also needs room for mention corners outside the text bounds.
                 .padding(.horizontal, TimelineTextRenderer.mentionHorizontalOutset)
                 .frame(
-                    maxHeight: isCollapsed ? MessageBodyCollapsePresentation.collapsedBodyMaxHeight : nil,
+                    maxHeight: fadesReviewExcerpt ? MessageBodyCollapsePresentation.collapsedBodyMaxHeight : nil,
                     alignment: .topLeading
                 )
                 .clipped()
                 .mask {
-                    if isCollapsed {
+                    if fadesReviewExcerpt {
                         LinearGradient(
                             stops: [
                                 .init(color: .black, location: 0),
@@ -1208,7 +1268,7 @@ struct MessageBubble: View {
                 }
                 .padding(.horizontal, -TimelineTextRenderer.mentionHorizontalOutset)
 
-            if isCollapsed || snippet != nil || offersSourceReader {
+            if snippet != nil || offersSourceReader {
                 Button {
                     onExpandBody()
                 } label: {
@@ -1452,7 +1512,6 @@ struct MessageBubble: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
             .clipped()
             .contentShape(.rect)
             .accessibilityRepresentation {
@@ -3044,11 +3103,7 @@ private struct MessageVideoAttachmentView: View {
                     fallbackSystemName: "play.rectangle", width: width, height: height, usesSentBubbleColors: isFromMe)
             }
             if showsBadges {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
-                    .background(.black.opacity(0.4), in: Circle())
+                VideoPreviewPlayOverlay(diameter: 34, style: .transcriptTile)
                 if showsDuration, let duration = AudioDurationLabel.optionalLabel(for: item.durationSeconds ?? localDuration ?? MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey)) {
                     Text(duration)
                         .font(.caption2.weight(.semibold))
@@ -3542,6 +3597,7 @@ struct LiftedDocumentDetails: Equatable {
 }
 
 private struct MessageDocumentAttachmentView: View {
+    @Environment(AppState.self) private var appState
     let messageID: String
     @Environment(\.liftedDocuments) private var liftedDocuments
     @Environment(\.timelineSearchQuery) private var searchQuery
@@ -3560,6 +3616,7 @@ private struct MessageDocumentAttachmentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var preview: MessageDocumentPreview?
     @State private var openedDraftDigest: String?
+    @State private var openingDraft: OpeningDraftDocument?
     @State private var openingID: UUID?
     @State private var openingTask: Task<Void, Never>?
     @State private var contactName: String?
@@ -3582,6 +3639,7 @@ private struct MessageDocumentAttachmentView: View {
             guard openingID == nil || (openIntent != nil && openingID != openIntent?.current) else { return }
             let request = openIntent?.begin(cancelPendingOpen: cancelDocumentOpen) ?? UUID()
             openingID = request
+            openingDraft = OpeningDraftDocument(item, outgoing: isFromMe)
             openingTask = Task { await openDocument(request) }
         } label: {
             HStack(spacing: 8) {
@@ -3662,10 +3720,16 @@ private struct MessageDocumentAttachmentView: View {
                 .onDisappear(perform: file.finish)
         }
         .onDisappear { closeDocument() }
+        .onChange(of: appState.client.map(ObjectIdentifier.init)) { _, _ in
+            // Revoke the old reader and lease. The row's filename, size and search
+            // fields follow their existing message/slot lifetime.
+            closeDocument()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { cancelDocumentOpen() }
         }
         .onChange(of: DocumentPreviewSource(item)) { previous, current in
+            if let openingDraft, share.control == nil, openingDraft.update(to: item) { return }
             if !current.continues(previous, outgoing: isFromMe, openedDraftDigest: preview == nil ? nil : openedDraftDigest) {
                 resetDocument()
             }
@@ -3734,6 +3798,7 @@ private struct MessageDocumentAttachmentView: View {
             openIntent?.finish(request)
             if openingID == request {
                 openingTask = nil
+                openingDraft = nil
                 openingID = nil
             }
         }
@@ -3741,17 +3806,13 @@ private struct MessageDocumentAttachmentView: View {
         let demand = AttachmentDemand.userTap(afterFailure: didFail)
         didFail = false
         do {
+            let draft = openingDraft
+            if let draft {
+                guard await draft.verify(), isCurrent() else { return }
+            }
             if let document = try await share.openDocument(item, using: onLoadMedia, demand: demand,
-                isCurrent: isCurrent, didReadSize: { byteCount = $0 }), isCurrent() {
-                // The already-parsed draft is within its format's preview budget. Its digest lets
-                // the reader transfer to the same confirmed slot even if the local overlay was evicted.
-                if isFromMe, item.reference == nil, let bytes = item.localData {
-                    let digest = await MediaPlaintextHash.digest(bytes)
-                    guard isCurrent() else { return }
-                    openedDraftDigest = digest
-                } else {
-                    openedDraftDigest = nil
-                }
+                isCurrent: isCurrent, handoffItem: { draft?.current ?? item }, didReadSize: { byteCount = $0 }), isCurrent() {
+                openedDraftDigest = draft?.digest
                 if case .contact(let card) = document.content { contactName = card.name }
                 preview = document
             }
@@ -3778,6 +3839,7 @@ private struct MessageDocumentAttachmentView: View {
         // Native handoffs must finish through the transfer control so their lease is released.
         if share.control != nil { share.close() } else { openingTask?.cancel() }
         openingTask = nil
+        openingDraft = nil
         openingID = nil
     }
 
@@ -4096,6 +4158,12 @@ struct MessageMediaGallery: Identifiable {
         return item
     }
 
+    func canRestore(_ opening: MessageMediaAttachment) -> Bool {
+        guard let bookmark = TranscriptMediaBookmark(opening),
+              items.contains(where: { $0.id == opening.id && TranscriptMediaBookmark($0) == bookmark }) else { return false }
+        return opening.isVideo || initialMediaData != nil
+    }
+
     func initialData(for item: MessageMediaAttachment) -> Data? {
         if item.id == initialItemID {
             return initialMediaData
@@ -4171,6 +4239,12 @@ private enum MediaFullscreenDismiss {
 }
 
 nonisolated enum MessageMediaFullscreenGalleryPresentation {
+    static func videoDemand(onSelection: AttachmentDemand, waitForPlay: Bool, playRequest: Int,
+                            handledRequest: Int, afterFailure: Bool) -> AttachmentDemand? {
+        if playRequest != handledRequest { return .userTap(afterFailure: afterFailure) }
+        return waitForPlay && playRequest == 0 ? nil : onSelection
+    }
+
     @MainActor static func prepareVideo(_ player: AVPlayer, demand: AttachmentDemand, resumeConfirmed: Bool = false) {
         if demand.isUserInitiated || resumeConfirmed { player.play() } else { player.pause() }
     }
@@ -4248,6 +4322,8 @@ struct MessageMediaFullscreenGalleryView: View {
     var onGoToMessage: ((String) -> Void)?
     let onDismiss: () -> Void
 
+    private let restored: Bool
+    private let didDisplay: ((MessageMediaAttachment?) -> Void)?
     private let currentTranscriptGallery: (() -> MessageMediaGallery?)?
     @State private var pendingSelection: MessageMediaGallery.PendingSelection?
     @State private var pendingVideo = PendingVideoPlayback()
@@ -4270,6 +4346,8 @@ struct MessageMediaFullscreenGalleryView: View {
     init(
         gallery: MessageMediaGallery,
         openingSelection: MessageMediaGallery.PendingSelection? = nil,
+        restored: Bool = false,
+        didDisplay: ((MessageMediaAttachment?) -> Void)? = nil,
         currentTranscriptGallery: (() -> MessageMediaGallery?)? = nil,
         onLoadMedia: ConversationMediaLoader,
         forwardingContext: MediaForwardingContext? = nil,
@@ -4284,6 +4362,8 @@ struct MessageMediaFullscreenGalleryView: View {
         _selection = State(initialValue: TranscriptMediaSelection(openingID: gallery.initialItemID))
         _pendingSelection = State(initialValue: gallery.pendingSelection(for: gallery.initialItemID) ?? openingSelection)
         self.currentTranscriptGallery = currentTranscriptGallery
+        self.didDisplay = didDisplay
+        self.restored = restored
     }
 
     var body: some View {
@@ -4316,11 +4396,12 @@ struct MessageMediaFullscreenGalleryView: View {
             preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
                 contentType: UTType(mimeType: replacement.mediaType) ?? .data)
             let wasPlaying = pendingVideo.wantsPlayback ?? selection.demand(for: pendingSelection.id,
-                allowsOpeningDemand: transcriptHistory?.allowsOpeningDemand != false).isUserInitiated
+                allowsOpeningDemand: !restored && transcriptHistory?.allowsOpeningDemand != false).isUserInitiated
             selection.confirm(replacement.id, resumeVideo: replacement.isVideo && wasPlaying)
             self.pendingSelection = nil
             pendingVideo = PendingVideoPlayback()
         }
+        .onChange(of: selectedItem?.preparedSource, initial: true) { _, _ in didDisplay?(selectedItem) }
         .onChange(of: selectedItemID) { _, selection in
             if gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
             if preparedMedia?.id != selection { preparedMedia = nil }
@@ -4402,7 +4483,8 @@ struct MessageMediaFullscreenGalleryView: View {
             isSelected: item.id == selectedItemID,
             initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.data : nil } ?? gallery.initialData(for: source),
             selectionDemand: gallery.transcriptCaptions == nil ? .explicit
-                : selection.demand(for: item.id, allowsOpeningDemand: transcriptHistory?.allowsOpeningDemand != false),
+                : selection.demand(for: item.id, allowsOpeningDemand: !restored && transcriptHistory?.allowsOpeningDemand != false),
+            waitsForRestoredPlay: restored && item.id == selection.openingID,
             resumeConfirmedVideo: selection.resumingVideoID == item.id,
             pendingVideo: pendingSelection?.id == item.id ? pendingVideo : nil,
             onLoadMedia: onLoadMedia,
@@ -4592,6 +4674,7 @@ private struct MessageMediaFullscreenPage: View {
     let isSelected: Bool
     let initialImageData: Data?
     let selectionDemand: AttachmentDemand
+    let waitsForRestoredPlay: Bool
     let resumeConfirmedVideo: Bool
     let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
@@ -4604,8 +4687,8 @@ private struct MessageMediaFullscreenPage: View {
     var body: some View {
         content
             .id(sourceGeneration)
-            .onChange(of: item.localTarget) { previous, _ in
-                if previous != nil {
+            .onChange(of: item.preparedSource) { previous, current in
+                if !current.canContinue(previous) {
                     onSourceReplaced()
                     sourceGeneration &+= 1
                     onZoomChanged(false)
@@ -4621,6 +4704,7 @@ private struct MessageMediaFullscreenPage: View {
                 isSelected: isSelected,
                 initialMediaData: sourceGeneration == 0 ? initialImageData : nil,
                 selectionDemand: demand,
+                waitsForRestoredPlay: waitsForRestoredPlay,
                 resumeConfirmedVideo: sourceGeneration == 0 && resumeConfirmedVideo,
                 pendingVideo: pendingVideo,
                 onLoadMedia: onLoadMedia,
@@ -4648,6 +4732,7 @@ private struct MessageMediaFullscreenVideoPage: View {
     let isSelected: Bool
     let initialMediaData: Data?
     let selectionDemand: AttachmentDemand
+    let waitsForRestoredPlay: Bool
     let resumeConfirmedVideo: Bool
     let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
@@ -4726,7 +4811,9 @@ private struct MessageMediaFullscreenVideoPage: View {
                 releasePlayback()
                 return
             }
-            let demand = playRequest != handledPlayRequest ? .userTap(afterFailure: didFail) : selectionDemand
+            guard let demand = MessageMediaFullscreenGalleryPresentation.videoDemand(onSelection: selectionDemand,
+                waitForPlay: waitsForRestoredPlay, playRequest: playRequest, handledRequest: handledPlayRequest,
+                afterFailure: didFail) else { return }
             handledPlayRequest = playRequest
             await loadVideo(demand: demand)
         }

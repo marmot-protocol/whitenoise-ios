@@ -706,30 +706,8 @@ struct ConversationView: View {
     @State private var actionsPhase: ActionsPhase = .source
     @State private var actionsCrossfadeExcerpt = false
     @State private var actionsReturnGeometry: (row: CGRect, body: CGSize?, documents: [String: LiftedDocumentDetails])?
-    private struct TranscriptMediaTarget: Identifiable {
-        let item: MessageMediaAttachment
-        var id: String { item.id }
-        let scope: MessageBubble.MediaOpenScope
-        let initialData: Data?
-        var gifRowID: String? = nil
-        var pending: MessageMediaGallery.PendingSelection?
-
-        init(item: MessageMediaAttachment, scope: MessageBubble.MediaOpenScope, initialData: Data?,
-             row: TimelineItem, media: [MessageMediaAttachment], gifRowID: String? = nil) {
-            if case .message(let record, _) = row.kind { self.item = item.transcriptItem(in: record.messageIdHex) }
-            else { self.item = item }
-            self.scope = scope
-            self.initialData = initialData
-            self.gifRowID = gifRowID
-            if case .message(let record, _) = row.kind, record.direction == "sent", item.reference == nil,
-               let data = item.localData, let index = media.firstIndex(where: { $0.id == item.id }) {
-                pending = .init(id: item.id, slot: .init(rowID: row.id, index: item.sourceHint?.slot ?? UInt32(index)), data: data)
-            }
-        }
-    }
-
     @State private var mediaOpenIntent = MediaOpenIntent()
-    @State private var transcriptMedia: TranscriptMediaTarget?
+    @State private var transcriptMedia: TranscriptMediaSession?
     @State private var selectedMessageIds = Set<String>()
     @State private var showBatchDeleteConfirmation = false
     @State private var showStepDownDeclineConfirmation = false
@@ -1129,17 +1107,18 @@ struct ConversationView: View {
             }
             .environment(\.mediaOpenIntent, mediaOpenIntent)
             .onDisappear { mediaOpenIntent.invalidate() }
-            .onChange(of: appState.runtimeGeneration) { _, generation in
-                if let target = transcriptMedia, target.scope.generation != generation { transcriptMedia = nil }
-            }
-            .sheet(item: $transcriptMedia, onDismiss: { mediaOpenIntent.invalidate() }) { target in
-                if let viewModel, target.scope.isCurrent(viewModel, appState: appState) {
-                    TranscriptHistoryGalleryView(openingItem: target.item, initialData: target.initialData, conversation: viewModel,
-                        openingSelection: target.pending, gifRowID: target.gifRowID, onLoadMedia: mediaLoader(for: viewModel),
-                        forwardingContext: forwardingContext(for: viewModel),
-                        onGoToMessage: { navigateToTimelineMessage($0, viewModel: viewModel) },
-                        onDismiss: { transcriptMedia = nil })
-                        .appAppearance()
+            .sheet(item: $transcriptMedia, onDismiss: { mediaOpenIntent.invalidate() }) { session in
+                if let viewModel {
+                    TranscriptMediaSessionView(session: session, conversation: viewModel,
+                        onDismiss: { transcriptMedia = nil }) { target in
+                        TranscriptHistoryGalleryView(openingItem: target.item, initialData: target.initialData, conversation: viewModel,
+                            openingSelection: target.pending, gifRowID: target.gifRowID, restored: target.restored,
+                            didDisplay: session.didDisplay, onLoadMedia: mediaLoader(for: viewModel),
+                            forwardingContext: forwardingContext(for: viewModel),
+                            onGoToMessage: { navigateToTimelineMessage($0, viewModel: viewModel) },
+                            onDismiss: { transcriptMedia = nil })
+                    }
+                    .appAppearance()
                 } else {
                     Color.clear.onAppear { transcriptMedia = nil }
                 }
@@ -2224,11 +2203,11 @@ struct ConversationView: View {
                                                     isFirst: heading.id == dateHeadings.first?.id,
                                                     viewport: timelineDateViewport
                                                 )
-                                                .opacity(searchResultID == nil ? 1 : 0.28)
+                                                .opacity(searchResultID == nil ? 1 : ChatBubbleMetrics.dimmedSearchOpacity)
                                             }
                                             if showsUnreadDivider {
                                                 UnreadMessagesDivider()
-                                                    .opacity(searchResultID == nil ? 1 : 0.28)
+                                                    .opacity(searchResultID == nil ? 1 : ChatBubbleMetrics.dimmedSearchOpacity)
                                                     .id(unreadDividerID(for: viewModel.initialWindowUnreadMessageId ?? ""))
                                             }
                                             if let origin = viewModel.historyImportBoundary(before: item) {
@@ -2239,7 +2218,7 @@ struct ConversationView: View {
                                                 viewModel: viewModel,
                                                 showsSenderIdentity: showsSenderIdentity
                                             )
-                                                .opacity(searchResultID == nil || searchResultID == item.id ? 1 : 0.28)
+                                                .opacity(searchResultID == nil || searchResultID == item.id ? 1 : ChatBubbleMetrics.dimmedSearchOpacity)
                                                 .overlay {
                                                     if searchResultID == item.id {
                                                         Color.clear
@@ -2280,7 +2259,7 @@ struct ConversationView: View {
                                                 .onAppear { finishTimelineJump(reaching: item.id) }
                                         }
                                         .modifier(MessageActionRowStacking())
-                                        .padding(.top, dayHeaders[item.id] == nil && (showsUnreadDivider || viewModel.messageClusterPresentation(for: item).startsCluster)
+                                        .padding(.top, dayHeaders[item.id] == nil && viewModel.clusterAtUnreadBoundary(for: item).startsCluster
                                             ? density.metrics.timelineClusterSpacing - density.metrics.timelineRowSpacing : 0)
                                     }
                                     newerTimelineTrigger(viewModel: viewModel)
@@ -2775,19 +2754,14 @@ struct ConversationView: View {
     }
 
     private func longMessageReader(_ target: LongMessageTarget) -> some View {
-        ScrollView {
+        Group {
             if let viewModel, ObjectIdentifier(viewModel) == target.modelID,
                appState.activeAccountRef == target.accountRef, appState.runtimeGeneration == target.runtimeGeneration,
-               let item = viewModel.timeline.first(where: { item in
-                   guard case .message(let record, _) = item.kind else { return false }
-                   return target.rowID == item.id || (!target.messageID.isEmpty && record.messageIdHex == target.messageID)
-               }), case .message(let record, let status) = item.kind, !viewModel.isDeleted(record.messageIdHex) {
-                messageBubble(for: item, record: record, status: status, viewModel: viewModel,
+               let message = viewModel.readerMessage(rowID: target.rowID, messageID: target.messageID) {
+                messageBubble(for: message.item, record: message.record, status: message.status, viewModel: viewModel,
                               showsSenderIdentity: false, usesSelectionLayout: false, displaysReader: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
             } else {
-                Text(L10n.string("Message unavailable")).foregroundStyle(.secondary).padding()
+                ScrollView { Text(L10n.string("Message unavailable")).foregroundStyle(.secondary).padding() }
             }
         }
         .navigationTitle(L10n.string("Message"))
@@ -2900,7 +2874,7 @@ struct ConversationView: View {
                 }
             }
         )
-        .equatable()
+        .refreshingAttachments(on: AttachmentPresentationState.shared.revision)
         .padding(.leading, usesSelectionLayout ? selectionInset : 0)
         .environment(\.timelineSearchQuery, viewModel.search.isActive && viewModel.search.matchingItemIDs.contains(item.id)
             ? ConversationSearchEngine.normalizedQuery(viewModel.search.query) : nil)
@@ -2908,7 +2882,6 @@ struct ConversationView: View {
         .environment(\.stickerAssets, viewModel.stickerAssets)
         .environment(\.stickerLibrary, hasLiveDestinations ? viewModel.stickerLibrary : nil)
         .environment(\.mediaUploadProgress, viewModel.composer.uploadProgress)
-        .id(AttachmentPresentationState.shared.revision)
     }
 
     private var timelineBottomSentinel: some View {
@@ -4828,7 +4801,7 @@ struct ConversationView: View {
                               !viewModel.isDeleted(target.record.messageIdHex),
                               viewModel.firstGalleryGIF(in: current)?.id == gif.id else { return }
                         mediaOpenIntent.invalidate()
-                        transcriptMedia = mediaTarget
+                        transcriptMedia = TranscriptMediaSession(mediaTarget)
                     }
                 }
                 let actionCount = messageActionCount(
@@ -4990,29 +4963,23 @@ struct ConversationView: View {
         }
     }
 
-    private func localVoiceSource(for media: MessageMediaAttachment) async throws -> LocalVoiceAttachment? {
+    private func localVoiceSource(for media: MessageMediaAttachment) async -> Result<LocalVoiceAttachment, VoiceTranscriptionIssue> {
         #if DEBUG
         if previewsTimeline {
-            guard let target = media.localTarget, let url = ChatPreviewMedia.url(media.fileName) else { return nil }
-            return .bundled(url, target: target)
+            guard let target = media.localTarget, let url = ChatPreviewMedia.url(media.fileName) else { return .failure(.needsDownload) }
+            return .success(.bundled(url, target: target))
         }
         #endif
-        return try await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState)
+        return await LocalVoiceAttachment.check(media, group: chat.groupIdHex, app: appState)
     }
 
     private func retainedRecording(_ recording: ConversationSpeech.Recording, id: String, model: ConversationViewModel,
                                    scope: ConversationSpeech.Scope) async -> Bool? {
         guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
         guard let media = recordingAttachment(id: id, in: model), recording.matches(media) else { return false }
-        do {
-            let source = try await localVoiceSource(for: media)
-            guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
-            return source?.target == recording.target && recording.matches(recordingAttachment(id: id, in: model))
-        } catch is LocalVoiceAttachment.SizeError {
-            return scope == speechScope && viewModel === model && !Task.isCancelled ? false : nil
-        } catch {
-            return nil
-        }
+        let lookup = await localVoiceSource(for: media)
+        guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
+        return VoiceTranscriptionCheck.retained(lookup.map(\.target), recording: recording, media: recordingAttachment(id: id, in: model))
     }
 
     private func speechRow(_ id: String, in model: ConversationViewModel) -> TimelineItem? {
@@ -5055,7 +5022,7 @@ struct ConversationView: View {
         func hasSpokenText() -> Bool {
             guard !record.contentTokens.blocks.isEmpty, !TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) else { return true }
             return (model.markdownDisplayBlocks(for: row) ?? []).contains { block in
-                block.textFields(includeCodeLanguage: false).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                block.textFields(for: .body).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             }
         }
         return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId,
@@ -5075,38 +5042,21 @@ struct ConversationView: View {
                 && actionsTarget?.record.messageIdHex == record.messageIdHex && request == voiceAvailabilityRequest(for: row, in: model)
         }
         let wasVerified = speech.transcripts[record.messageIdHex]?.isVerified(in: scope) == true
-        let source: LocalVoiceAttachment?
-        do {
-            source = try await localVoiceSource(for: audio)
-        } catch {
-            guard isCurrent() else { return }
-            let sizeError = error as? LocalVoiceAttachment.SizeError
-            speech.checkedVoice = (request, .unavailable(sizeError?.message ?? L10n.string("Couldn’t transcribe this recording.")))
-            if let transcript = speech.transcripts[record.messageIdHex] {
-                speech.updateRetention(sizeError == nil ? nil : false, id: record.messageIdHex, recording: transcript.recording,
-                                       scope: scope, wasVerified: wasVerified)
-            }
-            return
-        }
+        let lookup = await localVoiceSource(for: audio)
         guard isCurrent() else { return }
         if let transcript = speech.transcripts[record.messageIdHex] {
-            let held = transcript.recording.matches(audio) && source?.target == transcript.recording.target
-            speech.updateRetention(held, id: record.messageIdHex, recording: transcript.recording, scope: scope)
-            if held { return }
+            let held = VoiceTranscriptionCheck.retained(lookup.map(\.target), recording: transcript.recording, media: audio)
+            speech.updateRetention(held, id: record.messageIdHex, recording: transcript.recording, scope: scope, wasVerified: wasVerified)
+            if held == true { return }
         }
-        guard let source else {
-            speech.checkedVoice = (request, .unavailable(L10n.string("Download the recording before transcribing it.")))
-            return
+        let hasModel: Bool
+        if case .success = lookup {
+            hasModel = await LocalVoiceRecognition.recognizer() != nil
+            guard isCurrent() else { return }
+        } else {
+            hasModel = false
         }
-        let recognizer = await LocalVoiceRecognition.recognizer()
-        guard isCurrent() else { return }
-        guard recognizer != nil else {
-            speech.checkedVoice = (request, .unavailable(L10n.string("No on-device speech model is available for this language.")))
-            return
-        }
-        let recording = ConversationSpeech.Recording(displayID: audio.id, target: source.target)
-        guard recording.matches(recordingAttachment(id: record.messageIdHex, in: model)) else { return }
-        speech.checkedVoice = (request, .available(recording, source))
+        speech.checkedVoice = (request, VoiceTranscriptionCheck.availability(of: lookup, hasInstalledModel: hasModel))
     }
 
     private func performSpeechAction(_ action: MessageSpeechAction, for record: AppMessageRecordFfi, in model: ConversationViewModel) {
@@ -5138,9 +5088,12 @@ struct ConversationView: View {
         case .transcribe:
             guard let checked else { return }
             switch checked.result {
-            case .unavailable(let reason):
-                appState.present(.warning(reason))
-            case .available(let recording, let source):
+            case .failure(let issue):
+                appState.present(.warning(issue.message))
+            case .success(let source):
+                guard let attachmentID = checked.request.attachmentID else { return }
+                let recording = ConversationSpeech.Recording(displayID: attachmentID, target: source.target)
+                guard recording.matches(recordingAttachment(id: id, in: model)) else { return }
                 let openingScope = checked.request.scope
                 speech.transcribe(id: id, recording: recording, scope: openingScope, data: {
                     guard self.viewModel === model, speechScope == openingScope,
@@ -5260,7 +5213,7 @@ struct ConversationView: View {
         }
         guard let current = currentRow() else { return }
         if current.slots.contains(where: { $0.canUseBytesPrepared(for: target.item) }) {
-            transcriptMedia = target
+            transcriptMedia = TranscriptMediaSession(target)
             return
         }
         // A tap can finish decoding after the outgoing attachment has been confirmed.
@@ -5272,7 +5225,8 @@ struct ConversationView: View {
                   let updated = currentRow(), let visible = updated.slots.first(where: {
                       $0.canUseBytesPrepared(for: confirmed) && $0.localTarget == confirmed.localTarget
                   }) else { return }
-            transcriptMedia = TranscriptMediaTarget(item: visible, scope: target.scope, initialData: pending.data, row: updated.row, media: updated.slots)
+            transcriptMedia = TranscriptMediaSession(.init(item: visible, scope: target.scope, initialData: pending.data,
+                row: updated.row, media: updated.slots))
         }
     }
 

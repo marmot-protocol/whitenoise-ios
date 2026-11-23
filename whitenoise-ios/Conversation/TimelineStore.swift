@@ -634,7 +634,7 @@ final class TimelineStore {
         if isText, let blocks = MarkdownMessageBuilder.build(for: tokens, mentionDisplayName: mentionDisplayNameResolver,
                                                            usesStaticTimestamps: true).blocks {
             for block in blocks {
-                let fields = block.textFields(includeCodeLanguage: false)
+                let fields = block.textFields(for: .body)
                 for field in fields {
                     let excerpt = ConversationReplyPreview.excerpt(field)
                     if !excerpt.isEmpty { return excerpt }
@@ -1064,7 +1064,7 @@ final class TimelineStore {
             // A row already shown can change origin without changing its
             // signature, so move the divider here rather than on the next rebuild.
             if previous != origin, timelineIndexByMessageId[record.messageIdHex] != nil {
-                rebuildHistoryImportBoundaries()
+                rebuildHistoryImportBoundariesAndInvalidateClusters()
             }
         }
         guard !appRecord.messageIdHex.isEmpty else { return false }
@@ -1398,7 +1398,7 @@ final class TimelineStore {
         guard timelineSignature != nextSignature else { return answersChanged }
         timeline = next
         timelineSignature = nextSignature
-        rebuildHistoryImportBoundaries()
+        rebuildHistoryImportBoundariesAndInvalidateClusters()
         return true
     }
 
@@ -1426,7 +1426,7 @@ final class TimelineStore {
         } else {
             timelineSignature = timeline.map(TimelineItemSignature.init)
         }
-        rebuildHistoryImportBoundaries()
+        rebuildHistoryImportBoundariesAndInvalidateClusters()
         if affectsActivityCompletion(previous) || affectsActivityCompletion(item) {
             answeredActivityRows = answeredActivities(in: timeline)
         }
@@ -1483,7 +1483,7 @@ final class TimelineStore {
         return answered
     }
 
-    private func rebuildHistoryImportBoundaries() {
+    private func rebuildHistoryImportBoundariesAndInvalidateClusters() {
         historyImportBoundaries = HistoryImportBoundaryProjection.boundaries(for: timeline, origins: historyImportOrigins)
         clusterCalendar = nil
     }

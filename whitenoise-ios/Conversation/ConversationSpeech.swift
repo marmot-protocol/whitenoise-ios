@@ -68,6 +68,36 @@ nonisolated enum MessageSpeechPresentation {
     }
 }
 
+enum VoiceTranscriptionIssue: Error {
+    case needsDownload, empty, tooLarge, checkFailed, missingModel
+
+    var message: String {
+        switch self {
+        case .needsDownload: L10n.string("Download the recording before transcribing it.")
+        case .empty, .checkFailed: L10n.string("Couldn’t transcribe this recording.")
+        case .tooLarge: L10n.string("This recording is too large to transcribe.")
+        case .missingModel: L10n.string("No on-device speech model is available for this language.")
+        }
+    }
+}
+
+enum VoiceTranscriptionCheck {
+    static func retained(_ lookup: Result<AttachmentLocalTargetFfi, VoiceTranscriptionIssue>,
+                         recording: ConversationSpeech.Recording, media: MessageMediaAttachment?) -> Bool? {
+        guard recording.matches(media) else { return false }
+        switch lookup {
+        case .success(let target): return target == recording.target
+        case .failure(.checkFailed): return nil
+        case .failure: return false
+        }
+    }
+
+    static func availability<Source>(of recording: Result<Source, VoiceTranscriptionIssue>,
+                                     hasInstalledModel: Bool) -> Result<Source, VoiceTranscriptionIssue> {
+        recording.flatMap { hasInstalledModel ? .success($0) : .failure(.missingModel) }
+    }
+}
+
 /// The navigation stack owns speech so a profile push leaves it running and
 /// popping past a covered conversation still cancels it.
 struct ConversationSpeechSession<Route: Equatable>: ViewModifier {
@@ -170,12 +200,7 @@ final class ConversationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         let sourceHint: AttachmentSourceHint?
     }
 
-    enum VoiceAvailability {
-        case available(Recording, LocalVoiceAttachment)
-        case unavailable(String)
-    }
-
-    var checkedVoice: (request: VoiceRequest, result: VoiceAvailability)?
+    var checkedVoice: (request: VoiceRequest, result: Result<LocalVoiceAttachment, VoiceTranscriptionIssue>)?
     private var transcribingRecording: Recording?
     @ObservationIgnored private var readingPreparation: Task<Void, Never>?
     @ObservationIgnored private var activeUtterance: (id: ObjectIdentifier, length: Int)?
@@ -405,23 +430,23 @@ enum LocalVoiceAttachment {
         }
     }
 
-    enum SizeError: Error {
-        case empty, tooLarge
+    static func validateSize(_ byteCount: UInt64) throws {
+        guard byteCount > 0 else { throw VoiceTranscriptionIssue.empty }
+        guard byteCount <= MessageMediaAttachment.audioAnalysisByteLimit else { throw VoiceTranscriptionIssue.tooLarge }
+    }
 
-        var message: String {
-            switch self {
-            case .empty: L10n.string("Couldn’t transcribe this recording.")
-            case .tooLarge: L10n.string("This recording is too large to transcribe.")
-            }
+    static func check(_ media: MessageMediaAttachment, group: String, app: AppState) async -> Result<Self, VoiceTranscriptionIssue> {
+        do {
+            guard let source = try await resolve(media, group: group, app: app) else { return .failure(.needsDownload) }
+            return .success(source)
+        } catch let issue as VoiceTranscriptionIssue {
+            return .failure(issue)
+        } catch {
+            return .failure(.checkFailed)
         }
     }
 
-    static func validateSize(_ byteCount: UInt64) throws {
-        guard byteCount > 0 else { throw SizeError.empty }
-        guard byteCount <= MessageMediaAttachment.audioAnalysisByteLimit else { throw SizeError.tooLarge }
-    }
-
-    static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState) async throws -> Self? {
+    private static func resolve(_ media: MessageMediaAttachment, group: String, app: AppState) async throws -> Self? {
         guard let account = app.activeAccountRef else { return nil }
         let client = try app.currentMarmotClient()
         let target: AttachmentLocalTargetFfi

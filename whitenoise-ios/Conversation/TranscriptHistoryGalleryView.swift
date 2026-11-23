@@ -43,6 +43,8 @@ struct TranscriptHistoryGalleryView: View {
     let conversation: ConversationViewModel
     var openingSelection: MessageMediaGallery.PendingSelection? = nil
     var gifRowID: String? = nil
+    var restored = false
+    var didDisplay: ((MessageMediaAttachment?) -> Void)?
     let onLoadMedia: ConversationMediaLoader
     let forwardingContext: MediaForwardingContext?
     let onGoToMessage: (String) -> Void
@@ -57,6 +59,7 @@ struct TranscriptHistoryGalleryView: View {
     private struct WindowRevision: Equatable {
         let timeline: Int
         let snapshot: ConversationWindowRevisionFfi?
+        let hasOpeningBytes: Bool
         let profiles: Int
         let account: String?
         let debug: Bool
@@ -98,9 +101,9 @@ struct TranscriptHistoryGalleryView: View {
 
     private var projectionInputs: Inputs {
         Inputs(window: WindowRevision(timeline: conversation.timelineProjectionGeneration,
-            snapshot: conversation.conversationWindow?.revision, profiles: appState.profileRefreshGeneration,
+            snapshot: conversation.conversationWindow?.revision, hasOpeningBytes: initialData != nil, profiles: appState.profileRefreshGeneration,
             account: conversation.myAccountId, debug: appState.streamingDebugEnabled, language: AppLanguage.current),
-            pages: history.pagesRevision, resume: history.resumeItemID, viewer: history.viewerGeneration)
+            pages: history.state.pagesRevision, resume: history.state.resumeItemID, viewer: history.state.viewerGeneration)
     }
 
     private var scope: TranscriptAttachmentHistory.Scope? {
@@ -110,29 +113,34 @@ struct TranscriptHistoryGalleryView: View {
         return .init(appState: appState, group: conversation.group.groupIdHex)
     }
 
+    private var owner: TranscriptAttachmentHistory.Scope? {
+        .init(ownerOf: appState, group: conversation.group.groupIdHex)
+    }
+
     private var visibleGallery: MessageMediaGallery? {
         guard let window, let expanded else { return nil }
-        if let scope, scope == activeScope, !history.validationFailed { return expanded }
+        if let owner, owner == activeScope, !history.state.validationFailed { return expanded }
         return window.gallery
     }
 
     var body: some View {
-        let currentScope = scope
-        let scoped = currentScope != nil && currentScope == activeScope
-        // The opening draft can disappear briefly while its confirmed slot is being matched.
-        let selectedID = history.selectedItemID ?? openingItem.id
-        let selectedFromHistory = window?.gallery.transcriptCaptions?[selectedID] == nil
-            && (history.resetViewerOnDiscard || history.pages.contains(attachmentID: selectedID))
+        let availability = AttachmentHistoryPager.Availability(appState, group: conversation.group.groupIdHex)
+        let currentScope = availability.readable
+        let scoped = availability.owner != nil && availability.owner == activeScope
         Group {
-            if scoped && history.validationFailed && selectedFromHistory {
+            if scoped && history.state.validationFailed && history.state.selectedFromHistory {
                 ContentUnavailableView {
                     Label("Couldn't load shared media.", systemImage: "photo.on.rectangle")
                 } actions: {
                     Button("Retry") { validate() }
                     Button("Close", action: onDismiss)
                 }
+            } else if restored && !history.state.hasPaged, let window, !window.gallery.canRestore(openingItem) {
+                // Its source changed between the retained read and this projection.
+                // Never mount the restored page with a loader that could admit a transfer.
+                Color.clear.onAppear(perform: onDismiss)
             } else if let gallery = window?.gallery, let visible = visibleGallery {
-                MessageMediaFullscreenGalleryView(gallery: visible, openingSelection: openingSelection,
+                MessageMediaFullscreenGalleryView(gallery: visible, openingSelection: openingSelection, restored: restored, didDisplay: didDisplay,
                     currentTranscriptGallery: { self.visibleGallery }, onLoadMedia: onLoadMedia,
                     forwardingContext: forwardingContext, onGoToMessage: onGoToMessage, onDismiss: onDismiss)
                     .id(projectedViewer)
@@ -144,14 +152,20 @@ struct TranscriptHistoryGalleryView: View {
         .onChange(of: projectionInputs, initial: true) { old, new in
             updateProjection(from: old, to: new)
         }
-        .onChange(of: selectedFromHistory, initial: true) { _, historyOnly in
-            history.resetViewerOnDiscard = historyOnly
-        }
-        .task(id: currentScope) {
-            history.begin(currentScope)
-            activeScope = currentScope
-            guard let currentScope else { return }
-            await history.loadPage(scope: currentScope, appState: appState)
+        .task(id: availability) {
+            if activeScope != availability.owner {
+                history.begin(availability.owner)
+                activeScope = availability.owner
+            }
+            guard let currentScope else {
+                history.interruptPageRead()
+                return
+            }
+            if history.state.pager.baseline == nil {
+                await history.loadPage(scope: currentScope, appState: appState)
+            } else {
+                await history.validate(scope: currentScope, appState: appState)
+            }
         }
         .task(id: history.revision) {
             guard let currentScope, scenePhase == .active else { return }
@@ -174,21 +188,21 @@ struct TranscriptHistoryGalleryView: View {
     }
 
     private func controls(for expanded: MessageMediaGallery, window gallery: MessageMediaGallery) -> TranscriptHistoryControls {
-        let progress: Int? = history.canLoadMore && history.scannedSlots > 0
-            && (history.isReconnectingPages || expanded.items.count == gallery.items.count) ? history.scannedSlots : nil
+        let progress: Int? = history.canLoadMore && history.state.scannedSlots > 0
+            && (history.state.isReconnectingPages || expanded.items.count == gallery.items.count) ? history.state.scannedSlots : nil
         let load: (() -> Void)?
-        if history.validationFailed { load = { self.validate() } }
+        if history.state.validationFailed { load = { self.validate() } }
         else if history.canLoadMore { load = { self.loadMore() } }
         else { load = nil }
         let refresh: (() -> Void)?
-        if let scope = activeScope, history.hasAdditions && !history.isReconnectingPages && !history.isLoading && !history.validationFailed {
+        if let scope = activeScope, history.state.hasAdditions && !history.state.isReconnectingPages && !history.isLoading && !history.state.validationFailed {
             refresh = {
                 Task { await history.refreshAdditions(scope: scope, appState: appState) }
             }
         } else { refresh = nil }
         return TranscriptHistoryControls(refresh: refresh, loadMore: load, isLoading: history.isLoading,
-            checkedWithoutOverlap: progress, pageFailed: history.pageFailed || history.validationFailed,
-            allowsOpeningDemand: !history.hasPaged, didSelect: { itemID in
+            checkedWithoutOverlap: progress, pageFailed: history.pageFailed || history.state.validationFailed,
+            allowsOpeningDemand: !history.state.hasPaged, didSelect: { itemID in
                 history.select(itemID, inWindow: gallery.transcriptCaptions?[itemID] != nil)
                 heldGIF.didSelect(itemID, in: gallery, opening: openingItem, pending: openingSelection)
             }, verify: { [activeScope] item in try await self.verify(item, in: activeScope) },
@@ -248,7 +262,7 @@ struct TranscriptHistoryGalleryView: View {
                       return record.messageIdHex == target.messageIdHex
                   }) else { return nil }
             // An invalidated history page cannot establish whether the slot was removed.
-            guard let slot = history.pages.slot(for: item) else { throw AttachmentReadError.stale }
+            guard let slot = history.state.pages.slot(for: item) else { throw AttachmentReadError.stale }
             return slot.isVisible(in: store) ? slot.attachment : nil
         }
         guard let presented = try presentedItem() else { return false }
@@ -279,11 +293,15 @@ struct TranscriptHistoryGalleryView: View {
                 identityNames: conversation.windowIdentities.mapValues(\.displayName))
             let previous = window
             window = next
+            let selected = history.state.selectedItemID ?? openingItem.id
+            history.updateWindow(for: selected, inWindow: gallery.transcriptCaptions?[selected] != nil)
             if let previous, old.pages == new.pages, old.resume == new.resume, old.viewer == new.viewer,
-               old.window.profiles == new.window.profiles, old.window.language == new.window.language, old.window.account == new.window.account,
-               next.hasSameMedia(as: previous, pages: history.pages) { return }
+               old.window.hasOpeningBytes == new.window.hasOpeningBytes, old.window.profiles == new.window.profiles, old.window.language == new.window.language, old.window.account == new.window.account,
+               next.hasSameMedia(as: previous, pages: history.state.pages) { return }
         }
         if let window {
+            let selected = history.state.selectedItemID ?? openingItem.id
+            history.updateWindow(for: selected, inWindow: window.gallery.transcriptCaptions?[selected] != nil)
             expanded = expandedGallery(for: window)
             projectedViewer = new.viewer
         }
@@ -292,11 +310,11 @@ struct TranscriptHistoryGalleryView: View {
     private func expandedGallery(for window: Window) -> MessageMediaGallery {
         let gallery = window.gallery
         guard var captions = gallery.transcriptCaptions else { return gallery }
-        let selectedID = history.selectedItemID ?? gallery.initialItemID
-        let edges = history.pages.extensions(around: gallery.items, excluding: window.messageIDs,
+        let selectedID = history.state.selectedItemID ?? gallery.initialItemID
+        let edges = history.state.pages.extensions(around: gallery.items, excluding: window.messageIDs,
                                              atLiveTail: window.atTail,
                                              preserving: selectedID, heldGIF: self.heldGIF.confirmed ?? (openingItem.isGIF ? openingItem : nil))
-        guard !edges.older.isEmpty || !edges.newer.isEmpty || history.resumeItemID != nil else { return gallery }
+        guard !edges.older.isEmpty || !edges.newer.isEmpty || history.state.resumeItemID != nil else { return gallery }
         if !edges.includesWindow { captions.removeAll() }
         var messages = edges.includesWindow ? gallery.messageIdByItemID : [:]
         func include(_ slot: TranscriptHistorySlot) -> MessageMediaAttachment? {
@@ -310,7 +328,7 @@ struct TranscriptHistoryGalleryView: View {
             newer: edges.newer.compactMap(include)) { item in
                 item.localTarget == nil && gallery.messageIdByItemID[item.id].map { !window.durableIDs.contains($0) } != false
             }
-        let openingID = history.resumeItemID.flatMap { captions[$0] == nil ? nil : $0 }
+        let openingID = history.state.resumeItemID.flatMap { captions[$0] == nil ? nil : $0 }
             ?? (edges.includesWindow ? gallery.initialItemID : selectedID)
         return MessageMediaGallery(transcriptItems: items, openingID: openingID,
             initialData: openingID == gallery.initialItemID ? gallery.initialMediaData : nil,
