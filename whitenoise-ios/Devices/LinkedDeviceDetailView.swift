@@ -28,7 +28,11 @@ struct LinkedDeviceDetailView: View {
                 infoSection(device)
                 if LinkedDevicePresentation.offersInactiveChoice(device) { inactiveSection(device) }
                 settingsSection(device)
-                if LinkedDevicePresentation.canRemove(device) { removeSection(device) }
+                if device.isThisDevice {
+                    signOutHintSection
+                } else if LinkedDevicePresentation.canRemove(device) {
+                    removeSection(device)
+                }
             } else {
                 Section {
                     Text("This device is no longer in your device list.")
@@ -141,7 +145,12 @@ struct LinkedDeviceDetailView: View {
         Section {
             Button("Remove Device", role: .destructive) { confirmsRemoval = true }
                 .disabled(busyKey == "remove")
-        } footer: {
+        }
+    }
+
+    /// This device can't remove itself here; point to Sign Out instead.
+    private var signOutHintSection: some View {
+        Section {} footer: {
             Text("To remove this device you’re using, sign out instead.")
         }
     }
