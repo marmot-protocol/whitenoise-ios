@@ -2856,9 +2856,9 @@ private struct MessageReplyMediaThumbnail: View {
             loadedItemID = item.id
             return
         }
-        guard MediaAutoDownloadStore.shared.shouldAutoDownload(.video),
-              let data = try? await onLoadMedia.videoPreviewData(for: item) else { return }
+        guard MediaAutoDownloadStore.shared.shouldAutoDownload(.video) else { return }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
+        guard let data = try? await onLoadMedia.videoPreviewData(for: item), !Task.isCancelled else { return }
         guard let url = await MediaPlaybackFileStore.fileURL(
             for: item,
             data: data,
@@ -3680,9 +3680,12 @@ private struct MessageDocumentAttachmentView: View {
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))) {
             guard liftedDocuments == nil else { return }
+            let clientID = appState.client.map(ObjectIdentifier.init)
+            let generation = appState.runtimeGeneration
             let metadata = await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
                 allowed: MediaAutoDownloadStore.shared.shouldAutoDownload(.document), hasContactName: displayName != nil)
-            if !Task.isCancelled, let metadata {
+            if !Task.isCancelled, appState.runtimeGeneration == generation,
+               appState.client.map(ObjectIdentifier.init) == clientID, let metadata {
                 byteCount = metadata.size
                 if let name = metadata.contactName { contactName = name }
             }

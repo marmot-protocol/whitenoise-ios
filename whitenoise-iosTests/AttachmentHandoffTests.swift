@@ -291,8 +291,11 @@ struct AttachmentHandoffTests {
         let loader = ConversationMediaLoader { requested in
             readDemands.append(requested.demand)
             if let local = requested.localData { return local }
-            if exceedsLimit, requested.previewByteLimit != nil {
-                throw AttachmentReadError.previewLimitExceeded(byteCount: bytesOverLimit)
+            if exceedsLimit {
+                #expect(requested.previewByteLimit == DocumentPreviewFormat.text.byteLimit)
+                if let limit = requested.previewByteLimit, bytesOverLimit > limit {
+                    throw AttachmentReadError.previewLimitExceeded(byteCount: bytesOverLimit)
+                }
             }
             return contents
         } openHandoff: { requested, _ in
