@@ -270,7 +270,7 @@ enum CustomEmojiDisplayText {
         func walk(_ blocks: [MarkdownDisplayBlock]) {
             for block in blocks {
                 switch block {
-                case .paragraph(let text), .heading(let text), .codeBlock(let text):
+                case .paragraph(let text), .heading(let text), .codeBlock(let text, _):
                     runs.append(String(text.characters))
                 case .blockQuote(let nested):
                     walk(nested)

@@ -171,9 +171,7 @@ nonisolated struct CanonicalMentionDisplayProjection: Equatable, Sendable {
         var selections: [ComposerMentionSelection] = []
         var index = text.startIndex
         while index < text.endIndex {
-            if text[index] == "@",
-               ComposerMentionCanonicalizer.leftBoundaryAllowsMention(at: index, in: text),
-               let match = canonicalNpub(in: text, at: index),
+            if let match = canonicalMention(in: text, at: index),
                let name = ContentSanitizer.displayName(displayName(match.npub)) {
                 let location = projected.utf16.count
                 let rendered = "@\(name)"
@@ -192,6 +190,11 @@ nonisolated struct CanonicalMentionDisplayProjection: Equatable, Sendable {
         }
 
         return CanonicalMentionDisplayProjection(text: projected, selectedMentions: selections)
+    }
+
+    static func canonicalMention(in text: String, at index: String.Index) -> (npub: String, endIndex: String.Index)? {
+        guard text[index] == "@", ComposerMentionCanonicalizer.leftBoundaryAllowsMention(at: index, in: text) else { return nil }
+        return canonicalNpub(in: text, at: index)
     }
 
     fileprivate static func canonicalNpub(

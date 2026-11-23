@@ -106,15 +106,23 @@ struct MessageActionsOverlayLayoutTests {
         #expect(candidates.contains([.list(items: [.init(marker: .bullet, blocks: [.paragraph(AttributedString("A…"))])], tight: false)]))
     }
 
-    @Test func aMarkdownExcerptPreservesTheQuotationAndCodeBlockAtItsTail() {
+    @Test func excerptEndingAtABlockSeparatorKeepsTheEllipsisOnTheLastVisibleLine() {
+        let quote = MarkdownDisplayBlock.blockQuote([.paragraph(AttributedString("Hello"))])
+        let source = [quote, .paragraph(AttributedString("Next paragraph"))]
+        #expect(MarkdownDisplayBlock.excerpt(source, characterBudget: 6, countingBlockSeparators: true)
+            == [.blockQuote([.paragraph(AttributedString("Hello…"))])])
+        #expect(MarkdownDisplayBlock.excerpt([quote], characterBudget: 6, countingBlockSeparators: true) == [quote])
+    }
+
+    @Test func aMarkdownExcerptPreservesTheQuotationAndCodeLanguageAtItsTail() {
         let source: [MarkdownDisplayBlock] = [
             .paragraph(AttributedString("Intro")),
-            .blockQuote([.codeBlock(AttributedString("let sample = 123"))]),
+            .blockQuote([.codeBlock(AttributedString("let sample = 123"), language: "swift")]),
             .paragraph(AttributedString("After"))
         ]
         #expect(MarkdownDisplayBlock.excerpt(source, characterBudget: 15) == [
             .paragraph(AttributedString("Intro")),
-            .blockQuote([.codeBlock(AttributedString("let sample…"))])
+            .blockQuote([.codeBlock(AttributedString("let sample…"), language: "swift")])
         ])
     }
 

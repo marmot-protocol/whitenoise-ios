@@ -55,6 +55,10 @@ final class ConversationMarkdownProjectionCache {
         projectionsByRowId[item.id]?.blocks
     }
 
+    func isTruncated(for item: TimelineItem) -> Bool {
+        projectionsByRowId[item.id]?.isTruncated == true
+    }
+
     func relativeTimestampSeconds(forRowId rowId: String) -> [Int64] {
         projectionsByRowId[rowId]?.timestamps.relativeUnixSeconds ?? []
     }
@@ -77,7 +81,7 @@ final class ConversationMarkdownProjectionCache {
             return false
         }
         let next = builders.markdown(record, resolver)
-        if next.blocks == nil, next.mentionedAccountIds.isEmpty {
+        if next.blocks == nil, next.mentionedAccountIds.isEmpty, !next.isTruncated {
             return remove(rowId: item.id)
         }
         let changed = projectionsByRowId[item.id] != next

@@ -18,11 +18,20 @@ nonisolated enum AgentEventPresentation {
         case operation
     }
 
+    static let completedIcon = "checkmark.message"
+
     struct Display: Equatable {
         var kind: RowKind
         var primaryText: String
         var secondaryText: String?
         var iconName: String
+        var reportsWorkInProgress = false
+
+        var showsStatusInIcon: Bool { reportsWorkInProgress || iconName == AgentEventPresentation.completedIcon }
+
+        var visibleActivityStatus: String? {
+            showsStatusInIcon || secondaryText == primaryText ? nil : secondaryText
+        }
     }
 
     static func display(for record: AppMessageRecordFfi) -> Display? {
@@ -49,11 +58,13 @@ nonisolated enum AgentEventPresentation {
                 ?? MessageSemantics.firstValue(of: "status", in: record.tags)
         )
         guard let primary = payload?.resolvedPrimaryText else { return nil }
+        let indicator = activityIndicator(status: status)
         return Display(
             kind: .activity,
             primaryText: primary,
             secondaryText: activitySecondaryText(status: status),
-            iconName: activityIcon(status: status)
+            iconName: indicator.icon,
+            reportsWorkInProgress: indicator.working
         )
     }
 
@@ -121,14 +132,16 @@ nonisolated enum AgentEventPresentation {
         return trimmed.isEmpty ? nil : trimmed.lowercased()
     }
 
-    private static func activityIcon(status: String?) -> String {
+    private static func activityIndicator(status: String?) -> (icon: String, working: Bool) {
         switch status {
         case "thinking":
-            return "ellipsis.message"
+            return ("ellipsis.message", true)
         case "running", "started", "in_progress":
-            return "sparkle"
+            return ("sparkle", true)
+        case "done", "completed", "finished":
+            return (completedIcon, false)
         default:
-            return "text.line.first.and.arrowtriangle.forward"
+            return ("text.line.first.and.arrowtriangle.forward", false)
         }
     }
 
@@ -137,6 +150,8 @@ nonisolated enum AgentEventPresentation {
         switch status {
         case "thinking":
             return L10n.string("Thinking")
+        case "done", "completed", "finished":
+            return L10n.string("Done")
         default:
             // `status` is peer-controlled (kind-1201 JSON / status tag) and is
             // only lowercased upstream, so strip spoofing codepoints and cap

@@ -33,7 +33,7 @@ struct PollMessageContent: View {
                     .font(.subheadline)
                     .foregroundStyle(secondaryForeground)
                     .accessibilityLabel(L10n.string("Poll"))
-                Text(ContentSanitizer.messageBody(poll.question))
+                TimelineSearchText(ContentSanitizer.messageBody(poll.question))
                     .font(.body.weight(.semibold))
                     .foregroundStyle(foreground)
                     .fixedSize(horizontal: false, vertical: true)
@@ -47,7 +47,7 @@ struct PollMessageContent: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                Text(PollPresentation.footerText(for: poll, isOpen: isOpen))
+                TimelineSearchText(PollPresentation.footerText(for: poll, isOpen: isOpen))
                     .font(.caption)
                     .foregroundStyle(secondaryForeground)
 
@@ -77,7 +77,7 @@ struct PollMessageContent: View {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(selected ? foreground : secondaryForeground)
                         .accessibilityHidden(true)
-                    Text(ContentSanitizer.messageBody(option.label))
+                    TimelineSearchText(ContentSanitizer.messageBody(option.label))
                         .foregroundStyle(foreground)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)

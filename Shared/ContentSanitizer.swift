@@ -16,6 +16,7 @@ nonisolated enum ContentSanitizer {
 
     private static let blankLineRunRegex = try! NSRegularExpression(pattern: "\n{3,}")
     private static let scalarBudgetMultiplier = 8
+    static let maxMessageScalars = maxMessageLength * scalarBudgetMultiplier
 
     /// Single-line text: strip control/bidi characters, collapse all
     /// whitespace (including newlines) to single spaces, trim, cap length.
@@ -522,21 +523,28 @@ nonisolated enum ContentSanitizer {
     /// whitespace) so callers can collapse or keep them as appropriate — the
     /// dangerous controls are the *other* C0/C1 codepoints.
     private static func stripUnsafe(_ s: String) -> String {
-        String(String.UnicodeScalarView(s.unicodeScalars.filter { scalar in
-            if scalar == "\n" || scalar == "\t" || scalar == "\r" { return true }
-            if scalar.properties.generalCategory == .control { return false }
-            switch scalar.value {
-            case 0x200E, 0x200F,        // LRM, RLM
-                 0x202A...0x202E,       // LRE, RLE, PDF, LRO, RLO
-                 0x2066...0x2069,       // LRI, RLI, FSI, PDI
-                 0x061C,                // Arabic letter mark
-                 0x200B, 0xFEFF,        // zero-width space, BOM / ZWNBSP
-                 0x2028, 0x2029:        // line separator, paragraph separator
-                return false
-            default:
-                return true
-            }
-        }))
+        String(String.UnicodeScalarView(s.unicodeScalars.filter(keepsTextScalar)))
+    }
+
+    /// Uses the same filter as textRun, stopping as soon as there is visible text.
+    static func hasNonWhitespaceText(_ text: String) -> Bool {
+        text.unicodeScalars.contains { keepsTextScalar($0) && !CharacterSet.whitespacesAndNewlines.contains($0) }
+    }
+
+    private static func keepsTextScalar(_ scalar: Unicode.Scalar) -> Bool {
+        if scalar == "\n" || scalar == "\t" || scalar == "\r" { return true }
+        if scalar.properties.generalCategory == .control { return false }
+        switch scalar.value {
+        case 0x200E, 0x200F,        // LRM, RLM
+             0x202A...0x202E,       // LRE, RLE, PDF, LRO, RLO
+             0x2066...0x2069,       // LRI, RLI, FSI, PDI
+             0x061C,                // Arabic letter mark
+             0x200B, 0xFEFF,        // zero-width space, BOM / ZWNBSP
+             0x2028, 0x2029:        // line separator, paragraph separator
+            return false
+        default:
+            return true
+        }
     }
 
     private static func visibleSingleLine(_ raw: String?, maxLength: Int) -> String? {

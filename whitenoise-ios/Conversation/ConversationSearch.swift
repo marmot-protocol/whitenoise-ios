@@ -1,18 +1,31 @@
 import Foundation
 import Observation
+import MarmotKit
 
 /// One searchable timeline row: the row's timeline id, its message id, and the
 /// budget-bounded plain-text haystack derived from the message body.
-struct ConversationSearchEntry: Equatable {
+nonisolated struct ConversationSearchEntry: Equatable {
     let itemId: String
     let messageIdHex: String
     let text: String
+    var labels: [String] = []
+    var poll: PollProjectionFfi?
+    var previewURL: URL?
+
+    func matchingText(for query: String, now: Date) -> String? {
+        if text.localizedStandardContains(query) { return text }
+        if let label = labels.first(where: { $0.localizedStandardContains(query) }) { return label }
+        guard let poll else { return nil }
+        let footer = PollPresentation.footerText(for: poll, isOpen: PollPresentation.isOpen(poll, now: now))
+        return footer.localizedStandardContains(query) ? footer : nil
+    }
 }
 
 /// One query hit. Matches are kept in timeline order, oldest first.
 struct ConversationSearchMatch: Equatable, Hashable {
     let itemId: String
     let messageIdHex: String
+    var matchingText: String = ""
 }
 
 /// Pure match indexing and cursor arithmetic for in-conversation search.
@@ -26,14 +39,23 @@ nonisolated enum ConversationSearchEngine {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    static func excerpt(in text: String, matching query: String, leadingContext: Int) -> String? {
+        guard let query = normalizedQuery(query), let match = text.localizedStandardRange(of: query) else { return nil }
+        let start = text.index(match.lowerBound, offsetBy: -leadingContext, limitedBy: text.startIndex) ?? text.startIndex
+        let end = text.index(match.upperBound, offsetBy: 32, limitedBy: text.endIndex) ?? text.endIndex
+        let excerpt = String(text[start..<end]).replacingOccurrences(of: "\n", with: " ")
+        return (start == text.startIndex ? "" : "…") + excerpt + (end == text.endIndex ? "" : "…")
+    }
+
     static func matches(
         for query: String,
-        in entries: [ConversationSearchEntry]
+        in entries: [ConversationSearchEntry],
+        now: Date = .now
     ) -> [ConversationSearchMatch] {
         guard let normalized = normalizedQuery(query) else { return [] }
         return entries.compactMap { entry in
-            guard entry.text.localizedStandardContains(normalized) else { return nil }
-            return ConversationSearchMatch(itemId: entry.itemId, messageIdHex: entry.messageIdHex)
+            guard let text = entry.matchingText(for: normalized, now: now) else { return nil }
+            return ConversationSearchMatch(itemId: entry.itemId, messageIdHex: entry.messageIdHex, matchingText: text)
         }
     }
 
@@ -115,9 +137,14 @@ final class ConversationSearchModel {
     }
 
     private(set) var isActive = false
-    private(set) var matches: [ConversationSearchMatch] = []
+    private(set) var matches: [ConversationSearchMatch] = [] {
+        didSet { matchingItemIDs = Set(matches.map(\.itemId)) }
+    }
+    private(set) var matchingItemIDs: Set<String> = []
     private(set) var currentIndex: Int?
-    private(set) var isPagingOlder = false
+    private var olderPageRequest: (id: UUID, query: String)?
+    var isPagingOlder: Bool { olderPageRequest != nil }
+    private(set) var nextPollDeadline: Date?
     private(set) var scrollRequest: ScrollRequest?
 
     var query = "" {
@@ -185,24 +212,29 @@ final class ConversationSearchModel {
         let observation = analytics?.record(.search(outcome), ticket: analyticsTicket)
         analyticsTicket = nil
         isActive = false
+        nextPollDeadline = nil
         query = ""
         matches = []
         currentIndex = nil
         scrollRequest = nil
-        isPagingOlder = false
+        olderPageRequest = nil
         return observation
     }
 
-    /// Recompute matches after any timeline/projection change, keeping the
-    /// cursor on the same row when it still matches. Passive refreshes never
-    /// request a scroll.
     func refreshAfterTimelineChange() {
         guard isActive, hasQuery else { return }
         let anchorId = currentMatch?.itemId
-        matches = ConversationSearchEngine.matches(for: query, in: entriesProvider())
+        matches = currentMatches()
         observedMatch = observedMatch || !matches.isEmpty
         currentIndex = ConversationSearchEngine.reanchoredIndex(of: anchorId, in: matches)
             ?? ConversationSearchEngine.initialIndex(matchCount: matches.count)
+    }
+
+    func refreshAfterSearchableContentChange(allowScrollTo: (String) -> Bool = { _ in true }) {
+        let previousID = currentMatch?.itemId
+        refreshAfterTimelineChange()
+        if olderPageRequest?.query != query, let match = currentMatch, previousID != match.itemId,
+           allowScrollTo(match.messageIdHex) { requestScrollToCurrentMatch() }
     }
 
     func goToNewerMatch() {
@@ -241,9 +273,22 @@ final class ConversationSearchModel {
 
     func notePagingFailure() { if isActive { searchFailed = true } }
 
+    private func currentMatches() -> [ConversationSearchMatch] {
+        guard hasQuery else {
+            nextPollDeadline = nil
+            return []
+        }
+        let entries = entriesProvider()
+        let now = Date.now
+        nextPollDeadline = entries.lazy.compactMap(\.poll).compactMap {
+            PollPresentation.deadlineRefresh(for: $0, now: now)
+        }.min()
+        return ConversationSearchEngine.matches(for: query, in: entries, now: now)
+    }
+
     private func recomputeForQueryChange() {
         observedQuery = observedQuery || hasQuery
-        matches = ConversationSearchEngine.matches(for: query, in: entriesProvider())
+        matches = currentMatches()
         observedMatch = observedMatch || !matches.isEmpty
         currentIndex = ConversationSearchEngine.initialIndex(matchCount: matches.count)
         requestScrollToCurrentMatch()
@@ -260,8 +305,9 @@ final class ConversationSearchModel {
         guard !isPagingOlder, hasQuery else { return }
         let steppedQuery = query
         let anchorId = currentMatch?.itemId
-        isPagingOlder = true
-        defer { isPagingOlder = false }
+        let requestID = UUID()
+        olderPageRequest = (requestID, steppedQuery)
+        defer { if olderPageRequest?.id == requestID { olderPageRequest = nil } }
 
         var pagesLoaded = 0
         var foundOlderMatch = false
@@ -270,7 +316,7 @@ final class ConversationSearchModel {
             pagesLoaded: pagesLoaded
         ) {
             await loadOlderPage()
-            guard isActive, query == steppedQuery else { return }
+            guard isActive, olderPageRequest?.id == requestID, query == steppedQuery else { return }
             pagesLoaded += 1
             refreshAfterTimelineChange()
             foundOlderMatch = hasMatchOlder(thanAnchor: anchorId)

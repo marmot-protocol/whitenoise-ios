@@ -1,9 +1,10 @@
 import SwiftUI
 
 struct LinkPreviewCardContent: View {
-    static let imageAspectRatio: CGFloat = 1.91
+    static let imageAspectRatio: CGFloat = 256.0 / 124.0
 
     let title: String?
+    var summary: String? = nil
     let host: String?
     let image: UIImage?
     let showsImageSlot: Bool
@@ -36,23 +37,30 @@ struct LinkPreviewCardContent: View {
                     .clipped()
                     .accessibilityHidden(true)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                if let title {
-                    Text(verbatim: title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(MessageBubblePalette.foreground(isFromMe: isFromMe))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
+            VStack(alignment: .leading, spacing: 4) {
                 if let host {
-                    Text(verbatim: host)
-                        .font(.caption)
-                        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
-                        .lineLimit(1)
+                    Label {
+                        TimelineSearchText(host, keepsMatchVisible: true)
+                    } icon: { Image(systemName: "link") }
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
+                    .lineLimit(1)
+                }
+                if let title {
+                    TimelineSearchText(title, keepsMatchVisible: true)
+                        .font(.headline)
+                        .lineLimit(2)
+                }
+                if let summary {
+                    TimelineSearchText(summary, keepsMatchVisible: true)
+                        .font(.subheadline)
+                        .lineLimit(3)
+                        .opacity(0.78)
                 }
             }
-            .padding(.horizontal, MessageBubbleReplyLayout.cardHorizontalInset)
-            .padding(.vertical, MessageBubbleReplyLayout.cardVerticalInset + 2)
+            .foregroundStyle(MessageBubblePalette.foreground(isFromMe: isFromMe))
+            .multilineTextAlignment(.leading)
+            .padding(MessageBubbleReplyLayout.cardOuterInset)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(cardBackground)
