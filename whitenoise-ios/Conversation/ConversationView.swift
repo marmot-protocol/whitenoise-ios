@@ -2619,7 +2619,7 @@ struct ConversationView: View {
     }
 
     private func longMessageReader(_ target: LongMessageTarget) -> some View {
-        ScrollView {
+        Group {
             if let viewModel, ObjectIdentifier(viewModel) == target.modelID,
                appState.activeAccountRef == target.accountRef, appState.runtimeGeneration == target.runtimeGeneration,
                let item = viewModel.timeline.first(where: { item in
@@ -2628,10 +2628,8 @@ struct ConversationView: View {
                }), case .message(let record, let status) = item.kind, !viewModel.isDeleted(record.messageIdHex) {
                 messageBubble(for: item, record: record, status: status, viewModel: viewModel,
                               showsSenderIdentity: false, usesSelectionLayout: false, displaysReader: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
             } else {
-                Text(L10n.string("Message unavailable")).foregroundStyle(.secondary).padding()
+                ScrollView { Text(L10n.string("Message unavailable")).foregroundStyle(.secondary).padding() }
             }
         }
         .navigationTitle(L10n.string("Message"))

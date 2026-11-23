@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import UIKit
 import Testing
 @testable import whitenoise_ios
 
@@ -57,16 +59,33 @@ struct TranscriptMessagePreviewTests {
         #expect(heading.runs.first?.inlinePresentationIntent == .stronglyEmphasized)
     }
 
-    @Test func sourceReaderRetainsEveryCharacterAcrossChunkBoundaries() {
-        let text = String(repeating: "🥾 a trail without a break ", count: 220) + String(repeating: "x", count: 5000)
-        var tail = text[...]
-        var recovered = ""
-        while !tail.isEmpty {
-            let chunk = TranscriptMessagePreview.sourceChunk(tail)
-            #expect((1...2048).contains(chunk.count))
-            recovered += chunk
-            tail = tail[chunk.endIndex...]
+    @MainActor
+    @Test func sourceReaderPreservesParagraphsAndLongLinesAroundTheFormerChunkBoundary() async throws {
+        let emoji = "👩🏽‍💻"
+        let paragraph = String(repeating: "a word ", count: 330) + emoji
+        let unbroken = String(repeating: "x", count: 10_000)
+        let source = paragraph + "\r\n\r\n" + unbroken + "\n\n" + paragraph + "\n"
+        let document = try await TranscriptMessagePreview.sourceText(source) { _ in nil }
+        let host = UIHostingController(rootView: SourceTextView(document: document))
+        try await withHostedWindow(host) { window in
+            func reader(in view: UIView) -> UITextView? {
+                if let text = view as? UITextView { return text }
+                return view.subviews.lazy.compactMap { reader(in: $0) }.first
+            }
+            let view = try #require(reader(in: window))
+            #expect(view.text.utf8.elementsEqual(source.utf8))
+            #expect(view.contentSize.height > view.bounds.height)
         }
-        #expect(recovered == text)
+    }
+
+    @Test func sourceReaderProjectsWholeMentionsAndPreservesAdjacentText() async throws {
+        let npub = try #require(NostrProfileReference.npub(fromAccountIdHex: String(repeating: "ab", count: 32)))
+        let prefix = String(repeating: "x", count: 2040) + " "
+        let suffix = "\n\n👩🏽‍💻 embedded@" + npub
+        let source = prefix + "@" + npub + suffix
+        let known = try await TranscriptMessagePreview.sourceText(source) { $0 == npub ? "Ada" : nil }
+        #expect(known == prefix + "@Ada" + suffix)
+        let unknown = try await TranscriptMessagePreview.sourceText(source) { _ in nil }
+        #expect(unknown == source)
     }
 }
