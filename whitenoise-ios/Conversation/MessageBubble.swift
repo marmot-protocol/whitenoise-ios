@@ -3666,7 +3666,7 @@ private struct MessageDocumentAttachmentView: View {
                 .onDisappear(perform: file.finish)
         }
         .onDisappear { closeDocument() }
-        .onChange(of: appState.client.map(ObjectIdentifier.init)) { _, _ in
+        .onChange(of: DocumentRuntimeScope(appState)) { _, _ in
             // Revoke the old reader and lease. The row's filename, size and search
             // fields follow their existing message/slot lifetime.
             closeDocument()
@@ -3683,12 +3683,10 @@ private struct MessageDocumentAttachmentView: View {
         .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
             policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision, source: AttachmentHandoffSource(item))) {
             guard liftedDocuments == nil else { return }
-            let clientID = appState.client.map(ObjectIdentifier.init)
-            let generation = appState.runtimeGeneration
+            let scope = DocumentRuntimeScope(appState)
             let metadata = await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
                 allowed: MediaAutoDownloadStore.shared.shouldAutoDownload(.document), hasContactName: displayName != nil)
-            if !Task.isCancelled, appState.runtimeGeneration == generation,
-               appState.client.map(ObjectIdentifier.init) == clientID, let metadata {
+            if !Task.isCancelled, DocumentRuntimeScope(appState) == scope, let metadata {
                 byteCount = metadata.size
                 if let name = metadata.contactName { contactName = name }
             }

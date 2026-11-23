@@ -1,6 +1,8 @@
 import Foundation
 import MarmotKit
+import Observation
 import PDFKit
+import Synchronization
 import Testing
 import UIKit
 @testable import whitenoise_ios
@@ -60,5 +62,34 @@ struct MessageDocumentPreviewTests {
         #expect(preview.emails == ["avery@example.invalid"])
         let second = card.replacingOccurrences(of: "Avery", with: "Robin")
         #expect(SharedContactPreview(data: Data((card + second).utf8)) == nil)
+    }
+
+    @Test func documentRuntimeScopeNotifiesObserversWhenRuntimeSuspendsOrChangesAccountOrPhase() async throws {
+        let appState = AppState.test()
+        appState.setPhase(.ready)
+        appState.activeAccountRef = "account-a"
+
+        func expectObservedChange(_ mutation: () async throws -> Void) async rethrows {
+            let before = DocumentRuntimeScope(appState)
+            let notified = Mutex(false)
+            withObservationTracking {
+                _ = DocumentRuntimeScope(appState)
+            } onChange: {
+                notified.withLock { $0 = true }
+            }
+            try await mutation()
+            #expect(notified.withLock { $0 })
+            #expect(DocumentRuntimeScope(appState) != before)
+        }
+
+        await expectObservedChange {
+            appState.activeAccountRef = "account-b"
+        }
+        await expectObservedChange {
+            appState.setPhase(.bootstrapping)
+        }
+        try await expectObservedChange {
+            try await appState.runtimeLifecycle.closeForAppErasure()
+        }
     }
 }

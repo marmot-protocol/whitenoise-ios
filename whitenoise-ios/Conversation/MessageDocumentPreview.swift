@@ -3,6 +3,25 @@ import MarmotKit
 import PDFKit
 import SwiftUI
 
+/// Observable runtime identity for document previews and share leases.
+/// `AppState.client` is `@ObservationIgnored`, so views observe this scope instead.
+@MainActor
+struct DocumentRuntimeScope: Equatable {
+    let ownsLiveRuntime: Bool
+    let isSuspended: Bool
+    let generation: Int
+    let accountRef: String?
+    let clientID: ObjectIdentifier?
+
+    init(_ appState: AppState) {
+        ownsLiveRuntime = appState.phaseOwnsLiveRuntime
+        isSuspended = appState.runtimeSuspendedForBackground
+        generation = appState.runtimeGeneration
+        accountRef = appState.activeAccountRef
+        clientID = appState.client.map(ObjectIdentifier.init)
+    }
+}
+
 nonisolated struct DocumentPreviewSource: Equatable {
     let id: String
     let reference: MediaAttachmentReferenceFfi?
@@ -225,6 +244,7 @@ struct MessageDocumentPreviewSheet: View {
     let preview: MessageDocumentPreview
     let item: MessageMediaAttachment
     let loader: ConversationMediaLoader
+    @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var share = DocumentSharePresentation()
     @State private var shareFailed = false
@@ -281,6 +301,7 @@ struct MessageDocumentPreviewSheet: View {
                     .onDisappear(perform: file.finish)
             }
         }
+        .onChange(of: DocumentRuntimeScope(appState)) { _, _ in share.close() }
         .onDisappear { share.close() }
     }
 }
