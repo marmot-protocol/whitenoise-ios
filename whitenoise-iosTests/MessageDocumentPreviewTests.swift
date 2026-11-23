@@ -28,6 +28,8 @@ struct MessageDocumentPreviewTests {
         let readable = try #require(document.dataRepresentation(options: [
             PDFDocumentWriteOption.userPasswordOption: "", PDFDocumentWriteOption.ownerPasswordOption: "owner"
         ]))
+        let ownerProtected = try #require(PDFDocument(data: readable))
+        #expect(ownerProtected.isEncrypted && !ownerProtected.isLocked)
         #expect(await MessageDocumentPreview.parse(data: readable, format: .pdf) != nil)
         let protected = try #require(document.dataRepresentation(options: [
             PDFDocumentWriteOption.userPasswordOption: "viewer", PDFDocumentWriteOption.ownerPasswordOption: "owner"
