@@ -2858,7 +2858,9 @@ private struct MessageReplyMediaThumbnail: View {
         }
         guard MediaAutoDownloadStore.shared.shouldAutoDownload(.video) else { return }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        guard let data = try? await onLoadMedia.videoPreviewData(for: item), !Task.isCancelled else { return }
+        let revision = AttachmentPresentationState.shared.revision
+        guard let data = try? await onLoadMedia.videoPreviewData(for: item), !Task.isCancelled,
+              revision == AttachmentPresentationState.shared.revision else { return }
         guard let url = await MediaPlaybackFileStore.fileURL(
             for: item,
             data: data,
@@ -2868,7 +2870,8 @@ private struct MessageReplyMediaThumbnail: View {
             url: url,
             maxPixelSize: maxPixelSize,
             scale: displayScale
-        ), !Task.isCancelled else { return }
+        ), !Task.isCancelled, producerEpoch == MessageMediaCache.currentProducerEpoch(),
+           revision == AttachmentPresentationState.shared.revision else { return }
         MessageVideoThumbnailDecoder.store(
             thumbnail,
             for: cacheKey,
