@@ -13,6 +13,101 @@ struct TranscriptAttachmentHistoryTests {
             attachment: .accepted(attachmentIndex: slot, reference: reference))
     }
 
+    @Test(arguments: [true, false])
+    func refreshingThroughAnInvisibleBoundaryRetainsSelectionAndNewerAdditions(exhausted: Bool) throws {
+        var state = TranscriptHistoryState()
+        let original = AttachmentHistoryVersion(noPointer: .init())
+        let newer = AttachmentHistoryVersion(noPointer: .init())
+        let cursor = AttachmentHistoryCursor(noPointer: .init())
+        func accept(_ entries: [AttachmentEntryFfi], version: AttachmentHistoryVersion, more: Bool) {
+            let nextCursor = more ? cursor : nil
+            let page = AttachmentPageFfi(entries: entries, version: version, nextCursor: nextCursor, hasMore: more)
+            state.accept(page, next: .init(baseline: original, cursor: nextCursor, canLoadMore: more))
+        }
+        let selected = entry("older"), boundary = entry("file", mediaType: "application/pdf")
+        let id = try #require(TranscriptHistorySlot(selected)).attachment.id
+        accept([selected, boundary], version: original, more: !exhausted)
+        state.select(id, inWindow: false)
+        state.validate(.additions, hasUncoveredAdditions: true)
+        let started = state.startRefresh()
+        #expect(started)
+        accept([entry("just-arrived")], version: newer, more: true)
+        #expect(state.pages.contains(attachmentID: id))
+        #expect(state.selectedItemID == id && state.isReconnectingPages)
+        state.validate(.additions, hasUncoveredAdditions: true)
+        accept([selected, boundary], version: newer, more: true)
+        #expect(state.isReconnectingPages == exhausted)
+        if exhausted { accept([], version: newer, more: false) }
+        #expect(state.pages.contains(messageID: "just-arrived"))
+        #expect(state.selectedItemID == id && !state.isReconnectingPages && state.hasAdditions)
+        #expect(state.pager.canLoadMore == !exhausted)
+        #expect(state.validationAdditionsBaseline === newer)
+    }
+
+    @Test func validationRetryPreservesTheSelectionAndRemovalDiscardsHistoricalPages() throws {
+        var state = TranscriptHistoryState()
+        let version = AttachmentHistoryVersion(noPointer: .init())
+        let older = entry("older")
+        let id = try #require(TranscriptHistorySlot(older)).attachment.id
+        let page = AttachmentPageFfi(entries: [older], version: version, nextCursor: nil, hasMore: false)
+        state.accept(page, next: .init(baseline: version, cursor: nil, canLoadMore: false))
+        state.select("live", inWindow: true)
+        state.select(id, inWindow: false)
+        state.validationFailedForSelection()
+        #expect(state.resumeItemID == id && state.validationFailed)
+        state.validate(.unchanged, hasUncoveredAdditions: false)
+        #expect(!state.validationFailed && state.selectedItemID == id)
+        let generation = state.viewerGeneration
+        state.validate(.restartRequired, hasUncoveredAdditions: false)
+        #expect(!state.pages.contains(attachmentID: id))
+        #expect(state.viewerGeneration != generation && state.resumeItemID == "live")
+        state.discard(changingScope: true)
+        #expect(state.selectedItemID == nil && state.resumeItemID == nil && !state.hasPaged)
+    }
+
+    @Test func movingTheWindowPastAnOpenPhotoRevokesItsHistoricalSelectionOnDiscard() throws {
+        var state = TranscriptHistoryState()
+        let version = AttachmentHistoryVersion(noPointer: .init())
+        let entry = entry("selected"), id = try #require(TranscriptHistorySlot(entry)).attachment.id
+        state.updateWindow(for: id, inWindow: true)
+        state.accept(.init(entries: [entry], version: version, nextCursor: nil, hasMore: false),
+                     next: .init(baseline: version, cursor: nil, canLoadMore: false))
+        state.updateWindow(for: id, inWindow: false)
+        let previous = state.viewerGeneration
+        state.validate(.restartRequired, hasUncoveredAdditions: false)
+        #expect(state.viewerGeneration != previous && !state.pages.contains(attachmentID: id))
+    }
+
+    @Test func resumeRequiresTheSelectedOriginalSlotInTheNewVisibleWindow() throws {
+        let chat = group(name: "Gallery")
+        var snapshot = conversationWindowSnapshot(groupIdHex: chat.groupIdHex, title: "Gallery")
+        let model = ConversationViewModel(appState: .test(), group: chat)
+        let reference = encryptedMediaReference(fileName: "photo.jpg", mediaType: "image/jpeg", sourceEpoch: 1)
+        var record = timelineRecord(messageIdHex: hex("a1"), sourceMessageIdHex: hex("b1"), direction: "received", timelineAt: 1)
+        record.media = [.accepted(attachmentIndex: 2, reference: reference)]
+        func install(_ rows: [TimelineMessageRecordFfi]) {
+            snapshot.revision.sequence += 1
+            snapshot.messages = rows.map { conversationMessage($0) }
+            model.installConversationWindow(snapshot)
+        }
+        install([record])
+        let original = try #require(model.timeline.first.flatMap { model.mediaItems(for: $0).first })
+        let bookmark = try #require(TranscriptMediaBookmark(original))
+        #expect(bookmark.find(in: model)?.item.localTarget?.attachmentIndex == 2)
+        model.applyBlockedAuthors([record.sender])
+        #expect(bookmark.find(in: model) == nil)
+        model.applyBlockedAuthors([])
+        record.media = [.accepted(attachmentIndex: 3, reference: reference)]
+        install([record])
+        #expect(bookmark.find(in: model) == nil)
+        record.media = [.accepted(attachmentIndex: 2, reference: reference)]
+        record.sourceMessageIdHex = hex("b2")
+        install([record])
+        #expect(bookmark.find(in: model) == nil)
+        install([])
+        #expect(bookmark.find(in: model) == nil)
+    }
+
     @Test func preparedOwnMediaRemainsUsableAfterPeerConfirmationUntilTheSourceArrives() {
         let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
         var row = timelineRecord(messageIdHex: hex("ab"), sourceMessageIdHex: .some(nil), direction: "sent", timelineAt: 1)

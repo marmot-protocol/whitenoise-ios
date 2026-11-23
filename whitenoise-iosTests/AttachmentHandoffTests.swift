@@ -298,7 +298,7 @@ struct AttachmentHandoffTests {
             return AttachmentHandoffLease(lease: self.lease, path: "/tmp/handoff/Notes.txt", releaser: releaser)
         }
         let preview = try await presentation.openDocument(item, using: loader, demand: .explicit,
-            isCurrent: { true }, didReadSize: { _ in })
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
         guard case .text("notes") = preview?.content else {
             Issue.record("Expected the text preview")
             return
@@ -307,7 +307,7 @@ struct AttachmentHandoffTests {
 
         contents = Data([0xff])
         let rejected = try await presentation.openDocument(item, using: loader, demand: .explicit,
-            isCurrent: { true }, didReadSize: { _ in })
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
         #expect(rejected == nil)
         #expect(handedOff == [Self.target])
         #expect(presentation.file?.url.lastPathComponent == "Notes.txt")
@@ -318,7 +318,7 @@ struct AttachmentHandoffTests {
         contents = Data("would otherwise preview".utf8)
         var reportedSize: Int?
         let oversized = try await presentation.openDocument(item, using: loader, demand: .retry,
-            isCurrent: { true }, didReadSize: { reportedSize = $0 })
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { reportedSize = $0 })
         #expect(oversized == nil)
         #expect(reportedSize == bytesOverLimit)
         #expect(retryRequests == 1)

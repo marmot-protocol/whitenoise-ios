@@ -29,6 +29,40 @@ nonisolated struct DocumentPreviewSource: Equatable {
     }
 }
 
+/// The row is keyed by the outgoing attachment's original slot. Keep a tap on that
+/// row alive while checking the picked bytes against the first confirmed reference.
+@MainActor
+final class OpeningDraftDocument {
+    private let original: DocumentPreviewSource
+    private let bytes: Data
+    private(set) var current: MessageMediaAttachment
+    private(set) var digest: String?
+
+    init?(_ item: MessageMediaAttachment, outgoing: Bool) {
+        let source = DocumentPreviewSource(item)
+        guard outgoing, source.reference == nil, source.source == .none, let format = source.format,
+              let data = item.localData, data.count <= format.byteLimit else { return nil }
+        original = source
+        current = item
+        bytes = data
+    }
+
+    func update(to item: MessageMediaAttachment) -> Bool {
+        let next = DocumentPreviewSource(item)
+        let previous = DocumentPreviewSource(current)
+        if !next.continues(previous, outgoing: true, openedDraftDigest: digest) {
+            guard digest == nil, previous == original, next.reference != nil, next.format == original.format else { return false }
+        }
+        current = item
+        return true
+    }
+
+    func verify() async -> Bool {
+        digest = await MediaPlaintextHash.digest(bytes)
+        return DocumentPreviewSource(current).continues(original, outgoing: true, openedDraftDigest: digest)
+    }
+}
+
 nonisolated enum DocumentPreviewFormat {
     case pdf, text, contact
 
@@ -110,7 +144,7 @@ final class DocumentSharePresentation {
 
     /// Prefer an in-app preview and hand off the original slot when it cannot be displayed.
     func openDocument(_ item: MessageMediaAttachment, using loader: ConversationMediaLoader, demand: AttachmentDemand,
-                      isCurrent: () -> Bool, didReadSize: (Int?) -> Void) async throws -> MessageDocumentPreview? {
+                      isCurrent: () -> Bool, handoffItem: () -> MessageMediaAttachment, didReadSize: (Int?) -> Void) async throws -> MessageDocumentPreview? {
         let format = DocumentPreviewFormat(for: item)
         if let format {
             var requested = item
@@ -131,7 +165,7 @@ final class DocumentSharePresentation {
         guard isCurrent() else { throw CancellationError() }
         // The bounded read already used this tap’s retry for a missing original slot.
         // A rejected or oversized preview hands off with ordinary open semantics.
-        try await present(item, using: loader, demand: format == nil ? demand : .explicit, isCurrent: isCurrent)
+        try await present(handoffItem(), using: loader, demand: format == nil ? demand : .explicit, isCurrent: isCurrent)
         return nil
     }
 

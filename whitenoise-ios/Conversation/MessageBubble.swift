@@ -363,6 +363,10 @@ struct MessageBubble: View {
             attachmentRevision = AttachmentPresentationState.shared.revision
         }
 
+        func matchesConversation(_ other: Self) -> Bool {
+            model == other.model && account != nil && account == other.account && attachmentRevision == other.attachmentRevision
+        }
+
         func isCurrent(_ viewModel: ConversationViewModel?, appState: AppState) -> Bool {
             viewModel.map { Self($0, appState: appState) == self } == true
         }
@@ -2993,11 +2997,7 @@ private struct MessageVideoAttachmentView: View {
                     fallbackSystemName: "play.rectangle", width: width, height: height, usesSentBubbleColors: isFromMe)
             }
             if showsBadges {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
-                    .background(.black.opacity(0.4), in: Circle())
+                VideoPreviewPlayOverlay(diameter: 34, style: .transcriptTile)
                 if showsDuration, let duration = AudioDurationLabel.optionalLabel(for: item.durationSeconds ?? localDuration ?? MessageVideoThumbnailDecoder.duration(for: thumbnailCacheKey)) {
                     Text(duration)
                         .font(.caption2.weight(.semibold))
@@ -3506,6 +3506,7 @@ private struct MessageDocumentAttachmentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var preview: MessageDocumentPreview?
     @State private var openedDraftDigest: String?
+    @State private var openingDraft: OpeningDraftDocument?
     @State private var openingID: UUID?
     @State private var openingTask: Task<Void, Never>?
     @State private var contactName: String?
@@ -3528,6 +3529,7 @@ private struct MessageDocumentAttachmentView: View {
             guard openingID == nil || (openIntent != nil && openingID != openIntent?.current) else { return }
             let request = openIntent?.begin(cancelPendingOpen: cancelDocumentOpen) ?? UUID()
             openingID = request
+            openingDraft = OpeningDraftDocument(item, outgoing: isFromMe)
             openingTask = Task { await openDocument(request) }
         } label: {
             HStack(spacing: 8) {
@@ -3609,6 +3611,7 @@ private struct MessageDocumentAttachmentView: View {
             if phase == .background { cancelDocumentOpen() }
         }
         .onChange(of: DocumentPreviewSource(item)) { previous, current in
+            if let openingDraft, share.control == nil, openingDraft.update(to: item) { return }
             if !current.continues(previous, outgoing: isFromMe, openedDraftDigest: preview == nil ? nil : openedDraftDigest) {
                 resetDocument()
             }
@@ -3661,6 +3664,7 @@ private struct MessageDocumentAttachmentView: View {
             openIntent?.finish(request)
             if openingID == request {
                 openingTask = nil
+                openingDraft = nil
                 openingID = nil
             }
         }
@@ -3668,17 +3672,13 @@ private struct MessageDocumentAttachmentView: View {
         let demand = AttachmentDemand.userTap(afterFailure: didFail)
         didFail = false
         do {
+            let draft = openingDraft
+            if let draft {
+                guard await draft.verify(), isCurrent() else { return }
+            }
             if let document = try await share.openDocument(item, using: onLoadMedia, demand: demand,
-                isCurrent: isCurrent, didReadSize: { byteCount = $0 }), isCurrent() {
-                // The already-parsed draft is within its format's preview budget. Its digest lets
-                // the reader transfer to the same confirmed slot even if the local overlay was evicted.
-                if isFromMe, item.reference == nil, let bytes = item.localData {
-                    let digest = await MediaPlaintextHash.digest(bytes)
-                    guard isCurrent() else { return }
-                    openedDraftDigest = digest
-                } else {
-                    openedDraftDigest = nil
-                }
+                isCurrent: isCurrent, handoffItem: { draft?.current ?? item }, didReadSize: { byteCount = $0 }), isCurrent() {
+                openedDraftDigest = draft?.digest
                 if case .contact(let card) = document.content { contactName = card.name }
                 preview = document
             }
@@ -3705,6 +3705,7 @@ private struct MessageDocumentAttachmentView: View {
         // Native handoffs must finish through the transfer control so their lease is released.
         if share.control != nil { share.close() } else { openingTask?.cancel() }
         openingTask = nil
+        openingDraft = nil
         openingID = nil
     }
 
@@ -4172,6 +4173,8 @@ struct MessageMediaFullscreenGalleryView: View {
     var onGoToMessage: ((String) -> Void)?
     let onDismiss: () -> Void
 
+    private let restored: Bool
+    private let didDisplay: ((MessageMediaAttachment?) -> Void)?
     private let currentTranscriptGallery: (() -> MessageMediaGallery?)?
     @State private var pendingSelection: MessageMediaGallery.PendingSelection?
     @State private var pendingVideo = PendingVideoPlayback()
@@ -4194,6 +4197,8 @@ struct MessageMediaFullscreenGalleryView: View {
     init(
         gallery: MessageMediaGallery,
         openingSelection: MessageMediaGallery.PendingSelection? = nil,
+        restored: Bool = false,
+        didDisplay: ((MessageMediaAttachment?) -> Void)? = nil,
         currentTranscriptGallery: (() -> MessageMediaGallery?)? = nil,
         onLoadMedia: ConversationMediaLoader,
         forwardingContext: MediaForwardingContext? = nil,
@@ -4208,6 +4213,8 @@ struct MessageMediaFullscreenGalleryView: View {
         _selection = State(initialValue: TranscriptMediaSelection(openingID: gallery.initialItemID))
         _pendingSelection = State(initialValue: gallery.pendingSelection(for: gallery.initialItemID) ?? openingSelection)
         self.currentTranscriptGallery = currentTranscriptGallery
+        self.didDisplay = didDisplay
+        self.restored = restored
     }
 
     var body: some View {
@@ -4240,11 +4247,12 @@ struct MessageMediaFullscreenGalleryView: View {
             preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
                 contentType: UTType(mimeType: replacement.mediaType) ?? .data)
             let wasPlaying = pendingVideo.wantsPlayback ?? selection.demand(for: pendingSelection.id,
-                allowsOpeningDemand: transcriptHistory?.allowsOpeningDemand != false).isUserInitiated
+                allowsOpeningDemand: !restored && transcriptHistory?.allowsOpeningDemand != false).isUserInitiated
             selection.confirm(replacement.id, resumeVideo: replacement.isVideo && wasPlaying)
             self.pendingSelection = nil
             pendingVideo = PendingVideoPlayback()
         }
+        .onChange(of: selectedItem?.preparedSource, initial: true) { _, _ in didDisplay?(selectedItem) }
         .onChange(of: selectedItemID) { _, selection in
             if gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
             if preparedMedia?.id != selection { preparedMedia = nil }
@@ -4326,7 +4334,7 @@ struct MessageMediaFullscreenGalleryView: View {
             isSelected: item.id == selectedItemID,
             initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.data : nil } ?? gallery.initialData(for: source),
             selectionDemand: gallery.transcriptCaptions == nil ? .explicit
-                : selection.demand(for: item.id, allowsOpeningDemand: transcriptHistory?.allowsOpeningDemand != false),
+                : selection.demand(for: item.id, allowsOpeningDemand: !restored && transcriptHistory?.allowsOpeningDemand != false),
             resumeConfirmedVideo: selection.resumingVideoID == item.id,
             pendingVideo: pendingSelection?.id == item.id ? pendingVideo : nil,
             onLoadMedia: onLoadMedia,
@@ -4501,8 +4509,8 @@ private struct MessageMediaFullscreenPage: View {
     var body: some View {
         content
             .id(sourceGeneration)
-            .onChange(of: item.localTarget) { previous, _ in
-                if previous != nil {
+            .onChange(of: item.preparedSource) { previous, current in
+                if !current.canContinue(previous) {
                     onSourceReplaced()
                     sourceGeneration &+= 1
                     onZoomChanged(false)

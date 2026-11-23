@@ -375,10 +375,25 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// Delivery can supply the original source for an already displayed outgoing attachment.
     /// A replacement for a previously known slot must prepare its own bytes.
     func canUseBytesPrepared(for earlier: Self) -> Bool {
-        guard id == earlier.id, reference == earlier.reference else { return false }
-        if localTarget == earlier.localTarget { return localTarget != nil || sourceHint == earlier.sourceHint }
-        return earlier.localTarget == nil && localTarget != nil && reference != nil
-            && (earlier.sourceHint == nil || earlier.sourceHint == sourceHint)
+        preparedSource.canContinue(earlier.preparedSource)
+    }
+
+    struct PreparedSource: Equatable {
+        let id: String
+        let reference: MediaAttachmentReferenceFfi?
+        let localTarget: AttachmentLocalTargetFfi?
+        let sourceHint: AttachmentSourceHint?
+
+        func canContinue(_ earlier: Self) -> Bool {
+            guard id == earlier.id, reference == earlier.reference else { return false }
+            if localTarget == earlier.localTarget { return localTarget != nil || sourceHint == earlier.sourceHint }
+            return earlier.localTarget == nil && localTarget != nil && reference != nil
+                && (earlier.sourceHint == nil || earlier.sourceHint == sourceHint)
+        }
+    }
+
+    var preparedSource: PreparedSource {
+        PreparedSource(id: id, reference: reference, localTarget: localTarget, sourceHint: sourceHint)
     }
 
     func isSameDocumentSource(as original: Self, leasedTarget: AttachmentLocalTargetFfi? = nil) -> Bool {

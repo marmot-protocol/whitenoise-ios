@@ -706,30 +706,8 @@ struct ConversationView: View {
     @State private var actionsPhase: ActionsPhase = .source
     @State private var actionsCrossfadeExcerpt = false
     @State private var actionsReturnGeometry: (row: CGRect, body: CGSize?, documents: [String: LiftedDocumentDetails])?
-    private struct TranscriptMediaTarget: Identifiable {
-        let item: MessageMediaAttachment
-        var id: String { item.id }
-        let scope: MessageBubble.MediaOpenScope
-        let initialData: Data?
-        var gifRowID: String? = nil
-        var pending: MessageMediaGallery.PendingSelection?
-
-        init(item: MessageMediaAttachment, scope: MessageBubble.MediaOpenScope, initialData: Data?,
-             row: TimelineItem, media: [MessageMediaAttachment], gifRowID: String? = nil) {
-            if case .message(let record, _) = row.kind { self.item = item.transcriptItem(in: record.messageIdHex) }
-            else { self.item = item }
-            self.scope = scope
-            self.initialData = initialData
-            self.gifRowID = gifRowID
-            if case .message(let record, _) = row.kind, record.direction == "sent", item.reference == nil,
-               let data = item.localData, let index = media.firstIndex(where: { $0.id == item.id }) {
-                pending = .init(id: item.id, slot: .init(rowID: row.id, index: item.sourceHint?.slot ?? UInt32(index)), data: data)
-            }
-        }
-    }
-
     @State private var mediaOpenIntent = MediaOpenIntent()
-    @State private var transcriptMedia: TranscriptMediaTarget?
+    @State private var transcriptMedia: TranscriptMediaSession?
     @State private var selectedMessageIds = Set<String>()
     @State private var showBatchDeleteConfirmation = false
     @State private var showStepDownDeclineConfirmation = false
@@ -1119,17 +1097,18 @@ struct ConversationView: View {
             }
             .environment(\.mediaOpenIntent, mediaOpenIntent)
             .onDisappear { mediaOpenIntent.invalidate() }
-            .onChange(of: appState.runtimeGeneration) { _, generation in
-                if let target = transcriptMedia, target.scope.generation != generation { transcriptMedia = nil }
-            }
-            .sheet(item: $transcriptMedia, onDismiss: { mediaOpenIntent.invalidate() }) { target in
-                if let viewModel, target.scope.isCurrent(viewModel, appState: appState) {
-                    TranscriptHistoryGalleryView(openingItem: target.item, initialData: target.initialData, conversation: viewModel,
-                        openingSelection: target.pending, gifRowID: target.gifRowID, onLoadMedia: mediaLoader(for: viewModel),
-                        forwardingContext: forwardingContext(for: viewModel),
-                        onGoToMessage: { navigateToTimelineMessage($0, viewModel: viewModel) },
-                        onDismiss: { transcriptMedia = nil })
-                        .appAppearance()
+            .sheet(item: $transcriptMedia, onDismiss: { mediaOpenIntent.invalidate() }) { session in
+                if let viewModel {
+                    TranscriptMediaSessionView(session: session, conversation: viewModel,
+                        onDismiss: { transcriptMedia = nil }) { target in
+                        TranscriptHistoryGalleryView(openingItem: target.item, initialData: target.initialData, conversation: viewModel,
+                            openingSelection: target.pending, gifRowID: target.gifRowID, restored: target.restored,
+                            didDisplay: session.didDisplay, onLoadMedia: mediaLoader(for: viewModel),
+                            forwardingContext: forwardingContext(for: viewModel),
+                            onGoToMessage: { navigateToTimelineMessage($0, viewModel: viewModel) },
+                            onDismiss: { transcriptMedia = nil })
+                    }
+                    .appAppearance()
                 } else {
                     Color.clear.onAppear { transcriptMedia = nil }
                 }
@@ -4696,7 +4675,7 @@ struct ConversationView: View {
                               !viewModel.isDeleted(target.record.messageIdHex),
                               viewModel.firstGalleryGIF(in: current)?.id == gif.id else { return }
                         mediaOpenIntent.invalidate()
-                        transcriptMedia = mediaTarget
+                        transcriptMedia = TranscriptMediaSession(mediaTarget)
                     }
                 }
                 let actionCount = messageActionCount(
@@ -5117,7 +5096,7 @@ struct ConversationView: View {
         }
         guard let current = currentRow() else { return }
         if current.slots.contains(where: { $0.canUseBytesPrepared(for: target.item) }) {
-            transcriptMedia = target
+            transcriptMedia = TranscriptMediaSession(target)
             return
         }
         // A tap can finish decoding after the outgoing attachment has been confirmed.
@@ -5129,7 +5108,8 @@ struct ConversationView: View {
                   let updated = currentRow(), let visible = updated.slots.first(where: {
                       $0.canUseBytesPrepared(for: confirmed) && $0.localTarget == confirmed.localTarget
                   }) else { return }
-            transcriptMedia = TranscriptMediaTarget(item: visible, scope: target.scope, initialData: pending.data, row: updated.row, media: updated.slots)
+            transcriptMedia = TranscriptMediaSession(.init(item: visible, scope: target.scope, initialData: pending.data,
+                row: updated.row, media: updated.slots))
         }
     }
 

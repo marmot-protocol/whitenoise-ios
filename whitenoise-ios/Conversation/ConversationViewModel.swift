@@ -261,6 +261,8 @@ final class ConversationViewModel {
     var suppressesInitialUnreadDivider = false
     var visibleUnreadDividerID: String? { suppressesInitialUnreadDivider ? nil : initialWindowUnreadMessageId }
     private(set) var initialWindowUnreadMessageId: String?
+    enum WindowRuntime: Equatable { case ready(Int), failed(Int) }
+    private(set) var windowRuntime: WindowRuntime?
     private(set) var conversationWindow: ConversationWindowSnapshotFfi?
     private var windowSubscription: ConversationWindowSubscription?
     @ObservationIgnored private var windowCursor: ProjectionSequenceCursor?
@@ -1681,6 +1683,7 @@ final class ConversationViewModel {
     }
 
     private func stopLiveSubscriptions() async {
+        windowRuntime = nil
         windowLifetime = UUID()
         mediaPrefetcher.cancel()
         let retiringLifetime = windowLifetime
@@ -1766,6 +1769,7 @@ final class ConversationViewModel {
                             }
                             self?.windowCursor = ProjectionSequenceCursor(generation: initial.revision.generation, sequence: initial.revision.sequence)
                             self?.installConversationWindow(initial)
+                            if appState.client === client { self?.windowRuntime = .ready(appState.runtimeGeneration) }
                         }
                         while !Task.isCancelled {
                             let next: ConversationWindowSnapshotFfi?
@@ -1805,6 +1809,7 @@ final class ConversationViewModel {
                     self?.windowCursor = nil
                     self?.timelineStore.setLoading(false)
                     self?.error = UserFacingError.message(for: error)
+                    if let generation = appState?.runtimeEventsGeneration { self?.windowRuntime = .failed(generation) }
                 }
                 do { try await Task.sleep(nanoseconds: retryDelay) } catch { return }
                 retryDelay = Self.nextLiveSubscriptionRetryDelay(after: retryDelay)
