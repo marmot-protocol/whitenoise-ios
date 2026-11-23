@@ -139,10 +139,14 @@ struct TranscriptMediaSessionView<Content: View>: View {
         let active: Bool
     }
 
-    var body: some View {
-        let now = Context(scope: .init(conversation, appState: appState), runtime: appState.runtimeEventsGeneration,
+    private var context: Context {
+        Context(scope: .init(conversation, appState: appState), runtime: appState.runtimeEventsGeneration,
             owner: .init(ownerOf: appState, group: conversation.group.groupIdHex),
             window: conversation.windowRuntime, phase: phase, active: appState.isAppSceneActive)
+    }
+
+    var body: some View {
+        let now = context
         Group {
             if let target = session.target, target.scope == now.scope, now.owner?.runtimeGeneration == target.scope.generation, phase != .background {
                 content(target)
@@ -161,7 +165,7 @@ struct TranscriptMediaSessionView<Content: View>: View {
             if now.window == .failed(generation) { onDismiss(); return }
             guard now.window == .ready(generation) else { return }
             do { try await session.restore(in: conversation, appState: appState) }
-            catch { if !Task.isCancelled { onDismiss() } }
+            catch { if !Task.isCancelled, context == now { onDismiss() } }
         }
     }
 }
