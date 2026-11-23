@@ -488,6 +488,8 @@ struct StartChatPromptSection: View {
     let onRetry: () -> Void
     let onDismiss: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: 10) {
@@ -502,7 +504,12 @@ struct StartChatPromptSection: View {
                         .foregroundStyle(.secondary)
                     HStack(spacing: 12) {
                         ShareLink(item: StartChatFailurePresentation.inviteMessage()) {
+                            // The prominent fill takes the white dark-mode tint, so
+                            // the label needs WNButton's contrasting color.
                             Label("Share Invite", systemImage: "square.and.arrow.up")
+                                .wnButtonContentColor(
+                                    .primary, size: .large, colorScheme: colorScheme, isEnabled: true
+                                )
                         }
                         .wnPrimaryButtonStyle()
                         .controlSize(.large)
