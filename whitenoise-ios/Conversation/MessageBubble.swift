@@ -110,6 +110,7 @@ private struct MessageTextBubbleLayout: Layout {
         let ideal = fitsQuote ? content.sizeThatFits(.unspecified).width : nil
         let width = MessageBubbleReplyLayout.textWidth(proposed: proposal.width, ideal: ideal)
         let size = content.sizeThatFits(.init(width: width, height: nil))
+        // The chrome measures the bubble with no height first, then supplies its final width for the reaction strip at placement.
         if widensForReactions, proposal.height != nil, let width = proposal.width {
             return CGSize(width: width, height: size.height)
         }
@@ -533,7 +534,6 @@ struct MessageBubble: View {
                 )
                 .environment(\.avatarMonogramFont, .subheadline.weight(.semibold))
                 .padding(.trailing, 7)
-                .alignmentGuide(.messageSurfaceBottom) { $0[.bottom] }
                 .zIndex(1)
             }
 
@@ -1412,7 +1412,6 @@ struct MessageBubble: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
             .clipped()
             .contentShape(.rect)
             .accessibilityRepresentation {

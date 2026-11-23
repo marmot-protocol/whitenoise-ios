@@ -2133,7 +2133,7 @@ struct ConversationView: View {
                                                 .onAppear { finishTimelineJump(reaching: item.id) }
                                         }
                                         .modifier(MessageActionRowStacking())
-                                        .padding(.top, dayHeaders[item.id] == nil && (showsUnreadDivider || viewModel.messageClusterPresentation(for: item).startsCluster)
+                                        .padding(.top, dayHeaders[item.id] == nil && clusterPresentation(for: item, model: viewModel).startsCluster
                                             ? density.metrics.timelineClusterSpacing - density.metrics.timelineRowSpacing : 0)
                                     }
                                     newerTimelineTrigger(viewModel: viewModel)

@@ -208,10 +208,9 @@ struct MessageBubbleChromeLayout: Layout {
             cache.bubbleSize = bubbleSize
         }
         let surfaceWidth = widensTextForReactions ? bounds.width : bubbleSize.width
-        let bubbleX = isFromMe ? bounds.maxX - surfaceWidth : bounds.minX
         subviews[0].place(
-            at: CGPoint(x: bubbleX, y: bounds.minY),
-            anchor: .topLeading,
+            at: CGPoint(x: isFromMe ? bounds.maxX : bounds.minX, y: bounds.minY),
+            anchor: isFromMe ? .topTrailing : .topLeading,
             proposal: ProposedViewSize(width: surfaceWidth, height: bubbleSize.height)
         )
         subviews.dropFirst().first?.place(
