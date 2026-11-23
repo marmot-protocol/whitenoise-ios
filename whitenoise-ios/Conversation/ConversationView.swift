@@ -772,7 +772,6 @@ struct ConversationView: View {
     @ScaledMetric(relativeTo: .caption)
     private var replyCloseHitSize = ReplyPreviewLayout.closeHitSize
 
-    private static let dimmedSearchResultOpacity = 0.28
     private static let timelineBottomID = "conversation-timeline-bottom"
     private static let actionFrameMeasurementClearDelayNanoseconds: UInt64 = 250_000_000
 
@@ -2078,11 +2077,11 @@ struct ConversationView: View {
                                                     isFirst: heading.id == dateHeadings.first?.id,
                                                     viewport: timelineDateViewport
                                                 )
-                                                .opacity(searchResultID == nil ? 1 : Self.dimmedSearchResultOpacity)
+                                                .opacity(searchResultID == nil ? 1 : ChatBubbleMetrics.dimmedSearchOpacity)
                                             }
                                             if showsUnreadDivider {
                                                 UnreadMessagesDivider()
-                                                    .opacity(searchResultID == nil ? 1 : Self.dimmedSearchResultOpacity)
+                                                    .opacity(searchResultID == nil ? 1 : ChatBubbleMetrics.dimmedSearchOpacity)
                                                     .id(unreadDividerID(for: viewModel.initialWindowUnreadMessageId ?? ""))
                                             }
                                             if let origin = viewModel.historyImportBoundary(before: item) {
@@ -2093,7 +2092,7 @@ struct ConversationView: View {
                                                 viewModel: viewModel,
                                                 showsSenderIdentity: showsSenderIdentity
                                             )
-                                                .opacity(searchResultID == nil || searchResultID == item.id ? 1 : Self.dimmedSearchResultOpacity)
+                                                .opacity(searchResultID == nil || searchResultID == item.id ? 1 : ChatBubbleMetrics.dimmedSearchOpacity)
                                                 .overlay {
                                                     if searchResultID == item.id {
                                                         Color.clear
@@ -2134,7 +2133,7 @@ struct ConversationView: View {
                                                 .onAppear { finishTimelineJump(reaching: item.id) }
                                         }
                                         .modifier(MessageActionRowStacking())
-                                        .padding(.top, dayHeaders[item.id] == nil && clusterPresentation(for: item, model: viewModel).startsCluster
+                                        .padding(.top, dayHeaders[item.id] == nil && viewModel.clusterAtUnreadBoundary(for: item).startsCluster
                                             ? density.metrics.timelineClusterSpacing - density.metrics.timelineRowSpacing : 0)
                                     }
                                     newerTimelineTrigger(viewModel: viewModel)

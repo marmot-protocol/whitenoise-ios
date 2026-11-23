@@ -63,6 +63,7 @@ nonisolated enum MessageSelectionPolicy {
 }
 
 nonisolated enum ChatBubbleMetrics {
+    static let dimmedSearchOpacity = 0.28
     static let timelineMargin: CGFloat = 16
     static let textMaximumWidth: CGFloat = 332
     static let regularMaximumWidth: CGFloat = 560
