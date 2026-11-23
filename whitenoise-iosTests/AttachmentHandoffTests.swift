@@ -282,12 +282,14 @@ struct AttachmentHandoffTests {
         let presentation = DocumentSharePresentation()
         let releaser = FakeReleaser()
         var contents = Data("notes".utf8)
+        var ownSend = false
         var exceedsLimit = false
         var handedOff: [AttachmentLocalTargetFfi] = []
         var retryRequests = 0
         let bytesOverLimit = DocumentPreviewFormat.text.byteLimit + 1
         let loader = ConversationMediaLoader { requested in
             if requested.demand == .retry { retryRequests += 1 }
+            if let local = requested.localData { return local }
             if exceedsLimit, requested.previewByteLimit != nil {
                 throw AttachmentReadError.previewLimitExceeded(byteCount: bytesOverLimit)
             }
@@ -297,7 +299,7 @@ struct AttachmentHandoffTests {
             #expect(requested.localData == nil)
             if let target = requested.localTarget { handedOff.append(target) }
             return AttachmentHandoffLease(lease: self.lease, path: "/tmp/handoff/Notes.txt", releaser: releaser)
-        } canShareDocument: { _, leasedTarget in leasedTarget == Self.target }
+        } canShareDocument: { _, leasedTarget in leasedTarget == Self.target || (ownSend && leasedTarget == nil) }
         let preview = try await presentation.openDocument(item, using: loader, demand: .explicit,
             isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
         guard case .text("notes") = preview?.content else {
@@ -325,6 +327,16 @@ struct AttachmentHandoffTests {
         #expect(retryRequests == 1)
         #expect(handedOff == [Self.target])
         presentation.close()
+
+        ownSend = true
+        handedOff.removeAll()
+        let own = try await presentation.openDocument(item, using: loader, demand: .explicit,
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
+        guard case .text("matching outgoing copy") = own?.content else {
+            Issue.record("The sender’s verified local copy should open without acquiring the upload again")
+            return
+        }
+        #expect(handedOff.isEmpty)
     }
 
     @Test func confirmedOwnSendWithHostBytesStillUsesItsSlot() {

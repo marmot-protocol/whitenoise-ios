@@ -147,7 +147,8 @@ final class DocumentSharePresentation {
                       isCurrent: () -> Bool, handoffItem: () -> MessageMediaAttachment, didReadSize: (Int?) -> Void) async throws -> MessageDocumentPreview? {
         let format = DocumentPreviewFormat(for: item)
         if let format {
-            var requested = item.forTranscriptPage
+            var requested = try await loader.documentSource(for: item)
+            guard isCurrent() else { throw CancellationError() }
             requested.previewByteLimit = format.byteLimit
             do {
                 let data = try await loader.data(for: requested, demand: demand)
@@ -175,12 +176,7 @@ final class DocumentSharePresentation {
         let request = MediaFileTransferControlFfi()
         control = request
         defer { if control === request { control = nil } }
-        var original = item
-        if item.localData != nil, AttachmentHandoffSource(item) != .none,
-           try await !loader.canShareDocument(item, nil) {
-            // Identical bytes from another send do not qualify this file for host export.
-            original = item.forTranscriptPage
-        }
+        let original = try await loader.documentSource(for: item)
         guard control === request, !request.isCancelled(), isCurrent() else { throw CancellationError() }
         let opened = try await loader.shareFile(for: original, demand: demand, control: request)
         do {

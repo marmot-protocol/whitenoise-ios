@@ -65,7 +65,8 @@ struct MediaAcquisitionIntentTests {
             reads.append(request)
             throw AttachmentReadError.unavailable
         }, canShareDocument: { _, source in
-            if let source { checked.append(source) }
+            guard let source else { return false }
+            checked.append(source)
             return retained
         })
         let missing = await loader.prefetchDocument(contact, isVisible: true, allowed: true)

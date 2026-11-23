@@ -125,6 +125,14 @@ final class ConversationMediaLoader {
         return try await data(for: media, demand: demand)
     }
 
+    /// A sourced attachment may carry matching bytes from another message. The
+    /// timeline can identify a confirmed own send whose only copy is still local.
+    func documentSource(for item: MessageMediaAttachment) async throws -> MessageMediaAttachment {
+        guard item.localData != nil, AttachmentHandoffSource(item) != .none,
+              try await !canShareDocument(item, nil) else { return item }
+        return item.forTranscriptPage
+    }
+
     @discardableResult
     func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool, hasContactName: Bool = false) async -> (size: Int, contactName: String?)? {
         guard isVisible, media.kind == .document || media.kind == .unsupported else { return nil }
@@ -138,7 +146,7 @@ final class ConversationMediaLoader {
             if let local = media.localData {
                 // An identical outgoing send can supply these bytes. Only reveal a contact
                 // name from that overlay while this message's own slot still retains it.
-                if AttachmentHandoffSource(media) != .none {
+                if try await documentSource(for: media).localData == nil {
                     guard let target = media.localTarget, try await canShareDocument(media, target) else { return nil }
                 }
                 guard local.count <= limit else { return (local.count, nil) }
@@ -3656,8 +3664,9 @@ private struct MessageDocumentAttachmentView: View {
         }
         .onDisappear { closeDocument() }
         .onChange(of: appState.client.map(ObjectIdentifier.init)) { _, _ in
-            // A parsed document or a leased share still belongs to the runtime that opened it.
-            resetDocument()
+            // Revoke the old reader and lease. The row's filename, size and search
+            // fields follow their existing message/slot lifetime.
+            closeDocument()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { cancelDocumentOpen() }
