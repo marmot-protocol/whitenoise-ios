@@ -2750,7 +2750,7 @@ struct ConversationView: View {
                 }
             }
         )
-        .equatable()
+        .refreshingAttachments(on: AttachmentPresentationState.shared.revision)
         .padding(.leading, usesSelectionLayout ? selectionInset : 0)
         .environment(\.timelineSearchQuery, viewModel.search.isActive && viewModel.search.matchingItemIDs.contains(item.id)
             ? ConversationSearchEngine.normalizedQuery(viewModel.search.query) : nil)
@@ -2758,7 +2758,6 @@ struct ConversationView: View {
         .environment(\.stickerAssets, viewModel.stickerAssets)
         .environment(\.stickerLibrary, viewModel.stickerLibrary)
         .environment(\.mediaUploadProgress, viewModel.composer.uploadProgress)
-        .id(AttachmentPresentationState.shared.revision)
     }
 
     private var timelineBottomSentinel: some View {
@@ -4851,7 +4850,7 @@ struct ConversationView: View {
         func hasSpokenText() -> Bool {
             guard !record.contentTokens.blocks.isEmpty, !TranscriptMessagePreview.exceedsInlineLimit(record.plaintext) else { return true }
             return (model.markdownDisplayBlocks(for: row) ?? []).contains { block in
-                block.textFields(includeCodeLanguage: false).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                block.textFields(for: .body).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             }
         }
         return MessageSpeechPresentation.textActions(for: record, myAccountID: model.myAccountId,

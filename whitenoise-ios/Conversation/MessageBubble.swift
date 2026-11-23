@@ -533,6 +533,11 @@ struct MessageBubble: View {
         }
     }
 
+    /// Refresh media state in a timeline row without replacing an open reader and its scroll position.
+    func refreshingAttachments(on revision: Int) -> some View {
+        equatable().id(displaysReader ? nil : revision)
+    }
+
     var readerShowsSource: Bool {
         if incompleteMarkdown { return true }
         guard markdownBlocks == nil else { return false }
@@ -1177,7 +1182,7 @@ struct MessageBubble: View {
 
     private func messageBodyText(hasReply: Bool, richContent: Bool = false) -> some View {
         let snippet = MessageBodyCollapsePresentation.snippet(
-            markdownBlocks?.flatMap { $0.textFields(includeCodeLanguage: false) }.joined(separator: "\n") ?? sanitizedBodyText,
+            markdownBlocks?.flatMap { $0.textFields(for: .excerpt) }.joined(separator: "\n") ?? sanitizedBodyText,
             isExpanded: isBodyExpanded || searchQuery != nil
         )
         let fadesReviewExcerpt = usesReviewLayout && snippet != nil
