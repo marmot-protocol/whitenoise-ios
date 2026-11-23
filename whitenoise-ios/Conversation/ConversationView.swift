@@ -772,6 +772,7 @@ struct ConversationView: View {
     @ScaledMetric(relativeTo: .caption)
     private var replyCloseHitSize = ReplyPreviewLayout.closeHitSize
 
+    private static let dimmedSearchResultOpacity = 0.28
     private static let timelineBottomID = "conversation-timeline-bottom"
     private static let actionFrameMeasurementClearDelayNanoseconds: UInt64 = 250_000_000
 
@@ -2077,11 +2078,11 @@ struct ConversationView: View {
                                                     isFirst: heading.id == dateHeadings.first?.id,
                                                     viewport: timelineDateViewport
                                                 )
-                                                .opacity(searchResultID == nil ? 1 : 0.28)
+                                                .opacity(searchResultID == nil ? 1 : Self.dimmedSearchResultOpacity)
                                             }
                                             if showsUnreadDivider {
                                                 UnreadMessagesDivider()
-                                                    .opacity(searchResultID == nil ? 1 : 0.28)
+                                                    .opacity(searchResultID == nil ? 1 : Self.dimmedSearchResultOpacity)
                                                     .id(unreadDividerID(for: viewModel.initialWindowUnreadMessageId ?? ""))
                                             }
                                             if let origin = viewModel.historyImportBoundary(before: item) {
@@ -2092,7 +2093,7 @@ struct ConversationView: View {
                                                 viewModel: viewModel,
                                                 showsSenderIdentity: showsSenderIdentity
                                             )
-                                                .opacity(searchResultID == nil || searchResultID == item.id ? 1 : 0.28)
+                                                .opacity(searchResultID == nil || searchResultID == item.id ? 1 : Self.dimmedSearchResultOpacity)
                                                 .overlay {
                                                     if searchResultID == item.id {
                                                         Color.clear
@@ -4805,15 +4806,9 @@ struct ConversationView: View {
                                    scope: ConversationSpeech.Scope) async -> Bool? {
         guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
         guard let media = recordingAttachment(id: id, in: model), recording.matches(media) else { return false }
-        do {
-            let source = try await LocalVoiceAttachment.resolve(media, group: chat.groupIdHex, app: appState)
-            guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
-            return source?.target == recording.target && recording.matches(recordingAttachment(id: id, in: model))
-        } catch is LocalVoiceAttachment.SizeError {
-            return scope == speechScope && viewModel === model && !Task.isCancelled ? false : nil
-        } catch {
-            return nil
-        }
+        let lookup = await LocalVoiceAttachment.check(media, group: chat.groupIdHex, app: appState)
+        guard scope == speechScope, viewModel === model, !Task.isCancelled else { return nil }
+        return VoiceTranscriptionCheck.retained(lookup.map(\.target), recording: recording, media: recordingAttachment(id: id, in: model))
     }
 
     private func speechRow(_ id: String, in model: ConversationViewModel) -> TimelineItem? {
@@ -4876,38 +4871,21 @@ struct ConversationView: View {
                 && actionsTarget?.record.messageIdHex == record.messageIdHex && request == voiceAvailabilityRequest(for: row, in: model)
         }
         let wasVerified = speech.transcripts[record.messageIdHex]?.isVerified(in: scope) == true
-        let source: LocalVoiceAttachment?
-        do {
-            source = try await LocalVoiceAttachment.resolve(audio, group: chat.groupIdHex, app: appState)
-        } catch {
-            guard isCurrent() else { return }
-            let sizeError = error as? LocalVoiceAttachment.SizeError
-            speech.checkedVoice = (request, .unavailable(sizeError?.message ?? L10n.string("Couldn’t transcribe this recording.")))
-            if let transcript = speech.transcripts[record.messageIdHex] {
-                speech.updateRetention(sizeError == nil ? nil : false, id: record.messageIdHex, recording: transcript.recording,
-                                       scope: scope, wasVerified: wasVerified)
-            }
-            return
-        }
+        let lookup = await LocalVoiceAttachment.check(audio, group: chat.groupIdHex, app: appState)
         guard isCurrent() else { return }
         if let transcript = speech.transcripts[record.messageIdHex] {
-            let held = transcript.recording.matches(audio) && source?.target == transcript.recording.target
-            speech.updateRetention(held, id: record.messageIdHex, recording: transcript.recording, scope: scope)
-            if held { return }
+            let held = VoiceTranscriptionCheck.retained(lookup.map(\.target), recording: transcript.recording, media: audio)
+            speech.updateRetention(held, id: record.messageIdHex, recording: transcript.recording, scope: scope, wasVerified: wasVerified)
+            if held == true { return }
         }
-        guard let source else {
-            speech.checkedVoice = (request, .unavailable(L10n.string("Download the recording before transcribing it.")))
-            return
+        let hasModel: Bool
+        if case .success = lookup {
+            hasModel = await LocalVoiceRecognition.recognizer() != nil
+            guard isCurrent() else { return }
+        } else {
+            hasModel = false
         }
-        let recognizer = await LocalVoiceRecognition.recognizer()
-        guard isCurrent() else { return }
-        guard recognizer != nil else {
-            speech.checkedVoice = (request, .unavailable(L10n.string("No on-device speech model is available for this language.")))
-            return
-        }
-        let recording = ConversationSpeech.Recording(displayID: audio.id, target: source.target)
-        guard recording.matches(recordingAttachment(id: record.messageIdHex, in: model)) else { return }
-        speech.checkedVoice = (request, .available(recording, source))
+        speech.checkedVoice = (request, VoiceTranscriptionCheck.availability(of: lookup, hasInstalledModel: hasModel))
     }
 
     private func performSpeechAction(_ action: MessageSpeechAction, for record: AppMessageRecordFfi, in model: ConversationViewModel) {
@@ -4939,9 +4917,12 @@ struct ConversationView: View {
         case .transcribe:
             guard let checked else { return }
             switch checked.result {
-            case .unavailable(let reason):
-                appState.present(.warning(reason))
-            case .available(let recording, let source):
+            case .failure(let issue):
+                appState.present(.warning(issue.message))
+            case .success(let source):
+                guard let attachmentID = checked.request.attachmentID else { return }
+                let recording = ConversationSpeech.Recording(displayID: attachmentID, target: source.target)
+                guard recording.matches(recordingAttachment(id: id, in: model)) else { return }
                 let openingScope = checked.request.scope
                 speech.transcribe(id: id, recording: recording, scope: openingScope, data: {
                     guard self.viewModel === model, speechScope == openingScope,

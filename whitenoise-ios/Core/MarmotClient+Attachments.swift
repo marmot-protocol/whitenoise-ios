@@ -34,7 +34,7 @@ extension MarmotClient {
         guard let asset = assets.first, let reference = asset.reference else { return nil }
         guard asset.byteCount <= 512 * 1024 * 1024 else { throw AttachmentReadError.tooLarge }
         if let previewByteLimit, asset.byteCount > previewByteLimit {
-            throw AttachmentReadError.previewLimitExceeded(byteCount: Int(asset.byteCount))
+            throw AttachmentReadError.tooLarge
         }
         return try await RetainedAttachmentReader.read(byteCount: asset.byteCount) { offset, limit in
             try await self.marmot.readAttachmentAsset(accountRef: accountRef,
@@ -43,8 +43,7 @@ extension MarmotClient {
     }
 }
 
-nonisolated enum AttachmentReadError: Error, Equatable {
-    case previewLimitExceeded(byteCount: Int?)
+nonisolated enum AttachmentReadError: Error {
     case stale
     case tooLarge
     case unavailable
