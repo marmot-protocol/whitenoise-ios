@@ -4027,6 +4027,12 @@ struct MessageMediaGallery: Identifiable {
         return item
     }
 
+    func canRestore(_ opening: MessageMediaAttachment) -> Bool {
+        guard let bookmark = TranscriptMediaBookmark(opening),
+              items.contains(where: { $0.id == opening.id && TranscriptMediaBookmark($0) == bookmark }) else { return false }
+        return opening.isVideo || initialMediaData != nil
+    }
+
     func initialData(for item: MessageMediaAttachment) -> Data? {
         if item.id == initialItemID {
             return initialMediaData
@@ -4338,6 +4344,7 @@ struct MessageMediaFullscreenGalleryView: View {
             initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.data : nil } ?? gallery.initialData(for: source),
             selectionDemand: gallery.transcriptCaptions == nil ? .explicit
                 : selection.demand(for: item.id, allowsOpeningDemand: !restored && transcriptHistory?.allowsOpeningDemand != false),
+            waitsForRestoredPlay: restored && item.id == selection.openingID,
             resumeConfirmedVideo: selection.resumingVideoID == item.id,
             pendingVideo: pendingSelection?.id == item.id ? pendingVideo : nil,
             onLoadMedia: onLoadMedia,
@@ -4500,6 +4507,7 @@ private struct MessageMediaFullscreenPage: View {
     let isSelected: Bool
     let initialImageData: Data?
     let selectionDemand: AttachmentDemand
+    let waitsForRestoredPlay: Bool
     let resumeConfirmedVideo: Bool
     let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
@@ -4529,6 +4537,7 @@ private struct MessageMediaFullscreenPage: View {
                 isSelected: isSelected,
                 initialMediaData: sourceGeneration == 0 ? initialImageData : nil,
                 selectionDemand: demand,
+                waitsForRestoredPlay: waitsForRestoredPlay,
                 resumeConfirmedVideo: sourceGeneration == 0 && resumeConfirmedVideo,
                 pendingVideo: pendingVideo,
                 onLoadMedia: onLoadMedia,
@@ -4556,6 +4565,7 @@ private struct MessageMediaFullscreenVideoPage: View {
     let isSelected: Bool
     let initialMediaData: Data?
     let selectionDemand: AttachmentDemand
+    let waitsForRestoredPlay: Bool
     let resumeConfirmedVideo: Bool
     let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
@@ -4634,6 +4644,7 @@ private struct MessageMediaFullscreenVideoPage: View {
                 releasePlayback()
                 return
             }
+            if waitsForRestoredPlay && playRequest == 0 { return }
             let demand = playRequest != handledPlayRequest ? .userTap(afterFailure: didFail) : selectionDemand
             handledPlayRequest = playRequest
             await loadVideo(demand: demand)

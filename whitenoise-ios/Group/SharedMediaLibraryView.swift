@@ -44,6 +44,7 @@ final class SharedMediaLibraryViewModel {
             generation += 1
             scope = nil
             resetPages()
+            loadError = nil
             resetLinks()
             if appState.activeAccountRef == nil {
                 loadError = L10n.string("Couldn't load shared media.")

@@ -6,7 +6,7 @@ struct TranscriptMediaTarget {
     var id: String { item.id }
     var restored = false
     let scope: MessageBubble.MediaOpenScope
-    let initialData: Data?
+    var initialData: Data?
     var gifRowID: String? = nil
     var pending: MessageMediaGallery.PendingSelection?
 
@@ -62,7 +62,13 @@ final class TranscriptMediaSession: Identifiable {
     }
 
     func didDisplay(_ item: MessageMediaAttachment?) {
-        if target != nil { bookmark = TranscriptMediaBookmark(item) }
+        guard var opening = target else { return }
+        bookmark = TranscriptMediaBookmark(item)
+        if opening.restored, let item, opening.id != item.id {
+            opening.initialData = nil
+            opening.restored = false
+            target = opening
+        }
     }
 
     func suspend() { target = nil }
@@ -80,26 +86,32 @@ final class TranscriptMediaSession: Identifiable {
             return found
         }
 
-        let (openingRow, _) = try current()
+        let (openingRow, openingItem) = try current()
         guard case .message(let message, _) = openingRow.kind else { throw AttachmentReadError.stale }
         let client = try scope.currentClient(in: appState)
         let baseline = try await scope.version(in: appState)
-        _ = try current()
-        // A resume never admits an attachment job. Missing or revoked local bytes close the sheet.
-        guard let data = try await client.attachmentData(accountRef: scope.account, groupID: scope.group, target: bookmark.target),
-              await MediaPlaintextHash.matches(data, expectedSha256: bookmark.reference.plaintextSha256) else {
-            throw AttachmentReadError.stale
-        }
-        _ = try current()
-        guard try await scope.stillRetains(bookmark.target, in: appState),
-              try await scope.version(in: appState).changeSince(previous: baseline) != .restartRequired else {
-            throw AttachmentReadError.stale
-        }
         // The live block-list subscription can still be attaching after resume.
         let blocked = try await Task.detached(priority: .userInitiated) {
             try client.marmot.getBlockedUsers(accountRef: scope.account)
         }.value
         guard !blocked.contains(where: { $0.publicKey.caseInsensitiveCompare(message.sender) == .orderedSame }) else {
+            throw AttachmentReadError.stale
+        }
+        _ = try current()
+        // The paused video needs only its retained slot until Play. A photo needs
+        // verified pixels now, within the app's existing image-source budget.
+        var data: Data?
+        if !openingItem.isVideo {
+            guard let bytes = try await client.attachmentData(accountRef: scope.account, groupID: scope.group,
+                target: bookmark.target, previewByteLimit: MediaDraftProcessor.maxImageSourceBytes),
+                await MediaPlaintextHash.matches(bytes, expectedSha256: bookmark.reference.plaintextSha256) else {
+                throw AttachmentReadError.stale
+            }
+            data = bytes
+        }
+        _ = try current()
+        guard try await scope.stillRetains(bookmark.target, in: appState),
+              try await scope.version(in: appState).changeSince(previous: baseline) != .restartRequired else {
             throw AttachmentReadError.stale
         }
         let (row, item) = try current()

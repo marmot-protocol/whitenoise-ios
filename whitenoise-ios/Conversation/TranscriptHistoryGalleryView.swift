@@ -59,6 +59,7 @@ struct TranscriptHistoryGalleryView: View {
     private struct WindowRevision: Equatable {
         let timeline: Int
         let snapshot: ConversationWindowRevisionFfi?
+        let hasOpeningBytes: Bool
         let profiles: Int
         let account: String?
         let debug: Bool
@@ -100,7 +101,7 @@ struct TranscriptHistoryGalleryView: View {
 
     private var projectionInputs: Inputs {
         Inputs(window: WindowRevision(timeline: conversation.timelineProjectionGeneration,
-            snapshot: conversation.conversationWindow?.revision, profiles: appState.profileRefreshGeneration,
+            snapshot: conversation.conversationWindow?.revision, hasOpeningBytes: initialData != nil, profiles: appState.profileRefreshGeneration,
             account: conversation.myAccountId, debug: appState.streamingDebugEnabled, language: AppLanguage.current),
             pages: history.state.pagesRevision, resume: history.state.resumeItemID, viewer: history.state.viewerGeneration)
     }
@@ -130,7 +131,7 @@ struct TranscriptHistoryGalleryView: View {
                     Button("Retry") { validate() }
                     Button("Close", action: onDismiss)
                 }
-            } else if restored && !history.state.hasPaged, let window, window.gallery.initialMediaData == nil {
+            } else if restored && !history.state.hasPaged, let window, !window.gallery.canRestore(openingItem) {
                 // Its source changed between the retained read and this projection.
                 // Never mount the restored page with a loader that could admit a transfer.
                 Color.clear.onAppear(perform: onDismiss)
@@ -288,7 +289,7 @@ struct TranscriptHistoryGalleryView: View {
             let selected = history.state.selectedItemID ?? openingItem.id
             history.updateWindow(for: selected, inWindow: gallery.transcriptCaptions?[selected] != nil)
             if let previous, old.pages == new.pages, old.resume == new.resume, old.viewer == new.viewer,
-               old.window.profiles == new.window.profiles, old.window.language == new.window.language, old.window.account == new.window.account,
+               old.window.hasOpeningBytes == new.window.hasOpeningBytes, old.window.profiles == new.window.profiles, old.window.language == new.window.language, old.window.account == new.window.account,
                next.hasSameMedia(as: previous, pages: history.state.pages) { return }
         }
         if let window {
