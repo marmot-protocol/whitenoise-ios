@@ -277,8 +277,8 @@ struct AttachmentHandoffTests {
     }
 
     @Test func openingTextShowsAPreviewOrHandsOffItsOriginalSlot() async throws {
-        let item = MessageMediaAttachment(id: "row:0", reference: nil, fileName: "Notes.txt",
-            mediaType: "application/octet-stream", dim: nil, localData: nil, localTarget: Self.target)
+        let item = MessageMediaAttachment(id: "row:0", reference: encryptedMediaReference(fileName: "Notes.txt", mediaType: "text/plain", sourceEpoch: 1), fileName: "Notes.txt",
+            mediaType: "application/octet-stream", dim: nil, localData: Data("matching outgoing copy".utf8), localTarget: Self.target)
         let presentation = DocumentSharePresentation()
         let releaser = FakeReleaser()
         var contents = Data("notes".utf8)
@@ -294,9 +294,10 @@ struct AttachmentHandoffTests {
             return contents
         } openHandoff: { requested, _ in
             if requested.demand == .retry { retryRequests += 1 }
+            #expect(requested.localData == nil)
             if let target = requested.localTarget { handedOff.append(target) }
             return AttachmentHandoffLease(lease: self.lease, path: "/tmp/handoff/Notes.txt", releaser: releaser)
-        }
+        } canShareDocument: { _, leasedTarget in leasedTarget == Self.target }
         let preview = try await presentation.openDocument(item, using: loader, demand: .explicit,
             isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
         guard case .text("notes") = preview?.content else {
