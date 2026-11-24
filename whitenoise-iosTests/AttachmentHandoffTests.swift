@@ -608,4 +608,91 @@ struct AttachmentHandoffTests {
             #expect(appState.activeToast?.style == .warning)
         }
     }
+
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func playbackFileURLRoutesTargetChecksStaleAccountAndToastsUserInitiatedStorageBlocked() async throws {
+        let cachesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("playback-routing-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: cachesDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: cachesDirectory) }
+        let expectedURL = cachesDirectory.appendingPathComponent("clip.mp4")
+        try Data("video".utf8).write(to: expectedURL)
+
+        let reference = encryptedMediaReference(fileName: "clip.mp4", mediaType: "video/mp4", sourceEpoch: 1)
+        let base = MessageMediaAttachment(
+            id: "row:0",
+            reference: reference,
+            fileName: "clip.mp4",
+            mediaType: "video/mp4",
+            dim: nil,
+            localData: nil,
+            localTarget: Self.target
+        )
+        let groupID = String(repeating: "ab", count: 32)
+
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-a"
+
+            // 1. Target path returns the streamed file URL cleanly.
+            var acquiredTargets: [AttachmentLocalTargetFfi] = []
+            let happyDownloader = ConversationMediaDownloader(
+                acquireAttachmentPlaybackFile: { _, _, _, target, _, _, _, _ in
+                    acquiredTargets.append(target)
+                    return expectedURL
+                }
+            )
+            var explicit = base
+            explicit.demand = .explicit
+            let resolved = try await happyDownloader.playbackFileURL(
+                for: explicit,
+                groupIdHex: groupID,
+                appState: appState
+            )
+            #expect(resolved == expectedURL)
+            #expect(acquiredTargets == [Self.target])
+
+            // 2. Switching active account mid-acquire rejects the stale URL.
+            let staleDownloader = ConversationMediaDownloader(
+                acquireAttachmentPlaybackFile: { _, _, _, _, _, _, _, _ in
+                    appState.activeAccountRef = "account-b"
+                    return expectedURL
+                }
+            )
+            await #expect(throws: CancellationError.self) {
+                _ = try await staleDownloader.playbackFileURL(
+                    for: explicit,
+                    groupIdHex: groupID,
+                    appState: appState
+                )
+            }
+            appState.activeAccountRef = "account-a"
+
+            // 3. Storage-blocked toast fires only for user-initiated demand.
+            let fullDownloader = ConversationMediaDownloader(
+                acquireAttachmentPlaybackFile: { _, _, _, _, _, _, _, _ in
+                    throw AttachmentReadError.storageBlocked
+                }
+            )
+            var automatic = base
+            automatic.demand = .automatic
+            await #expect(throws: AttachmentReadError.storageBlocked) {
+                _ = try await fullDownloader.playbackFileURL(
+                    for: automatic,
+                    groupIdHex: groupID,
+                    appState: appState
+                )
+            }
+            #expect(appState.activeToast == nil)
+
+            await #expect(throws: AttachmentReadError.storageBlocked) {
+                _ = try await fullDownloader.playbackFileURL(
+                    for: explicit,
+                    groupIdHex: groupID,
+                    appState: appState
+                )
+            }
+            #expect(appState.activeToast?.style == .warning)
+        }
+    }
 }

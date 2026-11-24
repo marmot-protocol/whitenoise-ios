@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import MarmotKit
 import Synchronization
@@ -412,6 +413,128 @@ struct MediaAcquisitionIntentTests {
         }
         let entries = try FileManager.default.contentsOfDirectory(atPath: encryptedDir.path)
         #expect(entries == [url.lastPathComponent])
+    }
+
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func playbackRejectsRevokedSlotEvenWhenHashKeyedCacheIsPrimed() async throws {
+        let cachesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("playback-revoked-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: cachesDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: cachesDirectory) }
+
+        let payload = Data("cached video bytes".utf8)
+        let sha = SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
+        let reference = MediaAttachmentReferenceFfi(
+            locators: [MediaLocatorFfi(kind: "blossom-v1", value: "https://media.example/video.mp4")],
+            ciphertextSha256: String(repeating: "a", count: 64),
+            plaintextSha256: sha,
+            nonceHex: String(repeating: "b", count: 24),
+            fileName: "video.mp4",
+            mediaType: "video/mp4",
+            version: .v2,
+            sourceEpoch: 1,
+            sourceEpochIdentity: nil,
+            dim: nil,
+            thumbhash: nil
+        )
+        // Prime the host plaintext cache so a cache-before-MDK shortcut would hit it.
+        MessageMediaCache.store(payload, for: reference, cachesDirectory: cachesDirectory)
+        let primedURL = await MessageMediaCache.validCachedFileURL(for: reference, cachesDirectory: cachesDirectory)
+        #expect(primedURL != nil)
+
+        try await withTestClient { client in
+            try await client.startRuntime()
+            let account = try await client.marmot.createIdentityWithProfile(
+                defaultRelays: client.relayUrls,
+                bootstrapRelays: client.relayUrls
+            ).account
+            let missingTarget = AttachmentLocalTargetFfi(
+                messageIdHex: String(repeating: "11", count: 32),
+                sourceMessageIdHex: String(repeating: "22", count: 32),
+                attachmentIndex: 0
+            )
+            // Requesting playback for an unavailable/revoked slot must fail
+            // through MDK authorization rather than returning primed plaintext.
+            await #expect(throws: Error.self) {
+                _ = try await client.acquireAttachmentPlaybackFile(
+                    accountRef: account.label,
+                    groupID: String(repeating: "ab", count: 32),
+                    target: missingTarget,
+                    demand: .automatic,
+                    reference: reference,
+                    producerGeneration: MessageMediaCache.currentProducerEpoch(),
+                    cachesDirectory: cachesDirectory
+                )
+            }
+        }
+    }
+
+    @Test func streamAndStoreSweepsAbandonedStagingFilesWhilePreservingActiveWriter() async throws {
+        let cachesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("staging-sweep-\(UUID().uuidString)", isDirectory: true)
+        let encryptedDir = cachesDirectory.appendingPathComponent(
+            "EncryptedMedia",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: encryptedDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: cachesDirectory) }
+
+        // Plant an abandoned staging file left over from a simulated prior crash.
+        let abandoned = encryptedDir.appendingPathComponent(".staging-abandoned-crash")
+        try Data("stale partial bytes".utf8).write(to: abandoned)
+        #expect(FileManager.default.fileExists(atPath: abandoned.path))
+
+        let payload = Data("fresh streamed video".utf8)
+        let sha = SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
+        let reference = MediaAttachmentReferenceFfi(
+            locators: [MediaLocatorFfi(kind: "blossom-v1", value: "https://media.example/fresh.mp4")],
+            ciphertextSha256: String(repeating: "c", count: 64),
+            plaintextSha256: sha,
+            nonceHex: String(repeating: "d", count: 24),
+            fileName: "fresh.mp4",
+            mediaType: "video/mp4",
+            version: .v2,
+            sourceEpoch: 1,
+            sourceEpochIdentity: nil,
+            dim: nil,
+            thumbhash: nil
+        )
+
+        let chunkEntered = TestLatch()
+        let chunkRelease = TestLatch()
+        let streamTask = Task {
+            try await MessageMediaCache.streamAndStore(
+                for: reference,
+                byteCount: UInt64(payload.count),
+                cachesDirectory: cachesDirectory
+            ) { offset, limit in
+                if offset == 0 {
+                    chunkEntered.signal()
+                    try await chunkRelease.wait()
+                }
+                let start = Int(offset)
+                let end = min(payload.count, start + Int(limit))
+                return AttachmentLocalBytesFfi(
+                    available: true,
+                    bytes: start < end ? payload[start..<end] : Data()
+                )
+            }
+        }
+
+        try await chunkEntered.wait()
+        // The abandoned staging file must already have been swept on startup,
+        // and a concurrent manual sweep must NOT delete the active writer's file.
+        #expect(!FileManager.default.fileExists(atPath: abandoned.path))
+        MessageMediaCache.sweepAbandonedStagingFiles(in: encryptedDir)
+        let activeEntries = try FileManager.default.contentsOfDirectory(atPath: encryptedDir.path)
+        #expect(activeEntries.count == 1)
+        #expect(activeEntries[0].hasPrefix(MessageMediaCache.stagingPrefix))
+
+        chunkRelease.signal()
+        let publishedURL = try await streamTask.value
+        #expect(try Data(contentsOf: publishedURL) == payload)
+        let finalEntries = try FileManager.default.contentsOfDirectory(atPath: encryptedDir.path)
+        #expect(finalEntries == [publishedURL.lastPathComponent])
     }
 
     @Test func sharedMediaThumbnailVideoLoadsApplyVideoPreviewByteLimit() async throws {

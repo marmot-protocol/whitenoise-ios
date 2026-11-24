@@ -4306,6 +4306,7 @@ struct MessageMediaFullscreenGalleryView: View {
     @State private var mediaShare: AttachmentShareFile?
     @State private var handoffControl: MediaFileTransferControlFfi?
     @State private var mediaActionTask: Task<Void, Never>?
+    @State private var mediaActionTaskID: UUID?
     @State private var exportDocument: DecryptedMediaExportDocument?
     @State private var saveProductTicket: ProductAnalyticsRecorder.Ticket?
     @State private var isExporting = false
@@ -4380,6 +4381,7 @@ struct MessageMediaFullscreenGalleryView: View {
             handoffControl?.cancel()
             mediaActionTask?.cancel()
             mediaActionTask = nil
+            mediaActionTaskID = nil
             zoomedItemID = nil
             dismissDragOffset = 0
         }
@@ -4391,6 +4393,7 @@ struct MessageMediaFullscreenGalleryView: View {
             handoffControl?.cancel()
             mediaActionTask?.cancel()
             mediaActionTask = nil
+            mediaActionTaskID = nil
         }
         .sheet(item: $forwardMedia) { prepared in
             if let forwardingContext {
@@ -4567,8 +4570,15 @@ struct MessageMediaFullscreenGalleryView: View {
         }
         guard mediaActionTask == nil else { return }
         let item = prepared.item
+        let taskID = UUID()
+        mediaActionTaskID = taskID
         mediaActionTask = Task {
-            defer { mediaActionTask = nil }
+            defer {
+                if mediaActionTaskID == taskID {
+                    mediaActionTask = nil
+                    mediaActionTaskID = nil
+                }
+            }
             do {
                 let data = try await onLoadMedia.data(for: item, demand: .explicit)
                 guard !Task.isCancelled, selectedItemID == item.id else { return }
@@ -4597,8 +4607,15 @@ struct MessageMediaFullscreenGalleryView: View {
         guard mediaActionTask == nil else { return }
         let item = prepared.item
         let pendingSelection = prepared.pendingSelection
+        let taskID = UUID()
+        mediaActionTaskID = taskID
         mediaActionTask = Task {
-            defer { mediaActionTask = nil }
+            defer {
+                if mediaActionTaskID == taskID {
+                    mediaActionTask = nil
+                    mediaActionTaskID = nil
+                }
+            }
             do {
                 let data = try await onLoadMedia.data(for: item, demand: .explicit)
                 guard !Task.isCancelled, selectedItemID == item.id else { return }

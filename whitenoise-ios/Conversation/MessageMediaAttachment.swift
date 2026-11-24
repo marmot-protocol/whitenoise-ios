@@ -1155,9 +1155,7 @@ nonisolated enum MediaDraftProcessor {
             fallbackStem: kind == .audio ? "audio-\(Int(Date().timeIntervalSince1970))" : "attachment-\(Int(Date().timeIntervalSince1970))",
             fallbackExtension: MediaAttachmentPolicy.fileExtension(for: mediaType, fileName: fileName)
         )
-        let audioMetadata = kind == .audio
-            ? MediaWaveformAnalyzer.metadata(from: data, mediaType: mediaType)
-            : nil
+        let audioMetadata = kind == .audio ? MediaWaveformAnalyzer.metadata(from: data, mediaType: mediaType) : nil
         return MediaDraftAttachment(
             fileName: sanitizedName,
             mediaType: mediaType,
@@ -1713,7 +1711,7 @@ nonisolated private enum DecryptedMediaCacheEvictor {
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
+            options: []
         ) else {
             return
         }
@@ -1721,6 +1719,14 @@ nonisolated private enum DecryptedMediaCacheEvictor {
         var entries: [Entry] = []
         entries.reserveCapacity(urls.count)
         for url in urls {
+            let name = url.lastPathComponent
+            if name.hasPrefix(MessageMediaCache.stagingPrefix) {
+                if !MessageMediaCache.isActiveStagingFile(name) {
+                    try? FileManager.default.removeItem(at: url)
+                }
+                continue
+            }
+            if name.hasPrefix(".") { continue }
             guard let values = try? url.resourceValues(forKeys: [
                 .isRegularFileKey,
                 .contentModificationDateKey,
@@ -2032,10 +2038,40 @@ nonisolated enum MessageMediaCache {
         return url
     }
 
+    static let stagingPrefix = ".staging-"
+    private static let activeStagingFilenames = Mutex<Set<String>>([])
+    private static let sweptStagingDirectories = Mutex<Set<String>>([])
+
+    static func isActiveStagingFile(_ filename: String) -> Bool {
+        activeStagingFilenames.withLock { $0.contains(filename) }
+    }
+
+    static func sweepAbandonedStagingFiles(in directory: URL) {
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: []
+        ) else { return }
+        for url in urls {
+            let name = url.lastPathComponent
+            guard name.hasPrefix(stagingPrefix), !isActiveStagingFile(name) else { continue }
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private static func sweepAbandonedStagingFilesOnceIfNeeded(in directory: URL) {
+        let shouldSweep = sweptStagingDirectories.withLock { $0.insert(directory.path).inserted }
+        if shouldSweep {
+            sweepAbandonedStagingFiles(in: directory)
+        }
+    }
+
     /// Streams an original-slot attachment directly into a `.complete`-protected
     /// staging file inside `Caches/EncryptedMedia`, verifies its SHA-256 while
     /// streaming, and atomically publishes it to the cache URL so playback of a
-    /// large video needs only one copy on disk and constant memory.
+    /// large video needs only one copy on disk and constant memory. Runs off the
+    /// MainActor so 1 MiB file writes, hashing, and trim never block the UI.
+    @concurrent
     static func streamAndStore(
         for reference: MediaAttachmentReferenceFfi,
         byteCount: UInt64,
@@ -2043,7 +2079,7 @@ nonisolated enum MessageMediaCache {
         policy: DecryptedMediaCacheEvictionPolicy = .media,
         now: Date = Date(),
         producerGeneration: Int? = nil,
-        chunk: (UInt64, UInt32) async throws -> AttachmentLocalBytesFfi
+        chunk: @Sendable (UInt64, UInt32) async throws -> AttachmentLocalBytesFfi
     ) async throws -> URL {
         guard byteCount <= 512 * 1024 * 1024 else { throw AttachmentReadError.tooLarge }
         guard let root = cachesDirectory ?? defaultCachesDirectory,
@@ -2059,10 +2095,14 @@ nonisolated enum MessageMediaCache {
             attributes: protectedAttributes
         )
         try? manager.setAttributes(protectedAttributes, ofItemAtPath: directory.path)
+        sweepAbandonedStagingFilesOnceIfNeeded(in: directory)
 
-        let staging = directory.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: false)
+        let stagingName = "\(stagingPrefix)\(UUID().uuidString)"
+        let staging = directory.appendingPathComponent(stagingName, isDirectory: false)
+        activeStagingFilenames.withLock { _ = $0.insert(stagingName) }
         let fd = Darwin.open(staging.path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)
         guard fd >= 0 else {
+            activeStagingFilenames.withLock { _ = $0.remove(stagingName) }
             let error = PickedMediaFile.mappedWriteError(for: errno)
             if (error as? CocoaError)?.code == .fileWriteOutOfSpace {
                 throw AttachmentReadError.storageBlocked
@@ -2073,6 +2113,7 @@ nonisolated enum MessageMediaCache {
         defer {
             if !fdClosed { _ = Darwin.close(fd) }
             try? manager.removeItem(at: staging)
+            activeStagingFilenames.withLock { _ = $0.remove(stagingName) }
         }
         try manager.setAttributes(protectedAttributes, ofItemAtPath: staging.path)
 
