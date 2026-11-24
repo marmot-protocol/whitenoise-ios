@@ -3,9 +3,9 @@ import MarmotKit
 
 extension AppState: DeviceDiagnosticsDataSource {
     func deviceDiagnosticsSnapshot() async throws -> DeviceDiagnosticsSnapshot? {
-        guard phaseOwnsLiveRuntime, canUseRuntimeForLocalForegroundWork, let client else { return nil }
+        guard phaseOwnsLiveRuntime, canUseLiveRuntime, let client else { return nil }
         let snapshot = try await client.deviceDiagnosticsSnapshot()
-        guard self.client === client, canUseRuntimeForLocalForegroundWork else { throw CancellationError() }
+        guard self.client === client, canUseLiveRuntime else { throw CancellationError() }
         return snapshot
     }
 

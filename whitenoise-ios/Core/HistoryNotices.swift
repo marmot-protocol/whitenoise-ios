@@ -49,7 +49,7 @@ final class HistoryNoticeStore {
     var accountNotices: [HistoryNoticeFfi] { notices.filter { $0.groupIdHex == nil } }
 
     func refresh(using appState: AppState) async {
-        guard appState.canUseRuntimeForForegroundWork, let account = appState.activeAccountRef,
+        guard appState.canUseLiveRuntime, let account = appState.activeAccountRef,
               let client = try? appState.currentMarmotClient() else {
             clear()
             return
@@ -96,7 +96,7 @@ final class HistoryNoticeStore {
     }
 
     private func matches(_ appState: AppState) -> Bool {
-        appState.canUseRuntimeForForegroundWork && appState.activeAccountRef == accountRef
+        appState.canUseLiveRuntime && appState.activeAccountRef == accountRef
             && appState.runtimeGeneration == runtimeGeneration
     }
 }

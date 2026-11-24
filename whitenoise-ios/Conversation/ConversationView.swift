@@ -1854,7 +1854,7 @@ struct ConversationView: View {
     }
 
     private var blockedPeerSubscriptionKey: String {
-        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(blockedPeerTarget ?? "")/\(viewModel != nil)"
+        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseLiveRuntimeWork)/\(blockedPeerTarget ?? "")/\(viewModel != nil)"
     }
 
     /// Only a direct chat has a peer whose block state gates the composer; a

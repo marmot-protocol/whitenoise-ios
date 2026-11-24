@@ -305,7 +305,7 @@ final class DeviceLinkStore {
     /// the same account keeps the open sheet: the user may have switched apps
     /// mid-link, and the sheet then shows how MDK resumed it.
     private func prepareScope(using appState: AppState) -> Bool {
-        guard appState.canUseRuntimeForForegroundWork,
+        guard appState.canUseLiveRuntime,
               let accountRef = appState.activeAccountRef,
               let accountIdHex = appState.activeAccount?.accountIdHex,
               (try? appState.currentMarmotClient()) != nil else {
@@ -421,7 +421,7 @@ final class DeviceLinkStore {
     }
 
     private func matches(_ appState: AppState) -> Bool {
-        appState.canUseRuntimeForForegroundWork && appState.activeAccountRef == scope?.accountRef
+        appState.canUseLiveRuntime && appState.activeAccountRef == scope?.accountRef
             && appState.runtimeGeneration == scope?.runtimeGeneration
     }
 

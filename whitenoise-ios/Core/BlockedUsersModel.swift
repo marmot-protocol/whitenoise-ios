@@ -63,7 +63,7 @@ final class BlockedUsersModel {
         let owner = UUID()
         lifetime = owner
         revision = nil
-        guard appState.canUseRuntimeForForegroundWork, let account = appState.activeAccountRef else {
+        guard appState.canUseLiveRuntimeWork, let account = appState.activeAccountRef else {
             isLoaded = false
             targetId = nil
             resolvedTargetReference = nil

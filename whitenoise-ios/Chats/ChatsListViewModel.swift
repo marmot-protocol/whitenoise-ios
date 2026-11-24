@@ -400,8 +400,11 @@ final class ChatsListViewModel {
         await previous?.value
         await commands?.value
         guard bindID == binding, !Task.isCancelled else { return }
+        let preservesWindowSnapshot = currentAccount == accountRef && listMode == mode
         listMode = mode
-        windowSnapshot = nil
+        if !preservesWindowSnapshot {
+            windowSnapshot = nil
+        }
         isPaging = false
         pageError = nil
         chatListTask = nil
@@ -453,7 +456,7 @@ final class ChatsListViewModel {
             return
         }
         guard !Task.isCancelled else { return }
-        guard let appState, appState.canUseRuntimeForForegroundWork else { return }
+        guard let appState, appState.canUseLiveRuntimeWork else { return }
         currentAccount = accountRef
         isLoading = true
         startLiveUpdates(accountRef: accountRef)
@@ -479,7 +482,7 @@ final class ChatsListViewModel {
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
             while !Task.isCancelled {
                 do {
-                    guard let appState, appState.canUseRuntimeForForegroundWork else { return }
+                    guard let appState, appState.canUseLiveRuntimeWork else { return }
                     if case .window(let view) = self?.listMode {
                         let projection = try resolveProjectionClient(appState)
                         loadStage = (
@@ -529,7 +532,7 @@ final class ChatsListViewModel {
                         throw CancellationError()
                     }
                     guard !Task.isCancelled,
-                          appState.canUseRuntimeForForegroundWork,
+                          appState.canUseLiveRuntimeWork,
                           self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true
                     else { return }
                     self?.loadError = nil
@@ -540,7 +543,7 @@ final class ChatsListViewModel {
 
                     while let update = try await chatListSub.nextCancellable() {
                         guard !Task.isCancelled,
-                              appState.canUseRuntimeForForegroundWork,
+                              appState.canUseLiveRuntimeWork,
                               self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true
                         else { return }
                         retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
@@ -554,7 +557,7 @@ final class ChatsListViewModel {
                 } catch {
                     finishLoad(.failure)
                     guard !Task.isCancelled,
-                          appState?.canUseRuntimeForForegroundWork == true,
+                          appState?.canUseLiveRuntimeWork == true,
                           self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true
                     else { return }
                     if self?.rowByGroupId.isEmpty == true {
@@ -563,7 +566,7 @@ final class ChatsListViewModel {
                     self?.isLoading = false
                 }
                 guard !Task.isCancelled,
-                      appState?.canUseRuntimeForForegroundWork == true,
+                      appState?.canUseLiveRuntimeWork == true,
                       self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true
                 else { return }
                 do {
@@ -666,7 +669,7 @@ final class ChatsListViewModel {
     func refreshRows() async {
         guard let accountRef = currentAccount,
               let appState,
-              appState.canUseRuntimeForForegroundWork
+              appState.canUseLiveRuntimeWork
         else { return }
         if case .window = listMode {
             // Keep the current viewport when returning from a conversation.
@@ -693,7 +696,7 @@ final class ChatsListViewModel {
     func refreshRow(groupIdHex: String, retainAsDestination: Bool = true) async {
         guard let accountRef = currentAccount, let appState else { return }
         guard
-              appState.canUseRuntimeForLocalForegroundWork
+              appState.canUseLiveRuntime
         else { return }
         if rowByGroupId[groupIdHex] == nil,
            let created = appState.createdChatListRow(accountRef: accountRef, groupIdHex: groupIdHex) {
@@ -710,7 +713,7 @@ final class ChatsListViewModel {
                 groupIdHex: groupIdHex
             ), !Task.isCancelled, currentAccount == accountRef, chatListTaskID == taskID,
                item(groupIdHex: groupIdHex) == previousItem,
-               appState.runtimeGeneration == generation, appState.canUseRuntimeForLocalForegroundWork
+               appState.runtimeGeneration == generation, appState.canUseLiveRuntime
             else { return }
             preparedRowsByGroupId[groupIdHex] = row
             selectedPresentationByGroupId[groupIdHex] = row.presentation
@@ -1466,7 +1469,7 @@ final class ChatsListViewModel {
             defer { self?.finishAvatarEnrichmentTask(taskID: taskID) }
             guard let self, let appState else { return }
             while !Task.isCancelled,
-                  appState.canUseRuntimeForForegroundWork,
+                  appState.canUseLiveRuntimeWork,
                   self.currentAccount == accountRef {
                 let pendingGroupIds = self.pendingDirectPeerRefreshGroupIds
                 self.pendingDirectPeerRefreshGroupIds = []
@@ -1509,7 +1512,7 @@ final class ChatsListViewModel {
                         fallbackReadCount: 0
                     )
                 }
-                guard appState.canUseRuntimeForForegroundWork,
+                guard appState.canUseLiveRuntimeWork,
                       self.ownsAvatarEnrichmentTask(taskID: taskID, accountRef: accountRef)
                 else { return }
 
@@ -1562,7 +1565,7 @@ final class ChatsListViewModel {
                         }
                     }
                 }
-                guard appState.canUseRuntimeForForegroundWork,
+                guard appState.canUseLiveRuntimeWork,
                       self.ownsAvatarEnrichmentTask(taskID: taskID, accountRef: accountRef)
                 else { return }
 
@@ -1604,7 +1607,7 @@ final class ChatsListViewModel {
                     }
                 }
                 guard !Task.isCancelled,
-                      appState.canUseRuntimeForForegroundWork,
+                      appState.canUseLiveRuntimeWork,
                       self.ownsAvatarEnrichmentTask(taskID: taskID, accountRef: accountRef)
                 else { break }
                 self.pendingDirectPeerRefreshGroupIds.formUnion(

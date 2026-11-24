@@ -140,8 +140,9 @@ struct whitenoise_iosApp: App {
                         )
                         await appState.bootstrap()
                     }
-                    .task(id: "\(appState.runtimeGeneration)/\(appState.canUseRuntimeForLocalForegroundWork)/\(appState.accounts.map { "\($0.accountIdHex):\($0.signedOut)" }.joined())") {
-                        guard appState.canUseRuntimeForLocalForegroundWork,
+                    .task(id: "\(appState.runtimeGeneration)/\(appState.canUseLiveRuntime && appState.isCurrentClientStarted)/\(appState.accounts.map { "\($0.accountIdHex):\($0.signedOut)" }.joined())") {
+                        guard appState.canUseLiveRuntime,
+                              appState.isCurrentClientStarted,
                               let client = try? appState.currentMarmotClient() else { return }
                         do { try await AttachmentPolicyBridge.shared.synchronize(client) }
                         catch is CancellationError { return }

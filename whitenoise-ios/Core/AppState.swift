@@ -28,6 +28,31 @@ nonisolated enum ForegroundRuntimeWorkGate {
             && !runtimeSuspendedForBackground
             && !isRuntimeSuspending
     }
+
+    /// True while the runtime itself is live and usable (not suspended for
+    /// background and not shutting down), independent of transient `.inactive`
+    /// focus loss such as Face ID, Control Center, Notification Center, or the
+    /// App Switcher.
+    static func canUseLiveRuntime(
+        runtimeSuspendedForBackground: Bool,
+        isRuntimeSuspending: Bool,
+        hasRuntimeClient: Bool
+    ) -> Bool {
+        !runtimeSuspendedForBackground
+            && !isRuntimeSuspending
+            && hasRuntimeClient
+    }
+
+    /// True while runtime-backed UI subscriptions may remain active (not
+    /// suspended for background and not shutting down), independent of
+    /// transient `.inactive` focus loss.
+    static func canUseLiveRuntimeWork(
+        runtimeSuspendedForBackground: Bool,
+        isRuntimeSuspending: Bool
+    ) -> Bool {
+        !runtimeSuspendedForBackground
+            && !isRuntimeSuspending
+    }
 }
 
 struct ForegroundMaintenanceTasks {
@@ -643,6 +668,9 @@ final class AppState {
     var canRefreshProfiles: Bool { runtimeLifecycle.canRefreshProfiles }
     var canUseRuntimeForLocalForegroundWork: Bool { runtimeLifecycle.canUseRuntimeForLocalForegroundWork }
     var canUseRuntimeForForegroundWork: Bool { runtimeLifecycle.canUseRuntimeForForegroundWork }
+    var canUseLiveRuntime: Bool { runtimeLifecycle.canUseLiveRuntime }
+    var canUseLiveRuntimeWork: Bool { runtimeLifecycle.canUseLiveRuntimeWork }
+    var isCurrentClientStarted: Bool { runtimeLifecycle.isCurrentClientStarted }
 
     private static let developerModeKey = "marmot.developerMode"
     private static let streamingDebugModeKey = "marmot.streamingDebugMode"
@@ -663,10 +691,15 @@ final class AppState {
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory =
             RuntimeLifecycle.defaultRuntimeClientFactory,
+        runtimeStarter: @escaping RuntimeLifecycle.RuntimeStarter =
+            RuntimeLifecycle.defaultRuntimeStarter,
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = {
             delay in try await Task.sleep(for: delay)
         },
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
+        mutationDrainSleeper: @escaping RuntimeLifecycle.RetrySleeper = {
+            delay in try await Task.sleep(for: delay)
+        },
         notificationCatchUpCalls: NotificationCatchUpCalls = .live,
         hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
             RuntimeLifecycle.recordHostPerformanceOnClient,
@@ -682,8 +715,10 @@ final class AppState {
             client: client,
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
             runtimeClientFactory: runtimeClientFactory,
+            runtimeStarter: runtimeStarter,
             retrySleeper: runtimeRetrySleeper,
             constructionRetryPolicy: runtimeConstructionRetryPolicy,
+            mutationDrainSleeper: mutationDrainSleeper,
             hostPerformanceRecorder: hostPerformanceRecorder
         )
         self.accountStore = AccountStore(defaults: accountDefaults)
@@ -799,7 +834,7 @@ final class AppState {
     /// both loops; ordinary account switches never stopped the subscription,
     /// so the liveness guard keeps this a no-op there.
     @MainActor
-    private func restartReadyForegroundMaintenanceIfStopped() {
+    func restartReadyForegroundMaintenanceIfStopped() {
         guard phase == .ready, !notificationCoordinator.notificationSubscriptionActive else { return }
         startReadyForegroundMaintenance(scheduleNativePushRegistration: false)
     }
@@ -1623,16 +1658,22 @@ final class AppState {
     @discardableResult
     func startRuntimeSuspension() -> Task<Void, Never> {
         // Claim the live runtime before the lifecycle flips its foreground gate.
-        // The suspension task waits for this mutation lease before closing
-        // SQLCipher, so the final composer keystrokes cannot race teardown.
+        // Start the draft flush promptly before scheduling suspension; the
+        // suspension task waits for this mutation lease under a bounded timeout
+        // before closing SQLCipher so final composer keystrokes cannot race
+        // teardown without risking 0xdead10cc.
         let draftLease = try? runtimeLifecycle.beginForegroundRuntimeMutation()
-        let runtimeSuspensionTask = runtimeLifecycle.startRuntimeSuspension()
         let conversationDraftStore = conversationDraftStore
-        return Task { @MainActor in
-            if let draftLease {
-                defer { runtimeLifecycle.endForegroundRuntimeMutation(draftLease) }
-                await conversationDraftStore.flush(using: draftLease.client)
+        let runtimeLifecycle = runtimeLifecycle
+        let draftFlushTask: Task<Void, Never>? = draftLease.map { lease in
+            Task { @MainActor in
+                defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+                await conversationDraftStore.flush(using: lease.client)
             }
+        }
+        let runtimeSuspensionTask = runtimeLifecycle.startRuntimeSuspension()
+        return Task { @MainActor in
+            await draftFlushTask?.value
             await runtimeSuspensionTask.value
         }
     }

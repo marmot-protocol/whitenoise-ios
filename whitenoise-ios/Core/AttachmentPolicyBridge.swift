@@ -48,8 +48,16 @@ extension MediaAutoDownloadStore: AttachmentPermissionSource {}
 final class AttachmentPolicyBridge {
     static let shared = AttachmentPolicyBridge()
 
-    private weak var activeClient: (any AttachmentPolicyRuntime)?
+    /// The runtime currently targeted by `synchronize`. Not exposed to
+    /// `NWPathMonitor`'s `policyDidChange()` until `clientAcceptsPolicyChanges`
+    /// is enabled by a post-start sync (never during `beforeStart: true`).
+    /// `reconciledClient` tracks the runtime whose post-start policy sync
+    /// actually succeeded so a failed sync is retried on the next activation.
+    private weak var currentClient: (any AttachmentPolicyRuntime)?
+    private weak var reconciledClient: (any AttachmentPolicyRuntime)?
+    private var clientAcceptsPolicyChanges = false
     private var revision: UInt64 = 0
+    private var detachEpoch: UInt64 = 0
     private var policyTail: Task<Void, Error>?
     private var revocationTail: Task<[(AccountSummaryFfi, String)], Error>?
     private let permissions: @MainActor () -> any AttachmentPermissionSource
@@ -61,15 +69,44 @@ final class AttachmentPolicyBridge {
     }
 
     func policyDidChange() {
-        guard let client = activeClient else { return }
+        guard clientAcceptsPolicyChanges, let client = currentClient else { return }
         let task = schedule(client, beforeStart: false, updatedLimits: nil)
         Task { _ = try? await task.value }
+    }
+
+    func isAttached(to client: any AttachmentPolicyRuntime) -> Bool {
+        currentClient === client && clientAcceptsPolicyChanges && reconciledClient === client
+    }
+
+    /// Detaches `client` so `NWPathMonitor` / preference updates cannot race
+    /// `shutdownAndClose()`, and cancels in-flight bridge work. Returns the
+    /// cancelled policy tail so lifecycle cleanup can drain it after storage
+    /// closes.
+    @discardableResult
+    func detach(client: any AttachmentPolicyRuntime) -> Task<Void, Error>? {
+        guard currentClient === client else { return nil }
+        currentClient = nil
+        reconciledClient = nil
+        clientAcceptsPolicyChanges = false
+        revision &+= 1
+        detachEpoch &+= 1
+        let revoked = revocationTail
+        let tail = policyTail
+        revocationTail = nil
+        policyTail = nil
+        revoked?.cancel()
+        tail?.cancel()
+        return tail
     }
 
     func synchronize(_ client: any AttachmentPolicyRuntime, beforeStart: Bool = false,
                      updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)? = nil) async throws {
         guard client.cursorPersistence == .advance else { return }
-        activeClient = client
+        if currentClient !== client {
+            reconciledClient = nil
+        }
+        currentClient = client
+        clientAcceptsPolicyChanges = !beforeStart
         try await schedule(client, beforeStart: beforeStart, updatedLimits: updatedLimits).value
     }
 
@@ -77,12 +114,20 @@ final class AttachmentPolicyBridge {
                           updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)?) -> Task<Void, Error> {
         revision &+= 1
         let event = revision
+        let epoch = detachEpoch
+        if !beforeStart, reconciledClient === client {
+            reconciledClient = nil
+        }
         let previous = revocationTail
         let revocation = Task { @MainActor in
             _ = try? await previous?.value
+            try Task.checkCancellation()
+            guard self.detachEpoch == epoch else { throw CancellationError() }
             let accounts = try await client.listAccounts()
             var generations: [(AccountSummaryFfi, String)] = []
             for account in accounts where !account.signedOut {
+                try Task.checkCancellation()
+                guard self.detachEpoch == epoch else { throw CancellationError() }
                 do {
                     let generation = try await client.beginAttachmentPermissionUpdate(accountRef: account.accountIdHex)
                     generations.append((account, generation))
@@ -96,23 +141,31 @@ final class AttachmentPolicyBridge {
             let generations = try await revocation.value
             // Keep durable quota writes ordered while revocation runs promptly.
             _ = try? await previousPolicy?.value
+            try Task.checkCancellation()
+            guard self.detachEpoch == epoch else { throw CancellationError() }
             let limitsEdited = updatedLimits != nil
             var appliedLimits = false
             var appliedPermission = false
+            var reconciledAllEligibleAccounts = true
             for (account, generation) in generations {
+                try Task.checkCancellation()
+                guard self.detachEpoch == epoch else { throw CancellationError() }
                 do {
                     let checkpoint = try await client.onboardingSnapshot(accountID: account.accountIdHex)
                     guard Self.configures(onboardingReady: checkpoint?.ready) else { continue }
                 } catch is CancellationError { throw CancellationError() }
-                catch { continue }
-                guard revision == event, activeClient === client else {
+                catch {
+                    reconciledAllEligibleAccounts = false
+                    continue
+                }
+                guard !Task.isCancelled, revision == event, currentClient === client else {
                     try Self.endSupersededEvent(limitsEdited: limitsEdited)
                     return
                 }
                 let old = try await client.attachmentDownloadPolicy(accountRef: account.accountIdHex)
                 let update = Self.policy(old, for: account, applying: updatedLimits)
                 appliedLimits = appliedLimits || update.appliesLimits
-                guard revision == event, activeClient === client else {
+                guard !Task.isCancelled, revision == event, currentClient === client else {
                     try Self.endSupersededEvent(limitsEdited: limitsEdited)
                     return
                 }
@@ -120,18 +173,24 @@ final class AttachmentPolicyBridge {
                     try await client.setAttachmentDownloadPolicy(accountRef: account.accountIdHex,
                                                                  policy: update.policy)
                 }
-                guard Self.grantsPermission(beforeStart: beforeStart,
-                                            isCurrentEvent: revision == event && activeClient === client) else { continue }
+                guard Self.grantsPermission(
+                    beforeStart: beforeStart,
+                    isCurrentEvent: !Task.isCancelled && revision == event && currentClient === client
+                ) else { continue }
                 let permission = permissions().attachmentPermission(accountID: account.accountIdHex)
                 // A stale generation is consumed as-is; never mint a replacement for this event.
                 let applied = try await client.setAttachmentAutomaticPermission(accountRef: account.accountIdHex,
                     generation: generation, permission: permission)
+                if !applied { reconciledAllEligibleAccounts = false }
                 appliedPermission = appliedPermission || applied
             }
-            if appliedPermission, revision == event, activeClient === client {
+            if appliedPermission, !Task.isCancelled, revision == event, currentClient === client {
                 permissions().didApplyAttachmentPermission()
             }
             try Self.finishEvent(limitsEdited: limitsEdited, appliedLimits: appliedLimits)
+            if reconciledAllEligibleAccounts, !beforeStart, !Task.isCancelled, revision == event, currentClient === client {
+                self.reconciledClient = client
+            }
         }
         policyTail = application
         return application

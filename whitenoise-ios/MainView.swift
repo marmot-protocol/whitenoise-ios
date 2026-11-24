@@ -31,7 +31,7 @@ struct MainView: View {
                 }
                 .appAppearance()
             }
-            .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)") {
+            .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseLiveRuntime)") {
                 await appState.deviceLinks.refresh(using: appState)
             }
     }

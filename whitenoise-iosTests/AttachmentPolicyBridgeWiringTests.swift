@@ -357,6 +357,196 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(frozen.listings == 0)
     }
 
+    @Test func policyDidChangeDoesNotFireBeforeStartupCompletes() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
+        let permissions = FakePermissionSource()
+        let bridge = AttachmentPolicyBridge(permissions: { permissions })
+        let hold = runtime.hold(.listing)
+
+        let startup = Task { @MainActor in
+            try await bridge.synchronize(runtime, beforeStart: true)
+        }
+        try await hold.entered.wait()
+
+        // NWPathMonitor firing while beforeStart is running must not schedule a
+        // post-start permission grant against an unstarted runtime.
+        bridge.policyDidChange()
+        hold.release.signal()
+        try await startup.value
+
+        // Even after beforeStart returns (while marmot.start() is still in
+        // flight), policyDidChange must remain silent until post-start sync.
+        let listingsAfterBeforeStart = runtime.listings
+        bridge.policyDidChange()
+        await Task.yield()
+
+        #expect(runtime.listings == listingsAfterBeforeStart)
+        #expect(runtime.grants.isEmpty)
+        #expect(permissions.appliedCount == 0)
+
+        // Once post-start synchronize completes, policyDidChange activates.
+        try await bridge.synchronize(runtime)
+        #expect(runtime.grants.count == 1)
+
+        bridge.policyDidChange()
+        try await eventually { runtime.grants.count == 2 }
+    }
+
+    @Test func detachPreventsPolicyDidChangeAndCancelsInFlightWork() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: true))
+        let permissions = FakePermissionSource()
+        let bridge = AttachmentPolicyBridge(permissions: { permissions })
+        try await bridge.synchronize(runtime)
+        #expect(runtime.grants.count == 1)
+        #expect(runtime.writes.isEmpty)
+
+        let hold = runtime.hold(.read)
+        let edited = attachmentPolicy(transfer: 8 * mebibyte)
+        let save = try await start(bridge, runtime, updatedLimits: (Self.alice.accountIdHex, edited))
+        try await hold.entered.wait()
+
+        let drained = bridge.detach(client: runtime)
+        hold.release.signal()
+
+        await #expect(throws: CancellationError.self) { try await save.value }
+        _ = try? await drained?.value
+        #expect(runtime.writes.isEmpty)
+        #expect(runtime.grants.count == 1)
+
+        let listingsAfterDetach = runtime.listings
+        bridge.policyDidChange()
+        await Task.yield()
+
+        #expect(runtime.listings == listingsAfterDetach)
+        #expect(runtime.grants.count == 1)
+    }
+
+    @Test func detachStopsEarlierQueuedRevocationsFromCallingDetachedClient() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: true))
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        let hold = runtime.hold(.listing)
+
+        let first = try await start(bridge, runtime)
+        try await hold.entered.wait()
+        let second = try await start(bridge, runtime)
+        let third = try await start(bridge, runtime)
+
+        let drained = bridge.detach(client: runtime)
+        hold.release.signal()
+
+        await #expect(throws: CancellationError.self) { try await first.value }
+        await #expect(throws: CancellationError.self) { try await second.value }
+        await #expect(throws: CancellationError.self) { try await third.value }
+        _ = try? await drained?.value
+
+        // Only `first`'s already-started listAccounts ran; detach stopped
+        // `first`'s revocation loop and prevented `second` and `third` from
+        // touching the detached runtime at all.
+        #expect(runtime.listings == 1)
+        #expect(runtime.begun.isEmpty)
+        #expect(runtime.reads.isEmpty)
+        #expect(runtime.writes.isEmpty)
+        #expect(runtime.grants.isEmpty)
+    }
+
+    @Test func isAttachedTracksPostStartSyncAndDetach() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
+        let other = FakeAttachmentRuntime(accounts: [Self.alice])
+        let frozen = FakeAttachmentRuntime(accounts: [Self.alice], cursorPersistence: .frozen)
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+
+        #expect(!bridge.isAttached(to: runtime))
+
+        try await bridge.synchronize(runtime, beforeStart: true)
+        #expect(!bridge.isAttached(to: runtime))
+
+        try await bridge.synchronize(runtime)
+        #expect(bridge.isAttached(to: runtime))
+        #expect(!bridge.isAttached(to: other))
+        #expect(!bridge.isAttached(to: frozen))
+
+        try await bridge.synchronize(frozen)
+        #expect(bridge.isAttached(to: runtime))
+        #expect(!bridge.isAttached(to: frozen))
+
+        let drained = bridge.detach(client: runtime)
+        _ = try? await drained?.value
+        #expect(!bridge.isAttached(to: runtime))
+
+        runtime.failingRevocation = [Self.alice.accountIdHex]
+        await #expect(throws: FakeAttachmentRuntime.RevocationFailed.self) {
+            try await bridge.synchronize(runtime)
+        }
+        // A failed post-start sync must NOT mark the runtime attached so the
+        // next activation retries reconciliation.
+        #expect(!bridge.isAttached(to: runtime))
+
+        runtime.failingRevocation = []
+        try await bridge.synchronize(runtime)
+        #expect(bridge.isAttached(to: runtime))
+    }
+
+    @Test func supersededSyncDoesNotMarkAttachedWhenSupersedingPolicyChangeFailsAfterRevocation() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        let hold = runtime.hold(.read)
+
+        // Start initial post-start sync and pause during its policy read.
+        let initialSync = try await start(bridge, runtime)
+        try await hold.entered.wait()
+
+        // A network/preference change supersedes the initial sync, revokes
+        // permissions, and then fails during its own policy read.
+        runtime.failingRead = [Self.alice.accountIdHex]
+        bridge.policyDidChange()
+        try await eventually { runtime.begun.count == 2 }
+
+        hold.release.signal()
+        try await initialSync.value
+        try await eventually { runtime.reads.count == 2 }
+
+        // The superseded initial sync must NOT have marked `runtime` reconciled,
+        // so the next foreground activation retries reconciliation.
+        #expect(!bridge.isAttached(to: runtime))
+        #expect(runtime.grants.isEmpty)
+
+        runtime.failingRead = []
+        try await bridge.synchronize(runtime)
+        #expect(bridge.isAttached(to: runtime))
+        #expect(runtime.grants.count == 1)
+    }
+
+    @Test func incompletePolicyPassLeavesRuntimeUnreconciledWhileSkippingUnreadyOnboarding() async throws {
+        // 1. An unreadable onboarding checkpoint leaves the runtime unreconciled
+        //    so the next foreground activation retries.
+        let unreadable = FakeAttachmentRuntime(
+            accounts: [Self.alice, Self.erin],
+            checkpoints: [Self.erin.accountIdHex: .unreadable]
+        )
+        let unreadableBridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        try await unreadableBridge.synchronize(unreadable)
+        #expect(!unreadableBridge.isAttached(to: unreadable))
+
+        // 2. A rejected automatic-permission grant also leaves the runtime unreconciled.
+        let rejected = FakeAttachmentRuntime(
+            accounts: [Self.alice],
+            rejectedGrants: [Self.alice.accountIdHex]
+        )
+        let rejectedBridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        try await rejectedBridge.synchronize(rejected)
+        #expect(!rejectedBridge.isAttached(to: rejected))
+
+        // 3. An intentionally skipped unready onboarding checkpoint still counts
+        //    as reconciled when every eligible account succeeds.
+        let unready = FakeAttachmentRuntime(
+            accounts: [Self.alice, Self.bob],
+            checkpoints: [Self.bob.accountIdHex: .unready]
+        )
+        let unreadyBridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        try await unreadyBridge.synchronize(unready)
+        #expect(unreadyBridge.isAttached(to: unready))
+    }
+
     /// Starts `synchronize` and returns once it has scheduled its event. The
     /// bridge schedules synchronously on entry, in the same main-actor job as
     /// the signal, before its first suspension.
@@ -374,6 +564,47 @@ struct AttachmentPolicyBridgeWiringTests {
     }
 }
 
+@MainActor
+struct AttachmentPolicyBridgeRuntimeStartupTests {
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func isCurrentClientStartedStaysFalseUntilRuntimeStartupCompletes() async throws {
+        try await withTestClient { initialClient in
+            let startEntered = TestLatch()
+            let startRelease = TestLatch()
+            let appState = AppState.test(
+                client: initialClient,
+                runtimeStarter: { client in
+                    startEntered.signal()
+                    try await startRelease.wait()
+                    try await client.startRuntime()
+                }
+            )
+            appState.setAppSceneActive(true)
+            #expect(appState.canUseLiveRuntime)
+            #expect(!appState.isCurrentClientStarted)
+
+            let bootstrapTask = Task { @MainActor in
+                await appState.bootstrap()
+            }
+            try await startEntered.wait()
+
+            // `client` is assigned and `canUseLiveRuntime` is true, but startup
+            // is still running `beforeStart` / `marmot.start()`. The root policy
+            // sync task must stay gated until `runtimeStarter` finishes.
+            #expect(appState.canUseLiveRuntime)
+            #expect(!appState.isCurrentClientStarted)
+
+            startRelease.signal()
+            await bootstrapTask.value
+            #expect(appState.canUseLiveRuntime && appState.isCurrentClientStarted)
+
+            await appState.startRuntimeSuspension().value
+            #expect(!appState.canUseLiveRuntime)
+            #expect(!appState.isCurrentClientStarted)
+        }
+    }
+}
+
 /// Models the order of runtime calls, not MDK's own rules: a grant is
 /// accepted whatever its generation, so tests assert on the generations the
 /// bridge forwards rather than on what MDK would reject.
@@ -387,12 +618,14 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
     struct Grant { let account: String; let generation: String; let permission: AttachmentAutomaticPermissionFfi }
     struct Unreadable: Error {}
     struct RevocationFailed: Error {}
+    struct ReadFailed: Error {}
 
     let cursorPersistence: CursorPersistenceFfi
     private let accounts: [AccountSummaryFfi]
     private let checkpoints: [String: Checkpoint]
     private let signedOutDuringRevocation: Set<String>
     var failingRevocation: Set<String>
+    var failingRead: Set<String> = []
     private let rejectedGrants: Set<String>
     private var stored: [String: AttachmentDownloadPolicyFfi]
     private var holds: [Step: Hold] = [:]
@@ -469,6 +702,7 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
 
     func attachmentDownloadPolicy(accountRef: String) async throws -> AttachmentDownloadPolicyFfi {
         reads.append(accountRef)
+        if failingRead.contains(accountRef) { throw ReadFailed() }
         let policy = try #require(stored[accountRef])
         try await pass(.read)
         return policy

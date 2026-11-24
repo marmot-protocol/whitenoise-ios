@@ -1222,7 +1222,12 @@ nonisolated final class MarmotClient: Sendable {
         try? await configureTelemetryRuntime()
         try? await configureProductAnalytics()
         try await AttachmentPolicyBridge.shared.synchronize(self, beforeStart: true)
-        try await marmot.start()
+        do {
+            try await marmot.start()
+        } catch {
+            _ = await AttachmentPolicyBridge.shared.detach(client: self)
+            throw error
+        }
     }
 
     func recordHostPerformance(
