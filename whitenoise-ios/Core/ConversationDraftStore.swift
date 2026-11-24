@@ -843,8 +843,8 @@ final class ConversationDraftStore {
             let attachments = await MediaDraftProcessor.restoredDraftAttachments(
                 from: loaded?.mediaAttachments ?? []
             )
-            let sanitizedStoredAttachments = loaded != nil
-                && attachments.map(\.id.uuidString) != loaded?.mediaAttachments.map(\.id)
+            try Task.checkCancellation()
+            guard suspensionEpoch == epoch else { throw CancellationError() }
             guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }
             // An edit made before the composer received the draft wins, with
             // the saved attachments it lacks.
@@ -859,29 +859,14 @@ final class ConversationDraftStore {
                     mediaAttachments: ConversationDraftHydrationGate.attachments(
                         composer: edited?.mediaAttachments ?? [], loaded: attachments)
                 ))
-                if sanitizedStoredAttachments {
-                    applyDraft(
-                        merged ?? ConversationDraftSnapshot(canonicalText: "", replyToMessageIdHex: nil, mediaAttachments: []),
-                        key: key,
-                        keepsSavedFiles: false
-                    )
-                }
                 return .loaded(merged)
             }
             guard let draft = loaded else { return .loaded(nil) }
-            let restoredSnapshot = Self.normalizedSnapshot(ConversationDraftSnapshot(
+            return .loaded(Self.normalizedSnapshot(ConversationDraftSnapshot(
                 canonicalText: draft.content,
                 replyToMessageIdHex: draft.replyToMessageIdHex,
                 mediaAttachments: attachments
-            ))
-            if sanitizedStoredAttachments {
-                applyDraft(
-                    restoredSnapshot ?? ConversationDraftSnapshot(canonicalText: "", replyToMessageIdHex: nil, mediaAttachments: []),
-                    key: key,
-                    keepsSavedFiles: false
-                )
-            }
-            return .loaded(restoredSnapshot)
+            )))
         } catch {
             let result = ConversationDraftLoadResult.classify(error)
             // A missing client is covered by the view's readiness gate; only a

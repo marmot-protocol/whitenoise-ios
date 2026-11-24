@@ -178,9 +178,11 @@ struct MediaVideoMetadataStrippingTests {
 
         let restored = try #require(await store.snapshot(accountRef: "alice", groupIdHex: "group-1"))
         let sanitized = try #require(restored.mediaAttachments.first)
-        // Sanitized replacement gets a new ID so MDK replaces any pre-upgrade
-        // file-backed entry via revisioned save rather than retaining the raw file.
+        // Sanitized replacement gets a new ID so sending never uploads raw
+        // pre-upgrade file-backed bytes, and restoring does NOT auto-rewrite
+        // the durable draft before the composer saves.
         #expect(sanitized.id != legacyID)
+        #expect(persistence.lastSavedSnapshot == nil)
         let inputs = MessageDraftAttachmentInputs.inputs(
             for: [sanitized],
             retainedIDs: [legacyID.uuidString],
@@ -196,11 +198,56 @@ struct MediaVideoMetadataStrippingTests {
         })
         try await verifyStrippedAttachment(sanitized, expectedDim: "160x120", in: directory)
 
-        // Flushing persists the sanitized replacement back into the draft store.
+        // Once the composer saves the sanitized draft, reopening it is idempotent:
+        // already-clean videos keep their exact ID and bytes with no re-remux.
+        store.setDraft(restored, accountRef: "alice", groupIdHex: "group-1")
         await store.flush()
         let saved = try #require(persistence.lastSavedSnapshot)
         #expect(saved.mediaAttachments.map(\.id) == [sanitized.id])
         #expect(saved.mediaAttachments.first?.data.range(of: Data("+37.33182".utf8)) == nil)
+
+        let reopenedStore = ConversationDraftStore(
+            persistence: persistence,
+            legacyFileURL: directory.appendingPathComponent("legacy-2.json")
+        )
+        let reopened = try #require(await reopenedStore.snapshot(accountRef: "alice", groupIdHex: "group-1"))
+        let reopenedAttachment = try #require(reopened.mediaAttachments.first)
+        #expect(reopenedAttachment.id == sanitized.id)
+        #expect(reopenedAttachment.data == sanitized.data)
+
+        // An unstrippable/corrupt video is omitted from the composer so raw bytes
+        // cannot be sent, while leaving the durable draft intact in storage.
+        let corruptID = UUID()
+        let corruptPersistence = StubDraftPersistence(
+            initialDraft: MessageDraftFfi(
+                groupIdHex: "group-2",
+                content: "Keep caption",
+                replyToMessageIdHex: nil,
+                mediaAttachments: [
+                    MessageDraftAttachmentFfi(
+                        id: corruptID.uuidString,
+                        fileName: "broken.mov",
+                        mediaType: "video/quicktime",
+                        plaintext: Data("not a valid quicktime movie".utf8),
+                        dim: nil,
+                        thumbhash: nil,
+                        durationSeconds: nil,
+                        waveformSamples: []
+                    ),
+                ],
+                createdAtMs: 1_000,
+                updatedAtMs: 1_000
+            )
+        )
+        let corruptStore = ConversationDraftStore(
+            persistence: corruptPersistence,
+            legacyFileURL: directory.appendingPathComponent("legacy-corrupt.json")
+        )
+        let corruptRestored = try #require(await corruptStore.snapshot(accountRef: "alice", groupIdHex: "group-2"))
+        #expect(corruptRestored.canonicalText == "Keep caption")
+        #expect(corruptRestored.mediaAttachments.isEmpty)
+        #expect(corruptPersistence.lastSavedSnapshot == nil)
+        #expect(corruptPersistence.storedDraft?.mediaAttachments.map(\.id) == [corruptID.uuidString])
     }
 
     @Test func allowsAudioOnlyMovieContainersWhileStrippingMetadata() async throws {
@@ -278,6 +325,46 @@ struct MediaVideoMetadataStrippingTests {
         }
         #expect(outcome == .failed)
         #expect(writer.status == .cancelled)
+
+        // Task cancellation after copying begins must also cancel reader/writer
+        // and return `.cancelled` without hanging.
+        let cancelReader = try AVAssetReader(asset: asset)
+        let cancelOutputURL = directory.appendingPathComponent("cancelled.mov")
+        let cancelWriter = try AVAssetWriter(outputURL: cancelOutputURL, fileType: .mov)
+        var cancelPairs: [(output: AVAssetReaderTrackOutput, input: AVAssetWriterInput)] = []
+        for track in tracks {
+            let hint = try #require(try await track.load(.formatDescriptions).first)
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+            let input = AVAssetWriterInput(mediaType: track.mediaType, outputSettings: nil, sourceFormatHint: hint)
+            cancelReader.add(output)
+            cancelWriter.add(input)
+            cancelPairs.append((output, input))
+        }
+        #expect(cancelReader.startReading())
+        #expect(cancelWriter.startWriting())
+        cancelWriter.startSession(atSourceTime: .zero)
+
+        let copyStarted = TestLatch()
+        let cancelReady = DispatchSemaphore(value: 0)
+        let cancelTask = Task {
+            await MediaVideoMetadataStripper.copyRemainingSamples(
+                reader: cancelReader,
+                writer: cancelWriter,
+                pairs: cancelPairs
+            ) { index, input, sample in
+                if index == 0 {
+                    copyStarted.signal()
+                    _ = cancelReady.wait(timeout: .now() + .seconds(5))
+                }
+                return input.append(sample)
+            }
+        }
+        try await copyStarted.wait()
+        cancelTask.cancel()
+        cancelReady.signal()
+        let cancelOutcome = await cancelTask.value
+        #expect(cancelOutcome == .cancelled)
+        #expect(cancelWriter.status == .cancelled)
     }
 
     private func verifyStrippedAttachment(

@@ -817,17 +817,19 @@ nonisolated enum MediaDraftProcessor {
                 restoredDim = attachment.dim
             case .video:
                 // Pre-upgrade drafts may hold unsanitized video bytes carrying
-                // GPS or device metadata. Strip before restoring so no draft can
-                // upload metadata; fail closed if stripping fails, and assign a
-                // fresh ID when sanitized bytes differ so MDK replaces any
-                // file-backed pre-upgrade copy via revisioned save.
-                guard let stripped = try? await MediaVideoMetadataStripper.strip(
+                // GPS or device metadata. Inspect first so already-clean videos
+                // keep their exact bytes and ID (idempotent restore with no
+                // remux). Legacy videos carrying metadata are stripped and
+                // given a fresh ID so sending never uploads raw pre-upgrade
+                // file-backed bytes; failures omit the clip from the composer
+                // without deleting the durable draft.
+                guard let inspection = try? await MediaVideoMetadataStripper.stripIfNeeded(
                     data: attachment.plaintext,
                     preferredMediaType: attachment.mediaType
                 ) else {
                     continue
                 }
-                if stripped.data != attachment.plaintext || stripped.mediaType != attachment.mediaType {
+                if let stripped = inspection.stripped {
                     restoredID = UUID()
                     restoredFileName = adjustedVideoFileName(
                         attachment.fileName,
@@ -836,9 +838,12 @@ nonisolated enum MediaDraftProcessor {
                     ) ?? attachment.fileName
                     restoredMediaType = stripped.mediaType
                     restoredData = stripped.data
+                    thumbnail = stripped.thumbnail
+                    restoredDim = stripped.dim ?? attachment.dim
+                } else {
+                    thumbnail = inspection.thumbnail
+                    restoredDim = inspection.dim ?? attachment.dim
                 }
-                thumbnail = stripped.thumbnail
-                restoredDim = stripped.dim ?? attachment.dim
             case .audio, .document, .unsupported:
                 thumbnail = nil
                 restoredDim = attachment.dim
@@ -1626,6 +1631,89 @@ nonisolated enum MediaVideoMetadataStripper {
         )
     }
 
+    struct RestoreInspection {
+        /// Non-nil only when the source carried container/track metadata or
+        /// auxiliary tracks and had to be remuxed.
+        let stripped: StrippedVideo?
+        let dim: String?
+        let thumbnail: UIImage?
+    }
+
+    /// Inspects a draft video once and remuxes only if the container or any
+    /// track carries metadata or non-media tracks (such as `.metadata`).
+    /// Already-clean videos return `stripped == nil` so restoring them is
+    /// idempotent without re-remuxing or rotating attachment IDs.
+    static func stripIfNeeded(
+        data: Data,
+        preferredMediaType: String,
+        directory: URL = defaultDirectory,
+        now: Date = Date()
+    ) async throws -> RestoreInspection {
+        guard !data.isEmpty else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        guard data.count <= MediaDraftProcessor.maxAttachmentBytes else {
+            throw MediaDraftProcessor.Failure.attachmentTooLarge(data.count)
+        }
+        try prepareDirectory(directory, now: now)
+        let inputURL = directory
+            .appendingPathComponent(UUID().uuidString, isDirectory: false)
+            .appendingPathExtension(MediaAttachmentPolicy.fileExtension(for: preferredMediaType))
+        try data.write(
+            to: inputURL,
+            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+        )
+        defer { try? FileManager.default.removeItem(at: inputURL) }
+
+        let asset = AVURLAsset(url: inputURL)
+        if try await !assetNeedsMetadataStripping(asset) {
+            let videoMetadata = await MediaVideoMetadata.metadata(for: asset)
+            return RestoreInspection(
+                stripped: nil,
+                dim: videoMetadata.dim,
+                thumbnail: videoMetadata.thumbnail
+            )
+        }
+        let stripped = try await stripOwnedFile(
+            at: inputURL,
+            preferredMediaType: preferredMediaType,
+            directory: directory
+        )
+        return RestoreInspection(
+            stripped: stripped,
+            dim: stripped.dim,
+            thumbnail: stripped.thumbnail
+        )
+    }
+
+    private static func assetNeedsMetadataStripping(_ asset: AVURLAsset) async throws -> Bool {
+        try Task.checkCancellation()
+        let tracks = try await asset.load(.tracks)
+        guard tracks.contains(where: { $0.mediaType == .video || $0.mediaType == .audio }) else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        if tracks.contains(where: { $0.mediaType != .video && $0.mediaType != .audio }) {
+            return true
+        }
+        let commonMetadata = try await asset.load(.metadata)
+        if !commonMetadata.isEmpty { return true }
+        let assetFormats = try await asset.load(.availableMetadataFormats)
+        for format in assetFormats {
+            try Task.checkCancellation()
+            if !(try await asset.loadMetadata(for: format)).isEmpty { return true }
+        }
+        for track in tracks {
+            try Task.checkCancellation()
+            if !(try await track.load(.metadata)).isEmpty { return true }
+            let trackFormats = try await track.load(.availableMetadataFormats)
+            for format in trackFormats {
+                try Task.checkCancellation()
+                if !(try await track.loadMetadata(for: format)).isEmpty { return true }
+            }
+        }
+        return false
+    }
+
     static func strip(
         sourceURL: URL,
         preferredMediaType: String,
@@ -1635,9 +1723,9 @@ nonisolated enum MediaVideoMetadataStripper {
         let manager = FileManager.default
         try prepareDirectory(directory, now: now)
 
-        // Always clone the external file-provider URL into a private scoped
-        // snapshot first so the provider cannot mutate bytes or size between
-        // validation and AVFoundation's asynchronous track reads.
+        // Always snapshot the external file-provider URL into a private bounded
+        // regular file first so the provider cannot mutate bytes or exceed the
+        // attachment limit between validation and AVFoundation's track reads.
         let ext = sourceURL.pathExtension.lowercased()
         let copyExtension = (ext == "mov" || ext == "mp4" || ext == "m4v")
             ? ext
@@ -1645,28 +1733,93 @@ nonisolated enum MediaVideoMetadataStripper {
         let copyURL = directory
             .appendingPathComponent(UUID().uuidString, isDirectory: false)
             .appendingPathExtension(copyExtension)
-        try manager.copyItem(at: sourceURL, to: copyURL)
-        defer { try? manager.removeItem(at: copyURL) }
-        guard MediaUploadSourceFiles.isRegularFile(at: copyURL) else {
-            throw MediaDraftProcessor.Failure.encodingFailed
-        }
-        try manager.setAttributes(
-            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-            ofItemAtPath: copyURL.path
+        try copyRegularFileBounded(
+            from: sourceURL,
+            to: copyURL,
+            maxBytes: MediaDraftProcessor.maxAttachmentBytes
         )
-        let copySize = (try? copyURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        guard copySize > 0 else {
-            throw MediaDraftProcessor.Failure.encodingFailed
-        }
-        guard copySize <= MediaDraftProcessor.maxAttachmentBytes else {
-            throw MediaDraftProcessor.Failure.attachmentTooLarge(copySize)
-        }
+        defer { try? manager.removeItem(at: copyURL) }
 
         return try await stripOwnedFile(
             at: copyURL,
             preferredMediaType: preferredMediaType,
             directory: directory
         )
+    }
+
+    private static func copyRegularFileBounded(
+        from sourceURL: URL,
+        to destinationURL: URL,
+        maxBytes: Int
+    ) throws {
+        let srcFD = sourceURL.withUnsafeFileSystemRepresentation { path -> Int32 in
+            guard let path else { return -1 }
+            return Darwin.open(path, O_RDONLY | O_NOFOLLOW)
+        }
+        guard srcFD >= 0 else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        defer { Darwin.close(srcFD) }
+
+        var st = stat()
+        guard Darwin.fstat(srcFD, &st) == 0,
+              (st.st_mode & S_IFMT) == S_IFREG
+        else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+
+        let dstFD = destinationURL.withUnsafeFileSystemRepresentation { path -> Int32 in
+            guard let path else { return -1 }
+            return Darwin.open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        }
+        guard dstFD >= 0 else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        var succeeded = false
+        defer {
+            Darwin.close(dstFD)
+            if !succeeded {
+                try? FileManager.default.removeItem(at: destinationURL)
+            }
+        }
+        try FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: destinationURL.path
+        )
+
+        let chunkSize = 256 * 1024
+        var buffer = [UInt8](repeating: 0, count: chunkSize)
+        var totalWritten = 0
+        while true {
+            try Task.checkCancellation()
+            let readCount = buffer.withUnsafeMutableBytes { raw -> Int in
+                Darwin.read(srcFD, raw.baseAddress, chunkSize)
+            }
+            if readCount < 0 {
+                if errno == EINTR { continue }
+                throw MediaDraftProcessor.Failure.encodingFailed
+            }
+            if readCount == 0 { break }
+            if totalWritten + readCount > maxBytes {
+                throw MediaDraftProcessor.Failure.attachmentTooLarge(totalWritten + readCount)
+            }
+            var offset = 0
+            while offset < readCount {
+                let written = buffer.withUnsafeBytes { raw -> Int in
+                    Darwin.write(dstFD, raw.baseAddress!.advanced(by: offset), readCount - offset)
+                }
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    throw MediaDraftProcessor.Failure.encodingFailed
+                }
+                offset += written
+            }
+            totalWritten += readCount
+        }
+        guard totalWritten > 0 else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        succeeded = true
     }
 
     private static func stripOwnedFile(

@@ -43,8 +43,13 @@ enum LinkPreviewLoader {
         return cache
     }()
 
-    private static var inFlightMetadata: [String: Task<LinkPreviewMetadata?, Error>] = [:]
-    private static var inFlightImages: [String: Task<UIImage, Error>] = [:]
+    private struct InFlightLoad<Value: Sendable> {
+        let task: Task<Value, Error>
+        var waiters: Set<UUID>
+    }
+
+    private static var inFlightMetadata: [String: InFlightLoad<LinkPreviewMetadata?>] = [:]
+    private static var inFlightImages: [String: InFlightLoad<UIImage>] = [:]
 
     static func cachedMetadata(for url: URL) -> LinkPreviewMetadata?? {
         metadataCache.object(forKey: url.absoluteString as NSString).map(\.metadata)
@@ -58,20 +63,36 @@ enum LinkPreviewLoader {
         try checkLoadAllowed()
         let key = url.absoluteString
         if let cached = metadataCache.object(forKey: key as NSString) { return cached.metadata }
-        if let task = inFlightMetadata[key] { return try await task.value }
 
-        let activeLimiter = limiter ?? loadLimiter
-        let task = Task {
-            try await withLimiter(activeLimiter) {
-                try await fetchMetadata(for: url, fetch: fetch)
+        let waiterID = UUID()
+        let task: Task<LinkPreviewMetadata?, Error>
+        if var existing = inFlightMetadata[key] {
+            existing.waiters.insert(waiterID)
+            inFlightMetadata[key] = existing
+            task = existing.task
+        } else {
+            let activeLimiter = limiter ?? loadLimiter
+            let created = Task {
+                let metadata = try await withLimiter(activeLimiter) {
+                    try await fetchMetadata(for: url, fetch: fetch)
+                }
+                if !AvatarCacheErasure.isInProgress {
+                    metadataCache.setObject(CachedMetadata(metadata), forKey: key as NSString)
+                }
+                return metadata
+            }
+            inFlightMetadata[key] = InFlightLoad(task: created, waiters: [waiterID])
+            task = created
+        }
+
+        defer { releaseMetadataWaiter(key: key, task: task, waiterID: waiterID) }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            Task { @MainActor in
+                releaseMetadataWaiter(key: key, task: task, waiterID: waiterID)
             }
         }
-        inFlightMetadata[key] = task
-        defer { inFlightMetadata[key] = nil }
-        let metadata = try await task.value
-        try checkLoadAllowed()
-        metadataCache.setObject(CachedMetadata(metadata), forKey: key as NSString)
-        return metadata
     }
 
     static func imageCacheKey(for url: URL, maxPixelSize: Int, scale: CGFloat) -> String {
@@ -88,37 +109,87 @@ enum LinkPreviewLoader {
         try checkLoadAllowed()
         let key = imageCacheKey(for: url, maxPixelSize: maxPixelSize, scale: scale)
         if let cached = imageCache.object(forKey: key as NSString) { return cached.image }
-        if let task = inFlightImages[key] { return try await task.value }
 
-        let activeLimiter = limiter ?? loadLimiter
-        let task = Task {
-            try await withLimiter(activeLimiter) {
-                try await fetchImage(
-                    for: url,
-                    maxPixelSize: maxPixelSize,
-                    scale: scale,
-                    fetch: fetch
-                )
+        let waiterID = UUID()
+        let task: Task<UIImage, Error>
+        if var existing = inFlightImages[key] {
+            existing.waiters.insert(waiterID)
+            inFlightImages[key] = existing
+            task = existing.task
+        } else {
+            let activeLimiter = limiter ?? loadLimiter
+            let created = Task {
+                let image = try await withLimiter(activeLimiter) {
+                    try await fetchImage(
+                        for: url,
+                        maxPixelSize: maxPixelSize,
+                        scale: scale,
+                        fetch: fetch
+                    )
+                }
+                if !AvatarCacheErasure.isInProgress {
+                    imageCache.setObject(
+                        CachedImage(image),
+                        forKey: key as NSString,
+                        cost: DecodedImageCost.decodedBitmapByteCost(for: image)
+                    )
+                }
+                return image
+            }
+            inFlightImages[key] = InFlightLoad(task: created, waiters: [waiterID])
+            task = created
+        }
+
+        defer { releaseImageWaiter(key: key, task: task, waiterID: waiterID) }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            Task { @MainActor in
+                releaseImageWaiter(key: key, task: task, waiterID: waiterID)
             }
         }
-        inFlightImages[key] = task
-        defer { inFlightImages[key] = nil }
-        let image = try await task.value
-        try checkLoadAllowed()
-        imageCache.setObject(
-            CachedImage(image),
-            forKey: key as NSString,
-            cost: DecodedImageCost.decodedBitmapByteCost(for: image)
-        )
-        return image
+    }
+
+    private static func releaseMetadataWaiter(
+        key: String,
+        task: Task<LinkPreviewMetadata?, Error>,
+        waiterID: UUID
+    ) {
+        guard var entry = inFlightMetadata[key],
+              entry.task == task,
+              entry.waiters.remove(waiterID) != nil
+        else { return }
+        if entry.waiters.isEmpty {
+            inFlightMetadata.removeValue(forKey: key)
+            entry.task.cancel()
+        } else {
+            inFlightMetadata[key] = entry
+        }
+    }
+
+    private static func releaseImageWaiter(
+        key: String,
+        task: Task<UIImage, Error>,
+        waiterID: UUID
+    ) {
+        guard var entry = inFlightImages[key],
+              entry.task == task,
+              entry.waiters.remove(waiterID) != nil
+        else { return }
+        if entry.waiters.isEmpty {
+            inFlightImages.removeValue(forKey: key)
+            entry.task.cancel()
+        } else {
+            inFlightImages[key] = entry
+        }
     }
 
     static func clearCaches() {
         metadataCache.removeAllObjects()
         imageCache.removeAllObjects()
-        inFlightMetadata.values.forEach { $0.cancel() }
+        inFlightMetadata.values.forEach { $0.task.cancel() }
         inFlightMetadata.removeAll()
-        inFlightImages.values.forEach { $0.cancel() }
+        inFlightImages.values.forEach { $0.task.cancel() }
         inFlightImages.removeAll()
     }
 

@@ -291,4 +291,72 @@ struct LinkPreviewTests {
         }
         #expect(counts.withLock { $0.peak } == limit)
     }
+
+    @MainActor
+    @Test func cancellingQueuedCallerPreventsOffscreenPreviewFetchFromStarting() async throws {
+        let limiter = CancellableLoadLimiter(maximumConcurrentLoads: 1)
+        let activeEntered = TestLatch()
+        let activeRelease = TestLatch()
+        let queuedFetched = Mutex(false)
+        let html = Data(#"<head><meta property="og:title" content="Visible"></head>"#.utf8)
+        let visibleURL = try #require(URL(string: "https://example.com/visible-\(UUID().uuidString)"))
+        let scrolledOffURL = try #require(URL(string: "https://example.com/scrolled-off-\(UUID().uuidString)"))
+
+        let visibleTask = Task { @MainActor in
+            try await LinkPreviewLoader.metadata(
+                for: visibleURL,
+                fetch: { request in
+                    activeEntered.signal()
+                    try await activeRelease.wait()
+                    let response = HTTPURLResponse(
+                        url: request.url ?? visibleURL,
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["Content-Type": "text/html"]
+                    )!
+                    return (html, response)
+                },
+                limiter: limiter
+            )
+        }
+        try await activeEntered.wait()
+
+        // Queue a second request behind the saturated limiter, then cancel it
+        // (simulating a row scrolling off screen) before the first finishes.
+        let scrolledOffTask = Task { @MainActor in
+            try await LinkPreviewLoader.metadata(
+                for: scrolledOffURL,
+                fetch: { request in
+                    queuedFetched.withLock { $0 = true }
+                    let response = HTTPURLResponse(
+                        url: request.url ?? scrolledOffURL,
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["Content-Type": "text/html"]
+                    )!
+                    return (html, response)
+                },
+                limiter: limiter
+            )
+        }
+        try await eventually {
+            await limiter.snapshot() == (active: 1, waiting: 1)
+        }
+
+        scrolledOffTask.cancel()
+        do {
+            _ = try await scrolledOffTask.value
+            Issue.record("Expected cancelled offscreen preview request to throw")
+        } catch is CancellationError {
+            // Expected.
+        }
+        try await eventually {
+            await limiter.snapshot() == (active: 1, waiting: 0)
+        }
+
+        activeRelease.signal()
+        let visibleMetadata = try await visibleTask.value
+        #expect(visibleMetadata?.title == "Visible")
+        #expect(!queuedFetched.withLock { $0 })
+    }
 }
