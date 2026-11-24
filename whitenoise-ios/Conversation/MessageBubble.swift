@@ -312,6 +312,12 @@ nonisolated enum MessageBodyCollapsePresentation {
     static let maxCollapsedCharacters = 900
     static let maxCollapsedLines = 12
     static let collapsedBodyMaxHeight: CGFloat = 260
+    /// Read more's laid-out height and how far its hit area reaches past it,
+    /// so the target stays at least 44 points tall at every text size. The
+    /// outset fits the 5-point gap above the label and the compact bubble's
+    /// bottom padding, so it never covers the body or gets clipped.
+    static let readMoreMinHeight: CGFloat = 34
+    static let readMoreHitOutset: CGFloat = 5
 
     /// A CR/LF pair is one Swift Character and starts a single new line.
     static func snippet(_ body: @autoclosure () -> String, isExpanded: Bool = false) -> String? {
@@ -1239,8 +1245,19 @@ struct MessageBubble: View {
                 Button {
                     onExpandBody()
                 } label: {
-                    Text(L10n.string("Read more"))
-                        .font(.footnote.weight(.semibold))
+                    HStack(spacing: 4) {
+                        Text(L10n.string("Read more"))
+                        // The reader opens in a sheet, so only an inline expansion points down.
+                        if !offersSourceReader {
+                            Image(systemName: "chevron.down")
+                                .imageScale(.small)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: MessageBodyCollapsePresentation.readMoreMinHeight)
+                    // Reach a 44-point target without pushing the text further from the body.
+                    .contentShape(Rectangle().inset(by: -MessageBodyCollapsePresentation.readMoreHitOutset))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground.opacity(0.9) : Color.accentColor)
