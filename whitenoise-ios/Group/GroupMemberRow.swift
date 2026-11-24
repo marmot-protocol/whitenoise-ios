@@ -5,6 +5,7 @@ struct GroupMemberRow: View {
     @Environment(AppState.self) private var appState
     let member: AppGroupMemberRecordFfi
     let isAdmin: Bool
+    var allowsRemoteAvatars: Bool = true
 
     var body: some View {
         HStack(spacing: 12) {
@@ -49,7 +50,7 @@ struct GroupMemberRow: View {
     }
 
     private var avatarURL: URL? {
-        guard let account = member.account, !account.isEmpty else { return nil }
+        guard allowsRemoteAvatars, let account = member.account, !account.isEmpty else { return nil }
         return appState.avatarURL(forAccountIdHex: account)
     }
 
@@ -66,6 +67,7 @@ struct GroupMemberRow: View {
 struct GroupMemberDetailsRow: View {
     @Environment(AppState.self) private var appState
     let member: GroupMemberDetailsFfi
+    var allowsRemoteAvatars: Bool = true
 
     var body: some View {
         HStack(spacing: 12) {
@@ -107,7 +109,11 @@ struct GroupMemberDetailsRow: View {
     }
 
     private var avatarURL: URL? {
-        GroupMemberDetailsPresentation.avatarURL(for: member, appState: appState)
+        GroupMemberDetailsPresentation.avatarURL(
+            for: member,
+            appState: appState,
+            allowsRemoteAvatars: allowsRemoteAvatars
+        )
     }
 }
 
@@ -129,7 +135,12 @@ enum GroupMemberDetailsPresentation {
     }
 
     @MainActor
-    static func avatarURL(for member: GroupMemberDetailsFfi, appState: AppState) -> URL? {
-        appState.avatarURL(forAccountIdHex: profileAccountIdHex(for: member))
+    static func avatarURL(
+        for member: GroupMemberDetailsFfi,
+        appState: AppState,
+        allowsRemoteAvatars: Bool = true
+    ) -> URL? {
+        guard allowsRemoteAvatars else { return nil }
+        return appState.avatarURL(forAccountIdHex: profileAccountIdHex(for: member))
     }
 }

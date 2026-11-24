@@ -499,7 +499,7 @@ struct GroupDetailsView: View {
             seed: viewModel.selectedAvatarSeed,
             title: displayTitle,
             pictureURL: viewModel.selectedAvatarURL,
-            nativeAsset: viewModel.conversationWindow?.header.avatarAsset,
+            nativeAsset: viewModel.hasPendingInvite ? nil : viewModel.conversationWindow?.header.avatarAsset,
             usesNativeAsset: viewModel.conversationWindow != nil,
             nativeMaxPixelSize: nativeMaxPixelSize
         )
@@ -509,7 +509,7 @@ struct GroupDetailsView: View {
         NativeAvatarBubble(
             seed: contactAccountIdHex ?? viewModel.group.groupIdHex,
             title: contactTitle,
-            asset: viewModel.conversationWindow?.header.avatarAsset,
+            asset: viewModel.hasPendingInvite ? nil : viewModel.conversationWindow?.header.avatarAsset,
             maxPixelSize: maxPixelSize
         )
     }
@@ -519,7 +519,9 @@ struct GroupDetailsView: View {
     }
 
     private var hasContactImage: Bool {
-        guard let asset = viewModel.conversationWindow?.header.avatarAsset else { return false }
+        guard !viewModel.hasPendingInvite,
+              let asset = viewModel.conversationWindow?.header.avatarAsset
+        else { return false }
         return asset.availability == .ready || asset.availability == .stale
     }
 
@@ -844,7 +846,11 @@ struct GroupDetailsView: View {
 
             if details.isEmpty {
                 ForEach(viewModel.members, id: \.memberIdHex) { member in
-                    GroupMemberRow(member: member, isAdmin: viewModel.isAdmin(member))
+                    GroupMemberRow(
+                        member: member,
+                        isAdmin: viewModel.isAdmin(member),
+                        allowsRemoteAvatars: !viewModel.hasPendingInvite
+                    )
                 }
             } else if filtered.isEmpty {
                 Text("No members match your search.")
@@ -854,12 +860,18 @@ struct GroupDetailsView: View {
                     if member.isSelf {
                         // Your own row is informational; your controls live in
                         // the destructive section and Settings.
-                        GroupMemberDetailsRow(member: member)
+                        GroupMemberDetailsRow(
+                            member: member,
+                            allowsRemoteAvatars: !viewModel.hasPendingInvite
+                        )
                     } else {
                         Button {
                             memberProfileTarget = MemberProfileTarget(member: member)
                         } label: {
-                            GroupMemberDetailsRow(member: member)
+                            GroupMemberDetailsRow(
+                                member: member,
+                                allowsRemoteAvatars: !viewModel.hasPendingInvite
+                            )
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -1112,6 +1124,7 @@ struct GroupDetailsView: View {
     }
 
     private var hasGroupImage: Bool {
+        guard !viewModel.hasPendingInvite else { return false }
         if let window = viewModel.conversationWindow {
             let availability = window.header.avatarAsset?.availability
             return availability == .ready || availability == .stale

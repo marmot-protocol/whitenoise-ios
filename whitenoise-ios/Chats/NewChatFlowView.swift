@@ -436,7 +436,7 @@ struct ConversationChooserView: View {
         let title = choice.name ?? L10n.string("Conversation")
         let groupAvatarURL = ContentSanitizer.imageURL(choice.avatarUrl)
         let pictureURL = groupAvatarURL
-            ?? (isNamed
+            ?? (isNamed || choice.pendingConfirmation
                 ? nil
                 : appState.avatarURL(forAccountIdHex: presentation.targetAccountIdHex))
 

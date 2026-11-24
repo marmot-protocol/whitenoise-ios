@@ -2110,8 +2110,9 @@ struct ConversationView: View {
                             : initialAvatarSeed ?? viewModel.selectedAvatarSeed,
                         title: chrome.title,
                         pictureURL: viewModel.selectedAvatarURL,
-                        nativeAsset: viewModel.conversationWindow != nil
-                            ? viewModel.conversationWindow?.header.avatarAsset : initialAvatarAsset,
+                        nativeAsset: viewModel.hasPendingInvite ? nil
+                            : (viewModel.conversationWindow != nil
+                                ? viewModel.conversationWindow?.header.avatarAsset : initialAvatarAsset),
                         usesNativeAsset: viewModel.conversationWindow != nil || initialAvatarSeed != nil
                     )
                     .frame(width: 40, height: 40)
@@ -2862,6 +2863,7 @@ struct ConversationView: View {
             readingSpeech: speech.readingID == record.messageIdHex ? speech : nil,
             customEmoji: viewModel.customEmoji(for: item),
             markdownBlocks: viewModel.markdownDisplayBlocks(for: item),
+            allowsLinkPreviews: !viewModel.hasPendingInvite,
             incompleteMarkdown: incompleteMarkdown,
             poll: viewModel.poll(for: record.messageIdHex),
             onPollVote: viewModel.canVoteInPolls && status != .sending && status != .failed
@@ -2873,7 +2875,7 @@ struct ConversationView: View {
             projectedReactionTotal: viewModel.windowReactions[record.messageIdHex]?.totalCount,
             identityName: viewModel.windowDisplayName,
             identityAvatar: viewModel.windowAvatarURL,
-            identityAvatarAsset: { viewModel.windowIdentities[$0]?.avatarAsset },
+            identityAvatarAsset: { viewModel.hasPendingInvite ? nil : viewModel.windowIdentities[$0]?.avatarAsset },
             onTapReaction: viewModel.canSendMessages && !isSelectingMessages && !viewModel.search.isActive && !record.messageIdHex.isEmpty ? { tally in
                 Task { await handleReactionTap(tally, on: record, viewModel: viewModel) }
             } : nil,

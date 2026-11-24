@@ -26,6 +26,7 @@ nonisolated enum SharedGroupsProjection {
         return snapshots
             .filter { snapshot in
                 guard snapshot.isSelfMember,
+                      !snapshot.pendingConfirmation,
                       snapshot.memberIdsHex.count >= 2
                 else { return false }
                 let roster = Set(snapshot.memberIdsHex.map { $0.lowercased() })
@@ -60,6 +61,7 @@ nonisolated enum SharedGroupsProjection {
             .filter { snapshot in
                 guard snapshot.sanitizedName != nil,
                       snapshot.isSelfMember,
+                      !snapshot.pendingConfirmation,
                       !snapshot.memberIdsHex.isEmpty
                 else { return false }
                 let roster = Set(snapshot.memberIdsHex.map { $0.lowercased() })

@@ -229,6 +229,14 @@ nonisolated enum MarkdownMentionAttribute: AttributedStringKey {
     static let name = "WhiteNoise.markdownMention"
 }
 
+/// Marks link runs synthesized from markdown images (`![alt](url)`). Those runs
+/// remain tappable and copyable as links, but `LinkPreviewMetadata.previewURL`
+/// excludes them so an embedded image can never trigger a link-preview fetch.
+nonisolated enum MarkdownImageLinkAttribute: AttributedStringKey {
+    typealias Value = Bool
+    static let name = "WhiteNoise.markdownImageLink"
+}
+
 /// The absolute, unambiguous description of a rendered timestamp run.
 nonisolated enum MarkdownTimestampDescriptionAttribute: AttributedStringKey {
     typealias Value = String
@@ -637,6 +645,7 @@ enum MarkdownMessageBuilder {
         var strikethrough = false
         var monospaced = false
         var isMention = false
+        var isImageLink = false
         var link: URL?
         var mentionDisplayName: MarkdownMentionResolver?
 
@@ -740,6 +749,7 @@ enum MarkdownMessageBuilder {
         var nested = context
         if context.link == nil, let url = allowedLinkURL(dest) {
             nested.link = url
+            nested.isImageLink = true
         }
         let emittedAlt = walkInlines(alt, into: &out, context: nested, budget: &budget, depth: depth + 1)
         if emittedAlt {
@@ -867,6 +877,7 @@ enum MarkdownMessageBuilder {
         }
         if let link = context.link {
             attributes.link = link
+            if context.isImageLink { attributes[MarkdownImageLinkAttribute.self] = true }
             if !context.isMention { attributes.underlineStyle = .single }
         }
         if codeBackground {

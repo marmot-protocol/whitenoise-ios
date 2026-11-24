@@ -390,6 +390,7 @@ extension MessageBubble: Equatable {
             && Self.sameMedia(lhs.mediaItems, rhs.mediaItems)
             && lhs.customEmoji == rhs.customEmoji
             && lhs.markdownBlocks == rhs.markdownBlocks
+            && lhs.allowsLinkPreviews == rhs.allowsLinkPreviews
             && lhs.poll == rhs.poll
             && lhs.reactions == rhs.reactions
             && lhs.omittedReactionKinds == rhs.omittedReactionKinds
@@ -475,6 +476,7 @@ struct MessageBubble: View {
     /// already excluded from `mediaItems`.
     var customEmoji: CustomEmojiRowResolution = .empty
     var markdownBlocks: [MarkdownDisplayBlock]? = nil
+    var allowsLinkPreviews = true
     var incompleteMarkdown = false
     var poll: PollProjectionFfi? = nil
     var onPollVote: ((String) -> Void)? = nil
@@ -704,7 +706,21 @@ struct MessageBubble: View {
     }
 
     private var linkPreviewURL: URL? {
-        guard debugStyle == nil, linkPreviewSettings.showsPreviews else { return nil }
+        Self.resolvedLinkPreviewURL(
+            markdownBlocks: markdownBlocks,
+            allowsLinkPreviews: allowsLinkPreviews,
+            showsLinkPreviews: linkPreviewSettings.showsPreviews,
+            hasDebugStyle: debugStyle != nil
+        )
+    }
+
+    nonisolated static func resolvedLinkPreviewURL(
+        markdownBlocks: [MarkdownDisplayBlock]?,
+        allowsLinkPreviews: Bool,
+        showsLinkPreviews: Bool,
+        hasDebugStyle: Bool = false
+    ) -> URL? {
+        guard !hasDebugStyle, allowsLinkPreviews, showsLinkPreviews else { return nil }
         return LinkPreviewMetadata.previewURL(in: markdownBlocks)
     }
 

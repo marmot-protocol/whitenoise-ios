@@ -138,7 +138,9 @@ nonisolated enum LocalNotificationProjection {
             // `content` is donated, and no avatar is fetched.
             senderName: previewMode.revealsSenderIdentity ? senderName : nil,
             senderAccountIdHex: previewMode.revealsSenderIdentity ? update.sender.accountIdHex : nil,
-            senderPictureUrl: previewMode.revealsSenderIdentity
+            // Only message notifications may carry a sender picture URL; group
+            // invites and membership notices never expose an untrusted URL.
+            senderPictureUrl: previewMode.revealsSenderIdentity && update.trigger == .newMessage
                 ? ContentSanitizer.imageURL(update.sender.pictureUrl)?.absoluteString
                 : nil,
             isGroupConversation: previewMode.revealsSenderIdentity && !update.isDm

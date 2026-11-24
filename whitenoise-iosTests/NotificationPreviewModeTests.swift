@@ -160,6 +160,27 @@ struct NotificationPreviewProjectionTests {
         #expect(presentation(update, .generic)?.senderPictureUrl == nil)
     }
 
+    @Test func nonMessageTriggersAlwaysStripSenderPictureUrl() {
+        for trigger in [
+            NotificationTriggerFfi.groupInvite,
+            .removedFromGroup,
+            .madeAdmin,
+            .removedAsAdmin,
+        ] {
+            let update = previewUpdate(
+                trigger: trigger,
+                isDm: false,
+                groupName: "Project Room",
+                previewText: nil,
+                pictureUrl: "https://attacker.example/inviter.png"
+            )
+
+            for mode in NotificationPreviewMode.allCases {
+                #expect(presentation(update, mode)?.senderPictureUrl == nil)
+            }
+        }
+    }
+
     /// Sender-only makes the name the entire payload, so the private nickname
     /// has to keep winning over the peer-controlled kind:0 name there — and a
     /// nickname is more sensitive than a public name, so generic must withhold

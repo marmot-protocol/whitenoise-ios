@@ -284,17 +284,11 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
             presentation = plan.presentation
             if plan.delay > 0 { trigger = UNTimeIntervalNotificationTrigger(timeInterval: plan.delay, repeats: false) }
         }
-        // A cold avatar warms the cache without delaying notification scheduling.
-        let avatarData = NotificationCommunicationDecorator.cachedAvatarData(
-            forPictureUrl: presentation.senderPictureUrl
-        )
-        if avatarData == nil {
-            NotificationCommunicationDecorator.warmAvatarCache(for: presentation.senderPictureUrl)
-        }
+        // Notification arrival never initiates remote HTTPS avatar fetches.
         let content = NotificationCommunicationDecorator.decorated(
             NotificationContentDecorator.makeContent(for: presentation),
             presentation: presentation,
-            avatarData: avatarData
+            avatarData: nil
         )
 
         let request = UNNotificationRequest(

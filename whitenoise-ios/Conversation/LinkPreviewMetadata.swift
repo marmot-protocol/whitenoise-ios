@@ -18,7 +18,7 @@ nonisolated struct LinkPreviewMetadata: Equatable, Sendable {
     var summary: String? = nil
 
     static func previewURL(in blocks: [MarkdownDisplayBlock]?) -> URL? {
-        MessageLinkTarget.targets(in: blocks)
+        MessageLinkTarget.targets(in: blocks, includeImageLinks: false)
             .first { ContentSanitizer.imageURL($0.url.absoluteString) != nil }?
             .url
     }

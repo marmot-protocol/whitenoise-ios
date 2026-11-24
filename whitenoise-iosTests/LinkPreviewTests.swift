@@ -1,7 +1,10 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import whitenoise_ios
+@testable import MarmotKit
 
+@Suite(.serialized)
 struct LinkPreviewTests {
     private let base = URL(string: "https://example.com/articles/one")!
 
@@ -154,5 +157,235 @@ struct LinkPreviewTests {
 
         initial.setShowsPreviews(true)
         #expect(LinkPreviewSettingsStore(defaults: defaults).showsPreviews)
+    }
+
+    @MainActor
+    @Test func markdownImagesNeverTriggerLinkPreviewsWhileExplicitLinksRemainPreviewable() throws {
+        func blocks(_ inlines: [MarkdownInlineFfi]) throws -> [MarkdownDisplayBlock] {
+            try #require(MarkdownMessageBuilder.displayBlocks(
+                for: MarkdownDocumentFfi(blocks: [.paragraph(inlines: inlines)], truncated: false)
+            ))
+        }
+
+        // Pure markdown image stays tappable/copyable as a link target, but is never previewed.
+        let imageOnly = try blocks([
+            .image(dest: "https://tracker.example/pixel.png", title: nil, alt: [.text(content: "pixel")], classification: .web),
+        ])
+        #expect(MessageLinkTarget.targets(in: imageOnly).map(\.copyText) == ["https://tracker.example/pixel.png"])
+        #expect(LinkPreviewMetadata.previewURL(in: imageOnly) == nil)
+
+        // Markdown image followed by an explicit link skips the image and previews the explicit link.
+        let imageThenLink = try blocks([
+            .image(dest: "https://tracker.example/pixel.png", title: nil, alt: [.text(content: "pixel")], classification: .web),
+            .text(content: " "),
+            .link(dest: "https://article.example/post", title: nil, children: [.text(content: "read")], classification: .web),
+        ])
+        #expect(LinkPreviewMetadata.previewURL(in: imageThenLink) == URL(string: "https://article.example/post"))
+
+        // Adjacent image + explicit link to the same URL still previews the explicit link.
+        let sameURLAdjacent = try blocks([
+            .image(dest: "https://same.example/page", title: nil, alt: [.text(content: "img")], classification: .web),
+            .link(dest: "https://same.example/page", title: nil, children: [.text(content: "open")], classification: .web),
+        ])
+        #expect(LinkPreviewMetadata.previewURL(in: sameURLAdjacent) == URL(string: "https://same.example/page"))
+
+        // Linked image uses the explicit outer link destination, so it remains previewable.
+        let linkedImage = try blocks([
+            .link(
+                dest: "https://article.example/post",
+                title: nil,
+                children: [
+                    .image(dest: "https://tracker.example/pixel.png", title: nil, alt: [.text(content: "cover")], classification: .web),
+                ],
+                classification: .web
+            ),
+        ])
+        #expect(LinkPreviewMetadata.previewURL(in: linkedImage) == URL(string: "https://article.example/post"))
+    }
+
+    @MainActor
+    @Test func pendingInviteSuppressesMessageBubbleLinkPreviews() throws {
+        let blocks = try #require(MarkdownMessageBuilder.displayBlocks(
+            for: MarkdownDocumentFfi(
+                blocks: [.paragraph(inlines: [.autolink(url: "https://article.example/post", kind: .uri, classification: .web)])],
+                truncated: false
+            )
+        ))
+
+        #expect(MessageBubble.resolvedLinkPreviewURL(
+            markdownBlocks: blocks,
+            allowsLinkPreviews: false,
+            showsLinkPreviews: true
+        ) == nil)
+        #expect(MessageBubble.resolvedLinkPreviewURL(
+            markdownBlocks: blocks,
+            allowsLinkPreviews: true,
+            showsLinkPreviews: true
+        ) == URL(string: "https://article.example/post"))
+    }
+
+    @Test func htmlPreviewByteCapIsTighterThanGenericResponseCap() {
+        #expect(LinkPreviewLoader.maximumHTMLBytes <= LinkPreviewMetadata.maximumScannedBytes)
+        #expect(LinkPreviewLoader.maximumHTMLBytes < RemoteImageFetch.maximumResponseBytes)
+    }
+
+    @MainActor
+    @Test func loaderBoundsConcurrentFetchesToMaximumConcurrentLoads() async throws {
+        let limit = LinkPreviewLoader.maximumConcurrentLoads
+        let limiter = CancellableLoadLimiter(maximumConcurrentLoads: limit)
+        let entered = (0..<(limit + 1)).map { _ in TestLatch() }
+        let release = (0..<(limit + 1)).map { _ in TestLatch() }
+        let counts = Mutex<(active: Int, peak: Int, started: Int)>((0, 0, 0))
+        let html = Data(#"<head><meta property="og:title" content="Bounded"></head>"#.utf8)
+
+        let urls = try (0..<(limit + 1)).map { index in
+            try #require(URL(string: "https://example.com/bounded-\(UUID().uuidString)-\(index)"))
+        }
+
+        let tasks = urls.enumerated().map { index, url in
+            Task { @MainActor in
+                try await LinkPreviewLoader.metadata(
+                    for: url,
+                    fetch: { request in
+                        let slot = counts.withLock { state -> Int in
+                            state.active += 1
+                            state.peak = max(state.peak, state.active)
+                            let current = state.started
+                            state.started += 1
+                            return current
+                        }
+                        entered[slot].signal()
+                        try await release[slot].wait()
+                        counts.withLock { $0.active -= 1 }
+                        let response = HTTPURLResponse(
+                            url: request.url ?? url,
+                            statusCode: 200,
+                            httpVersion: nil,
+                            headerFields: ["Content-Type": "text/html"]
+                        )!
+                        return (html, response)
+                    },
+                    limiter: limiter
+                )
+            }
+        }
+
+        for index in 0..<limit {
+            try await entered[index].wait()
+        }
+        // The (limit + 1)-th request must wait behind the limiter until a slot frees up.
+        try await eventually {
+            await limiter.snapshot() == (active: limit, waiting: 1)
+        }
+        #expect(!entered[limit].isSignalled)
+        #expect(counts.withLock { $0.peak } == limit)
+
+        release[0].signal()
+        try await entered[limit].wait()
+        for index in 1...limit {
+            release[index].signal()
+        }
+
+        for task in tasks {
+            let metadata = try await task.value
+            #expect(metadata?.title == "Bounded")
+        }
+        #expect(counts.withLock { $0.peak } == limit)
+    }
+
+    @MainActor
+    @Test func cancellingQueuedCallerPreventsOffscreenPreviewFetchFromStarting() async throws {
+        let limiter = CancellableLoadLimiter(maximumConcurrentLoads: 1)
+        let activeEntered = TestLatch()
+        let activeRelease = TestLatch()
+        let queuedFetched = Mutex(false)
+        let html = Data(#"<head><meta property="og:title" content="Visible"></head>"#.utf8)
+        let visibleURL = try #require(URL(string: "https://example.com/visible-\(UUID().uuidString)"))
+        let scrolledOffURL = try #require(URL(string: "https://example.com/scrolled-off-\(UUID().uuidString)"))
+
+        let visibleTask = Task { @MainActor in
+            try await LinkPreviewLoader.metadata(
+                for: visibleURL,
+                fetch: { request in
+                    activeEntered.signal()
+                    try await activeRelease.wait()
+                    let response = HTTPURLResponse(
+                        url: request.url ?? visibleURL,
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["Content-Type": "text/html"]
+                    )!
+                    return (html, response)
+                },
+                limiter: limiter
+            )
+        }
+        try await activeEntered.wait()
+
+        // Queue a second request behind the saturated limiter, then cancel it
+        // (simulating a row scrolling off screen) before the first finishes.
+        let scrolledOffTask = Task { @MainActor in
+            try await LinkPreviewLoader.metadata(
+                for: scrolledOffURL,
+                fetch: { request in
+                    queuedFetched.withLock { $0 = true }
+                    let response = HTTPURLResponse(
+                        url: request.url ?? scrolledOffURL,
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["Content-Type": "text/html"]
+                    )!
+                    return (html, response)
+                },
+                limiter: limiter
+            )
+        }
+        try await eventually {
+            await limiter.snapshot() == (active: 1, waiting: 1)
+        }
+
+        scrolledOffTask.cancel()
+        // Release the active permit immediately (before waiting for any MainActor
+        // cleanup job) to prove synchronous waiter cancellation prevents the
+        // queued request from starting on permit handoff.
+        activeRelease.signal()
+        do {
+            _ = try await scrolledOffTask.value
+            Issue.record("Expected cancelled offscreen preview request to throw")
+        } catch is CancellationError {
+            // Expected.
+        }
+        let visibleMetadata = try await visibleTask.value
+        #expect(visibleMetadata?.title == "Visible")
+        #expect(!queuedFetched.withLock { $0 })
+    }
+
+    @MainActor
+    @Test func clearCachesPreventsInFlightMetadataFromPopulatingCache() async throws {
+        let url = URL(string: "https://clear-race-\(UUID().uuidString).example/article")!
+        let fetchEntered = TestLatch()
+        let fetchRelease = TestLatch()
+        let html = Data("<html><head><title>Stale</title></head></html>".utf8)
+
+        let task = Task { @MainActor in
+            try? await LinkPreviewLoader.metadata(for: url) { request in
+                fetchEntered.signal()
+                try? await fetchRelease.wait()
+                let response = HTTPURLResponse(
+                    url: request.url ?? url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "text/html"]
+                )!
+                return (html, response)
+            }
+        }
+
+        try await fetchEntered.wait()
+        LinkPreviewLoader.clearCaches()
+        fetchRelease.signal()
+        _ = await task.value
+
+        #expect(LinkPreviewLoader.cachedMetadata(for: url) == nil)
     }
 }

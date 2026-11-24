@@ -100,6 +100,60 @@ struct ConversationChoiceProjectionTests {
         #expect(choices.map(\.groupIdHex) == ["a", "b"])
     }
 
+    @Test func pendingConfirmationChoiceSuppressesAvatarMetadata() {
+        let pendingRow = chatListRow(
+            groupIdHex: "pending-dm",
+            pendingConfirmation: true,
+            title: "Alice",
+            groupName: "",
+            avatar: ChatListAvatarFfi(
+                imageHashHex: hex("dd"),
+                imageKeyHex: hex("11"),
+                imageNonceHex: String(repeating: "22", count: 12),
+                imageUploadKeyHex: hex("33"),
+                mediaType: "image/jpeg"
+            ),
+            avatarUrl: "https://attacker.example/avatar.png",
+            updatedAt: 20,
+            conversationKind: .direct
+        )
+        let acceptedRow = chatListRow(
+            groupIdHex: "accepted-dm",
+            pendingConfirmation: false,
+            title: "Alice",
+            groupName: "",
+            avatar: ChatListAvatarFfi(
+                imageHashHex: hex("ee"),
+                imageKeyHex: hex("44"),
+                imageNonceHex: String(repeating: "55", count: 12),
+                imageUploadKeyHex: hex("66"),
+                mediaType: "image/jpeg"
+            ),
+            avatarUrl: "https://cdn.example/avatar.png",
+            updatedAt: 10,
+            conversationKind: .direct
+        )
+        let pendingSnapshot = RecipientGroupSnapshot(row: pendingRow, memberIdsHex: [me, alice])
+        let acceptedSnapshot = RecipientGroupSnapshot(row: acceptedRow, memberIdsHex: [me, alice])
+
+        let choices = ConversationChoiceProjection.choices(
+            in: [pendingSnapshot, acceptedSnapshot],
+            targetAccountIdHex: alice,
+            myAccountIdHex: me
+        )
+
+        #expect(choices.count == 2)
+        #expect(choices[0].groupIdHex == "pending-dm")
+        #expect(choices[0].pendingConfirmation)
+        #expect(choices[0].avatarUrl == nil)
+        #expect(choices[0].imageHashHex == nil)
+
+        #expect(choices[1].groupIdHex == "accepted-dm")
+        #expect(!choices[1].pendingConfirmation)
+        #expect(choices[1].avatarUrl == "https://cdn.example/avatar.png")
+        #expect(choices[1].imageHashHex == hex("ee"))
+    }
+
     @Test func startNewConversationCreatesEvenWhenExistingChoicesArePresent() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account"

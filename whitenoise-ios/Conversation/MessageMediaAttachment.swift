@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 import ImageIO
-import AVFoundation
+@preconcurrency import AVFoundation
 import CryptoKit
 import MarmotKit
 import Synchronization
@@ -910,12 +910,12 @@ nonisolated enum MediaDraftProcessor {
                 )
                 restoredDim = attachment.dim
             case .video:
-                let metadata = await MediaVideoMetadata.metadata(
+                let videoMetadata = await MediaVideoMetadata.metadata(
                     from: attachment.plaintext,
                     mediaType: attachment.mediaType
                 )
-                thumbnail = metadata.thumbnail
-                restoredDim = attachment.dim ?? metadata.dim
+                thumbnail = videoMetadata.thumbnail
+                restoredDim = attachment.dim ?? videoMetadata.dim
             case .audio, .document, .unsupported:
                 thumbnail = nil
                 restoredDim = attachment.dim
@@ -977,18 +977,37 @@ nonisolated enum MediaDraftProcessor {
     static func preparedAttachment(fromFileURL url: URL) async throws -> MediaDraftAttachment {
         try await Task.detached(priority: .userInitiated) { () async throws -> MediaDraftAttachment in
             let resourceValues = try url.resourceValues(forKeys: [.contentTypeKey, .nameKey, .fileSizeKey])
-            let kind = kind(
-                for: resourceValues.contentType?.identifier,
-                fileName: resourceValues.name ?? url.lastPathComponent
-            )
+            let fileName = resourceValues.name ?? url.lastPathComponent
+            let typeIdentifier = resourceValues.contentType?.identifier
+            let kind = kind(for: typeIdentifier, fileName: fileName)
             if let size = resourceValues.fileSize, size > maxSourceBytes(for: kind) {
                 throw Failure.attachmentTooLarge(size)
+            }
+            if kind == .video {
+                guard let mediaType = MediaAttachmentPolicy.mediaType(
+                    typeIdentifier: typeIdentifier,
+                    fileName: fileName,
+                    fallbackKind: kind
+                ), MediaAttachmentPolicy.isSupported(mediaType: mediaType, fileName: fileName) else {
+                    throw Failure.unsupportedAttachment
+                }
+                let stripped = try await MediaVideoMetadataStripper.strip(
+                    sourceURL: url,
+                    preferredMediaType: mediaType
+                )
+                return try genericAttachment(
+                    from: stripped.data,
+                    fileName: adjustedVideoFileName(fileName, originalMediaType: mediaType, strippedMediaType: stripped.mediaType),
+                    mediaType: stripped.mediaType,
+                    kind: .video,
+                    videoMetadata: MediaVideoMetadata.Metadata(dim: stripped.dim, thumbnail: stripped.thumbnail)
+                )
             }
             let data = try PickedMediaFile.mappedData(from: url)
             return try await preparedAttachmentValue(
                 from: data,
-                fileName: resourceValues.name ?? url.lastPathComponent,
-                typeIdentifier: resourceValues.contentType?.identifier
+                fileName: fileName,
+                typeIdentifier: typeIdentifier
             )
         }.value
     }
@@ -1036,27 +1055,47 @@ nonisolated enum MediaDraftProcessor {
         typeIdentifier: String?
     ) async throws -> MediaDraftAttachment {
         let kind = kind(for: typeIdentifier, fileName: fileName)
-        let mediaType = MediaAttachmentPolicy.mediaType(
-            typeIdentifier: typeIdentifier,
-            fileName: fileName,
-            fallbackKind: kind
-        )
-        let videoMetadata: MediaVideoMetadata.Metadata?
-        if kind == .video,
-           let mediaType,
-           MediaAttachmentPolicy.isSupported(mediaType: mediaType, fileName: fileName),
-           data.count <= maxAttachmentBytes
-        {
-            videoMetadata = await MediaVideoMetadata.metadata(from: data, mediaType: mediaType)
-        } else {
-            videoMetadata = nil
+        if kind == .video {
+            guard let mediaType = MediaAttachmentPolicy.mediaType(
+                typeIdentifier: typeIdentifier,
+                fileName: fileName,
+                fallbackKind: kind
+            ), MediaAttachmentPolicy.isSupported(mediaType: mediaType, fileName: fileName) else {
+                throw Failure.unsupportedAttachment
+            }
+            guard data.count <= maxAttachmentBytes else {
+                throw Failure.attachmentTooLarge(data.count)
+            }
+            let stripped = try await MediaVideoMetadataStripper.strip(
+                data: data,
+                preferredMediaType: mediaType
+            )
+            return try genericAttachment(
+                from: stripped.data,
+                fileName: adjustedVideoFileName(fileName, originalMediaType: mediaType, strippedMediaType: stripped.mediaType),
+                mediaType: stripped.mediaType,
+                kind: .video,
+                videoMetadata: MediaVideoMetadata.Metadata(dim: stripped.dim, thumbnail: stripped.thumbnail)
+            )
         }
         return try attachment(
             from: data,
             fileName: fileName,
             typeIdentifier: typeIdentifier,
-            videoMetadata: videoMetadata
+            videoMetadata: nil
         )
+    }
+
+    private static func adjustedVideoFileName(
+        _ fileName: String?,
+        originalMediaType: String,
+        strippedMediaType: String
+    ) -> String? {
+        guard originalMediaType != strippedMediaType, let fileName else { return fileName }
+        let targetExtension = MediaAttachmentPolicy.fileExtension(for: strippedMediaType)
+        let stem = (fileName as NSString).deletingPathExtension
+        guard !stem.isEmpty else { return fileName }
+        return "\(stem).\(targetExtension)"
     }
 
     private static func attachment(
@@ -1587,18 +1626,21 @@ nonisolated enum MediaVideoDimensionPolicy {
 }
 
 nonisolated private enum MediaVideoMetadata {
-    struct Metadata {
+    struct Metadata: Sendable {
         let dim: String?
         let thumbnail: UIImage?
     }
 
     static func metadata(from data: Data, mediaType: String) async -> Metadata {
         await TemporaryMediaFile.withURL(data: data, fileExtension: MediaAttachmentPolicy.fileExtension(for: mediaType)) { url in
-            let asset = AVURLAsset(url: url)
-            let dim = await dimensions(for: asset)
-            let thumbnail = await thumbnail(for: asset)
-            return Metadata(dim: dim, thumbnail: thumbnail)
+            await metadata(for: AVURLAsset(url: url))
         }
+    }
+
+    static func metadata(for asset: AVURLAsset) async -> Metadata {
+        let dim = await dimensions(for: asset)
+        let thumbnail = await thumbnail(for: asset)
+        return Metadata(dim: dim, thumbnail: thumbnail)
     }
 
     private static func dimensions(for asset: AVURLAsset) async -> String? {
@@ -1635,6 +1677,541 @@ nonisolated private enum MediaVideoMetadata {
                 continuation.resume(returning: UIImage(cgImage: image))
             }
         }
+    }
+}
+
+/// Strips container, track, and timed metadata (GPS coordinates, make/model,
+/// software, creation date) from outgoing videos via compressed passthrough
+/// remuxing without re-encoding. Fails closed if stripping cannot complete.
+nonisolated enum MediaVideoMetadataStripper {
+    static let directoryName = "WhiteNoiseVideoStrip"
+    static let staleAge: TimeInterval = 60 * 60
+
+    static var defaultDirectory: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(directoryName, isDirectory: true)
+    }
+
+    struct StrippedVideo: Sendable {
+        let data: Data
+        let mediaType: String
+        let dim: String?
+        let thumbnail: UIImage?
+    }
+
+    private struct PreparedTrackPair {
+        let output: AVAssetReaderTrackOutput
+        let input: AVAssetWriterInput
+        let firstSample: CMSampleBuffer?
+    }
+
+    static func strip(
+        data: Data,
+        preferredMediaType: String,
+        directory: URL = defaultDirectory,
+        now: Date = Date()
+    ) async throws -> StrippedVideo {
+        guard !data.isEmpty else { throw MediaDraftProcessor.Failure.encodingFailed }
+        guard data.count <= MediaDraftProcessor.maxAttachmentBytes else {
+            throw MediaDraftProcessor.Failure.attachmentTooLarge(data.count)
+        }
+        try prepareDirectory(directory, now: now)
+        let inputURL = try writeProtectedTempFile(
+            data: data,
+            fileExtension: MediaAttachmentPolicy.fileExtension(for: preferredMediaType),
+            in: directory
+        )
+        defer { try? FileManager.default.removeItem(at: inputURL) }
+        return try await stripOwnedFile(
+            at: inputURL,
+            preferredMediaType: preferredMediaType,
+            directory: directory
+        )
+    }
+
+    static func strip(
+        sourceURL: URL,
+        preferredMediaType: String,
+        directory: URL = defaultDirectory,
+        now: Date = Date()
+    ) async throws -> StrippedVideo {
+        let manager = FileManager.default
+        try prepareDirectory(directory, now: now)
+
+        // Always snapshot the external file-provider URL into a private bounded
+        // regular file first so the provider cannot mutate bytes or exceed the
+        // attachment limit between validation and AVFoundation's track reads.
+        let ext = sourceURL.pathExtension.lowercased()
+        let copyExtension = (ext == "mov" || ext == "mp4" || ext == "m4v")
+            ? ext
+            : MediaAttachmentPolicy.fileExtension(for: preferredMediaType)
+        let copyURL = directory
+            .appendingPathComponent(UUID().uuidString, isDirectory: false)
+            .appendingPathExtension(copyExtension)
+        try copyRegularFileBounded(
+            from: sourceURL,
+            to: copyURL,
+            maxBytes: MediaDraftProcessor.maxAttachmentBytes
+        )
+        defer { try? manager.removeItem(at: copyURL) }
+
+        return try await stripOwnedFile(
+            at: copyURL,
+            preferredMediaType: preferredMediaType,
+            directory: directory
+        )
+    }
+
+    private static func copyRegularFileBounded(
+        from sourceURL: URL,
+        to destinationURL: URL,
+        maxBytes: Int
+    ) throws {
+        let srcFD = sourceURL.withUnsafeFileSystemRepresentation { path -> Int32 in
+            guard let path else { return -1 }
+            return Darwin.open(path, O_RDONLY | O_NOFOLLOW)
+        }
+        guard srcFD >= 0 else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        defer { Darwin.close(srcFD) }
+
+        var st = stat()
+        guard Darwin.fstat(srcFD, &st) == 0,
+              (st.st_mode & S_IFMT) == S_IFREG
+        else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+
+        let dstFD = destinationURL.withUnsafeFileSystemRepresentation { path -> Int32 in
+            guard let path else { return -1 }
+            return Darwin.open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        }
+        guard dstFD >= 0 else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        var succeeded = false
+        defer {
+            Darwin.close(dstFD)
+            if !succeeded {
+                try? FileManager.default.removeItem(at: destinationURL)
+            }
+        }
+        try FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: destinationURL.path
+        )
+
+        let chunkSize = 256 * 1024
+        var buffer = [UInt8](repeating: 0, count: chunkSize)
+        var totalWritten = 0
+        while true {
+            try Task.checkCancellation()
+            let readCount = buffer.withUnsafeMutableBytes { raw -> Int in
+                Darwin.read(srcFD, raw.baseAddress, chunkSize)
+            }
+            if readCount < 0 {
+                if errno == EINTR { continue }
+                throw MediaDraftProcessor.Failure.encodingFailed
+            }
+            if readCount == 0 { break }
+            if totalWritten + readCount > maxBytes {
+                throw MediaDraftProcessor.Failure.attachmentTooLarge(totalWritten + readCount)
+            }
+            var offset = 0
+            while offset < readCount {
+                let written = buffer.withUnsafeBytes { raw -> Int in
+                    Darwin.write(dstFD, raw.baseAddress!.advanced(by: offset), readCount - offset)
+                }
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    throw MediaDraftProcessor.Failure.encodingFailed
+                }
+                offset += written
+            }
+            totalWritten += readCount
+        }
+        guard totalWritten > 0 else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        succeeded = true
+    }
+
+    private static func stripOwnedFile(
+        at inputURL: URL,
+        preferredMediaType: String,
+        directory: URL
+    ) async throws -> StrippedVideo {
+        let manager = FileManager.default
+        let preferredType = fileType(for: preferredMediaType)
+        let candidateTypes: [AVFileType] = preferredType == .mov ? [.mov, .mp4] : [.mp4, .mov]
+
+        var lastError: Error = MediaDraftProcessor.Failure.encodingFailed
+        for candidateType in candidateTypes {
+            try Task.checkCancellation()
+            let outputURL = directory
+                .appendingPathComponent(UUID().uuidString, isDirectory: false)
+                .appendingPathExtension(fileExtension(for: candidateType))
+            defer { try? manager.removeItem(at: outputURL) }
+
+            do {
+                try await remuxStrippingMetadata(
+                    sourceURL: inputURL,
+                    outputURL: outputURL,
+                    outputFileType: candidateType
+                )
+                try manager.setAttributes(
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                    ofItemAtPath: outputURL.path
+                )
+                let strippedAsset = AVURLAsset(url: outputURL)
+                let videoMetadata = await MediaVideoMetadata.metadata(for: strippedAsset)
+                let mapped = try PickedMediaFile.mappedData(from: outputURL)
+                guard !mapped.isEmpty else {
+                    throw MediaDraftProcessor.Failure.encodingFailed
+                }
+                guard mapped.count <= MediaDraftProcessor.maxAttachmentBytes else {
+                    throw MediaDraftProcessor.Failure.attachmentTooLarge(mapped.count)
+                }
+                return StrippedVideo(
+                    data: mapped,
+                    mediaType: mediaType(for: candidateType),
+                    dim: videoMetadata.dim,
+                    thumbnail: videoMetadata.thumbnail
+                )
+            } catch let failure as MediaDraftProcessor.Failure {
+                if case .attachmentTooLarge = failure { throw failure }
+                lastError = failure
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError is MediaDraftProcessor.Failure ? lastError : MediaDraftProcessor.Failure.encodingFailed
+    }
+
+    private static func remuxStrippingMetadata(
+        sourceURL: URL,
+        outputURL: URL,
+        outputFileType: AVFileType
+    ) async throws {
+        let asset = AVURLAsset(url: sourceURL)
+        let allTracks = try await asset.load(.tracks)
+        // Copy only media tracks; timed `.metadata` and auxiliary tracks are dropped.
+        let mediaTracks = allTracks.filter { $0.mediaType == .video || $0.mediaType == .audio }
+        guard !mediaTracks.isEmpty else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+
+        let reader = try AVAssetReader(asset: asset)
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
+        writer.metadata = []
+        writer.shouldOptimizeForNetworkUse = true
+
+        var trackConfigs: [(output: AVAssetReaderTrackOutput, input: AVAssetWriterInput)] = []
+
+        for track in mediaTracks {
+            try Task.checkCancellation()
+            let formatDescriptions = try await track.load(.formatDescriptions)
+            guard let formatHint = formatDescriptions.first else { continue }
+
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+            output.alwaysCopiesSampleData = false
+            guard reader.canAdd(output) else { continue }
+
+            let input = AVAssetWriterInput(
+                mediaType: track.mediaType,
+                outputSettings: nil,
+                sourceFormatHint: formatHint
+            )
+            input.expectsMediaDataInRealTime = false
+            input.metadata = []
+            if track.mediaType == .video {
+                input.transform = try await track.load(.preferredTransform)
+                let timeScale = try await track.load(.naturalTimeScale)
+                if timeScale > 0 {
+                    input.mediaTimeScale = timeScale
+                }
+            }
+            input.marksOutputTrackAsEnabled = try await track.load(.isEnabled)
+            if let languageCode = try await track.load(.languageCode), !languageCode.isEmpty {
+                input.languageCode = languageCode
+            }
+            if let extendedTag = try await track.load(.extendedLanguageTag), !extendedTag.isEmpty {
+                input.extendedLanguageTag = extendedTag
+            }
+
+            guard writer.canAdd(input) else {
+                throw MediaDraftProcessor.Failure.encodingFailed
+            }
+            reader.add(output)
+            writer.add(input)
+            trackConfigs.append((output: output, input: input))
+        }
+
+        guard !trackConfigs.isEmpty else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+
+        guard reader.startReading(), writer.startWriting() else {
+            reader.cancelReading()
+            writer.cancelWriting()
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+
+        var pairs: [PreparedTrackPair] = []
+        var earliestPTS: CMTime?
+        for config in trackConfigs {
+            let first = config.output.copyNextSampleBuffer()
+            if let first {
+                let pts = CMSampleBufferGetPresentationTimeStamp(first)
+                if pts.isValid, pts.isNumeric {
+                    if let current = earliestPTS {
+                        if CMTimeCompare(pts, current) < 0 { earliestPTS = pts }
+                    } else {
+                        earliestPTS = pts
+                    }
+                }
+            }
+            pairs.append(PreparedTrackPair(output: config.output, input: config.input, firstSample: first))
+        }
+
+        guard pairs.contains(where: { $0.firstSample != nil }) else {
+            reader.cancelReading()
+            writer.cancelWriting()
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+
+        writer.startSession(atSourceTime: earliestPTS ?? .zero)
+        var activePairs: [(output: AVAssetReaderTrackOutput, input: AVAssetWriterInput)] = []
+        for pair in pairs {
+            if let first = pair.firstSample {
+                guard pair.input.isReadyForMoreMediaData, pair.input.append(first) else {
+                    reader.cancelReading()
+                    writer.cancelWriting()
+                    throw MediaDraftProcessor.Failure.encodingFailed
+                }
+                activePairs.append((output: pair.output, input: pair.input))
+            } else {
+                pair.input.markAsFinished()
+            }
+        }
+
+        let outcome = await copyRemainingSamples(
+            reader: reader,
+            writer: writer,
+            pairs: activePairs
+        )
+        switch outcome {
+        case .cancelled:
+            throw CancellationError()
+        case .failed:
+            throw MediaDraftProcessor.Failure.encodingFailed
+        case .completed:
+            break
+        }
+
+        guard reader.status == .completed else {
+            reader.cancelReading()
+            writer.cancelWriting()
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+
+        await writer.finishWriting()
+        guard writer.status == .completed else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+    }
+
+    enum SampleCopyOutcome: Equatable, Sendable {
+        case completed
+        case failed
+        case cancelled
+    }
+
+    private struct SampleCopyState {
+        var remaining: Int
+        var finishedTracks: [Bool]
+        var outcome: SampleCopyOutcome?
+        var continuation: CheckedContinuation<SampleCopyOutcome, Never>?
+        var cancelRequested = false
+    }
+
+    static func copyRemainingSamples(
+        reader: AVAssetReader,
+        writer: AVAssetWriter,
+        pairs: [(output: AVAssetReaderTrackOutput, input: AVAssetWriterInput)],
+        appendSample: @escaping @Sendable (Int, AVAssetWriterInput, CMSampleBuffer) -> Bool = { _, input, sample in
+            input.append(sample)
+        }
+    ) async -> SampleCopyOutcome {
+        guard !pairs.isEmpty else { return Task.isCancelled ? .cancelled : .completed }
+        let queue = DispatchQueue(
+            label: "dev.ipf.whitenoise.video-strip.copy",
+            qos: .userInitiated
+        )
+        // Every AVAssetReader / AVAssetWriter call and state transition runs
+        // strictly serialized on `queue`, honoring AVAssetWriter's threading
+        // contract across multi-track appends, finish, and cancellation.
+        let state = Mutex(SampleCopyState(
+            remaining: pairs.count,
+            finishedTracks: Array(repeating: false, count: pairs.count)
+        ))
+
+        @Sendable func finishOnQueue(_ finalOutcome: SampleCopyOutcome) {
+            let continuation: CheckedContinuation<SampleCopyOutcome, Never>? = state.withLock { current in
+                guard current.outcome == nil else { return nil }
+                current.outcome = finalOutcome
+                let cont = current.continuation
+                current.continuation = nil
+                return cont
+            }
+            guard continuation != nil || finalOutcome != .completed else { return }
+            if finalOutcome != .completed {
+                reader.cancelReading()
+                writer.cancelWriting()
+            }
+            continuation?.resume(returning: finalOutcome)
+        }
+
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<SampleCopyOutcome, Never>) in
+                queue.async {
+                    let earlyOutcome: SampleCopyOutcome? = state.withLock { current in
+                        if let existing = current.outcome {
+                            return existing
+                        }
+                        if current.cancelRequested || Task.isCancelled {
+                            current.outcome = .cancelled
+                            return .cancelled
+                        }
+                        current.continuation = continuation
+                        return nil
+                    }
+                    if let earlyOutcome {
+                        if earlyOutcome != .completed {
+                            reader.cancelReading()
+                            writer.cancelWriting()
+                        }
+                        continuation.resume(returning: earlyOutcome)
+                        return
+                    }
+
+                    for (index, pair) in pairs.enumerated() {
+                        let output = pair.output
+                        let input = pair.input
+                        input.requestMediaDataWhenReady(on: queue) {
+                            while input.isReadyForMoreMediaData {
+                                let status = state.withLock { (outcome: $0.outcome, cancelled: $0.cancelRequested) }
+                                if status.outcome != nil { return }
+                                if status.cancelled || Task.isCancelled {
+                                    finishOnQueue(.cancelled)
+                                    return
+                                }
+                                if writer.status != .writing {
+                                    finishOnQueue(.failed)
+                                    return
+                                }
+                                if let sample = output.copyNextSampleBuffer() {
+                                    if !appendSample(index, input, sample) {
+                                        finishOnQueue(.failed)
+                                        return
+                                    }
+                                    if state.withLock({ $0.cancelRequested }) || Task.isCancelled {
+                                        finishOnQueue(.cancelled)
+                                        return
+                                    }
+                                } else {
+                                    let shouldComplete: Bool = state.withLock { current in
+                                        guard current.outcome == nil, !current.cancelRequested, !current.finishedTracks[index] else { return false }
+                                        current.finishedTracks[index] = true
+                                        if writer.status == .writing {
+                                            input.markAsFinished()
+                                        }
+                                        current.remaining -= 1
+                                        return current.remaining == 0
+                                    }
+                                    if state.withLock({ $0.cancelRequested }) {
+                                        finishOnQueue(.cancelled)
+                                        return
+                                    }
+                                    if shouldComplete {
+                                        finishOnQueue(.completed)
+                                    }
+                                    return
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } onCancel: {
+            state.withLock { $0.cancelRequested = true }
+            queue.async {
+                finishOnQueue(.cancelled)
+            }
+        }
+    }
+
+    private static func prepareDirectory(_ directory: URL, now: Date) throws {
+        let manager = FileManager.default
+        try manager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+        )
+        try? manager.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: directory.path
+        )
+        MediaUploadSourceFiles.removeStale(in: directory, olderThan: staleAge, now: now)
+    }
+
+    private static func writeProtectedTempFile(
+        data: Data,
+        fileExtension: String,
+        in directory: URL
+    ) throws -> URL {
+        let manager = FileManager.default
+        let url = directory
+            .appendingPathComponent(UUID().uuidString, isDirectory: false)
+            .appendingPathExtension(fileExtension)
+        guard manager.createFile(
+            atPath: url.path,
+            contents: nil,
+            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+        ) else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        do {
+            let handle = try FileHandle(forWritingTo: url)
+            defer { try? handle.close() }
+            let chunkSize = 1024 * 1024
+            var offset = data.startIndex
+            while offset < data.endIndex {
+                try Task.checkCancellation()
+                let end = min(offset + chunkSize, data.endIndex)
+                try handle.write(contentsOf: data[offset..<end])
+                offset = end
+            }
+            try handle.close()
+            return url
+        } catch {
+            try? manager.removeItem(at: url)
+            throw error
+        }
+    }
+
+    private static func fileType(for mediaType: String) -> AVFileType {
+        MediaAttachmentPolicy.canonicalMediaType(mediaType) == "video/quicktime" ? .mov : .mp4
+    }
+
+    private static func fileExtension(for fileType: AVFileType) -> String {
+        fileType == .mov ? "mov" : "mp4"
+    }
+
+    private static func mediaType(for fileType: AVFileType) -> String {
+        fileType == .mov ? "video/quicktime" : "video/mp4"
     }
 }
 

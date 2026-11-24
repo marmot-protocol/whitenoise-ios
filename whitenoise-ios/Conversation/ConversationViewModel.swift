@@ -862,6 +862,7 @@ final class ConversationViewModel {
     }
 
     func windowAvatarURL(for accountId: String) -> URL? {
+        guard !hasPendingInvite else { return nil }
         guard conversationWindow != nil else { return appState?.avatarURL(forAccountIdHex: accountId) }
         if case .remoteImage(let url, _) = windowIdentities[accountId]?.avatar { return ContentSanitizer.imageURL(url) }
         return nil
@@ -875,13 +876,14 @@ final class ConversationViewModel {
     }
 
     var selectedAvatarURL: URL? {
+        guard !hasPendingInvite else { return nil }
         guard let avatar = conversationWindow?.header.selected.avatar else { return appState.flatMap { GroupDisplay.avatarURL(for: groupDisplay, appState: $0) } }
         if case .remoteImage(let url, _) = avatar { return ContentSanitizer.imageURL(url) }
         return nil
     }
 
     var selectedImageHash: String? {
-        guard !group.pendingConfirmation else { return nil }
+        guard !hasPendingInvite else { return nil }
         guard let avatar = conversationWindow?.header.selected.avatar else { return group.imageHashHex }
         if case .encryptedGroupImage(let image, _) = avatar { return image.imageHashHex }
         return nil

@@ -1790,7 +1790,7 @@ struct ChatDestination: View {
             ChatDestinationConversation(
                 chat: item.projectedGroup,
                 title: item.title,
-                avatarAsset: item.avatarAsset,
+                avatarAsset: item.row.pendingConfirmation ? nil : item.avatarAsset,
                 avatarSeed: item.selectedAvatar != nil ? item.avatarSeed : nil,
                 otherMember: item.directPeerAccountIdHex,
                 memberCount: item.isDirectMessage == true ? 2 : nil,

@@ -37,6 +37,106 @@ struct ConversationInviteActionTests {
         #expect(viewModel.inviteActionInFlight == nil)
     }
 
+    @Test func pendingInviteSuppressesSelectedAvatarURLAndImageHashUntilAccepted() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let avatarUrl = "https://attacker.example/group.png"
+        let imageHash = hex("cc")
+        var pending = group(
+            name: "invited",
+            avatarUrl: avatarUrl,
+            pendingConfirmation: true,
+            welcomerAccountIdHex: hex("44")
+        )
+        pending.imageHashHex = imageHash
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            groupCalls: groupCalls(accept: { _, groupIdHex in
+                var accepted = group(
+                    name: "invited",
+                    id: groupIdHex,
+                    avatarUrl: avatarUrl,
+                    pendingConfirmation: false
+                )
+                accepted.imageHashHex = imageHash
+                return accepted
+            })
+        )
+
+        #expect(viewModel.hasPendingInvite)
+        #expect(viewModel.selectedAvatarURL == nil)
+        #expect(viewModel.selectedImageHash == nil)
+
+        _ = await viewModel.acceptInvite()
+
+        #expect(!viewModel.hasPendingInvite)
+        #expect(viewModel.selectedAvatarURL == URL(string: avatarUrl))
+        #expect(viewModel.selectedImageHash == imageHash)
+    }
+
+    @Test func pendingInviteSuppressesGroupMemberRosterAvatarURLsUntilAccepted() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let memberHex = hex("55")
+        let memberAvatarURL = "https://attacker.example/member.png"
+        appState.seedDiscoveredProfile(
+            UserProfileMetadataFfi(
+                name: "Inviter",
+                displayName: "Inviter",
+                about: nil,
+                picture: memberAvatarURL,
+                banner: nil,
+                nip05: nil,
+                lud16: nil
+            ),
+            forAccountIdHex: memberHex
+        )
+        let member = GroupMemberDetailsFfi(
+            memberIdHex: memberHex,
+            account: memberHex,
+            local: false,
+            isAdmin: true,
+            isSelf: false,
+            npub: "npub1member",
+            displayName: "Inviter",
+            deviceCount: 1
+        )
+        let pending = group(
+            name: "invited",
+            pendingConfirmation: true,
+            welcomerAccountIdHex: memberHex
+        )
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            groupCalls: groupCalls(accept: { _, groupIdHex in
+                group(name: "invited", id: groupIdHex, pendingConfirmation: false)
+            })
+        )
+
+        #expect(viewModel.hasPendingInvite)
+        #expect(viewModel.windowAvatarURL(for: memberHex) == nil)
+        #expect(
+            GroupMemberDetailsPresentation.avatarURL(
+                for: member,
+                appState: appState,
+                allowsRemoteAvatars: !viewModel.hasPendingInvite
+            ) == nil
+        )
+
+        _ = await viewModel.acceptInvite()
+        #expect(!viewModel.hasPendingInvite)
+        #expect(viewModel.windowAvatarURL(for: memberHex) == URL(string: memberAvatarURL))
+        #expect(
+            GroupMemberDetailsPresentation.avatarURL(
+                for: member,
+                appState: appState,
+                allowsRemoteAvatars: !viewModel.hasPendingInvite
+            ) == URL(string: memberAvatarURL)
+        )
+    }
+
     @Test func declineAppliesArchivedInactiveGroup() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
