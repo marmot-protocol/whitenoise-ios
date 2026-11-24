@@ -227,31 +227,23 @@ nonisolated enum AttachmentHandoffOpening {
     }
 }
 
-/// A file for the share sheet or playback: MDK's leased copy, or the host's own
-/// export of bytes MDK has no slot for or does not hold (an outgoing draft or send).
+/// A file for the share sheet: MDK's leased copy, or the host's own export of bytes
+/// MDK has no slot for or does not hold (an outgoing draft or send).
 struct AttachmentShareFile: Identifiable {
     let id = UUID()
     let url: URL
     let lease: AttachmentHandoffLease?
-    private let cleanupURL: URL?
 
-    init(lease: AttachmentHandoffLease, url: URL? = nil, cleanupURL: URL? = nil) {
-        self.url = url ?? lease.url
+    init(lease: AttachmentHandoffLease) {
+        url = lease.url
         self.lease = lease
-        self.cleanupURL = cleanupURL
     }
 
     init(hostURL: URL) {
         url = hostURL
         lease = nil
-        cleanupURL = nil
     }
 
-    /// Call when the share sheet or playback completes or dismisses.
-    func finish() {
-        if let cleanupURL {
-            try? FileManager.default.removeItem(at: cleanupURL)
-        }
-        lease?.release()
-    }
+    /// Call when the share sheet completes or dismisses.
+    func finish() { lease?.release() }
 }

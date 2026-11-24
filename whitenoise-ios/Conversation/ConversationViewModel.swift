@@ -3389,57 +3389,6 @@ final class ConversationViewModel {
         data: Data,
         to groupIds: Set<String>
     ) async -> MessageForwardResult {
-        await forwardPreparedMedia(
-            media,
-            to: groupIds,
-            prepare: {
-                try await MediaDraftProcessor.preparedAttachment(
-                    from: data,
-                    fileName: media.fileName,
-                    typeIdentifier: nil
-                )
-            }
-        )
-    }
-
-    /// File-backed forward path for videos and large attachments so forwarding
-    /// never requires pinning up to 512 MiB in heap memory.
-    func forwardMedia(
-        _ media: MessageMediaAttachment,
-        fileURL: URL,
-        fallbackData: (@MainActor () async throws -> Data)? = nil,
-        to groupIds: Set<String>
-    ) async -> MessageForwardResult {
-        await forwardPreparedMedia(
-            media,
-            to: groupIds,
-            prepare: {
-                let mapped: Data
-                if let fileData = await Task.detached(priority: .userInitiated, operation: {
-                    try? PickedMediaFile.mappedData(from: fileURL)
-                }).value {
-                    mapped = fileData
-                } else if let fallbackData {
-                    mapped = try await fallbackData()
-                } else {
-                    mapped = try await Task.detached(priority: .userInitiated) {
-                        try PickedMediaFile.mappedData(from: fileURL)
-                    }.value
-                }
-                return try await MediaDraftProcessor.preparedAttachment(
-                    from: mapped,
-                    fileName: media.fileName,
-                    typeIdentifier: nil
-                )
-            }
-        )
-    }
-
-    private func forwardPreparedMedia(
-        _ media: MessageMediaAttachment,
-        to groupIds: Set<String>,
-        prepare: () async throws -> MediaDraftAttachment
-    ) async -> MessageForwardResult {
         let destinations = groupIds.filter { !$0.isEmpty && $0 != group.groupIdHex }
         guard !destinations.isEmpty,
               let appState,
@@ -3451,7 +3400,11 @@ final class ConversationViewModel {
 
         let prepared: MediaDraftAttachment
         do {
-            prepared = try await prepare()
+            prepared = try await MediaDraftProcessor.preparedAttachment(
+                from: data,
+                fileName: media.fileName,
+                typeIdentifier: nil
+            )
         } catch {
             return MessageForwardResult(successfulGroupIds: [], failedGroupIds: Set(destinations))
         }

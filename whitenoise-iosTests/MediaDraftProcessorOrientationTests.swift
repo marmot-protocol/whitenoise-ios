@@ -124,37 +124,9 @@ struct MediaDraftProcessorOrientationTests {
         #expect(attachment.thumbnail != nil)
     }
 
-    @Test func decodedBoundedImageRequestsDownsampledTransformedUncachedThumbnailAndRejectsSVG() throws {
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        format.opaque = true
-        let bitmap = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16), format: format).image { context in
-            UIColor.systemIndigo.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
-        }
-        let jpegData = try #require(bitmap.jpegData(compressionQuality: 0.9))
-
-        var capturedOptions: [CFString: Any] = [:]
-        let decoded = MediaDraftProcessor.decodedBoundedImage(
-            from: jpegData,
-            maxPixelSize: MediaQuality.standard.imageMaxEdgePx,
-            createThumbnail: { source, options in
-                capturedOptions = (options as? [CFString: Any]) ?? [:]
-                return CGImageSourceCreateThumbnailAtIndex(source, 0, options)
-            }
-        )
-        #expect(decoded != nil)
-        #expect(capturedOptions[kCGImageSourceCreateThumbnailFromImageAlways] as? Bool == true)
-        #expect(capturedOptions[kCGImageSourceCreateThumbnailWithTransform] as? Bool == true)
-        #expect(capturedOptions[kCGImageSourceShouldCache] as? Bool == false)
-        #expect(capturedOptions[kCGImageSourceThumbnailMaxPixelSize] as? Int == Int(MediaQuality.standard.imageMaxEdgePx))
-
-        let rejectedSVG = MediaDraftProcessor.decodedBoundedImage(
-            from: jpegData,
-            maxPixelSize: MediaQuality.standard.imageMaxEdgePx,
-            sourceType: { _ in UTType.svg.identifier as CFString }
-        )
-        #expect(rejectedSVG == nil)
+    @Test func decodedBoundedImageRejectsSVGPayload() {
+        let svg = Data("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"></svg>".utf8)
+        #expect(MediaDraftProcessor.decodedBoundedImage(from: svg, maxPixelSize: MediaQuality.standard.imageMaxEdgePx) == nil)
     }
 
     @Test func oversizedExifRotatedJPEGDownsamplesToQualityCapAndStripsMetadata() throws {

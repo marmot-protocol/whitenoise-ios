@@ -311,11 +311,6 @@ struct SharedMediaLibraryView: View {
             ActivityShareSheet(items: [share.url], onComplete: share.finish)
                 .onDisappear(perform: share.finish)
         }
-        .onChange(of: DocumentRuntimeScope(appState)) { _, _ in
-            cancelPendingFileShare()
-            fileShare?.finish()
-            fileShare = nil
-        }
         .onDisappear {
             cancelPendingFileShare()
         }
@@ -694,7 +689,6 @@ struct SharedMediaLibraryView: View {
     @MainActor
     private func openFile(_ item: GroupSharedMediaItem) async {
         guard loadingFileID == nil else { return }
-        fileShareControl?.cancel()
         let control = MediaFileTransferControlFfi()
         fileShareControl = control
         loadingFileID = item.id

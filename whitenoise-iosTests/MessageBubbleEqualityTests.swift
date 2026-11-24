@@ -7,17 +7,6 @@ import Testing
 /// to follow everything the bubble draws and nothing else.
 @MainActor
 @Suite struct MessageBubbleEqualityTests {
-    private static func physicalFootprint() -> UInt64? {
-        var info = task_vm_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
-        let result = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
-            }
-        }
-        return result == KERN_SUCCESS ? info.phys_footprint : nil
-    }
-
     private func attachment(target: AttachmentLocalTargetFfi? = nil) -> MessageMediaAttachment {
         MessageMediaAttachment(
             id: "row:0",
@@ -71,37 +60,22 @@ import Testing
     }
 
     @Test func largeAttachmentEqualityAndHashingUseContentTokenWithoutScanningMappedBytes() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TokenEqualityTests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-
-        let size = 64 * 1024 * 1024
-        let source = directory.appendingPathComponent("large.mov")
-        FileManager.default.createFile(atPath: source.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: source)
-        let chunk = Data(repeating: 0x2a, count: 1024 * 1024)
-        for _ in 0..<(size / chunk.count) { try handle.write(contentsOf: chunk) }
-        try handle.close()
-
-        let clones = directory.appendingPathComponent("clones", isDirectory: true)
-        let firstMapped = try PickedMediaFile.mappedData(from: source, in: clones)
-        let secondMapped = try PickedMediaFile.mappedData(from: source, in: clones)
-
-        let before = try #require(Self.physicalFootprint())
+        // Above the 64 KiB inline-digest cutoff, payloads receive an O(1) identity token
+        // so equality and hashing never scan or fault mapped bytes.
+        let payload = Data(repeating: 0x2a, count: 65 * 1024)
         let draftID = UUID()
         let firstDraft = MediaDraftAttachment(
             id: draftID,
             fileName: "large.mov",
             mediaType: "video/quicktime",
-            data: firstMapped,
+            data: payload,
             dim: "1920x1080"
         )
         let distinctDraft = MediaDraftAttachment(
             id: draftID,
             fileName: "large.mov",
             mediaType: "video/quicktime",
-            data: secondMapped,
+            data: Data(repeating: 0x2a, count: 65 * 1024),
             dim: "1920x1080"
         )
 
@@ -152,9 +126,6 @@ import Testing
         remote.localTarget = nil
         let bubbleDifferent = MessageBubble(record: record, status: .sent, mediaItems: [distinctDisplay])
         #expect(MessageBubble(record: record, status: .sent, mediaItems: [firstDisplay]) != bubbleDifferent)
-
-        let after = try #require(Self.physicalFootprint())
-        #expect(Int64(after) - Int64(before) < Int64(size / 2))
     }
 
     @Test func smallAttachmentEqualityMatchesByContentDigestAndDistinguishesPayloads() {

@@ -392,6 +392,12 @@ final class ConversationMediaDownloader {
             guard let live = appState?.client?.marmot, !live.storageIsClosed() else { return nil }
             return live
         }
+        let isCurrent: @MainActor () -> Bool = {
+            !self.isStopped
+                && appState.activeAccountRef == account
+                && appState.client === client
+                && appState.runtimeGeneration == generation
+        }
         let controlID = ObjectIdentifier(control)
         handoffControls[controlID] = control
         defer { handoffControls[controlID] = nil }
@@ -437,26 +443,15 @@ final class ConversationMediaDownloader {
                     )
                     try await self.inFlightFetches.value(for: key) {
                         try Task.checkCancellation()
-                        guard !self.isStopped,
-                              appState.activeAccountRef == account,
-                              appState.client === client,
-                              appState.runtimeGeneration == generation else {
-                            throw CancellationError()
-                        }
+                        guard isCurrent() else { throw CancellationError() }
                         try await self.fetchAttachment(client, account, groupIdHex, target, media.demand)
                     }
-                    guard !Task.isCancelled, !self.isStopped, !control.isCancelled(),
-                          appState.activeAccountRef == account,
-                          appState.client === client,
-                          appState.runtimeGeneration == generation else {
+                    guard !Task.isCancelled, !control.isCancelled(), isCurrent() else {
                         throw CancellationError()
                     }
                 }
             ) else { return nil }
-            guard !Task.isCancelled, !isStopped, !control.isCancelled(),
-                  appState.activeAccountRef == account,
-                  appState.client === client,
-                  appState.runtimeGeneration == generation else {
+            guard !Task.isCancelled, !control.isCancelled(), isCurrent() else {
                 lease.release()
                 throw CancellationError()
             }

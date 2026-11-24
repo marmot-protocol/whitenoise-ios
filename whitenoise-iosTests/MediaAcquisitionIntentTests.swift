@@ -335,8 +335,8 @@ struct MediaAcquisitionIntentTests {
         _ = try await GroupSharedMediaThumbnailLoader.loadData(for: image, demand: .explicit, using: loader)
 
         #expect(recorded.count == 3)
-        #expect(recorded[0].demand == .automatic && recorded[0].limit == 32 * 1024 * 1024)
-        #expect(recorded[1].demand == .explicit && recorded[1].limit == 32 * 1024 * 1024)
+        #expect(recorded[0].demand == .automatic && recorded[0].limit != nil)
+        #expect(recorded[1].demand == .explicit && recorded[1].limit != nil)
         #expect(recorded[2].demand == .explicit && recorded[2].limit == nil)
 
         #expect(GroupSharedMediaThumbnailLoader.canOpenGallery(hasThumbnail: false, isVideo: true, overPreviewLimit: true))

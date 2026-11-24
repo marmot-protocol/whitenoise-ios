@@ -344,8 +344,6 @@ struct GroupDetailsView: View {
     private var mediaLoader: ConversationMediaLoader {
         ConversationMediaLoader { media in
             try await viewModel.data(for: media)
-        } openHandoff: { media, control in
-            try await viewModel.openHandoff(for: media, control: control)
         }
     }
 

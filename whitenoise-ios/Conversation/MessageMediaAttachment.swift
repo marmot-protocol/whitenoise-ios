@@ -1137,18 +1137,15 @@ nonisolated enum MediaDraftProcessor {
     /// before downscaling and metadata stripping.
     static func decodedBoundedImage(
         from data: Data,
-        maxPixelSize: CGFloat,
-        createSource: (Data, CFDictionary) -> CGImageSource? = { CGImageSourceCreateWithData($0 as CFData, $1) },
-        sourceType: (CGImageSource) -> CFString? = { CGImageSourceGetType($0) },
-        createThumbnail: (CGImageSource, CFDictionary) -> CGImage? = { CGImageSourceCreateThumbnailAtIndex($0, 0, $1) }
+        maxPixelSize: CGFloat
     ) -> UIImage? {
         let sourceOptions: [CFString: Any] = [
             kCGImageSourceShouldCache: false,
         ]
-        guard let source = createSource(data, sourceOptions as CFDictionary) else {
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
             return nil
         }
-        guard RemoteImageDecoder.isAllowedRemoteImageType(sourceType(source)) else {
+        guard RemoteImageDecoder.isAllowedRemoteImageType(CGImageSourceGetType(source)) else {
             return nil
         }
         let thumbnailOptions: [CFString: Any] = [
@@ -1157,7 +1154,7 @@ nonisolated enum MediaDraftProcessor {
             kCGImageSourceThumbnailMaxPixelSize: max(1, Int(maxPixelSize.rounded(.up))),
             kCGImageSourceShouldCache: false,
         ]
-        guard let cgImage = createThumbnail(source, thumbnailOptions as CFDictionary) else {
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else {
             return nil
         }
         return UIImage(cgImage: cgImage, scale: 1, orientation: .up)
@@ -1897,7 +1894,7 @@ nonisolated enum MessageMediaCache {
             DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, now: now)
             return nil
         }
-        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
+        guard let data = try? Data(contentsOf: url) else { return nil }
         DecryptedMediaCacheEvictor.touch(url, at: now)
         DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, preserving: url, now: now)
         return data
