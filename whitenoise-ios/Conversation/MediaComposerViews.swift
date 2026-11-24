@@ -1307,8 +1307,14 @@ nonisolated private final class CameraCaptureService: NSObject, @unchecked Senda
         sessionQueue.async { [self] in
             guard !movieOutput.isRecording else { return }
             discardNextMovie = false
-            let url = FileManager.default.temporaryDirectory
-                .appending(path: "camera-\(UUID().uuidString).mov")
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("WhiteNoiseCameraCapture", isDirectory: true)
+            try? FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.complete]
+            )
+            let url = directory.appending(path: "camera-\(UUID().uuidString).mov")
             applyPortraitRotation(to: movieOutput.connection(with: .video))
             movieOutput.startRecording(to: url, recordingDelegate: self)
         }
@@ -1370,6 +1376,7 @@ nonisolated private final class CameraCaptureService: NSObject, @unchecked Senda
             throw CameraCaptureError.cannotAddOutput
         }
         session.addOutput(photoOutput)
+        movieOutput.metadata = []
         session.addOutput(movieOutput)
     }
 

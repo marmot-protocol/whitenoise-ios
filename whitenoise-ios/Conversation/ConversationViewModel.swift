@@ -875,6 +875,7 @@ final class ConversationViewModel {
     }
 
     var selectedAvatarURL: URL? {
+        guard !group.pendingConfirmation, !hasPendingInvite else { return nil }
         guard let avatar = conversationWindow?.header.selected.avatar else { return appState.flatMap { GroupDisplay.avatarURL(for: groupDisplay, appState: $0) } }
         if case .remoteImage(let url, _) = avatar { return ContentSanitizer.imageURL(url) }
         return nil

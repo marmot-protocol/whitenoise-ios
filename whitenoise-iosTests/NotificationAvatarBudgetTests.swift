@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 @testable import whitenoise_ios
 
 struct NotificationAvatarBudgetTests {
@@ -124,5 +125,62 @@ struct NotificationAvatarBudgetTests {
             == distinct)
         #expect(NotificationCommunicationDecorator.avatarURLs(
             for: [notificationPresentation(senderPictureUrl: nil)]).isEmpty)
+    }
+
+    @Test func avatarDataReadsOnlyAlreadyCachedBytesAndNeverFetchesRemotely() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NotificationAvatarCacheTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let rawURL = "https://example.com/sender-avatar.png"
+        let url = try #require(URL(string: rawURL))
+
+        // Cache miss returns nil immediately with zero network egress.
+        let miss = await NotificationCommunicationDecorator.avatarData(
+            for: rawURL,
+            cacheDirectory: directory
+        )
+        #expect(miss == nil)
+        NotificationCommunicationDecorator.warmAvatarCache(for: rawURL)
+        #expect(NotificationCommunicationDecorator.cachedAvatarData(
+            forPictureUrl: rawURL,
+            cacheDirectory: directory
+        ) == nil)
+        let contentsAfterMiss = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        #expect(contentsAfterMiss.isEmpty)
+
+        // Pre-populated valid raster bytes are returned from the local cache.
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let png = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format).pngData { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }
+        let cacheFile = try #require(NotificationCommunicationDecorator.cacheFileURL(for: url, in: directory))
+        try png.write(to: cacheFile, options: .atomic)
+
+        let hit = await NotificationCommunicationDecorator.avatarData(
+            for: rawURL,
+            cacheDirectory: directory
+        )
+        #expect(hit == png)
+
+        // Expired entries are ignored without re-fetching.
+        let expiredNow = Date().addingTimeInterval(NotificationCommunicationDecorator.avatarCacheLifetime + 60)
+        let stale = await NotificationCommunicationDecorator.avatarData(
+            for: rawURL,
+            cacheDirectory: directory,
+            now: expiredNow
+        )
+        #expect(stale == nil)
+
+        // Non-image cached payloads are rejected without re-fetching.
+        try Data("<svg xmlns='http://www.w3.org/2000/svg'/>".utf8).write(to: cacheFile, options: .atomic)
+        let rejected = await NotificationCommunicationDecorator.avatarData(
+            for: rawURL,
+            cacheDirectory: directory
+        )
+        #expect(rejected == nil)
     }
 }

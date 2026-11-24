@@ -1938,13 +1938,14 @@ struct ConversationView: View {
                 if let viewModel {
                     GroupAvatarBubble(
                         groupIdHex: viewModel.group.groupIdHex,
-                        imageHashHex: viewModel.selectedImageHash,
+                        imageHashHex: viewModel.hasPendingInvite ? nil : viewModel.selectedImageHash,
                         seed: viewModel.conversationWindow != nil ? viewModel.selectedAvatarSeed
                             : initialAvatarSeed ?? viewModel.selectedAvatarSeed,
                         title: chrome.title,
-                        pictureURL: viewModel.selectedAvatarURL,
-                        nativeAsset: viewModel.conversationWindow != nil
-                            ? viewModel.conversationWindow?.header.avatarAsset : initialAvatarAsset,
+                        pictureURL: viewModel.hasPendingInvite ? nil : viewModel.selectedAvatarURL,
+                        nativeAsset: viewModel.hasPendingInvite ? nil
+                            : (viewModel.conversationWindow != nil
+                                ? viewModel.conversationWindow?.header.avatarAsset : initialAvatarAsset),
                         usesNativeAsset: viewModel.conversationWindow != nil || initialAvatarSeed != nil
                     )
                     .frame(width: 40, height: 40)
@@ -2697,6 +2698,7 @@ struct ConversationView: View {
             readingSpeech: speech.readingID == record.messageIdHex ? speech : nil,
             customEmoji: viewModel.customEmoji(for: item),
             markdownBlocks: viewModel.markdownDisplayBlocks(for: item),
+            allowsLinkPreviews: !viewModel.hasPendingInvite,
             incompleteMarkdown: incompleteMarkdown,
             poll: viewModel.poll(for: record.messageIdHex),
             onPollVote: viewModel.canVoteInPolls && status != .sending && status != .failed

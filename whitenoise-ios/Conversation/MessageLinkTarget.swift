@@ -12,12 +12,19 @@ nonisolated struct MessageLinkTarget: Equatable, Hashable {
         self.copyText = copyText
     }
 
-    static func targets(in blocks: [MarkdownDisplayBlock]?) -> [MessageLinkTarget] {
+    static func targets(
+        in blocks: [MarkdownDisplayBlock]?,
+        includeImageLinks: Bool = true
+    ) -> [MessageLinkTarget] {
         var seen = Set<String>()
         var targets: [MessageLinkTarget] = []
         for text in paragraphs(in: blocks ?? []) {
-            for segment in MessageLinkSegment.segments(of: text) {
-                guard let target = segment.target, seen.insert(target.copyText).inserted else { continue }
+            for run in text.runs {
+                guard let link = run.link else { continue }
+                if !includeImageLinks, run[MarkdownImageLinkAttribute.self] == true { continue }
+                guard let target = MessageLinkTarget(url: link),
+                      seen.insert(target.copyText).inserted
+                else { continue }
                 targets.append(target)
             }
         }

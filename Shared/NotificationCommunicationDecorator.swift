@@ -8,8 +8,8 @@ import UserNotifications
 
 /// Decorates message notifications as communication notifications so the
 /// system renders the sender's avatar (initials monogram when no image is
-/// available). Avatar fetching is bounded and cached in the app group so a
-/// slow avatar host can never delay notification delivery.
+/// available). Reads only already-cached local avatar bytes — never triggers
+/// unprompted remote HTTPS fetches on push wakes or notification arrival.
 nonisolated enum NotificationCommunicationDecorator {
     static let maxAvatarBytes = 512 * 1024
     static let avatarRequestTimeout: TimeInterval = 4
@@ -110,33 +110,39 @@ nonisolated enum NotificationCommunicationDecorator {
         "\(presentation.threadIdentifier):\(presentation.senderAccountIdHex ?? presentation.senderName ?? "")"
     }
 
-    // MARK: - Bounded, cached avatar bytes
+    // MARK: - Cached avatar bytes (zero network egress)
 
-    /// `pictureUrl` is re-validated even though presentations carry it
-    /// pre-sanitized — the decorator is its own egress chokepoint.
-    static func avatarData(for pictureUrl: String?, deadline: Duration = avatarDeadline) async -> Data? {
-        guard let pictureUrl, let url = ContentSanitizer.imageURL(pictureUrl) else { return nil }
-        if let cached = cachedAvatarData(for: url) { return cached }
-        return await withDeadline(deadline) {
-            guard let fetched = await boundedFetch(url) else { return nil }
-            storeCachedAvatar(fetched, for: url)
-            return fetched
-        }
+    /// Reads only already-cached local avatar bytes. Unprompted remote HTTPS
+    /// fetches on push wakes or foreground notifications leak the device's IP
+    /// address to attacker-controlled hosts, so cache misses fall back to the
+    /// initials monogram until MDK exposes opaque local avatar references on
+    /// `NotificationUserFfi`.
+    static func avatarData(
+        for pictureUrl: String?,
+        deadline: Duration = avatarDeadline,
+        cacheDirectory: URL? = defaultCacheDirectory,
+        now: Date = Date()
+    ) async -> Data? {
+        _ = deadline
+        return cachedAvatarData(
+            forPictureUrl: pictureUrl,
+            cacheDirectory: cacheDirectory,
+            now: now
+        )
     }
 
-    /// Cache-only read for paths that must never wait on the network — the
-    /// foreground presenter enqueues immediately and warms the cache instead.
-    static func cachedAvatarData(forPictureUrl pictureUrl: String?) -> Data? {
+    /// Cache-only read that never touches the network.
+    static func cachedAvatarData(
+        forPictureUrl pictureUrl: String?,
+        cacheDirectory: URL? = defaultCacheDirectory,
+        now: Date = Date()
+    ) -> Data? {
         guard let pictureUrl, let url = ContentSanitizer.imageURL(pictureUrl) else { return nil }
-        return cachedAvatarData(for: url)
+        return cachedAvatarData(for: url, cacheDirectory: cacheDirectory, now: now)
     }
 
-    private static let warmsInFlight = Mutex<Set<String>>([])
-
-    /// Application-level bound on concurrent warm fetches. Per-URL dedup alone
-    /// lets many distinct slow hosts each hold a detached task (DNS is not
-    /// interruptible), so the set itself is capped; warms beyond it are
-    /// dropped — the cache is opportunistic.
+    /// Application-level bound on concurrent warm fetches. Retained for policy
+    /// helpers while unprompted remote cache warming is disabled.
     static let maxConcurrentWarms = 4
 
     static func claimWarmSlot(
@@ -149,22 +155,10 @@ nonisolated enum NotificationCommunicationDecorator {
         return true
     }
 
-    /// Fills the avatar cache off the delivery path so the next presentation
-    /// of this sender carries an image. Deduplicates concurrent warms per URL
-    /// and caps how many may run at once.
+    /// Intentionally a no-op: notification arrival must never initiate
+    /// unprompted remote HTTPS requests to peer-controlled hosts.
     static func warmAvatarCache(for pictureUrl: String?) {
-        guard let pictureUrl, let url = ContentSanitizer.imageURL(pictureUrl) else { return }
-        guard cachedAvatarData(for: url) == nil else { return }
-        let key = url.absoluteString
-        let claimed = warmsInFlight.withLock { inFlight in
-            claimWarmSlot(key, in: &inFlight)
-        }
-        guard claimed else { return }
-        Task.detached(priority: .utility) {
-            defer { _ = warmsInFlight.withLock { $0.remove(key) } }
-            guard let fetched = await boundedFetch(url) else { return }
-            storeCachedAvatar(fetched, for: url)
-        }
+        _ = pictureUrl
     }
 
     private struct DeadlineRace {
@@ -242,22 +236,6 @@ nonisolated enum NotificationCommunicationDecorator {
         }
     }
 
-    private static func boundedFetch(_ url: URL) async -> Data? {
-        var request = URLRequest(url: url)
-        request.timeoutInterval = avatarRequestTimeout
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
-        guard let (data, response) = try? await PinnedHTTPSFetcher.fetch(
-            request,
-            maximumResponseBytes: maxAvatarBytes
-        ) else { return nil }
-        guard let http = response as? HTTPURLResponse,
-              http.statusCode == 200,
-              isAllowedAvatarData(data)
-        else { return nil }
-        return data
-    }
-
     /// `INImage(imageData:)` accepts arbitrary bytes and defers interpretation
     /// to system services. Sniff the payload locally and allow only decodable
     /// raster image sources before caching or crossing that boundary.
@@ -307,53 +285,34 @@ nonisolated enum NotificationCommunicationDecorator {
         return true
     }
 
-    private static var cacheDirectory: URL? {
+    private static var defaultCacheDirectory: URL? {
         FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: AppContainerConfig.appGroupIdentifier)?
             .appendingPathComponent("Library/Caches/NotificationAvatars", isDirectory: true)
     }
 
-    private static func cacheFileURL(for url: URL) -> URL? {
-        guard let cacheDirectory else { return nil }
+    static func cacheFileURL(for url: URL, in directory: URL? = defaultCacheDirectory) -> URL? {
+        guard let directory else { return nil }
         let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
         let name = digest.map { String(format: "%02x", $0) }.joined()
-        return cacheDirectory.appendingPathComponent(name)
+        return directory.appendingPathComponent(name)
     }
 
     /// Cache entries expire so a changed image behind a stable URL converges;
-    /// a stale hit reads as a miss and the re-fetch overwrites the file.
+    /// a stale hit reads as a miss and falls back to the initials monogram.
     static let avatarCacheLifetime: TimeInterval = 7 * 24 * 3600
 
-    private static func cachedAvatarData(for url: URL, now: Date = Date()) -> Data? {
-        guard let file = cacheFileURL(for: url),
+    private static func cachedAvatarData(
+        for url: URL,
+        cacheDirectory: URL?,
+        now: Date = Date()
+    ) -> Data? {
+        guard let file = cacheFileURL(for: url, in: cacheDirectory),
               let modified = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
               now.timeIntervalSince(modified) < avatarCacheLifetime,
               let data = try? Data(contentsOf: file),
               isAllowedAvatarData(data)
         else { return nil }
         return data
-    }
-
-    private static func storeCachedAvatar(_ data: Data, for url: URL) {
-        guard let cacheDirectory, let file = cacheFileURL(for: url) else { return }
-        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-        try? data.write(to: file, options: .atomic)
-        pruneCache(in: cacheDirectory)
-    }
-
-    private static func pruneCache(in directory: URL) {
-        let manager = FileManager.default
-        guard let files = try? manager.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey]
-        ), files.count > maxCachedAvatars else { return }
-        let sorted = files.sorted { lhs, rhs in
-            let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            return lhsDate < rhsDate
-        }
-        for file in sorted.prefix(files.count - maxCachedAvatars) {
-            try? manager.removeItem(at: file)
-        }
     }
 }

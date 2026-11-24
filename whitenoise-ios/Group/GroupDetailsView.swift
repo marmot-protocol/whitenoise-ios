@@ -493,11 +493,11 @@ struct GroupDetailsView: View {
     ) -> some View {
         GroupAvatarBubble(
             groupIdHex: viewModel.group.groupIdHex,
-            imageHashHex: viewModel.selectedImageHash,
+            imageHashHex: viewModel.hasPendingInvite ? nil : viewModel.selectedImageHash,
             seed: viewModel.selectedAvatarSeed,
             title: displayTitle,
-            pictureURL: viewModel.selectedAvatarURL,
-            nativeAsset: viewModel.conversationWindow?.header.avatarAsset,
+            pictureURL: viewModel.hasPendingInvite ? nil : viewModel.selectedAvatarURL,
+            nativeAsset: viewModel.hasPendingInvite ? nil : viewModel.conversationWindow?.header.avatarAsset,
             usesNativeAsset: viewModel.conversationWindow != nil,
             nativeMaxPixelSize: nativeMaxPixelSize
         )
@@ -507,7 +507,7 @@ struct GroupDetailsView: View {
         NativeAvatarBubble(
             seed: contactAccountIdHex ?? viewModel.group.groupIdHex,
             title: contactTitle,
-            asset: viewModel.conversationWindow?.header.avatarAsset,
+            asset: viewModel.hasPendingInvite ? nil : viewModel.conversationWindow?.header.avatarAsset,
             maxPixelSize: maxPixelSize
         )
     }
@@ -517,7 +517,9 @@ struct GroupDetailsView: View {
     }
 
     private var hasContactImage: Bool {
-        guard let asset = viewModel.conversationWindow?.header.avatarAsset else { return false }
+        guard !viewModel.hasPendingInvite,
+              let asset = viewModel.conversationWindow?.header.avatarAsset
+        else { return false }
         return asset.availability == .ready || asset.availability == .stale
     }
 
@@ -1110,6 +1112,7 @@ struct GroupDetailsView: View {
     }
 
     private var hasGroupImage: Bool {
+        guard !viewModel.hasPendingInvite else { return false }
         if let window = viewModel.conversationWindow {
             let availability = window.header.avatarAsset?.availability
             return availability == .ready || availability == .stale

@@ -60,6 +60,7 @@ nonisolated struct RecipientGroupSnapshot: Equatable {
     let imageHashHex: String?
     let isArchived: Bool
     let isSelfMember: Bool
+    let pendingConfirmation: Bool
     let conversationKind: ChatConversationKindFfi
     let lastActivityAt: UInt64
     let memberIdsHex: [String]
@@ -76,7 +77,8 @@ nonisolated struct RecipientGroupSnapshot: Equatable {
             groupName: details?.group.name,
             avatarUrl: details?.group.avatarUrl,
             imageHashHex: details?.group.imageHashHex,
-            welcomerIdHex: details?.group.welcomerAccountIdHex
+            welcomerIdHex: details?.group.welcomerAccountIdHex,
+            pendingConfirmation: row.pendingConfirmation || details?.group.pendingConfirmation == true
         )
     }
 
@@ -87,16 +89,18 @@ nonisolated struct RecipientGroupSnapshot: Equatable {
         groupName: String? = nil,
         avatarUrl: String? = nil,
         imageHashHex: String? = nil,
-        welcomerIdHex: String? = nil
+        welcomerIdHex: String? = nil,
+        pendingConfirmation: Bool? = nil
     ) {
+        let isPending = pendingConfirmation ?? row.pendingConfirmation
         self.init(
             groupIdHex: row.groupIdHex,
             sanitizedName: ContentSanitizer.groupName(groupName ?? row.groupName),
             title: ContentSanitizer.groupName(row.groupName)
                 ?? ContentSanitizer.groupName(row.title)
                 ?? IdentityFormatter.short(row.groupIdHex),
-            avatarUrl: avatarUrl ?? row.avatarUrl,
-            imageHashHex: imageHashHex ?? row.avatar?.imageHashHex,
+            avatarUrl: isPending ? nil : (avatarUrl ?? row.avatarUrl),
+            imageHashHex: isPending ? nil : (imageHashHex ?? row.avatar?.imageHashHex),
             isArchived: row.archived,
             isSelfMember: GroupManagementPresentation.isActiveChatListMember(row.selfMembership),
             conversationKind: row.conversationKind,
@@ -104,7 +108,8 @@ nonisolated struct RecipientGroupSnapshot: Equatable {
             memberIdsHex: memberIdsHex,
             lastSenderIdHex: row.lastMessage?.sender,
             welcomerIdHex: welcomerIdHex,
-            adminIdsHex: adminIdsHex
+            adminIdsHex: adminIdsHex,
+            pendingConfirmation: isPending
         )
     }
 
@@ -121,15 +126,17 @@ nonisolated struct RecipientGroupSnapshot: Equatable {
         memberIdsHex: [String],
         lastSenderIdHex: String?,
         welcomerIdHex: String?,
-        adminIdsHex: [String] = []
+        adminIdsHex: [String] = [],
+        pendingConfirmation: Bool = false
     ) {
         self.groupIdHex = groupIdHex
         self.sanitizedName = sanitizedName
         self.title = title
-        self.avatarUrl = avatarUrl
-        self.imageHashHex = imageHashHex
+        self.avatarUrl = pendingConfirmation ? nil : avatarUrl
+        self.imageHashHex = pendingConfirmation ? nil : imageHashHex
         self.isArchived = isArchived
         self.isSelfMember = isSelfMember
+        self.pendingConfirmation = pendingConfirmation
         self.conversationKind = conversationKind
         self.lastActivityAt = lastActivityAt
         self.memberIdsHex = memberIdsHex
@@ -163,6 +170,7 @@ nonisolated struct ConversationChoice: Equatable, Identifiable {
     let imageHashHex: String?
     let isArchived: Bool
     let lastActivityAt: UInt64
+    var pendingConfirmation: Bool = false
 
     var id: String { groupIdHex }
 }
@@ -198,10 +206,11 @@ nonisolated enum ConversationChoiceProjection {
                 ConversationChoice(
                     groupIdHex: snapshot.groupIdHex,
                     name: snapshot.sanitizedName,
-                    avatarUrl: snapshot.avatarUrl,
-                    imageHashHex: snapshot.imageHashHex,
+                    avatarUrl: snapshot.pendingConfirmation ? nil : snapshot.avatarUrl,
+                    imageHashHex: snapshot.pendingConfirmation ? nil : snapshot.imageHashHex,
                     isArchived: snapshot.isArchived,
-                    lastActivityAt: snapshot.lastActivityAt
+                    lastActivityAt: snapshot.lastActivityAt,
+                    pendingConfirmation: snapshot.pendingConfirmation
                 )
             }
             .sorted {

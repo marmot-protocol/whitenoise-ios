@@ -11,6 +11,7 @@ nonisolated enum SharedGroupsProjection {
         let imageHashHex: String?
         let memberCount: Int
         let isDirectMessage: Bool
+        var pendingConfirmation: Bool = false
 
         var id: String { groupIdHex }
     }
@@ -26,6 +27,7 @@ nonisolated enum SharedGroupsProjection {
         return snapshots
             .filter { snapshot in
                 guard snapshot.isSelfMember,
+                      !snapshot.pendingConfirmation,
                       snapshot.memberIdsHex.count >= 2
                 else { return false }
                 let roster = Set(snapshot.memberIdsHex.map { $0.lowercased() })
@@ -36,11 +38,12 @@ nonisolated enum SharedGroupsProjection {
                 SharedGroup(
                     groupIdHex: snapshot.groupIdHex,
                     title: snapshot.title,
-                    avatarUrl: snapshot.avatarUrl,
-                    imageHashHex: snapshot.imageHashHex,
+                    avatarUrl: snapshot.pendingConfirmation ? nil : snapshot.avatarUrl,
+                    imageHashHex: snapshot.pendingConfirmation ? nil : snapshot.imageHashHex,
                     memberCount: snapshot.memberIdsHex.count,
                     isDirectMessage: snapshot.sanitizedName == nil
-                        && snapshot.memberIdsHex.count == 2
+                        && snapshot.memberIdsHex.count == 2,
+                    pendingConfirmation: snapshot.pendingConfirmation
                 )
             }
     }
@@ -60,6 +63,7 @@ nonisolated enum SharedGroupsProjection {
             .filter { snapshot in
                 guard snapshot.sanitizedName != nil,
                       snapshot.isSelfMember,
+                      !snapshot.pendingConfirmation,
                       !snapshot.memberIdsHex.isEmpty
                 else { return false }
                 let roster = Set(snapshot.memberIdsHex.map { $0.lowercased() })
@@ -71,10 +75,11 @@ nonisolated enum SharedGroupsProjection {
                 SharedGroup(
                     groupIdHex: snapshot.groupIdHex,
                     title: snapshot.title,
-                    avatarUrl: snapshot.avatarUrl,
-                    imageHashHex: snapshot.imageHashHex,
+                    avatarUrl: snapshot.pendingConfirmation ? nil : snapshot.avatarUrl,
+                    imageHashHex: snapshot.pendingConfirmation ? nil : snapshot.imageHashHex,
                     memberCount: snapshot.memberIdsHex.count,
-                    isDirectMessage: false
+                    isDirectMessage: false,
+                    pendingConfirmation: snapshot.pendingConfirmation
                 )
             }
     }

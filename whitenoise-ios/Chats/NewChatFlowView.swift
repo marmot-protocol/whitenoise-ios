@@ -434,16 +434,18 @@ struct ConversationChooserView: View {
     private func conversationRow(_ choice: ConversationChoice) -> some View {
         let isNamed = choice.name != nil
         let title = choice.name ?? L10n.string("Conversation")
-        let groupAvatarURL = ContentSanitizer.imageURL(choice.avatarUrl)
-        let pictureURL = groupAvatarURL
-            ?? (isNamed
-                ? nil
-                : appState.avatarURL(forAccountIdHex: presentation.targetAccountIdHex))
+        let groupAvatarURL = choice.pendingConfirmation ? nil : ContentSanitizer.imageURL(choice.avatarUrl)
+        let pictureURL = choice.pendingConfirmation
+            ? nil
+            : (groupAvatarURL
+                ?? (isNamed
+                    ? nil
+                    : appState.avatarURL(forAccountIdHex: presentation.targetAccountIdHex)))
 
         return HStack(spacing: 12) {
             GroupAvatarBubble(
                 groupIdHex: choice.groupIdHex,
-                imageHashHex: choice.imageHashHex,
+                imageHashHex: choice.pendingConfirmation ? nil : choice.imageHashHex,
                 seed: isNamed ? choice.groupIdHex : presentation.targetAccountIdHex,
                 title: isNamed ? title : presentation.recipientName,
                 pictureURL: pictureURL

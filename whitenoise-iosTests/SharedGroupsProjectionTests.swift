@@ -1,5 +1,6 @@
 import Testing
 @testable import whitenoise_ios
+@testable import MarmotKit
 
 struct SharedGroupsProjectionTests {
     private let me = String(repeating: "aa", count: 32)
@@ -77,6 +78,81 @@ struct SharedGroupsProjectionTests {
         )
 
         #expect(result.map(\.groupIdHex) == ["g1"])
+    }
+
+    @Test func excludesPendingConfirmationInvitesFromSharedAndAddableGroupsAndSuppressesAvatars() {
+        let pendingRow = chatListRow(
+            groupIdHex: "pending-group",
+            pendingConfirmation: true,
+            title: "Unaccepted Invite",
+            avatar: ChatListAvatarFfi(
+                imageHashHex: hex("dd"),
+                imageKeyHex: hex("11"),
+                imageNonceHex: String(repeating: "22", count: 12),
+                imageUploadKeyHex: hex("33"),
+                mediaType: "image/jpeg"
+            ),
+            avatarUrl: "https://attacker.example/group.png",
+            updatedAt: 20
+        )
+        let pendingSnapshot = RecipientGroupSnapshot(
+            row: pendingRow,
+            memberIdsHex: [me, alice, bob],
+            adminIdsHex: [me]
+        )
+        #expect(pendingSnapshot.pendingConfirmation)
+        #expect(pendingSnapshot.avatarUrl == nil)
+        #expect(pendingSnapshot.imageHashHex == nil)
+
+        let acceptedShared = snapshot(
+            "accepted-shared",
+            name: "Accepted Team",
+            members: [me, alice, bob],
+            activity: 10
+        )
+        let acceptedAddable = RecipientGroupSnapshot(
+            groupIdHex: "accepted-addable",
+            sanitizedName: "Admin Room",
+            title: "Admin Room",
+            avatarUrl: "https://cdn.example/room.png",
+            imageHashHex: hex("ee"),
+            isSelfMember: true,
+            lastActivityAt: 15,
+            memberIdsHex: [me, bob],
+            lastSenderIdHex: nil,
+            welcomerIdHex: nil,
+            adminIdsHex: [me]
+        )
+        let pendingAddable = RecipientGroupSnapshot(
+            groupIdHex: "pending-addable",
+            sanitizedName: "Pending Admin Room",
+            title: "Pending Admin Room",
+            avatarUrl: "https://attacker.example/admin-room.png",
+            imageHashHex: hex("ff"),
+            isSelfMember: true,
+            lastActivityAt: 25,
+            memberIdsHex: [me, bob],
+            lastSenderIdHex: nil,
+            welcomerIdHex: nil,
+            adminIdsHex: [me],
+            pendingConfirmation: true
+        )
+        #expect(pendingAddable.avatarUrl == nil)
+        #expect(pendingAddable.imageHashHex == nil)
+
+        let shared = SharedGroupsProjection.sharedGroups(
+            snapshots: [pendingSnapshot, acceptedShared],
+            targetAccountIdHex: alice,
+            myAccountIdHex: me
+        )
+        #expect(shared.map(\.groupIdHex) == ["accepted-shared"])
+
+        let addable = SharedGroupsProjection.addableGroups(
+            snapshots: [pendingAddable, acceptedAddable],
+            targetAccountIdHex: alice,
+            myAccountIdHex: me
+        )
+        #expect(addable.map(\.groupIdHex) == ["accepted-addable"])
     }
 
     private func snapshot(

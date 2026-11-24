@@ -37,6 +37,44 @@ struct ConversationInviteActionTests {
         #expect(viewModel.inviteActionInFlight == nil)
     }
 
+    @Test func pendingInviteSuppressesSelectedAvatarURLAndImageHashUntilAccepted() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let avatarUrl = "https://attacker.example/group.png"
+        let imageHash = hex("cc")
+        var pending = group(
+            name: "invited",
+            avatarUrl: avatarUrl,
+            pendingConfirmation: true,
+            welcomerAccountIdHex: hex("44")
+        )
+        pending.imageHashHex = imageHash
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            groupCalls: groupCalls(accept: { _, groupIdHex in
+                var accepted = group(
+                    name: "invited",
+                    id: groupIdHex,
+                    avatarUrl: avatarUrl,
+                    pendingConfirmation: false
+                )
+                accepted.imageHashHex = imageHash
+                return accepted
+            })
+        )
+
+        #expect(viewModel.hasPendingInvite)
+        #expect(viewModel.selectedAvatarURL == nil)
+        #expect(viewModel.selectedImageHash == nil)
+
+        _ = await viewModel.acceptInvite()
+
+        #expect(!viewModel.hasPendingInvite)
+        #expect(viewModel.selectedAvatarURL == URL(string: avatarUrl))
+        #expect(viewModel.selectedImageHash == imageHash)
+    }
+
     @Test func declineAppliesArchivedInactiveGroup() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"
