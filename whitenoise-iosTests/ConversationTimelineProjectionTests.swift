@@ -615,12 +615,20 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func inFlightReadMarkPreservesOffWindowSavedMarkerReportedOnCompletion() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let reconcileCount = Mutex(0)
+            let notifications = AppNotifications(
+                deliveredNotificationDescriptorsProvider: {
+                    reconcileCount.withLock { $0 += 1 }
+                    return []
+                }
+            )
+            let appState = AppState.test(client: client, notifications: notifications)
             appState.activeAccountRef = "acct-1"
             let msgB = message(id: hex("f1"), kind: MessageSemantics.kindChat)
             let msgB2 = message(id: hex("f2"), kind: MessageSemantics.kindChat)
             let msgB3 = message(id: hex("f3"), kind: MessageSemantics.kindChat)
             let offWindowC = hex("f9")
+            let offWindowFirstUnread = hex("fa")
             let keys: [String: TimelineHistoryOrderKey] = [
                 msgB.messageIdHex: orderKey(msgB.messageIdHex, epoch: 1, timelineAt: 10),
                 msgB2.messageIdHex: orderKey(msgB2.messageIdHex, epoch: 1, timelineAt: 20),
@@ -648,23 +656,24 @@ struct ConversationTimelineProjectionTests {
             )
 
             // Case 1: MDK returns success for B, but its returned row reports
-            // that the durable cursor is still at off-window C (linked device
-            // read ahead). Completion must retain off-window C and block B2.
+            // that the durable cursor is at off-window C with unread messages
+            // still beyond the current historical page. Completion must retain
+            // off-window C fail-closed (`hasMoreAfter = true`) and block B2.
             var rowAtC = chatListRow(groupIdHex: hex("aa"), title: "Chat")
             rowAtC.lastReadMessageIdHex = offWindowC
-            rowAtC.unreadCount = 0
+            rowAtC.unreadCount = 2
+            rowAtC.firstUnreadMessageIdHex = offWindowFirstUnread
             returnedRow = rowAtC
             marker.advanceWatermark(to: msgB, isDeleted: false)
             try await eventually { sleeper.sleepingCount == 1 }
             sleeper.releaseAll()
             try await writeEntered.wait()
             writeRelease.signal()
-            try await eventually { markedIds == [msgB.messageIdHex] && sleeper.sleepingCount == 0 }
-            await Task.yield()
+            // Waiting for notification reconciliation proves `settleSuccessfulFlush` completed.
+            try await eventually { reconcileCount.withLock { $0 } >= 1 }
 
             let delaysAfterB = sleeper.requestedDelays.count
             marker.advanceWatermark(to: msgB2, isDeleted: false)
-            await Task.yield()
             #expect(sleeper.requestedDelays.count == delaysAfterB)
             #expect(markedIds == [msgB.messageIdHex])
 
@@ -698,13 +707,12 @@ struct ConversationTimelineProjectionTests {
                 firstUnreadMessageIdHex: nil,
                 hasMoreAfter: true
             )
+            let reconcilesBeforeRelease = reconcileCount.withLock { $0 }
             write2Release.signal()
-            await Task.yield()
-            await Task.yield()
+            try await eventually { reconcileCount.withLock { $0 } > reconcilesBeforeRelease }
 
             let delaysAfterSeed = sleeper.requestedDelays.count
             marker2.advanceWatermark(to: msgB3, isDeleted: false)
-            await Task.yield()
             #expect(sleeper.requestedDelays.count == delaysAfterSeed)
             #expect(marked2 == [msgB.messageIdHex])
         }
@@ -714,29 +722,52 @@ struct ConversationTimelineProjectionTests {
     func reconcileDeliveredNotificationsSkipsRemovalWhenFlushSuspendedDuringLookup() async throws {
         try await withTestClient { client in
             let groupIdHex = hex("aa")
-            let msg = message(id: hex("e8"), kind: MessageSemantics.kindChat)
+            let msg1 = message(id: hex("e7"), kind: MessageSemantics.kindChat)
+            let msg2 = message(id: hex("e8"), kind: MessageSemantics.kindChat)
             let keys: [String: TimelineHistoryOrderKey] = [
-                msg.messageIdHex: orderKey(msg.messageIdHex, epoch: 1, timelineAt: 100),
+                msg1.messageIdHex: orderKey(msg1.messageIdHex, epoch: 1, timelineAt: 100),
+                msg2.messageIdHex: orderKey(msg2.messageIdHex, epoch: 1, timelineAt: 200),
             ]
-            let lookupEntered = TestLatch()
-            let lookupRelease = TestLatch()
+            let lookup2Entered = TestLatch()
+            let lookup2Release = TestLatch()
+            let lookup2Returned = TestLatch()
+            let lookupCalls = Mutex(0)
             let removedIdentifiers = Mutex<[String]>([])
-            let descriptor = DeliveredNotificationDescriptor(
+            let descriptor1 = DeliveredNotificationDescriptor(
                 identifier: "notif-1",
                 route: LocalNotificationRoute(
                     accountRef: "acct-1",
                     groupIdHex: groupIdHex,
                     notificationKey: "notif-1",
-                    messageIdHex: msg.messageIdHex
+                    messageIdHex: msg1.messageIdHex
+                ),
+                isMessageNotification: true,
+                isActionFailure: false
+            )
+            let descriptor2 = DeliveredNotificationDescriptor(
+                identifier: "notif-2",
+                route: LocalNotificationRoute(
+                    accountRef: "acct-1",
+                    groupIdHex: groupIdHex,
+                    notificationKey: "notif-2",
+                    messageIdHex: msg2.messageIdHex
                 ),
                 isMessageNotification: true,
                 isActionFailure: false
             )
             let notifications = AppNotifications(
                 deliveredNotificationDescriptorsProvider: {
-                    lookupEntered.signal()
-                    try? await lookupRelease.wait()
-                    return [descriptor]
+                    let call = lookupCalls.withLock { count -> Int in
+                        count += 1
+                        return count
+                    }
+                    if call == 1 {
+                        return [descriptor1]
+                    }
+                    lookup2Entered.signal()
+                    try? await lookup2Release.wait()
+                    defer { lookup2Returned.signal() }
+                    return [descriptor2]
                 },
                 deliveredNotificationIdentifiersRemover: { ids in
                     removedIdentifiers.withLock { $0.append(contentsOf: ids) }
@@ -760,19 +791,32 @@ struct ConversationTimelineProjectionTests {
                 }
             )
 
-            marker.advanceWatermark(to: msg, isDeleted: false)
+            // Positive control: unsuspended flush removes delivered notifications.
+            marker.advanceWatermark(to: msg1, isDeleted: false)
             try await eventually { sleeper.sleepingCount == 1 }
             sleeper.releaseAll()
-            try await lookupEntered.wait()
+            try await eventually { removedIdentifiers.withLock { $0 } == ["notif-1"] }
 
-            // Suspend while delivered-notification lookup is in flight; once
-            // lookup completes after suspension, stale notification removal must be skipped.
+            // Suspended case: suspend while delivered-notification lookup is in flight;
+            // once lookup completes after suspension, stale removal must be skipped.
+            marker.advanceWatermark(to: msg2, isDeleted: false)
+            try await eventually { sleeper.sleepingCount == 1 }
+            sleeper.releaseAll()
+            try await lookup2Entered.wait()
+
             marker.suspendPendingReadMarks()
-            lookupRelease.signal()
-            await Task.yield()
-            await Task.yield()
+            lookup2Release.signal()
+            try await lookup2Returned.wait()
+            // Drain any already-enqueued centerMutationQueue work via a second no-op reconcile barrier.
+            await notifications.reconcileDeliveredNotificationsAfterRead(
+                accountRef: "acct-1",
+                groupIdHex: groupIdHex,
+                readMessageIdHexes: [hex("e9")],
+                conversationStillHasUnread: true,
+                shouldRemoveDeliveredNotifications: { false }
+            )
 
-            #expect(removedIdentifiers.withLock { $0 }.isEmpty)
+            #expect(removedIdentifiers.withLock { $0 } == ["notif-1"])
         }
     }
 

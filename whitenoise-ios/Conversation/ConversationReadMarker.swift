@@ -141,6 +141,7 @@ final class ConversationReadMarker {
     ) {
         promoteUnplacedSavedMarkerIfPossible()
         guard let messageIdHex, !messageIdHex.isEmpty else { return }
+        let previousUnplaced = unplacedSavedMarker
         if let resolvedKey = orderKey(messageIdHex),
            !resolvedKey.isUnresolvedOptimistic {
             let incoming = Watermark(messageIdHex: messageIdHex, orderKey: resolvedKey)
@@ -149,11 +150,15 @@ final class ConversationReadMarker {
                 incoming: incoming
             )
             unplacedSavedMarker = nil
-            unplacedSavedMarkerGeneration &+= 1
+            if unplacedSavedMarker != previousUnplaced {
+                unplacedSavedMarkerGeneration &+= 1
+            }
             pruneSupersededPendingWatermark()
         } else if flushedWatermark?.messageIdHex == messageIdHex {
             unplacedSavedMarker = nil
-            unplacedSavedMarkerGeneration &+= 1
+            if unplacedSavedMarker != previousUnplaced {
+                unplacedSavedMarkerGeneration &+= 1
+            }
             pruneSupersededPendingWatermark()
         } else {
             unplacedSavedMarker = UnplacedSavedMarker(
@@ -162,7 +167,9 @@ final class ConversationReadMarker {
                 firstUnreadMessageIdHex: firstUnreadMessageIdHex,
                 hasMoreAfter: hasMoreAfter
             )
-            unplacedSavedMarkerGeneration &+= 1
+            if unplacedSavedMarker != previousUnplaced {
+                unplacedSavedMarkerGeneration &+= 1
+            }
             pruneSupersededPendingWatermark()
         }
     }
@@ -470,7 +477,6 @@ final class ConversationReadMarker {
                         return self.readMarkTaskID == taskID
                             && !Task.isCancelled
                             && appState.runtimeGeneration == startedRuntimeGeneration
-                            && appState.canUseRuntimeForForegroundWork
                     }
                 )
                 guard readMarkTaskID == taskID,
@@ -537,7 +543,7 @@ final class ConversationReadMarker {
                     messageIdHex: reportedSavedID,
                     unreadCount: latestRow?.unreadCount,
                     firstUnreadMessageIdHex: latestRow?.firstUnreadMessageIdHex,
-                    hasMoreAfter: unplacedSavedMarker?.hasMoreAfter ?? false
+                    hasMoreAfter: unplacedSavedMarker?.hasMoreAfter ?? true
                 )
             }
         } else if markerUnchangedDuringAwait {
