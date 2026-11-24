@@ -57,6 +57,7 @@ final class AttachmentPolicyBridge {
     private weak var reconciledClient: (any AttachmentPolicyRuntime)?
     private var clientAcceptsPolicyChanges = false
     private var revision: UInt64 = 0
+    private var detachEpoch: UInt64 = 0
     private var policyTail: Task<Void, Error>?
     private var revocationTail: Task<[(AccountSummaryFfi, String)], Error>?
     private let permissions: @MainActor () -> any AttachmentPermissionSource
@@ -88,6 +89,7 @@ final class AttachmentPolicyBridge {
         reconciledClient = nil
         clientAcceptsPolicyChanges = false
         revision &+= 1
+        detachEpoch &+= 1
         let revoked = revocationTail
         let tail = policyTail
         revocationTail = nil
@@ -112,6 +114,7 @@ final class AttachmentPolicyBridge {
                           updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)?) -> Task<Void, Error> {
         revision &+= 1
         let event = revision
+        let epoch = detachEpoch
         if !beforeStart, reconciledClient === client {
             reconciledClient = nil
         }
@@ -119,10 +122,12 @@ final class AttachmentPolicyBridge {
         let revocation = Task { @MainActor in
             _ = try? await previous?.value
             try Task.checkCancellation()
+            guard self.detachEpoch == epoch else { throw CancellationError() }
             let accounts = try await client.listAccounts()
             var generations: [(AccountSummaryFfi, String)] = []
             for account in accounts where !account.signedOut {
                 try Task.checkCancellation()
+                guard self.detachEpoch == epoch else { throw CancellationError() }
                 do {
                     let generation = try await client.beginAttachmentPermissionUpdate(accountRef: account.accountIdHex)
                     generations.append((account, generation))
@@ -137,12 +142,14 @@ final class AttachmentPolicyBridge {
             // Keep durable quota writes ordered while revocation runs promptly.
             _ = try? await previousPolicy?.value
             try Task.checkCancellation()
+            guard self.detachEpoch == epoch else { throw CancellationError() }
             let limitsEdited = updatedLimits != nil
             var appliedLimits = false
             var appliedPermission = false
             var reconciledAllEligibleAccounts = true
             for (account, generation) in generations {
                 try Task.checkCancellation()
+                guard self.detachEpoch == epoch else { throw CancellationError() }
                 do {
                     let checkpoint = try await client.onboardingSnapshot(accountID: account.accountIdHex)
                     guard Self.configures(onboardingReady: checkpoint?.ready) else { continue }

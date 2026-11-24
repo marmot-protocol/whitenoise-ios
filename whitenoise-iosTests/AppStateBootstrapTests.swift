@@ -2028,6 +2028,66 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func foregroundActivationCompletesWhileEarlierAbortedCatchUpDrainIsStillHeld() async throws {
+        let catchUp = NotificationCatchUpStub()
+        let checkpoint = AsyncTestCheckpoint()
+        let sleeperEntered = TestLatch()
+        let sleeperExited = TestLatch()
+        let seeded = try await readyAppStateWithCreatedIdentities(
+            catchUp: catchUp,
+            mutationDrainSleeper: { _ in
+                defer { sleeperExited.signal() }
+                sleeperEntered.signal()
+                try await parkUntilCancelled()
+            }
+        )
+        let appState = seeded.appState
+        appState.setAppSceneActive(true)
+        let generationBefore = appState.runtimeGeneration
+
+        // Park connectivity catch-up and hold a mutation lease so Suspension A
+        // aborts before storage close and parks the catch-up drain.
+        catchUp.onCatchUp = {
+            await checkpoint.pause()
+        }
+        appState.scheduleConnectivityCatchUp()
+        await checkpoint.waitUntilPaused()
+        catchUp.onCatchUp = nil
+
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+        let suspensionA = appState.startRuntimeSuspension()
+        try await sleeperEntered.wait()
+
+        let activationA = appState.startForegroundActivation()
+        try await sleeperExited.wait()
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+        await suspensionA.value
+        await activationA.value
+
+        // Run Suspension B to terminal storage closure while Suspension A's
+        // parked catch-up is STILL held.
+        let initialClient = try #require(appState.client)
+        let suspensionB = appState.startRuntimeSuspension()
+        try await eventually {
+            initialClient.marmot.storageIsClosed() && appState.runtimeSuspendedForBackground
+        }
+
+        // Foreground activation must NOT stall behind Suspension A's unrelated
+        // parked catch-up drain: it must rebuild the runtime immediately while
+        // `checkpoint` is still held.
+        let resumedActivation = appState.startForegroundActivation()
+        await resumedActivation.value
+
+        #expect(appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.client != nil)
+        #expect(appState.runtimeGeneration == generationBefore + 1)
+
+        await checkpoint.release()
+        await suspensionB.value
+        await stopReadyRuntime(appState)
+    }
+
     @Test func transientInactiveToActiveKeepsLiveRuntimeAndRestoresPushRegistration() async throws {
         let catchUp = NotificationCatchUpStub()
         var remoteRegisterCalls = 0
@@ -2753,11 +2813,12 @@ struct AppStateBootstrapTests {
         catchUp: NotificationCatchUpStub? = nil,
         timings: HostPerformanceRecorderStub? = nil,
         sweepSleeper: ControlledSleeper? = nil,
-        refreshReads: AccountRefreshReadsStub? = nil
+        refreshReads: AccountRefreshReadsStub? = nil,
+        mutationDrainSleeper: @escaping RuntimeLifecycle.RetrySleeper = RuntimeLifecycle.defaultRetrySleeper
     ) async throws -> (appState: AppState, accounts: [AccountSummaryFfi]) {
         let appState = try testAppState(
             notifications: notifications, catchUp: catchUp, timings: timings, sweepSleeper: sweepSleeper,
-            refreshReads: refreshReads
+            refreshReads: refreshReads, mutationDrainSleeper: mutationDrainSleeper
         )
         await appState.bootstrap()
         #expect(appState.phase == .onboarding)

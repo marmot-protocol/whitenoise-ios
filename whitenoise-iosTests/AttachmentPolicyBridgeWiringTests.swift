@@ -421,6 +421,34 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(runtime.grants.count == 1)
     }
 
+    @Test func detachStopsEarlierQueuedRevocationsFromCallingDetachedClient() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: true))
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        let hold = runtime.hold(.listing)
+
+        let first = try await start(bridge, runtime)
+        try await hold.entered.wait()
+        let second = try await start(bridge, runtime)
+        let third = try await start(bridge, runtime)
+
+        let drained = bridge.detach(client: runtime)
+        hold.release.signal()
+
+        await #expect(throws: CancellationError.self) { try await first.value }
+        await #expect(throws: CancellationError.self) { try await second.value }
+        await #expect(throws: CancellationError.self) { try await third.value }
+        _ = try? await drained?.value
+
+        // Only `first`'s already-started listAccounts ran; detach stopped
+        // `first`'s revocation loop and prevented `second` and `third` from
+        // touching the detached runtime at all.
+        #expect(runtime.listings == 1)
+        #expect(runtime.begun.isEmpty)
+        #expect(runtime.reads.isEmpty)
+        #expect(runtime.writes.isEmpty)
+        #expect(runtime.grants.isEmpty)
+    }
+
     @Test func isAttachedTracksPostStartSyncAndDetach() async throws {
         let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
         let other = FakeAttachmentRuntime(accounts: [Self.alice])
@@ -519,6 +547,25 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(unreadyBridge.isAttached(to: unready))
     }
 
+    /// Starts `synchronize` and returns once it has scheduled its event. The
+    /// bridge schedules synchronously on entry, in the same main-actor job as
+    /// the signal, before its first suspension.
+    private func start(
+        _ bridge: AttachmentPolicyBridge, _ runtime: FakeAttachmentRuntime,
+        updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)? = nil
+    ) async throws -> Task<Void, any Error> {
+        let scheduled = TestLatch()
+        let task = Task { @MainActor in
+            scheduled.signal()
+            try await bridge.synchronize(runtime, updatedLimits: updatedLimits)
+        }
+        try await scheduled.wait()
+        return task
+    }
+}
+
+@MainActor
+struct AttachmentPolicyBridgeRuntimeStartupTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func isCurrentClientStartedStaysFalseUntilRuntimeStartupCompletes() async throws {
         try await withTestClient { initialClient in
@@ -555,22 +602,6 @@ struct AttachmentPolicyBridgeWiringTests {
             #expect(!appState.canUseLiveRuntime)
             #expect(!appState.isCurrentClientStarted)
         }
-    }
-
-    /// Starts `synchronize` and returns once it has scheduled its event. The
-    /// bridge schedules synchronously on entry, in the same main-actor job as
-    /// the signal, before its first suspension.
-    private func start(
-        _ bridge: AttachmentPolicyBridge, _ runtime: FakeAttachmentRuntime,
-        updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)? = nil
-    ) async throws -> Task<Void, any Error> {
-        let scheduled = TestLatch()
-        let task = Task { @MainActor in
-            scheduled.signal()
-            try await bridge.synchronize(runtime, updatedLimits: updatedLimits)
-        }
-        try await scheduled.wait()
-        return task
     }
 }
 

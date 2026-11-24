@@ -158,8 +158,9 @@ final class RuntimeLifecycle {
     /// True while a real `.background` transition (`startRuntimeSuspension`) has
     /// an unsatisfied suspension request. Cleared by `startForegroundActivation()`
     /// and untouched by transient `.inactive` (`setAppSceneActive(false)`), so
-    /// Face ID / App Lock overlays never revive an abandoned suspension.
-    @ObservationIgnored private var backgroundSuspensionRequested = false
+    /// Face ID / App Lock overlays never revive an abandoned suspension. Tracked
+    /// by `@Observable` so `canUseLiveRuntime` closes immediately on suspension.
+    private var backgroundSuspensionRequested = false
     /// Detached cleanup tasks for already-cancelled maintenance from aborted
     /// suspensions or superseded activations. Terminal background suspension
     /// awaits these after closing SQLCipher.
@@ -322,7 +323,7 @@ final class RuntimeLifecycle {
         guard appState?.isErasingAppData != true else { return false }
         return ForegroundRuntimeWorkGate.canUseLiveRuntime(
             runtimeSuspendedForBackground: runtimeSuspendedForBackground,
-            isRuntimeSuspending: runtimeWorkIsSuspending,
+            isRuntimeSuspending: runtimeWorkIsSuspending || backgroundSuspensionRequested,
             hasRuntimeClient: client != nil
         )
     }
@@ -330,7 +331,7 @@ final class RuntimeLifecycle {
         guard appState?.isErasingAppData != true else { return false }
         return ForegroundRuntimeWorkGate.canUseLiveRuntimeWork(
             runtimeSuspendedForBackground: runtimeSuspendedForBackground,
-            isRuntimeSuspending: runtimeWorkIsSuspending
+            isRuntimeSuspending: runtimeWorkIsSuspending || backgroundSuspensionRequested
         )
     }
 
@@ -946,6 +947,9 @@ final class RuntimeLifecycle {
         guard phaseOwnsLiveRuntime, !runtimeSuspendedForBackground else {
             backgroundSuspensionRequested = false
             await drainForegroundMaintenance(cancellation)
+            if isBackgroundStorageCloseInProgress {
+                finishBackgroundStorageClose()
+            }
             await drainPendingMaintenanceDrains()
             return
         }
@@ -966,11 +970,13 @@ final class RuntimeLifecycle {
         runtimeSuspendedForBackground = true
         // Once terminal storage closure has run, cancelled work can safely
         // drain: retained handles are spent and return StorageClosed instead of
-        // reopening the App Group databases. Keep the lifecycle task alive so
-        // foreground resume still observes orderly task completion, but the
-        // suspension-sensitive file lock is already gone if UIKit expires the
-        // background assertion during this cleanup.
+        // reopening the App Group databases. Release the storage-close gate
+        // before joining unrelated earlier aborted drains so foreground resume
+        // is never stalled behind a parked catch-up from an earlier suspension.
         await drainForegroundMaintenance(cancellation)
+        if isBackgroundStorageCloseInProgress {
+            finishBackgroundStorageClose()
+        }
         await drainPendingMaintenanceDrains()
     }
 
@@ -1430,11 +1436,14 @@ final class RuntimeLifecycle {
     }
 
     private func waitForForegroundRuntimeMutations(timeout: Duration) async {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
         var timedOut = false
         while !foregroundMutationLeaseIDs.isEmpty,
               !Task.isCancelled,
               backgroundSuspensionRequested,
               !timedOut {
+            let remaining = ContinuousClock.now.duration(to: deadline)
+            guard remaining > .zero else { break }
             let waiterID = UUID()
             let sleeper = mutationDrainSleeper
             var timeoutTask: Task<Void, Never>?
@@ -1451,7 +1460,7 @@ final class RuntimeLifecycle {
                     foregroundMutationWaiters[waiterID] = continuation
                     timeoutTask = Task { @MainActor [weak self] in
                         do {
-                            try await sleeper(timeout)
+                            try await sleeper(remaining)
                         } catch {
                             return
                         }
