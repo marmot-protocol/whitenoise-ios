@@ -5608,6 +5608,13 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func sendCustomEvent(accountRef: String, groupIdHex: String, kind: UInt64, tags: [[String]], content: String) async throws  -> SendSummaryFfi
 
     /**
+     * Durably admit an app-defined event under [`Marmot::send_custom_event`]'s
+     * rules, such as an answer or a control for an agent (kind 1202). The
+     * same token after a restart returns the same event and sends nothing.
+     */
+    func sendCustomEventWithClientToken(accountRef: String, groupIdHex: String, kind: UInt64, tags: [[String]], content: String, clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
      * Send already-uploaded encrypted media attachments as a kind-9 chat
      * carrying ordered NIP-92 `imeta` tags. Preserve each upload's local
      * `source_epoch_identity`; references without provenance need a fresh upload.
@@ -6035,6 +6042,26 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * NIP-59 gift-wrapped). Additive to `report_message`, which is unchanged.
      */
     func submitModerationReport(accountRef: String, reportedPubkey: String, reason: ReportReasonFfi, explanation: String, origin: ModerationReportOriginFfi) async throws  -> ModerationReportOutcomeFfi
+
+    /**
+     * Durably admit a kind-9 reply with application tags. MDK owns the reply's `e` and `q` tags.
+     */
+    func submitTaggedReply(accountRef: String, groupIdHex: String, targetMessageId: String, text: String, tags: [[String]], clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
+     * Durably admit an authorized pack sticker with context tags under [`Marmot::send_tagged_sticker`]'s rules.
+     */
+    func submitTaggedSticker(accountRef: String, groupIdHex: String, stickerRef: StickerRefFfi, tags: [[String]], clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
+     * Durably admit kind-9 text with application tags under [`Marmot::send_tagged_text`]'s rules.
+     */
+    func submitTaggedText(accountRef: String, groupIdHex: String, text: String, tags: [[String]], clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
+     * Durably admit a NIP-22 thread message using [`Marmot::send_thread_message`]'s input rules.
+     */
+    func submitThreadMessage(accountRef: String, groupIdHex: String, parentMessageId: String, text: String, attachments: [MediaAttachmentReferenceFfi], tags: [[String]], clientToken: String) async throws  -> LocalSendAcceptanceFfi
 
     /**
      * Signed-in local/external accounts, independent of any list or active worker.
@@ -12387,6 +12414,28 @@ open func sendCustomEvent(accountRef: String, groupIdHex: String, kind: UInt64, 
 }
 
     /**
+     * Durably admit an app-defined event under [`Marmot::send_custom_event`]'s
+     * rules, such as an answer or a control for an agent (kind 1202). The
+     * same token after a restart returns the same event and sends nothing.
+     */
+open func sendCustomEventWithClientToken(accountRef: String, groupIdHex: String, kind: UInt64, tags: [[String]], content: String, clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_send_custom_event_with_client_token(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterUInt64.lower(kind),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(content),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Send already-uploaded encrypted media attachments as a kind-9 chat
      * carrying ordered NIP-92 `imeta` tags. Preserve each upload's local
      * `source_epoch_identity`; references without provenance need a fresh upload.
@@ -13532,6 +13581,86 @@ open func submitModerationReport(accountRef: String, reportedPubkey: String, rea
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeModerationReportOutcomeFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Durably admit a kind-9 reply with application tags. MDK owns the reply's `e` and `q` tags.
+     */
+open func submitTaggedReply(accountRef: String, groupIdHex: String, targetMessageId: String, text: String, tags: [[String]], clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_submit_tagged_reply(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(targetMessageId),FfiConverterString.lower(text),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Durably admit an authorized pack sticker with context tags under [`Marmot::send_tagged_sticker`]'s rules.
+     */
+open func submitTaggedSticker(accountRef: String, groupIdHex: String, stickerRef: StickerRefFfi, tags: [[String]], clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_submit_tagged_sticker(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterTypeStickerRefFfi_lower(stickerRef),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Durably admit kind-9 text with application tags under [`Marmot::send_tagged_text`]'s rules.
+     */
+open func submitTaggedText(accountRef: String, groupIdHex: String, text: String, tags: [[String]], clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_submit_tagged_text(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(text),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Durably admit a NIP-22 thread message using [`Marmot::send_thread_message`]'s input rules.
+     */
+open func submitThreadMessage(accountRef: String, groupIdHex: String, parentMessageId: String, text: String, attachments: [MediaAttachmentReferenceFfi], tags: [[String]], clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_submit_thread_message(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(parentMessageId),FfiConverterString.lower(text),FfiConverterSequenceTypeMediaAttachmentReferenceFfi.lower(attachments),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -18202,6 +18331,239 @@ public func FfiConverterTypeAccountUnreadFfi_lift(_ buf: RustBuffer) throws -> A
 #endif
 public func FfiConverterTypeAccountUnreadFfi_lower(_ value: AccountUnreadFfi) -> RustBuffer {
     return FfiConverterTypeAccountUnreadFfi.lower(value)
+}
+
+
+/**
+ * The latest version of an agent item (kind 1201) on its timeline row: the
+ * highest `v` MDK holds, from the item's first event or a later edit. The
+ * row's `plaintext` is the item's plain rendering and its `tags` are that
+ * version's tags, including the ones MDK passes on unread (`native`,
+ * `left_out`, `cut`). Render the item from `item_type` and `fields_json`.
+ */
+public struct AgentItemFfi {
+    /**
+     * The item's version, from 1.
+     */
+    public var version: UInt64
+    public var state: AgentItemStateFfi
+    /**
+     * A few words: "Allow this command?".
+     */
+    public var title: String
+    /**
+     * The harness's name, such as `codex`.
+     */
+    public var harness: String
+    /**
+     * The harness's own id for the item.
+     */
+    public var itemId: String
+    /**
+     * This version's place among its session's events. The row is ordered by
+     * the first event's.
+     */
+    public var seq: UInt64
+    /**
+     * `turn`, `message`, `reasoning`, `tool`, `approval`, `question`, `plan`,
+     * `task`, `notice`, `error` or `session`.
+     */
+    public var itemType: String
+    /**
+     * The item type and its own fields, as JSON: `{"type": ..., "body": ...}`.
+     */
+    public var fieldsJson: String
+    public var session: String?
+    public var turn: String?
+    /**
+     * On a turn: the chat message that started it.
+     */
+    public var startedByMessageIdHex: String?
+    /**
+     * The answers and controls (kind 1202) whose effect this version shows.
+     * A pressed answer stays pending until an item's version settles it.
+     */
+    public var settles: [String]
+    /**
+     * Whether this version alerts: an approval or a question while it is
+     * waiting, or a turn that ended failed.
+     */
+    public var alerts: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The item's version, from 1.
+         */version: UInt64, state: AgentItemStateFfi,
+        /**
+         * A few words: "Allow this command?".
+         */title: String,
+        /**
+         * The harness's name, such as `codex`.
+         */harness: String,
+        /**
+         * The harness's own id for the item.
+         */itemId: String,
+        /**
+         * This version's place among its session's events. The row is ordered by
+         * the first event's.
+         */seq: UInt64,
+        /**
+         * `turn`, `message`, `reasoning`, `tool`, `approval`, `question`, `plan`,
+         * `task`, `notice`, `error` or `session`.
+         */itemType: String,
+        /**
+         * The item type and its own fields, as JSON: `{"type": ..., "body": ...}`.
+         */fieldsJson: String, session: String?, turn: String?,
+        /**
+         * On a turn: the chat message that started it.
+         */startedByMessageIdHex: String?,
+        /**
+         * The answers and controls (kind 1202) whose effect this version shows.
+         * A pressed answer stays pending until an item's version settles it.
+         */settles: [String],
+        /**
+         * Whether this version alerts: an approval or a question while it is
+         * waiting, or a turn that ended failed.
+         */alerts: Bool) {
+        self.version = version
+        self.state = state
+        self.title = title
+        self.harness = harness
+        self.itemId = itemId
+        self.seq = seq
+        self.itemType = itemType
+        self.fieldsJson = fieldsJson
+        self.session = session
+        self.turn = turn
+        self.startedByMessageIdHex = startedByMessageIdHex
+        self.settles = settles
+        self.alerts = alerts
+    }
+}
+
+#if compiler(>=6)
+extension AgentItemFfi: Sendable {}
+#endif
+
+
+extension AgentItemFfi: Equatable, Hashable {
+    public static func ==(lhs: AgentItemFfi, rhs: AgentItemFfi) -> Bool {
+        if lhs.version != rhs.version {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.harness != rhs.harness {
+            return false
+        }
+        if lhs.itemId != rhs.itemId {
+            return false
+        }
+        if lhs.seq != rhs.seq {
+            return false
+        }
+        if lhs.itemType != rhs.itemType {
+            return false
+        }
+        if lhs.fieldsJson != rhs.fieldsJson {
+            return false
+        }
+        if lhs.session != rhs.session {
+            return false
+        }
+        if lhs.turn != rhs.turn {
+            return false
+        }
+        if lhs.startedByMessageIdHex != rhs.startedByMessageIdHex {
+            return false
+        }
+        if lhs.settles != rhs.settles {
+            return false
+        }
+        if lhs.alerts != rhs.alerts {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(version)
+        hasher.combine(state)
+        hasher.combine(title)
+        hasher.combine(harness)
+        hasher.combine(itemId)
+        hasher.combine(seq)
+        hasher.combine(itemType)
+        hasher.combine(fieldsJson)
+        hasher.combine(session)
+        hasher.combine(turn)
+        hasher.combine(startedByMessageIdHex)
+        hasher.combine(settles)
+        hasher.combine(alerts)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAgentItemFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentItemFfi {
+        return
+            try AgentItemFfi(
+                version: FfiConverterUInt64.read(from: &buf),
+                state: FfiConverterTypeAgentItemStateFfi.read(from: &buf),
+                title: FfiConverterString.read(from: &buf),
+                harness: FfiConverterString.read(from: &buf),
+                itemId: FfiConverterString.read(from: &buf),
+                seq: FfiConverterUInt64.read(from: &buf),
+                itemType: FfiConverterString.read(from: &buf),
+                fieldsJson: FfiConverterString.read(from: &buf),
+                session: FfiConverterOptionString.read(from: &buf),
+                turn: FfiConverterOptionString.read(from: &buf),
+                startedByMessageIdHex: FfiConverterOptionString.read(from: &buf),
+                settles: FfiConverterSequenceString.read(from: &buf),
+                alerts: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AgentItemFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.version, into: &buf)
+        FfiConverterTypeAgentItemStateFfi.write(value.state, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterString.write(value.harness, into: &buf)
+        FfiConverterString.write(value.itemId, into: &buf)
+        FfiConverterUInt64.write(value.seq, into: &buf)
+        FfiConverterString.write(value.itemType, into: &buf)
+        FfiConverterString.write(value.fieldsJson, into: &buf)
+        FfiConverterOptionString.write(value.session, into: &buf)
+        FfiConverterOptionString.write(value.turn, into: &buf)
+        FfiConverterOptionString.write(value.startedByMessageIdHex, into: &buf)
+        FfiConverterSequenceString.write(value.settles, into: &buf)
+        FfiConverterBool.write(value.alerts, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentItemFfi_lift(_ buf: RustBuffer) throws -> AgentItemFfi {
+    return try FfiConverterTypeAgentItemFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentItemFfi_lower(_ value: AgentItemFfi) -> RustBuffer {
+    return FfiConverterTypeAgentItemFfi.lower(value)
 }
 
 
@@ -43331,7 +43693,8 @@ public struct TimelineMessageRecordFfi {
     public var receivedAt: UInt64
     /**
      * What a client without a thread view quotes: the inline-reply target,
-     * or a thread message's parent.
+     * a thread message's parent, or an agent item's `started_by`, else its
+     * thread parent.
      */
     public var replyToMessageIdHex: String?
     public var replyPreview: TimelineReplyPreviewFfi?
@@ -43356,6 +43719,20 @@ public struct TimelineMessageRecordFfi {
      * and malformed/free-text kind-1210 assertions.
      */
     public var groupSystem: GroupSystemEventFfi?
+    /**
+     * The latest version of an agent item (kind 1201). `None` for every other
+     * kind; a kind-1201 row with `None` here is an item MDK cannot read, such
+     * as the old shape an outdated connector sends: render it as an
+     * unreadable agent item.
+     */
+    public var agentItem: AgentItemFfi?
+    /**
+     * True for an agent item whose first event this device does not hold,
+     * such as one that began before this member joined: the row is its
+     * earliest edit, at that edit's place, showing the latest version. Say
+     * the item started earlier. False once the first event arrives.
+     */
+    public var agentItemFirstEventMissing: Bool
     public var reactions: TimelineReactionSummaryFfi
     public var edit: TimelineEditSummaryFfi?
     public var deleted: Bool
@@ -43434,7 +43811,8 @@ public struct TimelineMessageRecordFfi {
          */receivedAt: UInt64,
         /**
          * What a client without a thread view quotes: the inline-reply target,
-         * or a thread message's parent.
+         * a thread message's parent, or an agent item's `started_by`, else its
+         * thread parent.
          */replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?,
         /**
          * Where this row sits in a NIP-22 thread; `None` outside threads.
@@ -43452,7 +43830,19 @@ public struct TimelineMessageRecordFfi {
         /**
          * Parsed view of kind-1210 group system rows. `None` for chat, reactions,
          * and malformed/free-text kind-1210 assertions.
-         */groupSystem: GroupSystemEventFfi?, reactions: TimelineReactionSummaryFfi, edit: TimelineEditSummaryFfi?, deleted: Bool, deletionSource: DeletionSourceFfi, deletedByMessageIdHex: String?,
+         */groupSystem: GroupSystemEventFfi?,
+        /**
+         * The latest version of an agent item (kind 1201). `None` for every other
+         * kind; a kind-1201 row with `None` here is an item MDK cannot read, such
+         * as the old shape an outdated connector sends: render it as an
+         * unreadable agent item.
+         */agentItem: AgentItemFfi?,
+        /**
+         * True for an agent item whose first event this device does not hold,
+         * such as one that began before this member joined: the row is its
+         * earliest edit, at that edit's place, showing the latest version. Say
+         * the item started earlier. False once the first event arrives.
+         */agentItemFirstEventMissing: Bool, reactions: TimelineReactionSummaryFfi, edit: TimelineEditSummaryFfi?, deleted: Bool, deletionSource: DeletionSourceFfi, deletedByMessageIdHex: String?,
         /**
          * Set when convergence invalidated this message (it landed on a losing
          * branch). The message is kept as a "did not reach the group" tombstone
@@ -43502,6 +43892,8 @@ public struct TimelineMessageRecordFfi {
         self.mediaJson = mediaJson
         self.media = media
         self.groupSystem = groupSystem
+        self.agentItem = agentItem
+        self.agentItemFirstEventMissing = agentItemFirstEventMissing
         self.reactions = reactions
         self.edit = edit
         self.deleted = deleted
@@ -43593,6 +43985,12 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         if lhs.groupSystem != rhs.groupSystem {
             return false
         }
+        if lhs.agentItem != rhs.agentItem {
+            return false
+        }
+        if lhs.agentItemFirstEventMissing != rhs.agentItemFirstEventMissing {
+            return false
+        }
         if lhs.reactions != rhs.reactions {
             return false
         }
@@ -43648,6 +44046,8 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         hasher.combine(mediaJson)
         hasher.combine(media)
         hasher.combine(groupSystem)
+        hasher.combine(agentItem)
+        hasher.combine(agentItemFirstEventMissing)
         hasher.combine(reactions)
         hasher.combine(edit)
         hasher.combine(deleted)
@@ -43693,6 +44093,8 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
                 mediaJson: FfiConverterOptionString.read(from: &buf),
                 media: FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.read(from: &buf),
                 groupSystem: FfiConverterOptionTypeGroupSystemEventFfi.read(from: &buf),
+                agentItem: FfiConverterOptionTypeAgentItemFfi.read(from: &buf),
+                agentItemFirstEventMissing: FfiConverterBool.read(from: &buf),
                 reactions: FfiConverterTypeTimelineReactionSummaryFfi.read(from: &buf),
                 edit: FfiConverterOptionTypeTimelineEditSummaryFfi.read(from: &buf),
                 deleted: FfiConverterBool.read(from: &buf),
@@ -43730,6 +44132,8 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.mediaJson, into: &buf)
         FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.write(value.media, into: &buf)
         FfiConverterOptionTypeGroupSystemEventFfi.write(value.groupSystem, into: &buf)
+        FfiConverterOptionTypeAgentItemFfi.write(value.agentItem, into: &buf)
+        FfiConverterBool.write(value.agentItemFirstEventMissing, into: &buf)
         FfiConverterTypeTimelineReactionSummaryFfi.write(value.reactions, into: &buf)
         FfiConverterOptionTypeTimelineEditSummaryFfi.write(value.edit, into: &buf)
         FfiConverterBool.write(value.deleted, into: &buf)
@@ -44294,8 +44698,9 @@ public func FfiConverterTypeTimelineReplyPreviewFfi_lower(_ value: TimelineReply
 
 /**
  * A row's place in a NIP-22 thread: set for every thread message (kind
- * 1111), and for a chat, sticker or poll that joined a thread. A client
- * without a thread view ignores it and quotes `reply_to_message_id_hex`.
+ * 1111), and for a chat, sticker, poll or agent item (kind 1201) that joined
+ * a thread. A client without a thread view ignores it and quotes
+ * `reply_to_message_id_hex`.
  */
 public struct TimelineThreadRefFfi {
     /**
@@ -46206,6 +46611,107 @@ public func FfiConverterTypeAccountSetupReadinessFfi_lower(_ value: AccountSetup
 
 
 extension AccountSetupReadinessFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * An agent item's state (kind 1201).
+ */
+
+public enum AgentItemStateFfi {
+
+    case running
+    case waiting
+    case done
+    case failed
+    case declined
+    case cancelled
+}
+
+
+#if compiler(>=6)
+extension AgentItemStateFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAgentItemStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AgentItemStateFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentItemStateFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .running
+
+        case 2: return .waiting
+
+        case 3: return .done
+
+        case 4: return .failed
+
+        case 5: return .declined
+
+        case 6: return .cancelled
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AgentItemStateFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .running:
+            writeInt(&buf, Int32(1))
+
+
+        case .waiting:
+            writeInt(&buf, Int32(2))
+
+
+        case .done:
+            writeInt(&buf, Int32(3))
+
+
+        case .failed:
+            writeInt(&buf, Int32(4))
+
+
+        case .declined:
+            writeInt(&buf, Int32(5))
+
+
+        case .cancelled:
+            writeInt(&buf, Int32(6))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentItemStateFfi_lift(_ buf: RustBuffer) throws -> AgentItemStateFfi {
+    return try FfiConverterTypeAgentItemStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentItemStateFfi_lower(_ value: AgentItemStateFfi) -> RustBuffer {
+    return FfiConverterTypeAgentItemStateFfi.lower(value)
+}
+
+
+extension AgentItemStateFfi: Equatable, Hashable {}
 
 
 
@@ -57531,8 +58037,11 @@ extension NotificationCollectionStatusFfi: Equatable, Hashable {}
 
 public enum NotificationTrafficClassFfi {
 
+    /**
+     * Every notification. An agent item notifies only while a person is
+     * needed (a waiting approval or question) or when its turn failed.
+     */
     case standard
-    case agentActivity
 }
 
 
@@ -57552,8 +58061,6 @@ public struct FfiConverterTypeNotificationTrafficClassFfi: FfiConverterRustBuffe
 
         case 1: return .standard
 
-        case 2: return .agentActivity
-
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -57564,10 +58071,6 @@ public struct FfiConverterTypeNotificationTrafficClassFfi: FfiConverterRustBuffe
 
         case .standard:
             writeInt(&buf, Int32(1))
-
-
-        case .agentActivity:
-            writeInt(&buf, Int32(2))
 
         }
     }
@@ -61663,8 +62166,11 @@ public enum TimelineUpdateTriggerFfi {
     case reactionRemoved
     case messageDeleted
     case replyPreviewChanged
-    case agentActivity
-    case agentOperation
+    /**
+     * An agent item's row was added; its later versions arrive as
+     * `MessageEditedOrReprojected`.
+     */
+    case agentItem
     case groupSystem
     case customEvent
     case deliveryOrSendStateChanged
@@ -61699,19 +62205,17 @@ public struct FfiConverterTypeTimelineUpdateTriggerFfi: FfiConverterRustBuffer {
 
         case 6: return .replyPreviewChanged
 
-        case 7: return .agentActivity
+        case 7: return .agentItem
 
-        case 8: return .agentOperation
+        case 8: return .groupSystem
 
-        case 9: return .groupSystem
+        case 9: return .customEvent
 
-        case 10: return .customEvent
+        case 10: return .deliveryOrSendStateChanged
 
-        case 11: return .deliveryOrSendStateChanged
+        case 11: return .receiptChanged
 
-        case 12: return .receiptChanged
-
-        case 13: return .snapshotRefresh
+        case 12: return .snapshotRefresh
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -61745,32 +62249,28 @@ public struct FfiConverterTypeTimelineUpdateTriggerFfi: FfiConverterRustBuffer {
             writeInt(&buf, Int32(6))
 
 
-        case .agentActivity:
+        case .agentItem:
             writeInt(&buf, Int32(7))
 
 
-        case .agentOperation:
+        case .groupSystem:
             writeInt(&buf, Int32(8))
 
 
-        case .groupSystem:
+        case .customEvent:
             writeInt(&buf, Int32(9))
 
 
-        case .customEvent:
+        case .deliveryOrSendStateChanged:
             writeInt(&buf, Int32(10))
 
 
-        case .deliveryOrSendStateChanged:
+        case .receiptChanged:
             writeInt(&buf, Int32(11))
 
 
-        case .receiptChanged:
-            writeInt(&buf, Int32(12))
-
-
         case .snapshotRefresh:
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(12))
 
         }
     }
@@ -62353,6 +62853,30 @@ fileprivate struct FfiConverterOptionTypeAccountAttentionSnapshotFfi: FfiConvert
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeAccountAttentionSnapshotFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeAgentItemFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AgentItemFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeAgentItemFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeAgentItemFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -68190,6 +68714,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_custom_event() != 39139) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_custom_event_with_client_token() != 56176) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_media_attachments() != 49746) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -68359,6 +68886,18 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_submit_moderation_report() != 50855) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_submit_tagged_reply() != 20459) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_submit_tagged_sticker() != 17870) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_submit_tagged_text() != 29615) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_submit_thread_message() != 9741) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_account_attention() != 57261) {

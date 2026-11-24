@@ -19,6 +19,8 @@ Format:
 
 ### Fixed
 
+- Queue a linked-device capability refresh as soon as maintenance detects
+  an existing chat membership that needs one.
 - Filled missing localized strings for shared app copy and Info.plist privacy
   prompts across the supported languages.
 - Removed a bogus empty-string localization catalog entry.
