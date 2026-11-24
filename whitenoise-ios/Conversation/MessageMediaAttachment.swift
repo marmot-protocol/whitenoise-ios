@@ -803,10 +803,6 @@ nonisolated enum MediaDraftProcessor {
 
             let thumbnail: UIImage?
             let restoredDim: String?
-            var restoredID = id
-            var restoredFileName = attachment.fileName
-            var restoredMediaType = attachment.mediaType
-            var restoredData = attachment.plaintext
             switch kind {
             case .image:
                 thumbnail = await MessageMediaThumbnailDecoder.image(
@@ -816,44 +812,22 @@ nonisolated enum MediaDraftProcessor {
                 )
                 restoredDim = attachment.dim
             case .video:
-                // Pre-upgrade drafts may hold unsanitized video bytes carrying
-                // GPS or device metadata. Inspect first so already-clean videos
-                // keep their exact bytes and ID (idempotent restore with no
-                // remux). Legacy videos carrying metadata are stripped and
-                // given a fresh ID so sending never uploads raw pre-upgrade
-                // file-backed bytes; failures omit the clip from the composer
-                // without deleting the durable draft.
-                guard let inspection = try? await MediaVideoMetadataStripper.stripIfNeeded(
-                    data: attachment.plaintext,
-                    preferredMediaType: attachment.mediaType
-                ) else {
-                    continue
-                }
-                if let stripped = inspection.stripped {
-                    restoredID = UUID()
-                    restoredFileName = adjustedVideoFileName(
-                        attachment.fileName,
-                        originalMediaType: attachment.mediaType,
-                        strippedMediaType: stripped.mediaType
-                    ) ?? attachment.fileName
-                    restoredMediaType = stripped.mediaType
-                    restoredData = stripped.data
-                    thumbnail = stripped.thumbnail
-                    restoredDim = stripped.dim ?? attachment.dim
-                } else {
-                    thumbnail = inspection.thumbnail
-                    restoredDim = inspection.dim ?? attachment.dim
-                }
+                let videoMetadata = await MediaVideoMetadata.metadata(
+                    from: attachment.plaintext,
+                    mediaType: attachment.mediaType
+                )
+                thumbnail = videoMetadata.thumbnail
+                restoredDim = videoMetadata.dim ?? attachment.dim
             case .audio, .document, .unsupported:
                 thumbnail = nil
                 restoredDim = attachment.dim
             }
 
             restored.append(MediaDraftAttachment(
-                id: restoredID,
-                fileName: restoredFileName,
-                mediaType: restoredMediaType,
-                data: restoredData,
+                id: id,
+                fileName: attachment.fileName,
+                mediaType: attachment.mediaType,
+                data: attachment.plaintext,
                 dim: restoredDim,
                 thumbhash: attachment.thumbhash,
                 thumbnail: thumbnail,
@@ -1629,89 +1603,6 @@ nonisolated enum MediaVideoMetadataStripper {
             preferredMediaType: preferredMediaType,
             directory: directory
         )
-    }
-
-    struct RestoreInspection {
-        /// Non-nil only when the source carried container/track metadata or
-        /// auxiliary tracks and had to be remuxed.
-        let stripped: StrippedVideo?
-        let dim: String?
-        let thumbnail: UIImage?
-    }
-
-    /// Inspects a draft video once and remuxes only if the container or any
-    /// track carries metadata or non-media tracks (such as `.metadata`).
-    /// Already-clean videos return `stripped == nil` so restoring them is
-    /// idempotent without re-remuxing or rotating attachment IDs.
-    static func stripIfNeeded(
-        data: Data,
-        preferredMediaType: String,
-        directory: URL = defaultDirectory,
-        now: Date = Date()
-    ) async throws -> RestoreInspection {
-        guard !data.isEmpty else {
-            throw MediaDraftProcessor.Failure.encodingFailed
-        }
-        guard data.count <= MediaDraftProcessor.maxAttachmentBytes else {
-            throw MediaDraftProcessor.Failure.attachmentTooLarge(data.count)
-        }
-        try prepareDirectory(directory, now: now)
-        let inputURL = directory
-            .appendingPathComponent(UUID().uuidString, isDirectory: false)
-            .appendingPathExtension(MediaAttachmentPolicy.fileExtension(for: preferredMediaType))
-        try data.write(
-            to: inputURL,
-            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
-        )
-        defer { try? FileManager.default.removeItem(at: inputURL) }
-
-        let asset = AVURLAsset(url: inputURL)
-        if try await !assetNeedsMetadataStripping(asset) {
-            let videoMetadata = await MediaVideoMetadata.metadata(for: asset)
-            return RestoreInspection(
-                stripped: nil,
-                dim: videoMetadata.dim,
-                thumbnail: videoMetadata.thumbnail
-            )
-        }
-        let stripped = try await stripOwnedFile(
-            at: inputURL,
-            preferredMediaType: preferredMediaType,
-            directory: directory
-        )
-        return RestoreInspection(
-            stripped: stripped,
-            dim: stripped.dim,
-            thumbnail: stripped.thumbnail
-        )
-    }
-
-    private static func assetNeedsMetadataStripping(_ asset: AVURLAsset) async throws -> Bool {
-        try Task.checkCancellation()
-        let tracks = try await asset.load(.tracks)
-        guard tracks.contains(where: { $0.mediaType == .video || $0.mediaType == .audio }) else {
-            throw MediaDraftProcessor.Failure.encodingFailed
-        }
-        if tracks.contains(where: { $0.mediaType != .video && $0.mediaType != .audio }) {
-            return true
-        }
-        let commonMetadata = try await asset.load(.metadata)
-        if !commonMetadata.isEmpty { return true }
-        let assetFormats = try await asset.load(.availableMetadataFormats)
-        for format in assetFormats {
-            try Task.checkCancellation()
-            if !(try await asset.loadMetadata(for: format)).isEmpty { return true }
-        }
-        for track in tracks {
-            try Task.checkCancellation()
-            if !(try await track.load(.metadata)).isEmpty { return true }
-            let trackFormats = try await track.load(.availableMetadataFormats)
-            for format in trackFormats {
-                try Task.checkCancellation()
-                if !(try await track.loadMetadata(for: format)).isEmpty { return true }
-            }
-        }
-        return false
     }
 
     static func strip(

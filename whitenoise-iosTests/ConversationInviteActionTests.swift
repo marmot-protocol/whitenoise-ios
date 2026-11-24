@@ -75,6 +75,66 @@ struct ConversationInviteActionTests {
         #expect(viewModel.selectedImageHash == imageHash)
     }
 
+    @Test func pendingInviteSuppressesGroupMemberRosterAvatarURLsUntilAccepted() async throws {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account-ref"
+        let memberHex = hex("55")
+        let memberAvatarURL = "https://attacker.example/member.png"
+        appState.seedDiscoveredProfile(
+            UserProfileMetadataFfi(
+                name: "Inviter",
+                displayName: "Inviter",
+                about: nil,
+                picture: memberAvatarURL,
+                banner: nil,
+                nip05: nil,
+                lud16: nil
+            ),
+            forAccountIdHex: memberHex
+        )
+        let member = GroupMemberDetailsFfi(
+            memberIdHex: memberHex,
+            account: memberHex,
+            local: false,
+            isAdmin: true,
+            isSelf: false,
+            npub: "npub1member",
+            displayName: "Inviter",
+            deviceCount: 1
+        )
+        let pending = group(
+            name: "invited",
+            pendingConfirmation: true,
+            welcomerAccountIdHex: memberHex
+        )
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: pending,
+            groupCalls: groupCalls(accept: { _, groupIdHex in
+                group(name: "invited", id: groupIdHex, pendingConfirmation: false)
+            })
+        )
+
+        #expect(viewModel.hasPendingInvite)
+        #expect(
+            GroupMemberDetailsPresentation.avatarURL(
+                for: member,
+                appState: appState,
+                allowsRemoteAvatars: !viewModel.hasPendingInvite
+            ) == nil
+        )
+
+        _ = await viewModel.acceptInvite()
+        #expect(!viewModel.hasPendingInvite)
+        #expect(
+            GroupMemberDetailsPresentation.avatarURL(
+                for: member,
+                appState: appState,
+                allowsRemoteAvatars: !viewModel.hasPendingInvite
+            ) == URL(string: memberAvatarURL)
+        )
+    }
+
     @Test func declineAppliesArchivedInactiveGroup() async throws {
         let appState = AppState.test()
         appState.activeAccountRef = "account-ref"

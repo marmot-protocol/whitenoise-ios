@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import UIKit
 
 @MainActor
@@ -27,6 +28,58 @@ enum LinkPreviewLoader {
         }
     }
 
+    /// Thread-safe waiter set so `withTaskCancellationHandler.onCancel` removes
+    /// a cancelled waiter and cancels the underlying task synchronously without
+    /// waiting for a MainActor hop that could race a limiter permit release.
+    private final class WaiterState: Sendable {
+        private struct State {
+            var waiters: Set<UUID>
+            var cancelled: Bool
+        }
+
+        private let state: Mutex<State>
+
+        init(initialWaiter: UUID) {
+            state = Mutex(State(waiters: [initialWaiter], cancelled: false))
+        }
+
+        func addWaiter(_ id: UUID) -> Bool {
+            state.withLock {
+                guard !$0.cancelled else { return false }
+                $0.waiters.insert(id)
+                return true
+            }
+        }
+
+        /// Removes `id` and returns `true` when this call removed the last live
+        /// waiter (transitioning the load to cancelled).
+        func removeWaiter(_ id: UUID) -> Bool {
+            state.withLock {
+                guard $0.waiters.remove(id) != nil else { return false }
+                guard $0.waiters.isEmpty else { return false }
+                $0.cancelled = true
+                return true
+            }
+        }
+
+        func cancelAll() {
+            state.withLock {
+                $0.waiters.removeAll()
+                $0.cancelled = true
+            }
+        }
+
+        var hasActiveWaiters: Bool {
+            state.withLock { !$0.cancelled && !$0.waiters.isEmpty }
+        }
+    }
+
+    private struct InFlightLoad<Value: Sendable> {
+        let id: UUID
+        let task: Task<Value, Error>
+        let waiters: WaiterState
+    }
+
     private static let loadLimiter = CancellableLoadLimiter(
         maximumConcurrentLoads: maximumConcurrentLoads
     )
@@ -43,13 +96,9 @@ enum LinkPreviewLoader {
         return cache
     }()
 
-    private struct InFlightLoad<Value: Sendable> {
-        let task: Task<Value, Error>
-        var waiters: Set<UUID>
-    }
-
     private static var inFlightMetadata: [String: InFlightLoad<LinkPreviewMetadata?>] = [:]
     private static var inFlightImages: [String: InFlightLoad<UIImage>] = [:]
+    private static var cacheGeneration: UInt64 = 0
 
     static func cachedMetadata(for url: URL) -> LinkPreviewMetadata?? {
         metadataCache.object(forKey: url.absoluteString as NSString).map(\.metadata)
@@ -65,32 +114,50 @@ enum LinkPreviewLoader {
         if let cached = metadataCache.object(forKey: key as NSString) { return cached.metadata }
 
         let waiterID = UUID()
-        let task: Task<LinkPreviewMetadata?, Error>
-        if var existing = inFlightMetadata[key] {
-            existing.waiters.insert(waiterID)
-            inFlightMetadata[key] = existing
-            task = existing.task
+        let load: InFlightLoad<LinkPreviewMetadata?>
+        if let existing = inFlightMetadata[key], existing.waiters.addWaiter(waiterID) {
+            load = existing
         } else {
             let activeLimiter = limiter ?? loadLimiter
+            let loadID = UUID()
+            let startedGeneration = cacheGeneration
+            let waiters = WaiterState(initialWaiter: waiterID)
             let created = Task {
                 let metadata = try await withLimiter(activeLimiter) {
-                    try await fetchMetadata(for: url, fetch: fetch)
+                    try Task.checkCancellation()
+                    guard waiters.hasActiveWaiters else { throw CancellationError() }
+                    return try await fetchMetadata(for: url, fetch: fetch)
                 }
-                if !AvatarCacheErasure.isInProgress {
+                if !AvatarCacheErasure.isInProgress,
+                   cacheGeneration == startedGeneration,
+                   inFlightMetadata[key]?.id == loadID {
                     metadataCache.setObject(CachedMetadata(metadata), forKey: key as NSString)
                 }
                 return metadata
             }
-            inFlightMetadata[key] = InFlightLoad(task: created, waiters: [waiterID])
-            task = created
+            let newLoad = InFlightLoad(id: loadID, task: created, waiters: waiters)
+            inFlightMetadata[key] = newLoad
+            load = newLoad
         }
 
-        defer { releaseMetadataWaiter(key: key, task: task, waiterID: waiterID) }
+        defer {
+            if load.waiters.removeWaiter(waiterID) {
+                load.task.cancel()
+            }
+            if !load.waiters.hasActiveWaiters, inFlightMetadata[key]?.id == load.id {
+                inFlightMetadata.removeValue(forKey: key)
+            }
+        }
         return try await withTaskCancellationHandler {
-            try await task.value
+            try await load.task.value
         } onCancel: {
+            if load.waiters.removeWaiter(waiterID) {
+                load.task.cancel()
+            }
             Task { @MainActor in
-                releaseMetadataWaiter(key: key, task: task, waiterID: waiterID)
+                if !load.waiters.hasActiveWaiters, inFlightMetadata[key]?.id == load.id {
+                    inFlightMetadata.removeValue(forKey: key)
+                }
             }
         }
     }
@@ -111,23 +178,28 @@ enum LinkPreviewLoader {
         if let cached = imageCache.object(forKey: key as NSString) { return cached.image }
 
         let waiterID = UUID()
-        let task: Task<UIImage, Error>
-        if var existing = inFlightImages[key] {
-            existing.waiters.insert(waiterID)
-            inFlightImages[key] = existing
-            task = existing.task
+        let load: InFlightLoad<UIImage>
+        if let existing = inFlightImages[key], existing.waiters.addWaiter(waiterID) {
+            load = existing
         } else {
             let activeLimiter = limiter ?? loadLimiter
+            let loadID = UUID()
+            let startedGeneration = cacheGeneration
+            let waiters = WaiterState(initialWaiter: waiterID)
             let created = Task {
                 let image = try await withLimiter(activeLimiter) {
-                    try await fetchImage(
+                    try Task.checkCancellation()
+                    guard waiters.hasActiveWaiters else { throw CancellationError() }
+                    return try await fetchImage(
                         for: url,
                         maxPixelSize: maxPixelSize,
                         scale: scale,
                         fetch: fetch
                     )
                 }
-                if !AvatarCacheErasure.isInProgress {
+                if !AvatarCacheErasure.isInProgress,
+                   cacheGeneration == startedGeneration,
+                   inFlightImages[key]?.id == loadID {
                     imageCache.setObject(
                         CachedImage(image),
                         forKey: key as NSString,
@@ -136,60 +208,46 @@ enum LinkPreviewLoader {
                 }
                 return image
             }
-            inFlightImages[key] = InFlightLoad(task: created, waiters: [waiterID])
-            task = created
+            let newLoad = InFlightLoad(id: loadID, task: created, waiters: waiters)
+            inFlightImages[key] = newLoad
+            load = newLoad
         }
 
-        defer { releaseImageWaiter(key: key, task: task, waiterID: waiterID) }
+        defer {
+            if load.waiters.removeWaiter(waiterID) {
+                load.task.cancel()
+            }
+            if !load.waiters.hasActiveWaiters, inFlightImages[key]?.id == load.id {
+                inFlightImages.removeValue(forKey: key)
+            }
+        }
         return try await withTaskCancellationHandler {
-            try await task.value
+            try await load.task.value
         } onCancel: {
+            if load.waiters.removeWaiter(waiterID) {
+                load.task.cancel()
+            }
             Task { @MainActor in
-                releaseImageWaiter(key: key, task: task, waiterID: waiterID)
+                if !load.waiters.hasActiveWaiters, inFlightImages[key]?.id == load.id {
+                    inFlightImages.removeValue(forKey: key)
+                }
             }
         }
     }
 
-    private static func releaseMetadataWaiter(
-        key: String,
-        task: Task<LinkPreviewMetadata?, Error>,
-        waiterID: UUID
-    ) {
-        guard var entry = inFlightMetadata[key],
-              entry.task == task,
-              entry.waiters.remove(waiterID) != nil
-        else { return }
-        if entry.waiters.isEmpty {
-            inFlightMetadata.removeValue(forKey: key)
-            entry.task.cancel()
-        } else {
-            inFlightMetadata[key] = entry
-        }
-    }
-
-    private static func releaseImageWaiter(
-        key: String,
-        task: Task<UIImage, Error>,
-        waiterID: UUID
-    ) {
-        guard var entry = inFlightImages[key],
-              entry.task == task,
-              entry.waiters.remove(waiterID) != nil
-        else { return }
-        if entry.waiters.isEmpty {
-            inFlightImages.removeValue(forKey: key)
-            entry.task.cancel()
-        } else {
-            inFlightImages[key] = entry
-        }
-    }
-
     static func clearCaches() {
+        cacheGeneration &+= 1
         metadataCache.removeAllObjects()
         imageCache.removeAllObjects()
-        inFlightMetadata.values.forEach { $0.task.cancel() }
+        for load in inFlightMetadata.values {
+            load.waiters.cancelAll()
+            load.task.cancel()
+        }
         inFlightMetadata.removeAll()
-        inFlightImages.values.forEach { $0.task.cancel() }
+        for load in inFlightImages.values {
+            load.waiters.cancelAll()
+            load.task.cancel()
+        }
         inFlightImages.removeAll()
     }
 

@@ -843,8 +843,6 @@ final class ConversationDraftStore {
             let attachments = await MediaDraftProcessor.restoredDraftAttachments(
                 from: loaded?.mediaAttachments ?? []
             )
-            try Task.checkCancellation()
-            guard suspensionEpoch == epoch else { throw CancellationError() }
             guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }
             // An edit made before the composer received the draft wins, with
             // the saved attachments it lacks.
@@ -853,13 +851,12 @@ final class ConversationDraftStore {
                 case .save(let snapshot): snapshot
                 case .delete: nil
                 }
-                let merged = Self.normalizedSnapshot(ConversationDraftSnapshot(
+                return .loaded(Self.normalizedSnapshot(ConversationDraftSnapshot(
                     canonicalText: edited?.canonicalText ?? "",
                     replyToMessageIdHex: edited?.replyToMessageIdHex,
                     mediaAttachments: ConversationDraftHydrationGate.attachments(
                         composer: edited?.mediaAttachments ?? [], loaded: attachments)
-                ))
-                return .loaded(merged)
+                )))
             }
             guard let draft = loaded else { return .loaded(nil) }
             return .loaded(Self.normalizedSnapshot(ConversationDraftSnapshot(

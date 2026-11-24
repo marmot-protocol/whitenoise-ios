@@ -4,6 +4,7 @@ import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
 
+@Suite(.serialized)
 struct LinkPreviewTests {
     private let base = URL(string: "https://example.com/articles/one")!
 
@@ -344,19 +345,47 @@ struct LinkPreviewTests {
         }
 
         scrolledOffTask.cancel()
+        // Release the active permit immediately (before waiting for any MainActor
+        // cleanup job) to prove synchronous waiter cancellation prevents the
+        // queued request from starting on permit handoff.
+        activeRelease.signal()
         do {
             _ = try await scrolledOffTask.value
             Issue.record("Expected cancelled offscreen preview request to throw")
         } catch is CancellationError {
             // Expected.
         }
-        try await eventually {
-            await limiter.snapshot() == (active: 1, waiting: 0)
-        }
-
-        activeRelease.signal()
         let visibleMetadata = try await visibleTask.value
         #expect(visibleMetadata?.title == "Visible")
         #expect(!queuedFetched.withLock { $0 })
+    }
+
+    @MainActor
+    @Test func clearCachesPreventsInFlightMetadataFromPopulatingCache() async throws {
+        let url = URL(string: "https://clear-race-\(UUID().uuidString).example/article")!
+        let fetchEntered = TestLatch()
+        let fetchRelease = TestLatch()
+        let html = Data("<html><head><title>Stale</title></head></html>".utf8)
+
+        let task = Task { @MainActor in
+            try? await LinkPreviewLoader.metadata(for: url) { request in
+                fetchEntered.signal()
+                try? await fetchRelease.wait()
+                let response = HTTPURLResponse(
+                    url: request.url ?? url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "text/html"]
+                )!
+                return (html, response)
+            }
+        }
+
+        try await fetchEntered.wait()
+        LinkPreviewLoader.clearCaches()
+        fetchRelease.signal()
+        _ = await task.value
+
+        #expect(LinkPreviewLoader.cachedMetadata(for: url) == nil)
     }
 }

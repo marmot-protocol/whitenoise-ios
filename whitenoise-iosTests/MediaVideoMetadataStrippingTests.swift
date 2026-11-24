@@ -135,27 +135,47 @@ struct MediaVideoMetadataStrippingTests {
     }
 
     @MainActor
-    @Test func restoringPreUpgradeDraftStripsVideoMetadataAndReplacesStoredAttachment() async throws {
+    @Test func stripsTimedMetadataTracksAndPreservesSavedDraftsOnRestore() async throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("VideoDraftUpgradeTest-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("VideoDraftRestoreTest-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let sourceURL = directory.appendingPathComponent("geotagged.mov")
+        let sourceURL = directory.appendingPathComponent("timed-metadata.mov")
         try await synthesizeTaggedVideo(
             at: sourceURL,
             fileType: .mov,
             width: 160,
             height: 120,
-            transform: .identity
+            transform: .identity,
+            includeTimedMetadataTrack: true
         )
-        let originalData = try Data(contentsOf: sourceURL)
-        let legacyID = UUID()
+        let sourceAsset = AVURLAsset(url: sourceURL)
+        let sourceTracks = try await sourceAsset.load(.tracks)
+        #expect(sourceTracks.contains { $0.mediaType == .metadata })
+
+        let stripped = try await MediaVideoMetadataStripper.strip(
+            sourceURL: sourceURL,
+            preferredMediaType: "video/quicktime",
+            directory: directory
+        )
+        let strippedURL = directory.appendingPathComponent("stripped-timed.mov")
+        try stripped.data.write(to: strippedURL)
+        let strippedAsset = AVURLAsset(url: strippedURL)
+        let strippedTracks = try await strippedAsset.load(.tracks)
+        #expect(!strippedTracks.contains { $0.mediaType == .metadata })
+        #expect(strippedTracks.contains { $0.mediaType == .video })
+        #expect(stripped.data.range(of: Data("+37.33182".utf8)) == nil)
+        #expect(try await allMetadataStrings(in: strippedAsset).isEmpty)
+
+        // Restoring an existing saved draft preserves its ID and bytes without
+        // mutating or deleting attachments on autosave.
+        let savedID = UUID()
         let storedAttachment = MessageDraftAttachmentFfi(
-            id: legacyID.uuidString,
-            fileName: "geotagged.mov",
-            mediaType: "video/quicktime",
-            plaintext: originalData,
+            id: savedID.uuidString,
+            fileName: "stripped-timed.mov",
+            mediaType: stripped.mediaType,
+            plaintext: stripped.data,
             dim: "160x120",
             thumbhash: nil,
             durationSeconds: nil,
@@ -175,79 +195,11 @@ struct MediaVideoMetadataStrippingTests {
             persistence: persistence,
             legacyFileURL: directory.appendingPathComponent("legacy.json")
         )
-
         let restored = try #require(await store.snapshot(accountRef: "alice", groupIdHex: "group-1"))
-        let sanitized = try #require(restored.mediaAttachments.first)
-        // Sanitized replacement gets a new ID so sending never uploads raw
-        // pre-upgrade file-backed bytes, and restoring does NOT auto-rewrite
-        // the durable draft before the composer saves.
-        #expect(sanitized.id != legacyID)
+        let restoredAttachment = try #require(restored.mediaAttachments.first)
+        #expect(restoredAttachment.id == savedID)
+        #expect(restoredAttachment.data == stripped.data)
         #expect(persistence.lastSavedSnapshot == nil)
-        let inputs = MessageDraftAttachmentInputs.inputs(
-            for: [sanitized],
-            retainedIDs: [legacyID.uuidString],
-            removingUnnamed: [legacyID.uuidString]
-        )
-        #expect(inputs.contains {
-            if case .removed(let id) = $0 { return id == legacyID.uuidString }
-            return false
-        })
-        #expect(inputs.contains {
-            if case .inline(let attachment) = $0 { return attachment.id == sanitized.id.uuidString }
-            return false
-        })
-        try await verifyStrippedAttachment(sanitized, expectedDim: "160x120", in: directory)
-
-        // Once the composer saves the sanitized draft, reopening it is idempotent:
-        // already-clean videos keep their exact ID and bytes with no re-remux.
-        store.setDraft(restored, accountRef: "alice", groupIdHex: "group-1")
-        await store.flush()
-        let saved = try #require(persistence.lastSavedSnapshot)
-        #expect(saved.mediaAttachments.map(\.id) == [sanitized.id])
-        #expect(saved.mediaAttachments.first?.data.range(of: Data("+37.33182".utf8)) == nil)
-
-        let reopenedStore = ConversationDraftStore(
-            persistence: persistence,
-            legacyFileURL: directory.appendingPathComponent("legacy-2.json")
-        )
-        let reopened = try #require(await reopenedStore.snapshot(accountRef: "alice", groupIdHex: "group-1"))
-        let reopenedAttachment = try #require(reopened.mediaAttachments.first)
-        #expect(reopenedAttachment.id == sanitized.id)
-        #expect(reopenedAttachment.data == sanitized.data)
-
-        // An unstrippable/corrupt video is omitted from the composer so raw bytes
-        // cannot be sent, while leaving the durable draft intact in storage.
-        let corruptID = UUID()
-        let corruptPersistence = StubDraftPersistence(
-            initialDraft: MessageDraftFfi(
-                groupIdHex: "group-2",
-                content: "Keep caption",
-                replyToMessageIdHex: nil,
-                mediaAttachments: [
-                    MessageDraftAttachmentFfi(
-                        id: corruptID.uuidString,
-                        fileName: "broken.mov",
-                        mediaType: "video/quicktime",
-                        plaintext: Data("not a valid quicktime movie".utf8),
-                        dim: nil,
-                        thumbhash: nil,
-                        durationSeconds: nil,
-                        waveformSamples: []
-                    ),
-                ],
-                createdAtMs: 1_000,
-                updatedAtMs: 1_000
-            )
-        )
-        let corruptStore = ConversationDraftStore(
-            persistence: corruptPersistence,
-            legacyFileURL: directory.appendingPathComponent("legacy-corrupt.json")
-        )
-        let corruptRestored = try #require(await corruptStore.snapshot(accountRef: "alice", groupIdHex: "group-2"))
-        #expect(corruptRestored.canonicalText == "Keep caption")
-        #expect(corruptRestored.mediaAttachments.isEmpty)
-        #expect(corruptPersistence.lastSavedSnapshot == nil)
-        #expect(corruptPersistence.storedDraft?.mediaAttachments.map(\.id) == [corruptID.uuidString])
     }
 
     @Test func allowsAudioOnlyMovieContainersWhileStrippingMetadata() async throws {
@@ -424,7 +376,8 @@ struct MediaVideoMetadataStrippingTests {
         fileType: AVFileType,
         width: Int,
         height: Int,
-        transform: CGAffineTransform
+        transform: CGAffineTransform,
+        includeTimedMetadataTrack: Bool = false
     ) async throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: fileType)
         if fileType == .mov {
@@ -495,8 +448,56 @@ struct MediaVideoMetadataStrippingTests {
 
         #expect(writer.canAdd(input))
         writer.add(input)
+
+        var metadataInput: AVAssetWriterInput?
+        var metadataAdaptor: AVAssetWriterInputMetadataAdaptor?
+        if includeTimedMetadataTrack {
+            let spec: [String: Any] = [
+                kCMMetadataFormatDescriptionMetadataSpecificationKey_Identifier as String:
+                    AVMetadataIdentifier.quickTimeMetadataLocationISO6709.rawValue,
+                kCMMetadataFormatDescriptionMetadataSpecificationKey_DataType as String:
+                    kCMMetadataBaseDataType_UTF8 as String,
+            ]
+            var formatDescription: CMMetadataFormatDescription?
+            let status = CMMetadataFormatDescriptionCreateWithMetadataSpecifications(
+                allocator: kCFAllocatorDefault,
+                metadataType: kCMMetadataFormatType_Boxed,
+                metadataSpecifications: [spec] as CFArray,
+                formatDescriptionOut: &formatDescription
+            )
+            #expect(status == noErr)
+            let desc = try #require(formatDescription)
+            let timedInput = AVAssetWriterInput(
+                mediaType: .metadata,
+                outputSettings: nil,
+                sourceFormatHint: desc
+            )
+            timedInput.expectsMediaDataInRealTime = false
+            #expect(writer.canAdd(timedInput))
+            writer.add(timedInput)
+            metadataInput = timedInput
+            metadataAdaptor = AVAssetWriterInputMetadataAdaptor(assetWriterInput: timedInput)
+        }
+
         #expect(writer.startWriting())
         writer.startSession(atSourceTime: .zero)
+
+        if let metadataInput, let metadataAdaptor {
+            let timedItem = AVMutableMetadataItem()
+            timedItem.identifier = .quickTimeMetadataLocationISO6709
+            timedItem.dataType = kCMMetadataBaseDataType_UTF8 as String
+            timedItem.value = Self.sampleGPS as NSString
+            let group = AVTimedMetadataGroup(
+                items: [timedItem],
+                timeRange: CMTimeRange(
+                    start: .zero,
+                    duration: CMTime(value: 5, timescale: 15)
+                )
+            )
+            try await eventually { metadataInput.isReadyForMoreMediaData }
+            #expect(metadataAdaptor.append(group))
+            metadataInput.markAsFinished()
+        }
 
         for frameIndex in 0..<5 {
             var pixelBuffer: CVPixelBuffer?

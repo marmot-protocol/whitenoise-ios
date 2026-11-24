@@ -844,7 +844,11 @@ struct GroupDetailsView: View {
 
             if details.isEmpty {
                 ForEach(viewModel.members, id: \.memberIdHex) { member in
-                    GroupMemberRow(member: member, isAdmin: viewModel.isAdmin(member))
+                    GroupMemberRow(
+                        member: member,
+                        isAdmin: viewModel.isAdmin(member),
+                        allowsRemoteAvatars: !viewModel.hasPendingInvite
+                    )
                 }
             } else if filtered.isEmpty {
                 Text("No members match your search.")
@@ -854,12 +858,18 @@ struct GroupDetailsView: View {
                     if member.isSelf {
                         // Your own row is informational; your controls live in
                         // the destructive section and Settings.
-                        GroupMemberDetailsRow(member: member)
+                        GroupMemberDetailsRow(
+                            member: member,
+                            allowsRemoteAvatars: !viewModel.hasPendingInvite
+                        )
                     } else {
                         Button {
                             memberProfileTarget = MemberProfileTarget(member: member)
                         } label: {
-                            GroupMemberDetailsRow(member: member)
+                            GroupMemberDetailsRow(
+                                member: member,
+                                allowsRemoteAvatars: !viewModel.hasPendingInvite
+                            )
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
