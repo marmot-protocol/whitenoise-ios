@@ -41,12 +41,16 @@ final class ChatListViewport {
 
     /// A row that is still not laid out after this many estimated moves is given up on.
     static let maximumRowSearches = 3
+    private static let initialPruneThreshold = 128
 
     private var rows: [String: WeakRow] = [:]
+    private var pruneThreshold = ChatListViewport.initialPruneThreshold
     private weak var scrollView: UIScrollView?
     private var pending: Pending?
     private var isRestoring = false
     private var programmaticScroll: UUID?
+
+    var registeredRowCount: Int { rows.count }
 
     func beginProgrammaticScroll() -> UUID {
         let token = UUID()
@@ -68,8 +72,10 @@ final class ChatListViewport {
     }
 
     func register(_ view: ChatListAnchorView) {
-        rows = rows.filter { $0.value.view?.groupId == $0.key }
         rows[view.groupId] = WeakRow(view)
+        if rows.count >= pruneThreshold {
+            pruneDeadRows()
+        }
         var ancestor = view.superview
         while let current = ancestor {
             if let scroll = current as? UIScrollView { scrollView = scroll; break }
@@ -81,10 +87,24 @@ final class ChatListViewport {
         searchForPendingRowIfDropped(seenFrom: view)
     }
 
+    func unregister(_ view: ChatListAnchorView, groupId: String) {
+        if rows[groupId]?.view === view {
+            rows.removeValue(forKey: groupId)
+        }
+    }
+
+    private func pruneDeadRows() {
+        rows = rows.filter { $0.value.view?.groupId == $0.key }
+        pruneThreshold = max(Self.initialPruneThreshold, rows.count * 2)
+    }
+
     func visibleAnchor() -> String? { visibleRow()?.id }
 
     /// Whether the container currently has this row in layout.
-    func isLaidOut(_ rowID: String) -> Bool { rows[rowID]?.view?.window != nil }
+    func isLaidOut(_ rowID: String) -> Bool {
+        guard let view = rows[rowID]?.view, view.groupId == rowID else { return false }
+        return view.window != nil
+    }
 
     var visibleFrameInWindow: CGRect? {
         guard let scrollView, let window = scrollView.window else { return nil }
@@ -94,11 +114,12 @@ final class ChatListViewport {
     }
 
     private func visibleRows() -> [(id: String, offset: CGFloat, height: CGFloat)] {
+        pruneDeadRows()
         guard let scrollView else { return [] }
         let top = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
         let bottom = scrollView.contentOffset.y + scrollView.bounds.height - scrollView.adjustedContentInset.bottom
         return rows.compactMap { id, row in
-            guard let view = row.view, view.window != nil else { return nil }
+            guard let view = row.view, view.groupId == id, view.window != nil else { return nil }
             let rect = view.convert(view.bounds, to: scrollView)
             guard rect.maxY > top, rect.minY < bottom else { return nil }
             return (id, rect.minY - top, rect.height)
@@ -132,6 +153,7 @@ final class ChatListViewport {
                  lazyRowIDs: [String]? = nil) {
         guard let index = snapshot.anchor.index, snapshot.messages.indices.contains(Int(index)) else { return }
         let id = displayID(snapshot.messages[Int(index)].timeline.messageIdHex)
+        pruneDeadRows()
         // Initial positioning belongs to the conversation scroll coordinator.
         guard !rows.isEmpty else { return }
         let order = lazyRowIDs.map { _ in
@@ -203,7 +225,7 @@ final class ChatListViewport {
         lazy.isSearchScheduled = false
         pending.lazy = lazy
         self.pending = pending
-        if let row = rows[id]?.view, row.window != nil, row.sequence == sequence {
+        if let row = rows[id]?.view, row.groupId == id, row.window != nil, row.sequence == sequence {
             restoreIfReady(from: row)
             return
         }
@@ -212,7 +234,7 @@ final class ChatListViewport {
             return
         }
         let laidOut = rows.compactMap { rowID, row -> (index: Int, minY: CGFloat)? in
-            guard let view = row.view, view.window != nil, view.sequence == sequence,
+            guard let view = row.view, view.groupId == rowID, view.window != nil, view.sequence == sequence,
                   let index = lazy.order[rowID] else { return nil }
             return (index, view.convert(view.bounds, to: scrollView).minY)
         }
@@ -235,7 +257,9 @@ final class ChatListViewport {
             pending = nil
             return
         }
-        let retainedRow: ChatListAnchorView? = if case .retained(let id, _) = anchor { rows[id]?.view } else { nil }
+        pruneDeadRows()
+        let retainedRow: ChatListAnchorView? = if case .retained(let id, _) = anchor,
+                                                  let view = rows[id]?.view, view.groupId == id { view } else { nil }
         guard retainedRow != nil || !Self.isUserScrolling(scrollView) else {
             pending = nil
             return
@@ -261,7 +285,14 @@ final class ChatListViewport {
         }
     }
 
-    func reset() { pending = nil; programmaticScroll = nil; topRequested = false; rows = [:]; scrollView = nil }
+    func reset() {
+        pending = nil
+        programmaticScroll = nil
+        topRequested = false
+        rows = [:]
+        pruneThreshold = Self.initialPruneThreshold
+        scrollView = nil
+    }
 
     private func restoreIfReady(from view: ChatListAnchorView) {
         guard !isRestoring, let pending, pending.sequence == view.sequence,
@@ -305,6 +336,21 @@ final class ChatListAnchorView: UIView {
     var sequence: UInt64 = 0
     weak var viewport: ChatListViewport?
 
+    @discardableResult
+    func updateAnchor(groupId: String, sequence: UInt64, viewport: ChatListViewport) -> Bool {
+        guard self.groupId != groupId || self.sequence != sequence || self.viewport !== viewport else {
+            return false
+        }
+        if !self.groupId.isEmpty, self.groupId != groupId || self.viewport !== viewport {
+            self.viewport?.unregister(self, groupId: self.groupId)
+        }
+        self.groupId = groupId
+        self.sequence = sequence
+        self.viewport = viewport
+        setNeedsLayout()
+        return true
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         viewport?.register(self)
@@ -328,9 +374,6 @@ struct ChatListRowAnchor: UIViewRepresentable {
     }
 
     func updateUIView(_ view: ChatListAnchorView, context: Context) {
-        view.groupId = groupId
-        view.sequence = sequence
-        view.viewport = viewport
-        view.setNeedsLayout()
+        view.updateAnchor(groupId: groupId, sequence: sequence, viewport: viewport)
     }
 }

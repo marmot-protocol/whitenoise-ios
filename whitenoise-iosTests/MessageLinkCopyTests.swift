@@ -163,4 +163,64 @@ struct MessageLinkCopyTests {
             CGRect(x: 0, y: 20, width: 25, height: 20),
         ])
     }
+
+    @Test func markdownProjectionCacheReusesLinkCopyActionsUntilBlocksOrLanguageChange() {
+        var buildCount = 0
+        let cache = ConversationMarkdownProjectionCache(linkCopyActionsBuilder: { blocks in
+            buildCount += 1
+            return MessageLinkCopyAccessibilityAction.actions(in: blocks)
+        })
+
+        func makeItem(url: String, messageId: String = "msg-1") -> TimelineItem {
+            let doc = MarkdownDocumentFfi(
+                blocks: [.paragraph(inlines: [.autolink(url: url, kind: .uri, classification: .web)])],
+                truncated: false
+            )
+            let record = AppMessageRecordFfi(
+                messageIdHex: messageId,
+                direction: "received",
+                groupIdHex: "group",
+                sender: "sender",
+                plaintext: url,
+                contentTokens: doc,
+                kind: MessageSemantics.kindChat,
+                tags: [],
+                recordedAt: 1,
+                receivedAt: 1
+            )
+            return TimelineItem(id: "msg:\(messageId)", kind: .message(record: record, status: .received), timestamp: 1)
+        }
+
+        let item = makeItem(url: "https://example.com/a")
+        _ = cache.update(for: item, resolver: { _ in nil })
+
+        let first = cache.linkCopyActions(for: item, languageKey: "en|en_US")
+        let second = cache.linkCopyActions(for: item, languageKey: "en|en_US")
+        #expect(first == second)
+        #expect(first.map(\.target.copyText) == ["https://example.com/a"])
+        #expect(buildCount == 1)
+
+        // Updating with identical content keeps the cached actions.
+        _ = cache.update(for: item, resolver: { _ in nil })
+        _ = cache.linkCopyActions(for: item, languageKey: "en|en_US")
+        #expect(buildCount == 1)
+
+        // Changing language invalidates and rebuilds once.
+        _ = cache.linkCopyActions(for: item, languageKey: "de|de_DE")
+        #expect(buildCount == 2)
+        _ = cache.linkCopyActions(for: item, languageKey: "de|de_DE")
+        #expect(buildCount == 2)
+
+        // Changing markdown blocks invalidates the cached actions.
+        let edited = makeItem(url: "https://example.com/b")
+        _ = cache.update(for: edited, resolver: { _ in nil })
+        let afterEdit = cache.linkCopyActions(for: edited, languageKey: "de|de_DE")
+        #expect(afterEdit.map(\.target.copyText) == ["https://example.com/b"])
+        #expect(buildCount == 3)
+
+        // Removing the row clears its cached actions.
+        _ = cache.remove(rowId: edited.id)
+        #expect(cache.linkCopyActions(for: edited, languageKey: "de|de_DE").isEmpty)
+        #expect(buildCount == 3)
+    }
 }

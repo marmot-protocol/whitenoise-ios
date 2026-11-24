@@ -624,6 +624,444 @@ enum InviteDeclinePlan: Equatable {
     case blocked(String)
 }
 
+/// High-frequency composer state isolated from `ConversationView` so typing,
+/// voice-recorder waveform ticks, dictation updates, and attachment sheet
+/// toggles only invalidate the composer chrome and never re-evaluate the
+/// timeline `ForEach`.
+@Observable
+@MainActor
+final class ConversationComposerState {
+    struct EditSession {
+        let id = UUID()
+        let message: AppMessageRecordFfi
+        let preservedDraft: String
+        let preservedMediaDrafts: [MediaDraftAttachment]
+        let preservedMentionState: ComposerMentionDraftState
+        let preservedReplyTargetMessageIdHex: String?
+    }
+
+    struct CustomEmojiPicker: Identifiable {
+        let id = UUID()
+        let emoji: [CustomEmojiSendable]
+    }
+
+    var draft: String = ""
+    var textOverage: Int?
+    var didRestorePersistedDraft = false
+    var composerChangedBeforeDraftRestore = false
+    /// The saved draft couldn't be read. Writes then stop keeping files the
+    /// composer never showed, so the chat can still send and clear its draft.
+    var draftHydrationFailed = false
+    var mediaDrafts: [MediaDraftAttachment] = []
+    var dictation = ComposerDictationController()
+    var dictationPreferences = ComposerDictationPreferenceStore.shared
+    /// The composer when a dictation hold began, so one changed underneath it
+    /// isn't sent unseen.
+    var dictationBaseline: ComposerHoldSnapshot?
+    var editSession: EditSession?
+    var editSaveInFlight = false
+    var focusRequest = 0
+    var dismissRequest = 0
+
+    // Attachment sheet presentation state — observed only by `ConversationComposerSheetsModifier`.
+    var showCameraCapture = false
+    var showPhotoLibraryPicker = false
+    var mediaSelection: ComposerMediaSelection?
+    var showFileImporter = false
+    var showLocationPicker = false
+    var showPollComposer = false
+    var showContactPicker = false
+    var showGiphySearch = false
+    var showStickerPicker = false
+    var customEmojiPicker: CustomEmojiPicker?
+
+    // Imperative / non-body state: observed by `ConversationComposerInputView`
+    // (for `voiceRecorder`) or read only in callbacks, never invalidating the
+    // conversation timeline.
+    @ObservationIgnored let voiceRecorder = VoiceMessageRecorder()
+    @ObservationIgnored var voiceBaseline: ComposerHoldSnapshot?
+    @ObservationIgnored var dictationInstallWatch: Task<Void, Never>?
+    @ObservationIgnored var fileProductTicket: ProductAnalyticsRecorder.Ticket?
+    @ObservationIgnored var isInputFocused = false
+    @ObservationIgnored var focusSuspendedForActions = false
+}
+
+private struct ConversationComposerInputView: View {
+    @Bindable var composer: ConversationComposerState
+    @ObservedObject private var voiceRecorder: VoiceMessageRecorder
+    let viewModel: ConversationViewModel?
+    let replyCloseIconSize: CGFloat
+    let replyCloseHitSize: CGFloat
+    let makeReplyPreview: (ConversationViewModel) -> ComposerReplyPreview?
+    let makeDisabledAction: (ConversationViewModel) -> ComposerDisabledAction?
+    let makeDictationBinding: () -> ComposerDictationBinding?
+    let isEditSubmissionEnabled: () -> Bool
+    let hasSavedDraft: () -> Bool
+    let onCancelEdit: () -> Void
+    let onCreatePoll: () -> Void
+    let onCustomEmoji: () -> Void
+    let onStickers: () -> Void
+    let onTakePhoto: () -> Void
+    let onPhotoLibrary: () -> Void
+    let onAttachFile: () -> Void
+    let onShareLocation: () -> Void
+    let onShareContact: () -> Void
+    let onSearchGIFs: () -> Void
+    let onPasteImage: (UIImage) -> Void
+    let onRemoveMediaDraft: (MediaDraftAttachment.ID) -> Void
+    let onPreviewPreparedMedia: (MediaDraftAttachment.ID) -> Void
+    let onCancelVoiceRecording: () -> Void
+    let onStopVoiceRecording: () -> Void
+    let onVoicePressBegan: () -> Void
+    let onVoiceDragChanged: (CGSize) -> Void
+    let onVoicePressEnded: () -> Void
+    let onSend: () -> Void
+
+    init(
+        composer: ConversationComposerState,
+        viewModel: ConversationViewModel?,
+        replyCloseIconSize: CGFloat,
+        replyCloseHitSize: CGFloat,
+        makeReplyPreview: @escaping (ConversationViewModel) -> ComposerReplyPreview?,
+        makeDisabledAction: @escaping (ConversationViewModel) -> ComposerDisabledAction?,
+        makeDictationBinding: @escaping () -> ComposerDictationBinding?,
+        isEditSubmissionEnabled: @escaping () -> Bool,
+        hasSavedDraft: @escaping () -> Bool,
+        onCancelEdit: @escaping () -> Void,
+        onCreatePoll: @escaping () -> Void,
+        onCustomEmoji: @escaping () -> Void,
+        onStickers: @escaping () -> Void,
+        onTakePhoto: @escaping () -> Void,
+        onPhotoLibrary: @escaping () -> Void,
+        onAttachFile: @escaping () -> Void,
+        onShareLocation: @escaping () -> Void,
+        onShareContact: @escaping () -> Void,
+        onSearchGIFs: @escaping () -> Void,
+        onPasteImage: @escaping (UIImage) -> Void,
+        onRemoveMediaDraft: @escaping (MediaDraftAttachment.ID) -> Void,
+        onPreviewPreparedMedia: @escaping (MediaDraftAttachment.ID) -> Void,
+        onCancelVoiceRecording: @escaping () -> Void,
+        onStopVoiceRecording: @escaping () -> Void,
+        onVoicePressBegan: @escaping () -> Void,
+        onVoiceDragChanged: @escaping (CGSize) -> Void,
+        onVoicePressEnded: @escaping () -> Void,
+        onSend: @escaping () -> Void
+    ) {
+        self.composer = composer
+        _voiceRecorder = ObservedObject(wrappedValue: composer.voiceRecorder)
+        self.viewModel = viewModel
+        self.replyCloseIconSize = replyCloseIconSize
+        self.replyCloseHitSize = replyCloseHitSize
+        self.makeReplyPreview = makeReplyPreview
+        self.makeDisabledAction = makeDisabledAction
+        self.makeDictationBinding = makeDictationBinding
+        self.isEditSubmissionEnabled = isEditSubmissionEnabled
+        self.hasSavedDraft = hasSavedDraft
+        self.onCancelEdit = onCancelEdit
+        self.onCreatePoll = onCreatePoll
+        self.onCustomEmoji = onCustomEmoji
+        self.onStickers = onStickers
+        self.onTakePhoto = onTakePhoto
+        self.onPhotoLibrary = onPhotoLibrary
+        self.onAttachFile = onAttachFile
+        self.onShareLocation = onShareLocation
+        self.onShareContact = onShareContact
+        self.onSearchGIFs = onSearchGIFs
+        self.onPasteImage = onPasteImage
+        self.onRemoveMediaDraft = onRemoveMediaDraft
+        self.onPreviewPreparedMedia = onPreviewPreparedMedia
+        self.onCancelVoiceRecording = onCancelVoiceRecording
+        self.onStopVoiceRecording = onStopVoiceRecording
+        self.onVoicePressBegan = onVoicePressBegan
+        self.onVoiceDragChanged = onVoiceDragChanged
+        self.onVoicePressEnded = onVoicePressEnded
+        self.onSend = onSend
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let viewModel, let editSession = composer.editSession {
+                editBar(for: editSession, viewModel: viewModel)
+            }
+            let inlineAudioDraft = ComposerMediaDraftPresentation.inlineAudioDraft(in: composer.mediaDrafts)
+            let mentionCandidates = inlineAudioDraft == nil ? (viewModel?.mentionCandidates(for: composer.draft) ?? []) : []
+            let stripAttachments = ComposerMediaDraftPresentation.stripAttachments(from: composer.mediaDrafts)
+            if composer.editSession == nil, let message = viewModel?.customEmojiSendErrorMessage {
+                CustomEmojiSendNotice(message: message) {
+                    viewModel?.dismissCustomEmojiSendError()
+                }
+            }
+            ComposerBar(
+                draft: $composer.draft,
+                isSending: composer.editSaveInFlight || viewModel?.isSendingCustomEmojiMessage == true,
+                hasAttachments: !composer.mediaDrafts.isEmpty,
+                audioDraft: inlineAudioDraft,
+                preparedAttachments: stripAttachments,
+                replyPreview: composer.editSession == nil
+                    ? viewModel.flatMap(makeReplyPreview)
+                    : nil,
+                mediaEnabled: composer.editSession == nil && (viewModel?.canAddMediaAttachments ?? false),
+                disabledMessage: viewModel?.inactiveGroupMessage,
+                disabledAction: viewModel.flatMap(makeDisabledAction),
+                sendBlockedMessage: viewModel?.sendBlockedMessage,
+                textOverage: composer.textOverage,
+                voiceRecordingActive: voiceRecorder.isActive,
+                voiceRecordingLocked: voiceRecorder.isLocked,
+                voiceRecordingDurationSeconds: voiceRecorder.durationSeconds,
+                voiceRecordingLevel: voiceRecorder.waveformSamples.last ?? 0,
+                focusRequest: composer.focusRequest,
+                dismissRequest: composer.dismissRequest,
+                onInputFocusChange: { composer.isInputFocused = $0 },
+                mentionCandidates: mentionCandidates,
+                submissionEnabled: isEditSubmissionEnabled() && (composer.editSession != nil || hasSavedDraft()),
+                submissionAccessibilityLabel: composer.editSession == nil
+                    ? L10n.string("Send")
+                    : L10n.string("Save edit"),
+                voiceMessagesEnabled: composer.editSession == nil,
+                dictation: makeDictationBinding(),
+                cameraAvailable: ComposerAttachmentCapabilities.cameraAvailable,
+                gifsAvailable: ComposerAttachmentCapabilities.gifsAvailable,
+                pollsAvailable: composer.editSession == nil && (viewModel?.canCreatePolls ?? false),
+                onCreatePoll: onCreatePoll,
+                customEmojiAvailable: composer.editSession == nil && (viewModel?.canSendCustomEmoji ?? false),
+                onCustomEmoji: onCustomEmoji,
+                stickersAvailable: composer.editSession == nil && (viewModel?.canSendStickers ?? false),
+                onStickers: onStickers,
+                onTakePhoto: onTakePhoto,
+                onPhotoLibrary: onPhotoLibrary,
+                onAttachFile: onAttachFile,
+                onShareLocation: onShareLocation,
+                onShareContact: onShareContact,
+                onSearchGIFs: onSearchGIFs,
+                onPasteImage: onPasteImage,
+                onRemoveAudioDraft: onRemoveMediaDraft,
+                onRemovePreparedAttachment: onRemoveMediaDraft,
+                onPreviewPreparedMedia: onPreviewPreparedMedia,
+                onCancelReply: { viewModel?.restoreReplyTarget(messageIdHex: nil) },
+                onCancelVoiceRecording: onCancelVoiceRecording,
+                onStopVoiceRecording: onStopVoiceRecording,
+                onVoicePressBegan: onVoicePressBegan,
+                onVoiceDragChanged: onVoiceDragChanged,
+                onVoicePressEnded: onVoicePressEnded,
+                onMentionSelect: { candidate in
+                    viewModel?.applyMentionSelection(candidate, to: &composer.draft)
+                },
+                onSend: onSend
+            )
+        }
+    }
+
+    private func editBar(for session: ConversationComposerState.EditSession, viewModel: ConversationViewModel) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "pencil")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(L10n.string("Editing message"))
+                    .font(.caption.weight(.semibold))
+                Text(ContentSanitizer.compactSingleLine(viewModel.displayBody(of: session.message), maxLength: 100) ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Button(action: onCancelEdit) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: replyCloseIconSize, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.secondary)
+                    .frame(width: replyCloseHitSize, height: replyCloseHitSize)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.string("Cancel edit"))
+        }
+        .padding(.leading, ReplyPreviewLayout.leadingContentInset)
+        .padding(.trailing, ReplyPreviewLayout.closeTrailingInset)
+        .padding(.vertical, ReplyPreviewLayout.contentTopInset)
+        .background(.regularMaterial, in: .rect(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+        }
+        .padding(.horizontal, ReplyPreviewLayout.outerHorizontalInset)
+        .padding(.top, ReplyPreviewLayout.outerTopInset)
+        .padding(.bottom, ReplyPreviewLayout.outerBottomInset)
+    }
+}
+
+private struct ConversationComposerDraftObserver: View {
+    let composer: ConversationComposerState
+    let appState: AppState
+    let draftAccountRef: String?
+    let groupIdHex: String
+    let isViewModelReady: Bool
+    let isRuntimeReadyForDraftLoad: Bool
+    let onDraftChange: (String) -> Void
+    let onMediaDraftIDsChange: () -> Void
+    let onFileBackedGenerationChange: () -> Void
+    let onRestoreDraft: (Bool) async -> ConversationDraftLoadResult?
+
+    var body: some View {
+        Color.clear
+            .accessibilityHidden(true)
+            .onChange(of: composer.draft) { _, draft in
+                onDraftChange(draft)
+            }
+            .onChange(of: composer.mediaDrafts.map(\.id)) { _, _ in
+                onMediaDraftIDsChange()
+            }
+            .onChange(of: appState.conversationDraftStore.fileBackedGeneration) { _, _ in
+                onFileBackedGenerationChange()
+            }
+            .task(id: ConversationDraftLoadToken(
+                accountRef: draftAccountRef,
+                groupIdHex: groupIdHex,
+                isViewModelReady: isViewModelReady,
+                runtimeGeneration: appState.runtimeGeneration,
+                isRuntimeReady: isRuntimeReadyForDraftLoad,
+                isEditingMessage: composer.editSession != nil
+            )) {
+                _ = await ConversationDraftLoadRetry.run { isFinalAttempt in
+                    guard !composer.didRestorePersistedDraft, isRuntimeReadyForDraftLoad, composer.editSession == nil else { return nil }
+                    return await onRestoreDraft(isFinalAttempt)
+                }
+            }
+    }
+}
+
+private struct ConversationComposerSheetsModifier: ViewModifier {
+    @Bindable var composer: ConversationComposerState
+    let appState: AppState
+    let viewModel: ConversationViewModel?
+    let draftAccountRef: String?
+    let groupIdHex: String
+    let remainingMediaDraftSlots: () -> Int
+    let onCameraCapture: (CameraCapture) -> Void
+    let onPhotoLibrarySelection: ([PhotoLibrarySelection]) -> Void
+    let onApplyMediaSelection: (ComposerMediaSelection, Set<MediaDraftAttachment.ID>) -> Void
+    let onAdmitSendOrWarn: () -> Bool
+    let onSendSharedLocation: (Double, Double) -> Void
+    let onAddContactCard: (CNContact) -> Void
+    let onSendGiphyResult: (GiphySearchResult) -> Void
+    let onRequestComposerFocus: () -> Void
+    let onFileImporterResult: (Result<[URL], Error>) -> Void
+    let onResolveDraftConflict: (Bool) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Draft changed", isPresented: Binding(
+                get: { draftAccountRef.map { appState.conversationDraftStore.conflictedKeys.contains(ConversationDraftKey(accountRef: $0, groupIdHex: groupIdHex)) } ?? false },
+                set: { _ in }
+            )) {
+                Button("Keep my draft") { onResolveDraftConflict(true) }
+                Button("Use saved draft", role: .destructive) { onResolveDraftConflict(false) }
+            } message: {
+                Text("The saved draft changed while you were editing. Your text is preserved. Choose which version to keep.")
+            }
+            .sheet(isPresented: $composer.showCameraCapture) {
+                CameraCaptureView(
+                    onCapture: { capture in
+                        composer.showCameraCapture = false
+                        onCameraCapture(capture)
+                    },
+                    onCancel: {
+                        composer.showCameraCapture = false
+                    }
+                )
+                .ignoresSafeArea()
+            }
+            .sheet(isPresented: $composer.showPhotoLibraryPicker) {
+                PhotoLibraryPickerView(
+                    selectionLimit: remainingMediaDraftSlots(),
+                    budget: PhotoLibrarySelection.remainingBudget(alongside: composer.mediaDrafts),
+                    onSelection: onPhotoLibrarySelection,
+                    onError: { error in
+                        appState.present(UserFacingError.toast(title: L10n.string("Couldn't add attachment"), error: error))
+                    },
+                    onDismiss: {
+                        composer.showPhotoLibraryPicker = false
+                    }
+                )
+                .ignoresSafeArea()
+            }
+            .fullScreenCover(item: $composer.mediaSelection) { selection in
+                ComposerMediaPreviewView(selection: selection) { includedItemIDs in
+                    onApplyMediaSelection(selection, includedItemIDs)
+                }
+                .appAppearance()
+            }
+            .sheet(isPresented: $composer.showLocationPicker) {
+                LocationPickerView(
+                    onSend: { coordinate in
+                        guard onAdmitSendOrWarn() else { return }
+                        composer.showLocationPicker = false
+                        onSendSharedLocation(coordinate.latitude, coordinate.longitude)
+                    },
+                    onCancel: { composer.showLocationPicker = false }
+                )
+                .appAppearance()
+            }
+            .sheet(isPresented: $composer.showPollComposer) {
+                PollComposerView(
+                    onSend: { submission in
+                        guard let viewModel else { throw PollActionError.unavailable }
+                        try await viewModel.createPoll(submission)
+                        composer.showPollComposer = false
+                    },
+                    onCancel: { composer.showPollComposer = false }
+                )
+                .appAppearance()
+            }
+            .sheet(isPresented: $composer.showContactPicker) {
+                ContactCardPicker(
+                    onPick: { contact in
+                        composer.showContactPicker = false
+                        onAddContactCard(contact)
+                    },
+                    onCancel: { composer.showContactPicker = false }
+                )
+            }
+            .sheet(isPresented: $composer.showGiphySearch) {
+                if let apiKey = GiphyBuildConfig.current().apiKey {
+                    GiphySearchView(
+                        client: GiphySearchClient(apiKey: apiKey),
+                        onSelect: onSendGiphyResult
+                    )
+                    .appAppearance()
+                }
+            }
+            .sheet(isPresented: $composer.showStickerPicker) {
+                if let viewModel {
+                    StickerPickerSheet(library: viewModel.stickerLibrary) { sticker in
+                        guard onAdmitSendOrWarn() else { return }
+                        Task { await viewModel.sendSticker(sticker) }
+                    }
+                    .environment(\.stickerAssets, viewModel.stickerAssets)
+                    .appAppearance()
+                }
+            }
+            .sheet(item: $composer.customEmojiPicker, onDismiss: onRequestComposerFocus) { picker in
+                EmojiPickerSheet(customEmoji: picker.emoji, emojiSets: appState.emojiSetLibrary) { emoji in
+                    if CustomEmojiShortcode(reactionContent: emoji) != nil {
+                        composer.draft = CustomEmojiComposerText.inserting(emoji, into: composer.draft)
+                    } else {
+                        composer.draft += emoji
+                    }
+                }
+                .environment(\.customEmojiStore, viewModel?.customEmojiStore)
+                .appAppearance()
+            }
+            .fileImporter(
+                isPresented: $composer.showFileImporter,
+                allowedContentTypes: MediaAttachmentPolicy.fileImporterAllowedTypes,
+                allowsMultipleSelection: true,
+                onCompletion: onFileImporterResult
+            )
+    }
+}
+
 struct ConversationView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
@@ -650,39 +1088,13 @@ struct ConversationView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: ConversationViewModel?
     @State private var isConversationOnScreen = false
-    @State private var draft: String = ""
-    @State private var composerTextOverage: Int?
-    @State private var didRestorePersistedDraft = false
-    @State private var composerChangedBeforeDraftRestore = false
-    /// The saved draft couldn't be read. Writes then stop keeping files the
-    /// composer never showed, so the chat can still send and clear its draft.
-    @State private var draftHydrationFailed = false
-    @State private var mediaDrafts: [MediaDraftAttachment] = []
-    @StateObject private var voiceRecorder = VoiceMessageRecorder()
-    @State private var dictation = ComposerDictationController()
-    @State private var dictationPreferences = ComposerDictationPreferenceStore.shared
-    @State private var dictationInstallWatch: Task<Void, Never>?
-    /// The composer when a dictation or voice hold began, so one changed
-    /// underneath it isn't sent unseen.
-    @State private var dictationBaseline: ComposerHoldSnapshot?
-    @State private var voiceBaseline: ComposerHoldSnapshot?
-    @State private var showCameraCapture = false
-    @State private var fileProductTicket: ProductAnalyticsRecorder.Ticket?
-    @State private var showPhotoLibraryPicker = false
-    @State private var composerMediaSelection: ComposerMediaSelection?
-    @State private var showFileImporter = false
-    @State private var showLocationPicker = false
-    @State private var showPollComposer = false
-    @State private var showContactPicker = false
-    @State private var showGiphySearch = false
-    @State private var showStickerPicker = false
+    @State private var composer = ConversationComposerState()
     @State private var showDetails = false
     @State private var openAddMembersOnDetails = false
     @Environment(ConversationSpeech.self) private var speech
     @State private var actionsTarget: ActionsTarget?
     @State private var emojiPickerTarget: ActionsTarget?
     @State private var detailsAfterEmojiPicker: ReactionDetailsTarget?
-    @State private var composerCustomEmojiPicker: ComposerCustomEmojiPicker?
     private struct LongMessageTarget: Identifiable {
         var id: String { rowID }
         let accountRef: String?
@@ -715,8 +1127,6 @@ struct ConversationView: View {
     /// for an answer nobody can give.
     @State private var inviteDeclineTask: Task<Void, Never>?
     @State private var batchDeleteOperationID: UUID?
-    @State private var editSession: ComposerEditSession?
-    @State private var editSaveInFlight = false
     @State private var editHistoryTarget: ActionsTarget?
     @State private var reportTarget: ActionsTarget?
     @State private var blockTarget: ActionsTarget?
@@ -731,11 +1141,7 @@ struct ConversationView: View {
     @State private var pendingActionsPresentation: PendingActionsPresentation?
     @State private var pendingActionFrameMeasurementClearTask: Task<Void, Never>?
     private let openPerformance: ConversationOpenPerformance?
-    @State private var composerFocusRequest = 0
-    @State private var composerDismissRequest = 0
     @State private var popTransition = InteractivePopTransitionState()
-    @State private var isComposerInputFocused = false
-    @State private var composerFocusSuspendedForActions = false
     /// Bumped by `send()` to ask the timeline to re-pin. The composer is a
     /// sibling of the `ScrollViewReader`, so it has no `ScrollViewProxy`; this
     /// carries the request into the reader's scope.
@@ -777,15 +1183,9 @@ struct ConversationView: View {
     private static let timelineBottomID = "conversation-timeline-bottom"
     private static let actionFrameMeasurementClearDelayNanoseconds: UInt64 = 250_000_000
 
-    /// The composer's custom emoji picker, with its options captured on open.
     private struct ReactionEmojiCatalogTaskID: Equatable {
         let scope: CustomEmojiScope?
         let generation: Int
-    }
-
-    private struct ComposerCustomEmojiPicker: Identifiable {
-        let id = UUID()
-        let emoji: [CustomEmojiSendable]
     }
 
     private struct ActionsTarget: Identifiable {
@@ -897,15 +1297,6 @@ struct ConversationView: View {
     private struct ForwardSelectionTarget: Identifiable {
         let records: [AppMessageRecordFfi]
         let id = UUID()
-    }
-
-    private struct ComposerEditSession {
-        let id = UUID()
-        let message: AppMessageRecordFfi
-        let preservedDraft: String
-        let preservedMediaDrafts: [MediaDraftAttachment]
-        let preservedMentionState: ComposerMentionDraftState
-        let preservedReplyTargetMessageIdHex: String?
     }
 
     init(
@@ -1141,15 +1532,6 @@ struct ConversationView: View {
                 MessageInfoSheet(record: target.record, status: target.status, conversation: viewModel)
                     .appAppearance()
             }
-            .alert("Draft changed", isPresented: Binding(
-                get: { draftAccountRef.map { appState.conversationDraftStore.conflictedKeys.contains(ConversationDraftKey(accountRef: $0, groupIdHex: chat.groupIdHex)) } ?? false },
-                set: { _ in }
-            )) {
-                Button("Keep my draft") { resolveDraftConflict(keepLocal: true) }
-                Button("Use saved draft", role: .destructive) { resolveDraftConflict(keepLocal: false) }
-            } message: {
-                Text("The saved draft changed while you were editing. Your text is preserved. Choose which version to keep.")
-            }
             .sheet(item: $reactionDetailsTarget) { target in
                 if let viewModel {
                     ReactionDetailsSheet(
@@ -1297,109 +1679,60 @@ struct ConversationView: View {
 
     private var conversationAttachmentSheets: some View {
         conversationMessageSheets
-            .sheet(isPresented: $showCameraCapture) {
-                CameraCaptureView(
-                    onCapture: { capture in
-                        showCameraCapture = false
-                        addCameraCapture(capture)
-                    },
-                    onCancel: {
-                        showCameraCapture = false
-                    }
-                )
-                .ignoresSafeArea()
-            }
-            .sheet(isPresented: $showPhotoLibraryPicker) {
-                PhotoLibraryPickerView(
-                    selectionLimit: remainingMediaDraftSlots,
-                    budget: PhotoLibrarySelection.remainingBudget(alongside: mediaDrafts),
-                    onSelection: addPhotoLibrarySelections,
-                    onError: { error in
-                        appState.present(UserFacingError.toast(title: L10n.string("Couldn't add attachment"), error: error))
-                    },
-                    onDismiss: {
-                        showPhotoLibraryPicker = false
-                    }
-                )
-                .ignoresSafeArea()
-            }
-            .fullScreenCover(item: $composerMediaSelection) { selection in
-                ComposerMediaPreviewView(selection: selection) { includedItemIDs in
-                    applyComposerMediaSelection(selection, includedItemIDs: includedItemIDs)
-                }
-                .appAppearance()
-            }
-            .sheet(isPresented: $showLocationPicker) {
-                LocationPickerView(
-                    onSend: { coordinate in
-                        guard admitSendOrWarn() else { return }
-                        showLocationPicker = false
-                        sendSharedLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-                    },
-                    onCancel: { showLocationPicker = false }
-                )
-                .appAppearance()
-            }
-            .sheet(isPresented: $showPollComposer) {
-                PollComposerView(
-                    onSend: { submission in
-                        guard let viewModel else { throw PollActionError.unavailable }
-                        try await viewModel.createPoll(submission)
-                        showPollComposer = false
-                    },
-                    onCancel: { showPollComposer = false }
-                )
-                .appAppearance()
-            }
-            .sheet(isPresented: $showContactPicker) {
-                ContactCardPicker(
-                    onPick: { contact in
-                        showContactPicker = false
-                        addContactCard(contact)
-                    },
-                    onCancel: { showContactPicker = false }
-                )
-            }
-            .sheet(isPresented: $showGiphySearch) {
-                if let apiKey = GiphyBuildConfig.current().apiKey {
-                    GiphySearchView(
-                        client: GiphySearchClient(apiKey: apiKey),
-                        onSelect: sendGiphyResult
-                    )
-                    .appAppearance()
-                }
-            }
-            .sheet(isPresented: $showStickerPicker) {
-                if let viewModel {
-                    StickerPickerSheet(library: viewModel.stickerLibrary) { sticker in
-                        guard admitSendOrWarn() else { return }
-                        Task { await viewModel.sendSticker(sticker) }
-                    }
-                    .environment(\.stickerAssets, viewModel.stickerAssets)
-                    .appAppearance()
-                }
-            }
-            .sheet(item: $composerCustomEmojiPicker, onDismiss: requestComposerFocus) { picker in
-                EmojiPickerSheet(customEmoji: picker.emoji, emojiSets: appState.emojiSetLibrary) { emoji in
-                    if CustomEmojiShortcode(reactionContent: emoji) != nil {
-                        draft = CustomEmojiComposerText.inserting(emoji, into: draft)
-                    } else {
-                        draft += emoji
-                    }
-                }
-                .environment(\.customEmojiStore, viewModel?.customEmojiStore)
-                .appAppearance()
-            }
-            .fileImporter(
-                isPresented: $showFileImporter,
-                allowedContentTypes: MediaAttachmentPolicy.fileImporterAllowedTypes,
-                allowsMultipleSelection: true,
-                onCompletion: addFileImporterResult
-            )
+            .modifier(ConversationComposerSheetsModifier(
+                composer: composer,
+                appState: appState,
+                viewModel: viewModel,
+                draftAccountRef: draftAccountRef,
+                groupIdHex: chat.groupIdHex,
+                remainingMediaDraftSlots: { remainingMediaDraftSlots },
+                onCameraCapture: addCameraCapture,
+                onPhotoLibrarySelection: addPhotoLibrarySelections,
+                onApplyMediaSelection: applyComposerMediaSelection,
+                onAdmitSendOrWarn: admitSendOrWarn,
+                onSendSharedLocation: sendSharedLocation,
+                onAddContactCard: addContactCard,
+                onSendGiphyResult: sendGiphyResult,
+                onRequestComposerFocus: requestComposerFocus,
+                onFileImporterResult: addFileImporterResult,
+                onResolveDraftConflict: resolveDraftConflict
+            ))
     }
 
     private var conversationRuntimeTasks: some View {
         conversationAttachmentSheets
+            .background {
+                ConversationComposerDraftObserver(
+                    composer: composer,
+                    appState: appState,
+                    draftAccountRef: draftAccountRef,
+                    groupIdHex: chat.groupIdHex,
+                    isViewModelReady: viewModel != nil,
+                    isRuntimeReadyForDraftLoad: isRuntimeReadyForDraftLoad,
+                    onDraftChange: { draft in
+                        if composer.editSession == nil {
+                            persistComposerChange(text: draft)
+                        }
+                        refreshComposerTextOverage()
+                        if draft.isEmpty {
+                            viewModel?.dismissCustomEmojiSendError()
+                        }
+                    },
+                    onMediaDraftIDsChange: {
+                        reconcileDraftMediaUploads()
+                        if composer.editSession == nil {
+                            persistComposerChange()
+                        }
+                    },
+                    onFileBackedGenerationChange: {
+                        // A large attachment MDK now holds can pre-upload.
+                        reconcileDraftMediaUploads()
+                    },
+                    onRestoreDraft: { isFinalAttempt in
+                        await restorePersistedDraft(surfacesTransientFailures: isFinalAttempt)
+                    }
+                )
+            }
             .task(id: viewModel?.composerLoadingTaskID) {
                 await viewModel?.waitForComposerLoadingGracePeriod()
             }
@@ -1459,19 +1792,6 @@ struct ConversationView: View {
             )) {
                 viewModel?.applyBlockedAuthors(blockedUsers.blockedAccountIds)
             }
-            .task(id: ConversationDraftLoadToken(
-                accountRef: draftAccountRef,
-                groupIdHex: chat.groupIdHex,
-                isViewModelReady: viewModel != nil,
-                runtimeGeneration: appState.runtimeGeneration,
-                isRuntimeReady: isRuntimeReadyForDraftLoad,
-                isEditingMessage: editSession != nil
-            )) {
-                _ = await ConversationDraftLoadRetry.run { isFinalAttempt in
-                    guard !didRestorePersistedDraft, isRuntimeReadyForDraftLoad, editSession == nil else { return nil }
-                    return await restorePersistedDraft(surfacesTransientFailures: isFinalAttempt)
-                }
-            }
             .task(id: appState.groupRecoveryUpdate) {
                 guard let update = appState.groupRecoveryUpdate, update.groupID == chat.groupIdHex,
                       update.accountID == appState.activeAccount?.accountIdHex else { return }
@@ -1487,6 +1807,11 @@ struct ConversationView: View {
 
     private var conversationStateObservers: some View {
         conversationRuntimeTasks
+            .onChange(of: appState.canUseRuntimeForForegroundWork) { _, canUse in
+                if canUse {
+                    viewModel?.flushPendingReadMarksIfNeeded()
+                }
+            }
             .onChange(of: appState.streamingDebugEnabled) { _, _ in
                 viewModel?.refreshStreamingDebugPresentation()
             }
@@ -1517,42 +1842,23 @@ struct ConversationView: View {
                 handleComposerAvailabilityChange(composerHidden: composerHidden)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-                dictation.cancel()
+                composer.dictation.cancel()
             }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
                 // A call or another app took the microphone.
                 if DictationInterruptionPolicy.cancelsDictation(notification.userInfo) {
-                    dictation.cancel()
+                    composer.dictation.cancel()
                 }
             }
     }
 
     var body: some View {
         conversationStateObservers
-            .onChange(of: draft) { _, draft in
-                if editSession == nil {
-                    persistComposerChange(text: draft)
-                }
-                refreshComposerTextOverage()
-                if draft.isEmpty {
-                    viewModel?.dismissCustomEmojiSendError()
-                }
-            }
             .onChange(of: viewModel?.acceptedCustomEmojiSend?.id) { _, id in
                 if id != nil { reconcileAcceptedCustomEmojiSend() }
             }
-            .onChange(of: appState.conversationDraftStore.fileBackedGeneration) { _, _ in
-                // A large attachment MDK now holds can pre-upload.
-                reconcileDraftMediaUploads()
-            }
-            .onChange(of: mediaDrafts.map(\.id)) { _, _ in
-                reconcileDraftMediaUploads()
-                if editSession == nil {
-                    persistComposerChange()
-                }
-            }
             .onChange(of: viewModel?.replyTargetMessageIdHex) { _, _ in
-                if editSession == nil {
+                if composer.editSession == nil {
                     persistComposerChange()
                 }
             }
@@ -1565,17 +1871,17 @@ struct ConversationView: View {
                 if let visibleChatRoute {
                     appState.endViewingChat(visibleChatRoute)
                 }
-                voiceRecorder.cancelIfActive()
-                dictation.cancel()
-                dictationInstallWatch?.cancel()
-                dictationInstallWatch = nil
+                composer.voiceRecorder.cancelIfActive()
+                composer.dictation.cancel()
+                composer.dictationInstallWatch?.cancel()
+                composer.dictationInstallWatch = nil
                 viewModel?.search.end()
                 cancelPendingTimelineFollowUpWork()
                 actionsTarget = nil
                 actionsReturnGeometry = nil
-                composerFocusSuspendedForActions = false
+                composer.focusSuspendedForActions = false
                 dismissKeyboard()
-                if let editSession {
+                if let editSession = composer.editSession {
                     persistDraft(
                         editSession.preservedMentionState,
                         mediaAttachments: editSession.preservedMediaDrafts,
@@ -1652,76 +1958,36 @@ struct ConversationView: View {
                 onUnblock: unblockConversationPeer
             )
         } else {
-            VStack(spacing: 0) {
-                if let viewModel, let editSession {
-                    editBar(for: editSession, viewModel: viewModel)
-                }
-                let inlineAudioDraft = ComposerMediaDraftPresentation.inlineAudioDraft(in: mediaDrafts)
-                let mentionCandidates = inlineAudioDraft == nil ? (viewModel?.mentionCandidates(for: draft) ?? []) : []
-                let stripAttachments = ComposerMediaDraftPresentation.stripAttachments(from: mediaDrafts)
-                if editSession == nil, let message = viewModel?.customEmojiSendErrorMessage {
-                    CustomEmojiSendNotice(message: message) {
-                        viewModel?.dismissCustomEmojiSendError()
-                    }
-                }
-                ComposerBar(
-                    draft: $draft,
-                    isSending: editSaveInFlight || viewModel?.isSendingCustomEmojiMessage == true,
-                    hasAttachments: !mediaDrafts.isEmpty,
-                    audioDraft: inlineAudioDraft,
-                    preparedAttachments: stripAttachments,
-                    replyPreview: editSession == nil
-                        ? viewModel.flatMap(composerReplyPreview(viewModel:))
-                        : nil,
-                    mediaEnabled: editSession == nil && (viewModel?.canAddMediaAttachments ?? false),
-                    disabledMessage: viewModel?.inactiveGroupMessage,
-                    disabledAction: viewModel.flatMap(blockedLeaveComposerAction(viewModel:)),
-                    sendBlockedMessage: viewModel?.sendBlockedMessage,
-                    textOverage: composerTextOverage,
-                    voiceRecordingActive: voiceRecorder.isActive,
-                    voiceRecordingLocked: voiceRecorder.isLocked,
-                    voiceRecordingDurationSeconds: voiceRecorder.durationSeconds,
-                    voiceRecordingLevel: voiceRecorder.waveformSamples.last ?? 0,
-                    focusRequest: composerFocusRequest,
-                    dismissRequest: composerDismissRequest,
-                    onInputFocusChange: { isComposerInputFocused = $0 },
-                    mentionCandidates: mentionCandidates,
-                    submissionEnabled: editSubmissionEnabled && (editSession != nil || composerHasSavedDraft),
-                    submissionAccessibilityLabel: editSession == nil
-                        ? L10n.string("Send")
-                        : L10n.string("Save edit"),
-                    voiceMessagesEnabled: editSession == nil,
-                    dictation: composerDictationBinding,
-                    cameraAvailable: ComposerAttachmentCapabilities.cameraAvailable,
-                    gifsAvailable: ComposerAttachmentCapabilities.gifsAvailable,
-                    pollsAvailable: editSession == nil && (viewModel?.canCreatePolls ?? false),
-                    onCreatePoll: openPollComposer,
-                    customEmojiAvailable: editSession == nil && (viewModel?.canSendCustomEmoji ?? false),
-                    onCustomEmoji: openComposerCustomEmojiPicker,
-                    stickersAvailable: editSession == nil && (viewModel?.canSendStickers ?? false),
-                    onStickers: { showStickerPicker = true },
-                    onTakePhoto: takePhoto,
-                    onPhotoLibrary: openPhotoLibrary,
-                    onAttachFile: openFileImporter,
-                    onShareLocation: openLocationPicker,
-                    onShareContact: openContactPicker,
-                    onSearchGIFs: openGiphySearch,
-                    onPasteImage: pasteImage,
-                    onRemoveAudioDraft: removeMediaDraft,
-                    onRemovePreparedAttachment: removeMediaDraft,
-                    onPreviewPreparedMedia: previewPreparedMedia,
-                    onCancelReply: { viewModel?.restoreReplyTarget(messageIdHex: nil) },
-                    onCancelVoiceRecording: cancelVoiceRecording,
-                    onStopVoiceRecording: stopLockedVoiceRecording,
-                    onVoicePressBegan: beginVoicePress,
-                    onVoiceDragChanged: updateVoiceDrag,
-                    onVoicePressEnded: endVoicePress,
-                    onMentionSelect: { candidate in
-                        viewModel?.applyMentionSelection(candidate, to: &draft)
-                    },
-                    onSend: send
-                )
-            }
+            ConversationComposerInputView(
+                composer: composer,
+                viewModel: viewModel,
+                replyCloseIconSize: replyCloseIconSize,
+                replyCloseHitSize: replyCloseHitSize,
+                makeReplyPreview: composerReplyPreview(viewModel:),
+                makeDisabledAction: blockedLeaveComposerAction(viewModel:),
+                makeDictationBinding: { composerDictationBinding },
+                isEditSubmissionEnabled: { editSubmissionEnabled },
+                hasSavedDraft: { composerHasSavedDraft },
+                onCancelEdit: cancelEdit,
+                onCreatePoll: openPollComposer,
+                onCustomEmoji: openComposerCustomEmojiPicker,
+                onStickers: { composer.showStickerPicker = true },
+                onTakePhoto: takePhoto,
+                onPhotoLibrary: openPhotoLibrary,
+                onAttachFile: openFileImporter,
+                onShareLocation: openLocationPicker,
+                onShareContact: openContactPicker,
+                onSearchGIFs: openGiphySearch,
+                onPasteImage: pasteImage,
+                onRemoveMediaDraft: removeMediaDraft,
+                onPreviewPreparedMedia: previewPreparedMedia,
+                onCancelVoiceRecording: cancelVoiceRecording,
+                onStopVoiceRecording: stopLockedVoiceRecording,
+                onVoicePressBegan: beginVoicePress,
+                onVoiceDragChanged: updateVoiceDrag,
+                onVoicePressEnded: endVoicePress,
+                onSend: send
+            )
         }
     }
 
@@ -1866,45 +2132,6 @@ struct ConversationView: View {
                 maxLength: 100
             ) ?? ""
         )
-    }
-
-    private func editBar(for session: ComposerEditSession, viewModel: ConversationViewModel) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "pencil")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(L10n.string("Editing message"))
-                    .font(.caption.weight(.semibold))
-                Text(ContentSanitizer.compactSingleLine(viewModel.displayBody(of: session.message), maxLength: 100) ?? "")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Button(action: cancelEdit) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: replyCloseIconSize, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
-                    .frame(width: replyCloseHitSize, height: replyCloseHitSize)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.string("Cancel edit"))
-        }
-        .padding(.leading, ReplyPreviewLayout.leadingContentInset)
-        .padding(.trailing, ReplyPreviewLayout.closeTrailingInset)
-        .padding(.vertical, ReplyPreviewLayout.contentTopInset)
-        .background(.regularMaterial, in: .rect(cornerRadius: 16))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
-        }
-        .padding(.horizontal, ReplyPreviewLayout.outerHorizontalInset)
-        .padding(.top, ReplyPreviewLayout.outerTopInset)
-        .padding(.bottom, ReplyPreviewLayout.outerBottomInset)
     }
 
     /// Leading identity cluster: avatar beside the back chevron, then the
@@ -2072,11 +2299,9 @@ struct ConversationView: View {
                 let concealInitialTimeline = shouldConcealInitialTimelineContent(viewModel: viewModel)
                 let showsSenderIdentity = !viewModel.groupDisplay.isDirectMessage
                 let searchResultID = viewModel.search.isActive ? viewModel.search.currentMatch?.itemId : nil
-                let dateHeadings = viewModel.timelineDaySections().compactMap { section in
-                    section.items.first.map { TimelineDateHeading(id: $0.id, day: section.day) }
-                }
-                let dayHeaders = Dictionary(dateHeadings.map { ($0.id, $0) },
-                                            uniquingKeysWith: { first, _ in first })
+                let dayProjection = viewModel.timelineDayHeadings()
+                let dateHeadings = dayProjection.headings
+                let dayHeaders = dayProjection.headersByID
                 let renderedTailID = viewModel.timeline.last?.id
                 let hasWindow = viewModel.conversationWindow != nil
                 let loading = viewModel.isLoading
@@ -2180,7 +2405,7 @@ struct ConversationView: View {
                         }
                         .environment(\.timelinePreviewSearch, viewModel.search)
                         .onChange(of: dateHeadings) { noteTopVisibleRowDay(viewModel: viewModel) }
-                        .modifier(TimelinePinnedDateModifier(orderedHeaderIDs: dateHeadings.map(\.id), headingsByID: dayHeaders,
+                        .modifier(TimelinePinnedDateModifier(orderedHeaderIDs: dayProjection.orderedHeaderIDs, headingsByID: dayHeaders,
                                                              dimsForSearch: searchResultID != nil, viewport: timelineDateViewport))
                         .overlay(alignment: .bottomTrailing) {
                             scrollToBottomButton(proxy: proxy, viewModel: viewModel)
@@ -2601,7 +2826,7 @@ struct ConversationView: View {
             }
         }
         .messageLinkCopyAccessibilityActions(
-            for: interactionsEnabled ? viewModel.markdownDisplayBlocks(for: item) : nil,
+            interactionsEnabled ? viewModel.messageLinkCopyActions(for: item) : [],
             appState: appState
         )
     }
@@ -3048,9 +3273,7 @@ struct ConversationView: View {
     }
 
     private func historyOrderKey(for messageIdHex: String, viewModel: ConversationViewModel) -> TimelineHistoryOrderKey? {
-        viewModel.conversationWindow?.messages
-            .first { $0.timeline.messageIdHex == messageIdHex }
-            .map { TimelineHistoryOrderKey($0.timeline) }
+        viewModel.historyOrderKey(for: messageIdHex)
     }
 
     private func performInitialScrollIfNeeded(viewModel: ConversationViewModel) -> Bool {
@@ -3252,8 +3475,7 @@ struct ConversationView: View {
             timelineDateViewport.headerID = nil
             return
         }
-        let headerID = viewModel.timelineDaySections()
-            .first { section in section.items.contains { $0.id == top.id } }?.items.first?.id
+        let headerID = viewModel.timelineDayHeadings().headerIDByItemID[top.id]
         if timelineDateViewport.headerID != headerID { timelineDateViewport.headerID = headerID }
     }
 
@@ -3291,37 +3513,37 @@ struct ConversationView: View {
             canSendMessages: viewModel.canSendMessages,
             myAccountId: viewModel.myAccountId
         ) else { return }
-        let preservedDraft = editSession?.preservedDraft ?? draft
-        let preservedMediaDrafts = editSession?.preservedMediaDrafts ?? mediaDrafts
-        let preservedMentionState = editSession?.preservedMentionState
+        let preservedDraft = composer.editSession?.preservedDraft ?? composer.draft
+        let preservedMediaDrafts = composer.editSession?.preservedMediaDrafts ?? composer.mediaDrafts
+        let preservedMentionState = composer.editSession?.preservedMentionState
             ?? viewModel.composerMentionDraftState(for: preservedDraft)
-        let preservedReplyTargetMessageIdHex = editSession?.preservedReplyTargetMessageIdHex
+        let preservedReplyTargetMessageIdHex = composer.editSession?.preservedReplyTargetMessageIdHex
             ?? viewModel.replyTargetMessageIdHex
         viewModel.replyingTo = nil
-        mediaDrafts.removeAll()
+        composer.mediaDrafts.removeAll()
         cancelVoiceRecording()
         // Dictation belongs to the draft it started on; it must not land in,
         // or be sent from, another one.
-        dictation.cancel()
-        editSession = ComposerEditSession(
+        composer.dictation.cancel()
+        composer.editSession = ConversationComposerState.EditSession(
             message: message,
             preservedDraft: preservedDraft,
             preservedMediaDrafts: preservedMediaDrafts,
             preservedMentionState: preservedMentionState,
             preservedReplyTargetMessageIdHex: preservedReplyTargetMessageIdHex
         )
-        draft = viewModel.editingText(for: message)
+        composer.draft = viewModel.editingText(for: message)
         requestComposerFocus()
     }
 
     private func refreshComposerTextOverage() {
-        composerTextOverage = OutgoingSendSizePolicy.textOverage(viewModel?.preparedComposerText(draft))
+        composer.textOverage = OutgoingSendSizePolicy.textOverage(viewModel?.preparedComposerText(composer.draft))
     }
 
     private var editSubmissionEnabled: Bool {
-        guard let editSession, let viewModel,
-              let outgoing = viewModel.preparedComposerText(draft)
-        else { return editSession == nil }
+        guard let editSession = composer.editSession, let viewModel,
+              let outgoing = viewModel.preparedComposerText(composer.draft)
+        else { return composer.editSession == nil }
         return outgoing != editSession.message.plaintext
     }
 
@@ -3330,14 +3552,14 @@ struct ConversationView: View {
     }
 
     private func cancelEdit() {
-        guard let editSession else { return }
-        dictation.cancel()
-        self.editSession = nil
+        guard let editSession = composer.editSession else { return }
+        composer.dictation.cancel()
+        composer.editSession = nil
         viewModel?.restoreComposerMentionDraftState(editSession.preservedMentionState)
         viewModel?.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
-        draft = editSession.preservedDraft
+        composer.draft = editSession.preservedDraft
         refreshComposerTextOverage()
-        mediaDrafts = editSession.preservedMediaDrafts
+        composer.mediaDrafts = editSession.preservedMediaDrafts
     }
 
     private func acceptInvite(viewModel: ConversationViewModel) {
@@ -3369,48 +3591,48 @@ struct ConversationView: View {
 
     private func send() {
         guard viewModel?.canSendMessages == true else { return }
-        guard editSession != nil || composerHasSavedDraft else { return }
+        guard composer.editSession != nil || composerHasSavedDraft else { return }
         // Reject over-limit text before any snapshot, staging, edit or send so
         // the draft, reply target and attachments stay exactly as they are.
         if let viewModel,
            let rejection = ConversationSendPreparation.textRejection(
-               forOutgoing: viewModel.preparedComposerText(draft)
+               forOutgoing: viewModel.preparedComposerText(composer.draft)
            ) {
             presentComposerSizeRejection(rejection)
             return
         }
-        if let editSession, editSubmissionEnabled, let viewModel {
-            let editedContent = draft
+        if let editSession = composer.editSession, editSubmissionEnabled, let viewModel {
+            let editedContent = composer.draft
             // The save restores the preserved draft when it lands; dictation
             // finishing meanwhile would be lost or mixed into it.
-            dictation.cancel()
-            editSaveInFlight = true
+            composer.dictation.cancel()
+            composer.editSaveInFlight = true
             Task {
-                defer { editSaveInFlight = false }
+                defer { composer.editSaveInFlight = false }
                 guard await viewModel.editMessage(editSession.message, content: editedContent) else { return }
-                guard self.editSession?.id == editSession.id else { return }
-                self.editSession = nil
+                guard composer.editSession?.id == editSession.id else { return }
+                composer.editSession = nil
                 viewModel.restoreComposerMentionDraftState(editSession.preservedMentionState)
                 viewModel.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
-                draft = editSession.preservedDraft
+                composer.draft = editSession.preservedDraft
                 refreshComposerTextOverage()
-                mediaDrafts = editSession.preservedMediaDrafts
+                composer.mediaDrafts = editSession.preservedMediaDrafts
             }
             return
         }
         guard let viewModel, let accountRef = draftAccountRef, viewModel.canSendMessages else { return }
-        if let rejection = ConversationSendPreparation.removeOversizedAttachments(from: &mediaDrafts) {
+        if let rejection = ConversationSendPreparation.removeOversizedAttachments(from: &composer.mediaDrafts) {
             persistCurrentDraft()
             presentComposerSizeRejection(rejection)
             return
         }
-        let originalAttachments = mediaDrafts
+        let originalAttachments = composer.mediaDrafts
         let originalReply = viewModel.replyTargetMessageIdHex
-        let mentionState = viewModel.composerMentionDraftState(for: draft)
+        let mentionState = viewModel.composerMentionDraftState(for: composer.draft)
         let saved = ConversationDraftSnapshot(canonicalText: mentionState.canonicalText.trimmingCharacters(in: .whitespacesAndNewlines),
             replyToMessageIdHex: originalReply, mediaAttachments: originalAttachments)
         guard !saved.canonicalText.isEmpty || !originalAttachments.isEmpty else { return }
-        if let outgoing = viewModel.preparedComposerText(draft) {
+        if let outgoing = viewModel.preparedComposerText(composer.draft) {
             let customEmoji = viewModel.customEmojiUsed(in: outgoing)
             if !customEmoji.isEmpty {
                 let submitted = ConversationDraftSnapshot(canonicalText: mentionState.canonicalText,
@@ -3426,13 +3648,13 @@ struct ConversationView: View {
         // The store is told first so clearing the composer below can't delete the
         // draft the queued submission still has to claim by revision.
         let tapped = appState.productAnalytics.beginTiming()
-        let composerState = (draft: draft, mediaDrafts: mediaDrafts)
+        let composerState = (draft: composer.draft, mediaDrafts: composer.mediaDrafts)
         let tappedContents = ConversationComposerContents(
-            draft: draft,
-            mediaDrafts: mediaDrafts,
+            draft: composer.draft,
+            mediaDrafts: composer.mediaDrafts,
             replyTargetMessageIdHex: originalReply
         )
-        guard let payload = ConversationSendPreparation.prepare(draft: &draft, mediaDrafts: &mediaDrafts, viewModel: viewModel),
+        guard let payload = ConversationSendPreparation.prepare(draft: &composer.draft, mediaDrafts: &composer.mediaDrafts, viewModel: viewModel),
               let staged = viewModel.stagePreparedSend(
                   text: payload.text,
                   attachments: payload.attachments,
@@ -3441,9 +3663,9 @@ struct ConversationView: View {
             // Nothing left the composer: put it back exactly as it was. This is
             // still the tap's own runloop turn, so no newer edit can be lost.
             viewModel.restoreComposerMentionDraftState(mentionState)
-            draft = composerState.draft
+            composer.draft = composerState.draft
             refreshComposerTextOverage()
-            mediaDrafts = composerState.mediaDrafts
+            composer.mediaDrafts = composerState.mediaDrafts
             return
         }
         // Until MDK holds a large attachment as a file in the draft, there is
@@ -3502,7 +3724,7 @@ struct ConversationView: View {
             // A newer draft typed while this send was queued may have been
             // overwritten by its submitted snapshot; re-persist what's in the
             // composer now.
-            if editSession == nil, !draft.isEmpty || !mediaDrafts.isEmpty {
+            if composer.editSession == nil, !composer.draft.isEmpty || !composer.mediaDrafts.isEmpty {
                 persistCurrentDraft()
             }
         }
@@ -3526,8 +3748,8 @@ struct ConversationView: View {
         guard !viewModel.isSendingCustomEmojiMessage else { return }
         // A composer still showing an already accepted message clears instead.
         reconcileAcceptedCustomEmojiSend()
-        guard !draft.isEmpty else { return }
-        guard mediaDrafts.isEmpty else {
+        guard !composer.draft.isEmpty else { return }
+        guard composer.mediaDrafts.isEmpty else {
             viewModel.reportCustomEmojiSendError(.mixedWithAttachments)
             return
         }
@@ -3544,16 +3766,16 @@ struct ConversationView: View {
         guard let viewModel, let accepted = viewModel.acceptedCustomEmojiSend,
               CustomEmojiComposerReconciliation.clears(
                   submitted: accepted.submitted,
-                  canonicalText: viewModel.composerMentionDraftState(for: draft).canonicalText,
+                  canonicalText: viewModel.composerMentionDraftState(for: composer.draft).canonicalText,
                   replyTargetId: viewModel.replyTargetMessageIdHex,
-                  hasMediaDrafts: !mediaDrafts.isEmpty,
-                  isEditing: editSession != nil
+                  hasMediaDrafts: !composer.mediaDrafts.isEmpty,
+                  isEditing: composer.editSession != nil
               ) else { return }
-        _ = viewModel.consumeComposerText(draft)
+        _ = viewModel.consumeComposerText(composer.draft)
         if viewModel.replyTargetMessageIdHex != nil {
             viewModel.restoreReplyTarget(messageIdHex: nil)
         }
-        draft = ""
+        composer.draft = ""
         viewModel.consumeAcceptedCustomEmojiSend(accepted.id)
         isAtTimelineBottom = true
         userMovedAwayFromTimelineBottom = false
@@ -3562,10 +3784,10 @@ struct ConversationView: View {
     }
 
     private func openComposerCustomEmojiPicker() {
-        guard editSession == nil, let viewModel, viewModel.canSendCustomEmoji else { return }
+        guard composer.editSession == nil, let viewModel, viewModel.canSendCustomEmoji else { return }
         let emoji = viewModel.customEmojiSendables
         guard !emoji.isEmpty else { return }
-        composerCustomEmojiPicker = ComposerCustomEmojiPicker(emoji: emoji)
+        composer.customEmojiPicker = ConversationComposerState.CustomEmojiPicker(emoji: emoji)
     }
 
     /// Reports a size rejection whose message is still in the composer.
@@ -3586,17 +3808,17 @@ struct ConversationView: View {
             after: rejection,
             tapped: tapped,
             current: ConversationComposerContents(
-                draft: draft,
-                mediaDrafts: mediaDrafts,
+                draft: composer.draft,
+                mediaDrafts: composer.mediaDrafts,
                 replyTargetMessageIdHex: viewModel.replyTargetMessageIdHex
             ),
-            isEditing: editSession != nil
+            isEditing: composer.editSession != nil
         )
         if let restored {
             viewModel.restoreComposerMentionDraftState(mentionState)
             viewModel.restoreReplyTarget(messageIdHex: restored.replyTargetMessageIdHex)
-            mediaDrafts = restored.mediaDrafts
-            draft = restored.draft
+            composer.mediaDrafts = restored.mediaDrafts
+            composer.draft = restored.draft
             refreshComposerTextOverage()
         }
         viewModel.settleSizeRejectedSend(staged, rejection: rejection, restoredToComposer: restored != nil)
@@ -3611,18 +3833,18 @@ struct ConversationView: View {
     private func handleComposerAvailabilityChange(composerHidden: Bool) {
         guard composerHidden else { return }
         cancelEdit()
-        dictation.cancel()
-        if let recording = voiceRecorder.finishIfActive() {
+        composer.dictation.cancel()
+        if let recording = composer.voiceRecorder.finishIfActive() {
             addVoiceRecording(recording)
         }
-        showCameraCapture = false
-        showPhotoLibraryPicker = false
-        composerMediaSelection = nil
-        showFileImporter = false
-        showLocationPicker = false
-        showPollComposer = false
-        showContactPicker = false
-        showGiphySearch = false
+        composer.showCameraCapture = false
+        composer.showPhotoLibraryPicker = false
+        composer.mediaSelection = nil
+        composer.showFileImporter = false
+        composer.showLocationPicker = false
+        composer.showPollComposer = false
+        composer.showContactPicker = false
+        composer.showGiphySearch = false
         dismissKeyboard()
     }
 
@@ -3633,8 +3855,8 @@ struct ConversationView: View {
     @discardableResult
     private func restorePersistedDraft(surfacesTransientFailures: Bool = true) async -> ConversationDraftLoadResult? {
         guard let draftAccountRef, let viewModel else { return nil }
-        let draftBeforeLoad = draft
-        let mediaIDsBeforeLoad = mediaDrafts.map(\.id)
+        let draftBeforeLoad = composer.draft
+        let mediaIDsBeforeLoad = composer.mediaDrafts.map(\.id)
         let replyBeforeLoad = viewModel.replyTargetMessageIdHex
         let result = await appState.conversationDraftStore.loadSnapshot(
             accountRef: draftAccountRef,
@@ -3644,35 +3866,35 @@ struct ConversationView: View {
         // Transient and cancelled results are retried by the caller, and writes
         // keep the draft's files meanwhile. After a failed read nothing could
         // show or remove them, so writes stop keeping them.
-        guard result.hydratesComposer, !Task.isCancelled, editSession == nil else {
-            if result == .failed { draftHydrationFailed = true }
+        guard result.hydratesComposer, !Task.isCancelled, composer.editSession == nil else {
+            if result == .failed { composer.draftHydrationFailed = true }
             return result
         }
-        didRestorePersistedDraft = true
-        draftHydrationFailed = false
+        composer.didRestorePersistedDraft = true
+        composer.draftHydrationFailed = false
         guard case .loaded(let loaded) = result, let snapshot = loaded else {
-            guard draft == draftBeforeLoad,
-                  mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
+            guard composer.draft == draftBeforeLoad,
+                  composer.mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
                   viewModel.replyTargetMessageIdHex == replyBeforeLoad
             else { return result }
-            draft = ""
-            mediaDrafts.removeAll()
+            composer.draft = ""
+            composer.mediaDrafts.removeAll()
             viewModel.restoreReplyTarget(messageIdHex: nil)
             return result
         }
         guard !Task.isCancelled else { return result }
-        guard draft == draftBeforeLoad,
-              mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
+        guard composer.draft == draftBeforeLoad,
+              composer.mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
               viewModel.replyTargetMessageIdHex == replyBeforeLoad
         else {
             // Edited while loading: the edit wins, but the saved attachments
             // stay. Leaving one out would have MDK delete its file.
             // Attachments removed during the read stay removed.
-            let removed = Set(mediaIDsBeforeLoad).subtracting(mediaDrafts.map(\.id))
+            let removed = Set(mediaIDsBeforeLoad).subtracting(composer.mediaDrafts.map(\.id))
             let merged = ConversationDraftHydrationGate.attachments(
-                composer: mediaDrafts, loaded: snapshot.mediaAttachments.filter { !removed.contains($0.id) })
-            if merged.map(\.id) != mediaDrafts.map(\.id) {
-                mediaDrafts = merged
+                composer: composer.mediaDrafts, loaded: snapshot.mediaAttachments.filter { !removed.contains($0.id) })
+            if merged.map(\.id) != composer.mediaDrafts.map(\.id) {
+                composer.mediaDrafts = merged
                 persistCurrentDraft()
             }
             return result
@@ -3683,8 +3905,8 @@ struct ConversationView: View {
         )
         viewModel.restoreComposerMentionDraftState(mentionState)
         viewModel.restoreReplyTarget(messageIdHex: snapshot.replyToMessageIdHex)
-        mediaDrafts = snapshot.mediaAttachments
-        draft = mentionState.draft
+        composer.mediaDrafts = snapshot.mediaAttachments
+        composer.draft = mentionState.draft
         refreshComposerTextOverage()
         return result
     }
@@ -3702,27 +3924,27 @@ struct ConversationView: View {
     }
 
     private func reconcileDraftMediaUploads() {
-        viewModel?.reconcileDraftMediaUploads(mediaDrafts + (editSession?.preservedMediaDrafts ?? []))
+        viewModel?.reconcileDraftMediaUploads(composer.mediaDrafts + (composer.editSession?.preservedMediaDrafts ?? []))
     }
 
     private func persistComposerChange(text: String? = nil) {
         guard ConversationDraftHydrationGate.countsAsComposerChange(
-            isHydrated: didRestorePersistedDraft,
-            alreadyChanged: composerChangedBeforeDraftRestore,
-            composerIsEmpty: (text ?? draft).isEmpty && mediaDrafts.isEmpty
+            isHydrated: composer.didRestorePersistedDraft,
+            alreadyChanged: composer.composerChangedBeforeDraftRestore,
+            composerIsEmpty: (text ?? composer.draft).isEmpty && composer.mediaDrafts.isEmpty
                 && viewModel?.replyTargetMessageIdHex == nil
         ) else { return }
-        if !didRestorePersistedDraft { composerChangedBeforeDraftRestore = true }
+        if !composer.didRestorePersistedDraft { composer.composerChangedBeforeDraftRestore = true }
         persistCurrentDraft(text: text)
     }
 
     private func persistCurrentDraft(text: String? = nil) {
-        let text = text ?? draft
+        let text = text ?? composer.draft
         let mentionState = viewModel?.composerMentionDraftState(for: text)
             ?? ComposerMentionDraftState(draft: text, selectedMentions: [])
         persistDraft(
             mentionState,
-            mediaAttachments: mediaDrafts,
+            mediaAttachments: composer.mediaDrafts,
             replyToMessageIdHex: viewModel?.replyTargetMessageIdHex
         )
     }
@@ -3735,7 +3957,7 @@ struct ConversationView: View {
         guard viewModel?.isLocallyReset != true, let draftAccountRef else { return }
         // An untouched composer that never hydrated (runtime still resuming)
         // must not overwrite or delete the saved draft.
-        guard didRestorePersistedDraft || composerChangedBeforeDraftRestore else { return }
+        guard composer.didRestorePersistedDraft || composer.composerChangedBeforeDraftRestore else { return }
         appState.conversationDraftStore.setDraft(
             ConversationDraftSnapshot(
                 canonicalText: mentionState.canonicalText,
@@ -3757,57 +3979,60 @@ struct ConversationView: View {
     /// Until the composer has the saved draft, a write it makes keeps the
     /// draft's files: leaving one out would have MDK delete it.
     private var keepsSavedDraftFiles: Bool {
-        ConversationDraftHydrationGate.keepsSavedFiles(isHydrated: didRestorePersistedDraft, hydrationFailed: draftHydrationFailed)
+        ConversationDraftHydrationGate.keepsSavedFiles(
+            isHydrated: composer.didRestorePersistedDraft,
+            hydrationFailed: composer.draftHydrationFailed
+        )
     }
 
     private func takePhoto() {
-        guard editSession == nil else { return }
+        guard composer.editSession == nil else { return }
         guard canBeginMediaSelection() else { return }
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
             appState.present(.warning(L10n.string("Camera is not available on this device")))
             return
         }
-        showCameraCapture = true
+        composer.showCameraCapture = true
     }
 
     private func openPhotoLibrary() {
-        guard editSession == nil else { return }
+        guard composer.editSession == nil else { return }
         guard canBeginMediaSelection() else { return }
-        showPhotoLibraryPicker = true
+        composer.showPhotoLibraryPicker = true
     }
 
     private func openFileImporter() {
-        guard editSession == nil else { return }
+        guard composer.editSession == nil else { return }
         guard canBeginMediaSelection() else { return }
-        fileProductTicket = appState.productAnalytics.ticket()
-        showFileImporter = true
+        composer.fileProductTicket = appState.productAnalytics.ticket()
+        composer.showFileImporter = true
     }
 
     private func openLocationPicker() {
-        guard editSession == nil else { return }
+        guard composer.editSession == nil else { return }
         guard admitSendOrWarn() else { return }
-        showLocationPicker = true
+        composer.showLocationPicker = true
     }
 
     private func openPollComposer() {
-        guard editSession == nil, viewModel?.canCreatePolls == true else { return }
-        showPollComposer = true
+        guard composer.editSession == nil, viewModel?.canCreatePolls == true else { return }
+        composer.showPollComposer = true
     }
 
     private func openContactPicker() {
-        guard editSession == nil else { return }
+        guard composer.editSession == nil else { return }
         guard canBeginMediaSelection() else { return }
-        showContactPicker = true
+        composer.showContactPicker = true
     }
 
     private func openGiphySearch() {
-        guard editSession == nil else { return }
+        guard composer.editSession == nil else { return }
         guard admitSendOrWarn() else { return }
         guard GiphyBuildConfig.current().isAvailable else {
             appState.present(.warning(L10n.string("GIF search isn't configured in this build.")))
             return
         }
-        showGiphySearch = true
+        composer.showGiphySearch = true
     }
 
     private func sendGiphyResult(_ result: GiphySearchResult) {
@@ -3816,7 +4041,7 @@ struct ConversationView: View {
     }
 
     private func pasteImage(_ image: UIImage) {
-        guard editSession == nil else { return }
+        guard composer.editSession == nil else { return }
         guard canBeginMediaSelection() else { return }
         addCameraImage(image)
     }
@@ -3930,14 +4155,14 @@ struct ConversationView: View {
 
     private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
         guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
-        let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
+        let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - composer.mediaDrafts.count)
         let slotted = Array(attachments.prefix(availableSlots))
         guard !slotted.isEmpty else {
             presentMaxAttachmentWarning()
             return false
         }
-        let (accepted, refused) = MediaFileUploadLimit.admitting(slotted, alongside: mediaDrafts)
-        mediaDrafts.append(contentsOf: accepted)
+        let (accepted, refused) = MediaFileUploadLimit.admitting(slotted, alongside: composer.mediaDrafts)
+        composer.mediaDrafts.append(contentsOf: accepted)
         if slotted.count < attachments.count {
             presentMaxAttachmentWarning()
         }
@@ -3954,8 +4179,8 @@ struct ConversationView: View {
         case .success(let urls): outcome = urls.isEmpty ? .cancelled : .success
         case .failure(let error): outcome = (error as NSError).code == NSUserCancelledError ? .cancelled : .failure
         }
-        appState.productAnalytics.record(.attachment(.picker, outcome), ticket: fileProductTicket)
-        fileProductTicket = nil
+        appState.productAnalytics.record(.attachment(.picker, outcome), ticket: composer.fileProductTicket)
+        composer.fileProductTicket = nil
         switch result {
         case .success(let urls):
             addFileAttachments(urls)
@@ -3994,7 +4219,7 @@ struct ConversationView: View {
                 if let size = source?.fileSize,
                    MediaDraftProcessor.sendsSourceBytes(kind),
                    !MediaFileUploadLimit.fits(size, alongside: MediaDraftProcessor.draftsKept(
-                       mediaDrafts, addingAudio: kind == .audio
+                       composer.mediaDrafts, addingAudio: kind == .audio
                    ).map(\.data.count)) {
                     presentBatchLimitWarning()
                     continue
@@ -4012,18 +4237,18 @@ struct ConversationView: View {
     }
 
     private var composerDictationBinding: ComposerDictationBinding? {
-        guard ComposerDictationSupport.isSupportedOS, dictationPreferences.isEnabled else { return nil }
+        guard ComposerDictationSupport.isSupportedOS, composer.dictationPreferences.isEnabled else { return nil }
         return ComposerDictationBinding(
-            state: dictation.state,
-            transcript: dictation.transcript,
+            state: composer.dictation.state,
+            transcript: composer.dictation.transcript,
             onBegin: beginDictation,
-            onDrag: { dictation.updateDrag($0) },
-            onEnd: { dictation.endPress() },
-            onCancel: { dictation.cancel() },
-            onStop: { dictation.stopLocked() },
+            onDrag: { composer.dictation.updateDrag($0) },
+            onEnd: { composer.dictation.endPress() },
+            onCancel: { composer.dictation.cancel() },
+            onStop: { composer.dictation.stopLocked() },
             sendsOnFinish: ComposerDictationPresentation.sendsOnFinish(
-                isEditing: editSession != nil,
-                composerAtHoldStart: dictationBaseline,
+                isEditing: composer.editSession != nil,
+                composerAtHoldStart: composer.dictationBaseline,
                 composerNow: composerHoldSnapshot
             )
         )
@@ -4032,14 +4257,14 @@ struct ConversationView: View {
     private func beginDictation(keyboardLanguage: String?, locked: Bool) {
         // A second hold during locked dictation must not move the running
         // session's baseline.
-        guard !voiceRecorder.isActive, !dictation.isActive else { return }
+        guard !composer.voiceRecorder.isActive, !composer.dictation.isActive else { return }
         let languages = DictationLocalePolicy.candidateIdentifiers(
             lastKeyboardLanguage: keyboardLanguage,
             activeKeyboardLanguages: UITextInputMode.activeInputModes.compactMap(\.primaryLanguage),
             preferredLanguages: Locale.preferredLanguages
         )
-        dictationBaseline = composerHoldSnapshot
-        dictation.begin(
+        composer.dictationBaseline = composerHoldSnapshot
+        composer.dictation.begin(
             localeIdentifiers: languages,
             locked: locked,
             onFinish: finishDictation,
@@ -4051,22 +4276,22 @@ struct ConversationView: View {
     /// sent message only fills the field, since saving is a separate decision.
     private var composerHoldSnapshot: ComposerHoldSnapshot {
         ComposerHoldSnapshot(
-            draft: draft,
-            attachmentIDs: mediaDrafts.map(\.id),
+            draft: composer.draft,
+            attachmentIDs: composer.mediaDrafts.map(\.id),
             replyTargetMessageIdHex: viewModel?.replyTargetMessageIdHex
         )
     }
 
     private func finishDictation(_ result: DictationResult) {
         let composerNow = composerHoldSnapshot
-        let merged = DictationTextMerge.merged(draft: draft, transcript: result.text)
-        guard merged != draft else {
+        let merged = DictationTextMerge.merged(draft: composer.draft, transcript: result.text)
+        guard merged != composer.draft else {
             if !result.isComplete {
                 appState.present(.error(L10n.string("Couldn't dictate")))
             }
             return
         }
-        draft = merged
+        composer.draft = merged
         if !result.isComplete {
             appState.present(.warning(
                 L10n.string("Dictation stopped early"),
@@ -4074,9 +4299,9 @@ struct ConversationView: View {
             ))
         }
         guard ComposerDictationPresentation.sendsOnFinish(
-            isEditing: editSession != nil,
+            isEditing: composer.editSession != nil,
             isComplete: result.isComplete,
-            composerAtHoldStart: dictationBaseline,
+            composerAtHoldStart: composer.dictationBaseline,
             composerNow: composerNow
         ) else { return }
         send()
@@ -4089,12 +4314,12 @@ struct ConversationView: View {
         }
         appState.present(.warning(L10n.string("Getting dictation ready"), message: error.localizedDescription))
         guard #available(iOS 26.0, *),
-              dictationInstallWatch == nil,
+              composer.dictationInstallWatch == nil,
               let install = DictationModelInstaller.shared.currentInstall
         else { return }
-        dictationInstallWatch = Task { @MainActor in
+        composer.dictationInstallWatch = Task { @MainActor in
             let status = await install.value
-            dictationInstallWatch = nil
+            composer.dictationInstallWatch = nil
             guard !Task.isCancelled else { return }
             switch status {
             case .ready:
@@ -4109,21 +4334,21 @@ struct ConversationView: View {
     }
 
     private func beginVoicePress() {
-        guard !dictation.isActive else { return }
+        guard !composer.dictation.isActive else { return }
         guard canBeginMediaSelection() else { return }
-        voiceBaseline = composerHoldSnapshot
-        voiceRecorder.beginPress { error in
+        composer.voiceBaseline = composerHoldSnapshot
+        composer.voiceRecorder.beginPress { error in
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't record audio"), error: error))
         }
     }
 
     private func updateVoiceDrag(_ translation: CGSize) {
-        voiceRecorder.updateDrag(translation)
+        composer.voiceRecorder.updateDrag(translation)
     }
 
     private func endVoicePress() {
-        let shouldDismissKeyboard = voiceRecorder.hasStartedRecording
-        let result = voiceRecorder.endPress()
+        let shouldDismissKeyboard = composer.voiceRecorder.hasStartedRecording
+        let result = composer.voiceRecorder.endPress()
         if shouldDismissKeyboard {
             dismissKeyboard()
         }
@@ -4132,14 +4357,14 @@ struct ConversationView: View {
     }
 
     private func stopLockedVoiceRecording() {
-        guard let result = voiceRecorder.stopLockedRecording() else { return }
+        guard let result = composer.voiceRecorder.stopLockedRecording() else { return }
         dismissKeyboard()
         addVoiceRecording(result, sendsWhenReady: true)
     }
 
     private func cancelVoiceRecording() {
-        let shouldDismissKeyboard = voiceRecorder.hasStartedRecording
-        voiceRecorder.cancel()
+        let shouldDismissKeyboard = composer.voiceRecorder.hasStartedRecording
+        composer.voiceRecorder.cancel()
         if shouldDismissKeyboard {
             dismissKeyboard()
         }
@@ -4148,12 +4373,12 @@ struct ConversationView: View {
     /// A finished hold sends its recording, like dictation, unless something
     /// else changed the composer meanwhile; then it waits there as a draft.
     private func addVoiceRecording(_ result: VoiceRecordingResult, sendsWhenReady: Bool = false) {
-        let baseline = voiceBaseline
+        let baseline = composer.voiceBaseline
         Task { @MainActor in
             do {
                 let attachment = try await MediaDraftProcessor.preparedVoiceAttachment(from: result)
                 let sends = sendsWhenReady && ComposerDictationPresentation.sendsOnFinish(
-                    isEditing: editSession != nil,
+                    isEditing: composer.editSession != nil,
                     composerAtHoldStart: baseline,
                     composerNow: composerHoldSnapshot
                 )
@@ -4170,7 +4395,7 @@ struct ConversationView: View {
     }
 
     private var remainingMediaDraftSlots: Int {
-        max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
+        max(0, MediaDraftProcessor.maxAttachmentCount - composer.mediaDrafts.count)
     }
 
     private func canBeginMediaSelection() -> Bool {
@@ -4190,7 +4415,7 @@ struct ConversationView: View {
     @discardableResult
     private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
         guard viewModel?.composerAdmitsNewAttachments != false, composerHasSavedDraft else { return false }
-        let kept = MediaDraftProcessor.draftsKept(mediaDrafts, addingAudio: attachment.kind == .audio)
+        let kept = MediaDraftProcessor.draftsKept(composer.mediaDrafts, addingAudio: attachment.kind == .audio)
         guard kept.count < MediaDraftProcessor.maxAttachmentCount else {
             presentMaxAttachmentWarning()
             return false
@@ -4199,9 +4424,9 @@ struct ConversationView: View {
             presentBatchLimitWarning()
             return false
         }
-        mediaDrafts = kept + [attachment]
+        composer.mediaDrafts = kept + [attachment]
         if attachment.kind == .audio {
-            draft = ""
+            composer.draft = ""
             dismissKeyboard()
             return true
         }
@@ -4210,12 +4435,12 @@ struct ConversationView: View {
     }
 
     private func removeMediaDraft(_ id: MediaDraftAttachment.ID) {
-        mediaDrafts.removeAll { $0.id == id }
+        composer.mediaDrafts.removeAll { $0.id == id }
     }
 
     private func previewPreparedMedia(_ id: MediaDraftAttachment.ID) {
-        composerMediaSelection = ComposerMediaSelection(
-            attachments: mediaDrafts,
+        composer.mediaSelection = ComposerMediaSelection(
+            attachments: composer.mediaDrafts,
             initialItemID: id
         )
     }
@@ -4224,9 +4449,9 @@ struct ConversationView: View {
         _ selection: ComposerMediaSelection,
         includedItemIDs: Set<MediaDraftAttachment.ID>
     ) {
-        mediaDrafts = selection.applying(
+        composer.mediaDrafts = selection.applying(
             includedItemIDs: includedItemIDs,
-            to: mediaDrafts
+            to: composer.mediaDrafts
         )
     }
 
@@ -4245,7 +4470,7 @@ struct ConversationView: View {
     /// per gesture, remembering whether the composer was focused so a
     /// cancelled pop can put it back.
     private func beginPopTransition() -> Int? {
-        guard let epoch = popTransition.begin(isComposerFocused: isComposerInputFocused)
+        guard let epoch = popTransition.begin(isComposerFocused: composer.isInputFocused)
         else { return nil }
         dismissKeyboard()
         return epoch
@@ -4275,11 +4500,11 @@ struct ConversationView: View {
     /// request must not raise the keyboard behind the transition.
     private func requestComposerFocus() {
         guard !popTransition.isNavigating else { return }
-        composerFocusRequest &+= 1
+        composer.focusRequest &+= 1
     }
 
     private func dismissKeyboard() {
-        composerDismissRequest &+= 1
+        composer.dismissRequest &+= 1
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )
@@ -4571,8 +4796,8 @@ struct ConversationView: View {
             return
         }
         if let readingID = speech.readingID, readingID != record.messageIdHex { speech.stopReading() }
-        if isComposerInputFocused {
-            composerFocusSuspendedForActions = true
+        if composer.isInputFocused {
+            composer.focusSuspendedForActions = true
             dismissKeyboard()
         }
         pendingActionsPresentation = PendingActionsPresentation(
@@ -4586,8 +4811,8 @@ struct ConversationView: View {
     }
 
     private func resumeComposerFocusAfterActions() {
-        guard composerFocusSuspendedForActions else { return }
-        composerFocusSuspendedForActions = false
+        guard composer.focusSuspendedForActions else { return }
+        composer.focusSuspendedForActions = false
         requestComposerFocus()
     }
 
@@ -4630,7 +4855,7 @@ struct ConversationView: View {
             actionsReturnGeometry = nil
         }
         if resumingComposerFocus { resumeComposerFocusAfterActions() }
-        else { composerFocusSuspendedForActions = false }
+        else { composer.focusSuspendedForActions = false }
     }
 
     private var actionTargetUnavailable: Bool {

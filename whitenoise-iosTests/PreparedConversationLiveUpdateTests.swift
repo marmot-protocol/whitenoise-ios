@@ -236,4 +236,119 @@ struct PreparedConversationLiveUpdateTests {
         #expect(sections.flatMap(\.items) == rows)
         #expect(Set(sections.map(\.id)).count == 3)
     }
+
+    @Test func dayHeadingsProjectionCachePrecomputesHeadingsAndItemHeaderLookup() {
+        let cache = ConversationDaySectionProjectionCache()
+        let rows = [
+            TimelineItem.systemEvent(id: "day1-a", event: .groupCreated, timestamp: 100),
+            TimelineItem.systemEvent(id: "day1-b", event: .groupCreated, timestamp: 200),
+            TimelineItem.systemEvent(id: "day2-a", event: .groupCreated, timestamp: 200_000),
+            TimelineItem.systemEvent(id: "day2-b", event: .groupCreated, timestamp: 200_100),
+        ]
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let now = Date(timeIntervalSince1970: 500_000)
+
+        let first = cache.headingsProjection(for: rows, generation: 1, calendar: calendar, now: now)
+        let second = cache.headingsProjection(for: rows, generation: 1, calendar: calendar, now: now)
+
+        #expect(first == second)
+        #expect(first.orderedHeaderIDs == [rows[0].id, rows[2].id])
+        #expect(first.headersByID.keys.sorted() == [rows[0].id, rows[2].id].sorted())
+        #expect(first.headerIDByItemID[rows[0].id] == rows[0].id)
+        #expect(first.headerIDByItemID[rows[1].id] == rows[0].id)
+        #expect(first.headerIDByItemID[rows[2].id] == rows[2].id)
+        #expect(first.headerIDByItemID[rows[3].id] == rows[2].id)
+    }
+
+    @Test func preparedReactionDetailsCacheReusesResultsUntilInputsOrOptimisticStateChange() {
+        var buildCount = 0
+        let cache = ConversationReactionProjectionCache { value, target, me, records, removals in
+            buildCount += 1
+            return ConversationReactionProjectionCache.buildPreparedDetails(
+                value, target: target, me: me, optimisticRecords: records, optimisticRemovals: removals
+            )
+        }
+        let empty = ConversationReactionsFfi(totalCount: 0, totalKinds: 0, items: [], omittedKinds: 0)
+        #expect(cache.preparedDetails(empty, target: "msg-empty", me: "me").groups.isEmpty)
+        #expect(cache.preparedTallies(empty, target: "msg-empty", me: "me").isEmpty)
+        #expect(buildCount == 0)
+
+        let thumbsUp = ConversationReactionsFfi(
+            totalCount: 2,
+            totalKinds: 1,
+            items: [.init(emoji: "👍", count: 2, reactors: ["peer", "me"], viewerReacted: true, reactionMessageIdHex: nil)],
+            omittedKinds: 0
+        )
+        let heart = ConversationReactionsFfi(
+            totalCount: 1,
+            totalKinds: 1,
+            items: [.init(emoji: "❤️", count: 1, reactors: ["peer"], viewerReacted: false, reactionMessageIdHex: nil)],
+            omittedKinds: 0
+        )
+
+        // Repeated reads of details and tallies reuse the cached entry.
+        let detailsA = cache.preparedDetails(thumbsUp, target: "msg-a", me: "me")
+        let talliesA = cache.preparedTallies(thumbsUp, target: "msg-a", me: "me")
+        let detailsA2 = cache.preparedDetails(thumbsUp, target: "msg-a", me: "me")
+        #expect(detailsA == detailsA2)
+        #expect(talliesA == detailsA.tallies)
+        #expect(buildCount == 1)
+
+        _ = cache.preparedDetails(heart, target: "msg-b", me: "me")
+        #expect(buildCount == 2)
+
+        // Mutating optimistic state for msg-a invalidates msg-a only, keeping msg-b cached.
+        cache.insertRemoval(ReactionRemoval(targetMessageIdHex: "msg-a", emoji: "👍", sender: "me"))
+        _ = cache.preparedDetails(heart, target: "msg-b", me: "me")
+        #expect(buildCount == 2)
+
+        let updatedA = cache.preparedDetails(thumbsUp, target: "msg-a", me: "me")
+        #expect(updatedA.groups.first?.count == 1)
+        #expect(updatedA.groups.first?.mine == false)
+        #expect(buildCount == 3)
+
+        // Subsequent reads after rebuild hit the cache again.
+        _ = cache.preparedTallies(thumbsUp, target: "msg-a", me: "me")
+        #expect(buildCount == 3)
+
+        // Pruning evicted targets drops msg-a while keeping msg-b cached.
+        cache.prunePrepared(keeping: ["msg-b"])
+        _ = cache.preparedDetails(heart, target: "msg-b", me: "me")
+        #expect(buildCount == 3)
+        _ = cache.preparedDetails(thumbsUp, target: "msg-a", me: "me")
+        #expect(buildCount == 4)
+    }
+
+    @Test func composerStateKeepsImperativeAndVoiceRecorderStateOutOfParentObservation() {
+        let composer = ConversationComposerState()
+        var outerInvalidations = 0
+
+        withObservationTracking {
+            // Holding the composer reference and reading imperative fields registers no tracked dependency.
+            _ = composer.voiceRecorder
+            _ = composer.isInputFocused
+            _ = composer.focusSuspendedForActions
+            _ = composer.voiceBaseline
+        } onChange: {
+            outerInvalidations += 1
+        }
+
+        composer.draft = "typing a message"
+        composer.textOverage = 12
+        composer.isInputFocused = true
+        composer.focusSuspendedForActions = true
+        composer.focusRequest &+= 1
+        composer.dismissRequest &+= 1
+        #expect(outerInvalidations == 0)
+
+        var draftInvalidations = 0
+        withObservationTracking {
+            _ = composer.draft
+        } onChange: {
+            draftInvalidations += 1
+        }
+        composer.draft = "typing another keystroke"
+        #expect(draftInvalidations == 1)
+    }
 }

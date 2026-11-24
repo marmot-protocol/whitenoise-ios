@@ -25,10 +25,35 @@ import MarmotKit
 /// the view model; only the state and the aggregation live here.
 @MainActor
 final class ConversationReactionProjectionCache {
+    typealias PreparedDetailsBuilder = @MainActor (
+        _ value: ConversationReactionsFfi,
+        _ target: String,
+        _ me: String,
+        _ optimisticRecords: [String: AppMessageRecordFfi],
+        _ optimisticRemovals: Set<ReactionRemoval>
+    ) -> ConversationViewModel.ReactionDetails
+
+    private struct PreparedCacheEntry {
+        let value: ConversationReactionsFfi
+        let me: String
+        let details: ConversationViewModel.ReactionDetails
+        let tallies: [ConversationViewModel.ReactionTally]
+    }
+
+    private static let emptyDetails = ConversationViewModel.ReactionDetails(groups: [])
+
     private var summariesByTarget: [String: TimelineReactionSummaryFfi] = [:]
     private var optimisticRecords: [String: AppMessageRecordFfi] = [:]
     private var optimisticRemovals: Set<ReactionRemoval> = []
     private var detailsByTarget: [String: ConversationViewModel.ReactionDetails] = [:]
+    private var preparedCache: [String: PreparedCacheEntry] = [:]
+    private let preparedDetailsBuilder: PreparedDetailsBuilder
+
+    init(
+        preparedDetailsBuilder: @escaping PreparedDetailsBuilder = ConversationReactionProjectionCache.buildPreparedDetails
+    ) {
+        self.preparedDetailsBuilder = preparedDetailsBuilder
+    }
 
     // MARK: Read
 
@@ -37,7 +62,7 @@ final class ConversationReactionProjectionCache {
     }
 
     func details(forMessageId messageIdHex: String) -> ConversationViewModel.ReactionDetails {
-        detailsByTarget[messageIdHex] ?? ConversationViewModel.ReactionDetails(groups: [])
+        detailsByTarget[messageIdHex] ?? Self.emptyDetails
     }
 
     // MARK: Server summary (ingest write-path)
@@ -48,6 +73,7 @@ final class ConversationReactionProjectionCache {
 
     func removeSummary(forMessageId messageIdHex: String) {
         summariesByTarget[messageIdHex] = nil
+        preparedCache[messageIdHex] = nil
     }
 
     /// Drop optimistic react / un-react placeholders the server summary for
@@ -65,6 +91,7 @@ final class ConversationReactionProjectionCache {
             summary: summary,
             me: me
         )
+        preparedCache[target] = nil
     }
 
     func installPrepared(_ value: ConversationReactionsFfi, target: String, me: String) {
@@ -77,9 +104,49 @@ final class ConversationReactionProjectionCache {
         optimisticRemovals = optimisticRemovals.filter {
             $0.targetMessageIdHex != target || $0.sender != me || mine.contains($0.emoji)
         }
+        preparedCache[target] = nil
+    }
+
+    func prunePrepared(keeping targets: Set<String>) {
+        guard !preparedCache.isEmpty else { return }
+        preparedCache = preparedCache.filter { targets.contains($0.key) }
     }
 
     func preparedDetails(_ value: ConversationReactionsFfi, target: String, me: String) -> ConversationViewModel.ReactionDetails {
+        if value.items.isEmpty && value.omittedKinds == 0 && value.totalCount == 0 && !hasOptimistic {
+            return Self.emptyDetails
+        }
+        return cachedPreparedEntry(value, target: target, me: me).details
+    }
+
+    func preparedTallies(_ value: ConversationReactionsFfi, target: String, me: String) -> [ConversationViewModel.ReactionTally] {
+        if value.items.isEmpty && value.omittedKinds == 0 && value.totalCount == 0 && !hasOptimistic {
+            return []
+        }
+        return cachedPreparedEntry(value, target: target, me: me).tallies
+    }
+
+    private func cachedPreparedEntry(
+        _ value: ConversationReactionsFfi,
+        target: String,
+        me: String
+    ) -> PreparedCacheEntry {
+        if let cached = preparedCache[target], cached.value == value, cached.me == me {
+            return cached
+        }
+        let details = preparedDetailsBuilder(value, target, me, optimisticRecords, optimisticRemovals)
+        let entry = PreparedCacheEntry(value: value, me: me, details: details, tallies: details.tallies)
+        preparedCache[target] = entry
+        return entry
+    }
+
+    static func buildPreparedDetails(
+        _ value: ConversationReactionsFfi,
+        target: String,
+        me: String,
+        optimisticRecords: [String: AppMessageRecordFfi],
+        optimisticRemovals: Set<ReactionRemoval>
+    ) -> ConversationViewModel.ReactionDetails {
         var groups = value.items.map {
             ConversationViewModel.ReactionDetails.EmojiGroup(emoji: $0.emoji, senders: $0.reactors,
                 mine: $0.viewerReacted, totalCount: Int(clamping: $0.count),
@@ -114,29 +181,46 @@ final class ConversationReactionProjectionCache {
     func removeAllOptimistic() {
         optimisticRecords.removeAll()
         optimisticRemovals.removeAll()
+        preparedCache.removeAll()
     }
 
     func insertRemoval(_ removal: ReactionRemoval) {
         optimisticRemovals.insert(removal)
+        preparedCache[removal.targetMessageIdHex] = nil
     }
 
     @discardableResult
     func removeRemoval(_ removal: ReactionRemoval) -> Bool {
-        optimisticRemovals.remove(removal) != nil
+        let removed = optimisticRemovals.remove(removal) != nil
+        if removed {
+            preparedCache[removal.targetMessageIdHex] = nil
+        }
+        return removed
     }
 
     func setRecord(_ record: AppMessageRecordFfi, forKey key: String) {
+        if let previous = optimisticRecords[key],
+           case .reaction(let prevTarget) = MessageSemantics.classify(previous) {
+            preparedCache[prevTarget] = nil
+        }
         optimisticRecords[key] = record
+        if case .reaction(let target) = MessageSemantics.classify(record) {
+            preparedCache[target] = nil
+        }
     }
 
     @discardableResult
     func removeRecord(forKey key: String) -> AppMessageRecordFfi? {
-        optimisticRecords.removeValue(forKey: key)
+        let removed = optimisticRecords.removeValue(forKey: key)
+        if let removed, case .reaction(let target) = MessageSemantics.classify(removed) {
+            preparedCache[target] = nil
+        }
+        return removed
     }
 
     func restoreRecords(_ records: [String: AppMessageRecordFfi]) {
         for (key, record) in records {
-            optimisticRecords[key] = record
+            setRecord(record, forKey: key)
         }
     }
 
@@ -152,6 +236,9 @@ final class ConversationReactionProjectionCache {
             removed[key] = record
         }
         for key in removed.keys { optimisticRecords.removeValue(forKey: key) }
+        if !removed.isEmpty {
+            preparedCache[target] = nil
+        }
         return removed
     }
 

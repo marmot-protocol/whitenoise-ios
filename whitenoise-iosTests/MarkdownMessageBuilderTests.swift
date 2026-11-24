@@ -68,6 +68,101 @@ struct MarkdownMessageBuilderTests {
         #expect(MessageBubble(record: row, status: .received, incompleteMarkdown: projection.isTruncated).standaloneEmoji == nil)
     }
 
+    @Test func bodyPresentationShortCircuitsPlaintextAndSanitizesAtMostOnce() {
+        #expect(!MessageBubble.mayContainStandaloneEmoji(plaintext: "Hello world"))
+        #expect(!MessageBubble.mayContainStandaloneEmoji(plaintext: ""))
+        #expect(!MessageBubble.mayContainStandaloneEmoji(plaintext: "🔥" + String(repeating: "a", count: 129)))
+        #expect(MessageBubble.mayContainStandaloneEmoji(plaintext: "🔥"))
+        #expect(MessageBubble.mayContainStandaloneEmoji(plaintext: "1️⃣"))
+
+        #expect(!MessageBubble.mayContainStandaloneCustomEmoji(plaintext: ":wave:", hasResolvableCustomEmoji: false))
+        #expect(!MessageBubble.mayContainStandaloneCustomEmoji(plaintext: "hello", hasResolvableCustomEmoji: true))
+        #expect(!MessageBubble.mayContainStandaloneCustomEmoji(
+            plaintext: ":" + String(repeating: "a", count: 128) + ":",
+            hasResolvableCustomEmoji: true
+        ))
+        #expect(MessageBubble.mayContainStandaloneCustomEmoji(plaintext: ":wave:", hasResolvableCustomEmoji: true))
+
+        func resolve(
+            plaintext: String,
+            isDeleted: Bool = false,
+            hasReplyPreview: Bool = false,
+            hasMediaItems: Bool = false,
+            showsReactionStrip: Bool = true,
+            offersSourceReader: Bool = false,
+            resolvableCustomEmoji: Set<CustomEmojiShortcode> = [],
+            searchQuery: String? = nil
+        ) -> (presentation: MessageBubble.BodyPresentation, sanitizeCalls: Int) {
+            var calls = 0
+            let presentation = MessageBubble.BodyPresentation.resolve(
+                plaintext: plaintext,
+                isDeleted: isDeleted,
+                showsStandardBody: true,
+                hasDebugStyle: false,
+                hasAgentActivity: false,
+                hasReplyPreview: hasReplyPreview,
+                hasMediaItems: hasMediaItems,
+                hasSticker: false,
+                isPoll: false,
+                hasRemoteGiphyMedia: false,
+                hasSharedLocation: false,
+                hasLinkPreviewURL: false,
+                showsReactionStrip: showsReactionStrip,
+                offersSourceReader: offersSourceReader,
+                resolvableCustomEmoji: resolvableCustomEmoji,
+                searchQuery: searchQuery,
+                sanitizedBody: {
+                    calls += 1
+                    return ContentSanitizer.messageBody(plaintext)
+                }
+            )
+            return (presentation, calls)
+        }
+
+        // Plain ASCII message skips sanitization completely.
+        let ascii = resolve(plaintext: "Hello world")
+        #expect(ascii.sanitizeCalls == 0)
+        #expect(ascii.presentation.standaloneEmoji == nil)
+        #expect(ascii.presentation.widensTextForReactions)
+
+        // >128B emoji-prefixed message skips sanitization completely.
+        let longEmoji = resolve(plaintext: "🔥 " + String(repeating: "x", count: 140))
+        #expect(longEmoji.sanitizeCalls == 0)
+        #expect(longEmoji.presentation.standaloneEmoji == nil)
+
+        // Truncated source-reader and reply rows skip sanitization completely.
+        #expect(resolve(plaintext: "🔥", offersSourceReader: true).sanitizeCalls == 0)
+        #expect(resolve(plaintext: "🔥", hasReplyPreview: true).sanitizeCalls == 0)
+        #expect(resolve(plaintext: "", hasMediaItems: true).sanitizeCalls == 0)
+
+        // Single emoji sanitizes once and reuses the result.
+        let singleEmoji = resolve(plaintext: "🔥")
+        #expect(singleEmoji.sanitizeCalls == 1)
+        #expect(singleEmoji.presentation.standaloneEmoji == "🔥")
+        #expect(!singleEmoji.presentation.widensTextForReactions)
+        #expect(singleEmoji.presentation.precomputedSanitizedBody == "🔥")
+
+        // Multi-emoji sanitizes at most once and caches sanitized body for fallback rendering.
+        let multiEmoji = resolve(plaintext: "🔥🔥")
+        #expect(multiEmoji.sanitizeCalls == 1)
+        #expect(multiEmoji.presentation.standaloneEmoji == nil)
+        #expect(multiEmoji.presentation.widensTextForReactions)
+        #expect(multiEmoji.presentation.precomputedSanitizedBody == "🔥🔥")
+
+        // Single custom emoji sanitizes once even when both emoji and custom-emoji checks apply.
+        let wave = CustomEmojiShortcode("wave")!
+        let customEmoji = resolve(plaintext: ":wave:", resolvableCustomEmoji: [wave])
+        #expect(customEmoji.sanitizeCalls == 1)
+        #expect(customEmoji.presentation.standaloneCustomEmoji == wave)
+        #expect(!customEmoji.presentation.widensTextForReactions)
+
+        // Captioned media sanitizes once for hasVisibleBodyText and passes precomputed text down.
+        let captionedMedia = resolve(plaintext: "Caption text", hasMediaItems: true)
+        #expect(captionedMedia.sanitizeCalls == 1)
+        #expect(captionedMedia.presentation.hasVisibleBodyText)
+        #expect(captionedMedia.presentation.precomputedSanitizedBody == "Caption text")
+    }
+
     private func para(_ inlines: [MarkdownInlineFfi]) -> MarkdownBlockFfi {
         .paragraph(inlines: inlines)
     }

@@ -410,13 +410,13 @@ final class ConversationViewModel {
     )
     @ObservationIgnored private var customEmojiAvailability: (generation: Int, reactionArtwork: Int, scope: CustomEmojiScope,
                                                               available: Bool)?
-    // Lazy so its timeline-index closure can capture a fully initialized
+    // Lazy so its order-key closure can capture a fully initialized
     // store; first touched on the post-start apply/mark paths.
     @ObservationIgnored private lazy var readMarker = ConversationReadMarker(
         groupIdHex: group.groupIdHex,
         appState: appState,
-        timelineIndex: { [weak timelineStore] messageIdHex in
-            timelineStore?.timelineIndex(forMessageIdHex: messageIdHex)
+        orderKey: { [weak timelineStore] messageIdHex in
+            timelineStore?.historyOrderKey(forMessageIdHex: messageIdHex)
         },
         onChatListRowUpdated: onChatListRowUpdated
     )
@@ -821,7 +821,7 @@ final class ConversationViewModel {
     func reactions(for messageIdHex: String) -> [ReactionTally] {
         _ = timelineStore.timelineProjectionGeneration
         if let reactions = windowReactions[messageIdHex] {
-            return timelineStore.reactionProjections.preparedDetails(reactions, target: messageIdHex, me: myAccountId ?? "").tallies
+            return timelineStore.reactionProjections.preparedTallies(reactions, target: messageIdHex, me: myAccountId ?? "")
         }
         return timelineStore.reactions(for: messageIdHex)
     }
@@ -900,6 +900,14 @@ final class ConversationViewModel {
 
     func markdownDisplayBlocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
         timelineStore.markdownDisplayBlocks(for: item)
+    }
+
+    func messageLinkCopyActions(for item: TimelineItem) -> [MessageLinkCopyAccessibilityAction] {
+        timelineStore.messageLinkCopyActions(for: item)
+    }
+
+    func historyOrderKey(for messageIdHex: String) -> TimelineHistoryOrderKey? {
+        timelineStore.historyOrderKey(forMessageIdHex: messageIdHex)
     }
 
     func groupSystemDisplayText(for record: AppMessageRecordFfi) -> String? {
@@ -1212,7 +1220,7 @@ final class ConversationViewModel {
             canLoadLocalSnapshot: canLoadLocalSnapshot,
             canStartLiveWork: canStartLiveWork
         )
-        await stopLiveSubscriptions()
+        await stopLiveSubscriptions(preservePendingReadMarks: true)
         guard startRequest == request, !Task.isCancelled else { return }
         guard startDecision != .skipForegroundWork else {
             return
@@ -1225,6 +1233,7 @@ final class ConversationViewModel {
         usesConversationWindow = true
         startLiveTimeline(accountRef: accountRef)
         guard canStartLiveWork else { return }
+        readMarker.flushIfNeeded()
         startLiveGroupState(accountRef: accountRef)
         startDeferredGroupDetails(accountRef: accountRef)
     }
@@ -1324,8 +1333,8 @@ final class ConversationViewModel {
         guard let newest = ConversationReadMarker.newestWatermarkCandidate(
             in: records,
             isDeleted: { [weak self] messageIdHex in self?.isDeleted(messageIdHex) ?? true },
-            timelineIndex: { [weak timelineStore] messageIdHex in
-                timelineStore?.timelineIndex(forMessageIdHex: messageIdHex)
+            orderKey: { [weak timelineStore] messageIdHex in
+                timelineStore?.historyOrderKey(forMessageIdHex: messageIdHex)
             }
         ) else { return }
         readMarker.advanceWatermark(to: newest, isDeleted: false)
@@ -1339,13 +1348,17 @@ final class ConversationViewModel {
         readMarker.advanceWatermark(to: record, isDeleted: false)
     }
 
+    func flushPendingReadMarksIfNeeded() {
+        readMarker.flushIfNeeded()
+    }
+
     private func newestTailWatermarkCandidate() -> AppMessageRecordFfi? {
         for item in timelineStore.timeline.reversed() {
             guard case .message(let record, _) = item.kind else { continue }
-            let accepted = ConversationReadMarker.nextWatermarkIndex(
-                candidateIndex: timelineStore.timelineIndex(forMessageIdHex: record.messageIdHex),
-                pendingIndex: nil,
-                flushedIndex: nil,
+            let accepted = ConversationReadMarker.nextWatermark(
+                candidateKey: timelineStore.historyOrderKey(forMessageIdHex: record.messageIdHex),
+                pendingKey: nil,
+                flushedKey: nil,
                 kind: record.kind,
                 tags: record.tags,
                 isDeleted: isDeleted(record.messageIdHex)
@@ -1693,7 +1706,7 @@ final class ConversationViewModel {
         return min(doubled.partialValue, liveSubscriptionMaximumRetryDelayNanoseconds)
     }
 
-    private func stopLiveSubscriptions() async {
+    private func stopLiveSubscriptions(preservePendingReadMarks: Bool = false) async {
         windowRuntime = nil
         windowLifetime = UUID()
         mediaPrefetcher.cancel()
@@ -1719,7 +1732,11 @@ final class ConversationViewModel {
         groupStateTask = nil
         groupDetailsTask?.cancel()
         groupDetailsTask = nil
-        readMarker.cancelPendingReadMarks()
+        if preservePendingReadMarks {
+            readMarker.suspendPendingReadMarks()
+        } else {
+            readMarker.cancelPendingReadMarks()
+        }
         cancelTimelineTailRefresh()
     }
 
@@ -1882,6 +1899,7 @@ final class ConversationViewModel {
         windowIdentities = nextIdentities
         let previousReactions = windowReactions
         windowReactions = Dictionary(snapshot.messages.map { ($0.timeline.messageIdHex, $0.references.reactions) }, uniquingKeysWith: { _, latest in latest })
+        timelineStore.reactionProjections.prunePrepared(keeping: Set(windowReactions.keys))
         for message in snapshot.messages where previousReactions[message.timeline.messageIdHex] != message.references.reactions {
             timelineStore.reactionProjections.installPrepared(message.references.reactions,
                 target: message.timeline.messageIdHex, me: myAccountId ?? "")
@@ -1889,9 +1907,9 @@ final class ConversationViewModel {
         if let index = snapshot.anchor.index, snapshot.messages.indices.contains(Int(index)) {
             windowAnchorMessageId = snapshot.messages[Int(index)].timeline.messageIdHex
         } else { windowAnchorMessageId = nil }
-        readMarker.seedFlushedWatermark(messageIdHex: snapshot.readState.lastReadMessageIdHex)
         timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: snapshot.messages.map(\.timeline),
             hasMoreBefore: snapshot.hasMoreBefore, hasMoreAfter: snapshot.hasMoreAfter))
+        readMarker.seedFlushedWatermark(messageIdHex: snapshot.readState.lastReadMessageIdHex)
         if !changedNames.isEmpty {
             let affected = Set(snapshot.messages.compactMap { message -> String? in
                 let references = message.references
@@ -2405,6 +2423,18 @@ final class ConversationViewModel {
         locale: Locale = .autoupdatingCurrent
     ) -> [TimelineDaySection] {
         daySectionProjections.sections(
+            for: timeline,
+            generation: timelineProjectionGeneration,
+            calendar: calendar,
+            locale: locale
+        )
+    }
+
+    func timelineDayHeadings(
+        calendar: Calendar = .autoupdatingCurrent,
+        locale: Locale = .autoupdatingCurrent
+    ) -> TimelineDayHeadingsProjection {
+        daySectionProjections.headingsProjection(
             for: timeline,
             generation: timelineProjectionGeneration,
             calendar: calendar,

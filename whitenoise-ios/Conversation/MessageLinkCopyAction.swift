@@ -22,12 +22,20 @@ extension EnvironmentValues {
 
 extension View {
     func messageLinkCopyAccessibilityActions(for blocks: [MarkdownDisplayBlock]?, appState: AppState) -> some View {
-        let targets = MessageLinkTarget.targets(in: blocks)
-        let titles = MessageLinkTarget.accessibilityActionTitles(for: targets)
-        return accessibilityActions {
-            ForEach(targets.indices, id: \.self) { index in
-                Button(titles[index]) {
-                    MessageLinkCopyAction.copy(targets[index], presenting: appState)
+        messageLinkCopyAccessibilityActions(
+            MessageLinkCopyAccessibilityAction.actions(in: blocks),
+            appState: appState
+        )
+    }
+
+    func messageLinkCopyAccessibilityActions(
+        _ actions: [MessageLinkCopyAccessibilityAction],
+        appState: AppState
+    ) -> some View {
+        accessibilityActions {
+            ForEach(actions.indices, id: \.self) { index in
+                Button(actions[index].title) {
+                    MessageLinkCopyAction.copy(actions[index].target, presenting: appState)
                 }
             }
         }
