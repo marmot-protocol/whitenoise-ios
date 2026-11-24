@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import MarmotKit
 import Testing
 @testable import whitenoise_ios
 
@@ -134,5 +135,134 @@ struct DeviceSettingsFlowTests {
         var after = stat()
         #expect(lstat(lock.path, &after) == 0)
         #expect(before.st_ino == after.st_ino)
+    }
+
+    @Test func clearContainerFilesClearsAppGroupCachesWhilePreservingRuntimeLock() throws {
+        let sandbox = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClearContainerFilesTests-\(UUID().uuidString)", isDirectory: true)
+        let appCaches = sandbox.appendingPathComponent("App/Library/Caches", isDirectory: true)
+        let appSupport = sandbox.appendingPathComponent("App/Library/Application Support", isDirectory: true)
+        let documents = sandbox.appendingPathComponent("App/Documents", isDirectory: true)
+        let temp = sandbox.appendingPathComponent("App/tmp", isDirectory: true)
+        let appGroup = sandbox.appendingPathComponent("AppGroup", isDirectory: true)
+        let sharedAvatars = appGroup.appendingPathComponent("Library/Caches/NotificationAvatars", isDirectory: true)
+        let marmotRoot = AppContainerConfig.marmotRoot(in: appGroup)
+        for directory in [appCaches, appSupport, documents, temp, sharedAvatars, marmotRoot] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        defer { try? FileManager.default.removeItem(at: sandbox) }
+
+        let appCacheFile = appCaches.appendingPathComponent("cached.bin")
+        let supportFile = appSupport.appendingPathComponent("state.bin")
+        let documentFile = documents.appendingPathComponent("export.json")
+        let tempFile = temp.appendingPathComponent("scratch.tmp")
+        let notificationAvatar = sharedAvatars.appendingPathComponent("sender-avatar")
+        let runtimeLock = marmotRoot.appendingPathComponent(AppDataErasure.runtimeLockName)
+        for file in [appCacheFile, supportFile, documentFile, tempFile, notificationAvatar, runtimeLock] {
+            try Data("x".utf8).write(to: file)
+        }
+        var lockBefore = stat()
+        #expect(lstat(runtimeLock.path, &lockBefore) == 0)
+
+        let stub = ContainerCleanupStubFileManager(
+            caches: appCaches,
+            applicationSupport: appSupport,
+            documents: documents,
+            temp: temp,
+            sharedContainer: appGroup
+        )
+        try AppDataErasure.clearContainerFiles(fileManager: stub)
+
+        #expect(!FileManager.default.fileExists(atPath: appCacheFile.path))
+        #expect(!FileManager.default.fileExists(atPath: supportFile.path))
+        #expect(!FileManager.default.fileExists(atPath: documentFile.path))
+        #expect(!FileManager.default.fileExists(atPath: tempFile.path))
+        #expect(!FileManager.default.fileExists(atPath: sharedAvatars.path))
+        #expect(FileManager.default.fileExists(atPath: runtimeLock.path))
+        var lockAfter = stat()
+        #expect(lstat(runtimeLock.path, &lockAfter) == 0)
+        #expect(lockBefore.st_ino == lockAfter.st_ino)
+    }
+
+    @Test func erasureInMemoryResetClearsRetainedStateWithoutRewritingUserDefaults() async throws {
+        let suiteName = "ErasureInMemoryReset.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let checkpointStore = AppReviewDemoCheckpointStore(defaults: defaults)
+        try checkpointStore.save(AppReviewDemoCheckpoint(
+            originalAccountRef: "alice",
+            originalAccountIdHex: hex("aa"),
+            initialAccountRefs: ["alice"],
+            groupIdHex: hex("11"),
+            completed: true
+        ))
+        let appState = AppState.test(accountDefaults: defaults, preferenceDefaults: defaults)
+        #expect(appState.appReviewDemo.hasSavedSetup)
+        #expect(appState.appReviewDemo.status == .ready(groupIdHex: hex("11"), accountRef: "alice"))
+
+        appState.noteDirectChatPeer(accountRef: "alice", groupIdHex: hex("11"), peerAccountIdHex: hex("bb"))
+        appState.noteCreatedChatListRow(
+            accountRef: "alice",
+            row: chatListRow(groupIdHex: hex("11"), title: "Bob")
+        )
+        appState.deviceLinks.noteSetupFinished(accountIdHex: hex("aa"))
+        appState.deviceLinks.dismissNewDeviceOffer()
+        appState.deviceLinks.observe(.deviceUnlinked(accountIdHex: hex("aa"), accountLabel: "alice"), using: appState)
+        appState.startupDiagnosticsEnabled = true
+        #expect(defaults.object(forKey: StartupDiagnosticsPreference.key) != nil)
+
+        // Cancel and clear the demo setup before wiping persistent defaults,
+        // mirroring `eraseAppData()`, then wipe in-memory state.
+        await appState.appReviewDemo.resetForErasure()
+        defaults.removePersistentDomain(forName: suiteName)
+        appState.resetInMemoryStateForErasure()
+
+        #expect(appState.directChatPeerAccountId(accountRef: "alice", groupIdHex: hex("11")) == nil)
+        #expect(appState.createdChatListRow(accountRef: "alice", groupIdHex: hex("11")) == nil)
+        #expect(!appState.appReviewDemo.hasSavedSetup)
+        #expect(appState.appReviewDemo.status == .idle)
+        #expect(appState.deviceLinks.unlinkedNotice == nil)
+        var unlinked = accountSummary("alice", byte: "aa", signedOut: true)
+        unlinked.unlinked = true
+        appState.deviceLinks.remindUnlinkedProfiles([unlinked])
+        #expect(appState.deviceLinks.unlinkedNotice?.accountIdHex == hex("aa"))
+        #expect(!appState.startupDiagnosticsEnabled)
+        #expect(defaults.object(forKey: StartupDiagnosticsPreference.key) == nil)
+    }
+}
+
+private final class ContainerCleanupStubFileManager: FileManager {
+    private let caches: URL
+    private let applicationSupport: URL
+    private let documents: URL
+    private let temp: URL
+    private let sharedContainer: URL
+
+    init(caches: URL, applicationSupport: URL, documents: URL, temp: URL, sharedContainer: URL) {
+        self.caches = caches
+        self.applicationSupport = applicationSupport
+        self.documents = documents
+        self.temp = temp
+        self.sharedContainer = sharedContainer
+        super.init()
+    }
+
+    override var temporaryDirectory: URL { temp }
+
+    override func urls(
+        for directory: FileManager.SearchPathDirectory,
+        in domainMask: FileManager.SearchPathDomainMask
+    ) -> [URL] {
+        switch directory {
+        case .cachesDirectory: [caches]
+        case .applicationSupportDirectory: [applicationSupport]
+        case .documentDirectory: [documents]
+        default: super.urls(for: directory, in: domainMask)
+        }
+    }
+
+    override func containerURL(forSecurityApplicationGroupIdentifier groupIdentifier: String) -> URL? {
+        sharedContainer
     }
 }

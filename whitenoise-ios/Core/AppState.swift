@@ -65,6 +65,9 @@ struct ForegroundMaintenanceTasks {
 /// The reads `refreshAccounts` stages before it changes account or setup routing.
 nonisolated struct AccountRefreshReads: Sendable {
     var listAccounts: @MainActor (MarmotClient) async throws -> [AccountSummaryFfi]
+    var onboardingRecoveryRequired: @MainActor (MarmotClient, _ accountID: String) async throws -> Bool = {
+        client, accountID in try await client.onboardingRecoveryRequired(accountRef: accountID)
+    }
     var onboardingSnapshot: @MainActor (MarmotClient, _ accountID: String) async throws -> OnboardingSnapshotFfi?
 
     static let live = AccountRefreshReads(
@@ -328,13 +331,17 @@ final class AppState {
         }
     }
 
+    private var storedStartupDiagnosticsEnabled: Bool
+
     /// Device-wide opt-in for MDK's native startup diagnostics. Applied to the
     /// running runtime immediately and to future runtimes before account reads.
     /// Disabling clears captured history.
-    var startupDiagnosticsEnabled: Bool = StartupDiagnosticsPreference.isEnabled() {
-        didSet {
-            StartupDiagnosticsPreference.setEnabled(startupDiagnosticsEnabled)
-            try? client?.marmot.setStartupDiagnosticsEnabled(enabled: startupDiagnosticsEnabled)
+    var startupDiagnosticsEnabled: Bool {
+        get { storedStartupDiagnosticsEnabled }
+        set {
+            storedStartupDiagnosticsEnabled = newValue
+            StartupDiagnosticsPreference.setEnabled(newValue, preferenceDefaults)
+            try? client?.marmot.setStartupDiagnosticsEnabled(enabled: newValue)
         }
     }
 
@@ -735,6 +742,7 @@ final class AppState {
         self.preferenceDefaults = preferenceDefaults
         self.developerMode = preferenceDefaults.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = preferenceDefaults.bool(forKey: Self.streamingDebugModeKey)
+        self.storedStartupDiagnosticsEnabled = StartupDiagnosticsPreference.isEnabled(preferenceDefaults)
         self.blockScreenshots = preferenceDefaults.bool(forKey: Self.blockScreenshotsKey)
         self.recentReactions = preferenceDefaults.stringArray(forKey: Self.recentReactionsKey)
             ?? Self.defaultReactions
@@ -1096,6 +1104,8 @@ final class AppState {
     ) async -> [WipeFailureItem] {
         var localCleanupFailures: [WipeFailureItem] = []
         if destructive {
+            AvatarCacheErasure.begin()
+            defer { AvatarCacheErasure.end() }
             conversationDraftStore.removeDrafts(accountRef: removedRef)
             await conversationDraftStore.flush()
             MessageHideStore.clearAll(accountRef: removedRef)
@@ -1111,14 +1121,24 @@ final class AppState {
                 // the account either.
                 ChatMuteStore.clearAll(accountIdHex: removedAccountIdHex)
             }
-            if await !NotificationCommunicationDecorator.deleteAllDonatedInteractions() {
+            let clearedInteractions = await NotificationCommunicationDecorator.deleteAllDonatedInteractions()
+            let clearedNotificationAvatars = await Task.detached(priority: .utility) {
+                NotificationCommunicationDecorator.clearAvatarCache()
+            }.value
+            if !clearedInteractions || !clearedNotificationAvatars {
                 localCleanupFailures.append(WipeFailureItem(
                     subject: nil,
                     reason: L10n.string("Some notification previews may remain on this device."),
                     kind: .notificationPreviews
                 ))
             }
-            if await !MessageMediaCache.purgeAllDecryptedMedia() {
+            let clearedDecryptedMedia = await MessageMediaCache.purgeAllDecryptedMedia()
+            await RemoteAvatarImageLoader.clearCachesAndDrain()
+            await GroupAvatarImageLoader.clearCachesAndDrain()
+            let clearedProfileAvatars = await RemoteAvatarDiskCache.shared.removeAll()
+            let clearedGroupAvatars = await RemoteAvatarDiskCache.groupShared.removeAll()
+            let clearedGroupThumbnails = await RemoteAvatarDiskCache.groupThumbnailShared.removeAll()
+            if !clearedDecryptedMedia || !clearedProfileAvatars || !clearedGroupAvatars || !clearedGroupThumbnails {
                 localCleanupFailures.append(WipeFailureItem(
                     subject: nil,
                     reason: L10n.string("Some decrypted media may remain on this device."),
@@ -1341,6 +1361,7 @@ final class AppState {
             await pendingAccountSetup?.drain()
             signUpRestorationTask?.cancel()
             _ = try? await signUpRestorationTask?.value
+            await appReviewDemo.resetForErasure()
             await runtimeLifecycle.prepareForAppErasure()
             let stored = try await erasingClient.listAccounts()
             for account in stored {
@@ -1410,6 +1431,7 @@ final class AppState {
             signInAttempts.reset()
             nativePushRestoreIntents.reset()
             diagnosticsConsent.reset()
+            resetInMemoryStateForErasure()
             erasureState.complete()
             appDataErasureGeneration += 1
             isErasingAppData = false
@@ -1423,6 +1445,19 @@ final class AppState {
             present(.error(L10n.string("Erasure didn’t finish. Some data may remain. Try again.")))
             throw error
         }
+    }
+
+    func resetInMemoryStateForErasure() {
+        deviceLinks.resetForErasure()
+        historyNotices.clear()
+        recentDirectChatPeers = RecentDirectChatPeerStore()
+        recentCreatedChatRows = RecentCreatedChatRowStore()
+        pendingAccountSetupReadiness.removeAll()
+        latestAccountAttention = nil
+        accountExitIntent = nil
+        checkedRetainedUndeliveredChanges = false
+        // Reset in-memory only so we never write back into the wiped UserDefaults domain.
+        storedStartupDiagnosticsEnabled = false
     }
 
     @MainActor
@@ -1794,7 +1829,7 @@ final class AppState {
             try Task.checkCancellation()
             let snapshot: OnboardingSnapshotFfi?
             do {
-                if try await client.onboardingRecoveryRequired(accountRef: account.accountIdHex) {
+                if try await accountRefreshReads.onboardingRecoveryRequired(client, account.accountIdHex) {
                     recoveryAccounts.append(account)
                     continue
                 }

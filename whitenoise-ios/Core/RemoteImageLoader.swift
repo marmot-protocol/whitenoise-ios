@@ -299,17 +299,27 @@ actor RemoteAvatarDiskCache {
 
         let fileURL = cachedFileURL(forKey: key)
         do {
-            try data.write(to: fileURL, options: .atomic)
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
             try FileManager.default.setAttributes(
-                [
-                    .protectionKey: FileProtectionType.complete,
-                    .modificationDate: now,
-                ],
+                [.modificationDate: now],
                 ofItemAtPath: fileURL.path
             )
             pruneIfNeeded()
         } catch {
             try? FileManager.default.removeItem(at: fileURL)
+        }
+    }
+
+    @discardableResult
+    func removeAll() -> Bool {
+        do {
+            try FileManager.default.removeItem(at: directoryURL)
+            return true
+        } catch let error as NSError
+            where error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
+            return true
+        } catch {
+            return false
         }
     }
 

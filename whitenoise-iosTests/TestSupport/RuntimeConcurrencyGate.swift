@@ -116,3 +116,31 @@ final class GateTrace: Sendable {
 extension Trait where Self == MarmotRuntimeConcurrencyLimit {
     static var marmotRuntimeConcurrencyLimit: Self { Self() }
 }
+
+private let sharedAvatarCacheTestGate = AsyncTestGate(permits: 1)
+
+/// Serializes tests across suites that mutate or assert on process-wide avatar
+/// caches (`RemoteAvatarImageLoader`, `GroupAvatarImageLoader`,
+/// `RemoteAvatarDiskCache.shared`/`groupShared`/`groupThumbnailShared`,
+/// `NativeAvatarImageCache`, `AvatarCacheErasure`, `LinkPreviewLoader`).
+/// Always declare `.sharedAvatarCacheAccess` AFTER
+/// `.marmotRuntimeConcurrencyLimit` when a test uses both so lock acquisition
+/// order is globally acyclic.
+struct SharedAvatarCacheAccess: SuiteTrait, TestTrait, TestScoping {
+    var isRecursive: Bool { true }
+
+    func provideScope(
+        for test: Test,
+        testCase: Test.Case?,
+        performing function: @concurrent @Sendable () async throws -> Void
+    ) async throws {
+        guard testCase != nil else { return try await function() }
+        try await sharedAvatarCacheTestGate.withLock {
+            try await function()
+        }
+    }
+}
+
+extension Trait where Self == SharedAvatarCacheAccess {
+    static var sharedAvatarCacheAccess: Self { Self() }
+}

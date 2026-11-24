@@ -246,4 +246,24 @@ struct GroupImageSearchTests {
         #expect(draft.initialImage.sourceUrl == nil)
     }
 
+    @MainActor
+    @Test(.sharedAvatarCacheAccess) func remoteSearchThumbnailLoadsEphemerallyWithoutPersistingToDiskCache() async throws {
+        let url = try #require(URL(string: "https://external-content.duckduckgo.com/thumb-\(UUID().uuidString).png"))
+        let png = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).pngData { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        }
+        let fetches = Mutex(0)
+        let image = try await GroupImageRemoteThumbnail.loadThumbnail(for: url, scale: 1) { _ in
+            fetches.withLock { $0 += 1 }
+            return png
+        }
+
+        let maxPixelSize = GroupImageRemoteThumbnail.thumbnailMaxPixelSize(scale: 1)
+        #expect(image.cgImage != nil)
+        #expect(fetches.withLock { $0 } == 1)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: maxPixelSize) == nil)
+        #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
+    }
+
 }

@@ -56,6 +56,111 @@ struct AppStateBootstrapTests {
         #expect(remaining == [AppDataErasure.runtimeLockName])
     }
 
+    @Test(.sharedAvatarCacheAccess)
+    func destructiveWipeOfLastAccountDrainsAndClearsAvatarCaches() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
+
+        let url = try #require(URL(string: "https://example.com/wipe-avatar-\(UUID().uuidString).png"))
+        let png = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).pngData { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }
+        _ = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 16, scale: 1) { _ in png }
+        let groupRequest = GroupAvatarImageRequest(
+            accountRef: account.label,
+            groupIdHex: hex("44"),
+            imageHashHex: hex("55"),
+            maxPixelSize: 16
+        )
+        GroupAvatarImageLoader.seed(
+            data: png,
+            accountRef: groupRequest.accountRef,
+            groupIdHex: groupRequest.groupIdHex,
+            replacingImageHashHex: nil
+        )
+        _ = try await GroupAvatarImageLoader.image(
+            request: groupRequest,
+            scale: 1,
+            priority: .foreground,
+            client: try appState.currentMarmotClient()
+        )
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 16) != nil)
+        #expect(GroupAvatarImageLoader.cachedImage(for: groupRequest) != nil)
+
+        #expect(await appState.signOutAndWipeActiveAccount())
+
+        #expect(appState.phase == .onboarding)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 16) == nil)
+        #expect(GroupAvatarImageLoader.cachedImage(for: groupRequest) == nil)
+        #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
+    }
+
+    @Test(.sharedAvatarCacheAccess)
+    func destructiveWipeWithSurvivingProfileStillPurgesGroupAndProfileAvatarCaches() async throws {
+        let survivingAccount = accountSummary("surviving-b", byte: "bb")
+        let includeSurvivingAccount = Mutex(false)
+        let reads = AccountRefreshReads(
+            listAccounts: { client in
+                var accounts = try await AccountRefreshReads.live.listAccounts(client)
+                if includeSurvivingAccount.withLock({ $0 }) {
+                    accounts.append(survivingAccount)
+                }
+                return accounts
+            },
+            onboardingRecoveryRequired: { client, accountID in
+                if accountID == survivingAccount.accountIdHex { return false }
+                return try await AccountRefreshReads.live.onboardingRecoveryRequired(client, accountID)
+            },
+            onboardingSnapshot: { client, accountID in
+                if accountID == survivingAccount.accountIdHex { return nil }
+                return try await AccountRefreshReads.live.onboardingSnapshot(client, accountID)
+            }
+        )
+        let appState = try ownedAppState(
+            client: try ownedTestClient(),
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            accountRefreshReads: reads
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        let wipedAccount = try await appState.createIdentity()
+        appState.activeAccountRef = wipedAccount.label
+        includeSurvivingAccount.withLock { $0 = true }
+
+        let avatarURL = try #require(URL(string: "https://example.com/wipe-surviving-\(UUID().uuidString).png"))
+        let png = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).pngData { context in
+            UIColor.systemOrange.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }
+        _ = try await RemoteAvatarImageLoader.image(for: avatarURL, maxPixelSize: 16, scale: 1) { _ in png }
+        let rawGroupKey = GroupAvatarCacheKey.rawData(accountRef: wipedAccount.label, imageHashHex: hex("77"))
+        let thumbGroupKey = GroupAvatarCacheKey.thumbnail(
+            accountRef: wipedAccount.label,
+            imageHashHex: hex("77"),
+            maxPixelSize: 16
+        )
+        await RemoteAvatarDiskCache.groupShared.store(png, forKey: rawGroupKey)
+        await RemoteAvatarDiskCache.groupThumbnailShared.store(png, forKey: thumbGroupKey)
+        #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: rawGroupKey) == png)
+        #expect(await RemoteAvatarDiskCache.groupThumbnailShared.data(forKey: thumbGroupKey) == png)
+
+        #expect(await appState.signOutAndWipeActiveAccount())
+
+        // Profile B remains signed in, yet profile A's cached avatars are purged.
+        #expect(appState.phase == .ready)
+        #expect(appState.accounts.contains { $0.accountIdHex == survivingAccount.accountIdHex })
+        #expect(RemoteAvatarImageLoader.cachedImage(for: avatarURL, maxPixelSize: 16) == nil)
+        #expect(await RemoteAvatarDiskCache.shared.data(for: avatarURL) == nil)
+        #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: rawGroupKey) == nil)
+        #expect(await RemoteAvatarDiskCache.groupThumbnailShared.data(forKey: thumbGroupKey) == nil)
+
+        await stopReadyRuntime(appState)
+    }
+
     @Test func interruptedImportStaysGatedWithoutRestoringSetup() async throws {
         let appState = try testAppState()
         appState.setAppSceneActive(true)

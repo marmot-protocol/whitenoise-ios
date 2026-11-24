@@ -230,7 +230,7 @@ struct LinkPreviewTests {
     }
 
     @MainActor
-    @Test func loaderBoundsConcurrentFetchesToMaximumConcurrentLoads() async throws {
+    @Test(.sharedAvatarCacheAccess) func loaderBoundsConcurrentFetchesToMaximumConcurrentLoads() async throws {
         let limit = LinkPreviewLoader.maximumConcurrentLoads
         let limiter = CancellableLoadLimiter(maximumConcurrentLoads: limit)
         let entered = (0..<(limit + 1)).map { _ in TestLatch() }
@@ -294,7 +294,7 @@ struct LinkPreviewTests {
     }
 
     @MainActor
-    @Test func cancellingQueuedCallerPreventsOffscreenPreviewFetchFromStarting() async throws {
+    @Test(.sharedAvatarCacheAccess) func cancellingQueuedCallerPreventsOffscreenPreviewFetchFromStarting() async throws {
         let limiter = CancellableLoadLimiter(maximumConcurrentLoads: 1)
         let activeEntered = TestLatch()
         let activeRelease = TestLatch()
@@ -361,7 +361,7 @@ struct LinkPreviewTests {
     }
 
     @MainActor
-    @Test func clearCachesPreventsInFlightMetadataFromPopulatingCache() async throws {
+    @Test(.sharedAvatarCacheAccess) func clearCachesPreventsInFlightMetadataFromPopulatingCache() async throws {
         let url = URL(string: "https://clear-race-\(UUID().uuidString).example/article")!
         let fetchEntered = TestLatch()
         let fetchRelease = TestLatch()

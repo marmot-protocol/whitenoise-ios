@@ -325,25 +325,44 @@ struct GroupImageRemoteThumbnail: View {
 
     private func loadImage(scale: CGFloat) async {
         phase = .loading
-        guard let reservation = await Self.loadLimiter.acquire() else { return }
         do {
-            try Task.checkCancellation()
-            let image = try await RemoteAvatarImageLoader.image(
-                for: url,
-                maxPixelSize: Self.thumbnailMaxPixelSize(scale: scale),
-                scale: scale
-            )
-            await Self.loadLimiter.release(reservation)
+            let image = try await Self.loadThumbnail(for: url, scale: scale)
             guard !Task.isCancelled else { return }
             phase = .success(image)
         } catch {
-            await Self.loadLimiter.release(reservation)
             guard !Task.isCancelled else { return }
             phase = .failure
         }
     }
 
-    private static func thumbnailMaxPixelSize(scale: CGFloat) -> Int {
+    /// Loads a DuckDuckGo web-search thumbnail ephemerally (in-memory only,
+    /// never writing to `RemoteAvatarDiskCache`).
+    static func loadThumbnail(
+        for url: URL,
+        scale: CGFloat,
+        fetch: @escaping @Sendable (URL) async throws -> Data = RemoteImageFetch.imageData
+    ) async throws -> UIImage {
+        guard let reservation = await loadLimiter.acquire() else { throw CancellationError() }
+        do {
+            try Task.checkCancellation()
+            let data = try await fetch(url)
+            try Task.checkCancellation()
+            guard let image = await RemoteImageDecoder.downsampledImage(
+                from: data,
+                maxPixelSize: thumbnailMaxPixelSize(scale: scale),
+                scale: scale
+            ) else {
+                throw URLError(.cannotDecodeContentData)
+            }
+            await loadLimiter.release(reservation)
+            return image
+        } catch {
+            await loadLimiter.release(reservation)
+            throw error
+        }
+    }
+
+    static func thumbnailMaxPixelSize(scale: CGFloat) -> Int {
         Int(ceil(max(displaySize.width, displaySize.height) * max(scale, 1)))
     }
 

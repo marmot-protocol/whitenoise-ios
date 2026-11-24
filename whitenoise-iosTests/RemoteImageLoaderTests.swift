@@ -48,7 +48,7 @@ struct RemoteImageLoaderTests {
         #expect(!RemoteImageDecoder.isAllowedRemoteImageType(nil))
     }
 
-    @Test func avatarLoaderCachesAFailedFetchForItsRetryWindow() async throws {
+    @Test(.sharedAvatarCacheAccess) func avatarLoaderCachesAFailedFetchForItsRetryWindow() async throws {
         let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
         RemoteAvatarImageLoader.clearCaches()
         defer { RemoteAvatarImageLoader.clearCaches() }
@@ -77,7 +77,7 @@ struct RemoteImageLoaderTests {
         #expect(fetches.withLock { $0 } == 2)
     }
 
-    @Test func avatarLoaderNeverCachesACancelledFetch() async throws {
+    @Test(.sharedAvatarCacheAccess) func avatarLoaderNeverCachesACancelledFetch() async throws {
         RemoteAvatarImageLoader.clearCaches()
         defer { RemoteAvatarImageLoader.clearCaches() }
         let cancellations: [@Sendable () -> any Error] = [
@@ -99,7 +99,7 @@ struct RemoteImageLoaderTests {
         }
     }
 
-    @Test func avatarLoaderSharesOneFetchBetweenSizesOfTheSameAvatar() async throws {
+    @Test(.sharedAvatarCacheAccess) func avatarLoaderSharesOneFetchBetweenSizesOfTheSameAvatar() async throws {
         let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
         let data = try #require(UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { context in
             UIColor.green.setFill()
@@ -130,7 +130,7 @@ struct RemoteImageLoaderTests {
         #expect(await probe.callCount() == 1)
     }
 
-    @Test func avatarLoaderCoalescesDecodeWorkAndPublishesMemoryHit() async throws {
+    @Test(.sharedAvatarCacheAccess) func avatarLoaderCoalescesDecodeWorkAndPublishesMemoryHit() async throws {
         let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80))
         let source = renderer.image { context in
@@ -169,7 +169,7 @@ struct RemoteImageLoaderTests {
         #expect(RemoteAvatarImageLoader.cachedImage(for: url, maxPixelSize: 56) != nil)
     }
 
-    @Test func avatarRemoteImageShowsTheCenterOfNonSquareImages() async throws {
+    @Test(.sharedAvatarCacheAccess) func avatarRemoteImageShowsTheCenterOfNonSquareImages() async throws {
         RemoteAvatarImageLoader.clearCaches()
         defer { RemoteAvatarImageLoader.clearCaches() }
         let format = UIGraphicsImageRendererFormat()
@@ -209,7 +209,7 @@ struct RemoteImageLoaderTests {
         }
     }
 
-    @Test func erasureDrainsFetchesWithoutRepopulatingAvatarCaches() async throws {
+    @Test(.sharedAvatarCacheAccess) func erasureDrainsFetchesWithoutRepopulatingAvatarCaches() async throws {
         let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8))
         let data = try #require(renderer.image { context in
@@ -252,7 +252,7 @@ struct RemoteImageLoaderTests {
         _ = try await RemoteAvatarImageLoader.image(for: arrivingURL, maxPixelSize: 8, scale: 1, fetch: { _ in data })
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(.sharedAvatarCacheAccess, .timeLimit(.minutes(1)))
     func avatarDrainFinishesWhileCancelledDNSWorkerIsStillBlocked() async throws {
         let url = try #require(URL(string: "https://cdn.example/\(UUID()).png"))
         let fixture = BlockingDNS()
@@ -291,7 +291,7 @@ struct RemoteImageLoaderTests {
         #expect(await RemoteAvatarDiskCache.shared.data(for: url) == nil)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit, .sharedAvatarCacheAccess)
     func groupAvatarDrainBlocksNewLoadsUntilDecodeSettles() async throws {
         try await withTestClient { client in
             let request = GroupAvatarImageRequest(accountRef: "drain-\(UUID())", groupIdHex: "group",
@@ -339,7 +339,7 @@ struct RemoteImageLoaderTests {
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit, .sharedAvatarCacheAccess)
     func erasureKeepsBothLoadersBlockedAfterTheirIndividualDrains() async throws {
         AvatarCacheErasure.begin()
         defer { AvatarCacheErasure.end() }
@@ -418,7 +418,7 @@ struct RemoteImageLoaderTests {
         #expect(await cache.data(forKey: key) == data)
     }
 
-    @Test func groupAvatarDiskCacheRetainsRecentlyUsedEntriesBeyondOneWeek() async {
+    @Test(.sharedAvatarCacheAccess) func groupAvatarDiskCacheRetainsRecentlyUsedEntriesBeyondOneWeek() async {
         let key = "group-cache-retention-\(UUID().uuidString)"
         let data = Data([1, 2, 3, 4])
         let writtenAt = Date(timeIntervalSince1970: 10_000)
@@ -435,7 +435,7 @@ struct RemoteImageLoaderTests {
         ) == nil)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit, .sharedAvatarCacheAccess)
     func groupAvatarPersistentThumbnailBypassesTheFullImageDownload() async throws {
         let accountRef = "thumbnail-account-\(UUID().uuidString)"
         let imageHashHex = UUID().uuidString
@@ -467,7 +467,7 @@ struct RemoteImageLoaderTests {
         #expect(image.cgImage?.height == 56)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit, .sharedAvatarCacheAccess)
     func groupAvatarLoaderPromotesTheLegacyGroupScopedDiskEntry() async throws {
         let accountRef = "legacy-account-\(UUID().uuidString)"
         let groupIdHex = "legacy-group"
@@ -507,7 +507,7 @@ struct RemoteImageLoaderTests {
         #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: contentKey) == imageData)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
+    @Test(.marmotRuntimeConcurrencyLimit, .sharedAvatarCacheAccess)
     func groupAvatarSeedWaitsForTheReplacementHashAndAvoidsNetwork() async throws {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80))
         let imageData = try #require(renderer.image { context in
@@ -624,6 +624,53 @@ struct RemoteImageLoaderTests {
 
         let image = try #require(decoded)
         #expect(max(image.size.width, image.size.height) <= 20)
+    }
+
+    @Test func avatarDiskCacheStoresBytesAndAppliesCompleteFileProtection() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RemoteAvatarDiskCacheProtectionTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = RemoteAvatarDiskCache(
+            directoryURL: root,
+            directoryName: "GroupAvatars",
+            maximumBytes: 1_024,
+            maximumEntryBytes: 128,
+            maximumAge: 60
+        )
+
+        let data = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A])
+        await cache.store(data, forKey: "account:group-avatar-hash")
+
+        let directory = root.appendingPathComponent("GroupAvatars", isDirectory: true)
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        let storedFile = try #require(files.first)
+        #expect(try Data(contentsOf: storedFile) == data)
+#if !targetEnvironment(simulator)
+        let attributes = try FileManager.default.attributesOfItem(atPath: storedFile.path)
+        #expect(attributes[.protectionKey] as? FileProtectionType == .complete)
+#endif
+    }
+
+    @Test func avatarDiskCacheRemoveAllDeletesFilesAndIsIdempotent() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RemoteAvatarDiskCacheRemoveAllTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cache = RemoteAvatarDiskCache(
+            directoryURL: root,
+            maximumBytes: 1_024,
+            maximumEntryBytes: 128,
+            maximumAge: 3_600
+        )
+
+        #expect(await cache.removeAll())
+        await cache.store(Data(repeating: 0xBB, count: 16), forKey: "entry-1")
+        #expect(cachedFileCount(in: root) == 1)
+
+        #expect(await cache.removeAll())
+        #expect(cachedFileCount(in: root) == 0)
+        #expect(await cache.removeAll())
     }
 
 }

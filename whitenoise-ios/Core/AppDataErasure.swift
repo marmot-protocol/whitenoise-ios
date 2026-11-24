@@ -36,18 +36,20 @@ nonisolated enum AppDataErasure {
         }
     }
 
-    static func clearContainerFiles() throws {
-        let manager = FileManager.default
+    static func clearContainerFiles(fileManager: FileManager = .default) throws {
         let directories = [FileManager.SearchPathDirectory.cachesDirectory, .applicationSupportDirectory, .documentDirectory]
-        for directory in directories {
-            guard let url = manager.urls(for: directory, in: .userDomainMask).first,
-                  manager.fileExists(atPath: url.path) else { continue }
-            for child in try manager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) {
-                try manager.removeItem(at: child)
-            }
+        var urlsToClear = directories.compactMap { fileManager.urls(for: $0, in: .userDomainMask).first }
+        urlsToClear.append(fileManager.temporaryDirectory)
+        if let sharedCaches = AppContainerConfig.sharedBase(fileManager: fileManager)?
+            .appendingPathComponent("Library/Caches", isDirectory: true) {
+            // Clears shared extension caches (such as NotificationAvatars) without
+            // touching `White Noise/Marmot/.marmot-runtime.lock`.
+            urlsToClear.append(sharedCaches)
         }
-        for child in try manager.contentsOfDirectory(at: manager.temporaryDirectory, includingPropertiesForKeys: nil) {
-            try manager.removeItem(at: child)
+        for url in urlsToClear where fileManager.fileExists(atPath: url.path) {
+            for child in try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) {
+                try fileManager.removeItem(at: child)
+            }
         }
     }
 }

@@ -164,4 +164,32 @@ nonisolated enum NotificationCommunicationDecorator {
         }
         return true
     }
+    static func avatarCacheDirectory(fileManager: FileManager = .default) -> URL? {
+        AppContainerConfig.sharedBase(fileManager: fileManager)?
+            .appendingPathComponent("Library/Caches/NotificationAvatars", isDirectory: true)
+    }
+
+    /// Removes historical cached notification avatars from the shared App Group
+    /// container. Current builds never fetch or persist notification avatars,
+    /// so this clears pre-upgrade residue during destructive Sign Out & Wipe.
+    /// Returns `true` when the cache directory is absent or cleanly deleted,
+    /// `false` on removal error so destructive wipes report leftovers.
+    @discardableResult
+    static func clearAvatarCache(
+        at directory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        guard let target = directory ?? avatarCacheDirectory(fileManager: fileManager) else {
+            return true
+        }
+        do {
+            try fileManager.removeItem(at: target)
+            return true
+        } catch let error as NSError
+            where error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
+            return true
+        } catch {
+            return false
+        }
+    }
 }

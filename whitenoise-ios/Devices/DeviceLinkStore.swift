@@ -55,6 +55,11 @@ final class DeviceLinkStore {
     private(set) var keyPackageRefreshOverdue = false
     /// Chats whose history from another device is arriving or arrived, by group id.
     private(set) var historyImports: [String: ChatHistoryImportStateFfi] = [:]
+    typealias DeviceLinkSnapshotReader = @Sendable (
+        _ client: MarmotClient,
+        _ accountRef: String
+    ) async throws -> DeviceLinkSnapshotFfi
+
     /// Requests waiting for this device's other signed-in profiles, by account id.
     private(set) var otherProfilePrompts: [String: [DeviceLinkPromptFfi]] = [:]
     private var dismissedOtherProfilePromptIDs: Set<String> = []
@@ -86,6 +91,15 @@ final class DeviceLinkStore {
     /// The latest read of each other profile's requests; an older read that
     /// finishes later is dropped.
     private var otherProfileTickets: [String: UUID] = [:]
+    @ObservationIgnored private let readDeviceLinkSnapshot: DeviceLinkSnapshotReader
+
+    init(
+        readDeviceLinkSnapshot: @escaping DeviceLinkSnapshotReader = { client, accountRef in
+            try await client.marmot.deviceLinkSnapshot(accountRef: accountRef)
+        }
+    ) {
+        self.readDeviceLinkSnapshot = readDeviceLinkSnapshot
+    }
 
     // MARK: - Derived
 
@@ -257,7 +271,7 @@ final class DeviceLinkStore {
         let tickets = Dictionary(uniqueKeysWithValues: others.map { ($0.accountIdHex, UUID()) })
         otherProfileTickets.merge(tickets) { _, new in new }
         for account in others {
-            guard let snapshot = try? await client.marmot.deviceLinkSnapshot(accountRef: account.label) else { continue }
+            guard let snapshot = try? await readDeviceLinkSnapshot(client, account.label) else { continue }
             // A switch or a new runtime started a newer read.
             guard self.scope == scope, matches(appState) else { return }
             // A newer read of this profile owns its requests.
@@ -412,6 +426,20 @@ final class DeviceLinkStore {
         scope = nil
         tickets = [:]
         otherProfileTickets = [:]
+    }
+
+    /// Full reset for app-data erasure, clearing cross-profile prompts, unlinked
+    /// reminders, and setup-launch offers in addition to active-account state.
+    func resetForErasure() {
+        clear()
+        otherProfilePrompts = [:]
+        dismissedOtherProfilePromptIDs = []
+        promptAfterSwitch = nil
+        unlinkedNotice = nil
+        queuedUnlinkedAccountIDs = []
+        remindedUnlinkedAccountIDs = []
+        setupFinishedAccountIdHex = nil
+        newDeviceOfferDismissed = false
     }
 
     /// After an await: the store still mirrors `scope`, and the app is still on
