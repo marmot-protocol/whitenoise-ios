@@ -219,6 +219,7 @@ struct SharedMediaLibraryView: View {
     @State private var category = SharedMediaLibraryPresentation.Category.media
     @State private var gallery: MessageMediaGallery?
     @State private var loadingFileID: String?
+    @State private var fileShareControl: MediaFileTransferControlFfi?
     @State private var fileShare: AttachmentShareFile?
     @State private var fileOpenError: String?
     @State private var linkToOpen: SharedMediaLibraryPresentation.LinkItem?
@@ -309,6 +310,14 @@ struct SharedMediaLibraryView: View {
         .sheet(item: $fileShare) { share in
             ActivityShareSheet(items: [share.url], onComplete: share.finish)
                 .onDisappear(perform: share.finish)
+        }
+        .onChange(of: DocumentRuntimeScope(appState)) { _, _ in
+            cancelPendingFileShare()
+            fileShare?.finish()
+            fileShare = nil
+        }
+        .onDisappear {
+            cancelPendingFileShare()
         }
         .confirmationDialog(
             "Open this link?",
@@ -685,16 +694,38 @@ struct SharedMediaLibraryView: View {
     @MainActor
     private func openFile(_ item: GroupSharedMediaItem) async {
         guard loadingFileID == nil else { return }
+        fileShareControl?.cancel()
+        let control = MediaFileTransferControlFfi()
+        fileShareControl = control
         loadingFileID = item.id
-        defer { loadingFileID = nil }
+        defer {
+            if fileShareControl === control {
+                fileShareControl = nil
+                loadingFileID = nil
+            }
+        }
         do {
-            fileShare = try await mediaLoader.shareFile(for: item.attachment, control: MediaFileTransferControlFfi())
+            let share = try await mediaLoader.shareFile(for: item.attachment, control: control)
+            guard !control.isCancelled(), fileShareControl === control else {
+                share.finish()
+                return
+            }
+            fileShare = share
         } catch is CancellationError {
             return
         } catch AttachmentHandoffFailure.storageFull {
             return
         } catch {
-            fileOpenError = UserFacingError.message(for: error)
+            if !control.isCancelled() {
+                fileOpenError = UserFacingError.message(for: error)
+            }
         }
+    }
+
+    @MainActor
+    private func cancelPendingFileShare() {
+        fileShareControl?.cancel()
+        fileShareControl = nil
+        loadingFileID = nil
     }
 }

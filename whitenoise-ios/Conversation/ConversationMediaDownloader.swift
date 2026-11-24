@@ -119,10 +119,29 @@ final class ConversationMediaDownloader {
         _ reference: MediaAttachmentReferenceFfi
     ) async throws -> MediaDownloadResultFfi
 
+    typealias FetchAttachment = @MainActor (
+        _ client: MarmotClient,
+        _ accountRef: String,
+        _ groupIdHex: String,
+        _ target: AttachmentLocalTargetFfi,
+        _ demand: AttachmentDemand
+    ) async throws -> Void
+
+    typealias OpenAttachmentHandoff = @Sendable (
+        _ marmot: Marmot,
+        _ accountRef: String,
+        _ groupIdHex: String,
+        _ target: AttachmentLocalTargetFfi,
+        _ control: MediaFileTransferControlFfi
+    ) async throws -> AttachmentHandoffFfi?
+
     private let inFlight = MediaDownloadInFlightStore<Data>()
+    private let inFlightFetches = MediaDownloadInFlightStore<Void>()
     private let attachmentSizes = MediaDownloadInFlightStore<Int?>()
     private let cache: ConversationMediaCacheAccessing
     private let downloadMedia: DownloadMedia
+    private let fetchAttachment: FetchAttachment
+    private let openAttachmentHandoff: OpenAttachmentHandoff
     private let locatorResolver: HostResolutionGuard.Resolver
 
     init(
@@ -134,11 +153,29 @@ final class ConversationMediaDownloader {
                 groupIdHex: groupIdHex,
                 reference: reference
             )
+        },
+        fetchAttachment: @escaping FetchAttachment = { client, accountRef, groupIdHex, target, demand in
+            try await client.fetchAttachment(
+                accountRef: accountRef,
+                groupID: groupIdHex,
+                target: target,
+                demand: demand
+            )
+        },
+        openAttachmentHandoff: @escaping OpenAttachmentHandoff = { marmot, accountRef, groupIdHex, target, control in
+            try await marmot.openAttachmentHandoff(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                target: target,
+                control: control
+            )
         }
     ) {
         self.cache = cache ?? DefaultConversationMediaCache()
         self.locatorResolver = locatorResolver
         self.downloadMedia = downloadMedia
+        self.fetchAttachment = fetchAttachment
+        self.openAttachmentHandoff = openAttachmentHandoff
     }
 
     private var isStopped = false
@@ -148,8 +185,10 @@ final class ConversationMediaDownloader {
         isStopped = true
         handoffControls.values.forEach { $0.cancel() }
         async let sizes: Void = attachmentSizes.cancelAndDrain()
+        async let fetches: Void = inFlightFetches.cancelAndDrain()
         await inFlight.cancelAndDrain()
         await sizes
+        await fetches
     }
 
     func resume() { isStopped = false }
@@ -346,7 +385,9 @@ final class ConversationMediaDownloader {
         let hostHasBytes = media.localData != nil
         guard let appState, let account = appState.activeAccountRef else { throw MediaDataError.missingAccount }
         let client = try appState.currentMarmotClient()
+        let generation = appState.runtimeGeneration
         let marmot = client.marmot
+        let openNativeHandoff = openAttachmentHandoff
         let releaser = LiveRuntimeHandoffReleaser { @MainActor [weak appState] in
             guard let live = appState?.client?.marmot, !live.storageIsClosed() else { return nil }
             return live
@@ -372,24 +413,59 @@ final class ConversationMediaDownloader {
                 handoff: {
                     try await AttachmentHandoffOpening.shielded(cancel: { control.cancel() }) {
                         () async throws -> AttachmentHandoffLease? in
-                        guard let handoff = try await marmot.openAttachmentHandoff(accountRef: account,
-                            groupIdHex: groupIdHex, target: target, control: control) else { return nil }
+                        guard let handoff = try await openNativeHandoff(
+                            marmot, account, groupIdHex, target, control
+                        ) else { return nil }
                         let lease = AttachmentHandoffLease(handoff, target: target, releaser: releaser)
                         try lease.protect()
                         return lease
                     }
                 },
                 hostHasBytes: hostHasBytes,
-                acquire: { _ = try await self.data(for: media, groupIdHex: groupIdHex, appState: appState) }
+                acquire: {
+                    guard !self.isStopped, !control.isCancelled() else { throw CancellationError() }
+                    guard let reference = media.reference else { throw MediaDataError.missingReference }
+                    guard EncryptedMediaLocatorValidation.isStaticallySafe(reference.locators) else {
+                        throw MediaDataError.unsafeLocator
+                    }
+                    let key = MediaDownloadInFlightKey(
+                        reference: reference,
+                        target: target,
+                        demand: media.demand,
+                        sourceHint: media.sourceHint,
+                        scope: "\(account)/\(generation)/\(groupIdHex)"
+                    )
+                    try await self.inFlightFetches.value(for: key) {
+                        try Task.checkCancellation()
+                        guard !self.isStopped,
+                              appState.activeAccountRef == account,
+                              appState.client === client,
+                              appState.runtimeGeneration == generation else {
+                            throw CancellationError()
+                        }
+                        try await self.fetchAttachment(client, account, groupIdHex, target, media.demand)
+                    }
+                    guard !Task.isCancelled, !self.isStopped, !control.isCancelled(),
+                          appState.activeAccountRef == account,
+                          appState.client === client,
+                          appState.runtimeGeneration == generation else {
+                        throw CancellationError()
+                    }
+                }
             ) else { return nil }
-            guard !Task.isCancelled, !isStopped, appState.activeAccountRef == account, appState.client === client else {
+            guard !Task.isCancelled, !isStopped, !control.isCancelled(),
+                  appState.activeAccountRef == account,
+                  appState.client === client,
+                  appState.runtimeGeneration == generation else {
                 lease.release()
                 throw CancellationError()
             }
             return lease
         } catch {
             let failure = AttachmentHandoffOpening.failure(for: error, controlCancelled: control.isCancelled())
-            if failure as? AttachmentHandoffFailure == .storageFull {
+            if failure as? AttachmentHandoffFailure == .storageFull
+                || (failure as? AttachmentReadError == .storageBlocked && media.demand.isUserInitiated)
+            {
                 appState.present(.warning(
                     L10n.string("Not enough storage"),
                     message: L10n.string("Free up space on this device, then tap the attachment to try again.")

@@ -7,6 +7,17 @@ import Testing
 /// to follow everything the bubble draws and nothing else.
 @MainActor
 @Suite struct MessageBubbleEqualityTests {
+    private static func physicalFootprint() -> UInt64? {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? info.phys_footprint : nil
+    }
+
     private func attachment(target: AttachmentLocalTargetFfi? = nil) -> MessageMediaAttachment {
         MessageMediaAttachment(
             id: "row:0",
@@ -57,5 +68,107 @@ import Testing
         ])
         #expect(unresolved != resolved)
         #expect(unresolved == MessageBubble(record: record, status: .sent, mediaItems: [attachment()]))
+    }
+
+    @Test func largeAttachmentEqualityAndHashingUseContentTokenWithoutScanningMappedBytes() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TokenEqualityTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let size = 64 * 1024 * 1024
+        let source = directory.appendingPathComponent("large.mov")
+        FileManager.default.createFile(atPath: source.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: source)
+        let chunk = Data(repeating: 0x2a, count: 1024 * 1024)
+        for _ in 0..<(size / chunk.count) { try handle.write(contentsOf: chunk) }
+        try handle.close()
+
+        let clones = directory.appendingPathComponent("clones", isDirectory: true)
+        let firstMapped = try PickedMediaFile.mappedData(from: source, in: clones)
+        let secondMapped = try PickedMediaFile.mappedData(from: source, in: clones)
+
+        let before = try #require(Self.physicalFootprint())
+        let draftID = UUID()
+        let firstDraft = MediaDraftAttachment(
+            id: draftID,
+            fileName: "large.mov",
+            mediaType: "video/quicktime",
+            data: firstMapped,
+            dim: "1920x1080"
+        )
+        let distinctDraft = MediaDraftAttachment(
+            id: draftID,
+            fileName: "large.mov",
+            mediaType: "video/quicktime",
+            data: secondMapped,
+            dim: "1920x1080"
+        )
+
+        // Identical drafts and derived display/overlay items compare equal in O(1);
+        // separately constructed large payloads of identical size remain unequal.
+        #expect(firstDraft == firstDraft)
+        #expect(Set([firstDraft, firstDraft]).count == 1)
+        #expect(firstDraft != distinctDraft)
+
+        let firstDisplay = firstDraft.displayItem
+        let secondDisplay = firstDraft.displayItem
+        let distinctDisplay = distinctDraft.displayItem
+        #expect(firstDisplay == secondDisplay)
+        #expect(Set([firstDisplay, secondDisplay]).count == 1)
+        #expect(firstDisplay != distinctDisplay)
+        #expect(firstDisplay.isSameDocumentSource(as: secondDisplay))
+        #expect(!firstDisplay.isSameDocumentSource(as: distinctDisplay))
+
+        // OwnSendMediaStore.overlay preserves the content token across timeline rebuilds.
+        let reference = encryptedMediaReference(fileName: "large.mov", mediaType: "video/quicktime", sourceEpoch: 1)
+        var store = OwnSendMediaStore()
+        store.retain(firstDisplay, plaintextSha256: reference.plaintextSha256)
+        var remote = MessageMediaAttachment(
+            id: "row:0",
+            reference: reference,
+            fileName: "large.mov",
+            mediaType: "video/quicktime",
+            dim: nil,
+            localData: nil,
+            localTarget: AttachmentLocalTargetFfi(
+                messageIdHex: hex("01"),
+                sourceMessageIdHex: hex("01"),
+                attachmentIndex: 0
+            )
+        )
+        let overlaidA = store.overlay(remote)
+        let overlaidB = store.overlay(remote)
+        #expect(overlaidA == overlaidB)
+        #expect(overlaidA.localDataToken == firstDisplay.localDataToken)
+        #expect(overlaidA.forTranscriptPage.localDataToken == nil)
+        #expect(overlaidA.forTranscriptPage != overlaidA)
+
+        let record = message(id: hex("01"))
+        let bubbleA = MessageBubble(record: record, status: .sent, mediaItems: [overlaidA])
+        let bubbleB = MessageBubble(record: record, status: .sent, mediaItems: [overlaidB])
+        #expect(bubbleA == bubbleB)
+
+        remote.localTarget = nil
+        let bubbleDifferent = MessageBubble(record: record, status: .sent, mediaItems: [distinctDisplay])
+        #expect(MessageBubble(record: record, status: .sent, mediaItems: [firstDisplay]) != bubbleDifferent)
+
+        let after = try #require(Self.physicalFootprint())
+        #expect(Int64(after) - Int64(before) < Int64(size / 2))
+    }
+
+    @Test func smallAttachmentEqualityMatchesByContentDigestAndDistinguishesPayloads() {
+        let sameID = UUID()
+        let first = MediaDraftAttachment(id: sameID, fileName: "note.txt", mediaType: "text/plain", data: Data("same".utf8), dim: nil)
+        let reconstructed = MediaDraftAttachment(id: sameID, fileName: "note.txt", mediaType: "text/plain", data: Data("same".utf8), dim: nil)
+        let modified = MediaDraftAttachment(id: sameID, fileName: "note.txt", mediaType: "text/plain", data: Data("diff".utf8), dim: nil)
+
+        #expect(first == reconstructed)
+        #expect(first.dataToken == reconstructed.dataToken)
+        #expect(first != modified)
+        #expect(first.displayItem == reconstructed.displayItem)
+        #expect(first.displayItem != modified.displayItem)
+        #expect(first.displayItem.isSameDocumentSource(as: reconstructed.displayItem))
+        #expect(!first.displayItem.isSameDocumentSource(as: modified.displayItem))
     }
 }

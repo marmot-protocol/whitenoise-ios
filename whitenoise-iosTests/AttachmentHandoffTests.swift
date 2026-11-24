@@ -430,4 +430,243 @@ struct AttachmentHandoffTests {
         gate.continuation.finish()
         #expect(try await caller.value == "lease")
     }
+
+    // MARK: Zero-RAM handoff acquisition & file-backed playback/export
+
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func openHandoffAcquiresThroughFetchWithoutReadingOrDownloadingBytes() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("handoff-acquire-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let leasedFile = directory.appendingPathComponent("clip.mp4")
+        try Data("video-bytes".utf8).write(to: leasedFile)
+
+        final class SpyCache: ConversationMediaCacheAccessing {
+            var producerGeneration = 1
+            var cachedReads = 0
+            var stores = 0
+            func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data? {
+                cachedReads += 1
+                return nil
+            }
+            func store(_ data: Data, for reference: MediaAttachmentReferenceFfi, producerGeneration: Int?) async {
+                stores += 1
+            }
+        }
+
+        let cache = SpyCache()
+        let retained = Mutex(false)
+        let handoffAttempts = Mutex(0)
+        var fetchedDemands: [AttachmentDemand] = []
+        var legacyDownloads = 0
+        let leaseToken = lease
+        let downloader = ConversationMediaDownloader(
+            cache: cache,
+            downloadMedia: { _, _, _, _ in
+                legacyDownloads += 1
+                throw AttachmentReadError.unavailable
+            },
+            fetchAttachment: { _, _, _, _, demand in
+                fetchedDemands.append(demand)
+                retained.withLock { $0 = true }
+            },
+            openAttachmentHandoff: { _, _, _, _, _ in
+                handoffAttempts.withLock { $0 += 1 }
+                guard retained.withLock({ $0 }) else { return nil }
+                return AttachmentHandoffFfi(
+                    lease: leaseToken,
+                    path: leasedFile.path,
+                    byteCount: 11,
+                    mediaType: "video/mp4",
+                    fileName: "clip.mp4"
+                )
+            }
+        )
+
+        let reference = encryptedMediaReference(fileName: "clip.mp4", mediaType: "video/mp4", sourceEpoch: 1)
+        var media = MessageMediaAttachment(
+            id: "row:0",
+            reference: reference,
+            fileName: "clip.mp4",
+            mediaType: "video/mp4",
+            dim: nil,
+            localData: nil,
+            localTarget: Self.target
+        )
+        media.demand = .explicit
+
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-a"
+
+            let opened = try await downloader.openHandoff(
+                for: media,
+                groupIdHex: String(repeating: "ab", count: 32),
+                appState: appState,
+                control: MediaFileTransferControlFfi()
+            )
+            let result = try #require(opened)
+            #expect(result.url == leasedFile)
+            #expect(handoffAttempts.withLock { $0 } == 2)
+            #expect(fetchedDemands == [.explicit])
+            #expect(legacyDownloads == 0)
+            #expect(cache.cachedReads == 0 && cache.stores == 0)
+            result.release()
+        }
+    }
+
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func openHandoffRejectsUnsafeLocatorBeforeFetching() async throws {
+        var fetchCalls = 0
+        let downloader = ConversationMediaDownloader(
+            fetchAttachment: { _, _, _, _, _ in fetchCalls += 1 },
+            openAttachmentHandoff: { _, _, _, _, _ in nil }
+        )
+        let unsafeRef = MediaAttachmentReferenceFfi(
+            locators: [MediaLocatorFfi(kind: "blossom-v1", value: "http://media.example/video.mp4")],
+            ciphertextSha256: String(repeating: "a", count: 64),
+            plaintextSha256: String(repeating: "b", count: 64),
+            nonceHex: String(repeating: "c", count: 24),
+            fileName: "video.mp4",
+            mediaType: "video/mp4",
+            version: .v1,
+            sourceEpoch: 1,
+            dim: nil,
+            thumbhash: nil
+        )
+        var media = MessageMediaAttachment(
+            id: "row:0",
+            reference: unsafeRef,
+            fileName: "video.mp4",
+            mediaType: "video/mp4",
+            dim: nil,
+            localData: nil,
+            localTarget: Self.target
+        )
+        media.demand = .explicit
+
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-a"
+
+            await #expect(throws: ConversationMediaDownloader.MediaDataError.unsafeLocator) {
+                _ = try await downloader.openHandoff(
+                    for: media,
+                    groupIdHex: String(repeating: "ab", count: 32),
+                    appState: appState,
+                    control: MediaFileTransferControlFfi()
+                )
+            }
+            #expect(fetchCalls == 0)
+        }
+    }
+
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func openHandoffPresentsStorageWarningOnlyForUserInitiatedStorageBlocked() async throws {
+        let downloader = ConversationMediaDownloader(
+            fetchAttachment: { _, _, _, _, _ in throw AttachmentReadError.storageBlocked },
+            openAttachmentHandoff: { _, _, _, _, _ in nil }
+        )
+        let reference = encryptedMediaReference(fileName: "clip.mp4", mediaType: "video/mp4", sourceEpoch: 1)
+        let base = MessageMediaAttachment(
+            id: "row:0",
+            reference: reference,
+            fileName: "clip.mp4",
+            mediaType: "video/mp4",
+            dim: nil,
+            localData: nil,
+            localTarget: Self.target
+        )
+
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.activeAccountRef = "account-a"
+
+            var automatic = base
+            automatic.demand = .automatic
+            await #expect(throws: AttachmentReadError.storageBlocked) {
+                _ = try await downloader.openHandoff(
+                    for: automatic,
+                    groupIdHex: String(repeating: "ab", count: 32),
+                    appState: appState,
+                    control: MediaFileTransferControlFfi()
+                )
+            }
+            #expect(appState.activeToast == nil)
+
+            var explicit = base
+            explicit.demand = .explicit
+            await #expect(throws: AttachmentReadError.storageBlocked) {
+                _ = try await downloader.openHandoff(
+                    for: explicit,
+                    groupIdHex: String(repeating: "ab", count: 32),
+                    appState: appState,
+                    control: MediaFileTransferControlFfi()
+                )
+            }
+            #expect(appState.activeToast?.style == .warning)
+        }
+    }
+
+    @Test func playbackFilePrefersHandoffLeaseAndSymlinksExtensionlessFiles() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("playback-handoff-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let namedFile = directory.appendingPathComponent("clip.mp4")
+        let extensionlessFile = directory.appendingPathComponent("clip")
+        try Data("mp4".utf8).write(to: namedFile)
+        try Data("mp4".utf8).write(to: extensionlessFile)
+
+        let releaser = FakeReleaser()
+        var loadCalls = 0
+        var pathToLease = namedFile.path
+        let loader = ConversationMediaLoader { _ in
+            loadCalls += 1
+            return Data()
+        } openHandoff: { _, _ in
+            AttachmentHandoffLease(lease: self.lease, path: pathToLease, target: Self.target, releaser: releaser)
+        }
+        let video = MessageMediaAttachment(
+            id: "video:0",
+            reference: encryptedMediaReference(fileName: "clip.mp4", mediaType: "video/mp4", sourceEpoch: 1),
+            fileName: "clip.mp4",
+            mediaType: "video/mp4",
+            dim: nil,
+            localData: nil,
+            localTarget: Self.target
+        )
+
+        let direct = try await loader.playbackFile(for: video, demand: .explicit, control: MediaFileTransferControlFfi())
+        #expect(direct.url == namedFile)
+        #expect(loadCalls == 0)
+        direct.finish()
+
+        pathToLease = extensionlessFile.path
+        let aliased = try await loader.playbackFile(for: video, demand: .explicit, control: MediaFileTransferControlFfi())
+        #expect(aliased.url != extensionlessFile)
+        #expect(aliased.url.pathExtension == "mp4")
+        #expect(try Data(contentsOf: aliased.url) == Data("mp4".utf8))
+        #expect(loadCalls == 0)
+        let aliasPath = aliased.url.path
+        aliased.finish()
+        #expect(!FileManager.default.fileExists(atPath: aliasPath))
+        #expect(await waitForReleases(releaser, count: 2).count == 2)
+    }
+
+    @Test func exportDocumentUsesFileBackedFileWrapperForFileURLs() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("export-doc-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("movie.mp4")
+        let payload = Data("file-backed-video".utf8)
+        try payload.write(to: fileURL)
+
+        let wrapper = try DecryptedMediaExportDocument.fileWrapper(for: .fileURL(fileURL))
+        #expect(wrapper.isRegularFile)
+        #expect(wrapper.preferredFilename == "movie.mp4")
+        #expect(wrapper.regularFileContents == payload)
+    }
 }

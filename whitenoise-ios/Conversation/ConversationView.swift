@@ -5102,7 +5102,7 @@ struct ConversationView: View {
                 else { return false }
                 if requiringOwnBytes, record.direction != "sent" || media.localData == nil { return false }
                 return viewModel.mediaItems(for: row).contains {
-                    $0.isSameDocumentSource(as: media, leasedTarget: leasedTarget) && (!requiringOwnBytes || $0.localData == media.localData)
+                    $0.isSameDocumentSource(as: media, leasedTarget: leasedTarget) && (!requiringOwnBytes || $0.localDataToken == media.localDataToken)
                 }
             }
             // A confirmed own send can still have only the sender’s local copy.

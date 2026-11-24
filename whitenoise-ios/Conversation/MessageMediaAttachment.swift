@@ -268,6 +268,33 @@ nonisolated enum MediaAttachmentPolicy {
     }
 }
 
+/// O(1) immutable identity for in-memory or file-backed attachment bytes so
+/// SwiftUI diffs and hash tables never run byte-for-byte `memcmp` or hashing
+/// over multi-hundred-MiB payloads on the MainActor.
+nonisolated struct MediaDataContentToken: Hashable, Sendable {
+    /// Payloads at or below this threshold get a deterministic SHA-256 digest
+    /// at construction time so independent reconstructions of small drafts
+    /// remain equal without ever reading large attachments on the MainActor.
+    static let inlineDigestThresholdBytes = 64 * 1024
+
+    private enum Representation: Hashable, Sendable {
+        case digest(Data)
+        case unique(UUID)
+    }
+
+    let byteCount: Int
+    private let representation: Representation
+
+    init(data: Data) {
+        self.byteCount = data.count
+        if data.count <= Self.inlineDigestThresholdBytes {
+            self.representation = .digest(Data(SHA256.hash(data: data)))
+        } else {
+            self.representation = .unique(UUID())
+        }
+    }
+}
+
 nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// Waveform analysis and on-device transcription both need the whole encoded recording.
     static let audioAnalysisByteLimit = 16 * 1024 * 1024
@@ -279,6 +306,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     let mediaType: String
     let dim: String?
     private(set) var localData: Data?
+    private(set) var localDataToken: MediaDataContentToken?
     let thumbnail: UIImage?
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
@@ -300,7 +328,8 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         waveformSamples: [CGFloat] = [],
         rejectionKind: MediaAttachmentRejectionKindFfi? = nil,
         localTarget: AttachmentLocalTargetFfi? = nil,
-        displayIndex: UInt32? = nil
+        displayIndex: UInt32? = nil,
+        localDataToken: MediaDataContentToken? = nil
     ) {
         self.displayIndex = displayIndex
         self.id = id
@@ -309,6 +338,12 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         self.mediaType = mediaType
         self.dim = dim
         self.localData = localData
+        self.localDataToken = localData.map { data in
+            if let localDataToken, localDataToken.byteCount == data.count {
+                return localDataToken
+            }
+            return MediaDataContentToken(data: data)
+        }
         self.thumbnail = thumbnail
         self.durationSeconds = durationSeconds
         self.waveformSamples = waveformSamples
@@ -372,7 +407,10 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// Opening a sourced transcript page must still go through that page's original slot.
     var forTranscriptPage: Self {
         var copy = self
-        if AttachmentHandoffSource(self) != .none { copy.localData = nil }
+        if AttachmentHandoffSource(self) != .none {
+            copy.localData = nil
+            copy.localDataToken = nil
+        }
         return copy
     }
 
@@ -405,7 +443,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         if let leasedTarget {
             return AttachmentHandoffSource(self).matches(leasedTarget) && AttachmentHandoffSource(original).matches(leasedTarget)
         }
-        return localTarget == original.localTarget && sourceHint == original.sourceHint && (reference != nil || localData == original.localData)
+        return localTarget == original.localTarget && sourceHint == original.sourceHint && (reference != nil || localDataToken == original.localDataToken)
     }
 
     var isDocument: Bool {
@@ -485,7 +523,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
             && lhs.fileName == rhs.fileName
             && lhs.mediaType == rhs.mediaType
             && lhs.dim == rhs.dim
-            && lhs.localData == rhs.localData
+            && lhs.localDataToken == rhs.localDataToken
             && lhs.durationSeconds == rhs.durationSeconds
             && lhs.waveformSamples == rhs.waveformSamples
             && lhs.rejectionKind == rhs.rejectionKind
@@ -497,7 +535,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         hasher.combine(fileName)
         hasher.combine(mediaType)
         hasher.combine(dim)
-        hasher.combine(localData)
+        hasher.combine(localDataToken)
         hasher.combine(durationSeconds)
         hasher.combine(waveformSamples)
         hasher.combine(rejectionKind)
@@ -509,6 +547,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
     let fileName: String
     let mediaType: String
     let data: Data
+    let dataToken: MediaDataContentToken
     let dim: String?
     let thumbhash: String?
     let thumbnail: UIImage?
@@ -528,12 +567,14 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
         thumbhash: String? = nil,
         thumbnail: UIImage? = nil,
         durationSeconds: Double? = nil,
-        waveformSamples: [CGFloat] = []
+        waveformSamples: [CGFloat] = [],
+        dataToken: MediaDataContentToken? = nil
     ) {
         self.id = id
         self.fileName = fileName
         self.mediaType = mediaType
         self.data = data
+        self.dataToken = (dataToken?.byteCount == data.count ? dataToken : nil) ?? MediaDataContentToken(data: data)
         self.dim = dim
         self.thumbhash = thumbhash
         self.thumbnail = thumbnail
@@ -565,7 +606,8 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
             localData: data,
             thumbnail: thumbnail,
             durationSeconds: durationSeconds,
-            waveformSamples: waveformSamples
+            waveformSamples: waveformSamples,
+            localDataToken: dataToken
         )
     }
 
@@ -586,7 +628,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
         lhs.id == rhs.id
             && lhs.fileName == rhs.fileName
             && lhs.mediaType == rhs.mediaType
-            && lhs.data == rhs.data
+            && lhs.dataToken == rhs.dataToken
             && lhs.dim == rhs.dim
             && lhs.thumbhash == rhs.thumbhash
             && lhs.durationSeconds == rhs.durationSeconds
@@ -597,7 +639,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
         hasher.combine(id)
         hasher.combine(fileName)
         hasher.combine(mediaType)
-        hasher.combine(data)
+        hasher.combine(dataToken)
         hasher.combine(dim)
         hasher.combine(thumbhash)
         hasher.combine(durationSeconds)
@@ -661,9 +703,10 @@ nonisolated enum PickedMediaFile {
                 try Task.checkCancellation()
                 guard let chunk = try await read(offset) else { throw CocoaError(.fileReadNoSuchFile) }
                 if chunk.isEmpty { break }
+                let chunkCount = UInt64(chunk.count)
+                guard chunkCount <= expectedSize - offset else { throw CocoaError(.fileReadCorruptFile) }
                 try handle.write(contentsOf: chunk)
-                offset += UInt64(chunk.count)
-                guard offset <= expectedSize else { throw CocoaError(.fileReadCorruptFile) }
+                offset += chunkCount
             }
             try handle.close()
         } catch {
@@ -967,6 +1010,7 @@ nonisolated enum MediaDraftProcessor {
         typeIdentifier: String?,
         videoMetadata: MediaVideoMetadata.Metadata?
     ) throws -> MediaDraftAttachment {
+        let quality = MediaQualityStore.quality()
         let decodable = data.count <= maxImageSourceBytes
         if decodable, let gif = animatedGIFAttachment(from: data, fileName: fileName) {
             return gif
@@ -976,23 +1020,25 @@ nonisolated enum MediaDraftProcessor {
            type.conforms(to: .image)
         {
             guard decodable else { throw Failure.attachmentTooLarge(data.count) }
-            guard let image = UIImage(data: data) else {
+            guard let image = decodedBoundedImage(from: data, maxPixelSize: quality.imageMaxEdgePx) else {
                 throw Failure.unsupportedImage
             }
-            return try attachment(from: image, fileName: fileName)
+            return try attachment(from: image, fileName: fileName, quality: quality)
         }
 
-        if typeIdentifier == nil, decodable, let image = UIImage(data: data) {
-            return try attachment(from: image, fileName: fileName)
+        if typeIdentifier == nil, decodable,
+           let image = decodedBoundedImage(from: data, maxPixelSize: quality.imageMaxEdgePx)
+        {
+            return try attachment(from: image, fileName: fileName, quality: quality)
         }
 
         let kind = kind(for: typeIdentifier, fileName: fileName)
         if kind == .image {
             guard decodable else { throw Failure.attachmentTooLarge(data.count) }
-            guard let image = UIImage(data: data) else {
+            guard let image = decodedBoundedImage(from: data, maxPixelSize: quality.imageMaxEdgePx) else {
                 throw Failure.unsupportedImage
             }
-            return try attachment(from: image, fileName: fileName)
+            return try attachment(from: image, fileName: fileName, quality: quality)
         }
         guard kind == .video || kind == .audio || kind == .document,
               let mediaType = MediaAttachmentPolicy.mediaType(
@@ -1055,7 +1101,9 @@ nonisolated enum MediaDraftProcessor {
             fallbackStem: kind == .audio ? "audio-\(Int(Date().timeIntervalSince1970))" : "attachment-\(Int(Date().timeIntervalSince1970))",
             fallbackExtension: MediaAttachmentPolicy.fileExtension(for: mediaType, fileName: fileName)
         )
-        let audioMetadata = kind == .audio ? MediaWaveformAnalyzer.metadata(from: data, mediaType: mediaType) : nil
+        let audioMetadata = kind == .audio && data.count <= MessageMediaAttachment.audioAnalysisByteLimit
+            ? MediaWaveformAnalyzer.metadata(from: data, mediaType: mediaType)
+            : nil
         return MediaDraftAttachment(
             fileName: sanitizedName,
             mediaType: mediaType,
@@ -1067,14 +1115,52 @@ nonisolated enum MediaDraftProcessor {
         )
     }
 
-    static func imageAttachment(from data: Data, fileName: String?) throws -> MediaDraftAttachment {
+    static func imageAttachment(
+        from data: Data,
+        fileName: String?,
+        quality: MediaQuality = MediaQualityStore.quality()
+    ) throws -> MediaDraftAttachment {
+        guard data.count <= maxImageSourceBytes else {
+            throw Failure.attachmentTooLarge(data.count)
+        }
         if let gif = animatedGIFAttachment(from: data, fileName: fileName) {
             return gif
         }
-        guard let image = UIImage(data: data) else {
+        guard let image = decodedBoundedImage(from: data, maxPixelSize: quality.imageMaxEdgePx) else {
             throw Failure.unsupportedImage
         }
-        return try attachment(from: image, fileName: fileName)
+        return try attachment(from: image, fileName: fileName, quality: quality)
+    }
+
+    /// Decodes an image bounded directly to `maxPixelSize` via ImageIO so a
+    /// high-megapixel photo never allocates a full-resolution raster bitmap
+    /// before downscaling and metadata stripping.
+    static func decodedBoundedImage(
+        from data: Data,
+        maxPixelSize: CGFloat,
+        createSource: (Data, CFDictionary) -> CGImageSource? = { CGImageSourceCreateWithData($0 as CFData, $1) },
+        sourceType: (CGImageSource) -> CFString? = { CGImageSourceGetType($0) },
+        createThumbnail: (CGImageSource, CFDictionary) -> CGImage? = { CGImageSourceCreateThumbnailAtIndex($0, 0, $1) }
+    ) -> UIImage? {
+        let sourceOptions: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+        ]
+        guard let source = createSource(data, sourceOptions as CFDictionary) else {
+            return nil
+        }
+        guard RemoteImageDecoder.isAllowedRemoteImageType(sourceType(source)) else {
+            return nil
+        }
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(1, Int(maxPixelSize.rounded(.up))),
+            kCGImageSourceShouldCache: false,
+        ]
+        guard let cgImage = createThumbnail(source, thumbnailOptions as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage, scale: 1, orientation: .up)
     }
 
     private static func animatedGIFAttachment(from data: Data, fileName: String?) -> MediaDraftAttachment? {
@@ -1362,92 +1448,99 @@ nonisolated enum MediaWaveformAnalyzer {
     }
 
     static func metadata(from data: Data, mediaType: String) -> Metadata {
-        TemporaryMediaFile.withURL(data: data, fileExtension: MediaAttachmentPolicy.fileExtension(for: mediaType)) { url in
-            do {
-                let file = try AVAudioFile(forReading: url)
-                let format = file.processingFormat
-                let sampleRate = format.sampleRate
-                let totalFrames = file.length
-                let duration = sampleRate > 0 ? Double(totalFrames) / sampleRate : nil
+        guard data.count <= MessageMediaAttachment.audioAnalysisByteLimit else {
+            return Metadata(durationSeconds: nil, samples: fallback())
+        }
+        return TemporaryMediaFile.withURL(data: data, fileExtension: MediaAttachmentPolicy.fileExtension(for: mediaType)) { url in
+            metadata(fromFileURL: url)
+        }
+    }
 
-                let analyzedFrames = analyzedFrameCount(totalFrames: totalFrames)
-                guard analyzedFrames > 0 else {
-                    return Metadata(durationSeconds: duration, samples: fallback())
-                }
+    static func metadata(fromFileURL url: URL) -> Metadata {
+        do {
+            let file = try AVAudioFile(forReading: url)
+            let format = file.processingFormat
+            let sampleRate = format.sampleRate
+            let totalFrames = file.length
+            let duration = sampleRate > 0 ? Double(totalFrames) / sampleRate : nil
 
-                // Reject implausible channel counts: a peer-supplied container can
-                // declare thousands of channels purely to inflate the PCM buffer.
-                let channelCount = format.channelCount
-                guard channelCount > 0, channelCount <= maxChannelCount else {
-                    return Metadata(durationSeconds: duration, samples: fallback())
-                }
-
-                // Derive the per-read frame capacity from a fixed PCM *byte*
-                // budget so the buffer allocation stays bounded regardless of the
-                // (peer-controlled) channel count. A fixed frame count alone would
-                // still allocate `frames * channelCount * bytesPerSample` bytes.
-                // `mBitsPerChannel` is the per-sample width (32 for the float
-                // processing format); fall back to Float size if it is unset.
-                let bitsPerChannel = Int(format.streamDescription.pointee.mBitsPerChannel)
-                let bytesPerSample = bitsPerChannel > 0
-                    ? (bitsPerChannel + 7) / 8
-                    : MemoryLayout<Float>.size
-                let chunkCapacity = chunkFrameCapacity(
-                    channelCount: channelCount,
-                    bytesPerSample: bytesPerSample
-                )
-
-                // One reusable, byte-budget-bounded buffer — never sized to the file.
-                guard let buffer = AVAudioPCMBuffer(
-                    pcmFormat: format,
-                    frameCapacity: chunkCapacity
-                ) else {
-                    return Metadata(durationSeconds: duration, samples: fallback())
-                }
-
-                var peaks = [Float](repeating: 0, count: sampleCount)
-                var counts = [Int](repeating: 0, count: sampleCount)
-                var framesProcessed: AVAudioFramePosition = 0
-
-                do {
-                    while true {
-                        let toRead = nextChunkFrameCount(
-                            analyzedFrames: analyzedFrames,
-                            framesProcessed: framesProcessed,
-                            chunkCapacity: chunkCapacity
-                        )
-                        guard toRead > 0 else { break }
-                        buffer.frameLength = 0
-                        try file.read(into: buffer, frameCount: toRead)
-                        let read = Int(buffer.frameLength)
-                        guard read > 0, let channel = buffer.floatChannelData?[0] else { break }
-                        for offset in 0..<read {
-                            let bucket = bucketIndex(
-                                forFrame: framesProcessed + AVAudioFramePosition(offset),
-                                analyzedFrames: analyzedFrames
-                            )
-                            let value = abs(channel[offset])
-                            if value > peaks[bucket] { peaks[bucket] = value }
-                            counts[bucket] += 1
-                        }
-                        framesProcessed += AVAudioFramePosition(read)
-                    }
-                } catch {
-                    return Metadata(durationSeconds: duration, samples: fallback())
-                }
-
-                guard framesProcessed > 0 else {
-                    return Metadata(durationSeconds: duration, samples: fallback())
-                }
-
-                let samples = (0..<sampleCount).map { index -> CGFloat in
-                    guard counts[index] > 0 else { return 0.08 }
-                    return CGFloat(min(1, max(0.05, sqrt(peaks[index]))))
-                }
-                return Metadata(durationSeconds: duration, samples: normalized(samples))
-            } catch {
-                return Metadata(durationSeconds: nil, samples: fallback())
+            let analyzedFrames = analyzedFrameCount(totalFrames: totalFrames)
+            guard analyzedFrames > 0 else {
+                return Metadata(durationSeconds: duration, samples: fallback())
             }
+
+            // Reject implausible channel counts: a peer-supplied container can
+            // declare thousands of channels purely to inflate the PCM buffer.
+            let channelCount = format.channelCount
+            guard channelCount > 0, channelCount <= maxChannelCount else {
+                return Metadata(durationSeconds: duration, samples: fallback())
+            }
+
+            // Derive the per-read frame capacity from a fixed PCM *byte*
+            // budget so the buffer allocation stays bounded regardless of the
+            // (peer-controlled) channel count. A fixed frame count alone would
+            // still allocate `frames * channelCount * bytesPerSample` bytes.
+            // `mBitsPerChannel` is the per-sample width (32 for the float
+            // processing format); fall back to Float size if it is unset.
+            let bitsPerChannel = Int(format.streamDescription.pointee.mBitsPerChannel)
+            let bytesPerSample = bitsPerChannel > 0
+                ? (bitsPerChannel + 7) / 8
+                : MemoryLayout<Float>.size
+            let chunkCapacity = chunkFrameCapacity(
+                channelCount: channelCount,
+                bytesPerSample: bytesPerSample
+            )
+
+            // One reusable, byte-budget-bounded buffer — never sized to the file.
+            guard let buffer = AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: chunkCapacity
+            ) else {
+                return Metadata(durationSeconds: duration, samples: fallback())
+            }
+
+            var peaks = [Float](repeating: 0, count: sampleCount)
+            var counts = [Int](repeating: 0, count: sampleCount)
+            var framesProcessed: AVAudioFramePosition = 0
+
+            do {
+                while true {
+                    let toRead = nextChunkFrameCount(
+                        analyzedFrames: analyzedFrames,
+                        framesProcessed: framesProcessed,
+                        chunkCapacity: chunkCapacity
+                    )
+                    guard toRead > 0 else { break }
+                    buffer.frameLength = 0
+                    try file.read(into: buffer, frameCount: toRead)
+                    let read = Int(buffer.frameLength)
+                    guard read > 0, let channel = buffer.floatChannelData?[0] else { break }
+                    for offset in 0..<read {
+                        let bucket = bucketIndex(
+                            forFrame: framesProcessed + AVAudioFramePosition(offset),
+                            analyzedFrames: analyzedFrames
+                        )
+                        let value = abs(channel[offset])
+                        if value > peaks[bucket] { peaks[bucket] = value }
+                        counts[bucket] += 1
+                    }
+                    framesProcessed += AVAudioFramePosition(read)
+                }
+            } catch {
+                return Metadata(durationSeconds: duration, samples: fallback())
+            }
+
+            guard framesProcessed > 0 else {
+                return Metadata(durationSeconds: duration, samples: fallback())
+            }
+
+            let samples = (0..<sampleCount).map { index -> CGFloat in
+                guard counts[index] > 0 else { return 0.08 }
+                return CGFloat(min(1, max(0.05, sqrt(peaks[index]))))
+            }
+            return Metadata(durationSeconds: duration, samples: normalized(samples))
+        } catch {
+            return Metadata(durationSeconds: nil, samples: fallback())
         }
     }
 }
@@ -1804,7 +1897,7 @@ nonisolated enum MessageMediaCache {
             DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, now: now)
             return nil
         }
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
         DecryptedMediaCacheEvictor.touch(url, at: now)
         DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, preserving: url, now: now)
         return data

@@ -69,6 +69,23 @@ struct ForwardMessageSheet: View {
         }
     }
 
+    init(
+        media: MessageMediaAttachment,
+        fileURL: URL,
+        fallbackData: (@MainActor () async throws -> Data)? = nil,
+        verifySource: ((MessageMediaAttachment) async throws -> Bool)? = nil,
+        viewModel: ConversationViewModel,
+        destinationProvider: @escaping () async throws -> [MessageForwardDestination]
+    ) {
+        self.destinationProvider = destinationProvider
+        if let verifySource {
+            self.sourceIsAvailable = { try await verifySource(media) }
+        }
+        self.submit = { groupIds in
+            await viewModel.forwardMedia(media, fileURL: fileURL, fallbackData: fallbackData, to: groupIds)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             content

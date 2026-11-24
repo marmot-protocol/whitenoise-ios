@@ -152,13 +152,33 @@ extension MarmotClient {
 }
 
 nonisolated enum RetainedAttachmentReader {
+    static let chunkSizeBytes: UInt32 = 1024 * 1024
+    static let mappedReadThresholdBytes: UInt64 = 4 * 1024 * 1024
+
     static func read(byteCount: UInt64,
+                     mappedThreshold: UInt64 = mappedReadThresholdBytes,
+                     mappedDirectory: URL = PickedMediaFile.defaultDirectory,
                      chunk: (UInt64, UInt32) async throws -> AttachmentLocalBytesFfi) async throws -> Data {
         guard byteCount <= 512 * 1024 * 1024 else { throw AttachmentReadError.tooLarge }
+        if byteCount > mappedThreshold {
+            do {
+                return try await PickedMediaFile.mappedData(
+                    expectedSize: byteCount,
+                    in: mappedDirectory
+                ) { offset in
+                    let next = try await chunk(offset, chunkSizeBytes)
+                    guard next.available else { throw AttachmentReadError.stale }
+                    return next.bytes
+                }
+            } catch let error as CocoaError where error.code == .fileReadCorruptFile || error.code == .fileReadNoSuchFile {
+                throw AttachmentReadError.stale
+            }
+        }
         var data = Data()
+        data.reserveCapacity(Int(byteCount))
         while true {
             try Task.checkCancellation()
-            let next = try await chunk(UInt64(data.count), 1024 * 1024)
+            let next = try await chunk(UInt64(data.count), chunkSizeBytes)
             guard next.available else { throw AttachmentReadError.stale }
             if next.bytes.isEmpty {
                 guard UInt64(data.count) == byteCount else { throw AttachmentReadError.stale }

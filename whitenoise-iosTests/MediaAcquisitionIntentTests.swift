@@ -2,6 +2,7 @@ import Foundation
 import MarmotKit
 import Synchronization
 import Testing
+import UIKit
 @testable import whitenoise_ios
 
 @MainActor
@@ -279,6 +280,78 @@ struct MediaAcquisitionIntentTests {
                 AttachmentLocalBytesFfi(available: true, bytes: Data())
             }
         }
+    }
+
+    @Test func retainedReadsAboveThresholdStreamIntoUnlinkedMappedFile() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RetainedMappedReads-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let payload = Data((0..<(5 * 1024 * 1024 + 17)).map { UInt8($0 & 0xff) })
+        let offsets = Mutex<[UInt64]>([])
+        let read = try await RetainedAttachmentReader.read(
+            byteCount: UInt64(payload.count),
+            mappedDirectory: directory
+        ) { offset, limit in
+            offsets.withLock { $0.append(offset) }
+            let start = Int(offset)
+            let end = min(payload.count, start + Int(limit))
+            return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+        }
+        #expect(read == payload)
+        #expect(offsets.withLock { $0.first } == 0)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+
+        // Revocation, premature EOF, and oversize chunks all map to `.stale` and leave no file behind.
+        await #expect(throws: AttachmentReadError.stale) {
+            _ = try await RetainedAttachmentReader.read(byteCount: 128, mappedThreshold: 32, mappedDirectory: directory) { offset, _ in
+                AttachmentLocalBytesFfi(available: offset == 0, bytes: offset == 0 ? Data(count: 64) : Data())
+            }
+        }
+        await #expect(throws: AttachmentReadError.stale) {
+            _ = try await RetainedAttachmentReader.read(byteCount: 128, mappedThreshold: 32, mappedDirectory: directory) { offset, _ in
+                AttachmentLocalBytesFfi(available: true, bytes: offset == 0 ? Data(count: 64) : Data())
+            }
+        }
+        await #expect(throws: AttachmentReadError.stale) {
+            _ = try await RetainedAttachmentReader.read(byteCount: 64, mappedThreshold: 32, mappedDirectory: directory) { _, _ in
+                AttachmentLocalBytesFfi(available: true, bytes: Data(count: 80))
+            }
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
+
+    @Test func sharedMediaThumbnailVideoLoadsApplyVideoPreviewByteLimit() async throws {
+        var recorded: [(mediaType: String, demand: AttachmentDemand, limit: Int?)] = []
+        let loader = ConversationMediaLoader { item in
+            recorded.append((item.mediaType, item.demand, item.previewByteLimit))
+            return Data([1, 2, 3])
+        }
+        let video = attachment("video/mp4")
+        let image = attachment("image/jpeg")
+
+        _ = try await GroupSharedMediaThumbnailLoader.loadData(for: video, demand: .automatic, using: loader)
+        _ = try await GroupSharedMediaThumbnailLoader.loadData(for: video, demand: .explicit, using: loader)
+        _ = try await GroupSharedMediaThumbnailLoader.loadData(for: image, demand: .explicit, using: loader)
+
+        #expect(recorded.count == 3)
+        #expect(recorded[0].demand == .automatic && recorded[0].limit == 32 * 1024 * 1024)
+        #expect(recorded[1].demand == .explicit && recorded[1].limit == 32 * 1024 * 1024)
+        #expect(recorded[2].demand == .explicit && recorded[2].limit == nil)
+
+        #expect(GroupSharedMediaThumbnailLoader.canOpenGallery(hasThumbnail: false, isVideo: true, overPreviewLimit: true))
+        #expect(!GroupSharedMediaThumbnailLoader.canOpenGallery(hasThumbnail: false, isVideo: false, overPreviewLimit: true))
+        #expect(GroupSharedMediaThumbnailLoader.canOpenGallery(hasThumbnail: true, isVideo: false, overPreviewLimit: false))
+
+        // Image source bytes resolve through NSCache so eviction is never defeated by view state.
+        let imageBytes = Data([0xaa, 0xbb, 0xcc])
+        let thumbImage = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }
+        let cacheKey = MessageMediaThumbnailPresentation.cacheKey(for: image)
+        MessageMediaThumbnailDecoder.store(thumbImage, sourceData: imageBytes, for: cacheKey, maxPixelSize: 120)
+        #expect(GroupSharedMediaThumbnailLoader.cachedImageData(for: image, maxPixelSize: 120) == imageBytes)
+        #expect(GroupSharedMediaThumbnailLoader.cachedImageData(for: video, maxPixelSize: 120) == nil)
+        MessageMediaThumbnailDecoder.clear()
+        #expect(GroupSharedMediaThumbnailLoader.cachedImageData(for: image, maxPixelSize: 120) == nil)
     }
 }
 

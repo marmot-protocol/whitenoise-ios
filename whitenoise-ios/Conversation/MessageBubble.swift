@@ -95,11 +95,73 @@ final class ConversationMediaLoader {
         return try await load(requested)
     }
 
-    func videoPreviewData(for media: MessageMediaAttachment) async throws -> Data {
+    func videoPreviewData(for media: MessageMediaAttachment, demand: AttachmentDemand = .automatic) async throws -> Data {
         var preview = media
         // Larger movies can supply their poster from the file opened for playback.
         preview.previewByteLimit = 32 * 1024 * 1024
-        return try await data(for: preview, demand: .automatic)
+        return try await data(for: preview, demand: demand)
+    }
+
+    /// A file for video or audio playback. Prefers MDK's handoff lease when a
+    /// retained slot is available so playback never buffers up to 512 MiB in RAM.
+    func playbackFile(
+        for media: MessageMediaAttachment,
+        demand: AttachmentDemand = .explicit,
+        initialData: Data? = nil,
+        control: MediaFileTransferControlFfi
+    ) async throws -> AttachmentShareFile {
+        var requested = media
+        requested.demand = demand
+        if let initialData, demand != .retry, AttachmentHandoffSource(media) == .none {
+            let producerEpoch = MessageMediaCache.currentProducerEpoch()
+            guard let url = await MediaPlaybackFileStore.fileURL(for: media, data: initialData, producerEpoch: producerEpoch) else {
+                throw AttachmentReadError.unavailable
+            }
+            return AttachmentShareFile(hostURL: url)
+        }
+        if let openHandoff, let lease = try await openHandoff(requested, control) {
+            if Self.hasPlayableExtension(for: media, at: lease.url) {
+                return AttachmentShareFile(lease: lease)
+            }
+            if let alias = Self.makePlaybackSymlink(to: lease.url, for: media) {
+                return AttachmentShareFile(lease: lease, url: alias, cleanupURL: alias)
+            }
+            lease.release()
+        }
+        let producerEpoch = MessageMediaCache.currentProducerEpoch()
+        let data: Data
+        if let initialData, demand != .retry {
+            data = initialData
+        } else {
+            data = try await load(requested)
+        }
+        guard let url = await MediaPlaybackFileStore.fileURL(for: media, data: data, producerEpoch: producerEpoch) else {
+            throw AttachmentReadError.unavailable
+        }
+        return AttachmentShareFile(hostURL: url)
+    }
+
+    nonisolated private static func hasPlayableExtension(for media: MessageMediaAttachment, at url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        guard !ext.isEmpty, let resolvedType = MediaAttachmentPolicy.mediaType(forFileExtension: ext) else {
+            return false
+        }
+        return MediaAttachmentKind.classify(mediaType: resolvedType, fileName: url.lastPathComponent) == media.kind
+    }
+
+    nonisolated private static func makePlaybackSymlink(to targetURL: URL, for media: MessageMediaAttachment) -> URL? {
+        let ext = MediaAttachmentPolicy.fileExtension(for: media.mediaType, fileName: media.fileName)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WhiteNoiseMediaPlaybackLinks", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            MediaUploadSourceFiles.removeStale(in: directory, olderThan: PickedMediaFile.staleAge, now: Date())
+            let alias = directory.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
+            try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: targetURL)
+            return alias
+        } catch {
+            return nil
+        }
     }
 
     /// A file for the share sheet. MDK's handoff lease when it has a source slot for
@@ -3156,11 +3218,15 @@ private struct MessageVideoAttachmentView: View {
     }
 }
 
-private enum MessageVideoAttachmentError: Error {
-    case playbackFileUnavailable
-}
-
 nonisolated enum MessageAudioPlayerPreparer {
+    static func fileTypeHint(for item: MessageMediaAttachment) -> String? {
+        if let mimeType = UTType(mimeType: item.mediaType)?.identifier {
+            return mimeType
+        }
+        let ext = MediaAttachmentPolicy.fileExtension(for: item.mediaType, fileName: item.fileName)
+        return UTType(filenameExtension: ext)?.identifier
+    }
+
     static func preparedPlayer(from data: Data) async throws -> AVAudioPlayer {
         try await detachedPreparedValue(priority: .userInitiated) { () throws -> AVAudioPlayer in
             let next = try AVAudioPlayer(data: data)
@@ -3170,9 +3236,32 @@ nonisolated enum MessageAudioPlayerPreparer {
         }
     }
 
+    static func preparedPlayer(from url: URL, fileTypeHint: String? = nil) async throws -> AVAudioPlayer {
+        try await detachedPreparedValue(priority: .userInitiated) { () throws -> AVAudioPlayer in
+            let next: AVAudioPlayer
+            if let fileTypeHint {
+                next = try AVAudioPlayer(contentsOf: url, fileTypeHint: fileTypeHint)
+            } else {
+                next = try AVAudioPlayer(contentsOf: url)
+            }
+            next.enableRate = true
+            next.prepareToPlay()
+            return next
+        }
+    }
+
     static func duration(from data: Data) async -> Double? {
         await detachedValue(priority: .utility) {
             try? AVAudioPlayer(data: data).duration
+        }
+    }
+
+    static func duration(from url: URL, fileTypeHint: String? = nil) async -> Double? {
+        await detachedValue(priority: .utility) {
+            if let fileTypeHint {
+                return try? AVAudioPlayer(contentsOf: url, fileTypeHint: fileTypeHint).duration
+            }
+            return try? AVAudioPlayer(contentsOf: url).duration
         }
     }
 
@@ -3203,6 +3292,8 @@ private struct MessageAudioAttachmentView: View {
     let onLoadMedia: ConversationMediaLoader
 
     @State private var player: AVAudioPlayer?
+    @State private var playbackFile: AttachmentShareFile?
+    @State private var playbackHandoffControl: MediaFileTransferControlFfi?
     @State private var prefetchedAudio: TimelineMediaTaskID?
     @State private var isLoading = false
     @State private var didFail = false
@@ -3365,17 +3456,38 @@ private struct MessageAudioAttachmentView: View {
         let demand = AttachmentDemand.userTap(afterFailure: didFail)
         isLoading = true
         didFail = false
-        defer { isLoading = false }
+        let control = MediaFileTransferControlFfi()
+        playbackHandoffControl?.cancel()
+        playbackHandoffControl = control
+        defer {
+            if playbackHandoffControl === control { playbackHandoffControl = nil }
+            isLoading = false
+        }
         do {
-            let data = try await onLoadMedia.data(for: item, demand: demand)
+            let opened = try await onLoadMedia.playbackFile(
+                for: item,
+                demand: demand,
+                initialData: item.localData,
+                control: control
+            )
             // The view may have disappeared (and `stopPlayback` cancelled this
             // task) while the decrypt/download was in flight. Bail before
             // touching player state or acquiring the audio-session lease so a
             // gone view never starts invisible, uncontrollable playback.
-            guard AudioPlaybackLoadOutcome.resolve(isCancelled: Task.isCancelled) == .proceed else { return }
-            let metadata = await audioMetadata(from: data)
-            let next = try await MessageAudioPlayerPreparer.preparedPlayer(from: data)
-            guard AudioPlaybackLoadOutcome.resolve(isCancelled: Task.isCancelled) == .proceed else { return }
+            guard AudioPlaybackLoadOutcome.resolve(isCancelled: Task.isCancelled || control.isCancelled()) == .proceed else {
+                opened.finish()
+                return
+            }
+            let fileTypeHint = MessageAudioPlayerPreparer.fileTypeHint(for: item)
+            let metadata = await audioMetadata(fromFileURL: opened.url, fileTypeHint: fileTypeHint)
+            let next = try await MessageAudioPlayerPreparer.preparedPlayer(from: opened.url, fileTypeHint: fileTypeHint)
+            guard AudioPlaybackLoadOutcome.resolve(isCancelled: Task.isCancelled || control.isCancelled()) == .proceed else {
+                opened.finish()
+                return
+            }
+            player?.stop()
+            playbackFile?.finish()
+            playbackFile = opened
             player = next
             let playableMetadata = MessageAudioMetadata(
                 durationSeconds: metadata.durationSeconds ?? next.duration,
@@ -3387,7 +3499,11 @@ private struct MessageAudioAttachmentView: View {
         } catch {
             // A cancelled load is an expected disappearance, not a failure;
             // don't flip the bubble into the retry/failed state for it.
-            if Task.isCancelled { return }
+            if Task.isCancelled || control.isCancelled() || error is CancellationError { return }
+            if error as? AttachmentHandoffFailure == .storageFull {
+                isPlaying = false
+                return
+            }
             didFail = true
             isPlaying = false
         }
@@ -3416,6 +3532,33 @@ private struct MessageAudioAttachmentView: View {
             duration = analyzedDuration
         } else {
             duration = await MessageAudioPlayerPreparer.duration(from: data)
+        }
+        let metadata = MessageAudioMetadata(
+            durationSeconds: duration,
+            samples: MediaWaveformAnalyzer.normalized(analyzed.samples)
+        )
+        MessageAudioMetadataCache.store(metadata, for: metadataCacheKey)
+        return metadata
+    }
+
+    private func audioMetadata(fromFileURL url: URL, fileTypeHint: String?) async -> MessageAudioMetadata {
+        if let cached = MessageAudioMetadataCache.metadata(for: metadataCacheKey) ?? embeddedMetadata {
+            return cached
+        }
+        let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        let analyzed: MediaWaveformAnalyzer.Metadata
+        if fileSize <= MessageMediaAttachment.audioAnalysisByteLimit {
+            analyzed = await Task.detached(priority: .utility) {
+                MediaWaveformAnalyzer.metadata(fromFileURL: url)
+            }.value
+        } else {
+            analyzed = MediaWaveformAnalyzer.Metadata(durationSeconds: nil, samples: MediaWaveformAnalyzer.fallback())
+        }
+        let duration: Double?
+        if let analyzedDuration = analyzed.durationSeconds {
+            duration = analyzedDuration
+        } else {
+            duration = await MessageAudioPlayerPreparer.duration(from: url, fileTypeHint: fileTypeHint)
         }
         let metadata = MessageAudioMetadata(
             durationSeconds: duration,
@@ -3501,6 +3644,8 @@ private struct MessageAudioAttachmentView: View {
     private func stopPlayback() {
         progressTask?.cancel()
         progressTask = nil
+        playbackHandoffControl?.cancel()
+        playbackHandoffControl = nil
         // Cancel any in-flight load+play task. Without this, a load resolving
         // after the view disappeared would start playback (and acquire the
         // `.playback` lease) on a view that is no longer on screen.
@@ -3508,6 +3653,9 @@ private struct MessageAudioAttachmentView: View {
         playbackLoadTask = nil
         let shouldDeactivate = isPlaying || player?.isPlaying == true || audioSessionLease != nil
         player?.stop()
+        player = nil
+        playbackFile?.finish()
+        playbackFile = nil
         isPlaying = false
         if shouldDeactivate {
             releaseAudioSession()
@@ -4127,28 +4275,56 @@ struct MediaForwardingContext {
 }
 
 private struct FullscreenMediaPrepared: Identifiable {
+    enum Payload {
+        case data(Data)
+        case fileURL(URL)
+    }
+
     let id: String
     let item: MessageMediaAttachment
-    let data: Data
+    let payload: Payload
     let contentType: UTType
     var pendingSelection: MessageMediaGallery.PendingSelection? = nil
+
+    var inlineData: Data? {
+        if case .data(let data) = payload { return data }
+        return nil
+    }
 }
 
-private struct DecryptedMediaExportDocument: FileDocument {
+struct DecryptedMediaExportDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.data] }
 
-    let data: Data
+    enum Source {
+        case data(Data)
+        case fileURL(URL)
+    }
+
+    let source: Source
 
     init(data: Data) {
-        self.data = data
+        source = .data(data)
+    }
+
+    init(fileURL: URL) {
+        source = .fileURL(fileURL)
     }
 
     init(configuration: ReadConfiguration) throws {
-        data = configuration.file.regularFileContents ?? Data()
+        source = .data(configuration.file.regularFileContents ?? Data())
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: data)
+        try Self.fileWrapper(for: source)
+    }
+
+    nonisolated static func fileWrapper(for source: Source) throws -> FileWrapper {
+        switch source {
+        case .data(let data):
+            return FileWrapper(regularFileWithContents: data)
+        case .fileURL(let url):
+            return try FileWrapper(url: url, options: [])
+        }
     }
 }
 
@@ -4280,6 +4456,10 @@ struct MessageMediaFullscreenGalleryView: View {
     @State private var mediaShare: AttachmentShareFile?
     @State private var handoffControl: MediaFileTransferControlFfi?
     @State private var exportDocument: DecryptedMediaExportDocument?
+    @State private var exportShareFile: AttachmentShareFile?
+    @State private var exportContentType: UTType = .data
+    @State private var exportFilename = "Media"
+    @State private var exportHandoffControl: MediaFileTransferControlFfi?
     @State private var saveProductTicket: ProductAnalyticsRecorder.Ticket?
     @State private var isExporting = false
     @State private var actionError: String?
@@ -4338,7 +4518,7 @@ struct MessageMediaFullscreenGalleryView: View {
             case .unavailable: onDismiss(); return
             case .confirmed(let item): replacement = item
             }
-            preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
+            preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, payload: .data(pendingSelection.data),
                 contentType: UTType(mimeType: replacement.mediaType) ?? .data)
             let wasPlaying = pendingVideo.wantsPlayback ?? selection.demand(for: pendingSelection.id,
                 allowsOpeningDemand: !restored && transcriptHistory?.allowsOpeningDemand != false).isUserInitiated
@@ -4351,6 +4531,7 @@ struct MessageMediaFullscreenGalleryView: View {
             if gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
             if preparedMedia?.id != selection { preparedMedia = nil }
             handoffControl?.cancel()
+            exportHandoffControl?.cancel()
             zoomedItemID = nil
             dismissDragOffset = 0
         }
@@ -4358,27 +4539,46 @@ struct MessageMediaFullscreenGalleryView: View {
             ActivityShareSheet(items: [share.url], onComplete: share.finish)
                 .onDisappear(perform: share.finish)
         }
-        .onDisappear { handoffControl?.cancel() }
+        .onDisappear {
+            handoffControl?.cancel()
+            exportHandoffControl?.cancel()
+            exportShareFile?.finish()
+            exportShareFile = nil
+        }
         .sheet(item: $forwardMedia) { prepared in
             if let forwardingContext {
-                ForwardMessageSheet(
-                    media: prepared.item,
-                    data: prepared.data,
-                    verifySource: { item in
-                        if let transcriptHistory { return try await transcriptHistory.verifyForward(item, prepared.pendingSelection) }
-                        return try await gallery.mayExport(item, verify: nil)
-                    },
-                    viewModel: forwardingContext.viewModel,
-                    destinationProvider: forwardingContext.destinationProvider
-                )
-                .appAppearance()
+                let verify: (MessageMediaAttachment) async throws -> Bool = { item in
+                    if let transcriptHistory { return try await transcriptHistory.verifyForward(item, prepared.pendingSelection) }
+                    return try await gallery.mayExport(item, verify: nil)
+                }
+                switch prepared.payload {
+                case .data(let data):
+                    ForwardMessageSheet(
+                        media: prepared.item,
+                        data: data,
+                        verifySource: verify,
+                        viewModel: forwardingContext.viewModel,
+                        destinationProvider: forwardingContext.destinationProvider
+                    )
+                    .appAppearance()
+                case .fileURL(let url):
+                    ForwardMessageSheet(
+                        media: prepared.item,
+                        fileURL: url,
+                        fallbackData: { try await onLoadMedia.data(for: prepared.item, demand: .explicit) },
+                        verifySource: verify,
+                        viewModel: forwardingContext.viewModel,
+                        destinationProvider: forwardingContext.destinationProvider
+                    )
+                    .appAppearance()
+                }
             }
         }
         .fileExporter(
             isPresented: $isExporting,
             document: exportDocument,
-            contentType: preparedMedia?.contentType ?? .data,
-            defaultFilename: preparedMedia?.item.fileName ?? "Media"
+            contentType: exportContentType,
+            defaultFilename: exportFilename
         ) { result in
             let outcome: ProductOutcome
             switch result {
@@ -4387,6 +4587,9 @@ struct MessageMediaFullscreenGalleryView: View {
             }
             appState.productAnalytics.record(.attachment(.save, outcome), ticket: saveProductTicket)
             saveProductTicket = nil
+            exportShareFile?.finish()
+            exportShareFile = nil
+            exportDocument = nil
             if case .failure = result {
                 actionError = L10n.string("Couldn't save media.")
             }
@@ -4426,16 +4629,16 @@ struct MessageMediaFullscreenGalleryView: View {
         return MessageMediaFullscreenPage(
             item: source,
             isSelected: item.id == selectedItemID,
-            initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.data : nil } ?? gallery.initialData(for: source),
+            initialImageData: preparedMedia.flatMap { item.canUseBytesPrepared(for: $0.item) ? $0.inlineData : nil } ?? gallery.initialData(for: source),
             selectionDemand: gallery.transcriptCaptions == nil ? .explicit
                 : selection.demand(for: item.id, allowsOpeningDemand: !restored && transcriptHistory?.allowsOpeningDemand != false),
             waitsForRestoredPlay: restored && item.id == selection.openingID,
             resumeConfirmedVideo: selection.resumingVideoID == item.id,
             pendingVideo: pendingSelection?.id == item.id ? pendingVideo : nil,
             onLoadMedia: onLoadMedia,
-            onData: { data in
+            onPrepared: { payload in
                 guard selectedItemID == item.id, selectedItem != nil else { return }
-                preparedMedia = FullscreenMediaPrepared(id: item.id, item: item, data: data,
+                preparedMedia = FullscreenMediaPrepared(id: item.id, item: item, payload: payload,
                     contentType: UTType(mimeType: item.mediaType) ?? .data, pendingSelection: gallery.pendingSelection(for: item.id))
             },
             onToggleChrome: toggleChrome,
@@ -4489,7 +4692,7 @@ struct MessageMediaFullscreenGalleryView: View {
 
     private var currentPreparedMedia: FullscreenMediaPrepared? {
         guard let selectedItem, let preparedMedia, selectedItem.canUseBytesPrepared(for: preparedMedia.item) else { return nil }
-        return FullscreenMediaPrepared(id: selectedItem.id, item: selectedItem, data: preparedMedia.data,
+        return FullscreenMediaPrepared(id: selectedItem.id, item: selectedItem, payload: preparedMedia.payload,
             contentType: preparedMedia.contentType, pendingSelection: preparedMedia.pendingSelection)
     }
 
@@ -4525,10 +4728,54 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func saveSelectedMedia() {
-        guard let preparedMedia = currentPreparedMedia else { return }
-        saveProductTicket = appState.productAnalytics.ticket()
-        exportDocument = DecryptedMediaExportDocument(data: preparedMedia.data)
-        isExporting = true
+        guard let preparedMedia = currentPreparedMedia, exportHandoffControl == nil, !isExporting else { return }
+        switch preparedMedia.payload {
+        case .data(let data) where UInt64(data.count) <= RetainedAttachmentReader.mappedReadThresholdBytes:
+            saveProductTicket = appState.productAnalytics.ticket()
+            exportContentType = preparedMedia.contentType
+            exportFilename = preparedMedia.item.fileName
+            exportDocument = DecryptedMediaExportDocument(data: data)
+            isExporting = true
+        case .fileURL(let url) where AttachmentHandoffSource(preparedMedia.item) == .none && gallery.transcriptCaptions == nil:
+            saveProductTicket = appState.productAnalytics.ticket()
+            exportContentType = preparedMedia.contentType
+            exportFilename = preparedMedia.item.fileName
+            exportDocument = DecryptedMediaExportDocument(fileURL: url)
+            isExporting = true
+        case .data, .fileURL:
+            let item = preparedMedia.item
+            let contentType = preparedMedia.contentType
+            let control = MediaFileTransferControlFfi()
+            exportHandoffControl = control
+            Task {
+                defer { if exportHandoffControl === control { exportHandoffControl = nil } }
+                do {
+                    let file = try await gallery.shareFile(
+                        for: item,
+                        using: onLoadMedia,
+                        control: control,
+                        verify: transcriptHistory?.verify
+                    )
+                    guard !control.isCancelled(), selectedItemID == item.id, selectedItem != nil else {
+                        file.finish()
+                        return
+                    }
+                    saveProductTicket = appState.productAnalytics.ticket()
+                    exportShareFile?.finish()
+                    exportShareFile = file
+                    exportContentType = contentType
+                    exportFilename = item.fileName
+                    exportDocument = DecryptedMediaExportDocument(fileURL: file.url)
+                    isExporting = true
+                } catch AttachmentHandoffFailure.storageFull {
+                    return
+                } catch {
+                    if !control.isCancelled(), selectedItemID == item.id {
+                        actionError = L10n.string("Couldn't save media.")
+                    }
+                }
+            }
+        }
     }
 
     private func shareSelectedMedia() {
@@ -4596,7 +4843,7 @@ private struct MessageMediaFullscreenPage: View {
     let resumeConfirmedVideo: Bool
     let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
-    let onData: (Data) -> Void
+    let onPrepared: (FullscreenMediaPrepared.Payload) -> Void
     let onToggleChrome: () -> Void
     let onSourceReplaced: () -> Void
     let onZoomChanged: (Bool) -> Void
@@ -4626,7 +4873,7 @@ private struct MessageMediaFullscreenPage: View {
                 resumeConfirmedVideo: sourceGeneration == 0 && resumeConfirmedVideo,
                 pendingVideo: pendingVideo,
                 onLoadMedia: onLoadMedia,
-                onData: onData,
+                onPreparedFile: { onPrepared(.fileURL($0)) },
                 onToggleChrome: onToggleChrome
             )
         } else {
@@ -4636,7 +4883,7 @@ private struct MessageMediaFullscreenPage: View {
                 initialImageData: sourceGeneration == 0 ? initialImageData : nil,
                 selectionDemand: demand,
                 onLoadMedia: onLoadMedia,
-                onData: onData,
+                onData: { onPrepared(.data($0)) },
                 onToggleChrome: onToggleChrome,
                 onZoomChanged: onZoomChanged
             )
@@ -4654,7 +4901,7 @@ private struct MessageMediaFullscreenVideoPage: View {
     let resumeConfirmedVideo: Bool
     let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
-    let onData: (Data) -> Void
+    let onPreparedFile: (URL) -> Void
     let onToggleChrome: () -> Void
     @Environment(\.isTranscriptMediaSheet) private var isTranscriptMediaSheet
     @Environment(\.displayScale) private var displayScale
@@ -4663,6 +4910,8 @@ private struct MessageMediaFullscreenVideoPage: View {
     @State private var playRequest = 0
     @State private var handledPlayRequest = 0
     @State private var player: AVPlayer?
+    @State private var playbackFile: AttachmentShareFile?
+    @State private var playbackHandoffControl: MediaFileTransferControlFfi?
     @State private var audioSession = ObservableVideoPlaybackAudioSession()
     @State private var isLoading = false
     @State private var didFail = false
@@ -4758,51 +5007,59 @@ private struct MessageMediaFullscreenVideoPage: View {
         let productTicket = appState.productAnalytics.ticket()
         var productOutcome: ProductOutcome = .cancelled
         defer { appState.productAnalytics.record(.attachment(.open, productOutcome), ticket: productTicket) }
+        let control = MediaFileTransferControlFfi()
+        playbackHandoffControl?.cancel()
+        playbackHandoffControl = control
+        defer { if playbackHandoffControl === control { playbackHandoffControl = nil } }
         // An automatic read may be waiting on backoff. Play can take over through the same task ID.
         isLoading = demand.isUserInitiated
         didFail = false
         defer { if !Task.isCancelled { isLoading = false } }
         do {
-            let url = try await playbackFileURL(demand: demand)
-            guard !Task.isCancelled, isSelected else { return }
-            let next = AVPlayer(url: url)
+            let opened = try await onLoadMedia.playbackFile(
+                for: item,
+                demand: demand,
+                initialData: initialMediaData,
+                control: control
+            )
+            guard !Task.isCancelled, !control.isCancelled(), isSelected else {
+                opened.finish()
+                return
+            }
+            onPreparedFile(opened.url)
+            let next = AVPlayer(url: opened.url)
             productOutcome = .success
+            playbackFile?.finish()
+            playbackFile = opened
             player = next
             MessageMediaFullscreenGalleryPresentation.prepareVideo(next, demand: demand, resumeConfirmed: resumeConfirmedVideo)
             pendingVideo?.observe(next)
             audioSession.attach(to: next)
             if isTranscriptMediaSheet {
                 isLoading = false
-                await MessageVideoThumbnailDecoder.cachePlayedPreview(for: item, url: url, scale: displayScale)
+                await MessageVideoThumbnailDecoder.cachePlayedPreview(for: item, url: opened.url, scale: displayScale)
             }
+        } catch AttachmentHandoffFailure.storageFull {
+            guard !Task.isCancelled, !control.isCancelled(), isSelected else { return }
+            productOutcome = .failure
         } catch {
-            guard !Task.isCancelled, isSelected else { return }
+            guard !Task.isCancelled, !control.isCancelled(), !(error is CancellationError), isSelected else { return }
             productOutcome = .failure
             didFail = demand.failureOffersRetry
         }
     }
 
-    private func playbackFileURL(demand: AttachmentDemand) async throws -> URL {
-        let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        let data: Data
-        if let initialMediaData, demand != .retry { data = initialMediaData }
-        else { data = try await onLoadMedia.data(for: item, demand: demand) }
-        try Task.checkCancellation()
-        onData(data)
-        guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
-            throw MessageVideoAttachmentError.playbackFileUnavailable
-        }
-        try Task.checkCancellation()
-        return url
-    }
-
     private func releasePlayback() {
         isLoading = false
+        playbackHandoffControl?.cancel()
+        playbackHandoffControl = nil
         if let player { pendingVideo?.detach(player) }
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         audioSession.stop()
         player = nil
+        playbackFile?.finish()
+        playbackFile = nil
     }
 }
 
