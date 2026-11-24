@@ -58,8 +58,7 @@ nonisolated enum NotificationServiceTimeoutPolicy {
         elapsed: Duration
     ) -> UInt32 {
         let remaining = max(.zero, proactiveBudget - elapsed)
-        let remainingMs = Double(remaining.components.seconds) * 1_000
-            + Double(remaining.components.attoseconds) / 1_000_000_000_000_000
+        let remainingMs = remaining / .milliseconds(1)
         let boundedRemaining = UInt32(
             max(Double(minimumCollectionWaitMs), min(Double(UInt32.max), remainingMs.rounded(.down)))
         )

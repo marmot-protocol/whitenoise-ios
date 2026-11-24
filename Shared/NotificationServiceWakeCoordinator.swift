@@ -124,7 +124,7 @@ struct NotificationServiceWakeEnvironment {
     var loadPolicySnapshot: @MainActor () -> NotificationServiceWakePolicySnapshot
     var maxWaitMs: UInt32
     var proactiveBudget: Duration
-    var watchdogSleep: @Sendable () async throws -> Void
+    var sleep: @Sendable (Duration) async throws -> Void
     var enqueueAdditionalPresentation: @Sendable (
         LocalNotificationPresentation,
         Int?
@@ -136,8 +136,8 @@ struct NotificationServiceWakeEnvironment {
         loadPolicySnapshot: { NotificationServiceWakePolicySnapshot.loadLive() },
         maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
         proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
-        watchdogSleep: {
-            try await Task.sleep(for: NotificationServiceTimeoutPolicy.proactiveExpirationDelay)
+        sleep: { duration in
+            try await Task.sleep(for: duration)
         },
         enqueueAdditionalPresentation: { presentation, applicationBadgeCount in
             // A wake alerts once, through its primary. Caught-up records
@@ -185,8 +185,12 @@ final class NotificationServiceWakeCoordinator {
     private let environment: NotificationServiceWakeEnvironment
     private var activeSession: NotificationServiceWakeSession?
     private var drainingSessions: [UUID: NotificationServiceWakeSession] = [:]
-    private var pendingRuntimeDrain: Task<Void, Never>?
-    private var pendingRuntimeDrainID = UUID()
+    /// Single coordinator-owned close barrier for the most recent session that
+    /// actually opened a runtime. A waiting wake that expires before opening
+    /// storage never replaces this barrier, so later wakes still wait for the
+    /// open runtime to finish closing.
+    private var activeRuntimeBarrier: Task<Void, Never>?
+    private var activeRuntimeBarrierID = UUID()
 
     init(environment: NotificationServiceWakeEnvironment) {
         self.environment = environment
@@ -197,10 +201,8 @@ final class NotificationServiceWakeCoordinator {
         ownerID: UUID,
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
-        let previousDrain = pendingRuntimeDrain
-        let priorSessionDrain: Task<Void, Never>?
         if let previousSession = activeSession {
-            priorSessionDrain = previousSession.cancelForReplacement()
+            previousSession.cancelForReplacement()
             if previousSession.isAwaitingDelivery {
                 let drainingID = UUID()
                 drainingSessions[drainingID] = previousSession
@@ -208,35 +210,28 @@ final class NotificationServiceWakeCoordinator {
                     self?.drainingSessions.removeValue(forKey: drainingID)
                 }
             }
-        } else {
-            priorSessionDrain = nil
         }
 
-        let combinedPriorDrain: Task<Void, Never>?
-        if previousDrain == nil, priorSessionDrain == nil {
-            combinedPriorDrain = nil
-        } else {
-            let drainID = UUID()
-            pendingRuntimeDrainID = drainID
-            let combined = Task { @MainActor [weak self] in
-                await previousDrain?.value
-                await priorSessionDrain?.value
-                if self?.pendingRuntimeDrainID == drainID {
-                    self?.pendingRuntimeDrain = nil
-                }
-            }
-            pendingRuntimeDrain = combined
-            combinedPriorDrain = combined
-        }
-
+        let priorRuntimeBarrier = activeRuntimeBarrier
         let session = NotificationServiceWakeSession(
             ownerID: ownerID,
             request: request,
             contentHandler: contentHandler,
             environment: environment
-        )
+        ) { [weak self] barrier in
+            guard let self else { return }
+            let barrierID = UUID()
+            self.activeRuntimeBarrierID = barrierID
+            self.activeRuntimeBarrier = barrier
+            Task { @MainActor [weak self] in
+                await barrier.value
+                if self?.activeRuntimeBarrierID == barrierID {
+                    self?.activeRuntimeBarrier = nil
+                }
+            }
+        }
         activeSession = session
-        session.start(afterDrainingPriorRuntime: combinedPriorDrain)
+        session.start(afterDrainingPriorRuntime: priorRuntimeBarrier)
     }
 
     func serviceExtensionTimeWillExpire(ownerID: UUID) {
@@ -258,6 +253,7 @@ private final class NotificationServiceWakeSession {
     let ownerID: UUID
     private let delivery = OneShotNotificationDelivery()
     private let environment: NotificationServiceWakeEnvironment
+    private let onRuntimeOpened: @MainActor (Task<Void, Never>) -> Void
     private let wakeStartedAt = ContinuousClock.now
     private var bestAttemptContent: UNMutableNotificationContent?
     /// Communication-intent copy of the primary content. `updating(from:)`
@@ -268,19 +264,17 @@ private final class NotificationServiceWakeSession {
     private var expirationWatchdogTask: Task<Void, Never>?
     private var expirationCleanupTask: Task<Void, Never>?
     private var additionalPresentationTask: Task<Void, Never>?
+    private var pendingAdditionalPresentations: [LocalNotificationPresentation] = []
     private var activeRuntime: (any NotificationServiceWakeRuntime)?
     private var runtimeShutdownTask: Task<Void, Never>?
     /// Single storage-close barrier for successor wakes. Resolves once this
-    /// session either exited without opening a runtime or finished
-    /// `shutdownAndClose()`, decoupled from post-shutdown Notification Center
-    /// enqueues.
+    /// session's opened runtime finishes `shutdownAndClose()`, decoupled from
+    /// post-shutdown Notification Center enqueues.
     private var runtimeReleased = false
     private var runtimeReleaseWaiters: [CheckedContinuation<Void, Never>] = []
-    private var optionalBadgeContinuation: CheckedContinuation<Int?, Never>?
     private var onDeliveredHandler: (@MainActor () -> Void)?
     private var collectionInFlight = false
-    private var replacedDuringOrAfterCollection = false
-    private var skipOptionalPostCollectionWork = false
+    private var skipOptionalBadgeRead = false
     private var applicationBadgeCount: Int?
     private var didApplyRenderDecision = false
     private let diagnosticStartedAt = Date()
@@ -297,10 +291,12 @@ private final class NotificationServiceWakeSession {
         ownerID: UUID,
         request: UNNotificationRequest,
         contentHandler: @escaping (UNNotificationContent) -> Void,
-        environment: NotificationServiceWakeEnvironment
+        environment: NotificationServiceWakeEnvironment,
+        onRuntimeOpened: @escaping @MainActor (Task<Void, Never>) -> Void
     ) {
         self.ownerID = ownerID
         self.environment = environment
+        self.onRuntimeOpened = onRuntimeOpened
         delivery.reset(handler: contentHandler)
         bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
     }
@@ -319,9 +315,10 @@ private final class NotificationServiceWakeSession {
         collectionTask = Task {
             await self.collectAndDecorateNotification(priorRuntimeDrain: priorRuntimeDrain)
         }
-        let watchdogSleep = environment.watchdogSleep
+        let sleep = environment.sleep
+        let proactiveBudget = environment.proactiveBudget
         expirationWatchdogTask = Task { [weak self] in
-            try? await watchdogSleep()
+            try? await sleep(proactiveBudget)
             guard !Task.isCancelled else { return }
             self?.handleProactiveWatchdogExpiration()
         }
@@ -329,50 +326,51 @@ private final class NotificationServiceWakeSession {
 
     private func handleProactiveWatchdogExpiration() {
         guard bestAttemptContent != nil, !expirationInProgress else { return }
+        if didApplyRenderDecision {
+            // Primary content and any additional presentations are already
+            // projected. Submit extras independently, close storage if still
+            // open, and deliver the prepared primary as soon as storage closes
+            // rather than stalling behind Notification Center enqueues.
+            beginExpirationCleanup(deliverImmediately: false)
+            return
+        }
         if collectionInFlight {
             // Once `collectNotificationsAfterWake` has started, MDK may already
-            // have advanced the background notification cursor. Skip or abort
-            // optional badge work so privacy checks, projection, and delivery
-            // finish promptly instead of discarding a consumed batch to a
-            // fallback; iOS's `serviceExtensionTimeWillExpire()` remains the
-            // hard cutoff.
-            skipOptionalPostCollectionWork = true
-            abortOptionalBadgeRead()
+            // have advanced the background notification cursor. Skip optional
+            // badge work so privacy checks, projection, and delivery finish
+            // promptly instead of discarding a consumed batch to a fallback;
+            // iOS's `serviceExtensionTimeWillExpire()` remains the hard cutoff.
+            skipOptionalBadgeRead = true
             return
         }
         beginExpirationCleanup(deliverImmediately: false)
     }
 
-    /// Transitions this session out because a newer wake arrived, and returns a
-    /// barrier task that resolves once this session has released its runtime
-    /// lock. Once `collectNotificationsAfterWake` has started, MDK may already
-    /// have drained notifications from the background cursor, so ordinary
+    /// Transitions this session out because a newer wake arrived. Once
+    /// `collectNotificationsAfterWake` has started, MDK may already have
+    /// drained notifications from the background cursor, so ordinary
     /// replacement lets this session finish projecting, close its runtime, and
-    /// deliver (skipping or aborting optional badge queries, with the watchdog
-    /// and system expiration still enforced) instead of dropping them to a
-    /// fallback. Because runtime shutdown completes before additional enqueues
-    /// and resolves `runtimeReleased` directly, a stalled enqueue never blocks
-    /// the successor wake.
-    func cancelForReplacement() -> Task<Void, Never>? {
+    /// deliver (skipping optional badge queries, with the watchdog and system
+    /// expiration still enforced) instead of dropping them to a fallback.
+    func cancelForReplacement() {
         if collectionInFlight, !expirationInProgress {
-            replacedDuringOrAfterCollection = true
-            abortOptionalBadgeRead()
-            return runtimeReleaseBarrierTask()
+            skipOptionalBadgeRead = true
+            return
         }
         expirationWatchdogTask?.cancel()
         expirationWatchdogTask = nil
         recordDiagnostic(outcome: .replaced)
         beginExpirationCleanup(deliverImmediately: false)
-        return runtimeReleaseBarrierTask()
     }
 
     func beginExpirationCleanup(deliverImmediately: Bool) {
-        abortOptionalBadgeRead()
         if expirationInProgress {
             // Hard system expiration can arrive while proactive watchdog
-            // cleanup is still awaiting a slow runtime shutdown. Deliver the
-            // best prepared primary synchronously before iOS cuts off the
-            // handler while letting the shutdown task keep running.
+            // cleanup is still awaiting a slow runtime shutdown. Submit any
+            // already-projected extras and deliver the best prepared primary
+            // synchronously before iOS cuts off the handler while letting the
+            // shutdown task keep running.
+            _ = submitPendingAdditionalPresentationsIfNeeded()
             if deliverImmediately, bestAttemptContent != nil {
                 finish(
                     applyingFallbackForTimeout: true,
@@ -388,6 +386,10 @@ private final class NotificationServiceWakeSession {
         recordDiagnostic(outcome: .expired)
         collectionTask?.cancel()
         let shutdownTask = beginRuntimeShutdown()
+        // Never abandon additional notifications that were already projected
+        // from a consumed MDK batch: launch them in a task independent of the
+        // cancelled `collectionTask`.
+        _ = submitPendingAdditionalPresentationsIfNeeded()
         if deliverImmediately {
             // Apple's `serviceExtensionTimeWillExpire()` contract gives almost
             // no remaining time: deliver the best prepared primary synchronously
@@ -399,10 +401,8 @@ private final class NotificationServiceWakeSession {
             )
             return
         }
-        let additionalPresentationTask = additionalPresentationTask
         expirationCleanupTask = Task {
             await shutdownTask?.value
-            await additionalPresentationTask?.value
             self.finish(
                 applyingFallbackForTimeout: true,
                 completingExpiration: true
@@ -435,6 +435,9 @@ private final class NotificationServiceWakeSession {
         do {
             let runtime = try environment.makeRuntime()
             activeRuntime = runtime
+            if let barrier = runtimeReleaseBarrierTask() {
+                onRuntimeOpened(barrier)
+            }
             // Before `start()` opens accounts, whose recorders keep the source they open with.
             _ = try? runtime.setAuditLogSource(source: environment.auditLogSource())
             diagnosticStage = .runtimeCreated
@@ -502,14 +505,15 @@ private final class NotificationServiceWakeSession {
                 // wrong, so the fallback stays audible until the engine
                 // reports suppressed records explicitly.
                 //
-                // Prepare primary delivery content BEFORE any optional badge
-                // read so hard expiration mid-badge-read still delivers the
-                // decorated primary rather than falling back.
+                // Prepare primary delivery content and capture any additional
+                // presentations BEFORE the optional badge read and shutdown so
+                // expiration during either still delivers the decorated primary
+                // and submits the already-projected extras.
                 preparePrimaryContent(for: decision, in: content)
                 if result.status != .failed,
-                   !replacedDuringOrAfterCollection,
-                   !skipOptionalPostCollectionWork {
-                    if let count = await readOptionalApplicationBadgeCount(using: runtime),
+                   !skipOptionalBadgeRead,
+                   wakeStartedAt.duration(to: ContinuousClock.now) < environment.proactiveBudget {
+                    if let count = await runtime.applicationBadgeCount(),
                        !Task.isCancelled, !expirationInProgress {
                         applicationBadgeCount = count
                         applyApplicationBadgeCount(count, for: decision, to: content)
@@ -519,11 +523,13 @@ private final class NotificationServiceWakeSession {
                 // additional Notification Center requests so stalled enqueues
                 // cannot hold storage open or block a successor wake.
                 await beginRuntimeShutdown(expected: runtime)?.value
-                if case .decorate(_, let additionalPresentations) = decision,
-                   !Task.isCancelled, !expirationInProgress {
-                    let task = startAdditionalPresentations(additionalPresentations)
-                    await task?.value
-                    self.additionalPresentationTask = nil
+                let enqueueTask = submitPendingAdditionalPresentationsIfNeeded()
+                // Wait for additional enqueues while within budget; once the
+                // proactive watchdog fires (or a replacement already skipped
+                // optional waits), deliver the primary promptly while the
+                // standalone enqueue task continues running independently.
+                if !skipOptionalBadgeRead, !Task.isCancelled, !expirationInProgress {
+                    await enqueueTask?.value
                 }
                 let diagnosticOutcome: NotificationServiceDiagnosticOutcome
                 if result.status == .failed {
@@ -609,53 +615,6 @@ private final class NotificationServiceWakeSession {
         }
     }
 
-    private func readOptionalApplicationBadgeCount(
-        using runtime: any NotificationServiceWakeRuntime
-    ) async -> Int? {
-        guard !replacedDuringOrAfterCollection,
-              !skipOptionalPostCollectionWork,
-              !expirationInProgress,
-              !Task.isCancelled
-        else { return nil }
-
-        let badgeTask = Task {
-            await runtime.applicationBadgeCount()
-        }
-        defer { badgeTask.cancel() }
-
-        return await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                guard !replacedDuringOrAfterCollection,
-                      !skipOptionalPostCollectionWork,
-                      !expirationInProgress,
-                      !Task.isCancelled
-                else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                optionalBadgeContinuation = continuation
-                Task { @MainActor [weak self] in
-                    let count = await badgeTask.value
-                    self?.resumeOptionalBadgeRead(with: count)
-                }
-            }
-        } onCancel: {
-            Task { @MainActor [weak self] in
-                self?.abortOptionalBadgeRead()
-            }
-        }
-    }
-
-    private func resumeOptionalBadgeRead(with count: Int?) {
-        optionalBadgeContinuation?.resume(returning: count)
-        optionalBadgeContinuation = nil
-    }
-
-    private func abortOptionalBadgeRead() {
-        optionalBadgeContinuation?.resume(returning: nil)
-        optionalBadgeContinuation = nil
-    }
-
     private func takeActiveRuntimeForShutdown(
         _ expected: (any NotificationServiceWakeRuntime)? = nil
     ) -> (any NotificationServiceWakeRuntime)? {
@@ -684,7 +643,8 @@ private final class NotificationServiceWakeSession {
     ) {
         didApplyRenderDecision = true
         switch decision {
-        case .decorate(let presentation, _):
+        case .decorate(let presentation, let additionalPresentations):
+            pendingAdditionalPresentations = additionalPresentations
             NotificationContentDecorator.apply(presentation, to: content)
             decoratedContent = NotificationCommunicationDecorator.decorated(
                 content,
@@ -692,8 +652,10 @@ private final class NotificationServiceWakeSession {
                 avatarData: nil
             )
         case .deliverQuietly:
+            pendingAdditionalPresentations = []
             NotificationContentDecorator.applyQuietDelivery(to: content)
         case .fallback:
+            pendingAdditionalPresentations = []
             NotificationContentDecorator.applyFallback(to: content)
         }
     }
@@ -713,14 +675,18 @@ private final class NotificationServiceWakeSession {
         }
     }
 
-    private func startAdditionalPresentations(
-        _ additionalPresentations: [LocalNotificationPresentation]
-    ) -> Task<Void, Never>? {
-        guard !additionalPresentations.isEmpty else { return nil }
+    @discardableResult
+    private func submitPendingAdditionalPresentationsIfNeeded() -> Task<Void, Never>? {
+        if let existing = additionalPresentationTask {
+            return existing
+        }
+        guard !pendingAdditionalPresentations.isEmpty else { return nil }
+        let presentations = pendingAdditionalPresentations
+        pendingAdditionalPresentations = []
         let applicationBadgeCount = applicationBadgeCount
         let enqueue = environment.enqueueAdditionalPresentation
-        let task = Task { [additionalPresentations, applicationBadgeCount] in
-            for presentation in additionalPresentations {
+        let task = Task {
+            for presentation in presentations {
                 await enqueue(presentation, applicationBadgeCount)
             }
         }
@@ -752,10 +718,8 @@ private final class NotificationServiceWakeSession {
         self.expirationWatchdogTask = nil
         self.expirationCleanupTask = nil
         self.additionalPresentationTask = nil
-        self.abortOptionalBadgeRead()
         self.collectionInFlight = false
-        self.replacedDuringOrAfterCollection = false
-        self.skipOptionalPostCollectionWork = false
+        self.skipOptionalBadgeRead = false
         self.applicationBadgeCount = nil
         self.didApplyRenderDecision = false
         self.decoratedContent = nil
