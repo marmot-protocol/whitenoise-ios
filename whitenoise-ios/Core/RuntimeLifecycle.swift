@@ -160,7 +160,10 @@ final class RuntimeLifecycle {
     /// and untouched by transient `.inactive` (`setAppSceneActive(false)`), so
     /// Face ID / App Lock overlays never revive an abandoned suspension.
     @ObservationIgnored private var backgroundSuspensionRequested = false
-    @ObservationIgnored private var abortDrainInterruptWaiter: (id: UUID, continuation: CheckedContinuation<Bool, Never>)?
+    /// Detached cleanup tasks for already-cancelled maintenance from aborted
+    /// suspensions or superseded activations. Terminal background suspension
+    /// awaits these after closing SQLCipher.
+    @ObservationIgnored private var pendingMaintenanceDrains: [UUID: Task<Void, Never>] = [:]
     /// Set when the real background-suspension entry point runs while bootstrap
     /// still has the phase at `.bootstrapping`. An `.inactive` scene transition
     /// only flips `isAppSceneActive`; it must not tear the runtime down until the
@@ -410,7 +413,6 @@ final class RuntimeLifecycle {
             try Task.checkCancellation()
             guard stillOwnsWork() else { throw CancellationError() }
             if client == nil {
-                startedClientID = nil
                 client = try await makeRuntime(
                     retryOnTransientReadiness: true,
                     stillOwnsWork: stillOwnsWork
@@ -787,12 +789,16 @@ final class RuntimeLifecycle {
         appState?.isAppSceneActive = false
         appState?.sceneHasReportedPhase = true
         backgroundSuspensionRequested = true
-        interruptAbortDrainIfNeeded()
         if appState?.phase == .bootstrapping {
             bootstrapNeedsBackgroundSuspensionRecheck = true
         }
-        foregroundActivationTask?.cancel()
+        let cancelledActivation = foregroundActivationTask
+        foregroundActivationTask = nil
         foregroundActivationTaskID = UUID()
+        cancelledActivation?.cancel()
+        if let cancelledActivation {
+            trackPendingMaintenanceDrain(cancelledActivation)
+        }
         appState?.cancelNativePushRegistrationTaskSync()
         if let runtimeSuspensionTask {
             return runtimeSuspensionTask
@@ -806,205 +812,166 @@ final class RuntimeLifecycle {
         return task
     }
 
-    private func interruptAbortDrainIfNeeded() {
-        guard let waiter = abortDrainInterruptWaiter else { return }
-        abortDrainInterruptWaiter = nil
-        waiter.continuation.resume(returning: true)
-    }
-
-    private func completeAbortDrainWait(id: UUID, interrupted: Bool) {
-        guard abortDrainInterruptWaiter?.id == id else { return }
-        let waiter = abortDrainInterruptWaiter
-        abortDrainInterruptWaiter = nil
-        waiter?.continuation.resume(returning: interrupted)
-    }
-
-    /// Awaits `drainTask`, returning `true` immediately if a new `.background`
-    /// transition (`backgroundSuspensionRequested`) interrupts it so terminal
-    /// SQLCipher closure never waits behind a cancelled relay catch-up.
-    private func waitForDrainTaskOrBackgroundRequest(_ drainTask: Task<Void, Never>) async -> Bool {
-        if backgroundSuspensionRequested { return true }
-        let waitID = UUID()
-        return await withTaskCancellationHandler {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-                if backgroundSuspensionRequested || Task.isCancelled {
-                    continuation.resume(returning: backgroundSuspensionRequested)
-                    return
-                }
-                abortDrainInterruptWaiter = (id: waitID, continuation: continuation)
-                Task { @MainActor [weak self] in
-                    await drainTask.value
-                    self?.completeAbortDrainWait(id: waitID, interrupted: false)
-                }
-            }
-        } onCancel: {
-            Task { @MainActor [weak self] in
-                self?.completeAbortDrainWait(id: waitID, interrupted: false)
-            }
+    private func trackPendingMaintenanceDrain(_ task: Task<Void, Never>) {
+        let id = UUID()
+        pendingMaintenanceDrains[id] = task
+        Task { @MainActor [weak self] in
+            await task.value
+            self?.pendingMaintenanceDrains.removeValue(forKey: id)
         }
     }
 
-    /// Drains an aborted suspension's maintenance tasks while remaining
-    /// interruptible by a fresh `.background` transition. Only called when
-    /// `!backgroundSuspensionRequested`.
-    private func awaitAbortDrainInterruptibly(
-        _ cancellation: ForegroundMaintenanceCancellation,
-        deferredDrains: inout [Task<Void, Never>]
-    ) async -> Bool {
+    /// Defers waiting on already-captured, already-cancelled maintenance handles
+    /// so an aborted suspension returns immediately without holding
+    /// `runtimeSuspensionTask` or `isBackgroundStorageCloseInProgress` across a
+    /// slow catch-up unwind. Never invokes live-state cancellation helpers that
+    /// could cancel a newer foreground activation's tasks.
+    private func abortSuspension(draining cancellation: ForegroundMaintenanceCancellation) {
         let drainTask = Task { @MainActor in
-            await self.drainForegroundMaintenance(
-                cancellation,
-                waitForForegroundMutations: false
-            )
-        }
-        deferredDrains.append(drainTask)
-        while let nextDrain = deferredDrains.first {
-            if await waitForDrainTaskOrBackgroundRequest(nextDrain) {
-                return true
+            await cancellation.foregroundActivation?.value
+            await cancellation.maintenance?.notificationSubscription?.value
+            await cancellation.maintenance?.connectivityCatchUp?.value
+            await cancellation.maintenance?.profileRefresh?.value
+            if let mutationFollowups = cancellation.maintenance?.mutationFollowups {
+                for task in mutationFollowups {
+                    await task.value
+                }
             }
-            deferredDrains.removeFirst()
         }
-        return false
+        trackPendingMaintenanceDrain(drainTask)
+        if isBackgroundStorageCloseInProgress {
+            finishBackgroundStorageClose()
+        }
+        if isAppSceneActive {
+            startForegroundActivation()
+        }
+    }
+
+    private func drainPendingMaintenanceDrains() async {
+        while !pendingMaintenanceDrains.isEmpty {
+            let drains = pendingMaintenanceDrains
+            pendingMaintenanceDrains.removeAll()
+            for drain in drains.values {
+                await drain.value
+            }
+        }
     }
 
     func prepareForBackgroundSuspension() async {
-        var deferredDrains: [Task<Void, Never>] = []
         defer {
             if isBackgroundStorageCloseInProgress {
                 finishBackgroundStorageClose()
             }
             runtimeSuspensionTask = nil
         }
-        while true {
-            // Stop admitting foreground maintenance immediately, but do not put
-            // storage closure behind cancellation-sensitive drains. A subscription,
-            // relay catch-up, or local read can otherwise consume the entire UIKit
-            // background assertion while SQLCipher still holds its App Group lock.
-            let cancellation = beginForegroundMaintenanceCancellation()
-            // `backgroundSuspensionRequested` tracks whether an actual
-            // `.background` transition still requires suspension. Foreground
-            // activation clears it; transient `.inactive` overlays (Face ID,
-            // Control Center) do not re-set it. If a fresh `.background` arrives
-            // while an abort drain is parked, `awaitAbortDrainInterruptibly`
-            // yields immediately so SQLCipher closes before the parked drain
-            // finishes.
-            guard backgroundSuspensionRequested else {
-                if await awaitAbortDrainInterruptibly(cancellation, deferredDrains: &deferredDrains) {
-                    continue
-                }
-                if isAppSceneActive { startForegroundActivation() }
-                return
-            }
-            // A very fast launch-to-background transition can arrive before the
-            // SwiftUI bootstrap task has even registered. Park this same suspension
-            // owner until bootstrap exists, then chain through it; never re-arm the
-            // real teardown outside the UIKit assertion attached to this task.
-            if appState?.phase == .bootstrapping {
-                await waitForBootstrapRegistrationIfNeeded()
-#if DEBUG
-                let waitsForBootstrap = bootstrapTask != nil
-                if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, true) }
-#endif
-                await bootstrapTask?.value
-#if DEBUG
-                if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, false) }
-#endif
-                guard backgroundSuspensionRequested else {
-                    if await awaitAbortDrainInterruptibly(cancellation, deferredDrains: &deferredDrains) {
-                        continue
-                    }
-                    if isAppSceneActive { startForegroundActivation() }
-                    return
-                }
-            }
-            guard phaseOwnsLiveRuntime,
-                  !runtimeSuspendedForBackground
-            else {
-                backgroundSuspensionRequested = false
-                await drainForegroundMaintenance(cancellation)
-                for drain in deferredDrains { await drain.value }
-                return
-            }
-
-            // A notification action can hold an explicit lease on the live client.
-            // Unlike cancelled maintenance, that work must retain the runtime until
-            // the action releases it; closing underneath the lease would invalidate
-            // an in-flight reply or mark-read FFI call. This gate is independent of
-            // the maintenance drains moved below terminal storage closure.
-#if DEBUG
-            // Same condition as the wait loop, so a cancelled task never reports a wait.
-            let waitsForRuntimeWork = runtimeWorkIsSuspending && !Task.isCancelled
-            if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, true) }
-#endif
-            await waitForRuntimeSuspensionToFinish()
-#if DEBUG
-            if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, false) }
-#endif
-            guard backgroundSuspensionRequested else {
-                if await awaitAbortDrainInterruptibly(cancellation, deferredDrains: &deferredDrains) {
-                    continue
-                }
-                if isAppSceneActive { startForegroundActivation() }
-                return
-            }
-            guard phaseOwnsLiveRuntime, !runtimeSuspendedForBackground else {
-                backgroundSuspensionRequested = false
-                await drainForegroundMaintenance(cancellation)
-                for drain in deferredDrains { await drain.value }
-                return
-            }
-
-            isBackgroundStorageCloseInProgress = true
-            // Wait briefly for in-flight foreground runtime mutations (including
-            // the background draft flush lease) before closing SQLCipher. Fall
-            // through to terminal closure on timeout so 0xdead10cc is never risked.
-            await waitForForegroundRuntimeMutations(timeout: Self.defaultForegroundMutationDrainTimeout)
-            guard backgroundSuspensionRequested else {
-                let interrupted = await awaitAbortDrainInterruptibly(
-                    cancellation,
-                    deferredDrains: &deferredDrains
-                )
-                finishBackgroundStorageClose()
-                if interrupted {
-                    continue
-                }
-                if isAppSceneActive { startForegroundActivation() }
-                return
-            }
-            guard phaseOwnsLiveRuntime, !runtimeSuspendedForBackground else {
-                backgroundSuspensionRequested = false
-                await drainForegroundMaintenance(cancellation)
-                for drain in deferredDrains { await drain.value }
-                finishBackgroundStorageClose()
-                return
-            }
-
-            backgroundSuspensionRequested = false
-            let backgroundClient = client
-            let backgroundObservation = Task {
-                try? await backgroundClient?.marmot.setProductAnalyticsActivity(activity: .background)
-            }
-            // Terminal shutdown closes storage before draining delivery; never await
-            // the activity setter's network flush before releasing the database lock.
-            await shutdownAndReleaseCurrentClient()
-            await backgroundObservation.value
-            // `shutdownAndClose()` explicitly closes every SQLite connection and
-            // releases the root lease. Dropping only the top-level handle cannot
-            // prove that while subscriptions and projections retain internal Arcs;
-            // suspending with either lock is an iOS `0xdead10cc` kill.
-            runtimeSuspendedForBackground = true
-            // Once terminal storage closure has run, cancelled work can safely
-            // drain: retained handles are spent and return StorageClosed instead of
-            // reopening the App Group databases. Keep the lifecycle task alive so
-            // foreground resume still observes orderly task completion, but the
-            // suspension-sensitive file lock is already gone if UIKit expires the
-            // background assertion during this cleanup.
-            await drainForegroundMaintenance(cancellation)
-            for drain in deferredDrains {
-                await drain.value
-            }
+        // Stop admitting foreground maintenance immediately, but do not put
+        // storage closure behind cancellation-sensitive drains. A subscription,
+        // relay catch-up, or local read can otherwise consume the entire UIKit
+        // background assertion while SQLCipher still holds its App Group lock.
+        let cancellation = beginForegroundMaintenanceCancellation()
+        // `backgroundSuspensionRequested` tracks whether an actual `.background`
+        // transition still requires suspension. Foreground activation clears it;
+        // transient `.inactive` overlays (Face ID, Control Center) do not re-set
+        // it. Aborting defers the already-cancelled handles to
+        // `pendingMaintenanceDrains` and returns synchronously (no `await`
+        // between the guard and `runtimeSuspensionTask = nil`), so a subsequent
+        // `.background` immediately starts a fresh suspension task and closes
+        // SQLCipher even while an earlier catch-up is still parked.
+        guard backgroundSuspensionRequested else {
+            abortSuspension(draining: cancellation)
             return
         }
+        // A very fast launch-to-background transition can arrive before the
+        // SwiftUI bootstrap task has even registered. Park this same suspension
+        // owner until bootstrap exists, then chain through it; never re-arm the
+        // real teardown outside the UIKit assertion attached to this task.
+        if appState?.phase == .bootstrapping {
+            await waitForBootstrapRegistrationIfNeeded()
+#if DEBUG
+            let waitsForBootstrap = bootstrapTask != nil
+            if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, true) }
+#endif
+            await bootstrapTask?.value
+#if DEBUG
+            if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, false) }
+#endif
+            guard backgroundSuspensionRequested else {
+                abortSuspension(draining: cancellation)
+                return
+            }
+        }
+        guard phaseOwnsLiveRuntime,
+              !runtimeSuspendedForBackground
+        else {
+            backgroundSuspensionRequested = false
+            await drainForegroundMaintenance(cancellation)
+            await drainPendingMaintenanceDrains()
+            return
+        }
+
+        // A notification action can hold an explicit lease on the live client.
+        // Unlike cancelled maintenance, that work must retain the runtime until
+        // the action releases it; closing underneath the lease would invalidate
+        // an in-flight reply or mark-read FFI call. This gate is independent of
+        // the maintenance drains moved below terminal storage closure.
+#if DEBUG
+        // Same condition as the wait loop, so a cancelled task never reports a wait.
+        let waitsForRuntimeWork = runtimeWorkIsSuspending && !Task.isCancelled
+        if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, true) }
+#endif
+        await waitForRuntimeSuspensionToFinish()
+#if DEBUG
+        if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, false) }
+#endif
+        guard backgroundSuspensionRequested else {
+            abortSuspension(draining: cancellation)
+            return
+        }
+        guard phaseOwnsLiveRuntime, !runtimeSuspendedForBackground else {
+            backgroundSuspensionRequested = false
+            await drainForegroundMaintenance(cancellation)
+            await drainPendingMaintenanceDrains()
+            return
+        }
+
+        isBackgroundStorageCloseInProgress = true
+        // Wait briefly for in-flight foreground runtime mutations (including
+        // the background draft flush lease) before closing SQLCipher. Fall
+        // through to terminal closure on timeout so 0xdead10cc is never risked.
+        await waitForForegroundRuntimeMutations(timeout: Self.defaultForegroundMutationDrainTimeout)
+        guard backgroundSuspensionRequested else {
+            abortSuspension(draining: cancellation)
+            return
+        }
+        guard phaseOwnsLiveRuntime, !runtimeSuspendedForBackground else {
+            backgroundSuspensionRequested = false
+            await drainForegroundMaintenance(cancellation)
+            await drainPendingMaintenanceDrains()
+            return
+        }
+
+        backgroundSuspensionRequested = false
+        let backgroundClient = client
+        let backgroundObservation = Task {
+            try? await backgroundClient?.marmot.setProductAnalyticsActivity(activity: .background)
+        }
+        // Terminal shutdown closes storage before draining delivery; never await
+        // the activity setter's network flush before releasing the database lock.
+        await shutdownAndReleaseCurrentClient()
+        await backgroundObservation.value
+        // `shutdownAndClose()` explicitly closes every SQLite connection and
+        // releases the root lease. Dropping only the top-level handle cannot
+        // prove that while subscriptions and projections retain internal Arcs;
+        // suspending with either lock is an iOS `0xdead10cc` kill.
+        runtimeSuspendedForBackground = true
+        // Once terminal storage closure has run, cancelled work can safely
+        // drain: retained handles are spent and return StorageClosed instead of
+        // reopening the App Group databases. Keep the lifecycle task alive so
+        // foreground resume still observes orderly task completion, but the
+        // suspension-sensitive file lock is already gone if UIKit expires the
+        // background assertion during this cleanup.
+        await drainForegroundMaintenance(cancellation)
+        await drainPendingMaintenanceDrains()
     }
 
     private func resumeAfterForegroundActivation(activationID: UUID) async {
@@ -1165,7 +1132,12 @@ final class RuntimeLifecycle {
             if isCurrentClientStarted,
                let client,
                !AttachmentPolicyBridge.shared.isAttached(to: client) {
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
+                    guard let self,
+                          self.client === client,
+                          self.isCurrentClientStarted,
+                          self.canUseLiveRuntime
+                    else { return }
                     _ = try? await AttachmentPolicyBridge.shared.synchronize(client)
                 }
             }
@@ -1528,8 +1500,7 @@ final class RuntimeLifecycle {
 
     private func drainForegroundMaintenance(
         _ cancellation: ForegroundMaintenanceCancellation,
-        waitForAccountExit: Bool = true,
-        waitForForegroundMutations: Bool = true
+        waitForAccountExit: Bool = true
     ) async {
         await cancellation.foregroundActivation?.value
         await cancellation.maintenance?.notificationSubscription?.value
@@ -1548,7 +1519,7 @@ final class RuntimeLifecycle {
         // handles. Terminal close makes their eventual completion safe to await
         // without risking a shared-container lock at process suspension.
         if waitForAccountExit { await appState?.waitForAccountExitToFinish() }
-        if waitForForegroundMutations { await waitForForegroundRuntimeMutations() }
+        await waitForForegroundRuntimeMutations()
     }
 
     private func clearCompletedForegroundActivationTask(id: UUID) {

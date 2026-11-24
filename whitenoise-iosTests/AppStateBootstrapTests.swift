@@ -1879,7 +1879,7 @@ struct AppStateBootstrapTests {
         //    BEFORE the parked relay catch-up finishes (preventing 0xdead10cc).
         let suspension2 = appState.startRuntimeSuspension()
         try await eventually {
-            marmot.storageIsClosed()
+            marmot.storageIsClosed() && appState.runtimeSuspendedForBackground
         }
         #expect(appState.client == nil)
         #expect(appState.runtimeSuspendedForBackground)
@@ -1980,6 +1980,51 @@ struct AppStateBootstrapTests {
         #expect(appState.runtimeGeneration == initialGeneration)
         #expect(!appState.runtimeSuspendedForBackground)
         try await eventually { appState.notificationSubscriptionActive }
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func foregroundActivationRecoversAfterSecondBackgroundDuringPostCloseDrain() async throws {
+        let catchUp = NotificationCatchUpStub()
+        let checkpoint = AsyncTestCheckpoint()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
+        let appState = seeded.appState
+        appState.setAppSceneActive(true)
+        let generationBefore = appState.runtimeGeneration
+
+        // Park connectivity catch-up so terminal suspension stays alive in its
+        // post-close maintenance drain after SQLCipher is already closed.
+        catchUp.onCatchUp = {
+            await checkpoint.pause()
+        }
+        appState.scheduleConnectivityCatchUp()
+        await checkpoint.waitUntilPaused()
+        catchUp.onCatchUp = nil
+
+        let initialClient = try #require(appState.client)
+        let suspension1 = appState.startRuntimeSuspension()
+        try await eventually {
+            initialClient.marmot.storageIsClosed() && appState.runtimeSuspendedForBackground
+        }
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+
+        // Activate during the post-close drain, then immediately background
+        // again before the drain finishes. The cancelled activation slot must
+        // be cleared so the next foreground activation rebuilds the runtime.
+        let cancelledActivation = appState.startForegroundActivation()
+        let suspension2 = appState.startRuntimeSuspension()
+        await checkpoint.release()
+        await suspension1.value
+        await suspension2.value
+        await cancelledActivation.value
+
+        let recoveredActivation = appState.startForegroundActivation()
+        await recoveredActivation.value
+
+        #expect(appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.client != nil)
+        #expect(appState.runtimeGeneration == generationBefore + 1)
         await stopReadyRuntime(appState)
     }
 

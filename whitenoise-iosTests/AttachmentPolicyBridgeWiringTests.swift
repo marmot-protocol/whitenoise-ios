@@ -488,6 +488,37 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(runtime.grants.count == 1)
     }
 
+    @Test func incompletePolicyPassLeavesRuntimeUnreconciledWhileSkippingUnreadyOnboarding() async throws {
+        // 1. An unreadable onboarding checkpoint leaves the runtime unreconciled
+        //    so the next foreground activation retries.
+        let unreadable = FakeAttachmentRuntime(
+            accounts: [Self.alice, Self.erin],
+            checkpoints: [Self.erin.accountIdHex: .unreadable]
+        )
+        let unreadableBridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        try await unreadableBridge.synchronize(unreadable)
+        #expect(!unreadableBridge.isAttached(to: unreadable))
+
+        // 2. A rejected automatic-permission grant also leaves the runtime unreconciled.
+        let rejected = FakeAttachmentRuntime(
+            accounts: [Self.alice],
+            rejectedGrants: [Self.alice.accountIdHex]
+        )
+        let rejectedBridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        try await rejectedBridge.synchronize(rejected)
+        #expect(!rejectedBridge.isAttached(to: rejected))
+
+        // 3. An intentionally skipped unready onboarding checkpoint still counts
+        //    as reconciled when every eligible account succeeds.
+        let unready = FakeAttachmentRuntime(
+            accounts: [Self.alice, Self.bob],
+            checkpoints: [Self.bob.accountIdHex: .unready]
+        )
+        let unreadyBridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        try await unreadyBridge.synchronize(unready)
+        #expect(unreadyBridge.isAttached(to: unready))
+    }
+
     @Test(.marmotRuntimeConcurrencyLimit)
     func isCurrentClientStartedStaysFalseUntilRuntimeStartupCompletes() async throws {
         try await withTestClient { initialClient in

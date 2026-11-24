@@ -140,13 +140,17 @@ final class AttachmentPolicyBridge {
             let limitsEdited = updatedLimits != nil
             var appliedLimits = false
             var appliedPermission = false
+            var reconciledAllEligibleAccounts = true
             for (account, generation) in generations {
                 try Task.checkCancellation()
                 do {
                     let checkpoint = try await client.onboardingSnapshot(accountID: account.accountIdHex)
                     guard Self.configures(onboardingReady: checkpoint?.ready) else { continue }
                 } catch is CancellationError { throw CancellationError() }
-                catch { continue }
+                catch {
+                    reconciledAllEligibleAccounts = false
+                    continue
+                }
                 guard !Task.isCancelled, revision == event, currentClient === client else {
                     try Self.endSupersededEvent(limitsEdited: limitsEdited)
                     return
@@ -170,13 +174,14 @@ final class AttachmentPolicyBridge {
                 // A stale generation is consumed as-is; never mint a replacement for this event.
                 let applied = try await client.setAttachmentAutomaticPermission(accountRef: account.accountIdHex,
                     generation: generation, permission: permission)
+                if !applied { reconciledAllEligibleAccounts = false }
                 appliedPermission = appliedPermission || applied
             }
             if appliedPermission, !Task.isCancelled, revision == event, currentClient === client {
                 permissions().didApplyAttachmentPermission()
             }
             try Self.finishEvent(limitsEdited: limitsEdited, appliedLimits: appliedLimits)
-            if !beforeStart, !Task.isCancelled, revision == event, currentClient === client {
+            if reconciledAllEligibleAccounts, !beforeStart, !Task.isCancelled, revision == event, currentClient === client {
                 self.reconciledClient = client
             }
         }
