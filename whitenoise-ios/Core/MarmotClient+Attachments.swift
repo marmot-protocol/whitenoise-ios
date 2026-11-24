@@ -36,8 +36,8 @@ extension MarmotClient {
         if let previewByteLimit, asset.byteCount > previewByteLimit {
             throw AttachmentReadError.previewLimitExceeded(byteCount: Int(asset.byteCount))
         }
-        return try await RetainedAttachmentReader.read(byteCount: asset.byteCount) { offset, limit in
-            try await self.marmot.readAttachmentAsset(accountRef: accountRef,
+        return try await RetainedAttachmentReader.read(byteCount: asset.byteCount) { [marmot] offset, limit in
+            try await marmot.readAttachmentAsset(accountRef: accountRef,
                 reference: reference, offset: offset, limit: limit)
         }
     }
@@ -147,8 +147,8 @@ extension MarmotClient {
         if let previewByteLimit, asset.byteCount > previewByteLimit {
             throw AttachmentReadError.previewLimitExceeded(byteCount: Int(asset.byteCount))
         }
-        let data = try await RetainedAttachmentReader.read(byteCount: asset.byteCount) { offset, limit in
-            try await self.marmot.readAttachmentAsset(
+        let data = try await RetainedAttachmentReader.read(byteCount: asset.byteCount) { [marmot] offset, limit in
+            try await marmot.readAttachmentAsset(
                 accountRef: accountRef,
                 reference: assetRef,
                 offset: offset,
@@ -245,10 +245,11 @@ nonisolated enum RetainedAttachmentReader {
     static let chunkSizeBytes: UInt32 = 1024 * 1024
     static let mappedReadThresholdBytes: UInt64 = 4 * 1024 * 1024
 
+    @concurrent
     static func read(byteCount: UInt64,
                      mappedThreshold: UInt64 = mappedReadThresholdBytes,
                      mappedDirectory: URL = PickedMediaFile.defaultDirectory,
-                     chunk: (UInt64, UInt32) async throws -> AttachmentLocalBytesFfi) async throws -> Data {
+                     chunk: @Sendable (UInt64, UInt32) async throws -> AttachmentLocalBytesFfi) async throws -> Data {
         guard byteCount <= 512 * 1024 * 1024 else { throw AttachmentReadError.tooLarge }
         if byteCount > mappedThreshold {
             do {

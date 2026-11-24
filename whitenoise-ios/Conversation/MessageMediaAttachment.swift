@@ -683,11 +683,12 @@ nonisolated enum PickedMediaFile {
     /// descriptor so no named plaintext file ever exists while bytes flow.
     /// `read` returning nil means the bytes are gone. Refuses a body whose
     /// size isn't `expectedSize`.
+    @concurrent
     static func mappedData(
         expectedSize: UInt64,
         in directory: URL = defaultDirectory,
         now: Date = Date(),
-        read: (UInt64) async throws -> Data?
+        read: @Sendable (UInt64) async throws -> Data?
     ) async throws -> Data {
         guard let mappedByteCount = Int(exactly: expectedSize) else {
             throw CocoaError(.fileReadCorruptFile)
@@ -2089,25 +2090,41 @@ nonisolated enum MessageMediaCache {
         }
         let directory = destination.deletingLastPathComponent()
         let manager = FileManager.default
-        try manager.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true,
-            attributes: protectedAttributes
-        )
-        try? manager.setAttributes(protectedAttributes, ofItemAtPath: directory.path)
-        sweepAbandonedStagingFilesOnceIfNeeded(in: directory)
-
         let stagingName = "\(stagingPrefix)\(UUID().uuidString)"
         let staging = directory.appendingPathComponent(stagingName, isDirectory: false)
-        activeStagingFilenames.withLock { _ = $0.insert(stagingName) }
-        let fd = Darwin.open(staging.path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)
-        guard fd >= 0 else {
-            activeStagingFilenames.withLock { _ = $0.remove(stagingName) }
-            let error = PickedMediaFile.mappedWriteError(for: errno)
-            if (error as? CocoaError)?.code == .fileWriteOutOfSpace {
-                throw AttachmentReadError.storageBlocked
+        // Validate producerGeneration under the purge lock BEFORE creating the
+        // cache directory or opening a staging file so a stale producer after a
+        // cache purge never writes plaintext or recreates the directory.
+        let fd: Int32 = try purgeGeneration.withLock { generation in
+            if let producerGeneration, producerGeneration != generation {
+                throw CancellationError()
             }
-            throw error
+            try manager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true,
+                attributes: protectedAttributes
+            )
+            try? manager.setAttributes(protectedAttributes, ofItemAtPath: directory.path)
+            sweepAbandonedStagingFilesOnceIfNeeded(in: directory)
+            activeStagingFilenames.withLock { _ = $0.insert(stagingName) }
+            let opened = Darwin.open(staging.path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+            guard opened >= 0 else {
+                activeStagingFilenames.withLock { _ = $0.remove(stagingName) }
+                let error = PickedMediaFile.mappedWriteError(for: errno)
+                if (error as? CocoaError)?.code == .fileWriteOutOfSpace {
+                    throw AttachmentReadError.storageBlocked
+                }
+                throw error
+            }
+            do {
+                try manager.setAttributes(protectedAttributes, ofItemAtPath: staging.path)
+            } catch {
+                _ = Darwin.close(opened)
+                try? manager.removeItem(at: staging)
+                activeStagingFilenames.withLock { _ = $0.remove(stagingName) }
+                throw error
+            }
+            return opened
         }
         var fdClosed = false
         defer {
@@ -2115,7 +2132,6 @@ nonisolated enum MessageMediaCache {
             try? manager.removeItem(at: staging)
             activeStagingFilenames.withLock { _ = $0.remove(stagingName) }
         }
-        try manager.setAttributes(protectedAttributes, ofItemAtPath: staging.path)
 
         var hasher = SHA256()
         var offset: UInt64 = 0

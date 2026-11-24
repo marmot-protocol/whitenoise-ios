@@ -288,7 +288,9 @@ struct MediaAcquisitionIntentTests {
             .appendingPathComponent("RetainedMappedReads-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let size = 16 * 1024 * 1024
+        // Footprint is process-wide while other suites run concurrently, so use
+        // a 128 MiB payload (64 MiB margin) just like MediaFileUploadTests.
+        let size = 128 * 1024 * 1024
         let chunkPattern = Data(repeating: 0x05, count: 1024 * 1024)
         let offsets = Mutex<[UInt64]>([])
         let sawPathnameDuringStream = Mutex(false)
