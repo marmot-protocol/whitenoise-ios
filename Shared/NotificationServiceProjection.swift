@@ -35,6 +35,7 @@ nonisolated enum NotificationServiceDiagnosticOutcome: String, Codable, Equatabl
     case fallback
     case failed
     case runtimeOwnershipContention
+    case replaced
     case expired
 }
 
@@ -42,6 +43,28 @@ nonisolated enum NotificationServiceTimeoutPolicy {
     /// Leaves enough of the system-owned NSE window to stop workers and close
     /// SQLite before iOS is allowed to suspend the extension.
     static let proactiveExpirationDelay: Duration = .seconds(18)
+    /// Explicit grace floor for `collectNotificationsAfterWake` when the wake
+    /// already spent almost all of its proactive budget draining a prior
+    /// runtime or starting up, so MDK can still drain already-queued local
+    /// records (capped by `configuredMaxWaitMs`).
+    static let minimumCollectionWaitMs: UInt32 = 250
+
+    /// Bounds `collectNotificationsAfterWake`'s wait window to what remains of
+    /// `proactiveBudget` after prior-runtime draining and runtime startup,
+    /// preserving the explicit `minimumCollectionWaitMs` grace floor.
+    static func effectiveCollectionWaitMs(
+        configuredMaxWaitMs: UInt32,
+        proactiveBudget: Duration = proactiveExpirationDelay,
+        elapsed: Duration
+    ) -> UInt32 {
+        let remaining = max(.zero, proactiveBudget - elapsed)
+        let remainingMs = Double(remaining.components.seconds) * 1_000
+            + Double(remaining.components.attoseconds) / 1_000_000_000_000_000
+        let boundedRemaining = UInt32(
+            max(Double(minimumCollectionWaitMs), min(Double(UInt32.max), remainingMs.rounded(.down)))
+        )
+        return min(configuredMaxWaitMs, boundedRemaining)
+    }
 
     static func shouldApplyTimeoutFallback(
         applyingFallbackForTimeout: Bool,
