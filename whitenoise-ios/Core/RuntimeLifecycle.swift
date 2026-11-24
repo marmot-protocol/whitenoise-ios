@@ -1430,33 +1430,43 @@ final class RuntimeLifecycle {
     }
 
     private func waitForForegroundRuntimeMutations(timeout: Duration) async {
-        guard !foregroundMutationLeaseIDs.isEmpty, !Task.isCancelled, backgroundSuspensionRequested else { return }
-        let waiterID = UUID()
-        let sleeper = mutationDrainSleeper
-        var timeoutTask: Task<Void, Never>?
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                guard !foregroundMutationLeaseIDs.isEmpty, !Task.isCancelled, backgroundSuspensionRequested else {
-                    continuation.resume()
-                    return
-                }
-                foregroundMutationWaiters[waiterID] = continuation
-                timeoutTask = Task { @MainActor [weak self] in
-                    do {
-                        try await sleeper(timeout)
-                    } catch {
+        var timedOut = false
+        while !foregroundMutationLeaseIDs.isEmpty,
+              !Task.isCancelled,
+              backgroundSuspensionRequested,
+              !timedOut {
+            let waiterID = UUID()
+            let sleeper = mutationDrainSleeper
+            var timeoutTask: Task<Void, Never>?
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    guard !foregroundMutationLeaseIDs.isEmpty,
+                          !Task.isCancelled,
+                          backgroundSuspensionRequested,
+                          !timedOut
+                    else {
+                        continuation.resume()
                         return
                     }
-                    guard !Task.isCancelled else { return }
+                    foregroundMutationWaiters[waiterID] = continuation
+                    timeoutTask = Task { @MainActor [weak self] in
+                        do {
+                            try await sleeper(timeout)
+                        } catch {
+                            return
+                        }
+                        guard !Task.isCancelled else { return }
+                        timedOut = true
+                        self?.resumeForegroundMutationWaiter(id: waiterID)
+                    }
+                }
+            } onCancel: {
+                Task { @MainActor [weak self] in
                     self?.resumeForegroundMutationWaiter(id: waiterID)
                 }
             }
-        } onCancel: {
-            Task { @MainActor [weak self] in
-                self?.resumeForegroundMutationWaiter(id: waiterID)
-            }
+            timeoutTask?.cancel()
         }
-        timeoutTask?.cancel()
     }
 
     private func waitForForegroundRuntimeMutations() async {
