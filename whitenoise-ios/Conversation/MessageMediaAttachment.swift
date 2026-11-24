@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import ImageIO
 import AVFoundation
@@ -268,6 +269,33 @@ nonisolated enum MediaAttachmentPolicy {
     }
 }
 
+/// O(1) immutable identity for in-memory or file-backed attachment bytes so
+/// SwiftUI diffs and hash tables never run byte-for-byte `memcmp` or hashing
+/// over multi-hundred-MiB payloads on the MainActor.
+nonisolated struct MediaDataContentToken: Hashable, Sendable {
+    /// Payloads at or below this threshold get a deterministic SHA-256 digest
+    /// at construction time so independent reconstructions of small drafts
+    /// remain equal without ever reading large attachments on the MainActor.
+    static let inlineDigestThresholdBytes = 64 * 1024
+
+    private enum Representation: Hashable, Sendable {
+        case digest(Data)
+        case unique(UUID)
+    }
+
+    let byteCount: Int
+    private let representation: Representation
+
+    init(data: Data) {
+        self.byteCount = data.count
+        if data.count <= Self.inlineDigestThresholdBytes {
+            self.representation = .digest(Data(SHA256.hash(data: data)))
+        } else {
+            self.representation = .unique(UUID())
+        }
+    }
+}
+
 nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// Waveform analysis and on-device transcription both need the whole encoded recording.
     static let audioAnalysisByteLimit = 16 * 1024 * 1024
@@ -279,6 +307,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     let mediaType: String
     let dim: String?
     private(set) var localData: Data?
+    private(set) var localDataToken: MediaDataContentToken?
     let thumbnail: UIImage?
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
@@ -300,7 +329,8 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         waveformSamples: [CGFloat] = [],
         rejectionKind: MediaAttachmentRejectionKindFfi? = nil,
         localTarget: AttachmentLocalTargetFfi? = nil,
-        displayIndex: UInt32? = nil
+        displayIndex: UInt32? = nil,
+        localDataToken: MediaDataContentToken? = nil
     ) {
         self.displayIndex = displayIndex
         self.id = id
@@ -309,6 +339,12 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         self.mediaType = mediaType
         self.dim = dim
         self.localData = localData
+        self.localDataToken = localData.map { data in
+            if let localDataToken, localDataToken.byteCount == data.count {
+                return localDataToken
+            }
+            return MediaDataContentToken(data: data)
+        }
         self.thumbnail = thumbnail
         self.durationSeconds = durationSeconds
         self.waveformSamples = waveformSamples
@@ -372,7 +408,10 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     /// Opening a sourced transcript page must still go through that page's original slot.
     var forTranscriptPage: Self {
         var copy = self
-        if AttachmentHandoffSource(self) != .none { copy.localData = nil }
+        if AttachmentHandoffSource(self) != .none {
+            copy.localData = nil
+            copy.localDataToken = nil
+        }
         return copy
     }
 
@@ -405,7 +444,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         if let leasedTarget {
             return AttachmentHandoffSource(self).matches(leasedTarget) && AttachmentHandoffSource(original).matches(leasedTarget)
         }
-        return localTarget == original.localTarget && sourceHint == original.sourceHint && (reference != nil || localData == original.localData)
+        return localTarget == original.localTarget && sourceHint == original.sourceHint && (reference != nil || localDataToken == original.localDataToken)
     }
 
     var isDocument: Bool {
@@ -485,7 +524,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
             && lhs.fileName == rhs.fileName
             && lhs.mediaType == rhs.mediaType
             && lhs.dim == rhs.dim
-            && lhs.localData == rhs.localData
+            && lhs.localDataToken == rhs.localDataToken
             && lhs.durationSeconds == rhs.durationSeconds
             && lhs.waveformSamples == rhs.waveformSamples
             && lhs.rejectionKind == rhs.rejectionKind
@@ -497,7 +536,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         hasher.combine(fileName)
         hasher.combine(mediaType)
         hasher.combine(dim)
-        hasher.combine(localData)
+        hasher.combine(localDataToken)
         hasher.combine(durationSeconds)
         hasher.combine(waveformSamples)
         hasher.combine(rejectionKind)
@@ -509,6 +548,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
     let fileName: String
     let mediaType: String
     let data: Data
+    let dataToken: MediaDataContentToken
     let dim: String?
     let thumbhash: String?
     let thumbnail: UIImage?
@@ -528,12 +568,14 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
         thumbhash: String? = nil,
         thumbnail: UIImage? = nil,
         durationSeconds: Double? = nil,
-        waveformSamples: [CGFloat] = []
+        waveformSamples: [CGFloat] = [],
+        dataToken: MediaDataContentToken? = nil
     ) {
         self.id = id
         self.fileName = fileName
         self.mediaType = mediaType
         self.data = data
+        self.dataToken = (dataToken?.byteCount == data.count ? dataToken : nil) ?? MediaDataContentToken(data: data)
         self.dim = dim
         self.thumbhash = thumbhash
         self.thumbnail = thumbnail
@@ -565,7 +607,8 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
             localData: data,
             thumbnail: thumbnail,
             durationSeconds: durationSeconds,
-            waveformSamples: waveformSamples
+            waveformSamples: waveformSamples,
+            localDataToken: dataToken
         )
     }
 
@@ -586,7 +629,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
         lhs.id == rhs.id
             && lhs.fileName == rhs.fileName
             && lhs.mediaType == rhs.mediaType
-            && lhs.data == rhs.data
+            && lhs.dataToken == rhs.dataToken
             && lhs.dim == rhs.dim
             && lhs.thumbhash == rhs.thumbhash
             && lhs.durationSeconds == rhs.durationSeconds
@@ -597,7 +640,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
         hasher.combine(id)
         hasher.combine(fileName)
         hasher.combine(mediaType)
-        hasher.combine(data)
+        hasher.combine(dataToken)
         hasher.combine(dim)
         hasher.combine(thumbhash)
         hasher.combine(durationSeconds)
@@ -636,42 +679,97 @@ nonisolated enum PickedMediaFile {
     }
 
     /// Writes the chunks `read` returns (from `offset`, until an empty chunk)
-    /// into a private file and maps it, as `mappedData(from:)` maps a clone.
+    /// into an unlinked private file and maps it read-only through its open
+    /// descriptor so no named plaintext file ever exists while bytes flow.
     /// `read` returning nil means the bytes are gone. Refuses a body whose
     /// size isn't `expectedSize`.
+    @concurrent
     static func mappedData(
         expectedSize: UInt64,
         in directory: URL = defaultDirectory,
         now: Date = Date(),
-        read: (UInt64) async throws -> Data?
+        read: @Sendable (UInt64) async throws -> Data?
     ) async throws -> Data {
+        guard let mappedByteCount = Int(exactly: expectedSize) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
         let manager = FileManager.default
         try manager.createDirectory(at: directory, withIntermediateDirectories: true)
         MediaUploadSourceFiles.removeStale(in: directory, olderThan: staleAge, now: now)
         let copy = directory.appendingPathComponent(UUID().uuidString, isDirectory: false)
-        // Not complete protection, for the same reason as a picked clone.
-        guard manager.createFile(atPath: copy.path, contents: nil,
-            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
-        else { throw CocoaError(.fileWriteUnknown) }
-        defer { try? manager.removeItem(at: copy) }
-        let handle = try FileHandle(forWritingTo: copy)
-        var offset: UInt64 = 0
+        let fd = Darwin.open(copy.path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+        guard fd >= 0 else {
+            throw Self.mappedWriteError(for: errno)
+        }
+        var fdClosed = false
+        defer {
+            if !fdClosed { _ = Darwin.close(fd) }
+        }
+        // Set protection and unlink BEFORE any plaintext bytes are written so a
+        // mid-stream crash or kill never leaves a named plaintext file on disk.
+        // Not complete protection: once the device locks, a page fault in a
+        // complete-protection mapping can't be decrypted and crashes the app.
         do {
-            while true {
-                try Task.checkCancellation()
-                guard let chunk = try await read(offset) else { throw CocoaError(.fileReadNoSuchFile) }
-                if chunk.isEmpty { break }
-                try handle.write(contentsOf: chunk)
-                offset += UInt64(chunk.count)
-                guard offset <= expectedSize else { throw CocoaError(.fileReadCorruptFile) }
+            try manager.setAttributes(
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                ofItemAtPath: copy.path
+            )
+            guard Darwin.unlink(copy.path) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
-            try handle.close()
         } catch {
-            try? handle.close()
+            try? manager.removeItem(at: copy)
             throw error
         }
+
+        var offset: UInt64 = 0
+        while true {
+            try Task.checkCancellation()
+            guard let chunk = try await read(offset) else { throw CocoaError(.fileReadNoSuchFile) }
+            if chunk.isEmpty { break }
+            let chunkCount = UInt64(chunk.count)
+            guard chunkCount <= expectedSize - offset else { throw CocoaError(.fileReadCorruptFile) }
+            try writeAll(chunk, to: fd)
+            offset += chunkCount
+        }
         guard offset == expectedSize else { throw CocoaError(.fileReadCorruptFile) }
-        return try Data(contentsOf: copy, options: .alwaysMapped)
+        if mappedByteCount == 0 {
+            return Data()
+        }
+        let mapped = Darwin.mmap(nil, mappedByteCount, PROT_READ, MAP_PRIVATE, fd, 0)
+        guard mapped != MAP_FAILED, let pointer = mapped else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        _ = Darwin.close(fd)
+        fdClosed = true
+        return Data(bytesNoCopy: pointer, count: mappedByteCount, deallocator: .custom { ptr, length in
+            _ = Darwin.munmap(ptr, length)
+        })
+    }
+
+    static func writeAll(_ data: Data, to fd: Int32) throws {
+        try data.withUnsafeBytes { rawBuffer in
+            guard let base = rawBuffer.baseAddress else { return }
+            var remaining = rawBuffer.count
+            var current = base
+            while remaining > 0 {
+                let written = Darwin.write(fd, current, remaining)
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    throw mappedWriteError(for: errno)
+                }
+                guard written > 0 else { throw CocoaError(.fileWriteUnknown) }
+                remaining -= written
+                current = current.advanced(by: written)
+            }
+        }
+    }
+
+    static func mappedWriteError(for code: Int32) -> Error {
+        if code == ENOSPC || code == EDQUOT {
+            return CocoaError(.fileWriteOutOfSpace)
+        }
+        return POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
     }
 }
 
@@ -967,6 +1065,7 @@ nonisolated enum MediaDraftProcessor {
         typeIdentifier: String?,
         videoMetadata: MediaVideoMetadata.Metadata?
     ) throws -> MediaDraftAttachment {
+        let quality = MediaQualityStore.quality()
         let decodable = data.count <= maxImageSourceBytes
         if decodable, let gif = animatedGIFAttachment(from: data, fileName: fileName) {
             return gif
@@ -976,23 +1075,25 @@ nonisolated enum MediaDraftProcessor {
            type.conforms(to: .image)
         {
             guard decodable else { throw Failure.attachmentTooLarge(data.count) }
-            guard let image = UIImage(data: data) else {
+            guard let image = decodedBoundedImage(from: data, maxPixelSize: quality.imageMaxEdgePx) else {
                 throw Failure.unsupportedImage
             }
-            return try attachment(from: image, fileName: fileName)
+            return try attachment(from: image, fileName: fileName, quality: quality)
         }
 
-        if typeIdentifier == nil, decodable, let image = UIImage(data: data) {
-            return try attachment(from: image, fileName: fileName)
+        if typeIdentifier == nil, decodable,
+           let image = decodedBoundedImage(from: data, maxPixelSize: quality.imageMaxEdgePx)
+        {
+            return try attachment(from: image, fileName: fileName, quality: quality)
         }
 
         let kind = kind(for: typeIdentifier, fileName: fileName)
         if kind == .image {
             guard decodable else { throw Failure.attachmentTooLarge(data.count) }
-            guard let image = UIImage(data: data) else {
+            guard let image = decodedBoundedImage(from: data, maxPixelSize: quality.imageMaxEdgePx) else {
                 throw Failure.unsupportedImage
             }
-            return try attachment(from: image, fileName: fileName)
+            return try attachment(from: image, fileName: fileName, quality: quality)
         }
         guard kind == .video || kind == .audio || kind == .document,
               let mediaType = MediaAttachmentPolicy.mediaType(
@@ -1067,14 +1168,36 @@ nonisolated enum MediaDraftProcessor {
         )
     }
 
-    static func imageAttachment(from data: Data, fileName: String?) throws -> MediaDraftAttachment {
+    static func imageAttachment(
+        from data: Data,
+        fileName: String?,
+        quality: MediaQuality = MediaQualityStore.quality()
+    ) throws -> MediaDraftAttachment {
+        guard data.count <= maxImageSourceBytes else {
+            throw Failure.attachmentTooLarge(data.count)
+        }
         if let gif = animatedGIFAttachment(from: data, fileName: fileName) {
             return gif
         }
-        guard let image = UIImage(data: data) else {
+        guard let image = decodedBoundedImage(from: data, maxPixelSize: quality.imageMaxEdgePx) else {
             throw Failure.unsupportedImage
         }
-        return try attachment(from: image, fileName: fileName)
+        return try attachment(from: image, fileName: fileName, quality: quality)
+    }
+
+    /// Decodes an image bounded directly to `maxPixelSize` via ImageIO so a
+    /// high-megapixel photo never allocates a full-resolution raster bitmap
+    /// before downscaling and metadata stripping.
+    static func decodedBoundedImage(
+        from data: Data,
+        maxPixelSize: CGFloat
+    ) -> UIImage? {
+        RemoteImageDecoder.decodedDownsampledImage(
+            from: data,
+            maxPixelSize: max(1, Int(maxPixelSize.rounded(.up))),
+            scale: 1,
+            shouldCacheImmediately: false
+        )
     }
 
     private static func animatedGIFAttachment(from data: Data, fileName: String?) -> MediaDraftAttachment? {
@@ -1589,7 +1712,7 @@ nonisolated private enum DecryptedMediaCacheEvictor {
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
+            options: []
         ) else {
             return
         }
@@ -1597,6 +1720,14 @@ nonisolated private enum DecryptedMediaCacheEvictor {
         var entries: [Entry] = []
         entries.reserveCapacity(urls.count)
         for url in urls {
+            let name = url.lastPathComponent
+            if name.hasPrefix(MessageMediaCache.stagingPrefix) {
+                if !MessageMediaCache.isActiveStagingFile(name) {
+                    try? FileManager.default.removeItem(at: url)
+                }
+                continue
+            }
+            if name.hasPrefix(".") { continue }
             guard let values = try? url.resourceValues(forKeys: [
                 .isRegularFileKey,
                 .contentModificationDateKey,
@@ -1865,6 +1996,210 @@ nonisolated enum MessageMediaCache {
             preserving: url,
             now: now
         )
+    }
+
+    /// Verifies an already-cached playback file in streaming 1 MiB chunks so
+    /// replaying a large video never allocates its plaintext in RAM.
+    static func validCachedFileURL(
+        for reference: MediaAttachmentReferenceFfi,
+        cachesDirectory: URL? = nil,
+        policy: DecryptedMediaCacheEvictionPolicy = .media,
+        now: Date = Date()
+    ) async -> URL? {
+        guard let root = cachesDirectory ?? defaultCachesDirectory else { return nil }
+        return await Task.detached(priority: .userInitiated) {
+            validCachedFileURLSync(for: reference, cachesDirectory: root, policy: policy, now: now)
+        }.value
+    }
+
+    private static func validCachedFileURLSync(
+        for reference: MediaAttachmentReferenceFfi,
+        cachesDirectory: URL,
+        policy: DecryptedMediaCacheEvictionPolicy,
+        now: Date
+    ) -> URL? {
+        guard let url = cacheURL(for: reference, cachesDirectory: cachesDirectory),
+              FileManager.default.fileExists(atPath: url.path)
+        else { return nil }
+        let directory = url.deletingLastPathComponent()
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let modifiedAt = attributes[.modificationDate] as? Date,
+           now.timeIntervalSince(modifiedAt) > policy.maxAge
+        {
+            try? FileManager.default.removeItem(at: url)
+            DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, now: now)
+            return nil
+        }
+        guard streamingSHA256Hex(ofFileAt: url) == reference.plaintextSha256.lowercased() else {
+            try? FileManager.default.removeItem(at: url)
+            return nil
+        }
+        DecryptedMediaCacheEvictor.touch(url, at: now)
+        DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, preserving: url, now: now)
+        return url
+    }
+
+    static let stagingPrefix = ".staging-"
+    private static let activeStagingFilenames = Mutex<Set<String>>([])
+    private static let sweptStagingDirectories = Mutex<Set<String>>([])
+
+    static func isActiveStagingFile(_ filename: String) -> Bool {
+        activeStagingFilenames.withLock { $0.contains(filename) }
+    }
+
+    static func sweepAbandonedStagingFiles(in directory: URL) {
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: []
+        ) else { return }
+        for url in urls {
+            let name = url.lastPathComponent
+            guard name.hasPrefix(stagingPrefix), !isActiveStagingFile(name) else { continue }
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private static func sweepAbandonedStagingFilesOnceIfNeeded(in directory: URL) {
+        let shouldSweep = sweptStagingDirectories.withLock { $0.insert(directory.path).inserted }
+        if shouldSweep {
+            sweepAbandonedStagingFiles(in: directory)
+        }
+    }
+
+    /// Streams an original-slot attachment directly into a `.complete`-protected
+    /// staging file inside `Caches/EncryptedMedia`, verifies its SHA-256 while
+    /// streaming, and atomically publishes it to the cache URL so playback of a
+    /// large video needs only one copy on disk and constant memory. Runs off the
+    /// MainActor so 1 MiB file writes, hashing, and trim never block the UI.
+    @concurrent
+    static func streamAndStore(
+        for reference: MediaAttachmentReferenceFfi,
+        byteCount: UInt64,
+        cachesDirectory: URL? = nil,
+        policy: DecryptedMediaCacheEvictionPolicy = .media,
+        now: Date = Date(),
+        producerGeneration: Int? = nil,
+        chunk: @Sendable (UInt64, UInt32) async throws -> AttachmentLocalBytesFfi
+    ) async throws -> URL {
+        guard byteCount <= 512 * 1024 * 1024 else { throw AttachmentReadError.tooLarge }
+        guard let root = cachesDirectory ?? defaultCachesDirectory,
+              let destination = cacheURL(for: reference, cachesDirectory: root)
+        else {
+            throw AttachmentReadError.unavailable
+        }
+        let directory = destination.deletingLastPathComponent()
+        let manager = FileManager.default
+        let stagingName = "\(stagingPrefix)\(UUID().uuidString)"
+        let staging = directory.appendingPathComponent(stagingName, isDirectory: false)
+        // Validate producerGeneration under the purge lock BEFORE creating the
+        // cache directory or opening a staging file so a stale producer after a
+        // cache purge never writes plaintext or recreates the directory.
+        let fd: Int32 = try purgeGeneration.withLock { generation in
+            if let producerGeneration, producerGeneration != generation {
+                throw CancellationError()
+            }
+            try manager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true,
+                attributes: protectedAttributes
+            )
+            try? manager.setAttributes(protectedAttributes, ofItemAtPath: directory.path)
+            sweepAbandonedStagingFilesOnceIfNeeded(in: directory)
+            activeStagingFilenames.withLock { _ = $0.insert(stagingName) }
+            let opened = Darwin.open(staging.path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+            guard opened >= 0 else {
+                activeStagingFilenames.withLock { _ = $0.remove(stagingName) }
+                let error = PickedMediaFile.mappedWriteError(for: errno)
+                if (error as? CocoaError)?.code == .fileWriteOutOfSpace {
+                    throw AttachmentReadError.storageBlocked
+                }
+                throw error
+            }
+            do {
+                try manager.setAttributes(protectedAttributes, ofItemAtPath: staging.path)
+            } catch {
+                _ = Darwin.close(opened)
+                try? manager.removeItem(at: staging)
+                activeStagingFilenames.withLock { _ = $0.remove(stagingName) }
+                throw error
+            }
+            return opened
+        }
+        var fdClosed = false
+        defer {
+            if !fdClosed { _ = Darwin.close(fd) }
+            try? manager.removeItem(at: staging)
+            activeStagingFilenames.withLock { _ = $0.remove(stagingName) }
+        }
+
+        var hasher = SHA256()
+        var offset: UInt64 = 0
+        do {
+            while true {
+                try Task.checkCancellation()
+                let next = try await chunk(offset, RetainedAttachmentReader.chunkSizeBytes)
+                guard next.available else { throw AttachmentReadError.stale }
+                if next.bytes.isEmpty { break }
+                let chunkCount = UInt64(next.bytes.count)
+                guard chunkCount <= byteCount - offset else { throw AttachmentReadError.stale }
+                try PickedMediaFile.writeAll(next.bytes, to: fd)
+                hasher.update(data: next.bytes)
+                offset += chunkCount
+            }
+        } catch let error as CocoaError where error.code == .fileWriteOutOfSpace {
+            throw AttachmentReadError.storageBlocked
+        }
+        _ = Darwin.close(fd)
+        fdClosed = true
+
+        guard offset == byteCount else { throw AttachmentReadError.stale }
+        let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        guard digest == reference.plaintextSha256.lowercased() else {
+            throw ConversationMediaDownloader.MediaDataError.plaintextHashMismatch
+        }
+
+        let published: Bool = purgeGeneration.withLock { generation in
+            if let producerGeneration, producerGeneration != generation { return false }
+            do {
+                try manager.createDirectory(
+                    at: directory,
+                    withIntermediateDirectories: true,
+                    attributes: protectedAttributes
+                )
+                try? manager.setAttributes(protectedAttributes, ofItemAtPath: directory.path)
+                try? manager.setAttributes(protectedAttributes, ofItemAtPath: staging.path)
+                guard Darwin.rename(staging.path, destination.path) == 0 else { return false }
+                try? manager.setAttributes(protectedAttributes, ofItemAtPath: destination.path)
+                return true
+            } catch {
+                return false
+            }
+        }
+        guard published else { throw CancellationError() }
+        DecryptedMediaCacheEvictor.touch(destination, at: now)
+        DecryptedMediaCacheEvictor.trim(
+            directory: directory,
+            policy: policy,
+            preserving: destination,
+            now: now
+        )
+        return destination
+    }
+
+    private static func streamingSHA256Hex(ofFileAt url: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        let chunkSize = Int(RetainedAttachmentReader.chunkSizeBytes)
+        do {
+            while let chunk = try handle.read(upToCount: chunkSize), !chunk.isEmpty {
+                hasher.update(data: chunk)
+            }
+        } catch {
+            return nil
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     /// Removes cached decrypted plaintext when a caller has ciphertext hashes

@@ -1,5 +1,7 @@
+import ImageIO
 import Testing
 import UIKit
+import UniformTypeIdentifiers
 @testable import whitenoise_ios
 
 /// Camera portraits arrive as landscape sensor bitmaps tagged `.right`.
@@ -120,6 +122,63 @@ struct MediaDraftProcessorOrientationTests {
         #expect(attachment.mediaType == "image/jpeg")
         #expect(attachment.dim == "100x400")
         #expect(attachment.thumbnail != nil)
+    }
+
+    @Test func decodedBoundedImageRejectsSVGPayload() {
+        let svg = Data("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"></svg>".utf8)
+        #expect(MediaDraftProcessor.decodedBoundedImage(from: svg, maxPixelSize: MediaQuality.standard.imageMaxEdgePx) == nil)
+    }
+
+    @Test func oversizedExifRotatedJPEGDownsamplesToQualityCapAndStripsMetadata() throws {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let raw = UIGraphicsImageRenderer(size: CGSize(width: 3000, height: 1500), format: format).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 1500, height: 1500))
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 1500, y: 0, width: 1500, height: 1500))
+        }
+        let cgImage = try #require(raw.cgImage)
+        let encoded = NSMutableData()
+        let destination = try #require(
+            CGImageDestinationCreateWithData(encoded, UTType.jpeg.identifier as CFString, 1, nil)
+        )
+        // EXIF orientation 6 (.right) turns a 3000x1500 sensor bitmap into 1500x3000 portrait;
+        // add GPS & TIFF metadata to verify re-encoding strips all identifying tags.
+        let metadata: [CFString: Any] = [
+            kCGImagePropertyOrientation: 6,
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "TestCam"],
+            kCGImagePropertyExifDictionary: [
+                kCGImagePropertyExifUserComment: "secret-note",
+                kCGImagePropertyExifDateTimeOriginal: "2026:01:01 00:00:00",
+            ],
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 37.7749],
+        ]
+        CGImageDestinationAddImage(destination, cgImage, metadata as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+
+        let attachment = try MediaDraftProcessor.imageAttachment(
+            from: encoded as Data,
+            fileName: "camera.jpg",
+            quality: .standard
+        )
+        #expect(attachment.dim == "1024x2048")
+
+        let outputSource = try #require(CGImageSourceCreateWithData(attachment.data as CFData, nil))
+        let outputProps = (CGImageSourceCopyPropertiesAtIndex(outputSource, 0, nil) as? [CFString: Any]) ?? [:]
+        #expect(outputProps[kCGImagePropertyGPSDictionary] == nil)
+        let outputExif = outputProps[kCGImagePropertyExifDictionary] as? [CFString: Any]
+        #expect(outputExif?[kCGImagePropertyExifUserComment] == nil)
+        #expect(outputExif?[kCGImagePropertyExifDateTimeOriginal] == nil)
+        let outputTIFF = outputProps[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        #expect(outputTIFF?[kCGImagePropertyTIFFMake] == nil)
+
+        let decoded = try #require(UIImage(data: attachment.data))
+        let top = try #require(averageColor(of: decoded, sampleY: 300))
+        let bottom = try #require(averageColor(of: decoded, sampleY: 1700))
+        #expect(top.red > top.blue)
+        #expect(bottom.blue > bottom.red)
     }
 
     private struct SampledColor {

@@ -219,6 +219,22 @@ nonisolated struct GroupSharedMediaThumbnailLoadGate: Equatable {
     }
 }
 
+/// Routes shared-media thumbnail loads so videos always enforce the bounded
+/// preview limit instead of pulling uncapped 512 MiB blobs into RAM.
+nonisolated enum GroupSharedMediaThumbnailLoader {
+    @MainActor
+    static func loadData(
+        for item: MessageMediaAttachment,
+        demand: AttachmentDemand,
+        using loader: ConversationMediaLoader
+    ) async throws -> Data {
+        if item.isVideo {
+            return try await loader.videoPreviewData(for: item, demand: demand)
+        }
+        return try await loader.data(for: item, demand: demand)
+    }
+}
+
 struct GroupSharedMediaThumbnail: View {
     let item: MessageMediaAttachment
     let onLoadMedia: ConversationMediaLoader
@@ -226,21 +242,35 @@ struct GroupSharedMediaThumbnail: View {
 
     @Environment(\.displayScale) private var displayScale
     @State private var thumbnail: UIImage?
-    @State private var sourceData: Data?
     @State private var loads = GroupSharedMediaThumbnailLoadGate()
     @State private var didFail = false
+    @State private var overPreviewLimit = false
     @State private var awaitingManualDownload = false
 
     private let pointSize: CGFloat = 120
 
+    private var maxThumbnailPixelSize: Int {
+        max(1, Int(ceil(pointSize * displayScale)))
+    }
+
+    private var canOpenGallery: Bool {
+        thumbnail != nil || (item.isVideo && overPreviewLimit)
+    }
+
     var body: some View {
         Button {
             Task {
-                if thumbnail == nil {
+                if !canOpenGallery {
                     await load(demand: GroupSharedMediaThumbnailDemand.onTap(didFail: didFail))
                 }
-                guard thumbnail != nil else { return }
-                onOpen(item.isImage ? sourceData : nil)
+                guard canOpenGallery else { return }
+                let initialData = item.isImage
+                    ? MessageMediaThumbnailDecoder.cachedThumbnail(
+                        for: MessageMediaThumbnailPresentation.cacheKey(for: item),
+                        maxPixelSize: maxThumbnailPixelSize
+                    )?.sourceData
+                    : nil
+                onOpen(initialData)
             }
         } label: {
             GeometryReader { geometry in
@@ -265,7 +295,7 @@ struct GroupSharedMediaThumbnail: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    if item.isVideo, thumbnail != nil {
+                    if item.isVideo, thumbnail != nil || overPreviewLimit {
                         Image(systemName: "play.fill")
                             .font(.headline)
                             .foregroundStyle(.white)
@@ -281,6 +311,15 @@ struct GroupSharedMediaThumbnail: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(item.fileName)
+        .onReceive(NotificationCenter.default.publisher(for: MessageVideoThumbnailDecoder.playedPreviewDidChange)) { update in
+            guard item.isVideo, thumbnail == nil,
+                  let key = update.object as? String, key == MessageVideoThumbnailPresentation.cacheKey(for: item),
+                  let poster = MessageVideoThumbnailDecoder.cachedThumbnail(
+                    for: key,
+                    maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize
+                  ) else { return }
+            thumbnail = poster
+        }
         .task(id: [item.id, MediaAutoDownloadStore.shared.attachmentPolicyRevision]) {
             guard !restoreCachedThumbnail() else { return }
             let autoDownloadAllowed = MediaAutoDownloadStore.shared.shouldAutoDownload(item.isVideo ? .video : .image)
@@ -294,7 +333,7 @@ struct GroupSharedMediaThumbnail: View {
 
     @MainActor
     private func restoreCachedThumbnail() -> Bool {
-        let maxPixelSize = max(1, Int(ceil(pointSize * displayScale)))
+        let maxPixelSize = maxThumbnailPixelSize
         let cacheKey = MessageMediaThumbnailPresentation.cacheKey(for: item)
         if item.isImage,
            let cached = MessageMediaThumbnailDecoder.cachedThumbnail(
@@ -303,7 +342,6 @@ struct GroupSharedMediaThumbnail: View {
            )
         {
             thumbnail = cached.image
-            sourceData = cached.sourceData
             didFail = false
             awaitingManualDownload = false
             return true
@@ -312,6 +350,9 @@ struct GroupSharedMediaThumbnail: View {
            let cached = MessageVideoThumbnailDecoder.cachedThumbnail(
             for: cacheKey,
             maxPixelSize: maxPixelSize
+           ) ?? MessageVideoThumbnailDecoder.cachedThumbnail(
+            for: MessageVideoThumbnailPresentation.cacheKey(for: item),
+            maxPixelSize: MessageVideoThumbnailDecoder.playedPosterPixelSize
            )
         {
             thumbnail = cached
@@ -325,18 +366,23 @@ struct GroupSharedMediaThumbnail: View {
     @MainActor
     private func load(demand: AttachmentDemand) async {
         if demand != .retry, restoreCachedThumbnail() { return }
-        let maxPixelSize = max(1, Int(ceil(pointSize * displayScale)))
+        let maxPixelSize = maxThumbnailPixelSize
         let cacheKey = MessageMediaThumbnailPresentation.cacheKey(for: item)
 
         // A newer load supersedes this one; the downloader lets an explicit tap join the
         // automatic transfer instead of being dropped behind it.
         let load = loads.begin()
         didFail = false
+        overPreviewLimit = false
         awaitingManualDownload = false
         defer { loads.finish(load) }
         do {
             let producerEpoch = MessageMediaCache.currentProducerEpoch()
-            let data = try await onLoadMedia.data(for: item, demand: demand)
+            let data = try await GroupSharedMediaThumbnailLoader.loadData(
+                for: item,
+                demand: demand,
+                using: onLoadMedia
+            )
             guard !Task.isCancelled, loads.owns(load) else { return }
             if item.isImage {
                 guard let decoded = await MessageMediaThumbnailDecoder.image(
@@ -354,7 +400,6 @@ struct GroupSharedMediaThumbnail: View {
                     for: cacheKey,
                     maxPixelSize: maxPixelSize
                 )
-                sourceData = data
                 thumbnail = decoded
             } else if item.isVideo,
                       let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch),
@@ -373,6 +418,11 @@ struct GroupSharedMediaThumbnail: View {
                 thumbnail = decoded
             } else if loads.owns(load) {
                 didFail = demand.failureOffersRetry
+            }
+        } catch AttachmentReadError.previewLimitExceeded {
+            if loads.owns(load), item.isVideo {
+                overPreviewLimit = true
+                didFail = false
             }
         } catch is CancellationError {
             return

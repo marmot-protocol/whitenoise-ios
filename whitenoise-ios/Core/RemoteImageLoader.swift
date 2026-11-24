@@ -159,27 +159,36 @@ nonisolated enum RemoteImageDecoder {
         return type.conforms(to: .image) && !type.conforms(to: UTType.svg)
     }
 
-    static func downsampledImage(from data: Data, maxPixelSize: Int, scale: CGFloat) async -> UIImage? {
+    static func decodedDownsampledImage(
+        from data: Data,
+        maxPixelSize: Int,
+        scale: CGFloat,
+        shouldCacheImmediately: Bool = true
+    ) -> UIImage? {
         let targetPixelSize = max(maxPixelSize, 1)
         let imageScale = max(scale, 1)
-        return await Task.detached(priority: .utility) { () -> UIImage? in
-            let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-            guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-                return nil
-            }
-            guard Self.isAllowedRemoteImageType(CGImageSourceGetType(source)) else {
-                return nil
-            }
-            let options = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: targetPixelSize,
-            ] as CFDictionary
-            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
-                return nil
-            }
-            return UIImage(cgImage: cgImage, scale: imageScale, orientation: .up)
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
+            return nil
+        }
+        guard Self.isAllowedRemoteImageType(CGImageSourceGetType(source)) else {
+            return nil
+        }
+        let options = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: shouldCacheImmediately,
+            kCGImageSourceThumbnailMaxPixelSize: targetPixelSize,
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage, scale: imageScale, orientation: .up)
+    }
+
+    static func downsampledImage(from data: Data, maxPixelSize: Int, scale: CGFloat) async -> UIImage? {
+        await Task.detached(priority: .utility) { () -> UIImage? in
+            Self.decodedDownsampledImage(from: data, maxPixelSize: maxPixelSize, scale: scale)
         }.value
     }
 }

@@ -291,7 +291,8 @@ nonisolated struct OwnSendMediaStore {
             waveformSamples: own.waveformSamples,
             rejectionKind: item.rejectionKind,
             localTarget: item.localTarget,
-            displayIndex: item.displayIndex
+            displayIndex: item.displayIndex,
+            localDataToken: own.localDataToken
         )
         overlaid.sourceHint = item.sourceHint
         overlaid.demand = item.demand

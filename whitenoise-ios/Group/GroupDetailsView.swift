@@ -344,6 +344,8 @@ struct GroupDetailsView: View {
     private var mediaLoader: ConversationMediaLoader {
         ConversationMediaLoader { media in
             try await viewModel.data(for: media)
+        } playbackFileURL: { media in
+            try await viewModel.playbackFileURL(for: media)
         }
     }
 

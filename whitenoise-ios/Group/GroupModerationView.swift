@@ -361,6 +361,7 @@ struct GroupModerationView: View {
     private func documentLoader(for entry: GroupModerationModel.Entry) -> ConversationMediaLoader {
         let scope = AttachmentHistoryPager.Scope(appState: appState, group: conversation.group.groupIdHex)
         return ConversationMediaLoader({ try await conversation.data(for: $0) },
+            playbackFileURL: { try await conversation.playbackFileURL(for: $0) },
             openHandoff: { try await conversation.openHandoff(for: $0, control: $1) },
             canShareDocument: { media, target in
                 guard let scope, let target, AttachmentHandoffSource(media).matches(target), conversation.canModerateReports else { return false }

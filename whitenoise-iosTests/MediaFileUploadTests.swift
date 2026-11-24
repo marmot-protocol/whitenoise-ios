@@ -317,7 +317,7 @@ struct MediaFileUploadTests {
         #expect(Int64(after) - Int64(before) < Int64(size / 2))
     }
 
-    private static func physicalFootprint() -> UInt64? {
+    static func physicalFootprint() -> UInt64? {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
         let result = withUnsafeMutablePointer(to: &info) {

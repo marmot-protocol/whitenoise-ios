@@ -179,6 +179,17 @@ struct MediaAttachmentPolicyTests {
         #expect(draft.data.count == data.count)
     }
 
+    @Test func imageAttachmentRefusesSourcesOverDecodeLimit() {
+        let data = Data(count: MediaDraftProcessor.maxImageSourceBytes + 1)
+        let error = #expect(throws: MediaDraftProcessor.Failure.self) {
+            try MediaDraftProcessor.imageAttachment(from: data, fileName: "huge.jpg")
+        }
+        guard case .attachmentTooLarge = error else {
+            Issue.record("Expected attachmentTooLarge, got \(String(describing: error))")
+            return
+        }
+    }
+
     @Test func imageDraftGeneratesDimAndThumbhashForUpload() throws {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
