@@ -688,7 +688,7 @@ final class ConversationComposerState {
 
 private struct ConversationComposerInputView: View {
     @Bindable var composer: ConversationComposerState
-    @ObservedObject private var voiceRecorder: VoiceMessageRecorder
+    @ObservedObject var voiceRecorder: VoiceMessageRecorder
     let viewModel: ConversationViewModel?
     let replyCloseIconSize: CGFloat
     let replyCloseHitSize: CGFloat
@@ -716,67 +716,6 @@ private struct ConversationComposerInputView: View {
     let onVoiceDragChanged: (CGSize) -> Void
     let onVoicePressEnded: () -> Void
     let onSend: () -> Void
-
-    init(
-        composer: ConversationComposerState,
-        viewModel: ConversationViewModel?,
-        replyCloseIconSize: CGFloat,
-        replyCloseHitSize: CGFloat,
-        makeReplyPreview: @escaping (ConversationViewModel) -> ComposerReplyPreview?,
-        makeDisabledAction: @escaping (ConversationViewModel) -> ComposerDisabledAction?,
-        makeDictationBinding: @escaping () -> ComposerDictationBinding?,
-        isEditSubmissionEnabled: @escaping () -> Bool,
-        hasSavedDraft: @escaping () -> Bool,
-        onCancelEdit: @escaping () -> Void,
-        onCreatePoll: @escaping () -> Void,
-        onCustomEmoji: @escaping () -> Void,
-        onStickers: @escaping () -> Void,
-        onTakePhoto: @escaping () -> Void,
-        onPhotoLibrary: @escaping () -> Void,
-        onAttachFile: @escaping () -> Void,
-        onShareLocation: @escaping () -> Void,
-        onShareContact: @escaping () -> Void,
-        onSearchGIFs: @escaping () -> Void,
-        onPasteImage: @escaping (UIImage) -> Void,
-        onRemoveMediaDraft: @escaping (MediaDraftAttachment.ID) -> Void,
-        onPreviewPreparedMedia: @escaping (MediaDraftAttachment.ID) -> Void,
-        onCancelVoiceRecording: @escaping () -> Void,
-        onStopVoiceRecording: @escaping () -> Void,
-        onVoicePressBegan: @escaping () -> Void,
-        onVoiceDragChanged: @escaping (CGSize) -> Void,
-        onVoicePressEnded: @escaping () -> Void,
-        onSend: @escaping () -> Void
-    ) {
-        self.composer = composer
-        _voiceRecorder = ObservedObject(wrappedValue: composer.voiceRecorder)
-        self.viewModel = viewModel
-        self.replyCloseIconSize = replyCloseIconSize
-        self.replyCloseHitSize = replyCloseHitSize
-        self.makeReplyPreview = makeReplyPreview
-        self.makeDisabledAction = makeDisabledAction
-        self.makeDictationBinding = makeDictationBinding
-        self.isEditSubmissionEnabled = isEditSubmissionEnabled
-        self.hasSavedDraft = hasSavedDraft
-        self.onCancelEdit = onCancelEdit
-        self.onCreatePoll = onCreatePoll
-        self.onCustomEmoji = onCustomEmoji
-        self.onStickers = onStickers
-        self.onTakePhoto = onTakePhoto
-        self.onPhotoLibrary = onPhotoLibrary
-        self.onAttachFile = onAttachFile
-        self.onShareLocation = onShareLocation
-        self.onShareContact = onShareContact
-        self.onSearchGIFs = onSearchGIFs
-        self.onPasteImage = onPasteImage
-        self.onRemoveMediaDraft = onRemoveMediaDraft
-        self.onPreviewPreparedMedia = onPreviewPreparedMedia
-        self.onCancelVoiceRecording = onCancelVoiceRecording
-        self.onStopVoiceRecording = onStopVoiceRecording
-        self.onVoicePressBegan = onVoicePressBegan
-        self.onVoiceDragChanged = onVoiceDragChanged
-        self.onVoicePressEnded = onVoicePressEnded
-        self.onSend = onSend
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1960,6 +1899,7 @@ struct ConversationView: View {
         } else {
             ConversationComposerInputView(
                 composer: composer,
+                voiceRecorder: composer.voiceRecorder,
                 viewModel: viewModel,
                 replyCloseIconSize: replyCloseIconSize,
                 replyCloseHitSize: replyCloseHitSize,
@@ -2946,7 +2886,7 @@ struct ConversationView: View {
             onReplyPreviewTap: {
                 guard let targetId = viewModel.replyTargetMessageId(for: record) else { return }
                 let origin = DownArrowStopAnchor(messageIdHex: record.messageIdHex,
-                    orderKey: historyOrderKey(for: record.messageIdHex, viewModel: viewModel))
+                    orderKey: viewModel.historyOrderKey(for: record.messageIdHex))
                 replyOrigin = origin
                 navigateToTimelineMessage(targetId, viewModel: viewModel) {
                     // No jump happened, so there is nothing to return from.
@@ -3212,7 +3152,7 @@ struct ConversationView: View {
     ) -> (replyOrigin: TimelineDownArrowPolicy.Stop?, firstUnread: TimelineDownArrowPolicy.Stop?) {
         let unreadId = firstUnreadStopMessageId(viewModel: viewModel)
         guard replyOrigin != nil || unreadId != nil else { return (nil, nil) }
-        if let unreadId, let key = historyOrderKey(for: unreadId, viewModel: viewModel) {
+        if let unreadId, let key = viewModel.historyOrderKey(for: unreadId) {
             firstUnreadOrderKey = key
         }
         let visible = TimelineDownArrowPolicy.visibleIndices(
@@ -3270,10 +3210,6 @@ struct ConversationView: View {
         if stop?.placement.isOnScreenOrAhead == true, !didSeeFirstUnreadOnScreenOrAhead {
             didSeeFirstUnreadOnScreenOrAhead = true
         }
-    }
-
-    private func historyOrderKey(for messageIdHex: String, viewModel: ConversationViewModel) -> TimelineHistoryOrderKey? {
-        viewModel.historyOrderKey(for: messageIdHex)
     }
 
     private func performInitialScrollIfNeeded(viewModel: ConversationViewModel) -> Bool {
@@ -3418,7 +3354,7 @@ struct ConversationView: View {
             didScrollToUnreadTarget: viewModel.conversationWindow?.anchor.kind == .firstUnread
         )
         if let unreadId = viewModel.initialWindowUnreadMessageId {
-            firstUnreadOrderKey = historyOrderKey(for: unreadId, viewModel: viewModel)
+            firstUnreadOrderKey = viewModel.historyOrderKey(for: unreadId)
         }
         noteFirstUnreadPlacement(downArrowStops(viewModel: viewModel).firstUnread)
         markCurrentlyVisibleMessagesRead(viewModel: viewModel)
