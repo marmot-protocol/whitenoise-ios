@@ -275,7 +275,7 @@ struct ChatsListView: View {
                     }
                 }
             }
-            .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)") {
+            .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseLiveRuntime)") {
                 await appState.historyNotices.refresh(using: appState)
             }
             .animation(.smooth(duration: 0.2), value: appState.isConnectivityCatchUpInProgress)
@@ -333,9 +333,9 @@ struct ChatsListView: View {
             // phase is still `.bootstrapping`, so it cannot see the runtime.
             .task(id: ConsentRuntimeState(
                 generation: appState.runtimeGeneration,
-                isReady: appState.canUseRuntimeForLocalForegroundWork
+                isReady: appState.canUseLiveRuntime
             )) {
-                guard appState.canUseRuntimeForLocalForegroundWork else { return }
+                guard appState.canUseLiveRuntime else { return }
                 await appState.diagnosticsConsent.reload(using: appState)
             }
             // Only on the device that just finished setup. Waits for the consent
@@ -431,7 +431,9 @@ struct ChatsListView: View {
                 let vm = viewModel ?? ChatsListViewModel(appState: appState)
                 if viewModel == nil { viewModel = vm }
                 vm.refreshExpiredPreviews()
-                listViewport.reset()
+                if subscriptionScope.isRuntimeAvailable {
+                    listViewport.reset()
+                }
                 let viewport = listViewport
                 vm.windowWillChange = { [weak viewport] snapshot in viewport?.prepare(for: snapshot) }
                 await vm.bind(accountRef: appState.activeAccountRef, force: true, mode: listMode)
@@ -551,7 +553,7 @@ struct ChatsListView: View {
         SubscriptionScope(
             accountRef: appState.activeAccountRef,
             runtimeGeneration: appState.runtimeGeneration,
-            isAppSceneActive: appState.isAppSceneActive,
+            isRuntimeAvailable: appState.canUseLiveRuntimeWork,
             mode: listMode
         )
     }
@@ -559,7 +561,7 @@ struct ChatsListView: View {
     struct SubscriptionScope: Hashable {
         let accountRef: String?
         let runtimeGeneration: Int
-        let isAppSceneActive: Bool
+        let isRuntimeAvailable: Bool
         var mode: ChatsListViewModel.ListMode = .complete
     }
 

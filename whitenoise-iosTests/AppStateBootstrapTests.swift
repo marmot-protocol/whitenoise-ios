@@ -1745,6 +1745,191 @@ struct AppStateBootstrapTests {
         resetPersistedActiveAccountRef()
     }
 
+    @Test func backgroundSuspensionWaitsForDraftFlushBeforeClosingSQLCipher() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        let client = try #require(appState.client)
+        let created = try await client.createGroupWithOptionsDetailed(
+            accountRef: account.label,
+            name: "Draft Flush",
+            memberRefs: [],
+            options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)
+        ).requireCreated()
+
+        // Record an unflushed composer edit, then simulate the real iOS
+        // `.active → .inactive → .background` transition.
+        appState.conversationDraftStore.setDraft(
+            ConversationDraftSnapshot(
+                canonicalText: "Last keystrokes before backgrounding",
+                replyToMessageIdHex: nil,
+                mediaAttachments: []
+            ),
+            accountRef: account.label,
+            groupIdHex: created.groupIdHex
+        )
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+
+        // Rebuild the runtime and verify the draft was flushed to SQLCipher
+        // before suspension closed storage.
+        await appState.startForegroundActivation().value
+        let restored = try #require(appState.client)
+        let persisted = try await restored.messageDraft(
+            accountRef: account.label,
+            groupIdHex: created.groupIdHex
+        )
+        #expect(persisted?.content == "Last keystrokes before backgrounding")
+
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func backgroundSuspensionBoundedTimeoutFallsThroughToStorageCloseOnStuckLease() async throws {
+        let sleeperEntered = TestLatch()
+        let sleeperRelease = TestLatch()
+        let appState = try testAppState(
+            mutationDrainSleeper: { _ in
+                sleeperEntered.signal()
+                try await sleeperRelease.wait()
+            }
+        )
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        let liveClient = try #require(appState.client)
+        let marmot = liveClient.marmot
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+
+        let suspension = appState.startRuntimeSuspension()
+        var suspensionCompleted = false
+        let observer = Task { @MainActor in
+            await suspension.value
+            suspensionCompleted = true
+        }
+
+        // Suspension waits inside the bounded pre-close timeout while the
+        // mutation lease is active; storage stays open until timeout fires.
+        try await sleeperEntered.wait()
+        #expect(!marmot.storageIsClosed())
+        #expect(appState.client != nil)
+
+        // Once the bounded timeout expires, terminal storage closure runs even
+        // though the stuck mutation lease has not been released yet.
+        sleeperRelease.signal()
+        try await eventually {
+            marmot.storageIsClosed()
+        }
+        #expect(!suspensionCompleted)
+        #expect(appState.client == nil)
+
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+        await suspension.value
+        await observer.value
+
+        #expect(suspensionCompleted)
+        #expect(appState.runtimeSuspendedForBackground)
+        resetPersistedActiveAccountRef()
+    }
+
+    @Test func backgroundToActiveToBackgroundDuringDrainStillClosesStorage() async throws {
+        let catchUp = NotificationCatchUpStub()
+        let sleeperEntered = TestLatch()
+        let sleeperExited = TestLatch()
+        let checkpoint = AsyncTestCheckpoint()
+        let appState = try testAppState(
+            catchUp: catchUp,
+            mutationDrainSleeper: { _ in
+                defer { sleeperExited.signal() }
+                sleeperEntered.signal()
+                try await parkUntilCancelled()
+            }
+        )
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        appState.setAppSceneActive(true)
+
+        // Park a connectivity catch-up task so aborting suspension pauses in
+        // `drainForegroundMaintenance` before returning.
+        catchUp.onCatchUp = {
+            await checkpoint.pause()
+        }
+        appState.scheduleConnectivityCatchUp()
+        await checkpoint.waitUntilPaused()
+        catchUp.onCatchUp = nil
+
+        let liveClient = try #require(appState.client)
+        let marmot = liveClient.marmot
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+
+        // 1. Background: suspension parks in the pre-close mutation wait.
+        let suspension1 = appState.startRuntimeSuspension()
+        try await sleeperEntered.wait()
+
+        // 2. Return to active: wakes the pre-close wait, cancels its timeout
+        //    task (`sleeperExited`), and enters the abort drain (parked on
+        //    `checkpoint`).
+        _ = appState.startForegroundActivation()
+        try await sleeperExited.wait()
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+
+        // 3. Background again while the abort drain is still parked: the reused
+        //    suspension task must loop and close storage rather than exiting
+        //    with SQLCipher still open.
+        let suspension2 = appState.startRuntimeSuspension()
+        await checkpoint.release()
+
+        await suspension1.value
+        await suspension2.value
+
+        #expect(marmot.storageIsClosed())
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+        resetPersistedActiveAccountRef()
+    }
+
+    @Test func transientInactiveToActiveKeepsLiveRuntimeAndRestoresPushRegistration() async throws {
+        let catchUp = NotificationCatchUpStub()
+        var remoteRegisterCalls = 0
+        let notifications = grantedNotifications(
+            remoteNotificationRegistrar: { remoteRegisterCalls += 1 }
+        )
+        let seeded = try await readyAppStateWithCreatedIdentities(
+            notifications: notifications,
+            catchUp: catchUp
+        )
+        let appState = seeded.appState
+        appState.setAppSceneActive(true)
+        let generation = appState.runtimeGeneration
+        let initialClient = try #require(appState.client)
+        var catchUpAttempts = 0
+        catchUp.onCatchUp = { catchUpAttempts += 1 }
+        try await eventually { remoteRegisterCalls >= 1 }
+        let registrationsBeforeInactive = remoteRegisterCalls
+
+        // Transient `.inactive → .active` (Face ID, Control Center, Notification
+        // Center, App Switcher) keeps the runtime live (no rebuild / generation
+        // bump) while still restoring foreground maintenance such as push
+        // registration that `.inactive` cancelled.
+        appState.setAppSceneActive(false)
+        await appState.startForegroundActivation().value
+        try await eventually { catchUpAttempts >= 1 && remoteRegisterCalls > registrationsBeforeInactive }
+        catchUp.onCatchUp = nil
+
+        #expect(appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.runtimeGeneration == generation)
+        #expect(appState.client === initialClient)
+        #expect(remoteRegisterCalls > registrationsBeforeInactive)
+
+        // Real `.background → .active` rebuilds the runtime and bumps generation.
+        await appState.startRuntimeSuspension().value
+        await appState.startForegroundActivation().value
+        #expect(appState.runtimeGeneration == generation + 1)
+        await stopReadyRuntime(appState)
+    }
+
     @Test func suspensionClosesStorageBeforeConnectivityCatchUpDrains() async throws {
         let catchUp = NotificationCatchUpStub()
         let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
@@ -2360,7 +2545,8 @@ struct AppStateBootstrapTests {
         catchUp: NotificationCatchUpStub? = nil,
         timings: HostPerformanceRecorderStub? = nil,
         sweepSleeper: ControlledSleeper? = nil,
-        refreshReads: AccountRefreshReadsStub? = nil
+        refreshReads: AccountRefreshReadsStub? = nil,
+        mutationDrainSleeper: @escaping RuntimeLifecycle.RetrySleeper = RuntimeLifecycle.defaultRetrySleeper
     ) throws -> AppState {
         resetPersistedActiveAccountRef()
         return try ownedAppState(
@@ -2368,6 +2554,7 @@ struct AppStateBootstrapTests {
             notifications: notifications ?? deniedNotifications(),
             accountDefaults: accountDefaults,
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig ?? TelemetryBuildConfig.current(),
+            mutationDrainSleeper: mutationDrainSleeper,
             notificationCatchUpCalls: catchUp?.calls ?? .live,
             hostPerformanceRecorder: timings?.recorder ?? RuntimeLifecycle.recordHostPerformanceOnClient,
             retentionSweepSleep: sweepSleeper.map { sleeper in { try await sleeper.sleep(.nanoseconds($0)) } }
@@ -2396,6 +2583,7 @@ struct AppStateBootstrapTests {
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = TelemetryBuildConfig.current(),
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = AppStateTestResources.immediateRetry,
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
+        mutationDrainSleeper: @escaping RuntimeLifecycle.RetrySleeper = RuntimeLifecycle.defaultRetrySleeper,
         notificationCatchUpCalls: NotificationCatchUpCalls = .live,
         hostPerformanceRecorder: @escaping RuntimeLifecycle.HostPerformanceRecorder =
             RuntimeLifecycle.recordHostPerformanceOnClient,
@@ -2409,6 +2597,7 @@ struct AppStateBootstrapTests {
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
             runtimeRetrySleeper: runtimeRetrySleeper,
             runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy,
+            mutationDrainSleeper: mutationDrainSleeper,
             notificationCatchUpCalls: notificationCatchUpCalls,
             hostPerformanceRecorder: hostPerformanceRecorder,
             retentionSweepSleep: retentionSweepSleep,

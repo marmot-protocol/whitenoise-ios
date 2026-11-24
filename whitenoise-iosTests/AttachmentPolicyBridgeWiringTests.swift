@@ -357,6 +357,144 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(frozen.listings == 0)
     }
 
+    @Test func policyDidChangeDoesNotFireBeforeStartupCompletes() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
+        let permissions = FakePermissionSource()
+        let bridge = AttachmentPolicyBridge(permissions: { permissions })
+        let hold = runtime.hold(.listing)
+
+        let startup = Task { @MainActor in
+            try await bridge.synchronize(runtime, beforeStart: true)
+        }
+        try await hold.entered.wait()
+
+        // NWPathMonitor firing while beforeStart is running must not schedule a
+        // post-start permission grant against an unstarted runtime.
+        bridge.policyDidChange()
+        hold.release.signal()
+        try await startup.value
+
+        // Even after beforeStart returns (while marmot.start() is still in
+        // flight), policyDidChange must remain silent until post-start sync.
+        let listingsAfterBeforeStart = runtime.listings
+        bridge.policyDidChange()
+        await Task.yield()
+
+        #expect(runtime.listings == listingsAfterBeforeStart)
+        #expect(runtime.grants.isEmpty)
+        #expect(permissions.appliedCount == 0)
+
+        // Once post-start synchronize completes, policyDidChange activates.
+        try await bridge.synchronize(runtime)
+        #expect(runtime.grants.count == 1)
+
+        bridge.policyDidChange()
+        try await eventually { runtime.grants.count == 2 }
+    }
+
+    @Test func detachPreventsPolicyDidChangeAndCancelsInFlightWork() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: true))
+        let permissions = FakePermissionSource()
+        let bridge = AttachmentPolicyBridge(permissions: { permissions })
+        try await bridge.synchronize(runtime)
+        #expect(runtime.grants.count == 1)
+        #expect(runtime.writes.isEmpty)
+
+        let hold = runtime.hold(.read)
+        let edited = attachmentPolicy(transfer: 8 * mebibyte)
+        let save = try await start(bridge, runtime, updatedLimits: (Self.alice.accountIdHex, edited))
+        try await hold.entered.wait()
+
+        let drained = bridge.detach(client: runtime)
+        hold.release.signal()
+
+        await #expect(throws: CancellationError.self) { try await save.value }
+        _ = try? await drained?.value
+        #expect(runtime.writes.isEmpty)
+        #expect(runtime.grants.count == 1)
+
+        let listingsAfterDetach = runtime.listings
+        bridge.policyDidChange()
+        await Task.yield()
+
+        #expect(runtime.listings == listingsAfterDetach)
+        #expect(runtime.grants.count == 1)
+    }
+
+    @Test func isAttachedTracksPostStartSyncAndDetach() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
+        let other = FakeAttachmentRuntime(accounts: [Self.alice])
+        let frozen = FakeAttachmentRuntime(accounts: [Self.alice], cursorPersistence: .frozen)
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+
+        #expect(!bridge.isAttached(to: runtime))
+
+        try await bridge.synchronize(runtime, beforeStart: true)
+        #expect(!bridge.isAttached(to: runtime))
+
+        try await bridge.synchronize(runtime)
+        #expect(bridge.isAttached(to: runtime))
+        #expect(!bridge.isAttached(to: other))
+        #expect(!bridge.isAttached(to: frozen))
+
+        try await bridge.synchronize(frozen)
+        #expect(bridge.isAttached(to: runtime))
+        #expect(!bridge.isAttached(to: frozen))
+
+        let drained = bridge.detach(client: runtime)
+        _ = try? await drained?.value
+        #expect(!bridge.isAttached(to: runtime))
+
+        runtime.failingRevocation = [Self.alice.accountIdHex]
+        await #expect(throws: FakeAttachmentRuntime.RevocationFailed.self) {
+            try await bridge.synchronize(runtime)
+        }
+        // A failed post-start sync must NOT mark the runtime attached so the
+        // next activation retries reconciliation.
+        #expect(!bridge.isAttached(to: runtime))
+
+        runtime.failingRevocation = []
+        try await bridge.synchronize(runtime)
+        #expect(bridge.isAttached(to: runtime))
+    }
+
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func canSynchronizeAttachmentPolicyStaysFalseUntilRuntimeStartupCompletes() async throws {
+        try await withTestClient { initialClient in
+            let startEntered = TestLatch()
+            let startRelease = TestLatch()
+            let appState = AppState.test(
+                client: initialClient,
+                runtimeStarter: { client in
+                    startEntered.signal()
+                    try await startRelease.wait()
+                    try await client.startRuntime()
+                }
+            )
+            appState.setAppSceneActive(true)
+            #expect(appState.canUseLiveRuntime)
+            #expect(!appState.canSynchronizeAttachmentPolicy)
+
+            let bootstrapTask = Task { @MainActor in
+                await appState.bootstrap()
+            }
+            try await startEntered.wait()
+
+            // `client` is assigned and `canUseLiveRuntime` is true, but startup
+            // is still running `beforeStart` / `marmot.start()`. The root policy
+            // sync task must stay gated until `runtimeStarter` finishes.
+            #expect(appState.canUseLiveRuntime)
+            #expect(!appState.canSynchronizeAttachmentPolicy)
+
+            startRelease.signal()
+            await bootstrapTask.value
+            #expect(appState.canSynchronizeAttachmentPolicy)
+
+            await appState.startRuntimeSuspension().value
+            #expect(!appState.canSynchronizeAttachmentPolicy)
+        }
+    }
+
     /// Starts `synchronize` and returns once it has scheduled its event. The
     /// bridge schedules synchronously on entry, in the same main-actor job as
     /// the signal, before its first suspension.

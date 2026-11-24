@@ -188,21 +188,62 @@ struct AppStateGateTests {
             runtimeSuspendedForBackground: false,
             isRuntimeSuspending: true
         ))
+
+        // Live-runtime gates remain true across transient `.inactive` focus
+        // loss and only close on background suspension, teardown, or missing client.
+        #expect(ForegroundRuntimeWorkGate.canUseLiveRuntime(
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLiveRuntime(
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLiveRuntime(
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLiveRuntime(
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: false
+        ))
+        #expect(ForegroundRuntimeWorkGate.canUseLiveRuntimeWork(
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLiveRuntimeWork(
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLiveRuntimeWork(
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true
+        ))
     }
 
-    @Test func chatListSubscriptionScopeChangesWhenSceneBecomesActive() {
-        let inactive = ChatsListView.SubscriptionScope(
+    @Test func chatListSubscriptionScopeChangesOnRuntimeAvailabilityNotTransientInactive() {
+        let suspended = ChatsListView.SubscriptionScope(
             accountRef: "account-a",
             runtimeGeneration: 4,
-            isAppSceneActive: false
+            isRuntimeAvailable: false
         )
-        let active = ChatsListView.SubscriptionScope(
+        let live = ChatsListView.SubscriptionScope(
             accountRef: "account-a",
             runtimeGeneration: 4,
-            isAppSceneActive: true
+            isRuntimeAvailable: true
+        )
+        let nextGeneration = ChatsListView.SubscriptionScope(
+            accountRef: "account-a",
+            runtimeGeneration: 5,
+            isRuntimeAvailable: true
         )
 
-        #expect(inactive != active)
+        #expect(suspended != live)
+        #expect(live != nextGeneration)
     }
 
     @Test func nativePushRegistrationScheduleGateBlocksDuringSignOut() {

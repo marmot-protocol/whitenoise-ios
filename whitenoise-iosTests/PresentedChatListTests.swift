@@ -164,6 +164,53 @@ struct PresentedChatListTests {
         await model.bind(accountRef: nil)
     }
 
+    @Test func transientInactivePreservesWindowSnapshotAndLiveSubscription() async throws {
+        let appState = AppState.test()
+        let account = AccountSummaryFfi(label: "account", accountIdHex: "owner", localSigning: true, signedOut: false, running: true)
+        appState.accountStore.accounts = [account]
+        func snapshot(_ ids: [String], sequence: UInt64) -> ChatListWindowSnapshotFfi {
+            ChatListWindowSnapshotFfi(
+                subscriptionGeneration: "window",
+                sequence: sequence,
+                view: .chats,
+                rows: presentedChatSnapshot(ids.map { chatListRow(groupIdHex: $0, title: "Chat \($0)") }).rows,
+                hasMoreBefore: false,
+                hasMoreAfter: false,
+                anchor: .top
+            )
+        }
+        let feed = ChatListWindowFeedDouble(initial: snapshot(["a", "b"], sequence: 0))
+        let projection = ChatListProjectionDouble()
+        projection.openWindow = { _, _ in feed }
+        let model = ChatsListViewModel(appState: appState, projectionClient: { _ in projection })
+        appState.setAppSceneActive(true)
+        await model.bind(accountRef: "owner", mode: .window(.chats))
+        try await eventually { model.windowSnapshot?.rows.count == 2 }
+
+        // Transient `.inactive` (Face ID / Control Center / App Switcher) must
+        // keep the runtime usable for live list subscriptions and never wipe
+        // `windowSnapshot` to empty.
+        appState.setAppSceneActive(false)
+        #expect(!appState.isAppSceneActive)
+        #expect(appState.canUseLiveRuntimeWork)
+        #expect(model.windowSnapshot?.rows.count == 2)
+        #expect(model.items.map(\.id) == ["a", "b"])
+
+        // Live updates continue to flow while transiently inactive.
+        feed.send(snapshot(["a", "b", "c"], sequence: 1))
+        try await eventually { model.windowSnapshot?.rows.count == 3 }
+        #expect(model.items.map(\.id) == ["a", "b", "c"])
+
+        // Rebinding the same account and mode while inactive preserves the
+        // window snapshot rather than blanking the list to "No Chats".
+        await model.bind(accountRef: "owner", force: true, mode: .window(.chats))
+        #expect(model.windowSnapshot?.rows.count == 3)
+
+        // Switching modes or accounts still clears the previous window snapshot.
+        await model.bind(accountRef: nil)
+        #expect(model.windowSnapshot == nil)
+    }
+
     @Test func snapshotTimingWaitsForDeferredPresentationAndRequiresConsent() async throws {
         let appState = AppState.test()
         let model = ChatsListViewModel(appState: appState)

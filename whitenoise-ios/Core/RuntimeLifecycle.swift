@@ -82,6 +82,7 @@ struct ForegroundRuntimeMutationLease {
 private struct ForegroundMaintenanceCancellation {
     let foregroundActivation: Task<Void, Never>?
     let maintenance: ForegroundMaintenanceTasks?
+    let attachmentPolicy: Task<Void, Error>?
 }
 
 /// Owns the Marmot runtime's lifecycle: the live `MarmotClient` handle, the
@@ -112,6 +113,7 @@ final class RuntimeLifecycle {
         _ cursorPersistence: CursorPersistenceFfi,
         _ telemetryConfig: TelemetryBuildConfig
     ) async throws -> MarmotClient
+    typealias RuntimeStarter = @Sendable (_ client: MarmotClient) async throws -> Void
     typealias RetrySleeper = @Sendable (_ delay: Duration) async throws -> Void
     /// Sends one `host_*` stage timing to the runtime that measured it.
     typealias HostPerformanceRecorder = @MainActor (
@@ -120,6 +122,11 @@ final class RuntimeLifecycle {
         _ durationMs: UInt64,
         _ outcome: HostPerformanceOutcomeFfi
     ) -> Void
+
+    /// Upper bound for waiting on active foreground mutation leases (such as the
+    /// background draft flush) before terminal SQLCipher closure. Kept well
+    /// inside UIKit's ~30 s background assertion so `0xdead10cc` is never risked.
+    nonisolated static let defaultForegroundMutationDrainTimeout: Duration = .seconds(2)
 
     /// The live FFI runtime. Released (`nil`) while the app is suspended in the
     /// background so its SQLite storage in the shared App Group container is
@@ -131,8 +138,10 @@ final class RuntimeLifecycle {
     @ObservationIgnored private let runtimeRelayUrls: [String]
     @ObservationIgnored private let suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig
     @ObservationIgnored private let runtimeClientFactory: RuntimeClientFactory
+    @ObservationIgnored private let runtimeStarter: RuntimeStarter
     @ObservationIgnored private let retrySleeper: RetrySleeper
     @ObservationIgnored private let constructionRetryPolicy: RuntimeConstructionRetryPolicy
+    @ObservationIgnored private let mutationDrainSleeper: RetrySleeper
     @ObservationIgnored private let hostPerformanceRecorder: HostPerformanceRecorder
 
     @ObservationIgnored private var bootstrapTask: Task<Void, Never>?
@@ -147,6 +156,7 @@ final class RuntimeLifecycle {
     @ObservationIgnored private var bootstrapRegistrationWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     @ObservationIgnored private var foregroundMutationLeaseIDs: Set<UUID> = []
     @ObservationIgnored private var foregroundMutationWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+    @ObservationIgnored private var preCloseMutationWaiterID: UUID?
     /// Set when the real background-suspension entry point runs while bootstrap
     /// still has the phase at `.bootstrapping`. An `.inactive` scene transition
     /// only flips `isAppSceneActive`; it must not tear the runtime down until the
@@ -180,6 +190,7 @@ final class RuntimeLifecycle {
     /// has separate task ownership and must not hold the whole UI in a
     /// "Connecting…" state. MainActor-owned.
     private(set) var isRuntimeWarmingUp = false
+    private(set) var isCurrentClientStarted = false
     private(set) var runtimeGeneration = 0
     @ObservationIgnored private var isBackgroundStorageCloseInProgress = false
 
@@ -201,8 +212,10 @@ final class RuntimeLifecycle {
         client: MarmotClient?,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeClientFactory = RuntimeLifecycle.defaultRuntimeClientFactory,
-        retrySleeper: @escaping RetrySleeper = { delay in try await Task.sleep(for: delay) },
+        runtimeStarter: @escaping RuntimeStarter = RuntimeLifecycle.defaultRuntimeStarter,
+        retrySleeper: @escaping RetrySleeper = RuntimeLifecycle.defaultRetrySleeper,
         constructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
+        mutationDrainSleeper: @escaping RetrySleeper = RuntimeLifecycle.defaultRetrySleeper,
         hostPerformanceRecorder: @escaping HostPerformanceRecorder = RuntimeLifecycle.recordHostPerformanceOnClient
     ) {
         self.client = client
@@ -210,9 +223,19 @@ final class RuntimeLifecycle {
         self.runtimeRelayUrls = client?.relayUrls ?? MarmotClient.seedRelays
         self.suspendedRuntimeTelemetryBuildConfig = suspendedRuntimeTelemetryBuildConfig
         self.runtimeClientFactory = runtimeClientFactory
+        self.runtimeStarter = runtimeStarter
         self.retrySleeper = retrySleeper
         self.constructionRetryPolicy = constructionRetryPolicy
+        self.mutationDrainSleeper = mutationDrainSleeper
         self.hostPerformanceRecorder = hostPerformanceRecorder
+    }
+
+    nonisolated static let defaultRetrySleeper: RetrySleeper = { delay in
+        try await Task.sleep(for: delay)
+    }
+
+    nonisolated static func defaultRuntimeStarter(_ client: MarmotClient) async throws {
+        try await client.startRuntime()
     }
 
     static func recordHostPerformanceOnClient(
@@ -280,6 +303,30 @@ final class RuntimeLifecycle {
             isAppSceneActive: isAppSceneActive,
             runtimeSuspendedForBackground: runtimeSuspendedForBackground,
             isRuntimeSuspending: runtimeWorkIsSuspending
+        )
+    }
+    var canUseLiveRuntime: Bool {
+        guard appState?.isErasingAppData != true else { return false }
+        return ForegroundRuntimeWorkGate.canUseLiveRuntime(
+            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
+            isRuntimeSuspending: runtimeWorkIsSuspending,
+            hasRuntimeClient: client != nil
+        )
+    }
+    var canUseLiveRuntimeWork: Bool {
+        guard appState?.isErasingAppData != true else { return false }
+        return ForegroundRuntimeWorkGate.canUseLiveRuntimeWork(
+            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
+            isRuntimeSuspending: runtimeWorkIsSuspending
+        )
+    }
+    var canSynchronizeAttachmentPolicy: Bool {
+        guard appState?.isErasingAppData != true else { return false }
+        return ForegroundRuntimeWorkGate.canSynchronizeAttachmentPolicy(
+            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
+            isRuntimeSuspending: runtimeWorkIsSuspending,
+            hasRuntimeClient: client != nil,
+            isCurrentClientStarted: isCurrentClientStarted
         )
     }
 
@@ -362,14 +409,17 @@ final class RuntimeLifecycle {
             try Task.checkCancellation()
             guard stillOwnsWork() else { throw CancellationError() }
             if client == nil {
+                isCurrentClientStarted = false
                 client = try await makeRuntime(
                     retryOnTransientReadiness: true,
                     stillOwnsWork: stillOwnsWork
                 )
             }
             guard let client else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+            isCurrentClientStarted = false
             do {
-                try await client.startRuntime()
+                try await runtimeStarter(client)
+                isCurrentClientStarted = true
                 return
             } catch let error as MarmotKitError where error.isTransientStartupReadinessFailure {
                 guard stillOwnsWork(), retryIndex < constructionRetryPolicy.delays.count else {
@@ -629,8 +679,10 @@ final class RuntimeLifecycle {
 
     func closeForAppErasure() async throws {
         if let client {
+            AttachmentPolicyBridge.shared.detach(client: client)
             try await client.marmot.shutdownAndClose()
             self.client = nil
+            isCurrentClientStarted = false
         }
         runtimeSuspendedForBackground = true
     }
@@ -644,7 +696,9 @@ final class RuntimeLifecycle {
         appState?.invalidateProductAnalytics()
         let clientToRelease = client
         client = nil
+        isCurrentClientStarted = false
         guard let clientToRelease else { return }
+        AttachmentPolicyBridge.shared.detach(client: clientToRelease)
         try? await clientToRelease.marmot.shutdownAndClose()
     }
 
@@ -693,6 +747,10 @@ final class RuntimeLifecycle {
         appState?.markdownTimestampClock.invalidate()
         guard appState?.isErasingAppData != true else { return Task {} }
         resumeBootstrapRegistrationWaiters()
+        if let preCloseMutationWaiterID {
+            self.preCloseMutationWaiterID = nil
+            resumeForegroundMutationWaiter(id: preCloseMutationWaiterID)
+        }
         if appState?.phase == .bootstrapping {
             return Task { [weak self] in
                 guard let self else { return }
@@ -744,99 +802,140 @@ final class RuntimeLifecycle {
     }
 
     func prepareForBackgroundSuspension() async {
-        defer { runtimeSuspensionTask = nil }
-        // Stop admitting foreground maintenance immediately, but do not put
-        // storage closure behind cancellation-sensitive drains. A subscription,
-        // relay catch-up, or local read can otherwise consume the entire UIKit
-        // background assertion while SQLCipher still holds its App Group lock.
-        let cancellation = beginForegroundMaintenanceCancellation()
-        // `isAppSceneActive` is owned by the synchronous scene-phase entry
-        // points (`startRuntimeSuspension` / `startForegroundActivation` /
-        // `setAppSceneActive`), which run in true scene-delivery order. After
-        // the `await` above a racing foreground activation may have flipped the
-        // scene back to active. Re-check the authoritative flag before the
-        // irreversible teardown: suspending now would strand the app
-        // foregrounded with `client == nil` and nothing to re-trigger resume
-        // (#222). Hand back to a fresh foreground activation instead.
-        guard !isAppSceneActive else {
-            await drainForegroundMaintenance(cancellation)
-            startForegroundActivation()
-            return
+        defer {
+            if isBackgroundStorageCloseInProgress {
+                finishBackgroundStorageClose()
+            }
+            runtimeSuspensionTask = nil
         }
-        // A very fast launch-to-background transition can arrive before the
-        // SwiftUI bootstrap task has even registered. Park this same suspension
-        // owner until bootstrap exists, then chain through it; never re-arm the
-        // real teardown outside the UIKit assertion attached to this task.
-        if appState?.phase == .bootstrapping {
-            await waitForBootstrapRegistrationIfNeeded()
-#if DEBUG
-            let waitsForBootstrap = bootstrapTask != nil
-            if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, true) }
-#endif
-            await bootstrapTask?.value
-#if DEBUG
-            if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, false) }
-#endif
+        while true {
+            // Stop admitting foreground maintenance immediately, but do not put
+            // storage closure behind cancellation-sensitive drains. A subscription,
+            // relay catch-up, or local read can otherwise consume the entire UIKit
+            // background assertion while SQLCipher still holds its App Group lock.
+            let cancellation = beginForegroundMaintenanceCancellation()
+            // `isAppSceneActive` is owned by the synchronous scene-phase entry
+            // points (`startRuntimeSuspension` / `startForegroundActivation` /
+            // `setAppSceneActive`), which run in true scene-delivery order. After
+            // an `await`, a racing foreground activation may have flipped the
+            // scene back to active (or back to background again while draining).
+            // Re-check the authoritative flag before the irreversible teardown
+            // and after every abort drain so we neither strand the app
+            // foregrounded with `client == nil` (#222) nor exit with SQLCipher
+            // still open after a `background → active → background` transition.
             guard !isAppSceneActive else {
-                await drainForegroundMaintenance(cancellation)
+                await drainForegroundMaintenance(cancellation, waitForForegroundMutations: false)
+                if !isAppSceneActive { continue }
                 startForegroundActivation()
                 return
             }
-        }
-        guard phaseOwnsLiveRuntime,
-              !runtimeSuspendedForBackground
-        else {
-            await drainForegroundMaintenance(cancellation)
-            return
-        }
-
-        // A notification action can hold an explicit lease on the live client.
-        // Unlike cancelled maintenance, that work must retain the runtime until
-        // the action releases it; closing underneath the lease would invalidate
-        // an in-flight reply or mark-read FFI call. This gate is independent of
-        // the maintenance drains moved below terminal storage closure.
+            // A very fast launch-to-background transition can arrive before the
+            // SwiftUI bootstrap task has even registered. Park this same suspension
+            // owner until bootstrap exists, then chain through it; never re-arm the
+            // real teardown outside the UIKit assertion attached to this task.
+            if appState?.phase == .bootstrapping {
+                await waitForBootstrapRegistrationIfNeeded()
 #if DEBUG
-        // Same condition as the wait loop, so a cancelled task never reports a wait.
-        let waitsForRuntimeWork = runtimeWorkIsSuspending && !Task.isCancelled
-        if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, true) }
+                let waitsForBootstrap = bootstrapTask != nil
+                if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, true) }
 #endif
-        await waitForRuntimeSuspensionToFinish()
+                await bootstrapTask?.value
 #if DEBUG
-        if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, false) }
+                if waitsForBootstrap { backgroundSuspensionWaitForTesting?(.bootstrap, false) }
 #endif
-        guard !isAppSceneActive,
-              phaseOwnsLiveRuntime,
-              !runtimeSuspendedForBackground
-        else {
-            await drainForegroundMaintenance(cancellation)
-            if isAppSceneActive {
-                startForegroundActivation()
+                guard !isAppSceneActive else {
+                    await drainForegroundMaintenance(cancellation, waitForForegroundMutations: false)
+                    if !isAppSceneActive { continue }
+                    startForegroundActivation()
+                    return
+                }
             }
+            guard phaseOwnsLiveRuntime,
+                  !runtimeSuspendedForBackground
+            else {
+                await drainForegroundMaintenance(cancellation)
+                if !isAppSceneActive, phaseOwnsLiveRuntime, !runtimeSuspendedForBackground {
+                    continue
+                }
+                return
+            }
+
+            // A notification action can hold an explicit lease on the live client.
+            // Unlike cancelled maintenance, that work must retain the runtime until
+            // the action releases it; closing underneath the lease would invalidate
+            // an in-flight reply or mark-read FFI call. This gate is independent of
+            // the maintenance drains moved below terminal storage closure.
+#if DEBUG
+            // Same condition as the wait loop, so a cancelled task never reports a wait.
+            let waitsForRuntimeWork = runtimeWorkIsSuspending && !Task.isCancelled
+            if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, true) }
+#endif
+            await waitForRuntimeSuspensionToFinish()
+#if DEBUG
+            if waitsForRuntimeWork { backgroundSuspensionWaitForTesting?(.runtimeWork, false) }
+#endif
+            guard !isAppSceneActive,
+                  phaseOwnsLiveRuntime,
+                  !runtimeSuspendedForBackground
+            else {
+                await drainForegroundMaintenance(
+                    cancellation,
+                    waitForForegroundMutations: !isAppSceneActive
+                )
+                if !isAppSceneActive, phaseOwnsLiveRuntime, !runtimeSuspendedForBackground {
+                    continue
+                }
+                if isAppSceneActive {
+                    startForegroundActivation()
+                }
+                return
+            }
+
+            isBackgroundStorageCloseInProgress = true
+            // Wait briefly for in-flight foreground runtime mutations (including
+            // the background draft flush lease) before closing SQLCipher. Fall
+            // through to terminal closure on timeout so 0xdead10cc is never risked.
+            await waitForForegroundRuntimeMutations(timeout: Self.defaultForegroundMutationDrainTimeout)
+            guard !isAppSceneActive,
+                  phaseOwnsLiveRuntime,
+                  !runtimeSuspendedForBackground
+            else {
+                await drainForegroundMaintenance(
+                    cancellation,
+                    waitForForegroundMutations: !isAppSceneActive
+                )
+                finishBackgroundStorageClose()
+                if !isAppSceneActive, phaseOwnsLiveRuntime, !runtimeSuspendedForBackground {
+                    continue
+                }
+                if isAppSceneActive {
+                    startForegroundActivation()
+                }
+                return
+            }
+
+            let backgroundClient = client
+            let backgroundObservation = Task {
+                try? await backgroundClient?.marmot.setProductAnalyticsActivity(activity: .background)
+            }
+            // Terminal shutdown closes storage before draining delivery; never await
+            // the activity setter's network flush before releasing the database lock.
+            await shutdownAndReleaseCurrentClient()
+            await backgroundObservation.value
+            // `shutdownAndClose()` explicitly closes every SQLite connection and
+            // releases the root lease. Dropping only the top-level handle cannot
+            // prove that while subscriptions and projections retain internal Arcs;
+            // suspending with either lock is an iOS `0xdead10cc` kill.
+            runtimeSuspendedForBackground = true
+            // Once terminal storage closure has run, cancelled work can safely
+            // drain: retained handles are spent and return StorageClosed instead of
+            // reopening the App Group databases. Keep the lifecycle task alive so
+            // foreground resume still observes orderly task completion, but the
+            // suspension-sensitive file lock is already gone if UIKit expires the
+            // background assertion during this cleanup.
+            await drainForegroundMaintenance(cancellation)
             return
         }
-
-        isBackgroundStorageCloseInProgress = true
-        defer { finishBackgroundStorageClose() }
-        let backgroundClient = client
-        let backgroundObservation = Task {
-            try? await backgroundClient?.marmot.setProductAnalyticsActivity(activity: .background)
-        }
-        // Terminal shutdown closes storage before draining delivery; never await
-        // the activity setter's network flush before releasing the database lock.
-        await shutdownAndReleaseCurrentClient()
-        await backgroundObservation.value
-        // `shutdownAndClose()` explicitly closes every SQLite connection and
-        // releases the root lease. Dropping only the top-level handle cannot
-        // prove that while subscriptions and projections retain internal Arcs;
-        // suspending with either lock is an iOS `0xdead10cc` kill.
-        runtimeSuspendedForBackground = true
-        // Once terminal storage closure has run, cancelled work can safely
-        // drain: retained handles are spent and return StorageClosed instead of
-        // reopening the App Group databases. Keep the lifecycle task alive so
-        // foreground resume still observes orderly task completion, but the
-        // suspension-sensitive file lock is already gone if UIKit expires the
-        // background assertion during this cleanup.
-        await drainForegroundMaintenance(cancellation)
     }
 
     private func resumeAfterForegroundActivation(activationID: UUID) async {
@@ -874,6 +973,7 @@ final class RuntimeLifecycle {
                 }
 #endif
                 guard ownsForegroundActivation(id: activationID) else {
+                    AttachmentPolicyBridge.shared.detach(client: restored)
                     try? await restored.marmot.shutdownAndClose()
                     return
                 }
@@ -882,13 +982,14 @@ final class RuntimeLifecycle {
                     var retryIndex = 0
                     while true {
                         do {
-                            try await restored.startRuntime()
+                            try await runtimeStarter(restored)
                             break
                         } catch let error as MarmotKitError
                             where error.isTransientStartupReadinessFailure {
                             guard ownsForegroundActivation(id: activationID),
                                   retryIndex < constructionRetryPolicy.delays.count
                             else { throw error }
+                            AttachmentPolicyBridge.shared.detach(client: restored)
                             try? await restored.marmot.shutdownAndClose()
                             let delay = constructionRetryPolicy.delays[retryIndex]
                             retryIndex += 1
@@ -912,6 +1013,7 @@ final class RuntimeLifecycle {
                             outcome: .failure
                         )
                     }
+                    AttachmentPolicyBridge.shared.detach(client: restored)
                     try? await restored.marmot.shutdownAndClose()
                     if ownsForegroundActivation(id: activationID) {
                         appState?.stopNotificationSubscription()
@@ -921,10 +1023,12 @@ final class RuntimeLifecycle {
                     return
                 }
                 guard ownsForegroundActivation(id: activationID) else {
+                    AttachmentPolicyBridge.shared.detach(client: restored)
                     try? await restored.marmot.shutdownAndClose()
                     return
                 }
                 client = restored
+                isCurrentClientStarted = true
                 // An import may have persisted its identity just before suspension.
                 // Recover its checkpoint before restarting account maintenance.
                 let accountLoadStartedAt = ContinuousClock.now
@@ -940,7 +1044,11 @@ final class RuntimeLifecycle {
                     recordHostPerformance(using: restored, operation: .accountLoad, since: accountLoadStartedAt,
                                           outcome: error is CancellationError ? .cancelled : .failure)
                     // Close this activation's handle even if ownership changed during refresh.
-                    if client === restored { client = nil }
+                    if client === restored {
+                        client = nil
+                        isCurrentClientStarted = false
+                    }
+                    AttachmentPolicyBridge.shared.detach(client: restored)
                     try? await restored.marmot.shutdownAndClose()
                     if ownsForegroundActivation(id: activationID), !(error is CancellationError) {
                         appState?.setPhase(.failed(UserFacingError.message(for: error)))
@@ -981,6 +1089,18 @@ final class RuntimeLifecycle {
         }
 
         guard ownsForegroundActivation(id: activationID) else { return }
+        if !isRestartingAfterSuspension {
+            if appState?.phase == .ready {
+                appState?.restartReadyForegroundMaintenanceIfStopped()
+            }
+            if isCurrentClientStarted,
+               let client,
+               !AttachmentPolicyBridge.shared.isAttached(to: client) {
+                Task { @MainActor in
+                    _ = try? await AttachmentPolicyBridge.shared.synchronize(client)
+                }
+            }
+        }
         Self.foregroundResumeLog.info(
             """
             local_ready restarted=\(isRestartingAfterSuspension, privacy: .public) \
@@ -1154,7 +1274,9 @@ final class RuntimeLifecycle {
 
         if !lease.ownsEphemeralRuntime,
            client.map(ObjectIdentifier.init) == lease.clientIdentity {
+            AttachmentPolicyBridge.shared.detach(client: clientToClose)
             client = nil
+            isCurrentClientStarted = false
         }
         try? await clientToClose.marmot.shutdownAndClose()
         if !lease.ownsEphemeralRuntime {
@@ -1228,7 +1350,7 @@ final class RuntimeLifecycle {
 
     func beginForegroundRuntimeMutation() throws -> ForegroundRuntimeMutationLease {
         guard phaseOwnsLiveRuntime,
-              canUseRuntimeForLocalForegroundWork,
+              canUseLiveRuntime,
               let client
         else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
 
@@ -1255,11 +1377,46 @@ final class RuntimeLifecycle {
               foregroundMutationLeaseIDs.isEmpty
         else { return }
 
+        preCloseMutationWaiterID = nil
         let waiters = Array(foregroundMutationWaiters.values)
         foregroundMutationWaiters.removeAll()
         for waiter in waiters {
             waiter.resume()
         }
+    }
+
+    private func waitForForegroundRuntimeMutations(timeout: Duration) async {
+        guard !foregroundMutationLeaseIDs.isEmpty, !Task.isCancelled, !isAppSceneActive else { return }
+        let waiterID = UUID()
+        let sleeper = mutationDrainSleeper
+        var timeoutTask: Task<Void, Never>?
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard !foregroundMutationLeaseIDs.isEmpty, !Task.isCancelled, !isAppSceneActive else {
+                    continuation.resume()
+                    return
+                }
+                preCloseMutationWaiterID = waiterID
+                foregroundMutationWaiters[waiterID] = continuation
+                timeoutTask = Task { @MainActor [weak self] in
+                    do {
+                        try await sleeper(timeout)
+                    } catch {
+                        return
+                    }
+                    guard !Task.isCancelled else { return }
+                    self?.resumeForegroundMutationWaiter(id: waiterID)
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.resumeForegroundMutationWaiter(id: waiterID)
+            }
+        }
+        if preCloseMutationWaiterID == waiterID {
+            preCloseMutationWaiterID = nil
+        }
+        timeoutTask?.cancel()
     }
 
     private func waitForForegroundRuntimeMutations() async {
@@ -1282,6 +1439,9 @@ final class RuntimeLifecycle {
     }
 
     private func resumeForegroundMutationWaiter(id: UUID) {
+        if preCloseMutationWaiterID == id {
+            preCloseMutationWaiterID = nil
+        }
         foregroundMutationWaiters.removeValue(forKey: id)?.resume()
     }
 
@@ -1290,6 +1450,7 @@ final class RuntimeLifecycle {
         foregroundActivationTask = nil
         foregroundActivationTaskID = UUID()
         foregroundTask?.cancel()
+        let attachmentPolicy = client.map { AttachmentPolicyBridge.shared.detach(client: $0) } ?? nil
 
         // Native-push cancellation/drain stays in `NotificationCoordinator`
         // (master #401). Cancel-without-awaiting first, cancel the profile queue,
@@ -1297,15 +1458,18 @@ final class RuntimeLifecycle {
         // profile task — mirroring AppState's pre-extraction ordering.
         return ForegroundMaintenanceCancellation(
             foregroundActivation: foregroundTask,
-            maintenance: appState?.beginForegroundMaintenanceCancellation()
+            maintenance: appState?.beginForegroundMaintenanceCancellation(),
+            attachmentPolicy: attachmentPolicy
         )
     }
 
     private func drainForegroundMaintenance(
         _ cancellation: ForegroundMaintenanceCancellation,
-        waitForAccountExit: Bool = true
+        waitForAccountExit: Bool = true,
+        waitForForegroundMutations: Bool = true
     ) async {
         await cancellation.foregroundActivation?.value
+        _ = try? await cancellation.attachmentPolicy?.value
         await cancellation.maintenance?.notificationSubscription?.value
         await cancellation.maintenance?.connectivityCatchUp?.value
         await appState?.cancelNativePushRegistrationTask()
@@ -1322,7 +1486,7 @@ final class RuntimeLifecycle {
         // handles. Terminal close makes their eventual completion safe to await
         // without risking a shared-container lock at process suspension.
         if waitForAccountExit { await appState?.waitForAccountExitToFinish() }
-        await waitForForegroundRuntimeMutations()
+        if waitForForegroundMutations { await waitForForegroundRuntimeMutations() }
     }
 
     private func clearCompletedForegroundActivationTask(id: UUID) {
