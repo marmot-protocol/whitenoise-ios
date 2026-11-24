@@ -122,7 +122,7 @@ private let sharedAvatarCacheTestGate = AsyncTestGate(permits: 1)
 /// Serializes tests across suites that mutate or assert on process-wide avatar
 /// caches (`RemoteAvatarImageLoader`, `GroupAvatarImageLoader`,
 /// `RemoteAvatarDiskCache.shared`/`groupShared`/`groupThumbnailShared`,
-/// `NativeAvatarImageCache`, `AvatarCacheErasure`, `LinkPreviewLoader`).
+/// `NativeAvatarImageCache`, `AvatarCacheErasure`).
 /// Always declare `.sharedAvatarCacheAccess` AFTER
 /// `.marmotRuntimeConcurrencyLimit` when a test uses both so lock acquisition
 /// order is globally acyclic.

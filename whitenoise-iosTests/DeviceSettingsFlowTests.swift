@@ -182,6 +182,31 @@ struct DeviceSettingsFlowTests {
         var lockAfter = stat()
         #expect(lstat(runtimeLock.path, &lockAfter) == 0)
         #expect(lockBefore.st_ino == lockAfter.st_ino)
+
+        // Missing App Group container must throw so full erasure stays in recovery.
+        let unavailableContainerStub = ContainerCleanupStubFileManager(
+            caches: appCaches,
+            applicationSupport: appSupport,
+            documents: documents,
+            temp: temp,
+            sharedContainer: nil
+        )
+        #expect(throws: AppContainerError.appGroupContainerUnavailable) {
+            try AppDataErasure.clearContainerFiles(fileManager: unavailableContainerStub)
+        }
+
+        // Enumeration failure (other than confirmed absence) must propagate.
+        let permissionDeniedStub = ContainerCleanupStubFileManager(
+            caches: appCaches,
+            applicationSupport: appSupport,
+            documents: documents,
+            temp: temp,
+            sharedContainer: appGroup,
+            contentsError: CocoaError(.fileReadNoPermission)
+        )
+        #expect(throws: CocoaError.self) {
+            try AppDataErasure.clearContainerFiles(fileManager: permissionDeniedStub)
+        }
     }
 
     @Test func erasureInMemoryResetClearsRetainedStateWithoutRewritingUserDefaults() async throws {
@@ -212,9 +237,10 @@ struct DeviceSettingsFlowTests {
         appState.startupDiagnosticsEnabled = true
         #expect(defaults.object(forKey: StartupDiagnosticsPreference.key) != nil)
 
-        // Cancel and clear the demo setup before wiping persistent defaults,
-        // mirroring `eraseAppData()`, then wipe in-memory state.
+        // Cancel and clear the demo setup and reset preferences before wiping
+        // persistent defaults, mirroring `eraseAppData()`, then wipe in-memory state.
         await appState.appReviewDemo.resetForErasure()
+        appState.startupDiagnosticsEnabled = false
         defaults.removePersistentDomain(forName: suiteName)
         appState.resetInMemoryStateForErasure()
 
@@ -237,14 +263,23 @@ private final class ContainerCleanupStubFileManager: FileManager {
     private let applicationSupport: URL
     private let documents: URL
     private let temp: URL
-    private let sharedContainer: URL
+    private let sharedContainer: URL?
+    private let contentsError: Error?
 
-    init(caches: URL, applicationSupport: URL, documents: URL, temp: URL, sharedContainer: URL) {
+    init(
+        caches: URL,
+        applicationSupport: URL,
+        documents: URL,
+        temp: URL,
+        sharedContainer: URL?,
+        contentsError: Error? = nil
+    ) {
         self.caches = caches
         self.applicationSupport = applicationSupport
         self.documents = documents
         self.temp = temp
         self.sharedContainer = sharedContainer
+        self.contentsError = contentsError
         super.init()
     }
 
@@ -264,5 +299,14 @@ private final class ContainerCleanupStubFileManager: FileManager {
 
     override func containerURL(forSecurityApplicationGroupIdentifier groupIdentifier: String) -> URL? {
         sharedContainer
+    }
+
+    override func contentsOfDirectory(
+        at url: URL,
+        includingPropertiesForKeys keys: [URLResourceKey]?,
+        options mask: FileManager.DirectoryEnumerationOptions = []
+    ) throws -> [URL] {
+        if let contentsError { throw contentsError }
+        return try super.contentsOfDirectory(at: url, includingPropertiesForKeys: keys, options: mask)
     }
 }

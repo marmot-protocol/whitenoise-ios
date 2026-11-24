@@ -65,9 +65,6 @@ struct ForegroundMaintenanceTasks {
 /// The reads `refreshAccounts` stages before it changes account or setup routing.
 nonisolated struct AccountRefreshReads: Sendable {
     var listAccounts: @MainActor (MarmotClient) async throws -> [AccountSummaryFfi]
-    var onboardingRecoveryRequired: @MainActor (MarmotClient, _ accountID: String) async throws -> Bool = {
-        client, accountID in try await client.onboardingRecoveryRequired(accountRef: accountID)
-    }
     var onboardingSnapshot: @MainActor (MarmotClient, _ accountID: String) async throws -> OnboardingSnapshotFfi?
 
     static let live = AccountRefreshReads(
@@ -331,17 +328,13 @@ final class AppState {
         }
     }
 
-    private var storedStartupDiagnosticsEnabled: Bool
-
     /// Device-wide opt-in for MDK's native startup diagnostics. Applied to the
     /// running runtime immediately and to future runtimes before account reads.
     /// Disabling clears captured history.
     var startupDiagnosticsEnabled: Bool {
-        get { storedStartupDiagnosticsEnabled }
-        set {
-            storedStartupDiagnosticsEnabled = newValue
-            StartupDiagnosticsPreference.setEnabled(newValue, preferenceDefaults)
-            try? client?.marmot.setStartupDiagnosticsEnabled(enabled: newValue)
+        didSet {
+            StartupDiagnosticsPreference.setEnabled(startupDiagnosticsEnabled, preferenceDefaults)
+            try? client?.marmot.setStartupDiagnosticsEnabled(enabled: startupDiagnosticsEnabled)
         }
     }
 
@@ -742,7 +735,7 @@ final class AppState {
         self.preferenceDefaults = preferenceDefaults
         self.developerMode = preferenceDefaults.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = preferenceDefaults.bool(forKey: Self.streamingDebugModeKey)
-        self.storedStartupDiagnosticsEnabled = StartupDiagnosticsPreference.isEnabled(preferenceDefaults)
+        self.startupDiagnosticsEnabled = StartupDiagnosticsPreference.isEnabled(preferenceDefaults)
         self.blockScreenshots = preferenceDefaults.bool(forKey: Self.blockScreenshotsKey)
         self.recentReactions = preferenceDefaults.stringArray(forKey: Self.recentReactionsKey)
             ?? Self.defaultReactions
@@ -1103,9 +1096,18 @@ final class AppState {
         routesAway: Bool = true
     ) async -> [WipeFailureItem] {
         var localCleanupFailures: [WipeFailureItem] = []
+        // Hold the avatar-cache erasure gate across disk cleanup, account
+        // refresh, and routing so a still-displayed departing profile cannot
+        // repopulate the cleared avatar cache while `refreshAccounts()` awaits.
         if destructive {
             AvatarCacheErasure.begin()
-            defer { AvatarCacheErasure.end() }
+        }
+        defer {
+            if destructive {
+                AvatarCacheErasure.end()
+            }
+        }
+        if destructive {
             conversationDraftStore.removeDrafts(accountRef: removedRef)
             await conversationDraftStore.flush()
             MessageHideStore.clearAll(accountRef: removedRef)
@@ -1413,6 +1415,7 @@ final class AppState {
             scheduleApplicationBadgeSynchronization()
             developerMode = false
             streamingDebugMode = false
+            startupDiagnosticsEnabled = false
             blockScreenshots = false
             resetQuickReactions()
             await appLock.setEnabled(false)
@@ -1456,8 +1459,6 @@ final class AppState {
         latestAccountAttention = nil
         accountExitIntent = nil
         checkedRetainedUndeliveredChanges = false
-        // Reset in-memory only so we never write back into the wiped UserDefaults domain.
-        storedStartupDiagnosticsEnabled = false
     }
 
     @MainActor
@@ -1829,7 +1830,7 @@ final class AppState {
             try Task.checkCancellation()
             let snapshot: OnboardingSnapshotFfi?
             do {
-                if try await accountRefreshReads.onboardingRecoveryRequired(client, account.accountIdHex) {
+                if try await client.onboardingRecoveryRequired(accountRef: account.accountIdHex) {
                     recoveryAccounts.append(account)
                     continue
                 }

@@ -221,7 +221,11 @@ struct NotificationContentDecoratorTests {
         defer { try? FileManager.default.removeItem(at: container) }
 
         let fileManager = NotificationAvatarStubFileManager(sharedContainerURL: container)
-        let avatarDir = try #require(NotificationCommunicationDecorator.avatarCacheDirectory(fileManager: fileManager))
+        let avatarDir = container.appendingPathComponent("Library/Caches/NotificationAvatars", isDirectory: true)
+
+        // Missing App Group container reports incomplete cleanup rather than success.
+        let unavailableContainer = NotificationAvatarStubFileManager(sharedContainerURL: nil)
+        #expect(!NotificationCommunicationDecorator.clearAvatarCache(fileManager: unavailableContainer))
 
         // Absent directory succeeds cleanly.
         #expect(NotificationCommunicationDecorator.clearAvatarCache(fileManager: fileManager))

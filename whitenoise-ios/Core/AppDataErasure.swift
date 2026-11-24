@@ -40,16 +40,28 @@ nonisolated enum AppDataErasure {
         let directories = [FileManager.SearchPathDirectory.cachesDirectory, .applicationSupportDirectory, .documentDirectory]
         var urlsToClear = directories.compactMap { fileManager.urls(for: $0, in: .userDomainMask).first }
         urlsToClear.append(fileManager.temporaryDirectory)
-        if let sharedCaches = AppContainerConfig.sharedBase(fileManager: fileManager)?
-            .appendingPathComponent("Library/Caches", isDirectory: true) {
-            // Clears shared extension caches (such as NotificationAvatars) without
-            // touching `White Noise/Marmot/.marmot-runtime.lock`.
-            urlsToClear.append(sharedCaches)
+        guard let sharedBase = AppContainerConfig.sharedBase(fileManager: fileManager) else {
+            throw AppContainerError.appGroupContainerUnavailable
         }
-        for url in urlsToClear where fileManager.fileExists(atPath: url.path) {
-            for child in try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) {
+        // Clears shared extension caches (such as NotificationAvatars) without
+        // touching `White Noise/Marmot/.marmot-runtime.lock`.
+        urlsToClear.append(sharedBase.appendingPathComponent("Library/Caches", isDirectory: true))
+        for url in urlsToClear {
+            let children: [URL]
+            do {
+                children = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
+            } catch let error as NSError where isNotFoundError(error) {
+                continue
+            }
+            for child in children {
                 try fileManager.removeItem(at: child)
             }
         }
+    }
+
+    private static func isNotFoundError(_ error: NSError) -> Bool {
+        (error.domain == NSCocoaErrorDomain
+            && (error.code == NSFileNoSuchFileError || error.code == NSFileReadNoSuchFileError))
+            || (error.domain == NSPOSIXErrorDomain && error.code == Int(ENOENT))
     }
 }
