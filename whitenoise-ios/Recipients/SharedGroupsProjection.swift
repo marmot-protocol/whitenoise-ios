@@ -11,7 +11,6 @@ nonisolated enum SharedGroupsProjection {
         let imageHashHex: String?
         let memberCount: Int
         let isDirectMessage: Bool
-        var pendingConfirmation: Bool = false
 
         var id: String { groupIdHex }
     }
@@ -38,12 +37,11 @@ nonisolated enum SharedGroupsProjection {
                 SharedGroup(
                     groupIdHex: snapshot.groupIdHex,
                     title: snapshot.title,
-                    avatarUrl: snapshot.pendingConfirmation ? nil : snapshot.avatarUrl,
-                    imageHashHex: snapshot.pendingConfirmation ? nil : snapshot.imageHashHex,
+                    avatarUrl: snapshot.avatarUrl,
+                    imageHashHex: snapshot.imageHashHex,
                     memberCount: snapshot.memberIdsHex.count,
                     isDirectMessage: snapshot.sanitizedName == nil
-                        && snapshot.memberIdsHex.count == 2,
-                    pendingConfirmation: snapshot.pendingConfirmation
+                        && snapshot.memberIdsHex.count == 2
                 )
             }
     }
@@ -75,11 +73,10 @@ nonisolated enum SharedGroupsProjection {
                 SharedGroup(
                     groupIdHex: snapshot.groupIdHex,
                     title: snapshot.title,
-                    avatarUrl: snapshot.pendingConfirmation ? nil : snapshot.avatarUrl,
-                    imageHashHex: snapshot.pendingConfirmation ? nil : snapshot.imageHashHex,
+                    avatarUrl: snapshot.avatarUrl,
+                    imageHashHex: snapshot.imageHashHex,
                     memberCount: snapshot.memberIdsHex.count,
-                    isDirectMessage: false,
-                    pendingConfirmation: snapshot.pendingConfirmation
+                    isDirectMessage: false
                 )
             }
     }

@@ -1938,11 +1938,11 @@ struct ConversationView: View {
                 if let viewModel {
                     GroupAvatarBubble(
                         groupIdHex: viewModel.group.groupIdHex,
-                        imageHashHex: viewModel.hasPendingInvite ? nil : viewModel.selectedImageHash,
+                        imageHashHex: viewModel.selectedImageHash,
                         seed: viewModel.conversationWindow != nil ? viewModel.selectedAvatarSeed
                             : initialAvatarSeed ?? viewModel.selectedAvatarSeed,
                         title: chrome.title,
-                        pictureURL: viewModel.hasPendingInvite ? nil : viewModel.selectedAvatarURL,
+                        pictureURL: viewModel.selectedAvatarURL,
                         nativeAsset: viewModel.hasPendingInvite ? nil
                             : (viewModel.conversationWindow != nil
                                 ? viewModel.conversationWindow?.header.avatarAsset : initialAvatarAsset),

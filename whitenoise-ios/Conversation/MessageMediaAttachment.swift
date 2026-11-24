@@ -803,6 +803,10 @@ nonisolated enum MediaDraftProcessor {
 
             let thumbnail: UIImage?
             let restoredDim: String?
+            var restoredID = id
+            var restoredFileName = attachment.fileName
+            var restoredMediaType = attachment.mediaType
+            var restoredData = attachment.plaintext
             switch kind {
             case .image:
                 thumbnail = await MessageMediaThumbnailDecoder.image(
@@ -812,22 +816,39 @@ nonisolated enum MediaDraftProcessor {
                 )
                 restoredDim = attachment.dim
             case .video:
-                let metadata = await MediaVideoMetadata.metadata(
-                    from: attachment.plaintext,
-                    mediaType: attachment.mediaType
-                )
-                thumbnail = metadata.thumbnail
-                restoredDim = attachment.dim ?? metadata.dim
+                // Pre-upgrade drafts may hold unsanitized video bytes carrying
+                // GPS or device metadata. Strip before restoring so no draft can
+                // upload metadata; fail closed if stripping fails, and assign a
+                // fresh ID when sanitized bytes differ so MDK replaces any
+                // file-backed pre-upgrade copy via revisioned save.
+                guard let stripped = try? await MediaVideoMetadataStripper.strip(
+                    data: attachment.plaintext,
+                    preferredMediaType: attachment.mediaType
+                ) else {
+                    continue
+                }
+                if stripped.data != attachment.plaintext || stripped.mediaType != attachment.mediaType {
+                    restoredID = UUID()
+                    restoredFileName = adjustedVideoFileName(
+                        attachment.fileName,
+                        originalMediaType: attachment.mediaType,
+                        strippedMediaType: stripped.mediaType
+                    ) ?? attachment.fileName
+                    restoredMediaType = stripped.mediaType
+                    restoredData = stripped.data
+                }
+                thumbnail = stripped.thumbnail
+                restoredDim = stripped.dim ?? attachment.dim
             case .audio, .document, .unsupported:
                 thumbnail = nil
                 restoredDim = attachment.dim
             }
 
             restored.append(MediaDraftAttachment(
-                id: id,
-                fileName: attachment.fileName,
-                mediaType: attachment.mediaType,
-                data: attachment.plaintext,
+                id: restoredID,
+                fileName: restoredFileName,
+                mediaType: restoredMediaType,
+                data: restoredData,
                 dim: restoredDim,
                 thumbhash: attachment.thumbhash,
                 thumbnail: thumbnail,
@@ -1581,18 +1602,6 @@ nonisolated enum MediaVideoMetadataStripper {
         let firstSample: CMSampleBuffer?
     }
 
-    private final class CancellationFlag: Sendable {
-        private let state = Mutex(false)
-
-        var isCancelled: Bool {
-            state.withLock { $0 }
-        }
-
-        func cancel() {
-            state.withLock { $0 = true }
-        }
-    }
-
     static func strip(
         data: Data,
         preferredMediaType: String,
@@ -1610,11 +1619,10 @@ nonisolated enum MediaVideoMetadataStripper {
             in: directory
         )
         defer { try? FileManager.default.removeItem(at: inputURL) }
-        return try await strip(
-            sourceURL: inputURL,
+        return try await stripOwnedFile(
+            at: inputURL,
             preferredMediaType: preferredMediaType,
-            directory: directory,
-            now: now
+            directory: directory
         )
     }
 
@@ -1627,31 +1635,46 @@ nonisolated enum MediaVideoMetadataStripper {
         let manager = FileManager.default
         try prepareDirectory(directory, now: now)
 
-        // AVURLAsset relies on a recognized video extension to open containers.
-        let effectiveSourceURL: URL
-        let ownedCopyURL: URL?
+        // Always clone the external file-provider URL into a private scoped
+        // snapshot first so the provider cannot mutate bytes or size between
+        // validation and AVFoundation's asynchronous track reads.
         let ext = sourceURL.pathExtension.lowercased()
-        if ext == "mov" || ext == "mp4" || ext == "m4v" {
-            effectiveSourceURL = sourceURL
-            ownedCopyURL = nil
-        } else {
-            let copyURL = directory
-                .appendingPathComponent(UUID().uuidString, isDirectory: false)
-                .appendingPathExtension(MediaAttachmentPolicy.fileExtension(for: preferredMediaType))
-            try manager.copyItem(at: sourceURL, to: copyURL)
-            try manager.setAttributes(
-                [.protectionKey: FileProtectionType.complete],
-                ofItemAtPath: copyURL.path
-            )
-            effectiveSourceURL = copyURL
-            ownedCopyURL = copyURL
+        let copyExtension = (ext == "mov" || ext == "mp4" || ext == "m4v")
+            ? ext
+            : MediaAttachmentPolicy.fileExtension(for: preferredMediaType)
+        let copyURL = directory
+            .appendingPathComponent(UUID().uuidString, isDirectory: false)
+            .appendingPathExtension(copyExtension)
+        try manager.copyItem(at: sourceURL, to: copyURL)
+        defer { try? manager.removeItem(at: copyURL) }
+        guard MediaUploadSourceFiles.isRegularFile(at: copyURL) else {
+            throw MediaDraftProcessor.Failure.encodingFailed
         }
-        defer {
-            if let ownedCopyURL {
-                try? manager.removeItem(at: ownedCopyURL)
-            }
+        try manager.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: copyURL.path
+        )
+        let copySize = (try? copyURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        guard copySize > 0 else {
+            throw MediaDraftProcessor.Failure.encodingFailed
+        }
+        guard copySize <= MediaDraftProcessor.maxAttachmentBytes else {
+            throw MediaDraftProcessor.Failure.attachmentTooLarge(copySize)
         }
 
+        return try await stripOwnedFile(
+            at: copyURL,
+            preferredMediaType: preferredMediaType,
+            directory: directory
+        )
+    }
+
+    private static func stripOwnedFile(
+        at inputURL: URL,
+        preferredMediaType: String,
+        directory: URL
+    ) async throws -> StrippedVideo {
+        let manager = FileManager.default
         let preferredType = fileType(for: preferredMediaType)
         let candidateTypes: [AVFileType] = preferredType == .mov ? [.mov, .mp4] : [.mp4, .mov]
 
@@ -1665,12 +1688,12 @@ nonisolated enum MediaVideoMetadataStripper {
 
             do {
                 try await remuxStrippingMetadata(
-                    sourceURL: effectiveSourceURL,
+                    sourceURL: inputURL,
                     outputURL: outputURL,
                     outputFileType: candidateType
                 )
                 try manager.setAttributes(
-                    [.protectionKey: FileProtectionType.complete],
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
                     ofItemAtPath: outputURL.path
                 )
                 let strippedAsset = AVURLAsset(url: outputURL)
@@ -1709,7 +1732,7 @@ nonisolated enum MediaVideoMetadataStripper {
         let allTracks = try await asset.load(.tracks)
         // Copy only media tracks; timed `.metadata` and auxiliary tracks are dropped.
         let mediaTracks = allTracks.filter { $0.mediaType == .video || $0.mediaType == .audio }
-        guard mediaTracks.contains(where: { $0.mediaType == .video }) else {
+        guard !mediaTracks.isEmpty else {
             throw MediaDraftProcessor.Failure.encodingFailed
         }
 
@@ -1719,7 +1742,6 @@ nonisolated enum MediaVideoMetadataStripper {
         writer.shouldOptimizeForNetworkUse = true
 
         var trackConfigs: [(output: AVAssetReaderTrackOutput, input: AVAssetWriterInput)] = []
-        var hasVideoTrack = false
 
         for track in mediaTracks {
             try Task.checkCancellation()
@@ -1758,12 +1780,9 @@ nonisolated enum MediaVideoMetadataStripper {
             reader.add(output)
             writer.add(input)
             trackConfigs.append((output: output, input: input))
-            if track.mediaType == .video {
-                hasVideoTrack = true
-            }
         }
 
-        guard hasVideoTrack, !trackConfigs.isEmpty else {
+        guard !trackConfigs.isEmpty else {
             throw MediaDraftProcessor.Failure.encodingFailed
         }
 
@@ -1811,17 +1830,18 @@ nonisolated enum MediaVideoMetadataStripper {
             }
         }
 
-        let cancellation = CancellationFlag()
-        await withTaskCancellationHandler {
-            await copyRemainingSamples(pairs: activePairs, cancellation: cancellation)
-        } onCancel: {
-            cancellation.cancel()
-        }
-
-        if cancellation.isCancelled || Task.isCancelled {
-            reader.cancelReading()
-            writer.cancelWriting()
+        let outcome = await copyRemainingSamples(
+            reader: reader,
+            writer: writer,
+            pairs: activePairs
+        )
+        switch outcome {
+        case .cancelled:
             throw CancellationError()
+        case .failed:
+            throw MediaDraftProcessor.Failure.encodingFailed
+        case .completed:
+            break
         }
 
         guard reader.status == .completed else {
@@ -1836,55 +1856,128 @@ nonisolated enum MediaVideoMetadataStripper {
         }
     }
 
-    private static func copyRemainingSamples(
+    enum SampleCopyOutcome: Equatable, Sendable {
+        case completed
+        case failed
+        case cancelled
+    }
+
+    private struct SampleCopyState {
+        var remaining: Int
+        var finishedTracks: [Bool]
+        var outcome: SampleCopyOutcome?
+        var continuation: CheckedContinuation<SampleCopyOutcome, Never>?
+        var cancelBeforeContinuation = false
+    }
+
+    static func copyRemainingSamples(
+        reader: AVAssetReader,
+        writer: AVAssetWriter,
         pairs: [(output: AVAssetReaderTrackOutput, input: AVAssetWriterInput)],
-        cancellation: CancellationFlag
-    ) async {
-        guard !pairs.isEmpty else { return }
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let remaining = Mutex(pairs.count)
-            for (index, pair) in pairs.enumerated() {
-                let queue = DispatchQueue(
-                    label: "dev.ipf.whitenoise.video-strip.\(index)",
-                    qos: .userInitiated
-                )
-                let trackFinished = Mutex(false)
-                let output = pair.output
-                let input = pair.input
-                let finishTrack: @Sendable () -> Void = {
-                    let shouldFinish = trackFinished.withLock { done -> Bool in
-                        guard !done else { return false }
-                        done = true
-                        return true
-                    }
-                    guard shouldFinish else { return }
-                    input.markAsFinished()
-                    let allDone = remaining.withLock { count -> Bool in
-                        count -= 1
-                        return count == 0
-                    }
-                    if allDone {
-                        continuation.resume()
-                    }
+        appendSample: @escaping @Sendable (Int, AVAssetWriterInput, CMSampleBuffer) -> Bool = { _, input, sample in
+            input.append(sample)
+        }
+    ) async -> SampleCopyOutcome {
+        guard !pairs.isEmpty else { return Task.isCancelled ? .cancelled : .completed }
+        let state = Mutex(SampleCopyState(
+            remaining: pairs.count,
+            finishedTracks: Array(repeating: false, count: pairs.count)
+        ))
+
+        @Sendable func abort(outcome: SampleCopyOutcome) {
+            let continuation: CheckedContinuation<SampleCopyOutcome, Never>? = state.withLock { current in
+                guard current.outcome == nil else { return nil }
+                current.outcome = outcome
+                let cont = current.continuation
+                current.continuation = nil
+                return cont
+            }
+            reader.cancelReading()
+            writer.cancelWriting()
+            continuation?.resume(returning: outcome)
+        }
+
+        @Sendable func finishTrack(_ index: Int, input: AVAssetWriterInput) {
+            enum Action { case ignore, markOnly, complete(CheckedContinuation<SampleCopyOutcome, Never>?) }
+            let action: Action = state.withLock { current in
+                guard current.outcome == nil, !current.finishedTracks[index] else { return .ignore }
+                current.finishedTracks[index] = true
+                current.remaining -= 1
+                if current.remaining == 0 {
+                    current.outcome = .completed
+                    let cont = current.continuation
+                    current.continuation = nil
+                    return .complete(cont)
                 }
-                input.requestMediaDataWhenReady(on: queue) {
-                    while input.isReadyForMoreMediaData {
-                        if cancellation.isCancelled {
-                            finishTrack()
-                            return
-                        }
-                        if let sample = output.copyNextSampleBuffer() {
-                            if !input.append(sample) {
-                                finishTrack()
+                return .markOnly
+            }
+            switch action {
+            case .ignore:
+                return
+            case .markOnly:
+                if writer.status == .writing {
+                    input.markAsFinished()
+                }
+            case .complete(let continuation):
+                if writer.status == .writing {
+                    input.markAsFinished()
+                }
+                continuation?.resume(returning: .completed)
+            }
+        }
+
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<SampleCopyOutcome, Never>) in
+                let earlyOutcome: SampleCopyOutcome? = state.withLock { current in
+                    if let existing = current.outcome {
+                        return existing
+                    }
+                    if current.cancelBeforeContinuation || Task.isCancelled {
+                        current.outcome = .cancelled
+                        return .cancelled
+                    }
+                    current.continuation = continuation
+                    return nil
+                }
+                if let earlyOutcome {
+                    reader.cancelReading()
+                    writer.cancelWriting()
+                    continuation.resume(returning: earlyOutcome)
+                    return
+                }
+
+                for (index, pair) in pairs.enumerated() {
+                    let queue = DispatchQueue(
+                        label: "dev.ipf.whitenoise.video-strip.\(index)",
+                        qos: .userInitiated
+                    )
+                    let output = pair.output
+                    let input = pair.input
+                    input.requestMediaDataWhenReady(on: queue) {
+                        while input.isReadyForMoreMediaData {
+                            if state.withLock({ $0.outcome != nil }) {
                                 return
                             }
-                        } else {
-                            finishTrack()
-                            return
+                            if writer.status != .writing {
+                                abort(outcome: .failed)
+                                return
+                            }
+                            if let sample = output.copyNextSampleBuffer() {
+                                if !appendSample(index, input, sample) {
+                                    abort(outcome: .failed)
+                                    return
+                                }
+                            } else {
+                                finishTrack(index, input: input)
+                                return
+                            }
                         }
                     }
                 }
             }
+        } onCancel: {
+            state.withLock { $0.cancelBeforeContinuation = true }
+            abort(outcome: .cancelled)
         }
     }
 
@@ -1893,10 +1986,10 @@ nonisolated enum MediaVideoMetadataStripper {
         try manager.createDirectory(
             at: directory,
             withIntermediateDirectories: true,
-            attributes: [.protectionKey: FileProtectionType.complete]
+            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
         )
         try? manager.setAttributes(
-            [.protectionKey: FileProtectionType.complete],
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
             ofItemAtPath: directory.path
         )
         MediaUploadSourceFiles.removeStale(in: directory, olderThan: staleAge, now: now)
@@ -1914,7 +2007,7 @@ nonisolated enum MediaVideoMetadataStripper {
         guard manager.createFile(
             atPath: url.path,
             contents: nil,
-            attributes: [.protectionKey: FileProtectionType.complete]
+            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
         ) else {
             throw MediaDraftProcessor.Failure.encodingFailed
         }

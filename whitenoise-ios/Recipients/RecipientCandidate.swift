@@ -99,8 +99,8 @@ nonisolated struct RecipientGroupSnapshot: Equatable {
             title: ContentSanitizer.groupName(row.groupName)
                 ?? ContentSanitizer.groupName(row.title)
                 ?? IdentityFormatter.short(row.groupIdHex),
-            avatarUrl: isPending ? nil : (avatarUrl ?? row.avatarUrl),
-            imageHashHex: isPending ? nil : (imageHashHex ?? row.avatar?.imageHashHex),
+            avatarUrl: avatarUrl ?? row.avatarUrl,
+            imageHashHex: imageHashHex ?? row.avatar?.imageHashHex,
             isArchived: row.archived,
             isSelfMember: GroupManagementPresentation.isActiveChatListMember(row.selfMembership),
             conversationKind: row.conversationKind,
@@ -206,8 +206,8 @@ nonisolated enum ConversationChoiceProjection {
                 ConversationChoice(
                     groupIdHex: snapshot.groupIdHex,
                     name: snapshot.sanitizedName,
-                    avatarUrl: snapshot.pendingConfirmation ? nil : snapshot.avatarUrl,
-                    imageHashHex: snapshot.pendingConfirmation ? nil : snapshot.imageHashHex,
+                    avatarUrl: snapshot.avatarUrl,
+                    imageHashHex: snapshot.imageHashHex,
                     isArchived: snapshot.isArchived,
                     lastActivityAt: snapshot.lastActivityAt,
                     pendingConfirmation: snapshot.pendingConfirmation

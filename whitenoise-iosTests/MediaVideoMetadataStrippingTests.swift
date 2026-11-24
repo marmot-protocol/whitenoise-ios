@@ -1,6 +1,9 @@
 @preconcurrency import AVFoundation
+import CoreMedia
 import CoreVideo
 import Foundation
+import MarmotKit
+import Synchronization
 import Testing
 import UniformTypeIdentifiers
 @testable import whitenoise_ios
@@ -129,6 +132,152 @@ struct MediaVideoMetadataStrippingTests {
         #expect(!stripped.data.isEmpty)
         let leftovers = try FileManager.default.contentsOfDirectory(atPath: workDirectory.path)
         #expect(leftovers.isEmpty)
+    }
+
+    @MainActor
+    @Test func restoringPreUpgradeDraftStripsVideoMetadataAndReplacesStoredAttachment() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VideoDraftUpgradeTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let sourceURL = directory.appendingPathComponent("geotagged.mov")
+        try await synthesizeTaggedVideo(
+            at: sourceURL,
+            fileType: .mov,
+            width: 160,
+            height: 120,
+            transform: .identity
+        )
+        let originalData = try Data(contentsOf: sourceURL)
+        let legacyID = UUID()
+        let storedAttachment = MessageDraftAttachmentFfi(
+            id: legacyID.uuidString,
+            fileName: "geotagged.mov",
+            mediaType: "video/quicktime",
+            plaintext: originalData,
+            dim: "160x120",
+            thumbhash: nil,
+            durationSeconds: nil,
+            waveformSamples: []
+        )
+        let persistence = StubDraftPersistence(
+            initialDraft: MessageDraftFfi(
+                groupIdHex: "group-1",
+                content: "Check this clip",
+                replyToMessageIdHex: nil,
+                mediaAttachments: [storedAttachment],
+                createdAtMs: 1_000,
+                updatedAtMs: 1_000
+            )
+        )
+        let store = ConversationDraftStore(
+            persistence: persistence,
+            legacyFileURL: directory.appendingPathComponent("legacy.json")
+        )
+
+        let restored = try #require(await store.snapshot(accountRef: "alice", groupIdHex: "group-1"))
+        let sanitized = try #require(restored.mediaAttachments.first)
+        // Sanitized replacement gets a new ID so MDK replaces any pre-upgrade
+        // file-backed entry via revisioned save rather than retaining the raw file.
+        #expect(sanitized.id != legacyID)
+        let inputs = MessageDraftAttachmentInputs.inputs(
+            for: [sanitized],
+            retainedIDs: [legacyID.uuidString],
+            removingUnnamed: [legacyID.uuidString]
+        )
+        #expect(inputs.contains {
+            if case .removed(let id) = $0 { return id == legacyID.uuidString }
+            return false
+        })
+        #expect(inputs.contains {
+            if case .inline(let attachment) = $0 { return attachment.id == sanitized.id.uuidString }
+            return false
+        })
+        try await verifyStrippedAttachment(sanitized, expectedDim: "160x120", in: directory)
+
+        // Flushing persists the sanitized replacement back into the draft store.
+        await store.flush()
+        let saved = try #require(persistence.lastSavedSnapshot)
+        #expect(saved.mediaAttachments.map(\.id) == [sanitized.id])
+        #expect(saved.mediaAttachments.first?.data.range(of: Data("+37.33182".utf8)) == nil)
+    }
+
+    @Test func allowsAudioOnlyMovieContainersWhileStrippingMetadata() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AudioOnlyMovieStripTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let sourceURL = directory.appendingPathComponent("voice-container.mov")
+        try await synthesizeTaggedAudioOnlyMovie(at: sourceURL)
+
+        let sourceMetadata = try await allMetadataStrings(in: AVURLAsset(url: sourceURL))
+        #expect(sourceMetadata.contains { $0.contains("+37.33182") })
+
+        let attachment = try await MediaDraftProcessor.preparedAttachment(fromFileURL: sourceURL)
+        #expect(attachment.kind == .video)
+        #expect(!attachment.data.isEmpty)
+        #expect(attachment.data.range(of: Data("+37.33182".utf8)) == nil)
+
+        let strippedURL = directory.appendingPathComponent("stripped-audio-only.mov")
+        try attachment.data.write(to: strippedURL, options: .atomic)
+        let strippedAsset = AVURLAsset(url: strippedURL)
+        #expect(try await allMetadataStrings(in: strippedAsset).isEmpty)
+        let tracks = try await strippedAsset.load(.tracks)
+        #expect(tracks.contains { $0.mediaType == .audio })
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func multiTrackAppendFailureAndCancellationTerminateWithoutHanging() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MultiTrackFailureTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let sourceURL = directory.appendingPathComponent("av.mov")
+        try await synthesizeTaggedVideoWithAudio(at: sourceURL, width: 160, height: 120)
+
+        // Normal remux preserves both video and audio tracks and strips metadata.
+        let stripped = try await MediaDraftProcessor.preparedAttachment(fromFileURL: sourceURL)
+        try await verifyStrippedAttachment(stripped, expectedDim: "160x120", in: directory)
+        let strippedURL = directory.appendingPathComponent("av-stripped.mov")
+        try stripped.data.write(to: strippedURL, options: .atomic)
+        let strippedTracks = try await AVURLAsset(url: strippedURL).load(.tracks)
+        #expect(strippedTracks.contains { $0.mediaType == .video })
+        #expect(strippedTracks.contains { $0.mediaType == .audio })
+
+        // Force an append failure on track 0 while track 1 is still active:
+        // copyRemainingSamples must cancel reader/writer and resume immediately.
+        let asset = AVURLAsset(url: sourceURL)
+        let tracks = try await asset.load(.tracks).filter { $0.mediaType == .video || $0.mediaType == .audio }
+        #expect(tracks.count == 2)
+        let reader = try AVAssetReader(asset: asset)
+        let outputURL = directory.appendingPathComponent("aborted.mov")
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
+        var pairs: [(output: AVAssetReaderTrackOutput, input: AVAssetWriterInput)] = []
+        for track in tracks {
+            let hint = try #require(try await track.load(.formatDescriptions).first)
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+            let input = AVAssetWriterInput(mediaType: track.mediaType, outputSettings: nil, sourceFormatHint: hint)
+            reader.add(output)
+            writer.add(input)
+            pairs.append((output, input))
+        }
+        #expect(reader.startReading())
+        #expect(writer.startWriting())
+        writer.startSession(atSourceTime: .zero)
+
+        let outcome = await MediaVideoMetadataStripper.copyRemainingSamples(
+            reader: reader,
+            writer: writer,
+            pairs: pairs
+        ) { index, input, sample in
+            if index == 0 { return false }
+            return input.append(sample)
+        }
+        #expect(outcome == .failed)
+        #expect(writer.status == .cancelled)
     }
 
     private func verifyStrippedAttachment(
@@ -304,6 +453,168 @@ struct MediaVideoMetadataStrippingTests {
         return item
     }
 
+    private func synthesizeTaggedAudioOnlyMovie(at url: URL) async throws {
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        writer.metadata = [
+            metadataItem(
+                keySpace: .quickTimeMetadata,
+                key: AVMetadataKey.quickTimeMetadataKeyLocationISO6709 as NSString,
+                value: Self.sampleGPS as NSString
+            ),
+            metadataItem(
+                keySpace: .quickTimeMetadata,
+                key: AVMetadataKey.quickTimeMetadataKeyModel as NSString,
+                value: Self.sampleModel as NSString
+            ),
+        ]
+        let audioInput = makeAudioWriterInput()
+        #expect(writer.canAdd(audioInput))
+        writer.add(audioInput)
+        #expect(writer.startWriting())
+        writer.startSession(atSourceTime: .zero)
+        try await appendSilentAudioSamples(to: audioInput, count: 6)
+        audioInput.markAsFinished()
+        await writer.finishWriting()
+        #expect(writer.status == .completed, "audio-only writer failed: \(String(describing: writer.error))")
+    }
+
+    private func synthesizeTaggedVideoWithAudio(at url: URL, width: Int, height: Int) async throws {
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        writer.metadata = [
+            metadataItem(
+                keySpace: .quickTimeMetadata,
+                key: AVMetadataKey.quickTimeMetadataKeyLocationISO6709 as NSString,
+                value: Self.sampleGPS as NSString
+            ),
+            metadataItem(
+                keySpace: .quickTimeMetadata,
+                key: AVMetadataKey.quickTimeMetadataKeyModel as NSString,
+                value: Self.sampleModel as NSString
+            ),
+        ]
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+        ]
+        let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        videoInput.expectsMediaDataInRealTime = false
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: videoInput,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: width,
+                kCVPixelBufferHeightKey as String: height,
+            ]
+        )
+        let audioInput = makeAudioWriterInput()
+        #expect(writer.canAdd(videoInput))
+        #expect(writer.canAdd(audioInput))
+        writer.add(videoInput)
+        writer.add(audioInput)
+        #expect(writer.startWriting())
+        writer.startSession(atSourceTime: .zero)
+
+        for frameIndex in 0..<6 {
+            var pixelBuffer: CVPixelBuffer?
+            let status = CVPixelBufferCreate(
+                kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, nil, &pixelBuffer
+            )
+            #expect(status == kCVReturnSuccess)
+            let buffer = try #require(pixelBuffer)
+            let pts = CMTime(value: CMTimeValue(frameIndex), timescale: 15)
+            try await eventually { videoInput.isReadyForMoreMediaData }
+            #expect(adaptor.append(buffer, withPresentationTime: pts))
+        }
+        try await appendSilentAudioSamples(to: audioInput, count: 12)
+        videoInput.markAsFinished()
+        audioInput.markAsFinished()
+        await writer.finishWriting()
+        #expect(writer.status == .completed, "av writer failed: \(String(describing: writer.error))")
+    }
+
+    private func makeAudioWriterInput() -> AVAssetWriterInput {
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVNumberOfChannelsKey: 1,
+            AVSampleRateKey: 44_100,
+            AVEncoderBitRateKey: 64_000,
+        ]
+        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: settings)
+        input.expectsMediaDataInRealTime = false
+        return input
+    }
+
+    private func appendSilentAudioSamples(to input: AVAssetWriterInput, count: Int) async throws {
+        var asbd = AudioStreamBasicDescription(
+            mSampleRate: 44_100,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 2,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 2,
+            mChannelsPerFrame: 1,
+            mBitsPerChannel: 16,
+            mReserved: 0
+        )
+        var formatDescription: CMAudioFormatDescription?
+        let fmtStatus = CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &asbd,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &formatDescription
+        )
+        #expect(fmtStatus == noErr)
+        let format = try #require(formatDescription)
+        let framesPerBuffer = 1024
+        let byteCount = framesPerBuffer * 2
+
+        for index in 0..<count {
+            var blockBuffer: CMBlockBuffer?
+            let blockStatus = CMBlockBufferCreateWithMemoryBlock(
+                allocator: kCFAllocatorDefault,
+                memoryBlock: nil,
+                blockLength: byteCount,
+                blockAllocator: kCFAllocatorDefault,
+                customBlockSource: nil,
+                offsetToData: 0,
+                dataLength: byteCount,
+                flags: 0,
+                blockBufferOut: &blockBuffer
+            )
+            #expect(blockStatus == kCMBlockBufferNoErr)
+            let block = try #require(blockBuffer)
+            #expect(CMBlockBufferFillDataBytes(with: 0, blockBuffer: block, offsetIntoDestination: 0, dataLength: byteCount) == kCMBlockBufferNoErr)
+
+            var timing = CMSampleTimingInfo(
+                duration: CMTime(value: 1, timescale: 44_100),
+                presentationTimeStamp: CMTime(value: CMTimeValue(index * framesPerBuffer), timescale: 44_100),
+                decodeTimeStamp: .invalid
+            )
+            var sampleSize = byteCount
+            var sampleBuffer: CMSampleBuffer?
+            let sampleStatus = CMSampleBufferCreateReady(
+                allocator: kCFAllocatorDefault,
+                dataBuffer: block,
+                formatDescription: format,
+                sampleCount: framesPerBuffer,
+                sampleTimingEntryCount: 1,
+                sampleTimingArray: &timing,
+                sampleSizeEntryCount: 1,
+                sampleSizeArray: &sampleSize,
+                sampleBufferOut: &sampleBuffer
+            )
+            #expect(sampleStatus == noErr)
+            let sample = try #require(sampleBuffer)
+            try await eventually { input.isReadyForMoreMediaData }
+            #expect(input.append(sample))
+        }
+    }
+
     private func metadataItem(
         identifier: AVMetadataIdentifier,
         value: NSString
@@ -312,5 +623,62 @@ struct MediaVideoMetadataStrippingTests {
         item.identifier = identifier
         item.value = value
         return item
+    }
+}
+
+@MainActor
+private final class StubDraftPersistence: ConversationDraftPersistence {
+    var storedDraft: MessageDraftFfi?
+    var lastSavedSnapshot: ConversationDraftSnapshot?
+
+    init(initialDraft: MessageDraftFfi?) {
+        self.storedDraft = initialDraft
+    }
+
+    func loadMessageDraftSummaries(accountRef _: String) async throws -> [MessageDraftSummaryFfi] {
+        guard let storedDraft else { return [] }
+        return [
+            MessageDraftSummaryFfi(
+                groupIdHex: storedDraft.groupIdHex,
+                content: storedDraft.content,
+                replyToMessageIdHex: storedDraft.replyToMessageIdHex,
+                mediaAttachments: storedDraft.mediaAttachments.map {
+                    MessageDraftAttachmentSummaryFfi(
+                        id: $0.id,
+                        fileName: $0.fileName,
+                        mediaType: $0.mediaType,
+                        plaintextSize: UInt64($0.plaintext.count)
+                    )
+                },
+                createdAtMs: storedDraft.createdAtMs,
+                updatedAtMs: storedDraft.updatedAtMs
+            ),
+        ]
+    }
+
+    func loadMessageDraft(accountRef _: String, groupIdHex _: String) async throws -> MessageDraftFfi? {
+        storedDraft
+    }
+
+    func persistMessageDraft(
+        accountRef _: String,
+        groupIdHex: String,
+        snapshot: ConversationDraftSnapshot
+    ) async throws -> MessageDraftFfi {
+        lastSavedSnapshot = snapshot
+        let saved = MessageDraftFfi(
+            groupIdHex: groupIdHex,
+            content: snapshot.canonicalText,
+            replyToMessageIdHex: snapshot.replyToMessageIdHex,
+            mediaAttachments: snapshot.mediaAttachments.map(\.messageDraftAttachment),
+            createdAtMs: 1_000,
+            updatedAtMs: 2_000
+        )
+        storedDraft = saved
+        return saved
+    }
+
+    func deletePersistedMessageDraft(accountRef _: String, groupIdHex _: String) async throws {
+        storedDraft = nil
     }
 }

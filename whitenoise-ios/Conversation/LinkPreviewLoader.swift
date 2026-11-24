@@ -27,113 +27,6 @@ enum LinkPreviewLoader {
         }
     }
 
-    /// Reference-counted in-flight load. Individual callers cancel immediately
-    /// without cancelling peers sharing the same URL; the underlying fetch task
-    /// is cancelled as soon as the last waiter cancels.
-    @MainActor
-    private final class SharedInFlight<Value: Sendable> {
-        // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
-        // https://github.com/swiftlang/swift/issues/88036
-        nonisolated deinit {}
-
-        let id = UUID()
-        private var task: Task<Void, Never>?
-        private var waiters: [UUID: CheckedContinuation<Value, Error>] = [:]
-        private var outcome: Result<Value, Error>?
-        private let onClear: @MainActor () -> Void
-        private let onSuccess: @MainActor (Value) -> Void
-
-        init(
-            onClear: @escaping @MainActor () -> Void,
-            onSuccess: @escaping @MainActor (Value) -> Void
-        ) {
-            self.onClear = onClear
-            self.onSuccess = onSuccess
-        }
-
-        func start(_ operation: @escaping @Sendable () async throws -> Value) {
-            task = Task { @MainActor [weak self] in
-                do {
-                    let value = try await operation()
-                    guard !Task.isCancelled else {
-                        self?.finish(with: .failure(CancellationError()))
-                        return
-                    }
-                    self?.finish(with: .success(value))
-                } catch {
-                    self?.finish(with: .failure(error))
-                }
-            }
-        }
-
-        func wait() async throws -> Value {
-            try Task.checkCancellation()
-            if let outcome { return try outcome.get() }
-            let waiterID = UUID()
-            return try await withTaskCancellationHandler {
-                try await withCheckedThrowingContinuation { continuation in
-                    if Task.isCancelled {
-                        continuation.resume(throwing: CancellationError())
-                        if waiters.isEmpty, outcome == nil {
-                            cancelUnderlying()
-                        }
-                    } else if let outcome {
-                        continuation.resume(with: outcome)
-                    } else {
-                        waiters[waiterID] = continuation
-                    }
-                }
-            } onCancel: {
-                Task { @MainActor [weak self] in
-                    self?.cancelWaiter(waiterID)
-                }
-            }
-        }
-
-        func cancelAll() {
-            guard outcome == nil else { return }
-            outcome = .failure(CancellationError())
-            task?.cancel()
-            task = nil
-            let pending = waiters
-            waiters.removeAll()
-            onClear()
-            for continuation in pending.values {
-                continuation.resume(throwing: CancellationError())
-            }
-        }
-
-        private func cancelWaiter(_ waiterID: UUID) {
-            guard let continuation = waiters.removeValue(forKey: waiterID) else { return }
-            continuation.resume(throwing: CancellationError())
-            if waiters.isEmpty, outcome == nil {
-                cancelUnderlying()
-            }
-        }
-
-        private func cancelUnderlying() {
-            outcome = .failure(CancellationError())
-            task?.cancel()
-            task = nil
-            onClear()
-        }
-
-        private func finish(with result: Result<Value, Error>) {
-            guard outcome == nil else { return }
-            outcome = result
-            task = nil
-            let pending = waiters
-            waiters.removeAll()
-            onClear()
-            if case .success(let value) = result {
-                onSuccess(value)
-            }
-            for continuation in pending.values {
-                continuation.resume(with: result)
-            }
-        }
-    }
-
     private static let loadLimiter = CancellableLoadLimiter(
         maximumConcurrentLoads: maximumConcurrentLoads
     )
@@ -150,9 +43,8 @@ enum LinkPreviewLoader {
         return cache
     }()
 
-    private static var inFlightMetadata: [String: SharedInFlight<LinkPreviewMetadata?>] = [:]
-    private static var inFlightImages: [String: SharedInFlight<UIImage>] = [:]
-    private static var cacheGeneration: UInt64 = 0
+    private static var inFlightMetadata: [String: Task<LinkPreviewMetadata?, Error>] = [:]
+    private static var inFlightImages: [String: Task<UIImage, Error>] = [:]
 
     static func cachedMetadata(for url: URL) -> LinkPreviewMetadata?? {
         metadataCache.object(forKey: url.absoluteString as NSString).map(\.metadata)
@@ -166,30 +58,20 @@ enum LinkPreviewLoader {
         try checkLoadAllowed()
         let key = url.absoluteString
         if let cached = metadataCache.object(forKey: key as NSString) { return cached.metadata }
-        if let inFlight = inFlightMetadata[key] { return try await inFlight.wait() }
+        if let task = inFlightMetadata[key] { return try await task.value }
 
-        let generation = cacheGeneration
         let activeLimiter = limiter ?? loadLimiter
-        var entryID = UUID()
-        let entry = SharedInFlight<LinkPreviewMetadata?>(
-            onClear: {
-                if inFlightMetadata[key]?.id == entryID {
-                    inFlightMetadata[key] = nil
-                }
-            },
-            onSuccess: { metadata in
-                guard generation == cacheGeneration, !AvatarCacheErasure.isInProgress else { return }
-                metadataCache.setObject(CachedMetadata(metadata), forKey: key as NSString)
-            }
-        )
-        entryID = entry.id
-        inFlightMetadata[key] = entry
-        entry.start {
+        let task = Task {
             try await withLimiter(activeLimiter) {
                 try await fetchMetadata(for: url, fetch: fetch)
             }
         }
-        return try await entry.wait()
+        inFlightMetadata[key] = task
+        defer { inFlightMetadata[key] = nil }
+        let metadata = try await task.value
+        try checkLoadAllowed()
+        metadataCache.setObject(CachedMetadata(metadata), forKey: key as NSString)
+        return metadata
     }
 
     static func imageCacheKey(for url: URL, maxPixelSize: Int, scale: CGFloat) -> String {
@@ -206,29 +88,10 @@ enum LinkPreviewLoader {
         try checkLoadAllowed()
         let key = imageCacheKey(for: url, maxPixelSize: maxPixelSize, scale: scale)
         if let cached = imageCache.object(forKey: key as NSString) { return cached.image }
-        if let inFlight = inFlightImages[key] { return try await inFlight.wait() }
+        if let task = inFlightImages[key] { return try await task.value }
 
-        let generation = cacheGeneration
         let activeLimiter = limiter ?? loadLimiter
-        var entryID = UUID()
-        let entry = SharedInFlight<UIImage>(
-            onClear: {
-                if inFlightImages[key]?.id == entryID {
-                    inFlightImages[key] = nil
-                }
-            },
-            onSuccess: { image in
-                guard generation == cacheGeneration, !AvatarCacheErasure.isInProgress else { return }
-                imageCache.setObject(
-                    CachedImage(image),
-                    forKey: key as NSString,
-                    cost: DecodedImageCost.decodedBitmapByteCost(for: image)
-                )
-            }
-        )
-        entryID = entry.id
-        inFlightImages[key] = entry
-        entry.start {
+        let task = Task {
             try await withLimiter(activeLimiter) {
                 try await fetchImage(
                     for: url,
@@ -238,19 +101,25 @@ enum LinkPreviewLoader {
                 )
             }
         }
-        return try await entry.wait()
+        inFlightImages[key] = task
+        defer { inFlightImages[key] = nil }
+        let image = try await task.value
+        try checkLoadAllowed()
+        imageCache.setObject(
+            CachedImage(image),
+            forKey: key as NSString,
+            cost: DecodedImageCost.decodedBitmapByteCost(for: image)
+        )
+        return image
     }
 
     static func clearCaches() {
-        cacheGeneration &+= 1
         metadataCache.removeAllObjects()
         imageCache.removeAllObjects()
-        let pendingMetadata = Array(inFlightMetadata.values)
+        inFlightMetadata.values.forEach { $0.cancel() }
         inFlightMetadata.removeAll()
-        pendingMetadata.forEach { $0.cancelAll() }
-        let pendingImages = Array(inFlightImages.values)
+        inFlightImages.values.forEach { $0.cancel() }
         inFlightImages.removeAll()
-        pendingImages.forEach { $0.cancelAll() }
     }
 
     nonisolated static func fetchHTML(for request: URLRequest) async throws -> (Data, URLResponse) {

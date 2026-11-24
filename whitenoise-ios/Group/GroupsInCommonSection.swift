@@ -64,10 +64,10 @@ struct GroupsInCommonRow: View {
                         ForEach(groups.prefix(3)) { group in
                             GroupAvatarBubble(
                                 groupIdHex: group.groupIdHex,
-                                imageHashHex: group.pendingConfirmation ? nil : group.imageHashHex,
+                                imageHashHex: group.imageHashHex,
                                 seed: group.groupIdHex,
                                 title: group.title,
-                                pictureURL: group.pendingConfirmation ? nil : ContentSanitizer.imageURL(group.avatarUrl)
+                                pictureURL: ContentSanitizer.imageURL(group.avatarUrl)
                             )
                             .frame(width: 32, height: 32)
                             .background(Color(uiColor: .systemGray5), in: Circle())
@@ -136,10 +136,10 @@ private struct ProfileGroupSummaryRow: View {
         HStack(spacing: 12) {
             GroupAvatarBubble(
                 groupIdHex: group.groupIdHex,
-                imageHashHex: group.pendingConfirmation ? nil : group.imageHashHex,
+                imageHashHex: group.imageHashHex,
                 seed: group.groupIdHex,
                 title: group.title,
-                pictureURL: group.pendingConfirmation ? nil : ContentSanitizer.imageURL(group.avatarUrl)
+                pictureURL: ContentSanitizer.imageURL(group.avatarUrl)
             )
             .frame(width: 40, height: 40)
             VStack(alignment: .leading, spacing: 2) {

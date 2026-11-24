@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-import UIKit
 @testable import whitenoise_ios
 
 struct NotificationAvatarBudgetTests {
@@ -31,61 +30,6 @@ struct NotificationAvatarBudgetTests {
         ) == nil)
     }
 
-    @Test func deadlineWinCancelsTheAbandonedFetch() async throws {
-        // The work never finishes on its own: it returns only once its
-        // cancellation handler opens the latch, which the test then awaits.
-        let cancelled = TestLatch()
-        let result = await NotificationCommunicationDecorator.withDeadline(.milliseconds(50)) {
-            await withTaskCancellationHandler {
-                try? await cancelled.wait()
-                return nil
-            } onCancel: {
-                cancelled.signal()
-            }
-        }
-        #expect(result == nil)
-        // A starved runner may schedule the detached work task (and its
-        // cancellation handler) late; the latch waits for it, bounded.
-        try await cancelled.wait()
-    }
-
-    @Test func callerCancellationResumesTheDeadlineWaitAndCancelsWork() async throws {
-        // The deadline is effectively infinite and the work returns only once
-        // cancelled, so the await below can only ever return through the
-        // caller-cancellation racer — completion itself is the assertion,
-        // with no wall-clock comparison to flake on a saturated test runner.
-        let started = TestLatch()
-        let cancelled = TestLatch()
-        let waiter = Task {
-            await NotificationCommunicationDecorator.withDeadline(.seconds(100_000)) {
-                await withTaskCancellationHandler {
-                    started.signal()
-                    try? await cancelled.wait()
-                    return nil
-                } onCancel: {
-                    cancelled.signal()
-                }
-            }
-        }
-        try await started.wait()
-        waiter.cancel()
-        let result = await waiter.value
-        #expect(result == nil)
-        try await cancelled.wait()
-    }
-
-    @Test func warmSlotsDeduplicatePerUrlAndCapConcurrency() {
-        var inFlight: Set<String> = []
-        #expect(NotificationCommunicationDecorator.claimWarmSlot("a", in: &inFlight, limit: 2))
-        // Same URL never claims a second slot.
-        #expect(!NotificationCommunicationDecorator.claimWarmSlot("a", in: &inFlight, limit: 2))
-        #expect(NotificationCommunicationDecorator.claimWarmSlot("b", in: &inFlight, limit: 2))
-        // The cap bounds distinct peer-controlled hosts, not just duplicates.
-        #expect(!NotificationCommunicationDecorator.claimWarmSlot("c", in: &inFlight, limit: 2))
-        inFlight.remove("a")
-        #expect(NotificationCommunicationDecorator.claimWarmSlot("c", in: &inFlight, limit: 2))
-    }
-
     @Test func dnsSlotsFailFastAtTheCap() {
         // Pure claim logic on a local counter — the process-wide counter is
         // shared with parallel suites doing real fetches.
@@ -97,14 +41,7 @@ struct NotificationAvatarBudgetTests {
         #expect(PinnedHTTPSFetcher.claimDnsSlot(&inFlight, limit: 2))
     }
 
-    @Test func workWinReturnsItsValueBeforeTheDeadline() async {
-        let result = await NotificationCommunicationDecorator.withDeadline(.seconds(30)) {
-            Data([0x1])
-        }
-        #expect(result == Data([0x1]))
-    }
-
-    /// One wake fetches each sender picture once, in arrival order, and no more
+    /// One wake resolves each sender picture once, in arrival order, and no more
     /// than the per-wake cap. Arrival order keeps the primary sender, which the
     /// extension puts first, inside the cap.
     @Test func avatarURLsAreDistinctInArrivalOrderAndCapped() {
@@ -127,60 +64,10 @@ struct NotificationAvatarBudgetTests {
             for: [notificationPresentation(senderPictureUrl: nil)]).isEmpty)
     }
 
-    @Test func avatarDataReadsOnlyAlreadyCachedBytesAndNeverFetchesRemotely() async throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("NotificationAvatarCacheTest-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-
-        let rawURL = "https://example.com/sender-avatar.png"
-        let url = try #require(URL(string: rawURL))
-
-        // Cache miss returns nil immediately with zero network egress.
-        let miss = await NotificationCommunicationDecorator.avatarData(
-            for: rawURL,
-            cacheDirectory: directory
+    @Test func avatarDataReturnsNilWithoutNetworkEgress() async {
+        let result = await NotificationCommunicationDecorator.avatarData(
+            for: "https://example.com/sender-avatar.png"
         )
-        #expect(miss == nil)
-        NotificationCommunicationDecorator.warmAvatarCache(for: rawURL)
-        #expect(NotificationCommunicationDecorator.cachedAvatarData(
-            forPictureUrl: rawURL,
-            cacheDirectory: directory
-        ) == nil)
-        let contentsAfterMiss = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-        #expect(contentsAfterMiss.isEmpty)
-
-        // Pre-populated valid raster bytes are returned from the local cache.
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        let png = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format).pngData { context in
-            UIColor.systemBlue.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
-        }
-        let cacheFile = try #require(NotificationCommunicationDecorator.cacheFileURL(for: url, in: directory))
-        try png.write(to: cacheFile, options: .atomic)
-
-        let hit = await NotificationCommunicationDecorator.avatarData(
-            for: rawURL,
-            cacheDirectory: directory
-        )
-        #expect(hit == png)
-
-        // Expired entries are ignored without re-fetching.
-        let expiredNow = Date().addingTimeInterval(NotificationCommunicationDecorator.avatarCacheLifetime + 60)
-        let stale = await NotificationCommunicationDecorator.avatarData(
-            for: rawURL,
-            cacheDirectory: directory,
-            now: expiredNow
-        )
-        #expect(stale == nil)
-
-        // Non-image cached payloads are rejected without re-fetching.
-        try Data("<svg xmlns='http://www.w3.org/2000/svg'/>".utf8).write(to: cacheFile, options: .atomic)
-        let rejected = await NotificationCommunicationDecorator.avatarData(
-            for: rawURL,
-            cacheDirectory: directory
-        )
-        #expect(rejected == nil)
+        #expect(result == nil)
     }
 }

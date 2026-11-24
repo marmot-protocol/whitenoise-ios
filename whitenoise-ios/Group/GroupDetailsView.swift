@@ -493,10 +493,10 @@ struct GroupDetailsView: View {
     ) -> some View {
         GroupAvatarBubble(
             groupIdHex: viewModel.group.groupIdHex,
-            imageHashHex: viewModel.hasPendingInvite ? nil : viewModel.selectedImageHash,
+            imageHashHex: viewModel.selectedImageHash,
             seed: viewModel.selectedAvatarSeed,
             title: displayTitle,
-            pictureURL: viewModel.hasPendingInvite ? nil : viewModel.selectedAvatarURL,
+            pictureURL: viewModel.selectedAvatarURL,
             nativeAsset: viewModel.hasPendingInvite ? nil : viewModel.conversationWindow?.header.avatarAsset,
             usesNativeAsset: viewModel.conversationWindow != nil,
             nativeMaxPixelSize: nativeMaxPixelSize
