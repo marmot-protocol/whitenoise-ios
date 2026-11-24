@@ -34,7 +34,7 @@ extension MarmotClient {
         guard let asset = assets.first, let reference = asset.reference else { return nil }
         guard asset.byteCount <= 512 * 1024 * 1024 else { throw AttachmentReadError.tooLarge }
         if let previewByteLimit, asset.byteCount > previewByteLimit {
-            throw AttachmentReadError.tooLarge
+            throw AttachmentReadError.previewLimitExceeded(byteCount: Int(asset.byteCount))
         }
         return try await RetainedAttachmentReader.read(byteCount: asset.byteCount) { offset, limit in
             try await self.marmot.readAttachmentAsset(accountRef: accountRef,
@@ -43,7 +43,8 @@ extension MarmotClient {
     }
 }
 
-nonisolated enum AttachmentReadError: Error {
+nonisolated enum AttachmentReadError: Error, Equatable {
+    case previewLimitExceeded(byteCount: Int?)
     case stale
     case tooLarge
     case unavailable
@@ -106,15 +107,15 @@ extension Marmot: AttachmentDemandRequesting {}
 extension MarmotClient {
     /// `onLocalHit` receives the elapsed milliseconds of a successful retained-byte read.
     func acquireAttachmentData(accountRef: String, groupID: String, target: AttachmentLocalTargetFfi,
-                               demand: AttachmentDemand,
+                               demand: AttachmentDemand, previewByteLimit: Int? = nil,
                                onLocalHit: (@Sendable (UInt64) -> Void)? = nil) async throws -> Data? {
         let localReadStartedAt = ContinuousClock.now
-        if let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target) {
+        if let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target, previewByteLimit: previewByteLimit) {
             onLocalHit?(ProductAnalyticsRecorder.elapsedMilliseconds(from: localReadStartedAt, to: .now))
             return data
         }
         try await fetchAttachment(accountRef: accountRef, groupID: groupID, target: target, demand: demand)
-        guard let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target)
+        guard let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target, previewByteLimit: previewByteLimit)
         else { throw AttachmentReadError.stale }
         return data
     }

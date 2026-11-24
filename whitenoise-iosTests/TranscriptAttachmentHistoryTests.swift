@@ -1,0 +1,380 @@
+import Foundation
+import Testing
+@testable import whitenoise_ios
+@testable import MarmotKit
+
+@MainActor
+struct TranscriptAttachmentHistoryTests {
+    private func entry(_ message: String, slot: UInt32 = 0, mediaType: String = "image/jpeg",
+                       role: AttachmentRoleFfi = .shared) -> AttachmentEntryFfi {
+        let reference = encryptedMediaReference(fileName: message, mediaType: mediaType, sourceEpoch: 1)
+        return .init(messageIdHex: message, sourceMessageIdHex: "source-" + message, sender: "peer",
+            timelineAt: 10, receivedAt: 10, sourceEpoch: nil, category: .image, role: role,
+            attachment: .accepted(attachmentIndex: slot, reference: reference))
+    }
+
+    @Test(arguments: [true, false])
+    func refreshingThroughAnInvisibleBoundaryRetainsSelectionAndNewerAdditions(exhausted: Bool) throws {
+        var state = TranscriptHistoryState()
+        let original = AttachmentHistoryVersion(noPointer: .init())
+        let newer = AttachmentHistoryVersion(noPointer: .init())
+        let cursor = AttachmentHistoryCursor(noPointer: .init())
+        func accept(_ entries: [AttachmentEntryFfi], version: AttachmentHistoryVersion, more: Bool) {
+            let nextCursor = more ? cursor : nil
+            let page = AttachmentPageFfi(entries: entries, version: version, nextCursor: nextCursor, hasMore: more)
+            state.accept(page, next: .init(baseline: original, cursor: nextCursor, canLoadMore: more))
+        }
+        let selected = entry("older"), boundary = entry("file", mediaType: "application/pdf")
+        let id = try #require(TranscriptHistorySlot(selected)).attachment.id
+        accept([selected, boundary], version: original, more: !exhausted)
+        state.select(id, inWindow: false)
+        state.validate(.additions, hasUncoveredAdditions: true)
+        let started = state.startRefresh()
+        #expect(started)
+        accept([entry("just-arrived")], version: newer, more: true)
+        #expect(state.pages.contains(attachmentID: id))
+        #expect(state.selectedItemID == id && state.isReconnectingPages)
+        state.validate(.additions, hasUncoveredAdditions: true)
+        accept([selected, boundary], version: newer, more: true)
+        #expect(state.isReconnectingPages == exhausted)
+        if exhausted { accept([], version: newer, more: false) }
+        #expect(state.pages.contains(messageID: "just-arrived"))
+        #expect(state.selectedItemID == id && !state.isReconnectingPages && state.hasAdditions)
+        #expect(state.pager.canLoadMore == !exhausted)
+        #expect(state.validationAdditionsBaseline === newer)
+    }
+
+    @Test func validationRetryPreservesTheSelectionAndRemovalDiscardsHistoricalPages() throws {
+        var state = TranscriptHistoryState()
+        let version = AttachmentHistoryVersion(noPointer: .init())
+        let older = entry("older")
+        let id = try #require(TranscriptHistorySlot(older)).attachment.id
+        let page = AttachmentPageFfi(entries: [older], version: version, nextCursor: nil, hasMore: false)
+        state.accept(page, next: .init(baseline: version, cursor: nil, canLoadMore: false))
+        state.select("live", inWindow: true)
+        state.select(id, inWindow: false)
+        state.validationFailedForSelection()
+        #expect(state.resumeItemID == id && state.validationFailed)
+        state.validate(.unchanged, hasUncoveredAdditions: false)
+        #expect(!state.validationFailed && state.selectedItemID == id)
+        let generation = state.viewerGeneration
+        state.validate(.restartRequired, hasUncoveredAdditions: false)
+        #expect(!state.pages.contains(attachmentID: id))
+        #expect(state.viewerGeneration != generation && state.resumeItemID == "live")
+        state.discard(changingScope: true)
+        #expect(state.selectedItemID == nil && state.resumeItemID == nil && !state.hasPaged)
+    }
+
+    @Test func movingTheWindowPastAnOpenPhotoRevokesItsHistoricalSelectionOnDiscard() throws {
+        var state = TranscriptHistoryState()
+        let version = AttachmentHistoryVersion(noPointer: .init())
+        let entry = entry("selected"), id = try #require(TranscriptHistorySlot(entry)).attachment.id
+        state.updateWindow(for: id, inWindow: true)
+        state.accept(.init(entries: [entry], version: version, nextCursor: nil, hasMore: false),
+                     next: .init(baseline: version, cursor: nil, canLoadMore: false))
+        state.updateWindow(for: id, inWindow: false)
+        let previous = state.viewerGeneration
+        state.validate(.restartRequired, hasUncoveredAdditions: false)
+        #expect(state.viewerGeneration != previous && !state.pages.contains(attachmentID: id))
+    }
+
+    @Test func outgoingGalleryMatchesTheOriginalPhotoSlotAfterInlineEmojiFiltering() throws {
+        let chat = group(name: "Gallery")
+        var snapshot = conversationWindowSnapshot(groupIdHex: chat.groupIdHex, title: "Gallery")
+        let model = ConversationViewModel(appState: .test(), group: chat)
+        let emojiURL = "https://blossom.example.com/party"
+        let photo = CustomEmojiFixtures.reference(url: "https://blossom.example.com/photo", sha: String(repeating: "c", count: 64))
+        var row = timelineRecord(messageIdHex: hex("a1"), sourceMessageIdHex: .absent, direction: "sent",
+            groupIdHex: chat.groupIdHex, plaintext: ":party:", tags: [.init(values: ["emoji", "party", emojiURL])], timelineAt: 1)
+        row.media = [.accepted(attachmentIndex: 0, reference: CustomEmojiFixtures.reference(url: emojiURL)),
+                     .accepted(attachmentIndex: 1, reference: photo)]
+        snapshot.messages = [conversationMessage(row)]
+        model.installConversationWindow(snapshot)
+        let outgoing = try #require(model.timeline.first)
+        let gallery = try #require(model.transcriptMediaGallery(opening: "", initialData: nil, allowsEmptyWindow: true))
+        #expect(gallery.items.count == 1)
+        let pending = MessageMediaGallery.PendingSelection(id: "draft-photo", slot: .init(rowID: outgoing.id, index: 1), data: Data())
+        #expect(gallery.confirmedItem(for: pending)?.reference == photo)
+    }
+
+    @Test func resumeRequiresTheSelectedOriginalSlotInTheNewVisibleWindow() throws {
+        let chat = group(name: "Gallery")
+        var snapshot = conversationWindowSnapshot(groupIdHex: chat.groupIdHex, title: "Gallery")
+        let model = ConversationViewModel(appState: .test(), group: chat)
+        let reference = encryptedMediaReference(fileName: "photo.jpg", mediaType: "image/jpeg", sourceEpoch: 1)
+        var record = timelineRecord(messageIdHex: hex("a1"), sourceMessageIdHex: hex("b1"), direction: "received", timelineAt: 1)
+        record.media = [.accepted(attachmentIndex: 2, reference: reference)]
+        func install(_ rows: [TimelineMessageRecordFfi]) {
+            snapshot.revision.sequence += 1
+            snapshot.messages = rows.map { conversationMessage($0) }
+            model.installConversationWindow(snapshot)
+        }
+        install([record])
+        let original = try #require(model.timeline.first.flatMap { model.mediaItems(for: $0).first })
+        let bookmark = try #require(TranscriptMediaBookmark(original))
+        #expect(bookmark.find(in: model)?.item.localTarget?.attachmentIndex == 2)
+        model.applyBlockedAuthors([record.sender])
+        #expect(bookmark.find(in: model) == nil)
+        model.applyBlockedAuthors([])
+        record.media = [.accepted(attachmentIndex: 3, reference: reference)]
+        install([record])
+        #expect(bookmark.find(in: model) == nil)
+        record.media = [.accepted(attachmentIndex: 2, reference: reference)]
+        record.sourceMessageIdHex = hex("b2")
+        install([record])
+        #expect(bookmark.find(in: model) == nil)
+        install([])
+        #expect(bookmark.find(in: model) == nil)
+    }
+
+    @Test func preparedOwnMediaRemainsUsableAfterPeerConfirmationUntilTheSourceArrives() {
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"))
+        var row = timelineRecord(messageIdHex: hex("ab"), sourceMessageIdHex: .some(nil), direction: "sent", timelineAt: 1)
+        func install(_ rows: [TimelineMessageRecordFfi]) {
+            store.applyConversationWindowPage(.init(messages: rows, hasMoreBefore: false, hasMoreAfter: false))
+        }
+        install([row])
+        #expect(store.hasUnsourcedOwnMessage(row.messageIdHex))
+        row.recipientConfirmed = true
+        install([row])
+        #expect(store.hasUnsourcedOwnMessage(row.messageIdHex))
+        row.sourceMessageIdHex = hex("ac")
+        install([row])
+        #expect(!store.hasUnsourcedOwnMessage(row.messageIdHex))
+        row.sourceMessageIdHex = nil
+        row.direction = "received"
+        install([row])
+        #expect(!store.hasUnsourcedOwnMessage(row.messageIdHex))
+        row.direction = "sent"
+        row.deleted = true
+        install([row])
+        #expect(!store.hasUnsourcedOwnMessage(row.messageIdHex))
+        row.deleted = false
+        install([row])
+        #expect(store.hasUnsourcedOwnMessage(row.messageIdHex))
+        install([])
+        #expect(!store.hasUnsourcedOwnMessage(row.messageIdHex))
+    }
+
+    @Test func aWindowChangeRebuildsRetainedMediaWhenAMessageCrossesTheWindowBoundary() throws {
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("retained")])
+        let gallery = try #require(MessageMediaGallery(transcriptItems: [], openingID: "photo", initialData: nil,
+            messages: [:], captions: [:], allowsEmptyWindow: true))
+        func window(_ ids: Set<String>) -> TranscriptHistoryGalleryView.Window {
+            .init(gallery: gallery, messageIDs: ids, durableIDs: [], atTail: true,
+                visibility: .init(hidden: [], blocked: [], deleted: []), identityNames: [:])
+        }
+        let original = window(["retained", "text"])
+        #expect(window(["retained", "another-text"]).hasSameMedia(as: original, pages: pages))
+        #expect(!window(["text"]).hasSameMedia(as: original, pages: pages))
+    }
+
+    @Test func aReplacedWindowStaysSeparateUntilItReconnectsToTheSelectedPhoto() throws {
+        let photo = entry("selected")
+        let id = try #require(TranscriptHistorySlot(photo)).attachment.id
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("newer"), photo])
+        #expect(pages.extensions(around: [], excluding: [], preserving: id).older.map(\.target.messageIdHex) == ["selected", "newer"])
+        #expect(pages.extensions(around: [], excluding: ["selected"], preserving: id).older.isEmpty)
+        #expect(pages.extensions(around: [], excluding: [], preserving: "removed").older.isEmpty)
+
+        let replacement = entry("replacement")
+        let window = [try #require(TranscriptHistorySlot(replacement)).attachment]
+        let disconnected = pages.extensions(around: window, excluding: ["replacement"], preserving: id)
+        #expect(!disconnected.includesWindow)
+        #expect(disconnected.older.map(\.target.messageIdHex) == ["selected", "newer"])
+
+        var refreshed = TranscriptHistoryPages()
+        refreshed.append([replacement, entry("newer"), photo])
+        let connected = refreshed.extensions(around: window, excluding: ["replacement"], preserving: id)
+        #expect(connected.includesWindow)
+        #expect(connected.older.map(\.target.messageIdHex) == ["selected", "newer"])
+    }
+
+    @Test func theOppositeWindowEdgeCannotDisconnectASelectedOlderPhoto() throws {
+        let selected = entry("older"), latest = entry("latest"), late = entry("late")
+        let selectedID = try #require(TranscriptHistorySlot(selected)).attachment.id
+        let window = try [late, latest].map { try #require(TranscriptHistorySlot($0)).attachment }
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("after"), latest, selected])
+        let disconnected = pages.extensions(around: window, excluding: ["late", "latest"], preserving: selectedID)
+        #expect(!disconnected.includesWindow)
+        #expect(disconnected.older.map(\.attachment.id) == [selectedID])
+        var refreshed = TranscriptHistoryPages()
+        refreshed.append([entry("after"), latest, late, selected])
+        let connected = refreshed.extensions(around: window, excluding: ["late", "latest"], preserving: selectedID)
+        #expect(connected.includesWindow)
+        #expect(connected.older.map(\.attachment.id) == [selectedID])
+        #expect(connected.newer.map(\.target.messageIdHex) == ["after"])
+    }
+
+    @Test func refreshingNewerPhotosKeepsTheSelectedOlderPhotoAcrossPageBoundaries() throws {
+        let anchor = entry("visible")
+        let window = [try #require(TranscriptHistorySlot(anchor)).attachment]
+        var retained = TranscriptHistoryPages()
+        retained.append([anchor, entry("selected")])
+        var prefix = TranscriptHistoryPages()
+        prefix.append([entry("newest")])
+        let disjoint = prefix.includingRetainedTail(retained).extensions(around: window, excluding: ["visible"])
+        #expect(disjoint.older.map(\.target.messageIdHex) == ["selected"])
+        #expect(disjoint.newer.isEmpty)
+        prefix.append([entry("next"), anchor])
+        let joined = prefix.includingRetainedTail(retained).extensions(around: window, excluding: ["visible"])
+        #expect(joined.older.map(\.target.messageIdHex) == ["selected"])
+        #expect(joined.newer.map(\.target.messageIdHex) == ["next", "newest"])
+    }
+
+    @Test func aHeldGIFConnectsItsWindowToPhotosWithoutAddingOtherGIFs() throws {
+        let held = entry("held", mediaType: "image/gif")
+        let anchor = try #require(TranscriptHistorySlot(held)).attachment
+        var pending = try #require(TranscriptHistorySlot(entry("pending"))).attachment
+        pending.localTarget = nil
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("newer"), entry("another-gif", mediaType: "image/gif")])
+        #expect(pages.extensions(around: [anchor], excluding: ["held"]).newer.isEmpty)
+        pages.append([held, entry("older")])
+        for window in [[anchor], [anchor, pending]] {
+            for atTail in [false, true] {
+                let edges = pages.extensions(around: window, excluding: ["held"], atLiveTail: atTail)
+                #expect(edges.older.map(\.target.messageIdHex) == ["older"])
+                #expect(edges.newer.map(\.target.messageIdHex) == ["newer"])
+            }
+        }
+    }
+
+    @Test func aConfirmedLocalPhotoKeepsItsSelectionWhenOnlyHistoryHoldsIt() throws {
+        let photo = entry("confirmed", slot: 2)
+        let live = try #require(MessageMediaAttachment.displayItems(fromOutcomes: [photo.attachment], ownerId: "msg:temporary",
+            messageId: photo.messageIdHex, sourceMessageId: photo.sourceMessageIdHex).first)
+        let retained = try #require(TranscriptHistorySlot(photo)).attachment
+        #expect(live.id != retained.id)
+        let unsourced = try #require(MessageMediaAttachment.displayItems(fromOutcomes: [photo.attachment], ownerId: "msg:temporary",
+            messageId: photo.messageIdHex, sourceMessageId: nil).first)
+        let selected = unsourced.transcriptItem(in: photo.messageIdHex)
+        #expect(selected.localTarget == nil)
+        #expect(selected.sourceHint == nil)
+        #expect(live.transcriptItem(in: photo.messageIdHex).canUseBytesPrepared(for: selected))
+        var pages = TranscriptHistoryPages()
+        pages.append([photo])
+        let result = pages.extensions(around: [], excluding: [], preserving: selected.id)
+        #expect(result.older.map(\.attachment.id) == [selected.id])
+        #expect(result.older.first?.target == live.localTarget)
+    }
+
+    @Test func theVerifiedGIFStillOpensFromHistoryIfItsOriginalSourceArrivesAfterConfirmation() throws {
+        let held = entry("held", mediaType: "image/gif")
+        let sourced = try #require(TranscriptHistorySlot(held)).attachment
+        var intermediate = sourced
+        intermediate.localTarget = nil
+        let draft = MediaDraftAttachment(fileName: "draft.gif", mediaType: "image/gif", data: Data([1]), dim: nil).displayItem
+        let slot = MessageMediaGallery.OutgoingSlot(rowID: "msg:temporary", index: 0)
+        let pending = MessageMediaGallery.PendingSelection(id: draft.id, slot: slot, data: Data([1]))
+        func gallery(_ item: MessageMediaAttachment) throws -> MessageMediaGallery {
+            try #require(MessageMediaGallery(transcriptItems: [item], openingID: item.id, initialData: nil,
+                messages: [item.id: "held"], captions: [item.id: .init(sender: "You", date: .now, outgoingSlot: slot)]))
+        }
+        var heldGIF = TranscriptHeldGIF()
+        heldGIF.didSelect(intermediate.id, in: try gallery(intermediate), opening: draft, pending: pending)
+        heldGIF.updateSource(in: try gallery(sourced), opening: draft)
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("other", mediaType: "image/gif"), held])
+        let result = pages.extensions(around: [], excluding: [], preserving: intermediate.id, heldGIF: heldGIF.confirmed)
+        #expect(result.older.map(\.target) == [sourced.localTarget])
+    }
+
+    @Test func onlyTheExplicitlyOpenedGIFFollowsTheSelectionIntoHistory() throws {
+        let held = entry("held", mediaType: "image/gif")
+        let selected = try #require(TranscriptHistorySlot(held)).attachment
+        var pages = TranscriptHistoryPages()
+        pages.append([entry("other", mediaType: "image/gif"), held])
+        let result = pages.extensions(around: [], excluding: [], preserving: selected.id, heldGIF: selected)
+        #expect(result.older.map(\.attachment.id) == [selected.id])
+        var replaced = held
+        replaced.sourceMessageIdHex = "changed"
+        let stale = try #require(TranscriptHistorySlot(replaced)).attachment
+        #expect(pages.extensions(around: [], excluding: [], preserving: selected.id, heldGIF: stale).older.isEmpty)
+    }
+
+    @Test func waitsForAnExactOverlapBeforeShowingNewerPages() throws {
+        let anchor = entry("anchor", slot: 2)
+        let window = [try #require(TranscriptHistorySlot(anchor)).attachment]
+        var pages = TranscriptHistoryPages()
+        var otherSource = anchor
+        otherSource.sourceMessageIdHex = "replaced-source"
+        pages.append([entry("new"), otherSource, entry("anchor", slot: 1)])
+        #expect(pages.extensions(around: window, excluding: ["anchor"]).newer.isEmpty)
+        pages.append([anchor, entry("old")])
+        let joined = pages.extensions(around: window, excluding: ["anchor"])
+        #expect(joined.older.map(\.target.messageIdHex) == ["old"])
+        #expect(joined.newer.map(\.target.messageIdHex) == ["new"])
+    }
+
+    @Test func joinsSplitAlbumsInOriginalSlotOrderAndSkipsIneligibleRows() throws {
+        let anchor = entry("visible")
+        let window = [try #require(TranscriptHistorySlot(anchor)).attachment]
+        var pages = TranscriptHistoryPages()
+        pages.append([anchor, entry("album", slot: 4, mediaType: "video/mp4")])
+        pages.append([entry("album", slot: 2, role: .inlineEmoji), entry("album", slot: 1),
+                      entry("album", slot: 0, mediaType: "image/gif"), entry("album", slot: 1),
+                      entry("hidden-but-loaded"), entry("earlier")])
+        let joined = pages.extensions(around: window, excluding: ["visible", "hidden-but-loaded"])
+        #expect(joined.older.map(\.target.messageIdHex) == ["earlier", "album", "album"])
+        #expect(joined.older.map(\.target.attachmentIndex) == [0, 1, 4])
+        #expect(joined.newer.isEmpty)
+    }
+
+    @Test func locallyHiddenAndBlockedAttachmentsStayOutOfHistory() throws {
+        let olderID = String(repeating: "ab", count: 32)
+        let slot = try #require(TranscriptHistorySlot(entry(olderID)))
+        let store = TimelineStore(appState: nil, groupIdHex: hex("aa"), hiddenMessageIds: [olderID])
+        #expect(!slot.isVisible(in: store))
+        store.setHiddenMessageIds([])
+        store.setBlockedAuthorIds([slot.sender])
+        #expect(!slot.isVisible(in: store))
+        store.setBlockedAuthorIds([])
+        #expect(slot.isVisible(in: store))
+    }
+
+    @Test func aReprojectedSlotMustStillReferToTheSameSourceAndBytes() throws {
+        let original = entry("photo", slot: 2)
+        var pages = TranscriptHistoryPages()
+        pages.append([original])
+        var row = timelineRecord(messageIdHex: "photo", sourceMessageIdHex: original.sourceMessageIdHex,
+                                 sender: original.sender, timelineAt: 10)
+        row.media = [original.attachment]
+        #expect(!pages.conflicts(with: row))
+        row.sourceMessageIdHex = "another-source"
+        #expect(pages.conflicts(with: row))
+        row.sourceMessageIdHex = original.sourceMessageIdHex
+        row.media = [entry("other", slot: 2).attachment]
+        #expect(pages.conflicts(with: row))
+        row.media = [original.attachment]
+        row.deleted = true
+        #expect(pages.conflicts(with: row))
+    }
+
+    @Test func pendingWindowSlotDoesNotHideAnExactlyLinkedOlderPage() throws {
+        let linked = entry("linked")
+        let attached = try #require(TranscriptHistorySlot(linked)).attachment
+        var pending = attached
+        pending.localTarget = nil
+        var pages = TranscriptHistoryPages()
+        pages.append([linked, entry("earlier")])
+        #expect(pages.extensions(around: [pending], excluding: ["linked"]).older.isEmpty)
+        #expect(pages.extensions(around: [pending], excluding: ["linked"], atLiveTail: true)
+            .older.map(\.target.messageIdHex) == ["earlier"])
+        let joined = pages.extensions(around: [pending, attached], excluding: ["linked"])
+        #expect(joined.older.map(\.target.messageIdHex) == ["earlier"])
+    }
+
+    @Test func newerRetainedHistoryPrecedesOptimisticSends() throws {
+        func photo(_ id: String) throws -> MessageMediaAttachment {
+            try #require(TranscriptHistorySlot(entry(id))).attachment
+        }
+        let older = try photo("older"), visible = try photo("visible"), newer = try photo("newer"), pending = try photo("pending")
+        let ordered = TranscriptHistoryPages.join(older: [older], window: [visible, pending], newer: [newer],
+                                                isOverlay: { $0.id == pending.id })
+        #expect(ordered.map(\.id) == [older, visible, newer, pending].map(\.id))
+    }
+}

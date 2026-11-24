@@ -1,9 +1,50 @@
 import Foundation
+import MarmotKit
 import Testing
 @testable import whitenoise_ios
 
 @MainActor
 struct ConversationSearchModelTests {
+    @Test func anActivityWithADocumentIsSearchableByItsDisplayedFilename() {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: group(name: "Chat"))
+        let document = encryptedMediaReference(fileName: "route-plan.pdf", mediaType: "application/pdf", sourceEpoch: 1)
+        let activity = timelineRecord(messageIdHex: hex("ac"), plaintext: #"{"status":"thinking","text":"Checking the map"}"#,
+                                      kind: MessageSemantics.kindAgentActivity, timelineAt: 1, media: [document])
+        viewModel.applyTimelinePage(.init(messages: [activity], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        viewModel.search.activate()
+        viewModel.search.query = "route-plan"
+        #expect(viewModel.search.currentMatch?.messageIdHex == activity.messageIdHex)
+    }
+
+    @Test func confirmedGenericVCardKeepsItsSearchableNameWithDocumentDownloadsOff() async throws {
+        let app = AppState.test()
+        let viewModel = ConversationViewModel(appState: app, group: group(name: "Chat"))
+        let reference = encryptedMediaReference(fileName: "person.vcf", mediaType: "application/octet-stream", sourceEpoch: 1)
+        let card = Data("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Avery Stone\r\nN:Stone;Avery;;;\r\nEND:VCARD\r\n".utf8)
+        let draft = MediaDraftAttachment(fileName: "person.vcf", mediaType: "text/vcard", data: card, dim: nil)
+        viewModel.timelineStore.mediaProjections.retainOwnSend(draft.displayItem, plaintextSha256: reference.plaintextSha256)
+        let record = timelineRecord(messageIdHex: hex("ac"), direction: "sent", timelineAt: 1, media: [reference])
+        viewModel.applyTimelinePage(.init(messages: [record], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        let row = try #require(viewModel.timeline.first { $0.id == TimelineItem.messageRowId(forMessageIdHex: record.messageIdHex) })
+        let contact = try #require(viewModel.mediaItems(for: row).first)
+        viewModel.search.activate()
+        viewModel.search.query = "Avery"
+        #expect(viewModel.search.currentMatch == nil)
+        #expect(contact.id != draft.displayItem.id)
+        let loader = ConversationMediaLoader { _ in
+            Issue.record("A locally available contact should not request an attachment")
+            throw AttachmentReadError.unavailable
+        }
+        let metadata = await loader.prefetchDocument(contact, isVisible: true, allowed: false)
+        let name = try #require(metadata?.contactName)
+        viewModel.search.registerContactName(name, for: contact.id, in: record.messageIdHex)
+        #expect(viewModel.search.currentMatch?.messageIdHex == record.messageIdHex)
+
+        viewModel.timelineStore.applyConversationWindowPage(.init(messages: [], hasMoreBefore: false, hasMoreAfter: false))
+        viewModel.search.refreshAfterTimelineChange()
+        #expect(viewModel.search.displayedContactName(for: contact.id) == nil)
+        #expect(viewModel.search.currentMatch == nil)
+    }
 
     /// A fake loaded window: entries in timeline order plus an older backlog
     /// that pages in one slice per `loadOlderPage` call.

@@ -20,12 +20,14 @@ struct ForwardMessageSheet: View {
     let destinationProvider: () async throws -> [MessageForwardDestination]
     let submit: (Set<String>) async -> MessageForwardResult
 
+    private var sourceIsAvailable: (() async throws -> Bool)?
+    @State private var sourceUnavailable = false
     @State private var destinations: [MessageForwardDestination] = []
     @State private var selectedGroupIds = Set<String>()
     @State private var isLoading = true
     @State private var isSending = false
     @State private var loadFailed = false
-    @State private var sendFailed = false
+    @State private var forwardError: LocalizedStringKey?
     @State private var query = ""
 
     init(
@@ -54,10 +56,14 @@ struct ForwardMessageSheet: View {
     init(
         media: MessageMediaAttachment,
         data: Data,
+        verifySource: ((MessageMediaAttachment) async throws -> Bool)? = nil,
         viewModel: ConversationViewModel,
         destinationProvider: @escaping () async throws -> [MessageForwardDestination]
     ) {
         self.destinationProvider = destinationProvider
+        if let verifySource {
+            self.sourceIsAvailable = { try await verifySource(media) }
+        }
         self.submit = { groupIds in
             await viewModel.forwardMedia(media, data: data, to: groupIds)
         }
@@ -76,7 +82,7 @@ struct ForwardMessageSheet: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    forwardButton
+                    if !sourceUnavailable { forwardButton }
                 }
         }
         .presentationDetents([.large])
@@ -87,7 +93,9 @@ struct ForwardMessageSheet: View {
 
     @ViewBuilder
     private var content: some View {
-        if isLoading {
+        if sourceUnavailable {
+            ContentUnavailableView("Media unavailable", systemImage: "photo.on.rectangle")
+        } else if isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if loadFailed {
@@ -142,8 +150,8 @@ struct ForwardMessageSheet: View {
 
     private var forwardButton: some View {
         VStack(spacing: 8) {
-            if sendFailed {
-                Text("Send failed")
+            if let forwardError {
+                Text(forwardError)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
@@ -174,7 +182,7 @@ struct ForwardMessageSheet: View {
     }
 
     private func toggle(_ groupIdHex: String) {
-        sendFailed = false
+        forwardError = nil
         if selectedGroupIds.contains(groupIdHex) {
             selectedGroupIds.remove(groupIdHex)
         } else if selectedGroupIds.count < ForwardMessagePresentation.maximumDestinationCount {
@@ -198,18 +206,29 @@ struct ForwardMessageSheet: View {
     }
 
     private func forward() async {
-        guard !selectedGroupIds.isEmpty else { return }
+        guard !isSending, !sourceUnavailable, !selectedGroupIds.isEmpty else { return }
         isSending = true
-        sendFailed = false
+        defer { isSending = false }
+        forwardError = nil
+        if let sourceIsAvailable {
+            do {
+                guard try await sourceIsAvailable() else {
+                    sourceUnavailable = true
+                    return
+                }
+            } catch {
+                forwardError = "Attachment couldn’t be read"
+                return
+            }
+        }
         let result = await submit(selectedGroupIds)
-        isSending = false
         if result.succeededCompletely {
             dismiss()
         } else {
             // Successful destinations are removed so Retry cannot duplicate
             // them; only failed sends remain selected.
             selectedGroupIds = result.failedGroupIds
-            sendFailed = true
+            forwardError = "Send failed"
         }
     }
 }

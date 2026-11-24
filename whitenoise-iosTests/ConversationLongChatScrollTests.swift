@@ -194,7 +194,7 @@ private struct LongChatStressFixture {
             localData: variant.data,
             thumbnail: variant.image
         )
-        let displaySize = MessageImageBubblePresentation.displaySize(
+        let displaySize = MessageVisualMediaBubblePresentation.displaySize(
             maxWidth: MessageBubbleReplyLayout.richContentWidth,
             dim: variant.dim
         )

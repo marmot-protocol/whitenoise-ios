@@ -2,6 +2,8 @@ import SwiftUI
 import MarmotKit
 
 extension EnvironmentValues {
+    /// Nil for a live row. A lifted row displays the original cards' measured presentation.
+    @Entry var liftedDocuments: [String: LiftedDocumentDetails]? = nil
     @Entry var actionRowMeasurementKey: String?
     @Entry var messageActionBodySize: CGSize?
 }
@@ -36,6 +38,7 @@ nonisolated enum MessageActionsPresentation {
         canReport: Bool = false,
         canBlock: Bool = false,
         canViewVotes: Bool = false,
+        canOpenGIF: Bool = false,
         speechActionCount: Int = 0
     ) -> Int {
         var count = 2 + speechActionCount // Info and Select are always present.
@@ -49,6 +52,7 @@ nonisolated enum MessageActionsPresentation {
         if canReport { count += 1 }
         if canBlock { count += 1 }
         if canViewVotes { count += 1 }
+        if canOpenGIF { count += 1 }
         return count
     }
 
@@ -158,6 +162,7 @@ struct MessageActionsMenu: View {
     var canReport: Bool = false
     var canBlock: Bool = false
     var canViewVotes: Bool = false
+    var onOpenGIF: (() -> Void)? = nil
     var speechActions: [MessageSpeechAction] = []
     var canTapTranscribe = false
     var onSpeechAction: (MessageSpeechAction) -> Void = { _ in }
@@ -202,6 +207,9 @@ struct MessageActionsMenu: View {
                     if canInteract {
                         actionRow("Reply", systemImage: "arrowshape.turn.up.left", action: onReply)
                     }
+                    if let onOpenGIF {
+                        actionRow("Open media gallery", systemImage: "photo.on.rectangle", action: onOpenGIF)
+                    }
                     if canForward {
                         actionRow("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
                     }
@@ -237,7 +245,8 @@ struct MessageActionsMenu: View {
             .frame(height: maximumActionHeight ?? MessageActionsPresentation.actionMenuHeight(
                 actionCount: MessageActionsPresentation.actionCount(canRetry: canRetry, canInteract: canInteract, canCopy: canCopy,
                     canForward: canForward, canEdit: canEdit, canViewEditHistory: canViewEditHistory,
-                    canDelete: canDelete, canReport: canReport, canBlock: canBlock, canViewVotes: canViewVotes, speechActionCount: speechActions.count)
+                    canDelete: canDelete, canReport: canReport, canBlock: canBlock, canViewVotes: canViewVotes,
+                    canOpenGIF: onOpenGIF != nil, speechActionCount: speechActions.count)
             ))
             .clipShape(.rect(cornerRadius: 32))
             .frame(width: MessageActionsPresentation.menuWidth)

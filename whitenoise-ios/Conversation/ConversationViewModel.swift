@@ -261,6 +261,8 @@ final class ConversationViewModel {
     var suppressesInitialUnreadDivider = false
     var visibleUnreadDividerID: String? { suppressesInitialUnreadDivider ? nil : initialWindowUnreadMessageId }
     private(set) var initialWindowUnreadMessageId: String?
+    enum WindowRuntime: Equatable { case ready(Int), failed(Int) }
+    private(set) var windowRuntime: WindowRuntime?
     private(set) var conversationWindow: ConversationWindowSnapshotFfi?
     private var windowSubscription: ConversationWindowSubscription?
     @ObservationIgnored private var windowCursor: ProjectionSequenceCursor?
@@ -1017,6 +1019,49 @@ final class ConversationViewModel {
         timelineStore.editHistory(for: messageIdHex)
     }
 
+    /// Window and retained pages share this cache-only caption. Opening the gallery never requests a profile.
+    func gallerySenderName(_ sender: String, direction: String = "received") -> String {
+        if MessageOwnership.isMine(direction: direction, sender: sender, myAccountId: myAccountId) { return L10n.string("You") }
+        let name = windowIdentities[sender]?.displayName ?? appState?.cachedKnownDisplayName(forAccountIdHex: sender)
+        return IdentityPresentation.resolve(accountIdHex: sender, knownName: name).text
+    }
+
+    func firstGalleryGIF(in row: TimelineItem) -> MessageMediaAttachment? {
+        mediaItems(for: row).first { $0.isGIF && $0.rejectionKind == nil }
+    }
+
+    /// Project the currently loaded transcript only while its media sheet is open.
+    /// Keep the row's original media objects so opening a page addresses its original slot.
+    func transcriptMediaGallery(opening itemID: String, initialData: Data?, openingItem: MessageMediaAttachment? = nil,
+                                includingGIFsIn gifRowID: String? = nil,
+                                allowsEmptyWindow: Bool = false) -> MessageMediaGallery? {
+        var items: [MessageMediaAttachment] = []
+        var messages: [String: String] = [:]
+        var captions: [String: MessageMediaGallery.Caption] = [:]
+        for row in timeline {
+            guard case .message(let record, _) = row.kind, !isDeleted(record.messageIdHex),
+                  (record.kind != MessageSemantics.kindPoll || record.sticker != nil),
+                  !(appState?.streamingDebugEnabled == true && MessageSemantics.debugStyle(for: record).isUserVisibleBubble == false),
+                  groupSystemDisplayText(for: record) == nil, agentEventDisplay(for: row)?.kind != .operation else { continue }
+            guard !timelineStore.isHidden(record.messageIdHex), !timelineStore.isBlockedAuthor(record.sender) else { continue }
+            for (index, attachment) in mediaItems(for: row).enumerated() {
+                guard attachment.isTranscriptGalleryMedia || (row.id == gifRowID && attachment.isGIF && attachment.rejectionKind == nil) else { continue }
+                let media = attachment.transcriptItem(in: record.messageIdHex)
+                guard captions[media.id] == nil else { continue }
+                items.append(media)
+                if !record.messageIdHex.isEmpty { messages[media.id] = record.messageIdHex }
+                captions[media.id] = .init(sender: gallerySenderName(record.sender, direction: record.direction),
+                    date: Date(timeIntervalSince1970: TimeInterval(row.timestamp)),
+                    outgoingSlot: record.direction == "sent" ? .init(rowID: row.id, index: media.originalSlot(at: index)) : nil)
+            }
+        }
+        let openingBytes = openingItem.flatMap { original in
+            items.contains { $0.canUseBytesPrepared(for: original) && $0.localTarget == original.localTarget } ? initialData : nil
+        }
+        return MessageMediaGallery(transcriptItems: items, openingID: itemID, initialData: openingBytes,
+            messages: messages, captions: captions, allowsEmptyWindow: allowsEmptyWindow)
+    }
+
     func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
         timelineStore.mediaItems(for: item)
     }
@@ -1125,6 +1170,11 @@ final class ConversationViewModel {
         self.search = ConversationSearchModel()
         self.search.analytics = appState.productAnalytics
         search.entriesProvider = { [weak self] in self?.searchableTimelineEntries() ?? [] }
+        search.containsContact = { [weak self] messageID, attachmentID in
+            guard let self, let index = timelineStore.timelineIndex(forMessageIdHex: messageID),
+                  timeline.indices.contains(index), !isDeleted(messageID) else { return false }
+            return mediaItems(for: timeline[index]).contains { $0.id == attachmentID }
+        }
         search.hasMoreBefore = { [weak self] in self?.hasMoreBefore ?? false }
         search.loadOlderPage = { [weak self] in await self?.loadOlderTimelinePage() }
         timelineStore.identityNameResolver = { [weak self] id in self?.windowDisplayName(for: id) ?? L10n.string("Unknown user") }
@@ -1644,6 +1694,7 @@ final class ConversationViewModel {
     }
 
     private func stopLiveSubscriptions() async {
+        windowRuntime = nil
         windowLifetime = UUID()
         mediaPrefetcher.cancel()
         let retiringLifetime = windowLifetime
@@ -1687,10 +1738,13 @@ final class ConversationViewModel {
             defer { finishOpen(.cancelled) }
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
             while !Task.isCancelled {
+                let generation = appState?.runtimeEventsGeneration
+                var openedClient: ObjectIdentifier?
                 do {
                     guard let appState, appState.canUseRuntimeForLocalForegroundWork,
                           appState.activeAccountRef == accountRef else { return }
                     let client = try appState.currentMarmotClient()
+                    openedClient = ObjectIdentifier(client)
                     openTiming = .some(appState.productAnalytics.beginTiming())
                     let window: ConversationWindowSubscription
                     var targetUnavailable = false
@@ -1729,6 +1783,7 @@ final class ConversationViewModel {
                             }
                             self?.windowCursor = ProjectionSequenceCursor(generation: initial.revision.generation, sequence: initial.revision.sequence)
                             self?.installConversationWindow(initial)
+                            if appState.client === client { self?.windowRuntime = .ready(appState.runtimeGeneration) }
                         }
                         while !Task.isCancelled {
                             let next: ConversationWindowSnapshotFfi?
@@ -1768,6 +1823,10 @@ final class ConversationViewModel {
                     self?.windowCursor = nil
                     self?.timelineStore.setLoading(false)
                     self?.error = UserFacingError.message(for: error)
+                    if let generation, let openedClient, let appState, appState.runtimeEventsGeneration == generation,
+                       appState.activeAccountRef == accountRef, appState.client.map(ObjectIdentifier.init) == openedClient {
+                        self?.windowRuntime = .failed(generation)
+                    }
                 }
                 do { try await Task.sleep(nanoseconds: retryDelay) } catch { return }
                 retryDelay = Self.nextLiveSubscriptionRetryDelay(after: retryDelay)
@@ -2333,6 +2392,7 @@ final class ConversationViewModel {
         }
         return (searchEntriesCache?.entries ?? []).map { entry in
             var enriched = entry
+            enriched.labels += entry.contactAttachmentIDs.compactMap { search.displayedContactName(for: $0) }
             if let url = entry.previewURL, let metadata = LinkPreviewLoader.cachedMetadata(for: url) ?? nil {
                 enriched.labels += [metadata.title, metadata.summary, LinkPreviewCardContent.host(for: url)].compactMap { $0 }
             }
@@ -2372,10 +2432,6 @@ final class ConversationViewModel {
                 labels.append(IdentityPresentation.text(accountIdHex: record.sender, knownName: conversationWindow == nil
                     ? appState?.cachedKnownDisplayName(forAccountIdHex: record.sender) : windowIdentities[record.sender]?.displayName))
             }
-            if let activity {
-                if let status = activity.visibleActivityStatus { labels.append(status) }
-                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: activity.primaryText, labels: labels)
-            }
             if record.kind == MessageSemantics.kindPoll {
                 let poll = poll(for: record.messageIdHex)
                 labels += poll?.options.map { ContentSanitizer.messageBody($0.label) } ?? []
@@ -2390,6 +2446,18 @@ final class ConversationViewModel {
             let media = mediaItems(for: item)
             let text: String
             var previewURL: URL?
+            var contactIDs: [String] = []
+            if !media.isEmpty, !context.showsDebugStyle || MessageSemantics.debugStyle(for: record).isUserVisibleBubble {
+                for attachment in media where attachment.rejectionKind == nil && (attachment.kind == .document || attachment.kind == .unsupported) {
+                    labels.append(attachment.fileName)
+                    if DocumentPreviewFormat(for: attachment) == .contact { contactIDs.append(attachment.id) }
+                }
+            }
+            if let activity {
+                if let status = activity.visibleActivityStatus { labels.append(status) }
+                return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex, text: activity.primaryText, labels: labels,
+                                               contactAttachmentIDs: contactIDs)
+            }
             let standaloneSticker = record.sticker != nil && StickerBubbleLayout.standsAlone(plaintext: record.plaintext,
                 hasReply: replyPreview(for: record) != nil, hasMedia: !media.isEmpty)
             if standaloneSticker {
@@ -2399,10 +2467,6 @@ final class ConversationViewModel {
             } else if media.isEmpty, SharedLocationText.location(from: record.plaintext) != nil {
                 text = L10n.string("Location")
             } else {
-                labels += media.compactMap { attachment in
-                    guard attachment.rejectionKind == nil, attachment.kind == .document || attachment.kind == .unsupported else { return nil }
-                    return attachment.fileName
-                }
                 let blocks = markdownDisplayBlocks(for: item)
                 text = blocks.map { $0.flatMap(\.textFields).joined(separator: "\n") }
                     ?? (media.isEmpty || !record.plaintext.isEmpty ? ContentSanitizer.messageBody(displayBody(of: record)) : "")
@@ -2411,12 +2475,16 @@ final class ConversationViewModel {
                 }
             }
             return ConversationSearchEntry(itemId: item.id, messageIdHex: record.messageIdHex,
-                                           text: text, labels: labels, previewURL: previewURL)
+                                           text: text, labels: labels, previewURL: previewURL, contactAttachmentIDs: contactIDs)
         }
     }
 
     func data(for media: MessageMediaAttachment) async throws -> Data {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
+    }
+
+    func admitAutomaticAttachment(for media: MessageMediaAttachment) async -> Int? {
+        await mediaDownloader.admitAutomaticAttachment(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
     /// Requests the images in rows just beyond the viewport under the same

@@ -48,17 +48,7 @@ nonisolated enum ComposerMediaDraftLayout {
 
 nonisolated enum VideoPreviewOverlayPresentation {
     static let compactDiameter: CGFloat = 44
-    static let regularDiameter: CGFloat = 64
     static let maximumDiameter: CGFloat = 76
-
-    static func diameter(for size: CGSize) -> CGFloat {
-        let shortestSide = min(size.width, size.height)
-        guard shortestSide.isFinite, shortestSide >= 96 else {
-            return compactDiameter
-        }
-        return min(maximumDiameter, max(regularDiameter, shortestSide * 0.24))
-            .rounded(.toNearestOrAwayFromZero)
-    }
 
     static func iconFontSize(for diameter: CGFloat) -> CGFloat {
         max(19, diameter * 0.42).rounded(.toNearestOrAwayFromZero)
@@ -66,19 +56,21 @@ nonisolated enum VideoPreviewOverlayPresentation {
 }
 
 struct VideoPreviewPlayOverlay: View {
+    enum Style { case preview, transcriptTile }
+
     var systemName = "play.fill"
     let diameter: CGFloat
+    var style = Style.preview
 
     var body: some View {
+        let tile = style == .transcriptTile
         Image(systemName: systemName)
-            .font(.system(
-                size: VideoPreviewOverlayPresentation.iconFontSize(for: diameter),
-                weight: .bold
-            ))
+            .font(.system(size: tile ? diameter / 2 : VideoPreviewOverlayPresentation.iconFontSize(for: diameter),
+                          weight: tile ? .semibold : .bold))
             .foregroundStyle(.white)
             .frame(width: diameter, height: diameter)
-            .background(Color.black.opacity(0.5), in: Circle())
-            .shadow(color: Color.black.opacity(0.28), radius: 8, y: 2)
+            .background(Color.black.opacity(tile ? 0.4 : 0.5), in: Circle())
+            .shadow(color: tile ? .clear : Color.black.opacity(0.28), radius: tile ? 0 : 8, y: tile ? 0 : 2)
     }
 }
 

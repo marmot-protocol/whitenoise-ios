@@ -243,7 +243,7 @@ nonisolated enum SingleEmojiMessagePresentation {
 }
 
 /// A message whose whole text is one resolvable `:shortcode:` shows that
-/// custom emoji at sticker size without a bubble, like a single emoji.
+/// custom emoji at sticker size without a bubble.
 nonisolated enum SingleCustomEmojiMessagePresentation {
     static let side: CGFloat = 112
 

@@ -97,6 +97,49 @@ struct AttachmentHandoffTests {
         #expect(await releaser.leases == [lease])
     }
 
+    @Test func hidingTheSourceDuringShareReleasesTheOpenedLease() async throws {
+        let releaser = FakeReleaser()
+        let leased = AttachmentHandoffLease(lease: lease, path: "/tmp/handoff/photo.png", releaser: releaser)
+        let item = MessageMediaAttachment(id: "photo", reference: nil, fileName: "photo.png",
+                                          mediaType: "image/png", dim: nil, localData: nil)
+        let gallery = try #require(MessageMediaGallery(transcriptItems: [item], openingID: item.id,
+            initialData: nil, messages: [:], captions: [item.id: .init(sender: "Alice", date: .now)]))
+        var visible = false
+        var opened = false
+        let loader = ConversationMediaLoader { _ in throw AttachmentReadError.unavailable } openHandoff: { _, _ in
+            opened = true
+            visible = false
+            return leased
+        }
+        await #expect(throws: AttachmentReadError.unavailable) {
+            _ = try await gallery.shareFile(for: item, using: loader, control: MediaFileTransferControlFfi(),
+                                            verify: { _ in visible })
+        }
+        #expect(!opened)
+        visible = true
+        await #expect(throws: AttachmentReadError.unavailable) {
+            _ = try await gallery.shareFile(for: item, using: loader, control: MediaFileTransferControlFfi(),
+                                            verify: { _ in visible })
+        }
+        #expect(await waitForReleases(releaser, count: 1) == [lease])
+    }
+
+    @Test func documentShareReleasesTheLeaseWhenItsSourceDisappears() async throws {
+        let releaser = FakeReleaser()
+        let leased = AttachmentHandoffLease(lease: lease, path: "/tmp/handoff/report.pdf", releaser: releaser)
+        var visible = true
+        let loader = ConversationMediaLoader { _ in throw AttachmentReadError.unavailable } openHandoff: { _, _ in
+            visible = false
+            return leased
+        } canShareDocument: { _, _ in visible }
+        let presentation = DocumentSharePresentation()
+        await #expect(throws: AttachmentReadError.unavailable) {
+            try await presentation.present(document(localTarget: Self.target), using: loader, demand: .explicit)
+        }
+        #expect(presentation.file == nil)
+        #expect(await waitForReleases(releaser, count: 1) == [lease])
+    }
+
     @Test func droppingAnUnreleasedLeaseReleasesIt() async {
         let releaser = FakeReleaser()
         do {
@@ -233,6 +276,78 @@ struct AttachmentHandoffTests {
         return item
     }
 
+    @Test func openingTextShowsAPreviewOrHandsOffItsOriginalSlot() async throws {
+        let item = MessageMediaAttachment(id: "row:0", reference: encryptedMediaReference(fileName: "Notes.txt", mediaType: "text/plain", sourceEpoch: 1), fileName: "Notes.txt",
+            mediaType: "application/octet-stream", dim: nil, localData: Data("matching outgoing copy".utf8), localTarget: Self.target)
+        let presentation = DocumentSharePresentation()
+        let releaser = FakeReleaser()
+        var contents = Data("notes".utf8)
+        var ownSend = false
+        var exceedsLimit = false
+        var handedOff: [AttachmentLocalTargetFfi] = []
+        var readDemands: [AttachmentDemand] = []
+        var handoffDemands: [AttachmentDemand] = []
+        let bytesOverLimit = DocumentPreviewFormat.text.byteLimit + 1
+        let loader = ConversationMediaLoader { requested in
+            readDemands.append(requested.demand)
+            if let local = requested.localData { return local }
+            if exceedsLimit {
+                #expect(requested.previewByteLimit == DocumentPreviewFormat.text.byteLimit)
+                if let limit = requested.previewByteLimit, bytesOverLimit > limit {
+                    throw AttachmentReadError.previewLimitExceeded(byteCount: bytesOverLimit)
+                }
+            }
+            return contents
+        } openHandoff: { requested, _ in
+            handoffDemands.append(requested.demand)
+            #expect(requested.localData == nil)
+            if let target = requested.localTarget { handedOff.append(target) }
+            return AttachmentHandoffLease(
+                lease: self.lease, path: "/tmp/handoff/Notes.txt", target: requested.localTarget, releaser: releaser
+            )
+        } canShareDocument: { _, leasedTarget in leasedTarget == Self.target || (ownSend && leasedTarget == nil) }
+        let preview = try await presentation.openDocument(item, using: loader, demand: .explicit,
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
+        guard case .text("notes") = preview?.content else {
+            Issue.record("Expected the text preview")
+            return
+        }
+        #expect(presentation.file == nil && handedOff.isEmpty)
+
+        contents = Data([0xff])
+        let rejected = try await presentation.openDocument(item, using: loader, demand: .explicit,
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
+        #expect(rejected == nil)
+        #expect(handedOff == [Self.target])
+        #expect(presentation.file?.url.lastPathComponent == "Notes.txt")
+        presentation.close()
+
+        handedOff.removeAll()
+        readDemands.removeAll()
+        handoffDemands.removeAll()
+        exceedsLimit = true
+        contents = Data("would otherwise preview".utf8)
+        var reportedSize: Int?
+        let oversized = try await presentation.openDocument(item, using: loader, demand: .retry,
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { reportedSize = $0 })
+        #expect(oversized == nil)
+        #expect(reportedSize == bytesOverLimit)
+        #expect(readDemands == [.retry])
+        #expect(handoffDemands == [.explicit])
+        #expect(handedOff == [Self.target])
+        presentation.close()
+
+        ownSend = true
+        handedOff.removeAll()
+        let own = try await presentation.openDocument(item, using: loader, demand: .explicit,
+            isCurrent: { true }, handoffItem: { item }, didReadSize: { _ in })
+        guard case .text("matching outgoing copy") = own?.content else {
+            Issue.record("The sender’s verified local copy should open without acquiring the upload again")
+            return
+        }
+        #expect(handedOff.isEmpty)
+    }
+
     @Test func confirmedOwnSendWithHostBytesStillUsesItsSlot() {
         let item = document(localData: Data("%PDF".utf8), localTarget: Self.target)
         #expect(AttachmentHandoffSource(item) == .target(Self.target))
@@ -248,7 +363,7 @@ struct AttachmentHandoffTests {
         #expect(AttachmentHandoffSource(document(localTarget: Self.target, sourceHint: hint)) == .target(Self.target))
     }
 
-    @Test func reportedMessageMediaKeepsItsOriginalSlot() {
+    @Test func reportedMessageMediaKeepsItsOriginalSlot() throws {
         let messageID = String(repeating: "3", count: 64)
         let sourceID = String(repeating: "4", count: 64)
         let reference = MediaAttachmentReferenceFfi(
@@ -269,7 +384,20 @@ struct AttachmentHandoffTests {
         let slot = AttachmentLocalTargetFfi(messageIdHex: messageID, sourceMessageIdHex: sourceID,
                                             attachmentIndex: 0)
         #expect(items.first?.localTarget == slot)
-        #expect(items.first.map(AttachmentHandoffSource.init) == .target(slot))
+        let known = try #require(items.first)
+        var unresolved = message
+        unresolved.sourceMessageIdHex = ""
+        let hinted = try #require(GroupModerationModel.mediaItems(for: unresolved, reportIdHex: "r1").first)
+        #expect(hinted.localTarget == nil)
+        #expect(hinted.isSameDocumentSource(as: hinted, leasedTarget: slot))
+        #expect(known.isSameDocumentSource(as: hinted, leasedTarget: slot))
+
+        var other = slot
+        other.attachmentIndex = 1
+        #expect(!hinted.isSameDocumentSource(as: hinted, leasedTarget: other))
+        other = slot
+        other.sourceMessageIdHex = String(repeating: "7", count: 64)
+        #expect(!known.isSameDocumentSource(as: hinted, leasedTarget: other))
     }
 
     @Test func storageFullAndControlCancellationMapToUserStates() {

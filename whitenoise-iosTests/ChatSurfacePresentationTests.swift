@@ -230,6 +230,7 @@ struct ChatSurfacePresentationTests {
         let resolvable: Set = [marmot, wave]
         #expect(SingleCustomEmojiMessagePresentation.shortcode(in: ":marmot:", resolvable: resolvable) == marmot)
         #expect(SingleCustomEmojiMessagePresentation.shortcode(in: "  :wave:\n", resolvable: resolvable) == wave)
+        #expect(SingleCustomEmojiMessagePresentation.shortcode(in: "😀", resolvable: resolvable) == nil)
         #expect(SingleCustomEmojiMessagePresentation.side > SingleEmojiMessagePresentation.fontSize)
     }
 
