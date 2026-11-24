@@ -1911,7 +1911,8 @@ final class ConversationViewModel {
             hasMoreBefore: snapshot.hasMoreBefore, hasMoreAfter: snapshot.hasMoreAfter))
         readMarker.seedFlushedWatermark(
             messageIdHex: snapshot.readState.lastReadMessageIdHex,
-            timelineAt: snapshot.readState.lastReadTimelineAt,
+            unreadCount: snapshot.readState.unreadCount,
+            firstUnreadMessageIdHex: snapshot.readState.firstUnreadMessageIdHex,
             hasMoreAfter: snapshot.hasMoreAfter
         )
         if !changedNames.isEmpty {
@@ -2420,18 +2421,6 @@ final class ConversationViewModel {
             }
             return enriched
         }
-    }
-
-    func timelineDaySections(
-        calendar: Calendar = .autoupdatingCurrent,
-        locale: Locale = .autoupdatingCurrent
-    ) -> [TimelineDaySection] {
-        daySectionProjections.sections(
-            for: timeline,
-            generation: timelineProjectionGeneration,
-            calendar: calendar,
-            locale: locale
-        )
     }
 
     func timelineDayHeadings(

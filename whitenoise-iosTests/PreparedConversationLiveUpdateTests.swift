@@ -232,9 +232,10 @@ struct PreparedConversationLiveUpdateTests {
         let rows = [TimelineItem.systemEvent(id: "one", event: .groupCreated, timestamp: 1),
                     TimelineItem.systemEvent(id: "two", event: .groupCreated, timestamp: 200_000),
                     TimelineItem.systemEvent(id: "three", event: .groupCreated, timestamp: 2)]
-        let sections = cache.sections(for: rows, generation: 1)
-        #expect(sections.flatMap(\.items) == rows)
-        #expect(Set(sections.map(\.id)).count == 3)
+        let projection = cache.headingsProjection(for: rows, generation: 1)
+        #expect(projection.orderedHeaderIDs == rows.map(\.id))
+        #expect(Set(projection.orderedHeaderIDs).count == 3)
+        #expect(projection.headerIDByItemID.count == 3)
     }
 
     @Test func dayHeadingsProjectionCachePrecomputesHeadingsAndItemHeaderLookup() {

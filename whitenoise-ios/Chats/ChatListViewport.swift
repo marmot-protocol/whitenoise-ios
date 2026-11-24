@@ -50,8 +50,6 @@ final class ChatListViewport {
     private var isRestoring = false
     private var programmaticScroll: UUID?
 
-    var registeredRowCount: Int { rows.count }
-
     func beginProgrammaticScroll() -> UUID {
         let token = UUID()
         programmaticScroll = token

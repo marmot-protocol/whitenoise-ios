@@ -3,11 +3,20 @@ import Foundation
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-/// Profile fetch and projection-load queue bookkeeping with no runtime
-/// client. Tests where the inactive scene is what blocks refresh need a client
-/// and live in AppStateBootstrapTests.
+/// Profile fetch and projection-load queue bookkeeping. Tests that open a
+/// Marmot runtime via `withTestClient` declare `.marmotRuntimeConcurrencyLimit`.
 @MainActor
 struct AppStateProfileQueueTests {
+    private enum SimulatedRelayError: Error {
+        case timedOut
+    }
+
+    private static func allowedClassifications(_ endpoints: [String]) -> [RelayEndpointClassificationFfi] {
+        endpoints.map {
+            RelayEndpointClassificationFfi(endpoint: $0, normalizedEndpoint: $0, policy: .allowed)
+        }
+    }
+
     @Test func foregroundMaintenancePausePreservesPendingProfileWork() async throws {
         let appState = AppState.test()
         let loading = hex("36")
@@ -57,7 +66,8 @@ struct AppStateProfileQueueTests {
         #expect(appState.profileStore.profileProjectionLoadVersions == [hex("44"): 3, hex("55"): 1])
     }
 
-    @Test func negativeRefreshCooldownBackoffsAndStopsInfiniteRefetchForUnknownPeer() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func negativeRefreshCooldownBackoffsAndStopsInfiniteRefetchForUnknownPeer() async throws {
         #expect(ProfileStore.negativeRefreshCooldown(forAttempt: 1) == .seconds(60))
         #expect(ProfileStore.negativeRefreshCooldown(forAttempt: 2) == .seconds(120))
         #expect(ProfileStore.negativeRefreshCooldown(forAttempt: 3) == .seconds(240))
@@ -70,10 +80,20 @@ struct AppStateProfileQueueTests {
             var refreshCalls = 0
             let store = ProfileStore(
                 now: { currentNow },
-                performRelayRefresh: { _ in
-                    refreshCalls += 1
-                    return .completed
-                }
+                loadProjections: { _, requests in
+                    Dictionary(uniqueKeysWithValues: requests.map { req in
+                        (req.accountIdHex, ProfileDisplayProjection(profile: nil, projectedName: nil, localAccountLabel: nil))
+                    })
+                },
+                relayTransport: ProfileStore.RelayRefreshTransport(
+                    bootstrapRelays: { _, _ in ["wss://bootstrap.example"] },
+                    classifyRelayEndpoints: { _, candidates in Self.allowedClassifications(candidates) },
+                    cachedTargetRelays: { _, _ in [] },
+                    refreshProfile: { _, _, _ in
+                        refreshCalls += 1
+                    },
+                    refreshTargetRelays: { _, _, _ in [] }
+                )
             )
             store.appState = appState
             store.profileProjectionCache[peer] = ProfileDisplayProjection(
@@ -126,39 +146,65 @@ struct AppStateProfileQueueTests {
         }
     }
 
-    @Test func failedRelayRefreshDoesNotTriggerNegativeRefreshCooldown() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func partialRelayLookupFailureDoesNotTriggerNegativeRefreshCooldown() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
             let peer = hex("81")
-            var refreshCalls = 0
+            let bootstrapRelay = "wss://bootstrap.example"
+            let discoveredRelay = "wss://target.example"
+            var requestedRoutes: [[String]] = []
+            var failDiscovery = false
             let store = ProfileStore(
-                loadProjections: { requests in
+                loadProjections: { _, requests in
                     Dictionary(uniqueKeysWithValues: requests.map { req in
                         (req.accountIdHex, ProfileDisplayProjection(profile: nil, projectedName: nil, localAccountLabel: nil))
                     })
                 },
-                performRelayRefresh: { _ in
-                    refreshCalls += 1
-                    return .failed
-                }
+                relayTransport: ProfileStore.RelayRefreshTransport(
+                    bootstrapRelays: { _, _ in [bootstrapRelay] },
+                    classifyRelayEndpoints: { _, candidates in Self.allowedClassifications(candidates) },
+                    cachedTargetRelays: { _, _ in [] },
+                    refreshProfile: { _, _, relays in
+                        requestedRoutes.append(relays)
+                        if relays.contains(discoveredRelay) {
+                            throw SimulatedRelayError.timedOut
+                        }
+                    },
+                    refreshTargetRelays: { _, _, _ in
+                        if failDiscovery {
+                            throw SimulatedRelayError.timedOut
+                        }
+                        return [discoveredRelay]
+                    }
+                )
             )
             store.appState = appState
 
+            // Bootstrap lookup succeeds with no metadata, discovery finds a new
+            // target relay, and the follow-up query to that target relay times out:
+            // must be classified transient (no negative backoff).
             #expect(store.knownDisplayName(forAccountIdHex: peer) == nil)
-            try await eventually { refreshCalls == 1 && store.profileFetchQueueTask == nil }
+            try await eventually { requestedRoutes.count == 2 && store.profileFetchQueueTask == nil }
+            #expect(requestedRoutes == [[bootstrapRelay], [discoveredRelay, bootstrapRelay]])
             #expect(!store.isInNegativeRefreshCooldown(forAccountIdHex: peer))
             #expect(store.negativeRefreshCooldowns[peer] == nil)
 
-            // A subsequent read after a transient relay failure can retry immediately.
+            // Incomplete discovery after an empty bootstrap lookup must also
+            // avoid negative backoff and remain immediately retryable.
+            failDiscovery = true
             #expect(store.knownDisplayName(forAccountIdHex: peer) == nil)
-            try await eventually { refreshCalls == 2 && store.profileFetchQueueTask == nil }
+            try await eventually { requestedRoutes.count == 3 && store.profileFetchQueueTask == nil }
+            #expect(!store.isInNegativeRefreshCooldown(forAccountIdHex: peer))
+            #expect(store.negativeRefreshCooldowns[peer] == nil)
         }
     }
 
-    @Test func resumeMarksCachedProjectionsStaleLazilyWithoutEagerRequeueStorm() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func resumeMarksCachedProjectionsStaleLazilyWithoutEagerRequeueStorm() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
-            let store = ProfileStore(loadProjections: { requests in
+            let store = ProfileStore(loadProjections: { _, requests in
                 Dictionary(uniqueKeysWithValues: requests.map { req in
                     (
                         req.accountIdHex,
@@ -177,10 +223,14 @@ struct AppStateProfileQueueTests {
                 )
             }
 
+            let generationBeforeResume = appState.profileRefreshGeneration
             _ = store.pauseProfileFetchQueue()
             store.resumeProfileFetchQueueIfNeeded()
 
-            // Resuming must NOT eagerly enqueue all 20 cached peers.
+            // Resuming must NOT eagerly enqueue all 20 cached peers, yet it
+            // must bump `profileRefreshGeneration` once so currently visible
+            // views re-read and trigger lazy hydration for only visible rows.
+            #expect(appState.profileRefreshGeneration == generationBeforeResume + 1)
             #expect(store.queuedProfileProjectionLoadIDs.isEmpty)
             #expect(store.profileProjectionLoadTask == nil)
             #expect(store.staleProfileProjectionIDs.count == 20)
@@ -196,10 +246,11 @@ struct AppStateProfileQueueTests {
         }
     }
 
-    @Test func batchProjectionLoadNotifiesProfileRefreshGenerationOncePerBatch() async throws {
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func batchProjectionLoadNotifiesProfileRefreshGenerationOncePerBatch() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
-            let store = ProfileStore(loadProjections: { requests in
+            let store = ProfileStore(loadProjections: { _, requests in
                 Dictionary(uniqueKeysWithValues: requests.map { req in
                     (
                         req.accountIdHex,

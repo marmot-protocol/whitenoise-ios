@@ -16,6 +16,13 @@ final class ConversationReadMarker {
         let orderKey: TimelineHistoryOrderKey
     }
 
+    private struct UnplacedSavedMarker: Equatable {
+        let messageIdHex: String
+        let unreadCount: UInt64?
+        let firstUnreadMessageIdHex: String?
+        let hasMoreAfter: Bool
+    }
+
     enum PendingFlushDecision: Equatable {
         case stop
         case retryWhenRuntimeReturns
@@ -39,7 +46,16 @@ final class ConversationReadMarker {
     /// Bounded because the read marker is best-effort and must not spin.
     static let maximumFailedFlushAttempts = 5
 
-    typealias MarkReadHandler = @MainActor (String, String, [String]) async throws -> [TimelineReadMarkResult]
+    typealias MarkReadHandler = @MainActor (AppState, String, String, [String]) async throws -> [TimelineReadMarkResult]
+
+    static let defaultMarkRead: MarkReadHandler = { appState, accountRef, groupIdHex, messageIdHexes in
+        let client = try appState.currentMarmotClient()
+        return await client.markTimelineMessagesRead(
+            accountRef: accountRef,
+            groupIdHex: groupIdHex,
+            messageIdHexes: messageIdHexes
+        )
+    }
 
     private let groupIdHex: String
     private weak var appState: AppState?
@@ -49,29 +65,26 @@ final class ConversationReadMarker {
     private let orderKey: (String) -> TimelineHistoryOrderKey?
     private let onChatListRowUpdated: ((ChatListRowFfi) -> Void)?
     private let sleep: @Sendable (Duration) async throws -> Void
-    private let markReadHandler: MarkReadHandler?
+    private let markRead: MarkReadHandler
 
     private var pendingWatermark: Watermark?
-    private var inFlightWatermark: Watermark?
+    private var inFlightFlush: (taskID: UUID, watermark: Watermark)?
     private var pendingAccountRef: String?
     private var flushedWatermark: Watermark?
-    /// A persisted watermark seeded from MDK while its message sat outside the
-    /// bounded window (or while an optimistic own send lacked durable epoch
-    /// order). Upgraded to `flushedWatermark` once its durable row enters the
-    /// window, or superseded once a newer live-tail watermark flushes.
-    private var unplacedSeededFlushedMessageIdHex: String?
-    private var unplacedSeededFlushedTimelineAt: UInt64?
-    private var windowHasMoreAfter = false
+    /// Tracks an unresolved optimistic own send that succeeded while still
+    /// lacking a durable epoch so we avoid re-sending the exact same id without
+    /// letting it block durable inbound replies.
+    private var lastFlushedOptimisticMessageIdHex: String?
+    /// A persisted watermark reported by MDK whose message sits outside the
+    /// loaded timeline window (for example after another linked device read
+    /// ahead, or when opening directly into an older historical page). Retained
+    /// alongside any earlier `flushedWatermark` until it enters the window or
+    /// an authoritative unread boundary allows a newer live-tail row to flush.
+    private var unplacedSavedMarker: UnplacedSavedMarker?
     private var lastFlushFailureCategory: String?
     private var readMarkTask: Task<Void, Never>?
     private var readMarkTaskID: UUID?
     private var failedFlushAttempts = 0
-
-    var hasScheduledFlushTask: Bool { readMarkTask != nil }
-    var pendingWatermarkMessageIdHex: String? { pendingWatermark?.messageIdHex }
-    var flushedWatermarkMessageIdHex: String? {
-        flushedWatermark?.messageIdHex ?? unplacedSeededFlushedMessageIdHex
-    }
 
     init(
         groupIdHex: String,
@@ -79,41 +92,30 @@ final class ConversationReadMarker {
         orderKey: @escaping (String) -> TimelineHistoryOrderKey?,
         onChatListRowUpdated: ((ChatListRowFfi) -> Void)?,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        markRead: MarkReadHandler? = nil
+        markRead: @escaping MarkReadHandler = ConversationReadMarker.defaultMarkRead
     ) {
         self.groupIdHex = groupIdHex
         self.appState = appState
         self.orderKey = orderKey
         self.onChatListRowUpdated = onChatListRowUpdated
         self.sleep = sleep
-        self.markReadHandler = markRead
+        self.markRead = markRead
     }
 
     func advanceWatermark(to record: AppMessageRecordFfi, isDeleted: Bool) {
-        promoteUnplacedSeededFlushedIfPossible()
+        promoteUnplacedSavedMarkerIfPossible()
         guard let appState,
               let accountRef = appState.activeAccountRef
         else { return }
-        if unplacedSeededFlushedMessageIdHex == record.messageIdHex {
+        guard let candidateOrderKey = orderKey(record.messageIdHex) else { return }
+        if candidateOrderKey.isUnresolvedOptimistic,
+           lastFlushedOptimisticMessageIdHex == record.messageIdHex {
             return
         }
-        // When opening directly into an older historical page (`hasMoreAfter`)
-        // that excludes MDK's persisted `lastReadMessageIdHex`, or when the
-        // row's timestamp is at or behind the unplaced persisted marker, do not
-        // admit an older row and regress the read marker.
-        guard let candidateOrderKey = orderKey(record.messageIdHex) else { return }
-        if unplacedSeededFlushedMessageIdHex != nil, flushedWatermark == nil {
-            if windowHasMoreAfter {
-                return
-            }
-            if let seededTimelineAt = unplacedSeededFlushedTimelineAt,
-               candidateOrderKey.timelineAt <= seededTimelineAt {
-                return
-            }
-        }
+        guard allowsCandidateAgainstUnplacedSavedMarker(candidateOrderKey) else { return }
         let effectiveFlushedKey = maxDurableKey(
             flushedWatermark.map(resolvedOrderKey(for:)),
-            inFlightWatermark.map(resolvedOrderKey(for:))
+            inFlightFlush.map { resolvedOrderKey(for: $0.watermark) }
         )
         guard let candidateKey = Self.nextWatermark(
             candidateKey: candidateOrderKey,
@@ -139,11 +141,11 @@ final class ConversationReadMarker {
     func seedFlushedWatermark(
         messageIdHex: String?,
         orderKey providedOrderKey: TimelineHistoryOrderKey? = nil,
-        timelineAt: UInt64? = nil,
+        unreadCount: UInt64? = nil,
+        firstUnreadMessageIdHex: String? = nil,
         hasMoreAfter: Bool = false
     ) {
-        windowHasMoreAfter = hasMoreAfter
-        promoteUnplacedSeededFlushedIfPossible()
+        promoteUnplacedSavedMarkerIfPossible()
         guard let messageIdHex, !messageIdHex.isEmpty else { return }
         if let resolvedKey = providedOrderKey ?? orderKey(messageIdHex),
            !resolvedKey.isUnresolvedOptimistic {
@@ -152,16 +154,19 @@ final class ConversationReadMarker {
                 current: refreshedFlushedWatermark(),
                 incoming: incoming
             )
-            if unplacedSeededFlushedMessageIdHex == messageIdHex {
-                unplacedSeededFlushedMessageIdHex = nil
-                unplacedSeededFlushedTimelineAt = nil
-            }
+            unplacedSavedMarker = nil
             pruneSupersededPendingWatermark()
-        } else if flushedWatermark == nil {
-            unplacedSeededFlushedMessageIdHex = messageIdHex
-            if let timelineAt {
-                unplacedSeededFlushedTimelineAt = max(unplacedSeededFlushedTimelineAt ?? 0, timelineAt)
-            }
+        } else if flushedWatermark?.messageIdHex == messageIdHex {
+            unplacedSavedMarker = nil
+            pruneSupersededPendingWatermark()
+        } else {
+            unplacedSavedMarker = UnplacedSavedMarker(
+                messageIdHex: messageIdHex,
+                unreadCount: unreadCount,
+                firstUnreadMessageIdHex: firstUnreadMessageIdHex,
+                hasMoreAfter: hasMoreAfter
+            )
+            pruneSupersededPendingWatermark()
         }
     }
 
@@ -194,7 +199,9 @@ final class ConversationReadMarker {
     /// The accepted watermark order key, or nil when the candidate is ineligible
     /// (not a user-visible row kind, deleted, outside the loaded window) or is
     /// not strictly newer than both the pending and the already-flushed
-    /// watermark.
+    /// watermark. Durable candidates always take precedence over unresolved
+    /// optimistic candidates so a pending own send can never starve or displace
+    /// a durable inbound reply.
     nonisolated static func nextWatermark(
         candidateKey: TimelineHistoryOrderKey?,
         pendingKey: TimelineHistoryOrderKey?,
@@ -207,8 +214,25 @@ final class ConversationReadMarker {
               canAdvanceWatermark(kind: kind, tags: tags),
               let candidateKey
         else { return nil }
-        if let pendingKey, candidateKey <= pendingKey { return nil }
-        if let flushedKey, candidateKey <= flushedKey { return nil }
+        if let flushedKey, !flushedKey.isUnresolvedOptimistic {
+            if !candidateKey.isUnresolvedOptimistic, candidateKey <= flushedKey {
+                return nil
+            }
+        }
+        if let pendingKey {
+            switch (candidateKey.isUnresolvedOptimistic, pendingKey.isUnresolvedOptimistic) {
+            case (false, true):
+                // A durable candidate replaces an unresolved optimistic entry
+                // rather than being blocked by its temporary rank-2 order key.
+                break
+            case (true, false):
+                // Do not let an unresolved optimistic entry displace a durable
+                // pending candidate that MDK can persist immediately.
+                return nil
+            case (false, false), (true, true):
+                if candidateKey <= pendingKey { return nil }
+            }
+        }
         return candidateKey
     }
 
@@ -296,29 +320,72 @@ final class ConversationReadMarker {
         }
     }
 
+    private func allowsCandidateAgainstUnplacedSavedMarker(
+        _ candidateKey: TimelineHistoryOrderKey
+    ) -> Bool {
+        promoteUnplacedSavedMarkerIfPossible()
+        guard let marker = unplacedSavedMarker else { return true }
+        if marker.messageIdHex == flushedWatermark?.messageIdHex {
+            unplacedSavedMarker = nil
+            return true
+        }
+        // When MDK's authoritative first-unread row is in the loaded window,
+        // canonical comparison against it cleanly separates read and unread
+        // rows without comparing timestamps across epochs.
+        if let firstUnreadID = marker.firstUnreadMessageIdHex,
+           let firstUnreadKey = orderKey(firstUnreadID),
+           !firstUnreadKey.isUnresolvedOptimistic {
+            if candidateKey.isUnresolvedOptimistic {
+                return !marker.hasMoreAfter
+            }
+            return candidateKey >= firstUnreadKey
+        }
+        // At the live tail (`!hasMoreAfter`) with an authoritative positive
+        // unread count whose `firstUnreadMessageIdHex` sits before the loaded
+        // window, every row in this tail slice is strictly unread.
+        if !marker.hasMoreAfter,
+           let unreadCount = marker.unreadCount,
+           unreadCount > 0,
+           marker.firstUnreadMessageIdHex != nil {
+            return true
+        }
+        // Otherwise (historical page, zero unread, or unknown off-window marker
+        // placement) fail closed rather than regressing a newer saved marker.
+        return false
+    }
+
     private func pruneSupersededPendingWatermark() {
-        guard let pending = pendingWatermark,
-              let flushed = refreshedFlushedWatermark()
-        else { return }
+        guard let pending = pendingWatermark else { return }
         let pendingKey = resolvedOrderKey(for: pending)
-        if !pendingKey.isUnresolvedOptimistic, pendingKey <= flushed.orderKey {
+        if !allowsCandidateAgainstUnplacedSavedMarker(pendingKey) {
+            pendingWatermark = nil
+            pendingAccountRef = nil
+            failedFlushAttempts = 0
+            return
+        }
+        if let flushed = refreshedFlushedWatermark(),
+           !pendingKey.isUnresolvedOptimistic,
+           pendingKey <= flushed.orderKey {
             pendingWatermark = nil
             pendingAccountRef = nil
             failedFlushAttempts = 0
         }
     }
 
-    private func promoteUnplacedSeededFlushedIfPossible() {
-        guard let unplaced = unplacedSeededFlushedMessageIdHex,
-              let resolvedKey = orderKey(unplaced),
+    private func promoteUnplacedSavedMarkerIfPossible() {
+        guard let marker = unplacedSavedMarker else { return }
+        if marker.messageIdHex == flushedWatermark?.messageIdHex {
+            unplacedSavedMarker = nil
+            return
+        }
+        guard let resolvedKey = orderKey(marker.messageIdHex),
               !resolvedKey.isUnresolvedOptimistic
         else { return }
         flushedWatermark = Self.ratchetedFlushedWatermark(
             current: refreshedFlushedWatermark(),
-            incoming: Watermark(messageIdHex: unplaced, orderKey: resolvedKey)
+            incoming: Watermark(messageIdHex: marker.messageIdHex, orderKey: resolvedKey)
         )
-        unplacedSeededFlushedMessageIdHex = nil
-        unplacedSeededFlushedTimelineAt = nil
+        unplacedSavedMarker = nil
     }
 
     private func scheduleReadMarkFlush(accountRef: String) {
@@ -340,13 +407,16 @@ final class ConversationReadMarker {
                     return
                 }
                 guard !Task.isCancelled else { return }
-                guard await self?.flushPendingReadMarks(accountRef: accountRef) == true else { return }
+                guard await self?.flushPendingReadMarks(accountRef: accountRef, taskID: taskID) == true else {
+                    return
+                }
             }
         }
     }
 
-    private func flushPendingReadMarks(accountRef: String) async -> Bool {
-        promoteUnplacedSeededFlushedIfPossible()
+    private func flushPendingReadMarks(accountRef: String, taskID: UUID) async -> Bool {
+        guard readMarkTaskID == taskID, !Task.isCancelled else { return false }
+        promoteUnplacedSavedMarkerIfPossible()
         pruneSupersededPendingWatermark()
         let appState = appState
         switch Self.pendingFlushDecision(
@@ -371,8 +441,15 @@ final class ConversationReadMarker {
             messageIdHex: rawWatermark.messageIdHex,
             orderKey: resolvedOrderKey(for: rawWatermark)
         )
-        // Re-check against the current durable flushed floor right before calling
-        // MDK so a stale pending entry can never regress a newer mark.
+        // Re-check against both the off-window saved marker and the durable
+        // flushed floor right before calling MDK so a stale pending entry can
+        // never regress a newer mark.
+        guard allowsCandidateAgainstUnplacedSavedMarker(watermark.orderKey) else {
+            pendingWatermark = nil
+            pendingAccountRef = nil
+            failedFlushAttempts = 0
+            return false
+        }
         if let flushed = refreshedFlushedWatermark(),
            !watermark.orderKey.isUnresolvedOptimistic,
            watermark.orderKey <= flushed.orderKey {
@@ -381,29 +458,29 @@ final class ConversationReadMarker {
             failedFlushAttempts = 0
             return false
         }
+        let startedRuntimeGeneration = appState.runtimeGeneration
         // Drained before the await so a newer candidate arriving mid-flight
-        // stays queued for the next pass, while `inFlightWatermark` acts as an
-        // admission floor so scrolling up mid-flight cannot enqueue an older row.
+        // stays queued for the next pass, while `inFlightFlush` acts as an
+        // admission floor scoped to this `taskID`.
         pendingWatermark = nil
-        inFlightWatermark = watermark
-        defer { inFlightWatermark = nil }
+        inFlightFlush = (taskID: taskID, watermark: watermark)
+        defer {
+            if inFlightFlush?.taskID == taskID {
+                inFlightFlush = nil
+            }
+        }
 
         let signpost = Self.performanceSignposter.beginInterval("ConversationReadMarker.flushPendingReadMarks")
         defer { Self.performanceSignposter.endInterval("ConversationReadMarker.flushPendingReadMarks", signpost) }
 
         var didMarkRead = false
         do {
-            let results: [TimelineReadMarkResult]
-            if let markReadHandler {
-                results = try await markReadHandler(accountRef, groupIdHex, [watermark.messageIdHex])
-            } else {
-                let client = try appState.currentMarmotClient()
-                results = await client.markTimelineMessagesRead(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex,
-                    messageIdHexes: [watermark.messageIdHex]
-                )
-            }
+            let results = try await markRead(appState, accountRef, groupIdHex, [watermark.messageIdHex])
+            guard readMarkTaskID == taskID,
+                  !Task.isCancelled,
+                  appState.runtimeGeneration == startedRuntimeGeneration
+            else { return false }
+
             lastFlushFailureCategory = results.compactMap(\.failureCategory).last
             let latestRow = results.compactMap(\.row).last
             if let latestRow {
@@ -413,20 +490,17 @@ final class ConversationReadMarker {
                 didMarkRead = true
                 let settledKey = resolvedOrderKey(for: watermark)
                 if settledKey.isUnresolvedOptimistic {
-                    // Never persist a rank-2 optimistic key as the permanent
-                    // floor; track the id until its durable epoch resolves so
-                    // newer rank-1 inbound replies are never blocked.
-                    if flushedWatermark == nil {
-                        unplacedSeededFlushedMessageIdHex = watermark.messageIdHex
-                    }
+                    // Track the id to avoid re-sending the exact same
+                    // unresolved optimistic send without blocking durable rows.
+                    lastFlushedOptimisticMessageIdHex = watermark.messageIdHex
                 } else {
                     let settled = Watermark(messageIdHex: watermark.messageIdHex, orderKey: settledKey)
                     flushedWatermark = Self.ratchetedFlushedWatermark(
                         current: refreshedFlushedWatermark(),
                         incoming: settled
                     )
-                    unplacedSeededFlushedMessageIdHex = nil
-                    unplacedSeededFlushedTimelineAt = nil
+                    unplacedSavedMarker = nil
+                    lastFlushedOptimisticMessageIdHex = nil
                     pruneSupersededPendingWatermark()
                 }
                 await appState.notifications.reconcileDeliveredNotificationsAfterRead(
@@ -435,8 +509,16 @@ final class ConversationReadMarker {
                     readMessageIdHexes: [watermark.messageIdHex],
                     conversationStillHasUnread: latestRow?.hasUnread
                 )
+                guard readMarkTaskID == taskID,
+                      !Task.isCancelled,
+                      appState.runtimeGeneration == startedRuntimeGeneration
+                else { return false }
             }
         } catch {
+            guard readMarkTaskID == taskID,
+                  !Task.isCancelled,
+                  appState.runtimeGeneration == startedRuntimeGeneration
+            else { return false }
             lastFlushFailureCategory = MarmotClient.readMarkFailureCategory(for: error)
             // Handled below: a thrown client lookup and a rejected mark are the
             // same outcome to the caller, and both need the retry.
@@ -505,12 +587,32 @@ final class ConversationReadMarker {
     /// Cancels any scheduled flush task without dropping the parked watermark,
     /// so a foreground resume can flush it through `flushIfNeeded()`.
     func suspendPendingReadMarks() {
+        if let interrupted = inFlightFlush?.watermark {
+            let liveInterrupted = Watermark(
+                messageIdHex: interrupted.messageIdHex,
+                orderKey: resolvedOrderKey(for: interrupted)
+            )
+            let livePendingKey = pendingWatermark.map(resolvedOrderKey(for:))
+            let keepInterrupted = livePendingKey == nil || Self.nextWatermark(
+                candidateKey: liveInterrupted.orderKey,
+                pendingKey: livePendingKey,
+                flushedKey: nil,
+                kind: MessageSemantics.kindChat,
+                tags: [],
+                isDeleted: false
+            ) != nil
+            if keepInterrupted {
+                pendingWatermark = liveInterrupted
+            }
+        }
+        inFlightFlush = nil
         readMarkTask?.cancel()
         readMarkTask = nil
         readMarkTaskID = nil
     }
 
     func cancelPendingReadMarks() {
+        inFlightFlush = nil
         readMarkTask?.cancel()
         readMarkTask = nil
         readMarkTaskID = nil

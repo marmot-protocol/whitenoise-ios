@@ -538,14 +538,32 @@ struct MessageBubble: View {
 
     nonisolated static let maxStandaloneEmojiPlaintextBytes = 128
 
+    private nonisolated static func whitespaceTrimmedUTF8(_ string: String) -> Substring.UTF8View {
+        var start = string.startIndex
+        var end = string.endIndex
+        while start < end, string[start].isWhitespace || string[start].isNewline {
+            string.formIndex(after: &start)
+        }
+        while end > start {
+            let prev = string.index(before: end)
+            if string[prev].isWhitespace || string[prev].isNewline {
+                end = prev
+            } else {
+                break
+            }
+        }
+        return string[start..<end].utf8
+    }
+
     nonisolated static func mayContainStandaloneEmoji(
         plaintext: String,
         hasMarkdownTokens: Bool = false
     ) -> Bool {
-        let utf8 = plaintext.utf8
-        guard !utf8.isEmpty else { return false }
-        if !hasMarkdownTokens, utf8.count > maxStandaloneEmojiPlaintextBytes { return false }
-        return utf8.contains { $0 >= 0x80 }
+        let trimmed = whitespaceTrimmedUTF8(plaintext)
+        guard !trimmed.isEmpty else { return false }
+        if !hasMarkdownTokens, trimmed.count > maxStandaloneEmojiPlaintextBytes { return false }
+        if trimmed.contains(where: { $0 >= 0x80 }) { return true }
+        return hasMarkdownTokens && trimmed.contains(UInt8(ascii: "&"))
     }
 
     nonisolated static func mayContainStandaloneCustomEmoji(
@@ -554,10 +572,10 @@ struct MessageBubble: View {
         hasMarkdownTokens: Bool = false
     ) -> Bool {
         guard hasResolvableCustomEmoji else { return false }
-        let utf8 = plaintext.utf8
-        guard utf8.count >= 3 else { return false }
-        if !hasMarkdownTokens, utf8.count > maxStandaloneEmojiPlaintextBytes { return false }
-        return utf8.contains(UInt8(ascii: ":"))
+        let trimmed = whitespaceTrimmedUTF8(plaintext)
+        guard trimmed.count >= 3 else { return false }
+        if !hasMarkdownTokens, trimmed.count > maxStandaloneEmojiPlaintextBytes { return false }
+        return trimmed.contains(UInt8(ascii: ":"))
     }
 
     nonisolated struct BodyPresentation: Equatable {
@@ -597,7 +615,6 @@ struct MessageBubble: View {
 
             let eligibleForStandalone = !hasAgentActivity && !hasDebugStyle
                 && !isDeleted && !hasReplyPreview && !hasMediaItems
-                && !hasSticker && !isPoll && !hasRemoteGiphyMedia
                 && !offersSourceReader
 
             let standaloneEmoji: String? = if eligibleForStandalone,

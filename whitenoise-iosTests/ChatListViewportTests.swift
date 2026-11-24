@@ -351,7 +351,9 @@ struct ChatListViewportTests {
         scroll.layoutIfNeeded()
 
         #expect(viewport.visibleAnchor() == "live-old")
-        #expect(viewport.registeredRowCount == 1)
+        #expect(viewport.isLaidOut("live-old"))
+        #expect(!viewport.isLaidOut("dead-0"))
+        #expect(!viewport.isLaidOut("dead-259"))
 
         // Direct groupId reassignment without unregistering must not leave stale laid-out hits.
         liveRow.groupId = "live-new"

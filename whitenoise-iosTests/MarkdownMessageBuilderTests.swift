@@ -175,6 +175,15 @@ struct MarkdownMessageBuilderTests {
         #expect(customEmoji.presentation.standaloneCustomEmoji == wave)
         #expect(!customEmoji.presentation.widensTextForReactions)
 
+        // Whitespace-padded single emoji beyond 128 raw bytes still resolves as standalone emoji.
+        let paddedEmoji = resolve(plaintext: String(repeating: " ", count: 140) + "👍" + String(repeating: "\n", count: 10))
+        #expect(paddedEmoji.sanitizeCalls == 1)
+        #expect(paddedEmoji.presentation.standaloneEmoji == "👍")
+
+        // ASCII numeric HTML entity with Markdown tokens passes the emoji pre-check.
+        #expect(MessageBubble.mayContainStandaloneEmoji(plaintext: "&#128077;", hasMarkdownTokens: true))
+        #expect(!MessageBubble.mayContainStandaloneEmoji(plaintext: "&#128077;", hasMarkdownTokens: false))
+
         // Captioned media sanitizes once for hasVisibleBodyText and passes precomputed text down.
         let captionedMedia = resolve(plaintext: "Caption text", hasMediaItems: true)
         #expect(captionedMedia.sanitizeCalls == 1)
