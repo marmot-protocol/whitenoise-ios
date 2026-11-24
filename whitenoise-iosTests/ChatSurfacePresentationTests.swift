@@ -158,10 +158,12 @@ struct ChatSurfacePresentationTests {
             TimelineItem.systemEvent(id: "today", event: .groupCreated, timestamp: 86_400),
             TimelineItem.systemEvent(id: "future", event: .rosterChanged, timestamp: 172_800)
         ]
-        let today = cache.sections(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 86_400))
-        #expect(today.map(\.items.count) == [2])
-        let tomorrow = cache.sections(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 172_800))
-        #expect(tomorrow.map(\.items.count) == [1, 1])
+        let today = cache.headingsProjection(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 86_400))
+        #expect(today.orderedHeaderIDs == [rows[0].id])
+        #expect(today.headerIDByItemID[rows[1].id] == rows[0].id)
+        let tomorrow = cache.headingsProjection(for: rows, generation: 1, calendar: calendar, now: Date(timeIntervalSince1970: 172_800))
+        #expect(tomorrow.orderedHeaderIDs == [rows[0].id, rows[1].id])
+        #expect(tomorrow.headerIDByItemID[rows[1].id] == rows[1].id)
     }
 
     @Test func timelineDaySectionsReuseGenerationAndInvalidateForCalendarContext() {
@@ -175,25 +177,26 @@ struct ChatSurfacePresentationTests {
             TimelineItem.systemEvent(id: "3", event: .groupArchived, timestamp: 172_800),
         ]
 
-        let first = cache.sections(for: items, generation: 1, calendar: calendar, locale: locale)
-        #expect(first.map(\.items.count) == [2, 1])
+        let first = cache.headingsProjection(for: items, generation: 1, calendar: calendar, locale: locale)
+        #expect(first.orderedHeaderIDs == [items[0].id, items[2].id])
+        #expect(first.headerIDByItemID[items[1].id] == items[0].id)
 
         // The generation stands in for the items: the same key returns the cached
-        // sections, and any change to the key rebuilds from the items passed.
-        #expect(cache.sections(for: [], generation: 1, calendar: calendar, locale: locale) == first)
+        // projection, and any change to the key rebuilds from the items passed.
+        #expect(cache.headingsProjection(for: [], generation: 1, calendar: calendar, locale: locale) == first)
 
         calendar.timeZone = TimeZone(secondsFromGMT: 3_600)!
-        #expect(cache.sections(for: [], generation: 1, calendar: calendar, locale: locale).isEmpty)
+        #expect(cache.headingsProjection(for: [], generation: 1, calendar: calendar, locale: locale).headings.isEmpty)
 
         let french = Locale(identifier: "fr_FR")
-        let rebuilt = cache.sections(for: items, generation: 1, calendar: calendar, locale: french)
-        #expect(rebuilt.flatMap(\.items) == items)
+        let rebuilt = cache.headingsProjection(for: items, generation: 1, calendar: calendar, locale: french)
+        #expect(rebuilt.headerIDByItemID.count == items.count)
 
-        #expect(cache.sections(for: [], generation: 2, calendar: calendar, locale: french).isEmpty)
+        #expect(cache.headingsProjection(for: [], generation: 2, calendar: calendar, locale: french).headings.isEmpty)
 
         var iso = Calendar(identifier: .iso8601)
         iso.timeZone = calendar.timeZone
-        #expect(cache.sections(for: items, generation: 2, calendar: iso, locale: french).flatMap(\.items) == items)
+        #expect(cache.headingsProjection(for: items, generation: 2, calendar: iso, locale: french).headerIDByItemID.count == items.count)
     }
 
     @Test func compactBubblesReserveReadableOppositeMargin() {

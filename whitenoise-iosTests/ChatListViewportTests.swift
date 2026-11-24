@@ -287,4 +287,78 @@ struct ChatListViewportTests {
         viewport.requestTop()
         #expect(scroll.contentOffset.y == -scroll.adjustedContentInset.top)
     }
+
+    @Test func anchorUpdateSkipsLayoutInvalidationWhenIdentityAndSequenceAreUnchanged() throws {
+        let viewport = ChatListViewport()
+        let (window, scroll) = try makeList(ids: [], viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+
+        let anchorView = ChatListAnchorView()
+        anchorView.frame = CGRect(x: 0, y: 0, width: scroll.bounds.width, height: rowHeight)
+        scroll.addSubview(anchorView)
+
+        #expect(anchorView.updateAnchor(groupId: "row-1", sequence: 1, viewport: viewport))
+        scroll.layoutIfNeeded()
+        #expect(!anchorView.layer.needsLayout())
+
+        // Repeating the same identity, sequence, and viewport must not dirty UIKit layout.
+        #expect(!anchorView.updateAnchor(groupId: "row-1", sequence: 1, viewport: viewport))
+        #expect(!anchorView.layer.needsLayout())
+
+        // Changing sequence, groupId, or viewport marks layout dirty again.
+        #expect(anchorView.updateAnchor(groupId: "row-1", sequence: 2, viewport: viewport))
+        #expect(anchorView.layer.needsLayout())
+        scroll.layoutIfNeeded()
+        #expect(!anchorView.layer.needsLayout())
+
+        #expect(anchorView.updateAnchor(groupId: "row-2", sequence: 2, viewport: viewport))
+        #expect(anchorView.layer.needsLayout())
+        #expect(!viewport.isLaidOut("row-1"))
+        scroll.layoutIfNeeded()
+        #expect(viewport.isLaidOut("row-2"))
+
+        // After `viewport.reset()`, an unchanged anchor must re-register rather
+        // than early-returning while absent from the viewport map.
+        viewport.reset()
+        #expect(!viewport.isLaidOut("row-2"))
+        #expect(anchorView.updateAnchor(groupId: "row-2", sequence: 2, viewport: viewport))
+        #expect(anchorView.layer.needsLayout())
+        scroll.layoutIfNeeded()
+        #expect(viewport.isLaidOut("row-2"))
+    }
+
+    @Test func lazyPruningReclaimsDeallocatedRowsAndIgnoresReassignedKeys() throws {
+        let viewport = ChatListViewport()
+        let (window, scroll) = try makeList(ids: [], viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+
+        // Register many transient rows that are then detached and released.
+        for index in 0..<260 {
+            autoreleasepool {
+                let row = ChatListAnchorView()
+                row.groupId = "dead-\(index)"
+                row.sequence = 1
+                row.viewport = viewport
+                viewport.register(row)
+            }
+        }
+
+        // A live row triggers amortized pruning once capacity crosses the threshold.
+        let liveRow = ChatListAnchorView()
+        liveRow.frame = CGRect(x: 0, y: 0, width: scroll.bounds.width, height: rowHeight)
+        scroll.addSubview(liveRow)
+        liveRow.updateAnchor(groupId: "live-old", sequence: 2, viewport: viewport)
+        scroll.layoutIfNeeded()
+
+        #expect(viewport.visibleAnchor() == "live-old")
+        #expect(viewport.isLaidOut("live-old"))
+        #expect(!viewport.isLaidOut("dead-0"))
+        #expect(!viewport.isLaidOut("dead-259"))
+
+        // Direct groupId reassignment without unregistering must not leave stale laid-out hits.
+        liveRow.groupId = "live-new"
+        #expect(!viewport.isLaidOut("live-old"))
+        viewport.register(liveRow)
+        #expect(viewport.isLaidOut("live-new"))
+    }
 }

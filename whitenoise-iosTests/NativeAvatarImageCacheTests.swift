@@ -85,4 +85,132 @@ struct NativeAvatarImageCacheTests {
         #expect(AvatarCacheErasure.generation > generation)
         #expect(cache.image(account: "erasure-test", generation: 1, reference: "avatar", revision: 1) == nil)
     }
+
+    @Test func readyAvatarWithExactRamCacheHitSkipsRequestAvatarAssets() async throws {
+        let cache = NativeAvatarImageCache()
+        let cachedImage = UIImage()
+        cache.insert(cachedImage, account: "alice", generation: 3, reference: "ref-1", revision: 7,
+                     maxPixelSize: NativeAvatarImageCache.thumbnailPixelSize)
+
+        let readyAsset = AvatarAssetFfi(
+            target: "target-1",
+            reference: "ref-1",
+            availability: .ready,
+            acquisition: nil,
+            contentRevision: 7,
+            byteCount: 120
+        )
+
+        var requestCalls = 0
+        var readCalls = 0
+        let hit = try await NativeAvatarBubble.resolveImage(
+            asset: readyAsset,
+            account: "alice",
+            generation: 3,
+            maxPixelSize: NativeAvatarImageCache.thumbnailPixelSize,
+            cache: cache,
+            requestAssets: { _, _ in
+                requestCalls += 1
+                return [readyAsset]
+            },
+            readAssets: { _, _, _ in
+                readCalls += 1
+                return []
+            },
+            decodeImage: { _, _ in UIImage() }
+        )
+
+        #expect(hit?.image === cachedImage)
+        #expect(hit?.reference == "ref-1")
+        #expect(hit?.revision == 7)
+        #expect(requestCalls == 0)
+        #expect(readCalls == 0)
+
+        // Requesting viewer size when only thumbnail is cached must still hit MDK.
+        let decodedViewer = UIImage()
+        let viewerHit = try await NativeAvatarBubble.resolveImage(
+            asset: readyAsset,
+            account: "alice",
+            generation: 3,
+            maxPixelSize: 1_200,
+            cache: cache,
+            requestAssets: { _, _ in
+                requestCalls += 1
+                return [readyAsset]
+            },
+            readAssets: { _, _, _ in
+                readCalls += 1
+                return [AvatarBytesFfi(
+                    reference: "ref-1",
+                    availability: .ready,
+                    contentRevision: 7,
+                    byteCount: 3,
+                    deferred: false,
+                    bytes: Data([1, 2, 3]),
+                    mediaType: "image/png",
+                    width: 1_200,
+                    height: 1_200
+                )]
+            },
+            decodeImage: { _, _ in decodedViewer }
+        )
+        #expect(viewerHit?.image === decodedViewer)
+        #expect(requestCalls == 1)
+        #expect(readCalls == 1)
+
+        // Stale availability still calls requestAvatarAssets to trigger refresh,
+        // but reuses the warm pixels if MDK returns the same revision.
+        var staleAsset = readyAsset
+        staleAsset.availability = .stale
+        let staleHit = try await NativeAvatarBubble.resolveImage(
+            asset: staleAsset,
+            account: "alice",
+            generation: 3,
+            maxPixelSize: NativeAvatarImageCache.thumbnailPixelSize,
+            cache: cache,
+            requestAssets: { _, _ in
+                requestCalls += 1
+                return [staleAsset]
+            },
+            readAssets: { _, _, _ in
+                readCalls += 1
+                return []
+            },
+            decodeImage: { _, _ in UIImage() }
+        )
+        #expect(staleHit?.image === cachedImage)
+        #expect(requestCalls == 2)
+        #expect(readCalls == 1)
+
+        // Missing and invalidated avatars always register demand via requestAvatarAssets.
+        for availability in [AvatarAvailabilityFfi.missing, .invalidated] {
+            let unavailable = AvatarAssetFfi(
+                target: "target-1",
+                reference: nil,
+                availability: availability,
+                acquisition: nil,
+                contentRevision: 0,
+                byteCount: 0
+            )
+            let before = requestCalls
+            let result = try await NativeAvatarBubble.resolveImage(
+                asset: unavailable,
+                account: "alice",
+                generation: 3,
+                maxPixelSize: NativeAvatarImageCache.thumbnailPixelSize,
+                cache: cache,
+                requestAssets: { _, _ in
+                    requestCalls += 1
+                    return [unavailable]
+                },
+                readAssets: { _, _, _ in
+                    readCalls += 1
+                    return []
+                },
+                decodeImage: { _, _ in UIImage() }
+            )
+            #expect(result == nil)
+            #expect(requestCalls == before + 1)
+        }
+    }
 }

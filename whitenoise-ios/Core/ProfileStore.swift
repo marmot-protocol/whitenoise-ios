@@ -78,12 +78,90 @@ nonisolated enum ProfileRelayDiscovery {
 /// `appState`, so the observation behavior is unchanged by the extraction.
 @MainActor
 final class ProfileStore {
+    struct NegativeRefreshState: Equatable {
+        var failedAttempts: Int
+        var retryAfter: ContinuousClock.Instant
+    }
+
+    enum RefreshAttemptOutcome: Equatable {
+        case completed
+        case failed
+        case skipped
+        case cancelled
+    }
+
+    typealias ProjectionLoader = @MainActor (AppState, [ProfileProjectionRequest]) async -> [String: ProfileDisplayProjection]
+
+    struct RelayRefreshTransport {
+        var bootstrapRelays: @MainActor (AppState, String?) async -> [String]
+        var classifyRelayEndpoints: @MainActor (AppState, [String]) async -> [RelayEndpointClassificationFfi]?
+        var cachedTargetRelays: @MainActor (AppState, String) async throws -> [String]
+        var refreshProfile: @MainActor (AppState, String, [String]) async throws -> Void
+        var refreshTargetRelays: @MainActor (AppState, String, [String]) async throws -> [String]
+
+        static let live = Self(
+            bootstrapRelays: { appState, activeAccountRef in
+                if let activeAccountRef {
+                    return await appState.relayBootstrapRelays(for: activeAccountRef)
+                }
+                return MarmotClient.seedRelays
+            },
+            classifyRelayEndpoints: { appState, candidates in
+                guard let client = try? appState.currentMarmotClient() else { return nil }
+                return await client.classifyRelayEndpoints(candidates)
+            },
+            cachedTargetRelays: { appState, accountIdHex in
+                guard let client = try? appState.currentMarmotClient() else { return [] }
+                return try await client.userRelayLists(accountIdHex: accountIdHex).nip65.relays
+            },
+            refreshProfile: { appState, accountIdHex, relays in
+                let client = try appState.currentMarmotClient()
+                try await client.refreshProfile(accountIdHex: accountIdHex, relays: relays)
+            },
+            refreshTargetRelays: { appState, accountIdHex, relays in
+                let client = try appState.currentMarmotClient()
+                return try await client.refreshUserRelayLists(
+                    accountIdHex: accountIdHex,
+                    relays: relays
+                ).nip65.relays
+            }
+        )
+    }
+
+    static let defaultLoadProjections: ProjectionLoader = { appState, requests in
+        guard let client = try? appState.currentMarmotClient() else { return [:] }
+        // host_profile_read is per profile, so only single reads are timed.
+        let timing = requests.count == 1 ? appState.productAnalytics.beginTiming() : nil
+        let projections = await client.profileProjections(for: requests)
+        appState.productAnalytics.recordStage(
+            .profileRead, since: timing,
+            outcome: Task.isCancelled ? .cancelled : projections.isEmpty ? .unavailable : .success
+        )
+        return projections
+    }
+
+    nonisolated static let initialNegativeRefreshCooldown: Duration = .seconds(60)
+    nonisolated static let maximumNegativeRefreshCooldown: Duration = .seconds(3_600)
+    private nonisolated static let maximumNegativeRefreshCooldownEntries = 1_024
+
+    nonisolated static func negativeRefreshCooldown(forAttempt attempt: Int) -> Duration {
+        let shift = min(max(0, attempt - 1), 10)
+        let seconds = min(60 * (1 << shift), 3_600)
+        return .seconds(seconds)
+    }
+
     weak var appState: AppState?
+
+    private let now: () -> ContinuousClock.Instant
+    private let loadProjections: ProjectionLoader
+    private let relayTransport: RelayRefreshTransport
 
     // Internal (not private) so the existing white-box queue/version tests can
     // drive them via `appState.profileStore.…`; this matches the access level
     // they had as `@ObservationIgnored var` on AppState before the extraction.
     var profileProjectionCache: [String: ProfileDisplayProjection] = [:]
+    var staleProfileProjectionIDs: Set<String> = []
+    var negativeRefreshCooldowns: [String: NegativeRefreshState] = [:]
     var profileProjectionLoadTask: Task<Void, Never>?
     var profileProjectionLoadTaskID: UUID?
     var queuedProfileProjectionLoadIDs: [String] = []
@@ -108,6 +186,16 @@ final class ProfileStore {
     // Injectable defaults keep nickname tests hermetic.
     var contactNicknameDefaults: UserDefaults? = ContactNicknameStore.defaults
     private var contactNicknamesByKey: [String: String]?
+
+    init(
+        now: @escaping () -> ContinuousClock.Instant = { ContinuousClock.now },
+        loadProjections: @escaping ProjectionLoader = ProfileStore.defaultLoadProjections,
+        relayTransport: RelayRefreshTransport = .live
+    ) {
+        self.now = now
+        self.loadProjections = loadProjections
+        self.relayTransport = relayTransport
+    }
 
     // MARK: - Dependencies (read through AppState; never retained)
 
@@ -225,6 +313,8 @@ final class ProfileStore {
         queuedProfileProjectionLoadIDs.removeAll { $0 == id }
         scheduledProfileProjectionLoadIDs.remove(id)
         profileProjectionRefreshAfterLoadIDs.remove(id)
+        staleProfileProjectionIDs.remove(id)
+        negativeRefreshCooldowns.removeValue(forKey: id)
 
         let existing = profileProjectionCache[id]
         applyProfileProjection(
@@ -262,7 +352,8 @@ final class ProfileStore {
             changed = true
         }
 
-        for (id, projection) in profileProjectionCache where localLabelsByID[id] == nil {
+        for id in Array(profileProjectionCache.keys) where localLabelsByID[id] == nil {
+            guard let projection = profileProjectionCache[id] else { continue }
             let updated = projection.updatingLocalAccountLabel(nil)
             guard updated != projection else { continue }
             profileProjectionCache[id] = updated
@@ -291,6 +382,8 @@ final class ProfileStore {
         queuedProfileProjectionLoadIDs.removeAll { $0 == id }
         scheduledProfileProjectionLoadIDs.remove(id)
         profileProjectionRefreshAfterLoadIDs.remove(id)
+        staleProfileProjectionIDs.remove(id)
+        negativeRefreshCooldowns.removeValue(forKey: id)
         if hadProjectionWork {
             profileProjectionLoadVersions[id] = (profileProjectionLoadVersions[id] ?? 0) + 1
         }
@@ -345,7 +438,9 @@ final class ProfileStore {
     ) -> ProfileDisplayProjection? {
         _ = appState?.profileRefreshGeneration
         if let projection = profileProjectionCache[id] {
-            if refreshAfterLoad, !projection.hasRemoteIdentity {
+            if staleProfileProjectionIDs.remove(id) != nil {
+                scheduleProfileProjectionLoad(forAccountIdHex: id, refreshAfterLoad: refreshAfterLoad)
+            } else if refreshAfterLoad, !projection.hasRemoteIdentity {
                 scheduleProfileRefresh(forAccountIdHex: id)
             }
             return projection
@@ -400,6 +495,7 @@ final class ProfileStore {
                 queuedProfileProjectionLoadIDs.insert(contentsOf: ids, at: 0)
                 break
             }
+            var batchChanged = false
             for id in ids {
                 guard let version = versions[id],
                       profileProjectionLoadVersions[id] == version
@@ -408,7 +504,7 @@ final class ProfileStore {
                 scheduledProfileProjectionLoadIDs.remove(id)
                 let projection = projections[id]
                 if let projection {
-                    applyProfileProjection(projection, forAccountIdHex: id)
+                    batchChanged = storeProfileProjection(projection, forAccountIdHex: id) || batchChanged
                 }
 
                 let shouldRefresh = profileProjectionRefreshAfterLoadIDs.remove(id) != nil
@@ -419,6 +515,9 @@ final class ProfileStore {
                     forAccountIdHex: id,
                     matching: version
                 )
+            }
+            if batchChanged {
+                appState?.noteProfileRefreshCompleted()
             }
             Self.hydrationLog.debug(
                 "local_batch count=\(ids.count, privacy: .public) duration_ms=\(Self.elapsedMilliseconds(since: hydrationStartedAt), format: .fixed(precision: 0), privacy: .public)"
@@ -450,20 +549,14 @@ final class ProfileStore {
     private func loadProfileProjections(
         forAccountIdsHex ids: [String]
     ) async -> [String: ProfileDisplayProjection] {
-        guard let appState, let client = try? appState.currentMarmotClient() else { return [:] }
-        // host_profile_read is per profile, so only single reads are timed.
-        let timing = ids.count == 1 ? appState.productAnalytics.beginTiming() : nil
+        guard let appState else { return [:] }
         let requests = ids.map(profileProjectionRequest(forAccountIdHex:))
-        var projections = await client.profileProjections(for: requests)
+        var projections = await loadProjections(appState, requests)
         for id in ids {
             guard var projection = projections[id] else { continue }
             projection.localAccountLabel = localAccountLabel(forAccountIdHex: id)
             projections[id] = projection
         }
-        appState.productAnalytics.recordStage(
-            .profileRead, since: timing,
-            outcome: Task.isCancelled ? .cancelled : projections.isEmpty ? .unavailable : .success
-        )
         return projections
     }
 
@@ -475,10 +568,23 @@ final class ProfileStore {
         accounts.first(where: { $0.accountIdHex == id })?.label
     }
 
-    private func applyProfileProjection(_ projection: ProfileDisplayProjection, forAccountIdHex id: String) {
-        guard profileProjectionCache[id] != projection else { return }
+    @discardableResult
+    private func storeProfileProjection(_ projection: ProfileDisplayProjection, forAccountIdHex id: String) -> Bool {
+        staleProfileProjectionIDs.remove(id)
+        if projection.hasRemoteIdentity {
+            negativeRefreshCooldowns.removeValue(forKey: id)
+        }
+        guard profileProjectionCache[id] != projection else {
+            return false
+        }
         profileProjectionCache[id] = projection
-        appState?.noteProfileRefreshCompleted()
+        return true
+    }
+
+    private func applyProfileProjection(_ projection: ProfileDisplayProjection, forAccountIdHex id: String) {
+        if storeProfileProjection(projection, forAccountIdHex: id) {
+            appState?.noteProfileRefreshCompleted()
+        }
     }
 
     @discardableResult
@@ -529,9 +635,41 @@ final class ProfileStore {
 
     // MARK: - Relay refresh queue
 
+    func isInNegativeRefreshCooldown(forAccountIdHex id: String) -> Bool {
+        guard let state = negativeRefreshCooldowns[id] else { return false }
+        return now() < state.retryAfter
+    }
+
+    private func recordNegativeRefreshResult(forAccountIdHex id: String) {
+        let currentNow = now()
+        let nextAttempts = (negativeRefreshCooldowns[id]?.failedAttempts ?? 0) + 1
+        let cooldown = Self.negativeRefreshCooldown(forAttempt: nextAttempts)
+        negativeRefreshCooldowns[id] = NegativeRefreshState(
+            failedAttempts: nextAttempts,
+            retryAfter: currentNow.advanced(by: cooldown)
+        )
+        pruneNegativeRefreshCooldownsIfNeeded(now: currentNow)
+    }
+
+    private func pruneNegativeRefreshCooldownsIfNeeded(now currentNow: ContinuousClock.Instant) {
+        let cap = Self.maximumNegativeRefreshCooldownEntries
+        guard negativeRefreshCooldowns.count > cap else { return }
+        negativeRefreshCooldowns = negativeRefreshCooldowns.filter { $0.value.retryAfter > currentNow }
+        guard negativeRefreshCooldowns.count > cap else { return }
+        let overflow = negativeRefreshCooldowns.count - cap
+        let oldestKeys = negativeRefreshCooldowns
+            .sorted { $0.value.retryAfter < $1.value.retryAfter }
+            .prefix(overflow)
+            .map(\.key)
+        for key in oldestKeys {
+            negativeRefreshCooldowns.removeValue(forKey: key)
+        }
+    }
+
     private func scheduleProfileRefresh(forAccountIdHex id: String) {
         guard !id.isEmpty,
-              !scheduledProfileFetchIDs.contains(id)
+              !scheduledProfileFetchIDs.contains(id),
+              !isInNegativeRefreshCooldown(forAccountIdHex: id)
         else { return }
         scheduledProfileFetchIDs.insert(id)
         queuedProfileFetchIDs.append(id)
@@ -555,8 +693,12 @@ final class ProfileStore {
         guard canRefreshProfiles else { return }
         if profileProjectionCacheNeedsReloadOnResume {
             profileProjectionCacheNeedsReloadOnResume = false
-            for id in profileProjectionCache.keys.sorted() {
-                scheduleProfileProjectionLoad(forAccountIdHex: id, refreshAfterLoad: true)
+            // Mark cached entries stale lazily instead of eagerly re-enqueueing
+            // the whole session cache; bump the observation token once so
+            // currently visible views re-read and trigger on-demand hydration.
+            staleProfileProjectionIDs.formUnion(profileProjectionCache.keys)
+            if !staleProfileProjectionIDs.isEmpty {
+                appState?.noteProfileRefreshCompleted()
             }
         }
         startProfileProjectionLoadQueueIfNeeded()
@@ -570,9 +712,17 @@ final class ProfileStore {
 
         while !Task.isCancelled, canRefreshProfiles, let id = nextQueuedProfileFetchID() {
             activeProfileFetchID = id
-            await refreshProfile(forAccountIdHex: id)
+            let outcome = await refreshProfile(forAccountIdHex: id)
+            guard profileFetchQueueTaskID == taskID else { break }
             activeProfileFetchID = nil
             scheduledProfileFetchIDs.remove(id)
+            if outcome == .completed, !Task.isCancelled, canRefreshProfiles {
+                if profileProjectionCache[id]?.hasRemoteIdentity == true {
+                    negativeRefreshCooldowns.removeValue(forKey: id)
+                } else {
+                    recordNegativeRefreshResult(forAccountIdHex: id)
+                }
+            }
         }
     }
 
@@ -647,6 +797,7 @@ final class ProfileStore {
         profileProjectionLoadTaskID = nil
         projectionTask?.cancel()
         profileProjectionCacheNeedsReloadOnResume = false
+        staleProfileProjectionIDs.removeAll()
 
         queuedProfileFetchIDs.removeAll()
         scheduledProfileFetchIDs.removeAll()
@@ -691,32 +842,31 @@ final class ProfileStore {
     /// re-bump here, so the version map is safe to drop).
     func clearForSignOut() {
         profileProjectionCache.removeAll()
+        staleProfileProjectionIDs.removeAll()
+        negativeRefreshCooldowns.removeAll()
         profileProjectionLoadVersions.removeAll()
         profileProjectionCacheNeedsReloadOnResume = false
     }
 
-    private func refreshProfile(forAccountIdHex id: String) async {
-        guard !Task.isCancelled,
-              canRefreshProfiles,
+    private func refreshProfile(forAccountIdHex id: String) async -> RefreshAttemptOutcome {
+        guard !Task.isCancelled else { return .cancelled }
+        guard canRefreshProfiles,
               let appState
-        else { return }
+        else { return .skipped }
 
-        let bootstrapCandidates: [String]
-        if let activeAccountRef {
-            bootstrapCandidates = await appState.relayBootstrapRelays(for: activeAccountRef)
-        } else {
-            bootstrapCandidates = MarmotClient.seedRelays
-        }
-
-        guard let client = try? appState.currentMarmotClient() else { return }
-        let bootstrapClassifications = await client.classifyRelayEndpoints(bootstrapCandidates)
+        let bootstrapCandidates = await relayTransport.bootstrapRelays(appState, activeAccountRef)
+        guard !Task.isCancelled else { return .cancelled }
+        guard let bootstrapClassifications = await relayTransport.classifyRelayEndpoints(appState, bootstrapCandidates)
+        else { return .skipped }
         let bootstrapRelays = ProfileRelayDiscovery.allowedRelays(
             from: bootstrapClassifications
         )
 
-        let cachedLists = try? await client.userRelayLists(accountIdHex: id)
-        let cachedTargetCandidates = cachedLists?.nip65.relays ?? []
-        let cachedTargetClassifications = await client.classifyRelayEndpoints(cachedTargetCandidates)
+        let cachedTargetCandidates = (try? await relayTransport.cachedTargetRelays(appState, id)) ?? []
+        guard let cachedTargetClassifications = await relayTransport.classifyRelayEndpoints(
+            appState,
+            cachedTargetCandidates
+        ) else { return .skipped }
         let cachedTargetRelays = ProfileRelayDiscovery.allowedRelays(
             from: cachedTargetClassifications
         )
@@ -724,47 +874,73 @@ final class ProfileStore {
             targetRelays: cachedTargetRelays,
             bootstrapRelays: bootstrapRelays
         )
-        guard !initialRelays.isEmpty else { return }
+        guard !Task.isCancelled else { return .cancelled }
+        guard !initialRelays.isEmpty else { return .skipped }
 
         var initialProjection: ProfileDisplayProjection?
+        var anyRefreshSucceeded = false
         do {
-            try await client.refreshProfile(accountIdHex: id, relays: initialRelays)
-            guard !Task.isCancelled else { return }
+            try await relayTransport.refreshProfile(appState, id, initialRelays)
+            anyRefreshSucceeded = true
+            guard !Task.isCancelled else { return .cancelled }
             initialProjection = await reloadProfileProjection(forAccountIdHex: id)
         } catch is CancellationError {
-            return
+            return .cancelled
         } catch {
-            // A cached route can be stale. Continue into target relay-list
-            // discovery before giving up on the profile.
+            // A cached route can be stale or the device may be offline. Continue
+            // into target relay-list discovery without counting this error as a
+            // confirmed-empty kind:0 lookup.
         }
 
+        guard !Task.isCancelled else { return .cancelled }
+        if initialProjection?.hasRemoteIdentity == true {
+            return .completed
+        }
         guard ProfileRelayDiscovery.shouldRefreshTargetRelayLists(
             cachedTargetRelays: cachedTargetRelays,
-            hasRemoteIdentity: initialProjection?.hasRemoteIdentity == true
+            hasRemoteIdentity: false
         ),
-              !Task.isCancelled,
-              !bootstrapRelays.isEmpty,
-              let refreshedLists = try? await client.refreshUserRelayLists(
-                accountIdHex: id,
-                relays: bootstrapRelays
-              )
-        else { return }
+              !bootstrapRelays.isEmpty
+        else { return anyRefreshSucceeded ? .completed : .failed }
 
-        let refreshedClassifications = await client.classifyRelayEndpoints(
-            refreshedLists.nip65.relays
-        )
+        let refreshedTargetCandidates: [String]
+        do {
+            refreshedTargetCandidates = try await relayTransport.refreshTargetRelays(
+                appState,
+                id,
+                bootstrapRelays
+            )
+        } catch is CancellationError {
+            return .cancelled
+        } catch {
+            // Discovery did not complete while metadata is still absent; treat
+            // as transient rather than a confirmed-empty profile lookup.
+            return .failed
+        }
+
+        guard !Task.isCancelled else { return .cancelled }
+        guard let refreshedClassifications = await relayTransport.classifyRelayEndpoints(
+            appState,
+            refreshedTargetCandidates
+        ) else { return .skipped }
         let retryRelays = ProfileRelayDiscovery.profileRelays(
             targetRelays: ProfileRelayDiscovery.allowedRelays(from: refreshedClassifications),
             bootstrapRelays: bootstrapRelays
         )
-        guard !Task.isCancelled, retryRelays != initialRelays else { return }
+        guard !Task.isCancelled else { return .cancelled }
+        guard retryRelays != initialRelays else { return anyRefreshSucceeded ? .completed : .failed }
 
         do {
-            try await client.refreshProfile(accountIdHex: id, relays: retryRelays)
-            guard !Task.isCancelled else { return }
+            try await relayTransport.refreshProfile(appState, id, retryRelays)
+            guard !Task.isCancelled else { return .cancelled }
             await reloadProfileProjection(forAccountIdHex: id)
+            return .completed
+        } catch is CancellationError {
+            return .cancelled
         } catch {
-            return
+            // The newly discovered target route failed while metadata is still
+            // absent; treat as transient instead of entering negative backoff.
+            return .failed
         }
     }
 }

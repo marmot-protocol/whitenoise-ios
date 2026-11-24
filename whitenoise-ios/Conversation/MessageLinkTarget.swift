@@ -1,5 +1,17 @@
 import Foundation
 
+nonisolated struct MessageLinkCopyAccessibilityAction: Equatable, Hashable {
+    let title: String
+    let target: MessageLinkTarget
+
+    static func actions(in blocks: [MarkdownDisplayBlock]?) -> [MessageLinkCopyAccessibilityAction] {
+        let targets = MessageLinkTarget.targets(in: blocks)
+        guard !targets.isEmpty else { return [] }
+        let titles = MessageLinkTarget.accessibilityActionTitles(for: targets)
+        return zip(titles, targets).map { MessageLinkCopyAccessibilityAction(title: $0, target: $1) }
+    }
+}
+
 nonisolated struct MessageLinkTarget: Equatable, Hashable {
     private static let maxDisplayCharacters = 64
 

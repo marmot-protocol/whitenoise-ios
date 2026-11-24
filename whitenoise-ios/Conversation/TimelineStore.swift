@@ -187,6 +187,8 @@ final class TimelineStore {
     /// Position of a message id in `timeline`, oldest → newest. Backs the read
     /// watermark's monotonic guard, which has to be O(1) on every visible row.
     @ObservationIgnored private var timelineIndexByMessageId: [String: Int] = [:]
+    /// Monotonic canonical history order key per loaded durable message id.
+    @ObservationIgnored private var orderKeyByMessageId: [String: TimelineHistoryOrderKey] = [:]
     @ObservationIgnored private var messageStatusById: [String: MessageStatus] = [:]
     @ObservationIgnored private var durableRowProjectionRevisionById: [String: UInt64] = [:]
     @ObservationIgnored private var nextDurableRowProjectionRevision: UInt64 = 0
@@ -507,6 +509,15 @@ final class TimelineStore {
     func markdownDisplayBlocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
         _ = timelineProjectionGeneration
         return markdownProjections.blocks(for: item)
+    }
+
+    func messageLinkCopyActions(for item: TimelineItem) -> [MessageLinkCopyAccessibilityAction] {
+        _ = timelineProjectionGeneration
+        return markdownProjections.linkCopyActions(for: item)
+    }
+
+    func historyOrderKey(forMessageIdHex messageIdHex: String) -> TimelineHistoryOrderKey? {
+        orderKeyByMessageId[messageIdHex]
     }
 
     func record(for messageIdHex: String) -> AppMessageRecordFfi? {
@@ -1100,6 +1111,7 @@ final class TimelineStore {
         }
         let previousReplyTarget = updateTimeline ? messageById[appRecord.messageIdHex].flatMap(replyTargetId(for:)) : nil
         messageById[appRecord.messageIdHex] = appRecord
+        orderKeyByMessageId[appRecord.messageIdHex] = TimelineHistoryOrderKey(record)
         // `sourceMessageIdHex` is the durable delivery marker. A nil-source
         // projection means committed but unresolved, except while a successful
         // send result is waiting for its sourced upsert to catch up.
@@ -1185,6 +1197,7 @@ final class TimelineStore {
         let existed = messageById[messageIdHex] != nil
         let affectedEditTargets = editProjections.removeRecord(messageIdHex: messageIdHex)
         messageById[messageIdHex] = nil
+        orderKeyByMessageId[messageIdHex] = nil
         messageStatusById[messageIdHex] = nil
         durableRowProjectionRevisionById[messageIdHex] = nil
         undeliveredOwnMessageIds.remove(messageIdHex)

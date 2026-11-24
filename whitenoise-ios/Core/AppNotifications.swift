@@ -584,13 +584,15 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         accountRef: String,
         groupIdHex: String,
         readMessageIdHexes: Set<String>,
-        conversationStillHasUnread: Bool?
+        conversationStillHasUnread: Bool?,
+        shouldRemoveDeliveredNotifications: @MainActor () -> Bool = { true }
     ) async {
         guard !readMessageIdHexes.isEmpty else { return }
         let pending = foregroundBatches.cancel(account: accountRef, group: groupIdHex,
             readMessages: conversationStillHasUnread == false ? nil : readMessageIdHexes)
         removePendingNotificationRequests(withIdentifiers: pending)
         let descriptors = await deliveredNotificationDescriptors()
+        guard shouldRemoveDeliveredNotifications() else { return }
         let identifiers = DeliveredNotificationReadCleanupPolicy.identifiersToRemove(
             from: descriptors,
             accountRef: accountRef,

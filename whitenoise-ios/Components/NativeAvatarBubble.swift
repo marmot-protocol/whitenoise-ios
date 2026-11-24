@@ -62,36 +62,98 @@ struct NativeAvatarBubble: View {
                            revision: asset.contentRevision)
     }
 
+    struct LoadResult {
+        let reference: String
+        let revision: UInt64
+        let image: UIImage
+    }
+
+    static func resolveImage(
+        asset: AvatarAssetFfi,
+        account: String,
+        generation: Int,
+        maxPixelSize: Int,
+        cache: NativeAvatarImageCache? = nil,
+        requestAssets: (String, [String]) async throws -> [AvatarAssetFfi],
+        readAssets: (String, [String], UInt64) async throws -> [AvatarBytesFfi],
+        decodeImage: (Data, Int) async -> UIImage? = { data, maxPixelSize in
+            await RemoteImageDecoder.downsampledImage(from: data, maxPixelSize: maxPixelSize, scale: 1)
+        },
+        isCurrent: () -> Bool = { true }
+    ) async throws -> LoadResult? {
+        let cache = cache ?? .shared
+        if asset.availability == .ready,
+           let reference = asset.reference,
+           let image = cache.image(
+               account: account,
+               generation: generation,
+               reference: reference,
+               revision: asset.contentRevision,
+               maxPixelSize: maxPixelSize
+           ) {
+            return LoadResult(reference: reference, revision: asset.contentRevision, image: image)
+        }
+        // Register visible demand only. Acquisition completes through projection updates.
+        let assets = try await requestAssets(account, [asset.target])
+        try Task.checkCancellation()
+        guard isCurrent(),
+              let available = assets.first,
+              available.availability == .ready || available.availability == .stale,
+              let reference = available.reference
+        else { return nil }
+        if let image = cache.image(
+            account: account,
+            generation: generation,
+            reference: reference,
+            revision: available.contentRevision,
+            maxPixelSize: maxPixelSize
+        ) {
+            return LoadResult(reference: reference, revision: available.contentRevision, image: image)
+        }
+        let bytes = try await readAssets(account, [reference], 16 * 1024 * 1024)
+        try Task.checkCancellation()
+        guard let result = bytes.first, !result.deferred, !result.bytes.isEmpty else { return nil }
+        let image = await decodeImage(result.bytes, maxPixelSize)
+        try Task.checkCancellation()
+        guard isCurrent(), let image else { return nil }
+        cache.insert(
+            image,
+            account: account,
+            generation: generation,
+            reference: result.reference,
+            revision: result.contentRevision,
+            maxPixelSize: maxPixelSize
+        )
+        return LoadResult(reference: result.reference, revision: result.contentRevision, image: image)
+    }
+
     private func load(_ current: Request) async {
         if image(for: current) == nil { rendered = nil }
-        guard current.runtimeReady, !current.erasing, let asset = current.asset, let account = current.account,
-              let client = try? appState.currentMarmotClient() else { return }
+        guard current.runtimeReady, !current.erasing, let asset = current.asset, let account = current.account else {
+            return
+        }
         do {
-            // Register visible demand only. Acquisition completes through projection updates.
-            let assets = try await client.marmot.requestAvatarAssets(accountRef: account, targets: [asset.target])
-            try Task.checkCancellation()
-            guard request == current, !AvatarCacheErasure.isInProgress,
-                  let available = assets.first,
-                  available.availability == .ready || available.availability == .stale,
-                  let reference = available.reference else { return }
-            if let image = NativeAvatarImageCache.shared.image(account: account, generation: current.generation,
-                   reference: reference, revision: available.contentRevision, maxPixelSize: current.maxPixelSize) {
-                rendered = Rendered(request: current, reference: reference,
-                                    revision: available.contentRevision, image: image)
-                return
-            }
-            let bytes = try await client.marmot.readAvatarAssets(accountRef: account,
-                references: [reference], maxBytes: 16 * 1024 * 1024)
-            try Task.checkCancellation()
-            guard let result = bytes.first, !result.deferred, !result.bytes.isEmpty else { return }
-            let image = await RemoteImageDecoder.downsampledImage(from: result.bytes,
-                maxPixelSize: current.maxPixelSize, scale: 1)
-            try Task.checkCancellation()
-            guard request == current, !AvatarCacheErasure.isInProgress, let image else { return }
-            NativeAvatarImageCache.shared.insert(image, account: account, generation: current.generation,
-                reference: result.reference, revision: result.contentRevision, maxPixelSize: current.maxPixelSize)
-            rendered = Rendered(request: current, reference: result.reference,
-                                revision: result.contentRevision, image: image)
+            guard let resolved = try await Self.resolveImage(
+                asset: asset,
+                account: account,
+                generation: current.generation,
+                maxPixelSize: current.maxPixelSize,
+                requestAssets: { accountRef, targets in
+                    let client = try appState.currentMarmotClient()
+                    return try await client.marmot.requestAvatarAssets(accountRef: accountRef, targets: targets)
+                },
+                readAssets: { accountRef, references, maxBytes in
+                    let client = try appState.currentMarmotClient()
+                    return try await client.marmot.readAvatarAssets(accountRef: accountRef, references: references, maxBytes: maxBytes)
+                },
+                isCurrent: { request == current && !AvatarCacheErasure.isInProgress }
+            ) else { return }
+            rendered = Rendered(
+                request: current,
+                reference: resolved.reference,
+                revision: resolved.revision,
+                image: resolved.image
+            )
         } catch {
             // A current placeholder is preferable to a stale source or a second HTTP path.
         }

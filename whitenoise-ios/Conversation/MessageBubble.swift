@@ -536,15 +536,143 @@ struct MessageBubble: View {
         return MessagePreview.body(record, mentionDisplayName: mentionDisplayName)
     }
 
-    private var sanitizedBodyText: String {
-        ContentSanitizer.messageBody(bodyText)
+    nonisolated static let maxStandaloneEmojiPlaintextBytes = 128
+
+    private nonisolated static func whitespaceTrimmedUTF8(_ string: String) -> Substring.UTF8View {
+        var start = string.startIndex
+        var end = string.endIndex
+        while start < end, string[start].isWhitespace || string[start].isNewline {
+            string.formIndex(after: &start)
+        }
+        while end > start {
+            let prev = string.index(before: end)
+            if string[prev].isWhitespace || string[prev].isNewline {
+                end = prev
+            } else {
+                break
+            }
+        }
+        return string[start..<end].utf8
     }
 
-    private var hasVisibleBodyText: Bool {
-        if debugStyle != nil, debugStyle?.isUserVisibleBubble == false {
-            return true
+    nonisolated static func mayContainStandaloneEmoji(
+        plaintext: String,
+        hasMarkdownTokens: Bool = false
+    ) -> Bool {
+        let trimmed = whitespaceTrimmedUTF8(plaintext)
+        guard !trimmed.isEmpty else { return false }
+        if !hasMarkdownTokens, trimmed.count > maxStandaloneEmojiPlaintextBytes { return false }
+        if trimmed.contains(where: { $0 >= 0x80 }) { return true }
+        return hasMarkdownTokens && trimmed.contains(UInt8(ascii: "&"))
+    }
+
+    nonisolated static func mayContainStandaloneCustomEmoji(
+        plaintext: String,
+        hasResolvableCustomEmoji: Bool,
+        hasMarkdownTokens: Bool = false
+    ) -> Bool {
+        guard hasResolvableCustomEmoji else { return false }
+        let trimmed = whitespaceTrimmedUTF8(plaintext)
+        guard trimmed.count >= 3 else { return false }
+        if !hasMarkdownTokens, trimmed.count > maxStandaloneEmojiPlaintextBytes { return false }
+        return trimmed.contains(UInt8(ascii: ":"))
+    }
+
+    nonisolated struct BodyPresentation: Equatable {
+        let standaloneEmoji: String?
+        let standaloneCustomEmoji: CustomEmojiShortcode?
+        let hasVisibleBodyText: Bool
+        let widensTextForReactions: Bool
+        let precomputedSanitizedBody: String?
+
+        static func resolve(
+            plaintext: String,
+            hasMarkdownTokens: Bool = false,
+            isDeleted: Bool,
+            showsStandardBody: Bool,
+            hasDebugStyle: Bool,
+            hasAgentActivity: Bool,
+            hasReplyPreview: Bool,
+            hasMediaItems: Bool,
+            hasSticker: Bool,
+            isPoll: Bool,
+            hasRemoteGiphyMedia: Bool,
+            hasSharedLocation: Bool,
+            hasLinkPreviewURL: Bool,
+            showsReactionStrip: Bool,
+            offersSourceReader: Bool,
+            resolvableCustomEmoji: Set<CustomEmojiShortcode>,
+            searchQuery: String?,
+            sanitizedBody: () -> String
+        ) -> BodyPresentation {
+            var cachedSanitizedBody: String?
+            func resolveSanitizedBody() -> String {
+                if let cachedSanitizedBody { return cachedSanitizedBody }
+                let computed = sanitizedBody()
+                cachedSanitizedBody = computed
+                return computed
+            }
+
+            let eligibleForStandalone = !hasAgentActivity && !hasDebugStyle
+                && !isDeleted && !hasReplyPreview && !hasMediaItems
+                && !offersSourceReader
+
+            let standaloneEmoji: String? = if eligibleForStandalone,
+                                              MessageBubble.mayContainStandaloneEmoji(
+                                                  plaintext: plaintext,
+                                                  hasMarkdownTokens: hasMarkdownTokens
+                                              ) {
+                SingleEmojiMessagePresentation.emoji(in: resolveSanitizedBody())
+            } else {
+                nil
+            }
+
+            let standaloneCustomEmoji: CustomEmojiShortcode?
+            if standaloneEmoji == nil,
+               eligibleForStandalone,
+               MessageBubble.mayContainStandaloneCustomEmoji(
+                   plaintext: plaintext,
+                   hasResolvableCustomEmoji: !resolvableCustomEmoji.isEmpty,
+                   hasMarkdownTokens: hasMarkdownTokens
+               ) {
+                let body = resolveSanitizedBody()
+                if let shortcode = SingleCustomEmojiMessagePresentation.shortcode(
+                    in: body,
+                    resolvable: resolvableCustomEmoji
+                ), searchQuery.map({ !body.localizedStandardContains($0) }) ?? true {
+                    standaloneCustomEmoji = shortcode
+                } else {
+                    standaloneCustomEmoji = nil
+                }
+            } else {
+                standaloneCustomEmoji = nil
+            }
+
+            let hasVisibleBodyText: Bool
+            if hasDebugStyle && !showsStandardBody {
+                hasVisibleBodyText = true
+            } else if !hasMediaItems || plaintext.isEmpty {
+                hasVisibleBodyText = false
+            } else {
+                hasVisibleBodyText = !resolveSanitizedBody().trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+
+            let widensTextForReactions = showsReactionStrip && !hasSharedLocation && !hasLinkPreviewURL
+                && !hasSticker && !isPoll && !hasRemoteGiphyMedia
+                && !hasMediaItems && standaloneEmoji == nil && standaloneCustomEmoji == nil && !hasDebugStyle
+
+            return BodyPresentation(
+                standaloneEmoji: standaloneEmoji,
+                standaloneCustomEmoji: standaloneCustomEmoji,
+                hasVisibleBodyText: hasVisibleBodyText,
+                widensTextForReactions: widensTextForReactions,
+                precomputedSanitizedBody: cachedSanitizedBody
+            )
         }
-        return !sanitizedBodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var sanitizedBodyText: String {
+        ContentSanitizer.messageBody(bodyText)
     }
 
     private var sharedLocation: SharedLocation? {
@@ -570,28 +698,26 @@ struct MessageBubble: View {
     }
 
     var standaloneEmoji: String? {
-        guard agentActivity == nil, debugStyle == nil,
-              !isDeleted,
-              replyPreview == nil,
-              mediaItems.isEmpty
-        else { return nil }
-
-        guard let emoji = SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText), !offersSourceReader else { return nil }
-        return emoji
-    }
-
-    private var standaloneCustomEmoji: CustomEmojiShortcode? {
-        guard agentActivity == nil, debugStyle == nil,
-              !isDeleted,
-              replyPreview == nil,
-              mediaItems.isEmpty,
-              !customEmoji.isEmpty
-        else { return nil }
-
-        guard let shortcode = SingleCustomEmojiMessagePresentation.shortcode(in: sanitizedBodyText, resolvable: customEmoji.shortcodes),
-              !offersSourceReader else { return nil }
-        if let searchQuery, sanitizedBodyText.localizedStandardContains(searchQuery) { return nil }
-        return shortcode
+        BodyPresentation.resolve(
+            plaintext: record.plaintext,
+            hasMarkdownTokens: !record.contentTokens.blocks.isEmpty,
+            isDeleted: isDeleted,
+            showsStandardBody: showsStandardBody,
+            hasDebugStyle: debugStyle != nil,
+            hasAgentActivity: agentActivity != nil,
+            hasReplyPreview: replyPreview != nil,
+            hasMediaItems: !mediaItems.isEmpty,
+            hasSticker: record.sticker != nil,
+            isPoll: record.kind == MessageSemantics.kindPoll,
+            hasRemoteGiphyMedia: remoteGiphyMedia != nil,
+            hasSharedLocation: false,
+            hasLinkPreviewURL: false,
+            showsReactionStrip: false,
+            offersSourceReader: offersSourceReader,
+            resolvableCustomEmoji: [],
+            searchQuery: nil,
+            sanitizedBody: { sanitizedBodyText }
+        ).standaloneEmoji
     }
 
     /// White-on-gradient text is only appropriate for our own user-visible bubbles.
@@ -660,7 +786,30 @@ struct MessageBubble: View {
     }
 
     private var transcriptRow: some View {
-        HStack(alignment: .messageSurfaceBottom, spacing: 0) {
+        let giphyMedia = remoteGiphyMedia
+        let location = showsStandardBody ? sharedLocation : nil
+        let previewURL = showsStandardBody && location == nil ? linkPreviewURL : nil
+        let presentation = BodyPresentation.resolve(
+            plaintext: record.plaintext,
+            hasMarkdownTokens: !record.contentTokens.blocks.isEmpty,
+            isDeleted: isDeleted,
+            showsStandardBody: showsStandardBody,
+            hasDebugStyle: debugStyle != nil,
+            hasAgentActivity: agentActivity != nil,
+            hasReplyPreview: replyPreview != nil,
+            hasMediaItems: !mediaItems.isEmpty,
+            hasSticker: record.sticker != nil,
+            isPoll: record.kind == MessageSemantics.kindPoll,
+            hasRemoteGiphyMedia: giphyMedia != nil,
+            hasSharedLocation: location != nil,
+            hasLinkPreviewURL: previewURL != nil,
+            showsReactionStrip: showsReactionStrip,
+            offersSourceReader: offersSourceReader,
+            resolvableCustomEmoji: customEmoji.shortcodes,
+            searchQuery: searchQuery,
+            sanitizedBody: { sanitizedBodyText }
+        )
+        return HStack(alignment: .messageSurfaceBottom, spacing: 0) {
             if isFromMe { Spacer(minLength: oppositeInset) }
 
             if showsSenderIdentity, !isFromMe, clusterPresentation.reservesIdentityLane {
@@ -688,8 +837,13 @@ struct MessageBubble: View {
                     }
                 }
 
-                MessageBubbleChromeLayout(isFromMe: isFromMe, spacing: 0, widensTextForReactions: widensTextForReactions) {
-                    messageSurface
+                MessageBubbleChromeLayout(isFromMe: isFromMe, spacing: 0, widensTextForReactions: presentation.widensTextForReactions) {
+                    messageSurface(
+                        presentation: presentation,
+                        remoteGiphyMedia: giphyMedia,
+                        sharedLocation: location,
+                        linkPreviewURL: previewURL
+                    )
                         .alignmentGuide(.messageSurfaceBottom) { $0[.bottom] }
                         .modifier(MessageActionHold(isEnabled: showMessageActions != nil) {
                             showMessageActions?(.bubble)
@@ -748,11 +902,21 @@ struct MessageBubble: View {
     }
 
     @ViewBuilder
-    private var messageSurface: some View {
+    private func messageSurface(
+        presentation: BodyPresentation,
+        remoteGiphyMedia: RemoteGiphyMedia?,
+        sharedLocation: SharedLocation?,
+        linkPreviewURL: URL?
+    ) -> some View {
         if isDeleted {
             deletedBubble
         } else if let sticker = record.sticker, showsStandardBody {
-            stickerMessageContent(StickerKey(sticker))
+            stickerMessageContent(
+                StickerKey(sticker),
+                presentation: presentation,
+                sharedLocation: sharedLocation,
+                linkPreviewURL: linkPreviewURL
+            )
         } else if record.kind == MessageSemantics.kindPoll, showsStandardBody {
             let rich = poll != nil || replyPreview != nil
             VStack(alignment: .leading, spacing: MessageBubbleReplyLayout.cardOuterInset) {
@@ -798,8 +962,8 @@ struct MessageBubble: View {
         } else if let remoteGiphyMedia, showsStandardBody {
             remoteGiphyMessageContent(remoteGiphyMedia)
         } else if !mediaItems.isEmpty, showsStandardBody {
-            mediaMessageContent
-        } else if let standaloneEmoji {
+            mediaMessageContent(presentation: presentation)
+        } else if let standaloneEmoji = presentation.standaloneEmoji {
             if status == .failed {
                 standaloneEmojiContent(standaloneEmoji)
                     .contentShape(.rect)
@@ -808,39 +972,66 @@ struct MessageBubble: View {
                 standaloneEmojiContent(standaloneEmoji)
                     .opacity(status == .sending ? 0.7 : 1)
             }
-        } else if let standaloneCustomEmoji {
+        } else if let standaloneCustomEmoji = presentation.standaloneCustomEmoji {
             if status == .failed {
-                standaloneCustomEmojiContent(standaloneCustomEmoji)
+                standaloneCustomEmojiContent(
+                    standaloneCustomEmoji,
+                    presentation: presentation,
+                    sharedLocation: sharedLocation,
+                    linkPreviewURL: linkPreviewURL
+                )
                     .contentShape(.rect)
                     .onTapGesture { onFailedTap?() }
             } else {
-                standaloneCustomEmojiContent(standaloneCustomEmoji)
+                standaloneCustomEmojiContent(
+                    standaloneCustomEmoji,
+                    presentation: presentation,
+                    sharedLocation: sharedLocation,
+                    linkPreviewURL: linkPreviewURL
+                )
                     .opacity(status == .sending ? 0.7 : 1)
             }
         } else {
             // The tap gesture exists only on failed rows — a recognizer on
             // every bubble steals touches from timeline scrolling.
             if status == .failed {
-                textBubble
+                textBubble(
+                    presentation: presentation,
+                    sharedLocation: sharedLocation,
+                    linkPreviewURL: linkPreviewURL
+                )
                     .contentShape(.rect)
                     .onTapGesture { onFailedTap?() }
             } else {
-                textBubble
+                textBubble(
+                    presentation: presentation,
+                    sharedLocation: sharedLocation,
+                    linkPreviewURL: linkPreviewURL
+                )
                     .opacity(status == .sending ? 0.7 : 1)
             }
         }
     }
 
     @ViewBuilder
-    private func stickerMessageContent(_ sticker: StickerKey) -> some View {
+    private func stickerMessageContent(
+        _ sticker: StickerKey,
+        presentation: BodyPresentation,
+        sharedLocation: SharedLocation?,
+        linkPreviewURL: URL?
+    ) -> some View {
         let standsAlone = StickerBubbleLayout.standsAlone(plaintext: record.plaintext, hasReply: replyPreview != nil,
                                                           hasMedia: !mediaItems.isEmpty)
         VStack(alignment: isFromMe ? .trailing : .leading, spacing: 4) {
             if !standsAlone {
                 if mediaItems.isEmpty {
-                    textBubble
+                    textBubble(
+                        presentation: presentation,
+                        sharedLocation: sharedLocation,
+                        linkPreviewURL: linkPreviewURL
+                    )
                 } else {
-                    mediaMessageContent
+                    mediaMessageContent(presentation: presentation)
                 }
             }
             StickerMessageContent(sticker: sticker, isFromMe: isFromMe)
@@ -860,13 +1051,22 @@ struct MessageBubble: View {
     /// The ordinary bubble, with its own inline emoji or the literal
     /// shortcode, shows until the large image loads, and stays if it never
     /// does (auto-download off, a failed read).
-    private func standaloneCustomEmojiContent(_ shortcode: CustomEmojiShortcode) -> some View {
+    private func standaloneCustomEmojiContent(
+        _ shortcode: CustomEmojiShortcode,
+        presentation: BodyPresentation,
+        sharedLocation: SharedLocation?,
+        linkPreviewURL: URL?
+    ) -> some View {
         StandaloneCustomEmoji(
             shortcode: shortcode,
             side: SingleCustomEmojiMessagePresentation.side,
             isPixelArt: customEmoji.usesBuiltinArtwork(for: shortcode)
         ) {
-            textBubble
+            textBubble(
+                presentation: presentation,
+                sharedLocation: sharedLocation,
+                linkPreviewURL: linkPreviewURL
+            )
         }
         .modifier(CustomEmojiInlineLoader(resolution: customEmoji, fixedPointSize: SingleCustomEmojiMessagePresentation.side))
     }
@@ -939,11 +1139,13 @@ struct MessageBubble: View {
             .accessibilityAction { onReplyPreviewTap() }
     }
 
-    private var textBubble: some View {
-        let location = showsStandardBody ? sharedLocation : nil
-        let previewURL = showsStandardBody && location == nil ? linkPreviewURL : nil
+    private func textBubble(
+        presentation: BodyPresentation,
+        sharedLocation location: SharedLocation?,
+        linkPreviewURL previewURL: URL?
+    ) -> some View {
         let fitsQuote = replyPreview != nil && showsStandardBody && location == nil && previewURL == nil
-        return MessageTextBubbleLayout(fitsQuote: fitsQuote, widensForReactions: widensTextForReactions) {
+        return MessageTextBubbleLayout(fitsQuote: fitsQuote, widensForReactions: presentation.widensTextForReactions) {
             VStack(alignment: .leading, spacing: 0) {
                 if let debugStyle {
                     debugHeader(debugStyle)
@@ -967,7 +1169,10 @@ struct MessageBubble: View {
                             }
                             .id(previewURL)
                         }
-                        messageBodyText(hasReply: replyPreview != nil)
+                        messageBodyText(
+                            hasReply: replyPreview != nil,
+                            precomputedSanitizedBody: presentation.precomputedSanitizedBody
+                        )
                     }
                     if let debugStyle, debugStyle.isUserVisibleBubble {
                         debugTagsFooter(debugStyle)
@@ -1067,23 +1272,27 @@ struct MessageBubble: View {
         .padding(.bottom, MessageBubbleReplyLayout.bodyBottomInset)
     }
 
-    private var isStandaloneUnsupportedAttachment: Bool {
+    private func isStandaloneUnsupportedAttachment(hasVisibleBodyText: Bool) -> Bool {
         mediaItems.count == 1 && mediaItems.first?.rejectionKind == .unsupportedFormat
             && replyPreview == nil && !hasVisibleBodyText
     }
 
-    private var mediaMessageContent: some View {
-        let compact = isStandaloneUnsupportedAttachment
+    private func mediaMessageContent(presentation: BodyPresentation) -> some View {
+        let compact = isStandaloneUnsupportedAttachment(hasVisibleBodyText: presentation.hasVisibleBodyText)
         let contentWidth = compact ? nil : MessageVisualMediaBubblePresentation.contentWidth(for: mediaItems, maxWidth: mediaGridWidth)
         return VStack(alignment: .leading, spacing: 6) {
             if let replyPreview {
                 replyCard(replyPreview)
             }
 
-            mediaAttachments
+            mediaAttachments(isStandaloneUnsupportedAttachment: compact)
 
-            if hasVisibleBodyText {
-                messageBodyText(hasReply: false, richWidth: contentWidth)
+            if presentation.hasVisibleBodyText {
+                messageBodyText(
+                    hasReply: false,
+                    richWidth: contentWidth,
+                    precomputedSanitizedBody: presentation.precomputedSanitizedBody
+                )
             }
         }
         .frame(width: contentWidth, alignment: .leading)
@@ -1094,9 +1303,9 @@ struct MessageBubble: View {
         .opacity(status == .sending ? 0.7 : 1)
     }
 
-    private var mediaAttachments: some View {
+    private func mediaAttachments(isStandaloneUnsupportedAttachment: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            attachmentContent
+            attachmentContent(isStandaloneUnsupportedAttachment: isStandaloneUnsupportedAttachment)
             switch voiceTranscript {
             case .transcribing:
                 HStack(spacing: 6) {
@@ -1123,7 +1332,7 @@ struct MessageBubble: View {
         }
     }
 
-    private var attachmentContent: some View {
+    private func attachmentContent(isStandaloneUnsupportedAttachment: Bool) -> some View {
         MessageMediaAttachmentContent(
             messageID: record.messageIdHex, items: mediaItems,
             isFromMe: isFromMe,
@@ -1209,14 +1418,19 @@ struct MessageBubble: View {
             && (incompleteMarkdown || TranscriptMessagePreview.requiresReader(record.plaintext))
     }
 
-    private func messageBodyText(hasReply: Bool, richWidth: CGFloat? = nil) -> some View {
+    private func messageBodyText(
+        hasReply: Bool,
+        richWidth: CGFloat? = nil,
+        precomputedSanitizedBody: String? = nil
+    ) -> some View {
+        let fallbackBody = markdownBlocks == nil ? (precomputedSanitizedBody ?? sanitizedBodyText) : nil
         let snippet = MessageBodyCollapsePresentation.snippet(
-            markdownBlocks?.flatMap { $0.textFields(for: .excerpt) }.joined(separator: "\n") ?? sanitizedBodyText,
+            markdownBlocks?.flatMap { $0.textFields(for: .excerpt) }.joined(separator: "\n") ?? fallbackBody ?? "",
             isExpanded: isBodyExpanded || searchQuery != nil
         )
         let fadesReviewExcerpt = usesReviewLayout && snippet != nil
         return VStack(alignment: .leading, spacing: 5) {
-            messageBodyContent(snippet: snippet)
+            messageBodyContent(snippet: snippet, fallbackBody: fallbackBody)
                 // The body mask also needs room for mention corners outside the text bounds.
                 .padding(.horizontal, TimelineTextRenderer.mentionHorizontalOutset)
                 .frame(
@@ -1301,17 +1515,17 @@ struct MessageBubble: View {
     }
 
     @ViewBuilder
-    private func messageBodyContent(snippet: String?) -> some View {
+    private func messageBodyContent(snippet: String?, fallbackBody: String? = nil) -> some View {
         if customEmoji.isEmpty {
-            messageBodyTextContent(snippet: snippet)
+            messageBodyTextContent(snippet: snippet, fallbackBody: fallbackBody)
         } else {
-            messageBodyTextContent(snippet: snippet)
+            messageBodyTextContent(snippet: snippet, fallbackBody: fallbackBody)
                 .modifier(CustomEmojiInlineLoader(resolution: customEmoji))
         }
     }
 
     @ViewBuilder
-    private func messageBodyTextContent(snippet: String?) -> some View {
+    private func messageBodyTextContent(snippet: String?, fallbackBody: String? = nil) -> some View {
         if let blocks = markdownBlocks {
             let quoteColor = isFromMe ? MessageBubblePalette.sentForeground.opacity(0.8) : Color.accentColor
             let visible = snippet.map {
@@ -1344,7 +1558,7 @@ struct MessageBubble: View {
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
             // sends, pre-markdown history) keep the plain path.
-            let text = AttributedString(snippet.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) + "…" } ?? sanitizedBodyText)
+            let text = AttributedString(snippet.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) + "…" } ?? fallbackBody ?? sanitizedBodyText)
             if actionBodySize != nil {
                 liftedInlineText(text)
             } else {
@@ -1391,12 +1605,6 @@ struct MessageBubble: View {
 
     private var showsReactionStrip: Bool {
         !isDeleted && (!reactions.isEmpty || omittedReactionKinds > 0)
-    }
-
-    private var widensTextForReactions: Bool {
-        showsReactionStrip && sharedLocation == nil && linkPreviewURL == nil
-            && record.sticker == nil && record.kind != MessageSemantics.kindPoll && remoteGiphyMedia == nil
-            && mediaItems.isEmpty && standaloneEmoji == nil && standaloneCustomEmoji == nil && debugStyle == nil
     }
 
     private var showsMetadataFooter: Bool {

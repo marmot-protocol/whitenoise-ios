@@ -11,16 +11,31 @@ import MarmotKit
 /// message mirror.
 @MainActor
 final class ConversationMarkdownProjectionCache {
+    private struct LinkCopyActionsCacheEntry {
+        let languageKey: String
+        let actions: [MessageLinkCopyAccessibilityAction]
+    }
+
     private var projectionsByRowId: [String: MessageMarkdownDisplayProjection] = [:]
     private var projectionKeysByRowId: [String: ProjectionKey] = [:]
     private var timestampGenerationsByRowId: [String: Int] = [:]
+    private var linkCopyActionsByRowId: [String: LinkCopyActionsCacheEntry] = [:]
     /// `MarkdownTimestampRenderClock.generation` the cache renders under.
     private(set) var timestampGeneration = 0
 
     private let builders: ConversationProjectionBuilders
+    private let linkCopyActionsBuilder: ([MarkdownDisplayBlock]?) -> [MessageLinkCopyAccessibilityAction]
 
-    init(builders: ConversationProjectionBuilders = .live) {
+    init(
+        builders: ConversationProjectionBuilders = .live,
+        linkCopyActionsBuilder: @escaping ([MarkdownDisplayBlock]?) -> [MessageLinkCopyAccessibilityAction] = MessageLinkCopyAccessibilityAction.actions(in:)
+    ) {
         self.builders = builders
+        self.linkCopyActionsBuilder = linkCopyActionsBuilder
+    }
+
+    nonisolated static var currentLinkCopyLanguageKey: String {
+        "\(AppLanguage.current.rawValue)|\(AppLanguage.currentLocale.identifier)"
     }
 
     private struct ProjectionKey: Equatable {
@@ -53,6 +68,19 @@ final class ConversationMarkdownProjectionCache {
 
     func blocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
         projectionsByRowId[item.id]?.blocks
+    }
+
+    func linkCopyActions(
+        for item: TimelineItem,
+        languageKey: String = ConversationMarkdownProjectionCache.currentLinkCopyLanguageKey
+    ) -> [MessageLinkCopyAccessibilityAction] {
+        guard let blocks = projectionsByRowId[item.id]?.blocks else { return [] }
+        if let cached = linkCopyActionsByRowId[item.id], cached.languageKey == languageKey {
+            return cached.actions
+        }
+        let actions = linkCopyActionsBuilder(blocks)
+        linkCopyActionsByRowId[item.id] = LinkCopyActionsCacheEntry(languageKey: languageKey, actions: actions)
+        return actions
     }
 
     func isTruncated(for item: TimelineItem) -> Bool {
@@ -88,6 +116,9 @@ final class ConversationMarkdownProjectionCache {
         projectionsByRowId[item.id] = next
         projectionKeysByRowId[item.id] = key
         timestampGenerationsByRowId[item.id] = timestampGeneration
+        if changed {
+            linkCopyActionsByRowId[item.id] = nil
+        }
         return changed
     }
 
@@ -96,6 +127,7 @@ final class ConversationMarkdownProjectionCache {
         let projectionRemoved = projectionsByRowId.removeValue(forKey: rowId) != nil
         projectionKeysByRowId.removeValue(forKey: rowId)
         timestampGenerationsByRowId.removeValue(forKey: rowId)
+        linkCopyActionsByRowId.removeValue(forKey: rowId)
         return projectionRemoved
     }
 
