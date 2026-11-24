@@ -313,9 +313,11 @@ nonisolated enum MessageBodyCollapsePresentation {
     static let maxCollapsedLines = 12
     static let collapsedBodyMaxHeight: CGFloat = 260
     /// Read more's laid-out height and how far its hit area reaches past it,
-    /// so the target stays at least 44 points tall at every text size.
-    static let readMoreMinHeight: CGFloat = 28
-    static let readMoreHitOutset: CGFloat = 8
+    /// so the target stays at least 44 points tall at every text size. The
+    /// outset fits the 5-point gap above the label and the compact bubble's
+    /// bottom padding, so it never covers the body or gets clipped.
+    static let readMoreMinHeight: CGFloat = 34
+    static let readMoreHitOutset: CGFloat = 5
 
     /// A CR/LF pair is one Swift Character and starts a single new line.
     static func snippet(_ body: @autoclosure () -> String, isExpanded: Bool = false) -> String? {
