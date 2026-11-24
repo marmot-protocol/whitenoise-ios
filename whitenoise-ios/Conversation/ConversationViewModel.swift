@@ -862,6 +862,7 @@ final class ConversationViewModel {
     }
 
     func windowAvatarURL(for accountId: String) -> URL? {
+        guard !hasPendingInvite else { return nil }
         guard conversationWindow != nil else { return appState?.avatarURL(forAccountIdHex: accountId) }
         if case .remoteImage(let url, _) = windowIdentities[accountId]?.avatar { return ContentSanitizer.imageURL(url) }
         return nil

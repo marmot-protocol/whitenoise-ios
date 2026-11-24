@@ -116,6 +116,7 @@ struct ConversationInviteActionTests {
         )
 
         #expect(viewModel.hasPendingInvite)
+        #expect(viewModel.windowAvatarURL(for: memberHex) == nil)
         #expect(
             GroupMemberDetailsPresentation.avatarURL(
                 for: member,
@@ -126,6 +127,7 @@ struct ConversationInviteActionTests {
 
         _ = await viewModel.acceptInvite()
         #expect(!viewModel.hasPendingInvite)
+        #expect(viewModel.windowAvatarURL(for: memberHex) == URL(string: memberAvatarURL))
         #expect(
             GroupMemberDetailsPresentation.avatarURL(
                 for: member,

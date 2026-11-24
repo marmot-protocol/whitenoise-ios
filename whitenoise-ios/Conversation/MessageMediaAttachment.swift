@@ -817,7 +817,7 @@ nonisolated enum MediaDraftProcessor {
                     mediaType: attachment.mediaType
                 )
                 thumbnail = videoMetadata.thumbnail
-                restoredDim = videoMetadata.dim ?? attachment.dim
+                restoredDim = attachment.dim ?? videoMetadata.dim
             case .audio, .document, .unsupported:
                 thumbnail = nil
                 restoredDim = attachment.dim
@@ -1911,7 +1911,7 @@ nonisolated enum MediaVideoMetadataStripper {
         var finishedTracks: [Bool]
         var outcome: SampleCopyOutcome?
         var continuation: CheckedContinuation<SampleCopyOutcome, Never>?
-        var cancelBeforeContinuation = false
+        var cancelRequested = false
     }
 
     static func copyRemainingSamples(
@@ -1923,105 +1923,110 @@ nonisolated enum MediaVideoMetadataStripper {
         }
     ) async -> SampleCopyOutcome {
         guard !pairs.isEmpty else { return Task.isCancelled ? .cancelled : .completed }
+        let queue = DispatchQueue(
+            label: "dev.ipf.whitenoise.video-strip.copy",
+            qos: .userInitiated
+        )
+        // Every AVAssetReader / AVAssetWriter call and state transition runs
+        // strictly serialized on `queue`, honoring AVAssetWriter's threading
+        // contract across multi-track appends, finish, and cancellation.
         let state = Mutex(SampleCopyState(
             remaining: pairs.count,
             finishedTracks: Array(repeating: false, count: pairs.count)
         ))
 
-        @Sendable func abort(outcome: SampleCopyOutcome) {
+        @Sendable func finishOnQueue(_ finalOutcome: SampleCopyOutcome) {
             let continuation: CheckedContinuation<SampleCopyOutcome, Never>? = state.withLock { current in
                 guard current.outcome == nil else { return nil }
-                current.outcome = outcome
+                current.outcome = finalOutcome
                 let cont = current.continuation
                 current.continuation = nil
                 return cont
             }
-            reader.cancelReading()
-            writer.cancelWriting()
-            continuation?.resume(returning: outcome)
-        }
-
-        @Sendable func finishTrack(_ index: Int, input: AVAssetWriterInput) {
-            enum Action { case ignore, markOnly, complete(CheckedContinuation<SampleCopyOutcome, Never>?) }
-            let action: Action = state.withLock { current in
-                guard current.outcome == nil, !current.finishedTracks[index] else { return .ignore }
-                current.finishedTracks[index] = true
-                current.remaining -= 1
-                if current.remaining == 0 {
-                    current.outcome = .completed
-                    let cont = current.continuation
-                    current.continuation = nil
-                    return .complete(cont)
-                }
-                return .markOnly
+            guard continuation != nil || finalOutcome != .completed else { return }
+            if finalOutcome != .completed {
+                reader.cancelReading()
+                writer.cancelWriting()
             }
-            switch action {
-            case .ignore:
-                return
-            case .markOnly:
-                if writer.status == .writing {
-                    input.markAsFinished()
-                }
-            case .complete(let continuation):
-                if writer.status == .writing {
-                    input.markAsFinished()
-                }
-                continuation?.resume(returning: .completed)
-            }
+            continuation?.resume(returning: finalOutcome)
         }
 
         return await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<SampleCopyOutcome, Never>) in
-                let earlyOutcome: SampleCopyOutcome? = state.withLock { current in
-                    if let existing = current.outcome {
-                        return existing
+                queue.async {
+                    let earlyOutcome: SampleCopyOutcome? = state.withLock { current in
+                        if let existing = current.outcome {
+                            return existing
+                        }
+                        if current.cancelRequested || Task.isCancelled {
+                            current.outcome = .cancelled
+                            return .cancelled
+                        }
+                        current.continuation = continuation
+                        return nil
                     }
-                    if current.cancelBeforeContinuation || Task.isCancelled {
-                        current.outcome = .cancelled
-                        return .cancelled
+                    if let earlyOutcome {
+                        if earlyOutcome != .completed {
+                            reader.cancelReading()
+                            writer.cancelWriting()
+                        }
+                        continuation.resume(returning: earlyOutcome)
+                        return
                     }
-                    current.continuation = continuation
-                    return nil
-                }
-                if let earlyOutcome {
-                    reader.cancelReading()
-                    writer.cancelWriting()
-                    continuation.resume(returning: earlyOutcome)
-                    return
-                }
 
-                for (index, pair) in pairs.enumerated() {
-                    let queue = DispatchQueue(
-                        label: "dev.ipf.whitenoise.video-strip.\(index)",
-                        qos: .userInitiated
-                    )
-                    let output = pair.output
-                    let input = pair.input
-                    input.requestMediaDataWhenReady(on: queue) {
-                        while input.isReadyForMoreMediaData {
-                            if state.withLock({ $0.outcome != nil }) {
-                                return
-                            }
-                            if writer.status != .writing {
-                                abort(outcome: .failed)
-                                return
-                            }
-                            if let sample = output.copyNextSampleBuffer() {
-                                if !appendSample(index, input, sample) {
-                                    abort(outcome: .failed)
+                    for (index, pair) in pairs.enumerated() {
+                        let output = pair.output
+                        let input = pair.input
+                        input.requestMediaDataWhenReady(on: queue) {
+                            while input.isReadyForMoreMediaData {
+                                let status = state.withLock { (outcome: $0.outcome, cancelled: $0.cancelRequested) }
+                                if status.outcome != nil { return }
+                                if status.cancelled || Task.isCancelled {
+                                    finishOnQueue(.cancelled)
                                     return
                                 }
-                            } else {
-                                finishTrack(index, input: input)
-                                return
+                                if writer.status != .writing {
+                                    finishOnQueue(.failed)
+                                    return
+                                }
+                                if let sample = output.copyNextSampleBuffer() {
+                                    if !appendSample(index, input, sample) {
+                                        finishOnQueue(.failed)
+                                        return
+                                    }
+                                    if state.withLock({ $0.cancelRequested }) || Task.isCancelled {
+                                        finishOnQueue(.cancelled)
+                                        return
+                                    }
+                                } else {
+                                    let shouldComplete: Bool = state.withLock { current in
+                                        guard current.outcome == nil, !current.cancelRequested, !current.finishedTracks[index] else { return false }
+                                        current.finishedTracks[index] = true
+                                        if writer.status == .writing {
+                                            input.markAsFinished()
+                                        }
+                                        current.remaining -= 1
+                                        return current.remaining == 0
+                                    }
+                                    if state.withLock({ $0.cancelRequested }) {
+                                        finishOnQueue(.cancelled)
+                                        return
+                                    }
+                                    if shouldComplete {
+                                        finishOnQueue(.completed)
+                                    }
+                                    return
+                                }
                             }
                         }
                     }
                 }
             }
         } onCancel: {
-            state.withLock { $0.cancelBeforeContinuation = true }
-            abort(outcome: .cancelled)
+            state.withLock { $0.cancelRequested = true }
+            queue.async {
+                finishOnQueue(.cancelled)
+            }
         }
     }
 

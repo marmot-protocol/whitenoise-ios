@@ -2710,7 +2710,7 @@ struct ConversationView: View {
             projectedReactionTotal: viewModel.windowReactions[record.messageIdHex]?.totalCount,
             identityName: viewModel.windowDisplayName,
             identityAvatar: viewModel.windowAvatarURL,
-            identityAvatarAsset: { viewModel.windowIdentities[$0]?.avatarAsset },
+            identityAvatarAsset: { viewModel.hasPendingInvite ? nil : viewModel.windowIdentities[$0]?.avatarAsset },
             onTapReaction: viewModel.canSendMessages && !isSelectingMessages && !viewModel.search.isActive && !record.messageIdHex.isEmpty ? { tally in
                 Task { await handleReactionTap(tally, on: record, viewModel: viewModel) }
             } : nil,
