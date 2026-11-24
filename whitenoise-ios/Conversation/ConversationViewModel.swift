@@ -1909,7 +1909,11 @@ final class ConversationViewModel {
         } else { windowAnchorMessageId = nil }
         timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: snapshot.messages.map(\.timeline),
             hasMoreBefore: snapshot.hasMoreBefore, hasMoreAfter: snapshot.hasMoreAfter))
-        readMarker.seedFlushedWatermark(messageIdHex: snapshot.readState.lastReadMessageIdHex)
+        readMarker.seedFlushedWatermark(
+            messageIdHex: snapshot.readState.lastReadMessageIdHex,
+            timelineAt: snapshot.readState.lastReadTimelineAt,
+            hasMoreAfter: snapshot.hasMoreAfter
+        )
         if !changedNames.isEmpty {
             let affected = Set(snapshot.messages.compactMap { message -> String? in
                 let references = message.references

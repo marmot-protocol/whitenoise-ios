@@ -126,40 +126,32 @@ struct AppStateProfileQueueTests {
         }
     }
 
-    @Test func profileProjectionCacheEnforcesBoundedLRUEviction() async throws {
+    @Test func failedRelayRefreshDoesNotTriggerNegativeRefreshCooldown() async throws {
         try await withTestClient { client in
             let appState = AppState.test(client: client)
-            let idA = hex("81")
-            let idB = hex("82")
-            let idC = hex("83")
-            let idD = hex("84")
+            let peer = hex("81")
+            var refreshCalls = 0
             let store = ProfileStore(
-                maxCachedProjections: 3,
                 loadProjections: { requests in
                     Dictionary(uniqueKeysWithValues: requests.map { req in
-                        (
-                            req.accountIdHex,
-                            ProfileDisplayProjection(profile: nil, projectedName: "User \(req.accountIdHex.prefix(2))", localAccountLabel: nil)
-                        )
+                        (req.accountIdHex, ProfileDisplayProjection(profile: nil, projectedName: nil, localAccountLabel: nil))
                     })
+                },
+                performRelayRefresh: { _ in
+                    refreshCalls += 1
+                    return .failed
                 }
             )
             store.appState = appState
 
-            _ = await store.reloadProfileProjection(forAccountIdHex: idA)
-            _ = await store.reloadProfileProjection(forAccountIdHex: idB)
-            _ = await store.reloadProfileProjection(forAccountIdHex: idC)
-            #expect(store.profileProjectionCache.count == 3)
+            #expect(store.knownDisplayName(forAccountIdHex: peer) == nil)
+            try await eventually { refreshCalls == 1 && store.profileFetchQueueTask == nil }
+            #expect(!store.isInNegativeRefreshCooldown(forAccountIdHex: peer))
+            #expect(store.negativeRefreshCooldowns[peer] == nil)
 
-            // Reading idA refreshes its recency, making idB the least recently used entry.
-            #expect(store.cachedKnownDisplayName(forAccountIdHex: idA) == "User 81")
-
-            _ = await store.reloadProfileProjection(forAccountIdHex: idD)
-            #expect(store.profileProjectionCache.count == 3)
-            #expect(store.profileProjectionCache[idB] == nil)
-            #expect(store.profileProjectionCache[idA] != nil)
-            #expect(store.profileProjectionCache[idC] != nil)
-            #expect(store.profileProjectionCache[idD] != nil)
+            // A subsequent read after a transient relay failure can retry immediately.
+            #expect(store.knownDisplayName(forAccountIdHex: peer) == nil)
+            try await eventually { refreshCalls == 2 && store.profileFetchQueueTask == nil }
         }
     }
 

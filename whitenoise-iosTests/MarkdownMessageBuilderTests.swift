@@ -68,6 +68,25 @@ struct MarkdownMessageBuilderTests {
         #expect(MessageBubble(record: row, status: .received, incompleteMarkdown: projection.isTruncated).standaloneEmoji == nil)
     }
 
+    @Test func longMarkdownLinkFlatteningToSingleEmojiStillRendersAsStandaloneEmoji() {
+        let destination = "https://example.org/" + String(repeating: "x", count: 160)
+        let source = "[👍](\(destination))"
+        let document = doc([
+            para([
+                .link(
+                    dest: destination,
+                    title: nil,
+                    children: [.text(content: "👍")],
+                    classification: .web
+                ),
+            ]),
+        ])
+        let row = record(plaintext: source, tokens: document)
+        #expect(source.utf8.count > MessageBubble.maxStandaloneEmojiPlaintextBytes)
+        #expect(MessageBubble.mayContainStandaloneEmoji(plaintext: source, hasMarkdownTokens: true))
+        #expect(MessageBubble(record: row, status: .received).standaloneEmoji == "👍")
+    }
+
     @Test func bodyPresentationShortCircuitsPlaintextAndSanitizesAtMostOnce() {
         #expect(!MessageBubble.mayContainStandaloneEmoji(plaintext: "Hello world"))
         #expect(!MessageBubble.mayContainStandaloneEmoji(plaintext: ""))

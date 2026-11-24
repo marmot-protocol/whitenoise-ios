@@ -538,19 +538,25 @@ struct MessageBubble: View {
 
     nonisolated static let maxStandaloneEmojiPlaintextBytes = 128
 
-    nonisolated static func mayContainStandaloneEmoji(plaintext: String) -> Bool {
+    nonisolated static func mayContainStandaloneEmoji(
+        plaintext: String,
+        hasMarkdownTokens: Bool = false
+    ) -> Bool {
         let utf8 = plaintext.utf8
-        guard !utf8.isEmpty, utf8.count <= maxStandaloneEmojiPlaintextBytes else { return false }
+        guard !utf8.isEmpty else { return false }
+        if !hasMarkdownTokens, utf8.count > maxStandaloneEmojiPlaintextBytes { return false }
         return utf8.contains { $0 >= 0x80 }
     }
 
     nonisolated static func mayContainStandaloneCustomEmoji(
         plaintext: String,
-        hasResolvableCustomEmoji: Bool
+        hasResolvableCustomEmoji: Bool,
+        hasMarkdownTokens: Bool = false
     ) -> Bool {
         guard hasResolvableCustomEmoji else { return false }
         let utf8 = plaintext.utf8
-        guard utf8.count >= 3, utf8.count <= maxStandaloneEmojiPlaintextBytes else { return false }
+        guard utf8.count >= 3 else { return false }
+        if !hasMarkdownTokens, utf8.count > maxStandaloneEmojiPlaintextBytes { return false }
         return utf8.contains(UInt8(ascii: ":"))
     }
 
@@ -563,6 +569,7 @@ struct MessageBubble: View {
 
         static func resolve(
             plaintext: String,
+            hasMarkdownTokens: Bool = false,
             isDeleted: Bool,
             showsStandardBody: Bool,
             hasDebugStyle: Bool,
@@ -594,7 +601,10 @@ struct MessageBubble: View {
                 && !offersSourceReader
 
             let standaloneEmoji: String? = if eligibleForStandalone,
-                                              MessageBubble.mayContainStandaloneEmoji(plaintext: plaintext) {
+                                              MessageBubble.mayContainStandaloneEmoji(
+                                                  plaintext: plaintext,
+                                                  hasMarkdownTokens: hasMarkdownTokens
+                                              ) {
                 SingleEmojiMessagePresentation.emoji(in: resolveSanitizedBody())
             } else {
                 nil
@@ -605,7 +615,8 @@ struct MessageBubble: View {
                eligibleForStandalone,
                MessageBubble.mayContainStandaloneCustomEmoji(
                    plaintext: plaintext,
-                   hasResolvableCustomEmoji: !resolvableCustomEmoji.isEmpty
+                   hasResolvableCustomEmoji: !resolvableCustomEmoji.isEmpty,
+                   hasMarkdownTokens: hasMarkdownTokens
                ) {
                 let body = resolveSanitizedBody()
                 if let shortcode = SingleCustomEmojiMessagePresentation.shortcode(
@@ -670,15 +681,26 @@ struct MessageBubble: View {
     }
 
     var standaloneEmoji: String? {
-        guard agentActivity == nil, debugStyle == nil,
-              !isDeleted,
-              replyPreview == nil,
-              mediaItems.isEmpty,
-              !offersSourceReader,
-              Self.mayContainStandaloneEmoji(plaintext: record.plaintext)
-        else { return nil }
-
-        return SingleEmojiMessagePresentation.emoji(in: sanitizedBodyText)
+        BodyPresentation.resolve(
+            plaintext: record.plaintext,
+            hasMarkdownTokens: !record.contentTokens.blocks.isEmpty,
+            isDeleted: isDeleted,
+            showsStandardBody: showsStandardBody,
+            hasDebugStyle: debugStyle != nil,
+            hasAgentActivity: agentActivity != nil,
+            hasReplyPreview: replyPreview != nil,
+            hasMediaItems: !mediaItems.isEmpty,
+            hasSticker: record.sticker != nil,
+            isPoll: record.kind == MessageSemantics.kindPoll,
+            hasRemoteGiphyMedia: remoteGiphyMedia != nil,
+            hasSharedLocation: false,
+            hasLinkPreviewURL: false,
+            showsReactionStrip: false,
+            offersSourceReader: offersSourceReader,
+            resolvableCustomEmoji: [],
+            searchQuery: nil,
+            sanitizedBody: { sanitizedBodyText }
+        ).standaloneEmoji
     }
 
     /// White-on-gradient text is only appropriate for our own user-visible bubbles.
@@ -752,6 +774,7 @@ struct MessageBubble: View {
         let previewURL = showsStandardBody && location == nil ? linkPreviewURL : nil
         let presentation = BodyPresentation.resolve(
             plaintext: record.plaintext,
+            hasMarkdownTokens: !record.contentTokens.blocks.isEmpty,
             isDeleted: isDeleted,
             showsStandardBody: showsStandardBody,
             hasDebugStyle: debugStyle != nil,

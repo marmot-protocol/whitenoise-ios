@@ -132,19 +132,6 @@ struct NativeAvatarBubble: View {
         guard current.runtimeReady, !current.erasing, let asset = current.asset, let account = current.account else {
             return
         }
-        if asset.availability == .ready,
-           let reference = asset.reference,
-           let cached = NativeAvatarImageCache.shared.image(
-               account: account,
-               generation: current.generation,
-               reference: reference,
-               revision: asset.contentRevision,
-               maxPixelSize: current.maxPixelSize
-           ) {
-            rendered = Rendered(request: current, reference: reference, revision: asset.contentRevision, image: cached)
-            return
-        }
-        guard let client = try? appState.currentMarmotClient() else { return }
         do {
             guard let resolved = try await Self.resolveImage(
                 asset: asset,
@@ -152,10 +139,12 @@ struct NativeAvatarBubble: View {
                 generation: current.generation,
                 maxPixelSize: current.maxPixelSize,
                 requestAssets: { accountRef, targets in
-                    try await client.marmot.requestAvatarAssets(accountRef: accountRef, targets: targets)
+                    let client = try appState.currentMarmotClient()
+                    return try await client.marmot.requestAvatarAssets(accountRef: accountRef, targets: targets)
                 },
                 readAssets: { accountRef, references, maxBytes in
-                    try await client.marmot.readAvatarAssets(accountRef: accountRef, references: references, maxBytes: maxBytes)
+                    let client = try appState.currentMarmotClient()
+                    return try await client.marmot.readAvatarAssets(accountRef: accountRef, references: references, maxBytes: maxBytes)
                 },
                 isCurrent: { request == current && !AvatarCacheErasure.isInProgress }
             ) else { return }

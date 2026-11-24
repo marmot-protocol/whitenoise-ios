@@ -6,18 +6,18 @@ nonisolated struct TimelineReadMarkResult {
     let messageIdHex: String
     let row: ChatListRowFfi?
     let succeeded: Bool
-    let failureDescription: String?
+    let failureCategory: String?
 
     init(
         messageIdHex: String,
         row: ChatListRowFfi?,
         succeeded: Bool,
-        failureDescription: String? = nil
+        failureCategory: String? = nil
     ) {
         self.messageIdHex = messageIdHex
         self.row = row
         self.succeeded = succeeded
-        self.failureDescription = failureDescription
+        self.failureCategory = failureCategory
     }
 }
 
@@ -478,23 +478,38 @@ nonisolated final class MarmotClient: Sendable {
                     )
                     return TimelineReadMarkResult(messageIdHex: messageIdHex, row: row, succeeded: true)
                 } catch {
+                    let category = Self.readMarkFailureCategory(for: error)
                     Self.readMarkLog.error(
                         """
                         markTimelineMessageRead rejected \
-                        group=\(groupIdHex, privacy: .public) \
-                        message=\(messageIdHex, privacy: .public) \
-                        error=\(String(describing: error), privacy: .public)
+                        group=\(groupIdHex, privacy: .private(mask: .hash)) \
+                        message=\(messageIdHex, privacy: .private(mask: .hash)) \
+                        category=\(category, privacy: .public)
                         """
                     )
                     return TimelineReadMarkResult(
                         messageIdHex: messageIdHex,
                         row: nil,
                         succeeded: false,
-                        failureDescription: UserFacingError.sanitizedDiagnostic(for: error)
+                        failureCategory: category
                     )
                 }
             }
         }.value
+    }
+
+    static func readMarkFailureCategory(for error: Error) -> String {
+        if error is CancellationError { return "cancelled" }
+        if error is ForegroundRuntimeMutationError { return "runtime_unavailable" }
+        if let marmotError = error as? MarmotKitError {
+            switch marmotError {
+            case .StorageClosed: return "storage_closed"
+            case .RuntimeBusy: return "runtime_busy"
+            case .Io: return "io"
+            default: return "marmot_error"
+            }
+        }
+        return "other"
     }
 
     /// Sets or clears a manual unread reminder without blocking MainActor on

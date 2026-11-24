@@ -316,6 +316,15 @@ struct ChatListViewportTests {
         #expect(!viewport.isLaidOut("row-1"))
         scroll.layoutIfNeeded()
         #expect(viewport.isLaidOut("row-2"))
+
+        // After `viewport.reset()`, an unchanged anchor must re-register rather
+        // than early-returning while absent from the viewport map.
+        viewport.reset()
+        #expect(!viewport.isLaidOut("row-2"))
+        #expect(anchorView.updateAnchor(groupId: "row-2", sequence: 2, viewport: viewport))
+        #expect(anchorView.layer.needsLayout())
+        scroll.layoutIfNeeded()
+        #expect(viewport.isLaidOut("row-2"))
     }
 
     @Test func lazyPruningReclaimsDeallocatedRowsAndIgnoresReassignedKeys() throws {

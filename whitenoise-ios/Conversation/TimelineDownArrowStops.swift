@@ -29,6 +29,9 @@ nonisolated struct TimelineHistoryOrderKey: Comparable {
                   kind: record.kind, timelineAt: record.timelineAt, messageIdHex: record.messageIdHex)
     }
 
+    var isUnresolvedOptimistic: Bool { rank == 2 }
+    var timelineAt: UInt64 { intraEpochAt }
+
     static func < (lhs: Self, rhs: Self) -> Bool {
         (lhs.rank, lhs.primary, lhs.phase, lhs.intraEpochAt, lhs.messageIdHex)
             < (rhs.rank, rhs.primary, rhs.phase, rhs.intraEpochAt, rhs.messageIdHex)

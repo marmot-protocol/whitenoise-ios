@@ -93,6 +93,10 @@ final class ChatListViewport {
         }
     }
 
+    func isRegistered(_ view: ChatListAnchorView) -> Bool {
+        !view.groupId.isEmpty && rows[view.groupId]?.view === view
+    }
+
     private func pruneDeadRows() {
         rows = rows.filter { $0.value.view?.groupId == $0.key }
         pruneThreshold = max(Self.initialPruneThreshold, rows.count * 2)
@@ -119,7 +123,7 @@ final class ChatListViewport {
         let top = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
         let bottom = scrollView.contentOffset.y + scrollView.bounds.height - scrollView.adjustedContentInset.bottom
         return rows.compactMap { id, row in
-            guard let view = row.view, view.groupId == id, view.window != nil else { return nil }
+            guard let view = row.view, view.window != nil else { return nil }
             let rect = view.convert(view.bounds, to: scrollView)
             guard rect.maxY > top, rect.minY < bottom else { return nil }
             return (id, rect.minY - top, rect.height)
@@ -338,7 +342,11 @@ final class ChatListAnchorView: UIView {
 
     @discardableResult
     func updateAnchor(groupId: String, sequence: UInt64, viewport: ChatListViewport) -> Bool {
-        guard self.groupId != groupId || self.sequence != sequence || self.viewport !== viewport else {
+        guard self.groupId != groupId
+            || self.sequence != sequence
+            || self.viewport !== viewport
+            || !viewport.isRegistered(self)
+        else {
             return false
         }
         if !self.groupId.isEmpty, self.groupId != groupId || self.viewport !== viewport {
