@@ -458,8 +458,38 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(bridge.isAttached(to: runtime))
     }
 
+    @Test func supersededSyncDoesNotMarkAttachedWhenSupersedingPolicyChangeFailsAfterRevocation() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        let hold = runtime.hold(.read)
+
+        // Start initial post-start sync and pause during its policy read.
+        let initialSync = try await start(bridge, runtime)
+        try await hold.entered.wait()
+
+        // A network/preference change supersedes the initial sync, revokes
+        // permissions, and then fails during its own policy read.
+        runtime.failingRead = [Self.alice.accountIdHex]
+        bridge.policyDidChange()
+        try await eventually { runtime.begun.count == 2 }
+
+        hold.release.signal()
+        try await initialSync.value
+        try await eventually { runtime.reads.count == 2 }
+
+        // The superseded initial sync must NOT have marked `runtime` reconciled,
+        // so the next foreground activation retries reconciliation.
+        #expect(!bridge.isAttached(to: runtime))
+        #expect(runtime.grants.isEmpty)
+
+        runtime.failingRead = []
+        try await bridge.synchronize(runtime)
+        #expect(bridge.isAttached(to: runtime))
+        #expect(runtime.grants.count == 1)
+    }
+
     @Test(.marmotRuntimeConcurrencyLimit)
-    func canSynchronizeAttachmentPolicyStaysFalseUntilRuntimeStartupCompletes() async throws {
+    func isCurrentClientStartedStaysFalseUntilRuntimeStartupCompletes() async throws {
         try await withTestClient { initialClient in
             let startEntered = TestLatch()
             let startRelease = TestLatch()
@@ -473,7 +503,7 @@ struct AttachmentPolicyBridgeWiringTests {
             )
             appState.setAppSceneActive(true)
             #expect(appState.canUseLiveRuntime)
-            #expect(!appState.canSynchronizeAttachmentPolicy)
+            #expect(!appState.isCurrentClientStarted)
 
             let bootstrapTask = Task { @MainActor in
                 await appState.bootstrap()
@@ -484,14 +514,15 @@ struct AttachmentPolicyBridgeWiringTests {
             // is still running `beforeStart` / `marmot.start()`. The root policy
             // sync task must stay gated until `runtimeStarter` finishes.
             #expect(appState.canUseLiveRuntime)
-            #expect(!appState.canSynchronizeAttachmentPolicy)
+            #expect(!appState.isCurrentClientStarted)
 
             startRelease.signal()
             await bootstrapTask.value
-            #expect(appState.canSynchronizeAttachmentPolicy)
+            #expect(appState.canUseLiveRuntime && appState.isCurrentClientStarted)
 
             await appState.startRuntimeSuspension().value
-            #expect(!appState.canSynchronizeAttachmentPolicy)
+            #expect(!appState.canUseLiveRuntime)
+            #expect(!appState.isCurrentClientStarted)
         }
     }
 
@@ -525,12 +556,14 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
     struct Grant { let account: String; let generation: String; let permission: AttachmentAutomaticPermissionFfi }
     struct Unreadable: Error {}
     struct RevocationFailed: Error {}
+    struct ReadFailed: Error {}
 
     let cursorPersistence: CursorPersistenceFfi
     private let accounts: [AccountSummaryFfi]
     private let checkpoints: [String: Checkpoint]
     private let signedOutDuringRevocation: Set<String>
     var failingRevocation: Set<String>
+    var failingRead: Set<String> = []
     private let rejectedGrants: Set<String>
     private var stored: [String: AttachmentDownloadPolicyFfi]
     private var holds: [Step: Hold] = [:]
@@ -607,6 +640,7 @@ private final class FakeAttachmentRuntime: AttachmentPolicyRuntime {
 
     func attachmentDownloadPolicy(accountRef: String) async throws -> AttachmentDownloadPolicyFfi {
         reads.append(accountRef)
+        if failingRead.contains(accountRef) { throw ReadFailed() }
         let policy = try #require(stored[accountRef])
         try await pass(.read)
         return policy

@@ -116,7 +116,7 @@ struct BlockedUsersView: View {
     }
 
     private var subscriptionKey: String {
-        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(reload)"
+        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseLiveRuntimeWork)/\(reload)"
     }
 }
 

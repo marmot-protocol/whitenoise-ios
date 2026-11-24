@@ -106,15 +106,15 @@ final class AttachmentPolicyBridge {
         currentClient = client
         clientAcceptsPolicyChanges = !beforeStart
         try await schedule(client, beforeStart: beforeStart, updatedLimits: updatedLimits).value
-        if !beforeStart, currentClient === client {
-            reconciledClient = client
-        }
     }
 
     private func schedule(_ client: any AttachmentPolicyRuntime, beforeStart: Bool,
                           updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)?) -> Task<Void, Error> {
         revision &+= 1
         let event = revision
+        if !beforeStart, reconciledClient === client {
+            reconciledClient = nil
+        }
         let previous = revocationTail
         let revocation = Task { @MainActor in
             _ = try? await previous?.value
@@ -176,6 +176,9 @@ final class AttachmentPolicyBridge {
                 permissions().didApplyAttachmentPermission()
             }
             try Self.finishEvent(limitsEdited: limitsEdited, appliedLimits: appliedLimits)
+            if !beforeStart, !Task.isCancelled, revision == event, currentClient === client {
+                self.reconciledClient = client
+            }
         }
         policyTail = application
         return application

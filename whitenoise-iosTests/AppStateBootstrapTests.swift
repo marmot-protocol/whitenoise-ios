@@ -1875,11 +1875,16 @@ struct AppStateBootstrapTests {
         appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
 
         // 3. Background again while the abort drain is still parked: the reused
-        //    suspension task must loop and close storage rather than exiting
-        //    with SQLCipher still open.
+        //    suspension task must interrupt the abort drain and close storage
+        //    BEFORE the parked relay catch-up finishes (preventing 0xdead10cc).
         let suspension2 = appState.startRuntimeSuspension()
-        await checkpoint.release()
+        try await eventually {
+            marmot.storageIsClosed()
+        }
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
 
+        await checkpoint.release()
         await suspension1.value
         await suspension2.value
 
@@ -1887,6 +1892,95 @@ struct AppStateBootstrapTests {
         #expect(appState.client == nil)
         #expect(appState.runtimeSuspendedForBackground)
         resetPersistedActiveAccountRef()
+    }
+
+    @Test func backgroundToActiveToInactiveDuringDrainKeepsLiveRuntime() async throws {
+        let catchUp = NotificationCatchUpStub()
+        let sleeperEntered = TestLatch()
+        let sleeperExited = TestLatch()
+        let checkpoint = AsyncTestCheckpoint()
+        let appState = try testAppState(
+            catchUp: catchUp,
+            mutationDrainSleeper: { _ in
+                defer { sleeperExited.signal() }
+                sleeperEntered.signal()
+                try await parkUntilCancelled()
+            }
+        )
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        appState.setAppSceneActive(true)
+        let initialClient = try #require(appState.client)
+        let initialGeneration = appState.runtimeGeneration
+
+        // Park connectivity catch-up so the abort drain suspends.
+        catchUp.onCatchUp = {
+            await checkpoint.pause()
+        }
+        appState.scheduleConnectivityCatchUp()
+        await checkpoint.waitUntilPaused()
+        catchUp.onCatchUp = nil
+
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+        let suspension = appState.startRuntimeSuspension()
+        try await sleeperEntered.wait()
+
+        // Return to active (aborts suspension) and immediately lose active focus
+        // to a transient `.inactive` overlay such as Face ID App Lock while the
+        // abort drain is still parked.
+        _ = appState.startForegroundActivation()
+        try await sleeperExited.wait()
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+        appState.setAppSceneActive(false)
+
+        await checkpoint.release()
+        await suspension.value
+
+        // Transient `.inactive` must NOT revive the abandoned suspension.
+        #expect(!initialClient.marmot.storageIsClosed())
+        #expect(appState.client === initialClient)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.runtimeGeneration == initialGeneration)
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func abortedSuspensionRestartsNotificationSubscriptionOnForegroundReturn() async throws {
+        let sleeperEntered = TestLatch()
+        let sleeperExited = TestLatch()
+        let appState = try testAppState(
+            mutationDrainSleeper: { _ in
+                defer { sleeperExited.signal() }
+                sleeperEntered.signal()
+                try await parkUntilCancelled()
+            }
+        )
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        appState.setAppSceneActive(true)
+        let initialClient = try #require(appState.client)
+        let initialGeneration = appState.runtimeGeneration
+        try await eventually { appState.notificationSubscriptionActive }
+
+        // Start a background suspension (which cancels the notification
+        // subscription synchronously), then return to active before storage closes.
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+        let suspension = appState.startRuntimeSuspension()
+        try await sleeperEntered.wait()
+        #expect(!appState.notificationSubscriptionActive)
+
+        let activation = appState.startForegroundActivation()
+        try await sleeperExited.wait()
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+        await suspension.value
+        await activation.value
+
+        // Non-restart foreground resume keeps the same runtime and restores
+        // the notification subscription that the aborted suspension stopped.
+        #expect(appState.client === initialClient)
+        #expect(appState.runtimeGeneration == initialGeneration)
+        #expect(!appState.runtimeSuspendedForBackground)
+        try await eventually { appState.notificationSubscriptionActive }
+        await stopReadyRuntime(appState)
     }
 
     @Test func transientInactiveToActiveKeepsLiveRuntimeAndRestoresPushRegistration() async throws {

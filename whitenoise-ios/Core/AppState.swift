@@ -53,21 +53,6 @@ nonisolated enum ForegroundRuntimeWorkGate {
         !runtimeSuspendedForBackground
             && !isRuntimeSuspending
     }
-
-    /// True only once the live runtime has completed startup so post-start
-    /// attachment policy grants cannot race `beforeStart` / `marmot.start()`.
-    static func canSynchronizeAttachmentPolicy(
-        runtimeSuspendedForBackground: Bool,
-        isRuntimeSuspending: Bool,
-        hasRuntimeClient: Bool,
-        isCurrentClientStarted: Bool
-    ) -> Bool {
-        canUseLiveRuntime(
-            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
-            isRuntimeSuspending: isRuntimeSuspending,
-            hasRuntimeClient: hasRuntimeClient
-        ) && isCurrentClientStarted
-    }
 }
 
 struct ForegroundMaintenanceTasks {
@@ -685,7 +670,7 @@ final class AppState {
     var canUseRuntimeForForegroundWork: Bool { runtimeLifecycle.canUseRuntimeForForegroundWork }
     var canUseLiveRuntime: Bool { runtimeLifecycle.canUseLiveRuntime }
     var canUseLiveRuntimeWork: Bool { runtimeLifecycle.canUseLiveRuntimeWork }
-    var canSynchronizeAttachmentPolicy: Bool { runtimeLifecycle.canSynchronizeAttachmentPolicy }
+    var isCurrentClientStarted: Bool { runtimeLifecycle.isCurrentClientStarted }
 
     private static let developerModeKey = "marmot.developerMode"
     private static let streamingDebugModeKey = "marmot.streamingDebugMode"
