@@ -1,7 +1,6 @@
 import Foundation
 import UserNotifications
 
-@MainActor
 final class NotificationService: UNNotificationServiceExtension {
     /// Shared across the extension process so consecutive pushes serialize
     /// runtime teardown even if iOS constructs a fresh extension instance.
