@@ -190,20 +190,6 @@ struct MediaAttachmentPolicyTests {
         }
     }
 
-    @Test func largeAudioDraftSkipsWaveformAnalysis() throws {
-        let data = Data(count: MessageMediaAttachment.audioAnalysisByteLimit + 1)
-        let draft = try MediaDraftProcessor.attachment(
-            from: data,
-            fileName: "long-recording.m4a",
-            typeIdentifier: UTType.mpeg4Audio.identifier
-        )
-
-        #expect(draft.kind == .audio)
-        #expect(draft.data.count == data.count)
-        #expect(draft.durationSeconds == nil)
-        #expect(draft.waveformSamples.isEmpty)
-    }
-
     @Test func imageDraftGeneratesDimAndThumbhashForUpload() throws {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1

@@ -137,6 +137,7 @@ final class ConversationMediaDownloader {
 
     private let inFlight = MediaDownloadInFlightStore<Data>()
     private let inFlightFetches = MediaDownloadInFlightStore<Void>()
+    private let inFlightPlaybackFiles = MediaDownloadInFlightStore<URL>()
     private let attachmentSizes = MediaDownloadInFlightStore<Int?>()
     private let cache: ConversationMediaCacheAccessing
     private let downloadMedia: DownloadMedia
@@ -186,9 +187,11 @@ final class ConversationMediaDownloader {
         handoffControls.values.forEach { $0.cancel() }
         async let sizes: Void = attachmentSizes.cancelAndDrain()
         async let fetches: Void = inFlightFetches.cancelAndDrain()
+        async let playbackFiles: Void = inFlightPlaybackFiles.cancelAndDrain()
         await inFlight.cancelAndDrain()
         await sizes
         await fetches
+        await playbackFiles
     }
 
     func resume() { isStopped = false }
@@ -361,6 +364,107 @@ final class ConversationMediaDownloader {
             } catch AttachmentReadError.storageBlocked {
                 loadOutcome = .unavailable
                 // Automatic loads stay quiet; a tap explains why its Retry needs free space.
+                if media.demand.isUserInitiated {
+                    appState?.present(.warning(
+                        L10n.string("Not enough storage"),
+                        message: L10n.string("Free up space on this device, then tap the attachment to try again.")
+                    ))
+                }
+                throw AttachmentReadError.storageBlocked
+            }
+        }
+    }
+
+    /// Streams a retained attachment directly into its `.complete`-protected
+    /// playback cache file so video playback requires only one copy on disk.
+    func playbackFileURL(
+        for media: MessageMediaAttachment,
+        groupIdHex: String,
+        appState: AppState?
+    ) async throws -> URL {
+        guard !isStopped else { throw CancellationError() }
+        if let localData = media.localData {
+            let producerEpoch = cache.producerGeneration
+            guard let url = await MediaPlaybackFileStore.fileURL(
+                for: media,
+                data: localData,
+                producerEpoch: producerEpoch
+            ) else { throw AttachmentReadError.unavailable }
+            return url
+        }
+        guard let reference = media.reference else { throw MediaDataError.missingReference }
+        guard EncryptedMediaLocatorValidation.isStaticallySafe(reference.locators) else {
+            throw MediaDataError.unsafeLocator
+        }
+        let key = MediaDownloadInFlightKey(
+            reference: reference,
+            target: media.localTarget,
+            demand: media.demand,
+            sourceHint: media.sourceHint,
+            scope: "\(appState?.activeAccountRef ?? "")/\(appState?.runtimeGeneration ?? 0)/\(groupIdHex)"
+        )
+        return try await inFlightPlaybackFiles.value(for: key) {
+            let recorder = appState?.productAnalytics
+            let loadTiming = recorder?.beginTiming()
+            let cacheTicket = recorder?.ticket()
+            var loadOutcome = HostPerformanceOutcomeFfi.failure
+            defer { recorder?.recordStage(.mediaLoad, since: loadTiming, outcome: loadOutcome) }
+            do {
+                var target = media.localTarget
+                if target == nil, let hint = media.sourceHint,
+                   let appState, let account = appState.activeAccountRef {
+                    let client = try appState.currentMarmotClient()
+                    target = try await client.resolveAttachmentTarget(
+                        accountRef: account,
+                        groupID: groupIdHex,
+                        hint: hint
+                    )
+                }
+                if let target {
+                    guard let appState, let account = appState.activeAccountRef else {
+                        throw MediaDataError.missingAccount
+                    }
+                    let client = try appState.currentMarmotClient()
+                    let producerEpoch = self.cache.producerGeneration
+                    if let url = try await client.acquireAttachmentPlaybackFile(
+                        accountRef: account,
+                        groupID: groupIdHex,
+                        target: target,
+                        demand: media.demand,
+                        reference: reference,
+                        producerGeneration: producerEpoch,
+                        onLocalHit: { [recorder, cacheTicket] milliseconds in
+                            recorder?.recordPerformance(.mediaCacheRead, milliseconds: milliseconds, ticket: cacheTicket)
+                        }
+                    ) {
+                        try Task.checkCancellation()
+                        guard !self.isStopped,
+                              appState.activeAccountRef == account,
+                              appState.client === client,
+                              self.cache.producerGeneration == producerEpoch
+                        else { throw CancellationError() }
+                        loadOutcome = .success
+                        return url
+                    }
+                }
+                let producerEpoch = self.cache.producerGeneration
+                let data = try await self.data(for: media, groupIdHex: groupIdHex, appState: appState)
+                try Task.checkCancellation()
+                guard let url = await MediaPlaybackFileStore.fileURL(
+                    for: media,
+                    data: data,
+                    producerEpoch: producerEpoch
+                ) else { throw AttachmentReadError.unavailable }
+                loadOutcome = .success
+                return url
+            } catch is CancellationError {
+                loadOutcome = .cancelled
+                throw CancellationError()
+            } catch AttachmentReadError.unavailable {
+                loadOutcome = .unavailable
+                throw AttachmentReadError.unavailable
+            } catch AttachmentReadError.storageBlocked {
+                loadOutcome = .unavailable
                 if media.demand.isUserInitiated {
                     appState?.present(.warning(
                         L10n.string("Not enough storage"),

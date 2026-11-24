@@ -287,18 +287,34 @@ struct MediaAcquisitionIntentTests {
             .appendingPathComponent("RetainedMappedReads-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let payload = Data((0..<(5 * 1024 * 1024 + 17)).map { UInt8($0 & 0xff) })
+        let size = 16 * 1024 * 1024
+        let chunkPattern = Data(repeating: 0x05, count: 1024 * 1024)
         let offsets = Mutex<[UInt64]>([])
+        let sawPathnameDuringStream = Mutex(false)
+        let before = try #require(MediaFileUploadTests.physicalFootprint())
         let read = try await RetainedAttachmentReader.read(
-            byteCount: UInt64(payload.count),
+            byteCount: UInt64(size),
             mappedDirectory: directory
         ) { offset, limit in
             offsets.withLock { $0.append(offset) }
-            let start = Int(offset)
-            let end = min(payload.count, start + Int(limit))
-            return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+            // The backing file must already be unlinked before any plaintext flows.
+            if let entries = try? FileManager.default.contentsOfDirectory(atPath: directory.path),
+               !entries.isEmpty {
+                sawPathnameDuringStream.withLock { $0 = true }
+            }
+            let remaining = size - Int(offset)
+            let count = min(remaining, Int(limit))
+            return AttachmentLocalBytesFfi(
+                available: true,
+                bytes: count > 0 ? chunkPattern.prefix(count) : Data()
+            )
         }
-        #expect(read == payload)
+        #expect(!sawPathnameDuringStream.withLock { $0 })
+        #expect(read.count == size)
+        let sum = read.withUnsafeBytes { $0.reduce(into: 0) { $0 &+= Int($1) } }
+        let after = try #require(MediaFileUploadTests.physicalFootprint())
+        #expect(sum == size * 5)
+        #expect(Int64(after) - Int64(before) < Int64(size / 2))
         #expect(offsets.withLock { $0.first } == 0)
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
 
@@ -321,6 +337,83 @@ struct MediaAcquisitionIntentTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
     }
 
+    @Test func streamingPlaybackCachePublishesVerifiedFileAndRejectsCorruptionOrStaleEpoch() async throws {
+        let cachesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("StreamPlaybackCache-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: cachesDirectory) }
+
+        let payload = Data((0..<(2 * 1024 * 1024 + 33)).map { UInt8($0 & 0xff) })
+        let digest = await MediaPlaintextHash.digest(payload)
+        let reference = MediaAttachmentReferenceFfi(
+            locators: [],
+            ciphertextSha256: String(repeating: "c", count: 64),
+            plaintextSha256: digest,
+            nonceHex: String(repeating: "d", count: 24),
+            fileName: "clip.mp4",
+            mediaType: "video/mp4",
+            version: .v2,
+            sourceEpoch: 1,
+            sourceEpochIdentity: nil,
+            dim: "1920x1080",
+            thumbhash: nil
+        )
+        let epoch = MessageMediaCache.currentProducerEpoch()
+        let url = try await MessageMediaCache.streamAndStore(
+            for: reference,
+            byteCount: UInt64(payload.count),
+            cachesDirectory: cachesDirectory,
+            producerGeneration: epoch
+        ) { offset, limit in
+            let start = Int(offset)
+            let end = min(payload.count, start + Int(limit))
+            return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+        }
+        #expect(try Data(contentsOf: url) == payload)
+        #expect(await MessageMediaCache.validCachedFileURL(for: reference, cachesDirectory: cachesDirectory) == url)
+
+        // Staging files must never be left behind, even when verification or epoch checks fail.
+        let encryptedDir = url.deletingLastPathComponent()
+        let badReference = MediaAttachmentReferenceFfi(
+            locators: [],
+            ciphertextSha256: String(repeating: "e", count: 64),
+            plaintextSha256: String(repeating: "0", count: 64),
+            nonceHex: String(repeating: "f", count: 24),
+            fileName: "bad.mp4",
+            mediaType: "video/mp4",
+            version: .v2,
+            sourceEpoch: 1,
+            sourceEpochIdentity: nil,
+            dim: nil,
+            thumbhash: nil
+        )
+        await #expect(throws: ConversationMediaDownloader.MediaDataError.plaintextHashMismatch) {
+            _ = try await MessageMediaCache.streamAndStore(
+                for: badReference,
+                byteCount: UInt64(payload.count),
+                cachesDirectory: cachesDirectory,
+                producerGeneration: epoch
+            ) { offset, limit in
+                let start = Int(offset)
+                let end = min(payload.count, start + Int(limit))
+                return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+            }
+        }
+        await #expect(throws: CancellationError.self) {
+            _ = try await MessageMediaCache.streamAndStore(
+                for: reference,
+                byteCount: UInt64(payload.count),
+                cachesDirectory: cachesDirectory,
+                producerGeneration: epoch - 1
+            ) { offset, limit in
+                let start = Int(offset)
+                let end = min(payload.count, start + Int(limit))
+                return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+            }
+        }
+        let entries = try FileManager.default.contentsOfDirectory(atPath: encryptedDir.path)
+        #expect(entries == [url.lastPathComponent])
+    }
+
     @Test func sharedMediaThumbnailVideoLoadsApplyVideoPreviewByteLimit() async throws {
         var recorded: [(mediaType: String, demand: AttachmentDemand, limit: Int?)] = []
         let loader = ConversationMediaLoader { item in
@@ -338,20 +431,6 @@ struct MediaAcquisitionIntentTests {
         #expect(recorded[0].demand == .automatic && recorded[0].limit != nil)
         #expect(recorded[1].demand == .explicit && recorded[1].limit != nil)
         #expect(recorded[2].demand == .explicit && recorded[2].limit == nil)
-
-        #expect(GroupSharedMediaThumbnailLoader.canOpenGallery(hasThumbnail: false, isVideo: true, overPreviewLimit: true))
-        #expect(!GroupSharedMediaThumbnailLoader.canOpenGallery(hasThumbnail: false, isVideo: false, overPreviewLimit: true))
-        #expect(GroupSharedMediaThumbnailLoader.canOpenGallery(hasThumbnail: true, isVideo: false, overPreviewLimit: false))
-
-        // Image source bytes resolve through NSCache so eviction is never defeated by view state.
-        let imageBytes = Data([0xaa, 0xbb, 0xcc])
-        let thumbImage = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }
-        let cacheKey = MessageMediaThumbnailPresentation.cacheKey(for: image)
-        MessageMediaThumbnailDecoder.store(thumbImage, sourceData: imageBytes, for: cacheKey, maxPixelSize: 120)
-        #expect(GroupSharedMediaThumbnailLoader.cachedImageData(for: image, maxPixelSize: 120) == imageBytes)
-        #expect(GroupSharedMediaThumbnailLoader.cachedImageData(for: video, maxPixelSize: 120) == nil)
-        MessageMediaThumbnailDecoder.clear()
-        #expect(GroupSharedMediaThumbnailLoader.cachedImageData(for: image, maxPixelSize: 120) == nil)
     }
 }
 

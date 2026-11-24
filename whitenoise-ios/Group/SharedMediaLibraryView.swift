@@ -353,6 +353,8 @@ struct SharedMediaLibraryView: View {
     private var mediaLoader: ConversationMediaLoader {
         ConversationMediaLoader { media in
             try await conversation.data(for: media)
+        } playbackFileURL: { media in
+            try await conversation.playbackFileURL(for: media)
         } openHandoff: { media, control in
             try await conversation.openHandoff(for: media, control: control)
         }

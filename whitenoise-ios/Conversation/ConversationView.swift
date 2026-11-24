@@ -5091,6 +5091,8 @@ struct ConversationView: View {
         let opening = MessageBubble.MediaOpenScope(viewModel, appState: appState)
         return ConversationMediaLoader { media in
             try await viewModel.data(for: media)
+        } playbackFileURL: { media in
+            try await viewModel.playbackFileURL(for: media)
         } openHandoff: { media, control in
             try await viewModel.openHandoff(for: media, control: control)
         } canShareDocument: { media, leasedTarget in

@@ -233,20 +233,6 @@ nonisolated enum GroupSharedMediaThumbnailLoader {
         }
         return try await loader.data(for: item, demand: demand)
     }
-
-    @MainActor
-    static func cachedImageData(for item: MessageMediaAttachment, maxPixelSize: Int) -> Data? {
-        guard item.isImage else { return nil }
-        let cacheKey = MessageMediaThumbnailPresentation.cacheKey(for: item)
-        return MessageMediaThumbnailDecoder.cachedThumbnail(
-            for: cacheKey,
-            maxPixelSize: maxPixelSize
-        )?.sourceData
-    }
-
-    static func canOpenGallery(hasThumbnail: Bool, isVideo: Bool, overPreviewLimit: Bool) -> Bool {
-        hasThumbnail || (isVideo && overPreviewLimit)
-    }
 }
 
 struct GroupSharedMediaThumbnail: View {
@@ -267,25 +253,23 @@ struct GroupSharedMediaThumbnail: View {
         max(1, Int(ceil(pointSize * displayScale)))
     }
 
+    private var canOpenGallery: Bool {
+        thumbnail != nil || (item.isVideo && overPreviewLimit)
+    }
+
     var body: some View {
         Button {
             Task {
-                if !GroupSharedMediaThumbnailLoader.canOpenGallery(
-                    hasThumbnail: thumbnail != nil,
-                    isVideo: item.isVideo,
-                    overPreviewLimit: overPreviewLimit
-                ) {
+                if !canOpenGallery {
                     await load(demand: GroupSharedMediaThumbnailDemand.onTap(didFail: didFail))
                 }
-                guard GroupSharedMediaThumbnailLoader.canOpenGallery(
-                    hasThumbnail: thumbnail != nil,
-                    isVideo: item.isVideo,
-                    overPreviewLimit: overPreviewLimit
-                ) else { return }
-                let initialData = GroupSharedMediaThumbnailLoader.cachedImageData(
-                    for: item,
-                    maxPixelSize: maxThumbnailPixelSize
-                )
+                guard canOpenGallery else { return }
+                let initialData = item.isImage
+                    ? MessageMediaThumbnailDecoder.cachedThumbnail(
+                        for: MessageMediaThumbnailPresentation.cacheKey(for: item),
+                        maxPixelSize: maxThumbnailPixelSize
+                    )?.sourceData
+                    : nil
                 onOpen(initialData)
             }
         } label: {

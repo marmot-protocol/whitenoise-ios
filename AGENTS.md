@@ -478,7 +478,7 @@ user list is read-only: suggest its sets, never publish it.
 - `UserDefaults` stores app preferences such as active account, developer mode, and recent reactions.
 - The shared App Group container stores the Marmot root used by both app and extension. The MDK cutover root is `White Noise/Marmot`; do not migrate the legacy top-level `Marmot` root or old secure-storage entries into it. Users must re-import their nsec after this cutover.
 - Marmot stores account secrets in the Keychain.
-- Decrypted media cache files under `Caches/EncryptedMedia` must set complete file protection on both the directory and cached plaintext files.
+- Decrypted media cache files under `Caches/EncryptedMedia` must set complete file protection on both the directory and cached plaintext files. Large video playback streams original-slot reads directly into a `.complete`-protected staging file there and publishes it after SHA-256 verification. Large `Data` reads of retained attachments stream into an immediately-unlinked file under `tmp/WhiteNoisePickedMedia` (unlinked before plaintext flows) mapped read-only with `completeUntilFirstUserAuthentication` so device lock cannot fault an unreadable `.complete` mapping.
 - Temporary transcript export JSON files contain raw conversation event history; write them with complete file protection and remove them after the share sheet completes or dismisses.
 
 Do not add a second storage path for data Marmot already owns.

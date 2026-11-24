@@ -120,6 +120,67 @@ extension MarmotClient {
         return data
     }
 
+    /// Streams a retained attachment directly into its `.complete`-protected
+    /// playback cache file (one copy on disk, constant RAM) without creating an
+    /// intermediate mapped file copy.
+    func acquireAttachmentPlaybackFile(
+        accountRef: String,
+        groupID: String,
+        target: AttachmentLocalTargetFfi,
+        demand: AttachmentDemand,
+        reference: MediaAttachmentReferenceFfi,
+        producerGeneration: Int,
+        cachesDirectory: URL? = nil,
+        onLocalHit: (@Sendable (UInt64) -> Void)? = nil
+    ) async throws -> URL? {
+        let localReadStartedAt = ContinuousClock.now
+        if let cached = await MessageMediaCache.validCachedFileURL(
+            for: reference,
+            cachesDirectory: cachesDirectory
+        ) {
+            onLocalHit?(ProductAnalyticsRecorder.elapsedMilliseconds(from: localReadStartedAt, to: .now))
+            return cached
+        }
+        func localAsset() async throws -> AttachmentLocalAssetFfi? {
+            let assets = try await marmot.attachmentLocalAssets(
+                accountRef: accountRef,
+                groupIdHex: groupID,
+                targets: [target]
+            )
+            guard let asset = assets.first, asset.reference != nil else { return nil }
+            return asset
+        }
+        let asset: AttachmentLocalAssetFfi
+        let wasLocalHit: Bool
+        if let local = try await localAsset() {
+            asset = local
+            wasLocalHit = true
+        } else {
+            try await fetchAttachment(accountRef: accountRef, groupID: groupID, target: target, demand: demand)
+            guard let fetched = try await localAsset() else { throw AttachmentReadError.stale }
+            asset = fetched
+            wasLocalHit = false
+        }
+        guard let assetRef = asset.reference else { throw AttachmentReadError.stale }
+        let url = try await MessageMediaCache.streamAndStore(
+            for: reference,
+            byteCount: asset.byteCount,
+            cachesDirectory: cachesDirectory,
+            producerGeneration: producerGeneration
+        ) { offset, limit in
+            try await self.marmot.readAttachmentAsset(
+                accountRef: accountRef,
+                reference: assetRef,
+                offset: offset,
+                limit: limit
+            )
+        }
+        if wasLocalHit {
+            onLocalHit?(ProductAnalyticsRecorder.elapsedMilliseconds(from: localReadStartedAt, to: .now))
+        }
+        return url
+    }
+
     /// Asks MDK for an attachment and returns once it holds the bytes, without reading them.
     func fetchAttachment(accountRef: String, groupID: String, target: AttachmentLocalTargetFfi,
                          demand: AttachmentDemand) async throws {
@@ -170,8 +231,10 @@ nonisolated enum RetainedAttachmentReader {
                     guard next.available else { throw AttachmentReadError.stale }
                     return next.bytes
                 }
-            } catch let error as CocoaError where error.code == .fileReadCorruptFile || error.code == .fileReadNoSuchFile {
+            } catch let error as CocoaError where error.code == .fileReadCorruptFile {
                 throw AttachmentReadError.stale
+            } catch let error as CocoaError where error.code == .fileWriteOutOfSpace {
+                throw AttachmentReadError.storageBlocked
             }
         }
         var data = Data()

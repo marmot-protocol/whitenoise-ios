@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import ImageIO
 import AVFoundation
@@ -678,7 +679,8 @@ nonisolated enum PickedMediaFile {
     }
 
     /// Writes the chunks `read` returns (from `offset`, until an empty chunk)
-    /// into a private file and maps it, as `mappedData(from:)` maps a clone.
+    /// into an unlinked private file and maps it read-only through its open
+    /// descriptor so no named plaintext file ever exists while bytes flow.
     /// `read` returning nil means the bytes are gone. Refuses a body whose
     /// size isn't `expectedSize`.
     static func mappedData(
@@ -687,34 +689,86 @@ nonisolated enum PickedMediaFile {
         now: Date = Date(),
         read: (UInt64) async throws -> Data?
     ) async throws -> Data {
+        guard let mappedByteCount = Int(exactly: expectedSize) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
         let manager = FileManager.default
         try manager.createDirectory(at: directory, withIntermediateDirectories: true)
         MediaUploadSourceFiles.removeStale(in: directory, olderThan: staleAge, now: now)
         let copy = directory.appendingPathComponent(UUID().uuidString, isDirectory: false)
-        // Not complete protection, for the same reason as a picked clone.
-        guard manager.createFile(atPath: copy.path, contents: nil,
-            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
-        else { throw CocoaError(.fileWriteUnknown) }
-        defer { try? manager.removeItem(at: copy) }
-        let handle = try FileHandle(forWritingTo: copy)
-        var offset: UInt64 = 0
+        let fd = Darwin.open(copy.path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+        guard fd >= 0 else {
+            throw Self.mappedWriteError(for: errno)
+        }
+        var fdClosed = false
+        defer {
+            if !fdClosed { _ = Darwin.close(fd) }
+        }
+        // Set protection and unlink BEFORE any plaintext bytes are written so a
+        // mid-stream crash or kill never leaves a named plaintext file on disk.
+        // Not complete protection: once the device locks, a page fault in a
+        // complete-protection mapping can't be decrypted and crashes the app.
         do {
-            while true {
-                try Task.checkCancellation()
-                guard let chunk = try await read(offset) else { throw CocoaError(.fileReadNoSuchFile) }
-                if chunk.isEmpty { break }
-                let chunkCount = UInt64(chunk.count)
-                guard chunkCount <= expectedSize - offset else { throw CocoaError(.fileReadCorruptFile) }
-                try handle.write(contentsOf: chunk)
-                offset += chunkCount
+            try manager.setAttributes(
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                ofItemAtPath: copy.path
+            )
+            guard Darwin.unlink(copy.path) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
-            try handle.close()
         } catch {
-            try? handle.close()
+            try? manager.removeItem(at: copy)
             throw error
         }
+
+        var offset: UInt64 = 0
+        while true {
+            try Task.checkCancellation()
+            guard let chunk = try await read(offset) else { throw CocoaError(.fileReadNoSuchFile) }
+            if chunk.isEmpty { break }
+            let chunkCount = UInt64(chunk.count)
+            guard chunkCount <= expectedSize - offset else { throw CocoaError(.fileReadCorruptFile) }
+            try writeAll(chunk, to: fd)
+            offset += chunkCount
+        }
         guard offset == expectedSize else { throw CocoaError(.fileReadCorruptFile) }
-        return try Data(contentsOf: copy, options: .alwaysMapped)
+        if mappedByteCount == 0 {
+            return Data()
+        }
+        let mapped = Darwin.mmap(nil, mappedByteCount, PROT_READ, MAP_PRIVATE, fd, 0)
+        guard mapped != MAP_FAILED, let pointer = mapped else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        _ = Darwin.close(fd)
+        fdClosed = true
+        return Data(bytesNoCopy: pointer, count: mappedByteCount, deallocator: .custom { ptr, length in
+            _ = Darwin.munmap(ptr, length)
+        })
+    }
+
+    static func writeAll(_ data: Data, to fd: Int32) throws {
+        try data.withUnsafeBytes { rawBuffer in
+            guard let base = rawBuffer.baseAddress else { return }
+            var remaining = rawBuffer.count
+            var current = base
+            while remaining > 0 {
+                let written = Darwin.write(fd, current, remaining)
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    throw mappedWriteError(for: errno)
+                }
+                guard written > 0 else { throw CocoaError(.fileWriteUnknown) }
+                remaining -= written
+                current = current.advanced(by: written)
+            }
+        }
+    }
+
+    static func mappedWriteError(for code: Int32) -> Error {
+        if code == ENOSPC || code == EDQUOT {
+            return CocoaError(.fileWriteOutOfSpace)
+        }
+        return POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
     }
 }
 
@@ -1101,7 +1155,7 @@ nonisolated enum MediaDraftProcessor {
             fallbackStem: kind == .audio ? "audio-\(Int(Date().timeIntervalSince1970))" : "attachment-\(Int(Date().timeIntervalSince1970))",
             fallbackExtension: MediaAttachmentPolicy.fileExtension(for: mediaType, fileName: fileName)
         )
-        let audioMetadata = kind == .audio && data.count <= MessageMediaAttachment.audioAnalysisByteLimit
+        let audioMetadata = kind == .audio
             ? MediaWaveformAnalyzer.metadata(from: data, mediaType: mediaType)
             : nil
         return MediaDraftAttachment(
@@ -1139,25 +1193,12 @@ nonisolated enum MediaDraftProcessor {
         from data: Data,
         maxPixelSize: CGFloat
     ) -> UIImage? {
-        let sourceOptions: [CFString: Any] = [
-            kCGImageSourceShouldCache: false,
-        ]
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
-            return nil
-        }
-        guard RemoteImageDecoder.isAllowedRemoteImageType(CGImageSourceGetType(source)) else {
-            return nil
-        }
-        let thumbnailOptions: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(1, Int(maxPixelSize.rounded(.up))),
-            kCGImageSourceShouldCache: false,
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage, scale: 1, orientation: .up)
+        RemoteImageDecoder.decodedDownsampledImage(
+            from: data,
+            maxPixelSize: max(1, Int(maxPixelSize.rounded(.up))),
+            scale: 1,
+            shouldCacheImmediately: false
+        )
     }
 
     private static func animatedGIFAttachment(from data: Data, fileName: String?) -> MediaDraftAttachment? {
@@ -1445,99 +1486,92 @@ nonisolated enum MediaWaveformAnalyzer {
     }
 
     static func metadata(from data: Data, mediaType: String) -> Metadata {
-        guard data.count <= MessageMediaAttachment.audioAnalysisByteLimit else {
-            return Metadata(durationSeconds: nil, samples: fallback())
-        }
-        return TemporaryMediaFile.withURL(data: data, fileExtension: MediaAttachmentPolicy.fileExtension(for: mediaType)) { url in
-            metadata(fromFileURL: url)
-        }
-    }
-
-    static func metadata(fromFileURL url: URL) -> Metadata {
-        do {
-            let file = try AVAudioFile(forReading: url)
-            let format = file.processingFormat
-            let sampleRate = format.sampleRate
-            let totalFrames = file.length
-            let duration = sampleRate > 0 ? Double(totalFrames) / sampleRate : nil
-
-            let analyzedFrames = analyzedFrameCount(totalFrames: totalFrames)
-            guard analyzedFrames > 0 else {
-                return Metadata(durationSeconds: duration, samples: fallback())
-            }
-
-            // Reject implausible channel counts: a peer-supplied container can
-            // declare thousands of channels purely to inflate the PCM buffer.
-            let channelCount = format.channelCount
-            guard channelCount > 0, channelCount <= maxChannelCount else {
-                return Metadata(durationSeconds: duration, samples: fallback())
-            }
-
-            // Derive the per-read frame capacity from a fixed PCM *byte*
-            // budget so the buffer allocation stays bounded regardless of the
-            // (peer-controlled) channel count. A fixed frame count alone would
-            // still allocate `frames * channelCount * bytesPerSample` bytes.
-            // `mBitsPerChannel` is the per-sample width (32 for the float
-            // processing format); fall back to Float size if it is unset.
-            let bitsPerChannel = Int(format.streamDescription.pointee.mBitsPerChannel)
-            let bytesPerSample = bitsPerChannel > 0
-                ? (bitsPerChannel + 7) / 8
-                : MemoryLayout<Float>.size
-            let chunkCapacity = chunkFrameCapacity(
-                channelCount: channelCount,
-                bytesPerSample: bytesPerSample
-            )
-
-            // One reusable, byte-budget-bounded buffer — never sized to the file.
-            guard let buffer = AVAudioPCMBuffer(
-                pcmFormat: format,
-                frameCapacity: chunkCapacity
-            ) else {
-                return Metadata(durationSeconds: duration, samples: fallback())
-            }
-
-            var peaks = [Float](repeating: 0, count: sampleCount)
-            var counts = [Int](repeating: 0, count: sampleCount)
-            var framesProcessed: AVAudioFramePosition = 0
-
+        TemporaryMediaFile.withURL(data: data, fileExtension: MediaAttachmentPolicy.fileExtension(for: mediaType)) { url in
             do {
-                while true {
-                    let toRead = nextChunkFrameCount(
-                        analyzedFrames: analyzedFrames,
-                        framesProcessed: framesProcessed,
-                        chunkCapacity: chunkCapacity
-                    )
-                    guard toRead > 0 else { break }
-                    buffer.frameLength = 0
-                    try file.read(into: buffer, frameCount: toRead)
-                    let read = Int(buffer.frameLength)
-                    guard read > 0, let channel = buffer.floatChannelData?[0] else { break }
-                    for offset in 0..<read {
-                        let bucket = bucketIndex(
-                            forFrame: framesProcessed + AVAudioFramePosition(offset),
-                            analyzedFrames: analyzedFrames
-                        )
-                        let value = abs(channel[offset])
-                        if value > peaks[bucket] { peaks[bucket] = value }
-                        counts[bucket] += 1
-                    }
-                    framesProcessed += AVAudioFramePosition(read)
+                let file = try AVAudioFile(forReading: url)
+                let format = file.processingFormat
+                let sampleRate = format.sampleRate
+                let totalFrames = file.length
+                let duration = sampleRate > 0 ? Double(totalFrames) / sampleRate : nil
+
+                let analyzedFrames = analyzedFrameCount(totalFrames: totalFrames)
+                guard analyzedFrames > 0 else {
+                    return Metadata(durationSeconds: duration, samples: fallback())
                 }
+
+                // Reject implausible channel counts: a peer-supplied container can
+                // declare thousands of channels purely to inflate the PCM buffer.
+                let channelCount = format.channelCount
+                guard channelCount > 0, channelCount <= maxChannelCount else {
+                    return Metadata(durationSeconds: duration, samples: fallback())
+                }
+
+                // Derive the per-read frame capacity from a fixed PCM *byte*
+                // budget so the buffer allocation stays bounded regardless of the
+                // (peer-controlled) channel count. A fixed frame count alone would
+                // still allocate `frames * channelCount * bytesPerSample` bytes.
+                // `mBitsPerChannel` is the per-sample width (32 for the float
+                // processing format); fall back to Float size if it is unset.
+                let bitsPerChannel = Int(format.streamDescription.pointee.mBitsPerChannel)
+                let bytesPerSample = bitsPerChannel > 0
+                    ? (bitsPerChannel + 7) / 8
+                    : MemoryLayout<Float>.size
+                let chunkCapacity = chunkFrameCapacity(
+                    channelCount: channelCount,
+                    bytesPerSample: bytesPerSample
+                )
+
+                // One reusable, byte-budget-bounded buffer — never sized to the file.
+                guard let buffer = AVAudioPCMBuffer(
+                    pcmFormat: format,
+                    frameCapacity: chunkCapacity
+                ) else {
+                    return Metadata(durationSeconds: duration, samples: fallback())
+                }
+
+                var peaks = [Float](repeating: 0, count: sampleCount)
+                var counts = [Int](repeating: 0, count: sampleCount)
+                var framesProcessed: AVAudioFramePosition = 0
+
+                do {
+                    while true {
+                        let toRead = nextChunkFrameCount(
+                            analyzedFrames: analyzedFrames,
+                            framesProcessed: framesProcessed,
+                            chunkCapacity: chunkCapacity
+                        )
+                        guard toRead > 0 else { break }
+                        buffer.frameLength = 0
+                        try file.read(into: buffer, frameCount: toRead)
+                        let read = Int(buffer.frameLength)
+                        guard read > 0, let channel = buffer.floatChannelData?[0] else { break }
+                        for offset in 0..<read {
+                            let bucket = bucketIndex(
+                                forFrame: framesProcessed + AVAudioFramePosition(offset),
+                                analyzedFrames: analyzedFrames
+                            )
+                            let value = abs(channel[offset])
+                            if value > peaks[bucket] { peaks[bucket] = value }
+                            counts[bucket] += 1
+                        }
+                        framesProcessed += AVAudioFramePosition(read)
+                    }
+                } catch {
+                    return Metadata(durationSeconds: duration, samples: fallback())
+                }
+
+                guard framesProcessed > 0 else {
+                    return Metadata(durationSeconds: duration, samples: fallback())
+                }
+
+                let samples = (0..<sampleCount).map { index -> CGFloat in
+                    guard counts[index] > 0 else { return 0.08 }
+                    return CGFloat(min(1, max(0.05, sqrt(peaks[index]))))
+                }
+                return Metadata(durationSeconds: duration, samples: normalized(samples))
             } catch {
-                return Metadata(durationSeconds: duration, samples: fallback())
+                return Metadata(durationSeconds: nil, samples: fallback())
             }
-
-            guard framesProcessed > 0 else {
-                return Metadata(durationSeconds: duration, samples: fallback())
-            }
-
-            let samples = (0..<sampleCount).map { index -> CGFloat in
-                guard counts[index] > 0 else { return 0.08 }
-                return CGFloat(min(1, max(0.05, sqrt(peaks[index]))))
-            }
-            return Metadata(durationSeconds: duration, samples: normalized(samples))
-        } catch {
-            return Metadata(durationSeconds: nil, samples: fallback())
         }
     }
 }
@@ -1955,6 +1989,160 @@ nonisolated enum MessageMediaCache {
             preserving: url,
             now: now
         )
+    }
+
+    /// Verifies an already-cached playback file in streaming 1 MiB chunks so
+    /// replaying a large video never allocates its plaintext in RAM.
+    static func validCachedFileURL(
+        for reference: MediaAttachmentReferenceFfi,
+        cachesDirectory: URL? = nil,
+        policy: DecryptedMediaCacheEvictionPolicy = .media,
+        now: Date = Date()
+    ) async -> URL? {
+        guard let root = cachesDirectory ?? defaultCachesDirectory else { return nil }
+        return await Task.detached(priority: .userInitiated) {
+            validCachedFileURLSync(for: reference, cachesDirectory: root, policy: policy, now: now)
+        }.value
+    }
+
+    private static func validCachedFileURLSync(
+        for reference: MediaAttachmentReferenceFfi,
+        cachesDirectory: URL,
+        policy: DecryptedMediaCacheEvictionPolicy,
+        now: Date
+    ) -> URL? {
+        guard let url = cacheURL(for: reference, cachesDirectory: cachesDirectory),
+              FileManager.default.fileExists(atPath: url.path)
+        else { return nil }
+        let directory = url.deletingLastPathComponent()
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let modifiedAt = attributes[.modificationDate] as? Date,
+           now.timeIntervalSince(modifiedAt) > policy.maxAge
+        {
+            try? FileManager.default.removeItem(at: url)
+            DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, now: now)
+            return nil
+        }
+        guard streamingSHA256Hex(ofFileAt: url) == reference.plaintextSha256.lowercased() else {
+            try? FileManager.default.removeItem(at: url)
+            return nil
+        }
+        DecryptedMediaCacheEvictor.touch(url, at: now)
+        DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, preserving: url, now: now)
+        return url
+    }
+
+    /// Streams an original-slot attachment directly into a `.complete`-protected
+    /// staging file inside `Caches/EncryptedMedia`, verifies its SHA-256 while
+    /// streaming, and atomically publishes it to the cache URL so playback of a
+    /// large video needs only one copy on disk and constant memory.
+    static func streamAndStore(
+        for reference: MediaAttachmentReferenceFfi,
+        byteCount: UInt64,
+        cachesDirectory: URL? = nil,
+        policy: DecryptedMediaCacheEvictionPolicy = .media,
+        now: Date = Date(),
+        producerGeneration: Int? = nil,
+        chunk: (UInt64, UInt32) async throws -> AttachmentLocalBytesFfi
+    ) async throws -> URL {
+        guard byteCount <= 512 * 1024 * 1024 else { throw AttachmentReadError.tooLarge }
+        guard let root = cachesDirectory ?? defaultCachesDirectory,
+              let destination = cacheURL(for: reference, cachesDirectory: root)
+        else {
+            throw AttachmentReadError.unavailable
+        }
+        let directory = destination.deletingLastPathComponent()
+        let manager = FileManager.default
+        try manager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: protectedAttributes
+        )
+        try? manager.setAttributes(protectedAttributes, ofItemAtPath: directory.path)
+
+        let staging = directory.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: false)
+        let fd = Darwin.open(staging.path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+        guard fd >= 0 else {
+            let error = PickedMediaFile.mappedWriteError(for: errno)
+            if (error as? CocoaError)?.code == .fileWriteOutOfSpace {
+                throw AttachmentReadError.storageBlocked
+            }
+            throw error
+        }
+        var fdClosed = false
+        defer {
+            if !fdClosed { _ = Darwin.close(fd) }
+            try? manager.removeItem(at: staging)
+        }
+        try manager.setAttributes(protectedAttributes, ofItemAtPath: staging.path)
+
+        var hasher = SHA256()
+        var offset: UInt64 = 0
+        do {
+            while true {
+                try Task.checkCancellation()
+                let next = try await chunk(offset, RetainedAttachmentReader.chunkSizeBytes)
+                guard next.available else { throw AttachmentReadError.stale }
+                if next.bytes.isEmpty { break }
+                let chunkCount = UInt64(next.bytes.count)
+                guard chunkCount <= byteCount - offset else { throw AttachmentReadError.stale }
+                try PickedMediaFile.writeAll(next.bytes, to: fd)
+                hasher.update(data: next.bytes)
+                offset += chunkCount
+            }
+        } catch let error as CocoaError where error.code == .fileWriteOutOfSpace {
+            throw AttachmentReadError.storageBlocked
+        }
+        _ = Darwin.close(fd)
+        fdClosed = true
+
+        guard offset == byteCount else { throw AttachmentReadError.stale }
+        let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        guard digest == reference.plaintextSha256.lowercased() else {
+            throw ConversationMediaDownloader.MediaDataError.plaintextHashMismatch
+        }
+
+        let published: Bool = purgeGeneration.withLock { generation in
+            if let producerGeneration, producerGeneration != generation { return false }
+            do {
+                try manager.createDirectory(
+                    at: directory,
+                    withIntermediateDirectories: true,
+                    attributes: protectedAttributes
+                )
+                try? manager.setAttributes(protectedAttributes, ofItemAtPath: directory.path)
+                try? manager.setAttributes(protectedAttributes, ofItemAtPath: staging.path)
+                guard Darwin.rename(staging.path, destination.path) == 0 else { return false }
+                try? manager.setAttributes(protectedAttributes, ofItemAtPath: destination.path)
+                return true
+            } catch {
+                return false
+            }
+        }
+        guard published else { throw CancellationError() }
+        DecryptedMediaCacheEvictor.touch(destination, at: now)
+        DecryptedMediaCacheEvictor.trim(
+            directory: directory,
+            policy: policy,
+            preserving: destination,
+            now: now
+        )
+        return destination
+    }
+
+    private static func streamingSHA256Hex(ofFileAt url: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        let chunkSize = Int(RetainedAttachmentReader.chunkSizeBytes)
+        do {
+            while let chunk = try handle.read(upToCount: chunkSize), !chunk.isEmpty {
+                hasher.update(data: chunk)
+            }
+        } catch {
+            return nil
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     /// Removes cached decrypted plaintext when a caller has ciphertext hashes

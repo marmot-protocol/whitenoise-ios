@@ -2526,6 +2526,10 @@ final class ConversationViewModel {
                                               control: control)
     }
 
+    func playbackFileURL(for media: MessageMediaAttachment) async throws -> URL {
+        try await mediaDownloader.playbackFileURL(for: media, groupIdHex: group.groupIdHex, appState: appState)
+    }
+
     /// The account, runtime and chat custom emoji images belong to; nil once
     /// the active account is no longer the one this conversation opened under.
     var customEmojiScope: CustomEmojiScope? {

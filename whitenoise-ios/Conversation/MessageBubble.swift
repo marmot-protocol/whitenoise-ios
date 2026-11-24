@@ -68,17 +68,22 @@ final class ConversationMediaLoader {
     nonisolated deinit {}
 
     typealias OpenHandoff = (MessageMediaAttachment, MediaFileTransferControlFfi) async throws -> AttachmentHandoffLease?
+    typealias PlaybackFileLoader = (MessageMediaAttachment) async throws -> URL
 
     private let load: (MessageMediaAttachment) async throws -> Data
+    private let loadPlaybackFile: PlaybackFileLoader?
     private let openHandoff: OpenHandoff?
     let canShareDocument: @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool
     private let admitAutomatic: (MessageMediaAttachment) async -> Int?
 
 
-    init(_ load: @escaping (MessageMediaAttachment) async throws -> Data, openHandoff: OpenHandoff? = nil,
+    init(_ load: @escaping (MessageMediaAttachment) async throws -> Data,
+         playbackFileURL: PlaybackFileLoader? = nil,
+         openHandoff: OpenHandoff? = nil,
          canShareDocument: @escaping @MainActor (MessageMediaAttachment, AttachmentLocalTargetFfi?) async throws -> Bool = { _, _ in true },
          admitAutomaticAttachment: @escaping (MessageMediaAttachment) async -> Int? = { $0.localData?.count }) {
         self.load = load
+        self.loadPlaybackFile = playbackFileURL
         self.openHandoff = openHandoff
         self.canShareDocument = canShareDocument
         self.admitAutomatic = admitAutomaticAttachment
@@ -93,6 +98,20 @@ final class ConversationMediaLoader {
         var requested = media
         requested.demand = demand
         return try await load(requested)
+    }
+
+    func playbackFileURL(for media: MessageMediaAttachment, demand: AttachmentDemand = .explicit) async throws -> URL {
+        var requested = media
+        requested.demand = demand
+        if let loadPlaybackFile {
+            return try await loadPlaybackFile(requested)
+        }
+        let producerEpoch = MessageMediaCache.currentProducerEpoch()
+        let data = try await load(requested)
+        guard let url = await MediaPlaybackFileStore.fileURL(for: media, data: data, producerEpoch: producerEpoch) else {
+            throw MessageVideoAttachmentError.playbackFileUnavailable
+        }
+        return url
     }
 
     func videoPreviewData(for media: MessageMediaAttachment, demand: AttachmentDemand = .automatic) async throws -> Data {
@@ -4129,8 +4148,15 @@ struct MediaForwardingContext {
 private struct FullscreenMediaPrepared: Identifiable {
     let id: String
     let item: MessageMediaAttachment
-    let data: Data
+    let data: Data?
     let contentType: UTType
+    var pendingSelection: MessageMediaGallery.PendingSelection? = nil
+}
+
+private struct ForwardMediaPayload: Identifiable {
+    let id: String
+    let item: MessageMediaAttachment
+    let data: Data
     var pendingSelection: MessageMediaGallery.PendingSelection? = nil
 }
 
@@ -4279,11 +4305,12 @@ struct MessageMediaFullscreenGalleryView: View {
     @State private var preparedMedia: FullscreenMediaPrepared?
     @State private var mediaShare: AttachmentShareFile?
     @State private var handoffControl: MediaFileTransferControlFfi?
+    @State private var mediaActionTask: Task<Void, Never>?
     @State private var exportDocument: DecryptedMediaExportDocument?
     @State private var saveProductTicket: ProductAnalyticsRecorder.Ticket?
     @State private var isExporting = false
     @State private var actionError: String?
-    @State private var forwardMedia: FullscreenMediaPrepared?
+    @State private var forwardMedia: ForwardMediaPayload?
     @State private var chrome = MediaViewerChrome()
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -4318,7 +4345,7 @@ struct MessageMediaFullscreenGalleryView: View {
                 TranscriptMediaSheet(gallery: gallery, selection: Binding(get: { selectedItemID }, set: select),
                     isZoomed: zoomedItemID != nil, showsChrome: chrome.isVisible, controls: controlState,
                     onClose: onDismiss, onSave: saveSelectedMedia, onShare: shareSelectedMedia,
-                    onForward: { forwardMedia = currentPreparedMedia }, onGoToMessage: goToSelectedMessage,
+                    onForward: forwardSelectedMedia, onGoToMessage: goToSelectedMessage,
                     page: page)
             } else {
                 fullscreenContent
@@ -4351,6 +4378,8 @@ struct MessageMediaFullscreenGalleryView: View {
             if gallery.transcriptCaptions != nil { chrome = MediaViewerChrome() }
             if preparedMedia?.id != selection { preparedMedia = nil }
             handoffControl?.cancel()
+            mediaActionTask?.cancel()
+            mediaActionTask = nil
             zoomedItemID = nil
             dismissDragOffset = 0
         }
@@ -4358,7 +4387,11 @@ struct MessageMediaFullscreenGalleryView: View {
             ActivityShareSheet(items: [share.url], onComplete: share.finish)
                 .onDisappear(perform: share.finish)
         }
-        .onDisappear { handoffControl?.cancel() }
+        .onDisappear {
+            handoffControl?.cancel()
+            mediaActionTask?.cancel()
+            mediaActionTask = nil
+        }
         .sheet(item: $forwardMedia) { prepared in
             if let forwardingContext {
                 ForwardMessageSheet(
@@ -4472,7 +4505,7 @@ struct MessageMediaFullscreenGalleryView: View {
                     onClose: onDismiss,
                     onSave: saveSelectedMedia,
                     onShare: shareSelectedMedia,
-                    onForward: { forwardMedia = currentPreparedMedia },
+                    onForward: forwardSelectedMedia,
                     onGoToMessage: goToSelectedMessage
                 )
                 .transition(.opacity)
@@ -4525,10 +4558,62 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func saveSelectedMedia() {
-        guard let preparedMedia = currentPreparedMedia else { return }
-        saveProductTicket = appState.productAnalytics.ticket()
-        exportDocument = DecryptedMediaExportDocument(data: preparedMedia.data)
-        isExporting = true
+        guard let prepared = currentPreparedMedia else { return }
+        if let data = prepared.data {
+            saveProductTicket = appState.productAnalytics.ticket()
+            exportDocument = DecryptedMediaExportDocument(data: data)
+            isExporting = true
+            return
+        }
+        guard mediaActionTask == nil else { return }
+        let item = prepared.item
+        mediaActionTask = Task {
+            defer { mediaActionTask = nil }
+            do {
+                let data = try await onLoadMedia.data(for: item, demand: .explicit)
+                guard !Task.isCancelled, selectedItemID == item.id else { return }
+                saveProductTicket = appState.productAnalytics.ticket()
+                exportDocument = DecryptedMediaExportDocument(data: data)
+                isExporting = true
+            } catch {
+                if !Task.isCancelled, selectedItemID == item.id {
+                    actionError = L10n.string("Couldn't prepare media.")
+                }
+            }
+        }
+    }
+
+    private func forwardSelectedMedia() {
+        guard let prepared = currentPreparedMedia else { return }
+        if let data = prepared.data {
+            forwardMedia = ForwardMediaPayload(
+                id: prepared.id,
+                item: prepared.item,
+                data: data,
+                pendingSelection: prepared.pendingSelection
+            )
+            return
+        }
+        guard mediaActionTask == nil else { return }
+        let item = prepared.item
+        let pendingSelection = prepared.pendingSelection
+        mediaActionTask = Task {
+            defer { mediaActionTask = nil }
+            do {
+                let data = try await onLoadMedia.data(for: item, demand: .explicit)
+                guard !Task.isCancelled, selectedItemID == item.id else { return }
+                forwardMedia = ForwardMediaPayload(
+                    id: item.id,
+                    item: item,
+                    data: data,
+                    pendingSelection: pendingSelection
+                )
+            } catch {
+                if !Task.isCancelled, selectedItemID == item.id {
+                    actionError = L10n.string("Couldn't prepare media.")
+                }
+            }
+        }
     }
 
     private func shareSelectedMedia() {
@@ -4596,7 +4681,7 @@ private struct MessageMediaFullscreenPage: View {
     let resumeConfirmedVideo: Bool
     let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
-    let onData: (Data) -> Void
+    let onData: (Data?) -> Void
     let onToggleChrome: () -> Void
     let onSourceReplaced: () -> Void
     let onZoomChanged: (Bool) -> Void
@@ -4636,7 +4721,7 @@ private struct MessageMediaFullscreenPage: View {
                 initialImageData: sourceGeneration == 0 ? initialImageData : nil,
                 selectionDemand: demand,
                 onLoadMedia: onLoadMedia,
-                onData: onData,
+                onData: { onData($0) },
                 onToggleChrome: onToggleChrome,
                 onZoomChanged: onZoomChanged
             )
@@ -4654,7 +4739,7 @@ private struct MessageMediaFullscreenVideoPage: View {
     let resumeConfirmedVideo: Bool
     let pendingVideo: PendingVideoPlayback?
     let onLoadMedia: ConversationMediaLoader
-    let onData: (Data) -> Void
+    let onData: (Data?) -> Void
     let onToggleChrome: () -> Void
     @Environment(\.isTranscriptMediaSheet) private var isTranscriptMediaSheet
     @Environment(\.displayScale) private var displayScale
@@ -4783,16 +4868,22 @@ private struct MessageMediaFullscreenVideoPage: View {
     }
 
     private func playbackFileURL(demand: AttachmentDemand) async throws -> URL {
-        let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        let data: Data
-        if let initialMediaData, demand != .retry { data = initialMediaData }
-        else { data = try await onLoadMedia.data(for: item, demand: demand) }
-        try Task.checkCancellation()
-        onData(data)
-        guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
-            throw MessageVideoAttachmentError.playbackFileUnavailable
+        if let initialMediaData, demand != .retry {
+            let producerEpoch = MessageMediaCache.currentProducerEpoch()
+            onData(initialMediaData)
+            guard let url = await MediaPlaybackFileStore.fileURL(
+                for: item,
+                data: initialMediaData,
+                producerEpoch: producerEpoch
+            ) else {
+                throw MessageVideoAttachmentError.playbackFileUnavailable
+            }
+            try Task.checkCancellation()
+            return url
         }
+        let url = try await onLoadMedia.playbackFileURL(for: item, demand: demand)
         try Task.checkCancellation()
+        onData(nil)
         return url
     }
 
