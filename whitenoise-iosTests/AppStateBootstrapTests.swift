@@ -2620,7 +2620,7 @@ struct AppStateBootstrapTests {
         // A notification-action lease joins any in-flight activation or
         // suspension first; with no suspension started it leases the live
         // runtime instead of opening an ephemeral one.
-        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction(actionID: UUID())
         #expect(!lease.ownsEphemeralRuntime)
         await appState.runtimeLifecycle.suspendRuntimeAfterNotificationAction(lease)
 
@@ -2710,7 +2710,7 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
         #expect(appState.client == nil)
 
-        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction(actionID: UUID())
 
         #expect(lease.ownsEphemeralRuntime)
         #expect(lease.client.cursorPersistence == .frozen)
@@ -2754,7 +2754,7 @@ struct AppStateBootstrapTests {
 
         await appState.startRuntimeSuspension().value
 
-        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction(actionID: UUID())
         #expect(lease.ownsEphemeralRuntime)
 
         let activation = appState.startForegroundActivation()
@@ -2789,7 +2789,7 @@ struct AppStateBootstrapTests {
         let appState = seeded.appState
         appState.setAppSceneActive(true)
 
-        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction(actionID: UUID())
 
         #expect(!lease.ownsEphemeralRuntime)
         #expect(lease.client === appState.client)
@@ -2811,7 +2811,7 @@ struct AppStateBootstrapTests {
         let appState = seeded.appState
         appState.setAppSceneActive(true)
 
-        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction(actionID: UUID())
         #expect(!lease.ownsEphemeralRuntime)
         #expect(lease.client === appState.client)
         #expect(appState.runtimeLifecycle.isRuntimeSuspendingNow)
@@ -2871,7 +2871,7 @@ struct AppStateBootstrapTests {
                 route: route,
                 failureTitle: "Action expired",
                 deadline: .milliseconds(100)
-            ) { _ in
+            ) { _, _ in
                 await checkpoint.pause()
                 try Task.checkCancellation()
             }
@@ -2903,7 +2903,7 @@ struct AppStateBootstrapTests {
         #expect(!appState.sceneHasReportedPhase)
         #expect(appState.client != nil)
 
-        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        let lease = try await appState.runtimeLifecycle.startRuntimeForNotificationAction(actionID: UUID())
         #expect(!lease.ownsEphemeralRuntime)
 
         await appState.runtimeLifecycle.suspendRuntimeAfterNotificationAction(lease)
