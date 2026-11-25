@@ -18,11 +18,11 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     static let didChangeNotification = Notification.Name("AppLanguageDidChange")
     static let didChangeLanguageUserInfoKey = "language"
 
-    static var defaults: UserDefaults {
+    static var defaults: UserDefaults? {
         if let testDefaults {
             return testDefaults
         }
-        return UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier) ?? .standard
+        return UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier)
     }
 
     static let supportedAppLanguages: [AppLanguage] = [
@@ -60,7 +60,11 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     #endif
 
     static var currentRawValue: String {
-        defaults.string(forKey: storageKey) ?? AppLanguage.system.rawValue
+        storedRawValue(in: defaults)
+    }
+
+    static func storedRawValue(in defaults: UserDefaults?) -> String {
+        defaults?.string(forKey: storageKey) ?? AppLanguage.system.rawValue
     }
 
     static var currentLocale: Locale {
@@ -73,9 +77,10 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
 
     static func setCurrentRawValue(
         _ rawValue: String,
-        defaults: UserDefaults = AppLanguage.defaults,
+        defaults: UserDefaults? = AppLanguage.defaults,
         notificationCenter: NotificationCenter = .default
     ) {
+        guard let defaults else { return }
         let resolved = resolved(rawValue: rawValue).rawValue
         HostSettingsSaveTiming.measure { defaults.set(resolved, forKey: storageKey) }
         notificationCenter.post(

@@ -6,8 +6,8 @@ nonisolated enum MessageHideStore {
     static let storageKey = "messages.hiddenMessageIdsByConversation"
     private static let storageLock = NSLock()
 
-    static var defaults: UserDefaults {
-        UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier) ?? .standard
+    static var defaults: UserDefaults? {
+        UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier)
     }
 
     static func conversationKey(accountRef: String, groupIdHex: String) -> String? {
@@ -20,11 +20,11 @@ nonisolated enum MessageHideStore {
     static func hiddenMessageIds(
         accountRef: String,
         groupIdHex: String,
-        defaults: UserDefaults = MessageHideStore.defaults
+        defaults: UserDefaults? = MessageHideStore.defaults
     ) -> Set<String> {
-        guard let key = conversationKey(accountRef: accountRef, groupIdHex: groupIdHex) else {
-            return []
-        }
+        guard let defaults,
+              let key = conversationKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        else { return [] }
         return withStorageLock {
             Set(hiddenMessageIdsByConversation(defaults: defaults)[key] ?? [])
         }
@@ -35,9 +35,10 @@ nonisolated enum MessageHideStore {
         accountRef: String,
         groupIdHex: String,
         messageIdHex: String,
-        defaults: UserDefaults = MessageHideStore.defaults
+        defaults: UserDefaults? = MessageHideStore.defaults
     ) -> Set<String> {
-        guard let key = conversationKey(accountRef: accountRef, groupIdHex: groupIdHex),
+        guard let defaults,
+              let key = conversationKey(accountRef: accountRef, groupIdHex: groupIdHex),
               let messageId = Hex.normalized32Bytes(messageIdHex)
         else { return [] }
 
@@ -55,9 +56,9 @@ nonisolated enum MessageHideStore {
     /// wiped. A normal sign-out preserves it for later account reactivation.
     static func clearAll(
         accountRef: String,
-        defaults: UserDefaults = MessageHideStore.defaults
+        defaults: UserDefaults? = MessageHideStore.defaults
     ) {
-        guard let prefix = accountKeyPrefix(accountRef) else { return }
+        guard let defaults, let prefix = accountKeyPrefix(accountRef) else { return }
         withStorageLock {
             var entries = hiddenMessageIdsByConversation(defaults: defaults)
             let keys = entries.keys.filter { $0.hasPrefix(prefix) }
