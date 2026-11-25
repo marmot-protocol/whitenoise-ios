@@ -25,14 +25,15 @@ final class AudioSessionSpy: VoiceAudioSessionConfiguring {
 @MainActor
 final class VoiceRecordingMicrophoneDouble {
     private(set) var stops = 0
+    var elapsedSeconds: TimeInterval = 0
 
     var microphone: VoiceRecordingMicrophone {
         VoiceRecordingMicrophone(
             requestPermission: { true },
             startRecording: { [self] _ in
                 VoiceRecordingTake(
-                    meter: { (0, -160) },
-                    currentTime: { 0 },
+                    meter: { (self.elapsedSeconds, -160) },
+                    currentTime: { self.elapsedSeconds },
                     stop: { self.stops += 1 }
                 )
             }

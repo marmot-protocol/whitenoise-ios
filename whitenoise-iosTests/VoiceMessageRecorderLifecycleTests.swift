@@ -74,6 +74,47 @@ struct VoiceMessageRecorderLifecycleTests {
         recorder.cancel()
     }
 
+    @Test func aLockedRecordingFinishesIntoADraftAtTheLimit() async throws {
+        let session = AudioSessionSpy()
+        let microphone = VoiceRecordingMicrophoneDouble()
+        let recorder = VoiceMessageRecorder(audioSession: session, microphone: microphone.microphone)
+        var finished: [VoiceRecordingResult] = []
+
+        recorder.beginPress { error in
+            Issue.record(error, "recording failed to start")
+        } onLimitReached: { finished.append($0) }
+        try await eventually { recorder.hasStartedRecording }
+        recorder.updateDrag(CGSize(width: 0, height: HoldGesturePolicy.lockTranslationY - 1))
+        microphone.elapsedSeconds = VoiceRecordingLimit.maxDurationSeconds + 30
+
+        try await eventually { finished.count == 1 }
+        #expect((finished.first?.durationSeconds ?? .infinity) <= VoiceRecordingLimit.maxDurationSeconds)
+        #expect(microphone.stops == 1)
+        #expect(!recorder.isActive)
+        #expect(session.activeCalls.last?.active == false)
+        #expect(recorder.stopLockedRecording() == nil)
+        #expect(microphone.stops == 1)
+    }
+
+    @Test func aHeldRecordingFinishesIntoADraftAtTheLimitAndReleasingSendsNothingMore() async throws {
+        let microphone = VoiceRecordingMicrophoneDouble()
+        let recorder = VoiceMessageRecorder(audioSession: AudioSessionSpy(), microphone: microphone.microphone)
+        var finished: [VoiceRecordingResult] = []
+
+        recorder.beginPress { error in
+            Issue.record(error, "recording failed to start")
+        } onLimitReached: { finished.append($0) }
+        try await eventually { recorder.hasStartedRecording }
+        microphone.elapsedSeconds = VoiceRecordingLimit.maxDurationSeconds + 30
+
+        try await eventually { finished.count == 1 }
+        #expect((finished.first?.durationSeconds ?? .infinity) <= VoiceRecordingLimit.maxDurationSeconds)
+        #expect(recorder.endPress() == nil)
+        recorder.cancelIfActive()
+        #expect(microphone.stops == 1)
+        #expect(finished.count == 1)
+    }
+
     @Test func pendingHoldTaskDoesNotRetainRecorderOwner() async {
         var recorder: VoiceMessageRecorder? = VoiceMessageRecorder()
         weak let weakRecorder = recorder
