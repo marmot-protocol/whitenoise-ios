@@ -49,4 +49,22 @@ struct BackgroundRuntimeSuspensionTaskTests {
         #expect(endedTaskIDs == [taskID])
         #expect(expirationCount == 1)
     }
+
+    @Test func backgroundTaskIsActiveReflectsValidAndInvalidIdentifiers() {
+        let validTask = BackgroundRuntimeSuspensionTask(
+            name: "Valid",
+            beginBackgroundTask: { _, _ in UIBackgroundTaskIdentifier(rawValue: 7) },
+            endBackgroundTask: { _ in }
+        )
+        #expect(validTask.isActive)
+        validTask.endIfNeeded()
+        #expect(!validTask.isActive)
+
+        let invalidTask = BackgroundRuntimeSuspensionTask(
+            name: "Invalid",
+            beginBackgroundTask: { _, _ in .invalid },
+            endBackgroundTask: { _ in }
+        )
+        #expect(!invalidTask.isActive)
+    }
 }

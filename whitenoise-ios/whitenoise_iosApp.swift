@@ -35,6 +35,8 @@ final class BackgroundRuntimeSuspensionTask {
     private var suspensionTask: Task<Void, Never>?
     private var endObserverTask: Task<Void, Never>?
 
+    var isActive: Bool { taskID != .invalid }
+
     init(
         name: String,
         onExpiration: @escaping @MainActor () -> Void = {},
@@ -104,6 +106,12 @@ struct whitenoise_iosApp: App {
         let windowInitStartedAt = ContinuousClock.now
         let appState = AppState()
         appState.hostWindowInitStartedAt = windowInitStartedAt
+        if startsRuntime {
+            // Wire notifications at app init so cold UI-less reply and mark-read
+            // actions dispatch immediately without waiting for a UI scene to
+            // bootstrap `.ready`. Tap routes stay buffered until `.ready`.
+            appState.notifications.configure(appState: appState)
+        }
         HostSettingsSaveTiming.install { [recorder = appState.productAnalytics] milliseconds in
             recorder.recordPerformance(.settingsSave, milliseconds: milliseconds, ticket: recorder.ticket())
         }

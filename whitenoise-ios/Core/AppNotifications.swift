@@ -14,6 +14,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
 
     private let notificationRequestScheduler: ((UNNotificationRequest) async throws -> Void)?
     private let notificationClock: () -> TimeInterval
+    private let actionClock: @MainActor () -> ContinuousClock.Instant
     private let centerReference: NotificationCenterReference
     private var center: UNUserNotificationCenter { centerReference.value }
     private let requestAuthorizationHandler: (() async throws -> Bool)?
@@ -37,6 +38,13 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     private var pendingRoutes: [LocalNotificationRoute] = []
     private var pendingActionOperations: [NotificationActionOperation] = []
     private var actionOperationTask: Task<Void, Never>?
+    private var queuedActionOperationsCount = 0
+    /// Shared absolute fallback cutoff for responses queued together while no
+    /// foreground scene is active (`!appState.hasReportedActiveScene`), covering
+    /// both cold UI-less launches and background wakes where UIKit returns an
+    /// unbounded `backgroundTimeRemaining`. Captured when the first response
+    /// enters an empty queue and retired once the queue drains.
+    private var activeBackgroundActionBatchCutoff: ContinuousClock.Instant?
     private var applicationBadgeUpdateTask: Task<Void, Never>?
     private var languageChangeObserver: (any NSObjectProtocol)?
 
@@ -54,11 +62,13 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         pendingNotificationRequestsRemover: (@Sendable ([String]) -> Void)? = nil,
         deliveredNotificationIdentifiersRemover: (@Sendable ([String]) -> Void)? = nil,
         notificationRequestScheduler: ((UNNotificationRequest) async throws -> Void)? = nil,
-        notificationClock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+        notificationClock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        actionClock: @escaping @MainActor () -> ContinuousClock.Instant = { .now }
     ) {
         self.centerReference = NotificationCenterReference(value: center)
         self.notificationRequestScheduler = notificationRequestScheduler
         self.notificationClock = notificationClock
+        self.actionClock = actionClock
         self.requestAuthorizationHandler = requestAuthorizationHandler
         self.authorizationStatusProvider = authorizationStatusProvider
         self.remoteNotificationRegistrar = remoteNotificationRegistrar
@@ -382,9 +392,12 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
             userText: (response as? UNTextInputNotificationResponse)?.userText,
             route: route
         ) else { return }
+        await dispatchActionResponse(operation)
+    }
+
+    func dispatchActionResponse(_ operation: NotificationActionOperation) async {
         switch operation {
         case .openChat(let route):
-            appState?.productActivation(.foregroundNotification)
             handle(route: route)
         case .reply, .rejectedReply, .markRead:
             // Await completion: returning from the async delegate method ends
@@ -393,7 +406,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// Notification taps that arrive before `appState` is wired up are buffered.
+    /// Notification taps that arrive before `appState` is ready are buffered.
     /// Bound the buffer so a notification flood during startup can't grow memory
     /// unboundedly; keep the most recent routes (#18).
     nonisolated static let maxPendingRoutes = 32
@@ -408,15 +421,16 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func handle(route: LocalNotificationRoute) {
-        guard let appState else {
+        guard let appState, appState.phase == .ready else {
             pendingRoutes = Self.appendingBounded(route, to: pendingRoutes, limit: Self.maxPendingRoutes)
             return
         }
+        appState.productActivation(.foregroundNotification)
         appState.presentNotification(route: route)
     }
 
     private func flushPendingRoutes() {
-        guard let appState, !pendingRoutes.isEmpty else { return }
+        guard let appState, appState.phase == .ready, !pendingRoutes.isEmpty else { return }
         appState.productActivation(.foregroundNotification)
         for route in pendingRoutes {
             appState.presentNotification(route: route)
@@ -444,16 +458,43 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// Serializes reply/mark-read work so two responses can't interleave two
-    /// runtime restart/suspend cycles over the same App Group store.
+    /// runtime restart/suspend cycles over the same App Group store, and binds
+    /// responses queued together outside an active foreground scene to one
+    /// shared fallback cutoff until the queue drains.
     private func enqueueActionOperations(
         _ operations: [NotificationActionOperation],
         appState: AppState
     ) -> Task<Void, Never> {
+        let backgroundBatchCutoff: ContinuousClock.Instant?
+        if !appState.hasReportedActiveScene {
+            if let existing = activeBackgroundActionBatchCutoff {
+                backgroundBatchCutoff = existing
+            } else {
+                let cutoff = actionClock().advanced(
+                    by: .seconds(NotificationActionBackgroundBudget.coldLaunchMaximumWorkSeconds)
+                )
+                activeBackgroundActionBatchCutoff = cutoff
+                backgroundBatchCutoff = cutoff
+            }
+        } else {
+            activeBackgroundActionBatchCutoff = nil
+            backgroundBatchCutoff = nil
+        }
+        queuedActionOperationsCount += operations.count
+        let clock = actionClock
         let previousTask = actionOperationTask
-        let task = Task { @MainActor in
+        let task = Task { @MainActor [weak self] in
             await previousTask?.value
             for operation in operations {
-                await appState.performNotificationAction(operation)
+                await appState.performNotificationAction(
+                    operation,
+                    backgroundBatchCutoff: backgroundBatchCutoff,
+                    now: clock
+                )
+                self?.queuedActionOperationsCount -= 1
+            }
+            if let self, self.queuedActionOperationsCount == 0 {
+                self.activeBackgroundActionBatchCutoff = nil
             }
         }
         actionOperationTask = task
@@ -469,7 +510,10 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         body: String,
         route: LocalNotificationRoute
     ) async {
-        if appState?.isAppSceneActive == true {
+        // Only present an in-app toast when a UI scene has actually reported
+        // `.active`; a cold UI-less launch keeps the optimistic `isAppSceneActive`
+        // default with no window to show a toast.
+        if appState?.hasReportedActiveScene == true {
             appState?.present(.error(title, message: body))
             return
         }

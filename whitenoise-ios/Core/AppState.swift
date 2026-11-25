@@ -478,6 +478,10 @@ final class AppState {
     /// default, so the pair distinguishes "scene is active" from "no scene
     /// ever spoke". Written by `RuntimeLifecycle` alongside `isAppSceneActive`.
     var sceneHasReportedPhase = false
+    /// True only when a UI scene has actually reported `.active`, distinguishing
+    /// a visible foreground app from a cold UI-less launch where
+    /// `isAppSceneActive` still holds its optimistic initial `true`.
+    var hasReportedActiveScene: Bool { sceneHasReportedPhase && isAppSceneActive }
     private(set) var profileRefreshGeneration = 0
 
     /// Foreground expiration-sweep loop for disappearing messages. Started
@@ -2032,10 +2036,26 @@ final class AppState {
     @MainActor
     func refreshAccountUnreadSummaries(using leasedClient: MarmotClient? = nil) async {
         guard !blocksAccountWork else { return }
-        guard !accounts.isEmpty else {
-            accountUnreadStore.refreshed(from: [], accounts: [])
-            await synchronizeApplicationBadge()
-            return
+        let targetAccounts: [AccountSummaryFfi]
+        if accounts.isEmpty {
+            // Cold UI-less notification actions run on an ephemeral frozen
+            // runtime without running durable bootstrap, so `accounts` is still
+            // empty. Read the account list from the leased client so badge
+            // updates stay accurate without wiping the badge on failure.
+            guard let leasedClient, phase == .bootstrapping else {
+                accountUnreadStore.refreshed(from: [], accounts: [])
+                await synchronizeApplicationBadge()
+                return
+            }
+            guard let loadedAccounts = try? await leasedClient.listAccounts() else { return }
+            guard !loadedAccounts.isEmpty else {
+                accountUnreadStore.refreshed(from: [], accounts: [])
+                await synchronizeApplicationBadge()
+                return
+            }
+            targetAccounts = loadedAccounts
+        } else {
+            targetAccounts = accounts
         }
 #if DEBUG
         if let beforeUnreadSummaryRefreshForTesting {
@@ -2064,12 +2084,13 @@ final class AppState {
             guard generation == unreadSummaryRefreshGeneration else { return }
             accountUnreadStore.refreshed(
                 from: summaries,
-                accounts: accounts,
+                accounts: targetAccounts,
                 preservingUpdatesAfter: incrementalBaseline
             )
             await synchronizeApplicationBadge()
         } catch {
             guard generation == unreadSummaryRefreshGeneration else { return }
+            guard !accounts.isEmpty else { return }
             accountUnreadStore.pruneToCurrentAccounts(accounts)
             await synchronizeApplicationBadge()
         }

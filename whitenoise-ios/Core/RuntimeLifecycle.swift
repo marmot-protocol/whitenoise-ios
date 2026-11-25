@@ -6,12 +6,13 @@ import MarmotKit
 
 /// Runtime handle for one notification action: either the live foreground
 /// client (durable) or a lease-private frozen runtime built while the app's
-/// durable runtime stays suspended.
+/// durable runtime stays suspended or before cold bootstrap has started.
 final class NotificationActionRuntimeLease {
     // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
     // https://github.com/swiftlang/swift/issues/88036
     nonisolated deinit {}
 
+    let actionID: UUID
     private var retainedClient: MarmotClient?
     let clientIdentity: ObjectIdentifier
     /// True when the lease owns a private ephemeral frozen runtime. It is
@@ -19,7 +20,8 @@ final class NotificationActionRuntimeLease {
     /// completes; foreground never adopts it.
     let ownsEphemeralRuntime: Bool
 
-    init(client: MarmotClient, ownsEphemeralRuntime: Bool) {
+    init(actionID: UUID, client: MarmotClient, ownsEphemeralRuntime: Bool) {
+        self.actionID = actionID
         retainedClient = client
         clientIdentity = ObjectIdentifier(client)
         self.ownsEphemeralRuntime = ownsEphemeralRuntime
@@ -35,6 +37,35 @@ final class NotificationActionRuntimeLease {
     fileprivate func takeClientForRelease() -> MarmotClient? {
         defer { retainedClient = nil }
         return retainedClient
+    }
+}
+
+/// Tracks a notification action while it is constructing or starting an
+/// ephemeral frozen runtime (before `activeNotificationActionLease` exists) so
+/// deadline expiration can cancel, close SQLCipher, and release the suspension
+/// gate without stranding a partial runtime.
+@MainActor
+private final class PendingNotificationActionStart {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
+    let actionID: UUID
+    var isExpired = false
+    var constructionTask: Task<Result<MarmotClient, Error>, Never>?
+    private var ephemeralClient: MarmotClient?
+
+    init(actionID: UUID) {
+        self.actionID = actionID
+    }
+
+    func setEphemeralClient(_ client: MarmotClient) {
+        ephemeralClient = client
+    }
+
+    func takeEphemeralClientForRelease() -> MarmotClient? {
+        defer { ephemeralClient = nil }
+        return ephemeralClient
     }
 }
 
@@ -151,9 +182,15 @@ final class RuntimeLifecycle {
     @ObservationIgnored private var foregroundActivationTaskID = UUID()
     @ObservationIgnored private var runtimeSuspensionTask: Task<Void, Never>?
     @ObservationIgnored private var runtimeSuspensionTaskID = UUID()
+    @ObservationIgnored private var runtimeSuspensionClosePendingID: UUID?
     @ObservationIgnored private var activeNotificationActionLease: NotificationActionRuntimeLease?
+    @ObservationIgnored private var pendingNotificationActionStart: PendingNotificationActionStart?
     @ObservationIgnored private var notificationActionReleaseTask: Task<Void, Never>?
     @ObservationIgnored private var notificationActionReleaseTaskID = UUID()
+    @ObservationIgnored private var notificationActionReleaseActionID: UUID?
+    @ObservationIgnored private var notificationActionReleaseWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+    @ObservationIgnored private var notificationActionBackgroundEntryHandler: (actionID: UUID, handler: @MainActor () -> Void)?
+    @ObservationIgnored private var backgroundStorageCloseWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     @ObservationIgnored private var runtimeSuspensionWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     @ObservationIgnored private var suspensionStorageCloseWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     @ObservationIgnored private var bootstrapRegistrationWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
@@ -305,6 +342,7 @@ final class RuntimeLifecycle {
 
     private var isAppSceneActive: Bool { appState?.isAppSceneActive ?? false }
     private var sceneHasReportedPhase: Bool { appState?.sceneHasReportedPhase ?? false }
+    private var hasReportedActiveScene: Bool { appState?.hasReportedActiveScene ?? false }
 
     var canRefreshProfiles: Bool {
         isAppSceneActive
@@ -465,6 +503,8 @@ final class RuntimeLifecycle {
     /// per app launch.
     @MainActor
     func bootstrap() async {
+        await waitForRuntimeWorkAndActionReleaseToFinish()
+        guard !Task.isCancelled else { return }
         if let bootstrapTask {
             await bootstrapTask.value
             return
@@ -719,7 +759,7 @@ final class RuntimeLifecycle {
     }
 
     func closeForAppErasure() async throws {
-        await waitForRuntimeSuspensionToFinish()
+        await waitForRuntimeWorkAndActionReleaseToFinish()
         if let clientToClose = client {
             isBackgroundStorageCloseInProgress = true
             // `Marmot.shutdownAndClose()` is terminal and leaves every database
@@ -773,7 +813,10 @@ final class RuntimeLifecycle {
         }
     }
 
-    private func shutdownAndReleaseCurrentClient() async {
+    @discardableResult
+    private func shutdownAndReleaseCurrentClient(
+        awaitPolicyTail: Bool = true
+    ) async -> Task<Void, Error>? {
         if let appState {
             appState.conversationOpenPerformance?.finish(.cancelled, recorder: appState.productAnalytics)
             appState.conversationOpenPerformance?.accountContextReady(
@@ -783,10 +826,14 @@ final class RuntimeLifecycle {
         let clientToRelease = client
         client = nil
         startedClientID = nil
-        guard let clientToRelease else { return }
+        guard let clientToRelease else { return nil }
         let policyTail = AttachmentPolicyBridge.shared.detach(client: clientToRelease)
         try? await runtimeCloser(clientToRelease)
-        _ = try? await policyTail?.value
+        if awaitPolicyTail {
+            _ = try? await policyTail?.value
+            return nil
+        }
+        return policyTail
     }
 
     private func refreshAccountsForBootstrap(
@@ -839,8 +886,10 @@ final class RuntimeLifecycle {
         if appState?.phase == .bootstrapping {
             return Task { [weak self] in
                 guard let self else { return }
+                await self.waitForRuntimeWorkAndActionReleaseToFinish()
+                guard !Task.isCancelled else { return }
                 await bootstrapTask?.value
-                guard appState?.phase == .bootstrapping else { return }
+                guard !Task.isCancelled, appState?.phase == .bootstrapping else { return }
                 await bootstrap()
             }
         }
@@ -875,6 +924,10 @@ final class RuntimeLifecycle {
 
     @discardableResult
     func startRuntimeSuspension() -> Task<Void, Never> {
+        startRuntimeSuspensionWithCloseID().task
+    }
+
+    private func startRuntimeSuspensionWithCloseID() -> (task: Task<Void, Never>, closeID: UUID?) {
         if let appState {
             appState.conversationOpenPerformance?.finish(.cancelled, recorder: appState.productAnalytics)
             appState.conversationOpenPerformance?.accountContextReady(
@@ -884,6 +937,7 @@ final class RuntimeLifecycle {
         appState?.isAppSceneActive = false
         appState?.sceneHasReportedPhase = true
         backgroundSuspensionRequested = true
+        notifyNotificationActionBackgroundEntry()
         if appState?.phase == .bootstrapping || bootstrapTask != nil {
             bootstrapNeedsBackgroundSuspensionRecheck = true
         }
@@ -896,17 +950,18 @@ final class RuntimeLifecycle {
         }
         appState?.cancelNativePushRegistrationTaskSync()
         if let runtimeSuspensionTask {
-            return runtimeSuspensionTask
+            return (runtimeSuspensionTask, runtimeSuspensionClosePendingID)
         }
 
-        let id = UUID()
-        runtimeSuspensionTaskID = id
+        let suspensionID = UUID()
+        runtimeSuspensionTaskID = suspensionID
+        runtimeSuspensionClosePendingID = suspensionID
         let task = Task { [weak self] in
             guard let self else { return }
-            await prepareForBackgroundSuspension(suspensionID: id)
+            await prepareForBackgroundSuspension(suspensionID: suspensionID)
         }
         runtimeSuspensionTask = task
-        return task
+        return (task, suspensionID)
     }
 
     private func clearRuntimeSuspensionTaskIfCurrent(id: UUID) {
@@ -965,6 +1020,7 @@ final class RuntimeLifecycle {
             finishBackgroundStorageClose()
         }
         func finishAfterStorageSettled(_ cancellation: ForegroundMaintenanceCancellation) async {
+            markSuspensionStorageCloseFinished(suspensionID: suspensionID)
             await drainForegroundMaintenance(cancellation)
             releaseStorageCloseGateIfHeld()
             clearRuntimeSuspensionTaskIfCurrent(id: suspensionID)
@@ -973,6 +1029,7 @@ final class RuntimeLifecycle {
         }
         defer {
             releaseStorageCloseGateIfHeld()
+            markSuspensionStorageCloseFinished(suspensionID: suspensionID)
             clearRuntimeSuspensionTaskIfCurrent(id: suspensionID)
         }
         // Stop admitting foreground maintenance immediately, but do not put
@@ -1069,15 +1126,19 @@ final class RuntimeLifecycle {
             try? await backgroundClient?.marmot.setProductAnalyticsActivity(activity: .background)
         }
         // Terminal shutdown closes storage before draining delivery; never await
-        // the activity setter's network flush before releasing the database lock.
-        await shutdownAndReleaseCurrentClient()
-        await backgroundObservation.value
+        // the activity setter's network flush or policy-tail unwind before
+        // releasing the database lock and signaling storage closure to any
+        // notification action waiting to end its UIKit background assertion.
+        let policyTail = await shutdownAndReleaseCurrentClient(awaitPolicyTail: false)
         // `shutdownAndClose()` explicitly closes every SQLite connection and
         // releases the root lease. Dropping only the top-level handle cannot
         // prove that while subscriptions and projections retain internal Arcs;
         // suspending with either lock is an iOS `0xdead10cc` kill.
         backgroundSuspensionRequested = false
         runtimeSuspendedForBackground = true
+        markSuspensionStorageCloseFinished(suspensionID: suspensionID)
+        _ = try? await policyTail?.value
+        await backgroundObservation.value
         // Drain cancelled foreground maintenance before releasing the close gate
         // and `runtimeSuspensionTask` slot, then await account exit and earlier
         // drains (prevents erasure deadlock and lets a later `.background` close
@@ -1089,7 +1150,7 @@ final class RuntimeLifecycle {
         let resumeStartedAt = ContinuousClock.now
         let suspensionWaitStartedAt = ContinuousClock.now
         await bootstrapTask?.value
-        await waitForRuntimeSuspensionToFinish()
+        await waitForRuntimeWorkAndActionReleaseToFinish()
         let suspensionWaitMilliseconds = Self.elapsedMilliseconds(since: suspensionWaitStartedAt)
         guard phaseOwnsLiveRuntime, ownsForegroundActivation(id: activationID) else { return }
 
@@ -1316,25 +1377,75 @@ final class RuntimeLifecycle {
     // MARK: - Background notification actions
 
     /// Runtime for a notification action (reply / mark-read), which can arrive
-    /// while the app is backgrounded and the runtime is suspended. With a live
-    /// foreground client, the action leases that durable runtime. Otherwise
-    /// the lease owns an exclusive ephemeral runtime with `.frozen` cursor
-    /// persistence: it still ingests, decrypts, and publishes, but cannot
-    /// ratchet the durable transport-cursor floor past events a short
+    /// while the app is foregrounded, backgrounded with the runtime suspended,
+    /// or launched UI-less in the background before bootstrap has run. With a
+    /// live foreground client, the action leases that durable runtime.
+    /// Otherwise the lease owns an exclusive ephemeral runtime with `.frozen`
+    /// cursor persistence: it still ingests, decrypts, and publishes, but
+    /// cannot ratchet the durable transport-cursor floor past events a short
     /// background pass did not receive. It is never assigned to the client
     /// slot and never survives into foreground use, so a foregrounded app
     /// cannot end up running indefinitely on a frozen cursor. The suspension
-    /// claim is held for the whole action; a foreground activation that lands
-    /// mid-action parks on the waiter machinery for the action's duration
-    /// (seconds) and then resumes with a fresh durable runtime.
-    func startRuntimeForNotificationAction() async throws -> NotificationActionRuntimeLease {
-        // Let an in-flight foreground activation finish first so the live
-        // durable client serves the action, instead of building a second
-        // runtime over the same App Group store mid-activation.
-        await foregroundActivationTask?.value
-        await runtimeSuspensionTask?.value
-        await waitForRuntimeSuspensionToFinish()
-        guard phaseOwnsLiveRuntime,
+    /// claim is held for the whole action; a foreground activation or bootstrap
+    /// that lands mid-action parks on the waiter machinery for the action's
+    /// duration (seconds) and then resumes with a fresh durable runtime.
+    func setNotificationActionBackgroundEntryHandler(
+        actionID: UUID,
+        handler: @escaping @MainActor () -> Void
+    ) {
+        notificationActionBackgroundEntryHandler = (actionID: actionID, handler: handler)
+    }
+
+    func clearNotificationActionBackgroundEntryHandler(actionID: UUID) {
+        guard notificationActionBackgroundEntryHandler?.actionID == actionID else { return }
+        notificationActionBackgroundEntryHandler = nil
+    }
+
+    private func notifyNotificationActionBackgroundEntry() {
+        notificationActionBackgroundEntryHandler?.handler()
+    }
+
+    private var canHostEphemeralNotificationActionRuntime: Bool {
+        appState?.blocksAccountWork != true
+            && ((phaseOwnsLiveRuntime && runtimeSuspendedForBackground)
+                || (appState?.phase == .bootstrapping && client == nil && bootstrapTask == nil))
+    }
+
+    func startRuntimeForNotificationAction(
+        actionID: UUID = UUID()
+    ) async throws -> NotificationActionRuntimeLease {
+        // Let any in-flight foreground activation, suspension, bootstrap,
+        // release, or earlier notification action finish first so we never
+        // construct a second runtime over the same App Group store concurrently.
+        while true {
+            guard !Task.isCancelled else {
+                throw NotificationActionError.runtimeUnavailable
+            }
+            if let activation = foregroundActivationTask {
+                await activation.value
+                continue
+            }
+            if let suspension = runtimeSuspensionTask {
+                await suspension.value
+                continue
+            }
+            if let bootstrapTask {
+                await bootstrapTask.value
+                continue
+            }
+            if notificationActionReleaseTask != nil {
+                await waitForNotificationActionReleaseToFinish()
+                continue
+            }
+            if runtimeWorkIsSuspending {
+                await waitForRuntimeSuspensionToFinish()
+                continue
+            }
+            break
+        }
+        let canUseLiveClient = phaseOwnsLiveRuntime && !runtimeSuspendedForBackground && client != nil
+        let canUseEphemeralClient = canHostEphemeralNotificationActionRuntime
+        guard (canUseLiveClient || canUseEphemeralClient),
               appState?.blocksAccountWork != true,
               !Task.isCancelled
         else {
@@ -1344,79 +1455,139 @@ final class RuntimeLifecycle {
         // The live-client branch needs this too: its FFI work must finish before
         // a concurrent background transition can tear the durable runtime down.
         isRuntimeSuspending = true
-        if !runtimeSuspendedForBackground, let client {
-            let lease = NotificationActionRuntimeLease(client: client, ownsEphemeralRuntime: false)
+        if canUseLiveClient, let client {
+            let lease = NotificationActionRuntimeLease(
+                actionID: actionID,
+                client: client,
+                ownsEphemeralRuntime: false
+            )
             activeNotificationActionLease = lease
             return lease
         }
-        let ephemeral: MarmotClient
-        do {
-            ephemeral = try await makeRuntime(
-                cursorPersistence: .frozen,
-                retryOnTransientReadiness: false,
-                stillOwnsWork: {
-                    self.phaseOwnsLiveRuntime
-                        && self.runtimeSuspendedForBackground
-                        && self.appState?.blocksAccountWork != true
-                        && !Task.isCancelled
+        let start = PendingNotificationActionStart(actionID: actionID)
+        pendingNotificationActionStart = start
+        func abandonPendingStart(_ error: Error) async throws -> Never {
+            // Once `expireActiveNotificationAction` marks the start expired, it
+            // owns closing any late-built client under the action's deadline
+            // barrier; don't race it for `takeEphemeralClientForRelease()`.
+            if !start.isExpired, let clientToClose = start.takeEphemeralClientForRelease() {
+                await runNotificationActionRelease(actionID: actionID) { [self] in
+                    _ = try? await clientToClose.marmot.shutdownAndClose()
+                    releasePendingNotificationActionStartIfCurrent(start)
                 }
-            )
-        } catch let error as MarmotKitError where error.isRuntimeOwnershipContention {
-            finishRuntimeSuspensionWait()
+            } else {
+                releasePendingNotificationActionStartIfCurrent(start)
+            }
+            throw error
+        }
+        let constructionTask = Task { @MainActor [weak self] () -> Result<MarmotClient, Error> in
+            guard let self else { return .failure(NotificationActionError.runtimeUnavailable) }
+            do {
+                let built = try await self.makeRuntime(
+                    cursorPersistence: .frozen,
+                    retryOnTransientReadiness: false,
+                    stillOwnsWork: {
+                        self.canHostEphemeralNotificationActionRuntime
+                            && !start.isExpired
+                            && !Task.isCancelled
+                    }
+                )
+                start.setEphemeralClient(built)
+                return .success(built)
+            } catch {
+                return .failure(error)
+            }
+        }
+        start.constructionTask = constructionTask
+        let constructionResult = await withTaskCancellationHandler {
+            await constructionTask.value
+        } onCancel: {
+            constructionTask.cancel()
+        }
+        let ephemeral: MarmotClient
+        switch constructionResult {
+        case .success(let built):
+            ephemeral = built
+        case .failure(let error as MarmotKitError) where error.isRuntimeOwnershipContention:
+            releasePendingNotificationActionStartIfCurrent(start)
             Self.runtimeOwnershipLog.info(
                 "contention_fallback operation=notification_action attempt=1"
             )
             throw NotificationActionError.runtimeUnavailable
-        } catch {
-            finishRuntimeSuspensionWait()
+        case .failure(let error):
+            releasePendingNotificationActionStartIfCurrent(start)
             throw error
+        }
+        guard !start.isExpired, pendingNotificationActionStart === start, !Task.isCancelled else {
+            try await abandonPendingStart(NotificationActionError.runtimeUnavailable)
         }
         do {
-            try await ephemeral.startRuntime()
+            try await runtimeStarter(ephemeral)
         } catch {
-            // Release the partial runtime like the bootstrap failure path.
-            try? await ephemeral.marmot.shutdownAndClose()
-            finishRuntimeSuspensionWait()
-            throw error
+            try await abandonPendingStart(error)
         }
-        guard appState?.blocksAccountWork != true, !Task.isCancelled else {
-            try? await ephemeral.marmot.shutdownAndClose()
-            finishRuntimeSuspensionWait()
-            throw NotificationActionError.runtimeUnavailable
+        guard !start.isExpired,
+              pendingNotificationActionStart === start,
+              appState?.blocksAccountWork != true,
+              !Task.isCancelled,
+              let readyClient = start.takeEphemeralClientForRelease()
+        else {
+            try await abandonPendingStart(NotificationActionError.runtimeUnavailable)
         }
-        // `client` stays nil and `runtimeSuspendedForBackground` stays true:
-        // the app's durable runtime really is still suspended, and nothing
-        // app-visible changed runtimes (no generation bump).
-        let lease = NotificationActionRuntimeLease(client: ephemeral, ownsEphemeralRuntime: true)
+        // `client` stays nil and durable lifecycle state stays untouched:
+        // neither a suspended runtime nor a cold `.bootstrapping` launch adopts
+        // a frozen client (no generation bump).
+        let lease = NotificationActionRuntimeLease(
+            actionID: actionID,
+            client: readyClient,
+            ownsEphemeralRuntime: true
+        )
+        pendingNotificationActionStart = nil
         activeNotificationActionLease = lease
         return lease
     }
 
+    private func releasePendingNotificationActionStartIfCurrent(_ start: PendingNotificationActionStart) {
+        guard pendingNotificationActionStart === start else { return }
+        pendingNotificationActionStart = nil
+        finishRuntimeSuspensionWait()
+    }
+
     /// Ends a notification-action lease. An ephemeral lease shuts its frozen
     /// runtime down unconditionally — it must never outlive the action — then
-    /// both lease kinds release the suspension claim. A scene transition that
-    /// arrived mid-action then continues through the normal suspend / resume
-    /// path after re-checking the authoritative scene flag.
+    /// both lease kinds release the suspension claim. A live-client lease also
+    /// awaits terminal SQLCipher closure inside this same release task whenever
+    /// the app is backgrounded or launched UI-less, so deadline expiration
+    /// keeps the UIKit background assertion alive until storage closes.
     func suspendRuntimeAfterNotificationAction(_ lease: NotificationActionRuntimeLease) async {
         guard activeNotificationActionLease === lease else { return }
-        let releaseID = UUID()
-        notificationActionReleaseTaskID = releaseID
-        let releaseTask = Task {
-            await self.releaseNotificationActionClient(lease)
+        await runNotificationActionRelease(actionID: lease.actionID) { [self] in
+            await releaseNotificationActionClient(lease)
+            if activeNotificationActionLease === lease {
+                activeNotificationActionLease = nil
+                finishRuntimeSuspensionWait()
+            }
+            // A live-client lease needs the action's UIKit background assertion
+            // to stay alive until SQLCipher closes whenever the app is
+            // backgrounded: either starting teardown on a pre-bootstrapped
+            // UI-less launch (where no scene will deliver `.background`), or
+            // joining an in-flight scene suspension (in case UIKit denied the
+            // scene's own assertion). Wait only for terminal storage closure
+            // (independent of unrelated `pendingMaintenanceDrains`) to avoid
+            // drain cycles.
+            if !lease.ownsEphemeralRuntime {
+                if !sceneHasReportedPhase {
+                    let (_, closeID) = startRuntimeSuspensionWithCloseID()
+                    if let closeID {
+                        await waitForBackgroundStorageClose(suspensionID: closeID)
+                    }
+                } else if let closeID = runtimeSuspensionClosePendingID,
+                          backgroundSuspensionRequested || isBackgroundStorageCloseInProgress {
+                    await waitForBackgroundStorageClose(suspensionID: closeID)
+                }
+            }
         }
-        notificationActionReleaseTask = releaseTask
-        await releaseTask.value
-        guard notificationActionReleaseTaskID == releaseID else { return }
-        notificationActionReleaseTask = nil
-        activeNotificationActionLease = nil
-        finishRuntimeSuspensionWait()
-
-        // A live-client lease on a cold UI-less launch rides the runtime that
-        // the action's own bootstrap started. With no scene transition to own
-        // teardown, suspend it here after releasing the lease gate.
-        if !sceneHasReportedPhase {
-            await startRuntimeSuspension().value
-        } else if lease.ownsEphemeralRuntime, isAppSceneActive {
+        if lease.ownsEphemeralRuntime, hasReportedActiveScene {
             startForegroundActivation()
         }
     }
@@ -1424,15 +1595,37 @@ final class RuntimeLifecycle {
     /// Terminates an action that outlived its UIKit/background deadline. Swift
     /// task cancellation cannot interrupt every generated Rust future, so the
     /// lifecycle owner must close the runtime concurrently and only then release
-    /// the suspension gate. A foreground app rebuilds a fresh durable runtime;
-    /// a background app remains safely suspended with storage closed.
-    func expireActiveNotificationAction() async {
-        if let notificationActionReleaseTask {
+    /// the suspension gate. Scoped to `actionID` so an expiring queued action
+    /// never tears down a different action's pending start, close, or lease.
+    func expireActiveNotificationAction(actionID: UUID) async {
+        if let notificationActionReleaseTask,
+           notificationActionReleaseActionID == actionID {
             await notificationActionReleaseTask.value
             return
         }
-        guard let lease = activeNotificationActionLease else {
-            await runtimeSuspensionTask?.value
+        if let pendingStart = pendingNotificationActionStart,
+           pendingStart.actionID == actionID {
+            pendingStart.isExpired = true
+            pendingNotificationActionStart = nil
+            await runNotificationActionRelease(actionID: pendingStart.actionID) { [self] in
+                if let clientToClose = pendingStart.takeEphemeralClientForRelease() {
+                    _ = try? await clientToClose.marmot.shutdownAndClose()
+                } else if let constructionTask = pendingStart.constructionTask {
+                    constructionTask.cancel()
+                    _ = await constructionTask.value
+                    if let clientToClose = pendingStart.takeEphemeralClientForRelease() {
+                        _ = try? await clientToClose.marmot.shutdownAndClose()
+                    }
+                }
+                finishRuntimeSuspensionWait()
+            }
+            if hasReportedActiveScene {
+                startForegroundActivation()
+            }
+            return
+        }
+        guard let lease = activeNotificationActionLease,
+              lease.actionID == actionID else {
             return
         }
         activeNotificationActionLease = nil
@@ -1447,14 +1640,104 @@ final class RuntimeLifecycle {
             client = nil
             startedClientID = nil
         }
-        try? await clientToClose.marmot.shutdownAndClose()
-        if !lease.ownsEphemeralRuntime {
-            runtimeSuspendedForBackground = true
+        await runNotificationActionRelease(actionID: lease.actionID) { [self] in
+            _ = try? await clientToClose.marmot.shutdownAndClose()
+            if !lease.ownsEphemeralRuntime {
+                runtimeSuspendedForBackground = true
+            }
+            finishRuntimeSuspensionWait()
         }
-        finishRuntimeSuspensionWait()
 
-        if isAppSceneActive {
+        if hasReportedActiveScene {
             startForegroundActivation()
+        }
+    }
+
+    private func runNotificationActionRelease(
+        actionID: UUID,
+        _ operation: @escaping @MainActor () async -> Void
+    ) async {
+        let releaseID = UUID()
+        notificationActionReleaseTaskID = releaseID
+        notificationActionReleaseActionID = actionID
+        let releaseTask = Task { @MainActor in
+            defer {
+                if self.notificationActionReleaseTaskID == releaseID {
+                    self.notificationActionReleaseTask = nil
+                    self.notificationActionReleaseActionID = nil
+                    self.resumeNotificationActionReleaseWaitersIfReady()
+                }
+            }
+            await operation()
+        }
+        notificationActionReleaseTask = releaseTask
+        await releaseTask.value
+    }
+
+    private func waitForRuntimeWorkAndActionReleaseToFinish() async {
+        while (notificationActionReleaseTask != nil || runtimeWorkIsSuspending), !Task.isCancelled {
+            if notificationActionReleaseTask != nil {
+                await waitForNotificationActionReleaseToFinish()
+            } else {
+                await waitForRuntimeSuspensionToFinish()
+            }
+        }
+    }
+
+    private func waitForNotificationActionReleaseToFinish() async {
+        await waitWhile(
+            { self.notificationActionReleaseTask != nil },
+            in: \.notificationActionReleaseWaiters
+        )
+    }
+
+    private func resumeNotificationActionReleaseWaitersIfReady() {
+        guard notificationActionReleaseTask == nil else { return }
+        resumeAllWaiters(in: \.notificationActionReleaseWaiters)
+    }
+
+    private func waitForBackgroundStorageClose(suspensionID: UUID) async {
+        await waitWhile(
+            { self.runtimeSuspensionClosePendingID == suspensionID },
+            in: \.backgroundStorageCloseWaiters
+        )
+    }
+
+    private func markSuspensionStorageCloseFinished(suspensionID: UUID) {
+        guard runtimeSuspensionClosePendingID == suspensionID else { return }
+        runtimeSuspensionClosePendingID = nil
+        resumeAllWaiters(in: \.backgroundStorageCloseWaiters)
+    }
+
+    private func waitWhile(
+        _ condition: () -> Bool,
+        in waitersKeyPath: ReferenceWritableKeyPath<RuntimeLifecycle, [UUID: CheckedContinuation<Void, Never>]>
+    ) async {
+        while condition(), !Task.isCancelled {
+            let waiterID = UUID()
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    guard condition(), !Task.isCancelled else {
+                        continuation.resume()
+                        return
+                    }
+                    self[keyPath: waitersKeyPath][waiterID] = continuation
+                }
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    self?[keyPath: waitersKeyPath].removeValue(forKey: waiterID)?.resume()
+                }
+            }
+        }
+    }
+
+    private func resumeAllWaiters(
+        in waitersKeyPath: ReferenceWritableKeyPath<RuntimeLifecycle, [UUID: CheckedContinuation<Void, Never>]>
+    ) {
+        let waiters = Array(self[keyPath: waitersKeyPath].values)
+        self[keyPath: waitersKeyPath].removeAll()
+        for waiter in waiters {
+            waiter.resume()
         }
     }
 
@@ -1475,23 +1758,10 @@ final class RuntimeLifecycle {
     }
 
     private func waitForRuntimeSuspensionToFinish() async {
-        while runtimeWorkIsSuspending, !Task.isCancelled {
-            let waiterID = UUID()
-
-            await withTaskCancellationHandler {
-                await withCheckedContinuation { continuation in
-                    guard runtimeWorkIsSuspending, !Task.isCancelled else {
-                        continuation.resume()
-                        return
-                    }
-                    runtimeSuspensionWaiters[waiterID] = continuation
-                }
-            } onCancel: {
-                Task { @MainActor [weak self] in
-                    self?.resumeRuntimeSuspensionWaiter(id: waiterID)
-                }
-            }
-        }
+        await waitWhile(
+            { self.runtimeWorkIsSuspending },
+            in: \.runtimeSuspensionWaiters
+        )
     }
 
     private func finishRuntimeSuspensionWait() {
@@ -1537,16 +1807,8 @@ final class RuntimeLifecycle {
 
     private func resumeRuntimeSuspensionWaitersIfReady() {
         guard !runtimeWorkIsSuspending else { return }
-        let waiters = Array(runtimeSuspensionWaiters.values)
-        runtimeSuspensionWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
+        resumeAllWaiters(in: \.runtimeSuspensionWaiters)
         resumeSuspensionStorageCloseWaitersIfReady()
-    }
-
-    private func resumeRuntimeSuspensionWaiter(id: UUID) {
-        runtimeSuspensionWaiters.removeValue(forKey: id)?.resume()
     }
 
     func beginForegroundRuntimeMutation() throws -> ForegroundRuntimeMutationLease {
