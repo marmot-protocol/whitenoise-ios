@@ -11,8 +11,10 @@ struct NotificationServiceWakeCoordinatorTests {
         let events = WakeEventLog()
         let wake1CollectEntered = TestLatch()
         let wake1CollectRelease = TestLatch()
+        defer { wake1CollectRelease.signal() }
         let wake1ShutdownEntered = TestLatch()
         let wake1ShutdownRelease = TestLatch()
+        defer { wake1ShutdownRelease.signal() }
         let wake2Delivered = TestLatch()
         var wake1Contents: [UNNotificationContent] = []
         var wake2Contents: [UNNotificationContent] = []
@@ -116,6 +118,7 @@ struct NotificationServiceWakeCoordinatorTests {
         let events = WakeEventLog()
         let wake1StartEntered = TestLatch()
         let wake1StartRelease = TestLatch()
+        defer { wake1StartRelease.signal() }
         let wake1Delivered = TestLatch()
         let wake2Delivered = TestLatch()
         var wake1Contents: [UNNotificationContent] = []
@@ -209,6 +212,7 @@ struct NotificationServiceWakeCoordinatorTests {
         let events = WakeEventLog()
         let wake1CollectEntered = TestLatch()
         let wake1CollectRelease = TestLatch()
+        defer { wake1CollectRelease.signal() }
         let wake1Delivered = TestLatch()
         let wake2Delivered = TestLatch()
         let extraSubmitted = TestLatch()
@@ -328,6 +332,7 @@ struct NotificationServiceWakeCoordinatorTests {
         let events = WakeEventLog()
         let wake1LocalCheckEntered = TestLatch()
         let wake1LocalCheckRelease = TestLatch()
+        defer { wake1LocalCheckRelease.signal() }
         let wake1Delivered = TestLatch()
         let wake2Delivered = TestLatch()
         let extraSubmitted = TestLatch()
@@ -450,9 +455,12 @@ struct NotificationServiceWakeCoordinatorTests {
         watchdogFires: Bool
     ) async throws {
         let events = WakeEventLog()
+        let clock = MutableContinuousClock(initial: ContinuousClock.now)
         let wake1CollectEntered = TestLatch()
         let wake1CollectRelease = TestLatch()
+        defer { wake1CollectRelease.signal() }
         let triggerWatchdog = TestLatch()
+        defer { triggerWatchdog.signal() }
         let watchdogFired = TestLatch()
         let wake1Delivered = TestLatch()
         let extraSubmitted = TestLatch()
@@ -523,9 +531,14 @@ struct NotificationServiceWakeCoordinatorTests {
             loadPolicySnapshot: Self.allVisiblePolicySnapshot,
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
+            now: { clock.now() },
             sleep: { _ in
-                try await triggerWatchdog.wait()
-                watchdogFired.signal()
+                if watchdogFires {
+                    try await triggerWatchdog.wait()
+                    watchdogFired.signal()
+                } else {
+                    try await parkUntilCancelled()
+                }
             },
             submitAdditionalPresentation: { presentation, _ in
                 additionalTitles.withLock { $0.append(presentation.title) }
@@ -679,6 +692,7 @@ struct NotificationServiceWakeCoordinatorTests {
 
     @Test func wakeCoordinatorSubmitsBoundedExtrasBeforeShutdownEvenOnHardExpiry() async throws {
         let events = WakeEventLog()
+        let clock = MutableContinuousClock(initial: ContinuousClock.now)
         let shutdownEntered = TestLatch()
         let shutdownRelease = TestLatch()
         defer { shutdownRelease.signal() }
@@ -733,6 +747,7 @@ struct NotificationServiceWakeCoordinatorTests {
             loadPolicySnapshot: Self.allVisiblePolicySnapshot,
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
+            now: { clock.now() },
             sleep: { _ in try await parkUntilCancelled() },
             submitAdditionalPresentation: { presentation, badgeCount in
                 events.append("extra-\(presentation.title)")
@@ -765,26 +780,37 @@ struct NotificationServiceWakeCoordinatorTests {
         #expect(extraCarol < shutdownStart)
         #expect(!snapshot.contains("shutdown-done-1"))
 
-        // Fire hard expiration from a background thread (matching Apple's
-        // contract) while shutdown is still parked: primary must deliver
-        // synchronously with the prepared decorated snapshot and badge.
+        // Fire hard expiration from a dedicated background thread (matching
+        // Apple's contract without queuing behind GCD's global concurrent pool)
+        // while shutdown is still parked: primary must deliver synchronously
+        // with the prepared decorated snapshot and badge.
         let bgExpiryDone = TestLatch()
-        DispatchQueue.global(qos: .userInitiated).async {
+        let titlesAtExpiryReturn = Mutex<[String]>([])
+        let bodiesAtExpiryReturn = Mutex<[String]>([])
+        let badgesAtExpiryReturn = Mutex<[Int?]>([])
+        Self.runOnBackgroundThread {
             coordinator.serviceExtensionTimeWillExpire(ownerID: owner)
-            #expect(deliveredTitles.withLock { $0 } == ["Alice"])
-            #expect(deliveredBodies.withLock { $0 } == ["Primary prepared before shutdown"])
-            #expect(deliveredBadges.withLock { $0 } == [7])
+            titlesAtExpiryReturn.withLock { $0 = deliveredTitles.withLock { $0 } }
+            bodiesAtExpiryReturn.withLock { $0 = deliveredBodies.withLock { $0 } }
+            badgesAtExpiryReturn.withLock { $0 = deliveredBadges.withLock { $0 } }
             bgExpiryDone.signal()
         }
         try await bgExpiryDone.wait()
+        #expect(titlesAtExpiryReturn.withLock { $0 } == ["Alice"])
+        #expect(bodiesAtExpiryReturn.withLock { $0 } == ["Primary prepared before shutdown"])
+        #expect(badgesAtExpiryReturn.withLock { $0 } == [7])
         #expect(deliveredTitles.withLock { $0 } == ["Alice"])
     }
 
     @Test func wakeCoordinatorHandlesBackgroundThreadExpirationCompetingWithNormalDelivery() async throws {
         let events = WakeEventLog()
+        let clock = MutableContinuousClock(initial: ContinuousClock.now)
         let deliveryCount = Mutex(0)
+        let deliveredTitles = Mutex<[String]>([])
+        let deliveredBodies = Mutex<[String]>([])
         let deliveredFromBackgroundThread = Mutex(false)
         let shutdownRelease = TestLatch()
+        defer { shutdownRelease.signal() }
         let shutdownEntered = TestLatch()
         let delivered = TestLatch()
 
@@ -819,6 +845,7 @@ struct NotificationServiceWakeCoordinatorTests {
             loadPolicySnapshot: Self.allVisiblePolicySnapshot,
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
+            now: { clock.now() },
             sleep: { _ in try await parkUntilCancelled() },
             submitAdditionalPresentation: { _, _ in }
         )
@@ -827,11 +854,12 @@ struct NotificationServiceWakeCoordinatorTests {
         let owner = UUID()
         let request = UNNotificationRequest(identifier: "bg-race", content: UNNotificationContent(), trigger: nil)
 
-        // Dispatch `didReceive` itself from a non-main queue, matching iOS.
-        DispatchQueue.global(qos: .userInitiated).async {
+        // Dispatch `didReceive` itself from a dedicated background thread,
+        // matching iOS without stalling behind GCD's global concurrent pool.
+        Self.runOnBackgroundThread {
             coordinator.didReceive(request, ownerID: owner) { content in
-                #expect(content.title == "Alice")
-                #expect(content.body == "Prepared before thread race")
+                deliveredTitles.withLock { $0.append(content.title) }
+                deliveredBodies.withLock { $0.append(content.body) }
                 deliveryCount.withLock { $0 += 1 }
                 if !Thread.isMainThread {
                     deliveredFromBackgroundThread.withLock { $0 = true }
@@ -844,7 +872,7 @@ struct NotificationServiceWakeCoordinatorTests {
         // Race background-thread hard expiration against releasing normal
         // completion on MainActor: the handler must run exactly once.
         let bgDone = TestLatch()
-        DispatchQueue.global(qos: .userInitiated).async {
+        Self.runOnBackgroundThread {
             coordinator.serviceExtensionTimeWillExpire(ownerID: owner)
             bgDone.signal()
         }
@@ -855,6 +883,8 @@ struct NotificationServiceWakeCoordinatorTests {
         await Task.yield()
 
         #expect(deliveryCount.withLock { $0 } == 1)
+        #expect(deliveredTitles.withLock { $0 } == ["Alice"])
+        #expect(deliveredBodies.withLock { $0 } == ["Prepared before thread race"])
     }
 
     @Test(arguments: [true, false])
@@ -862,6 +892,7 @@ struct NotificationServiceWakeCoordinatorTests {
         withinBudget: Bool
     ) async throws {
         let events = WakeEventLog()
+        let clock = MutableContinuousClock(initial: ContinuousClock.now)
         let badgeCalls = Mutex(0)
         let delivered = TestLatch()
         var deliveredContents: [UNNotificationContent] = []
@@ -907,6 +938,7 @@ struct NotificationServiceWakeCoordinatorTests {
             proactiveBudget: withinBudget
                 ? NotificationServiceTimeoutPolicy.proactiveExpirationDelay
                 : .seconds(5),
+            now: { clock.now() },
             sleep: { _ in try await parkUntilCancelled() },
             submitAdditionalPresentation: { _, badgeCount in
                 extraBadges.withLock { $0.append(badgeCount) }
@@ -1043,8 +1075,10 @@ struct NotificationServiceWakeCoordinatorTests {
         let events = WakeEventLog()
         let instanceACollectEntered = TestLatch()
         let instanceACollectRelease = TestLatch()
+        defer { instanceACollectRelease.signal() }
         let instanceAShutdownEntered = TestLatch()
         let instanceAShutdownRelease = TestLatch()
+        defer { instanceAShutdownRelease.signal() }
         let instanceBDelivered = TestLatch()
         var instanceAContents: [UNNotificationContent] = []
         var instanceBContents: [UNNotificationContent] = []
@@ -1150,8 +1184,10 @@ struct NotificationServiceWakeCoordinatorTests {
         let events = WakeEventLog()
         let wake1StartEntered = TestLatch()
         let wake1StartRelease = TestLatch()
+        defer { wake1StartRelease.signal() }
         let wake1ShutdownEntered = TestLatch()
         let wake1ShutdownRelease = TestLatch()
+        defer { wake1ShutdownRelease.signal() }
         let wake1Delivered = TestLatch()
         let wake3Delivered = TestLatch()
         var wake2Contents: [UNNotificationContent] = []
@@ -1379,11 +1415,13 @@ struct NotificationServiceWakeCoordinatorTests {
 
     @Test func wakeCoordinatorHardExpiryDuringFirstExtraSubmissionStillDeliversPreparedPrimary() async throws {
         let events = WakeEventLog()
+        let clock = MutableContinuousClock(initial: ContinuousClock.now)
         let deliveredTitles = Mutex<[String]>([])
         let deliveredBodies = Mutex<[String]>([])
         let deliveredBadges = Mutex<[Int?]>([])
         let deliveredOffMainThread = Mutex(false)
         let expiryRanOffMainThread = Mutex(false)
+        let expiryWaitResult = Mutex<DispatchTimeoutResult?>(nil)
         let submittedExtras = Mutex<[String]>([])
         let expiryFinished = TestLatch()
 
@@ -1425,22 +1463,24 @@ struct NotificationServiceWakeCoordinatorTests {
             loadPolicySnapshot: Self.allVisiblePolicySnapshot,
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
+            now: { clock.now() },
             sleep: { _ in try await parkUntilCancelled() },
             submitAdditionalPresentation: { presentation, _ in
                 submittedExtras.withLock { $0.append(presentation.title) }
-                // Dispatch hard expiration asynchronously onto a background
-                // queue while keeping the first extra submission open until
-                // expiry returns (`DispatchQueue.global().sync` may execute on
-                // the calling main thread).
+                // Run hard expiration on a dedicated background pthread while
+                // keeping this MainActor extra submission on the stack so the
+                // test proves `serviceExtensionTimeWillExpire` never blocks on
+                // MainActor without starving behind GCD's global concurrent
+                // queue under parallel test load.
                 if let coordinator = coordinatorRef {
                     let semaphore = DispatchSemaphore(value: 0)
-                    DispatchQueue.global(qos: .userInitiated).async {
+                    Self.runOnBackgroundThread {
                         expiryRanOffMainThread.withLock { $0 = !Thread.isMainThread }
                         coordinator.serviceExtensionTimeWillExpire(ownerID: owner)
                         semaphore.signal()
                     }
-                    let waited = semaphore.wait(timeout: .now() + .seconds(5))
-                    #expect(waited == .success)
+                    let waited = semaphore.wait(timeout: .now() + .seconds(15))
+                    expiryWaitResult.withLock { $0 = waited }
                     expiryFinished.signal()
                 }
             }
@@ -1450,9 +1490,10 @@ struct NotificationServiceWakeCoordinatorTests {
         coordinatorRef = coordinator
         let request = UNNotificationRequest(identifier: "mid-extra-exp", content: UNNotificationContent(), trigger: nil)
 
-        // Dispatch `didReceive` itself from a background queue to verify
-        // nonisolated entry under Swift 6.2 default `@MainActor` isolation.
-        DispatchQueue.global(qos: .userInitiated).async {
+        // Dispatch `didReceive` itself from a dedicated background thread to
+        // verify nonisolated entry under Swift 6.2 default `@MainActor`
+        // isolation without queuing behind GCD's global concurrent pool.
+        Self.runOnBackgroundThread {
             coordinator.didReceive(request, ownerID: owner) { content in
                 deliveredOffMainThread.withLock { $0 = !Thread.isMainThread }
                 deliveredTitles.withLock { $0.append(content.title) }
@@ -1464,12 +1505,19 @@ struct NotificationServiceWakeCoordinatorTests {
         try await expiryFinished.wait()
         await Task.yield()
 
+        #expect(expiryWaitResult.withLock { $0 } == .success)
         #expect(expiryRanOffMainThread.withLock { $0 })
         #expect(deliveredOffMainThread.withLock { $0 })
         #expect(submittedExtras.withLock { $0 } == ["Bob"])
         #expect(deliveredTitles.withLock { $0 } == ["Alice"])
         #expect(deliveredBodies.withLock { $0 } == ["Frozen before extras"])
         #expect(deliveredBadges.withLock { $0 } == [4])
+    }
+
+    private nonisolated static func runOnBackgroundThread(_ body: @escaping @Sendable () -> Void) {
+        Thread.detachNewThread {
+            body()
+        }
     }
 
     private static func allVisiblePolicySnapshot() -> NotificationServiceWakePolicySnapshot {
