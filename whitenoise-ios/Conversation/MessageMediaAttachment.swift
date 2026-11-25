@@ -2924,11 +2924,12 @@ nonisolated enum MessageMediaCache {
         in references: [MediaAttachmentReferenceFfi],
         cachesDirectory: URL
     ) {
-        let directory = cachesDirectory.appendingPathComponent("EncryptedMedia", isDirectory: true)
-        let existing = (try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: nil
-        )) ?? []
+        let existing = decryptedMediaDirectoryNames.flatMap { name in
+            (try? FileManager.default.contentsOfDirectory(
+                at: cachesDirectory.appendingPathComponent(name, isDirectory: true),
+                includingPropertiesForKeys: nil
+            )) ?? []
+        }
         for reference in references where hashes.contains(reference.ciphertextSha256.lowercased()) {
             // Every file sharing the hash stem goes, not just the current
             // media-type name: older builds keyed by peer filename extension,

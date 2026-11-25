@@ -27,6 +27,44 @@ struct MessageMediaCachePurgeTests {
 
         #expect(!FileManager.default.fileExists(atPath: url.path))
     }
+
+    @Test func targetedRemovalClearsBothDecryptedStoresForTheDeletedMessageOnly() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("targeted-purge-playback-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let deleted = purgeTestReference()
+        let kept = purgeTestReference(
+            ciphertextSha256: String(repeating: "c", count: 64),
+            plaintextSha256: String(repeating: "d", count: 64)
+        )
+        let playbackDirectory = root.appendingPathComponent("EncryptedMediaPlayback", isDirectory: true)
+        try FileManager.default.createDirectory(at: playbackDirectory, withIntermediateDirectories: true)
+        var deletedURLs = [playbackDirectory.appendingPathComponent("\(deleted.plaintextSha256).m4a")]
+        var keptURLs = [playbackDirectory.appendingPathComponent("\(kept.plaintextSha256).m4a")]
+        deletedURLs.append(try #require(MessageMediaCache.cacheURL(for: deleted, cachesDirectory: root)))
+        keptURLs.append(try #require(MessageMediaCache.cacheURL(for: kept, cachesDirectory: root)))
+        for url in deletedURLs + keptURLs {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data("plaintext".utf8).write(to: url)
+        }
+
+        MessageMediaCache.removeCachedData(
+            forCiphertextHashes: [deleted.ciphertextSha256.lowercased()],
+            in: [deleted, kept],
+            cachesDirectory: root
+        )
+
+        for url in deletedURLs {
+            #expect(!FileManager.default.fileExists(atPath: url.path))
+        }
+        for url in keptURLs {
+            #expect(FileManager.default.fileExists(atPath: url.path))
+        }
+    }
+
     @Test func staleProducerCannotStorePlaintextAfterAPurge() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("purge-race-tests-\(UUID().uuidString)", isDirectory: true)
@@ -122,11 +160,14 @@ private func freshWriteFailure(_ write: (Int) -> Bool) -> String? {
     return "write failed on every attempt while the epoch kept moving"
 }
 
-private func purgeTestReference() -> MediaAttachmentReferenceFfi {
+private func purgeTestReference(
+    ciphertextSha256: String = String(repeating: "a", count: 64),
+    plaintextSha256: String = String(repeating: "b", count: 64)
+) -> MediaAttachmentReferenceFfi {
     MediaAttachmentReferenceFfi(
         locators: [MediaLocatorFfi(kind: "blossom-v1", value: "https://example.com/media")],
-        ciphertextSha256: String(repeating: "a", count: 64),
-        plaintextSha256: String(repeating: "b", count: 64),
+        ciphertextSha256: ciphertextSha256,
+        plaintextSha256: plaintextSha256,
         nonceHex: String(repeating: "2", count: 24),
         fileName: "photo.jpg",
         mediaType: "image/jpeg",
