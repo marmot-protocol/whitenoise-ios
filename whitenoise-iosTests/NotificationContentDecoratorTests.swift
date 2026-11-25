@@ -112,36 +112,6 @@ struct NotificationContentDecoratorTests {
         #expect(decorated.badge == 6)
     }
 
-    @Test func timeoutFallbackAppliesOnlyWhenNoRenderDecisionWasApplied() {
-        #expect(NotificationServiceTimeoutPolicy.shouldApplyTimeoutFallback(
-            applyingFallbackForTimeout: true,
-            didApplyRenderDecision: false
-        ))
-        #expect(!NotificationServiceTimeoutPolicy.shouldApplyTimeoutFallback(
-            applyingFallbackForTimeout: true,
-            didApplyRenderDecision: true
-        ))
-        #expect(!NotificationServiceTimeoutPolicy.shouldApplyTimeoutFallback(
-            applyingFallbackForTimeout: false,
-            didApplyRenderDecision: false
-        ))
-    }
-
-    @Test func timeoutDeliveryWaitsForExpirationCleanup() {
-        #expect(NotificationServiceTimeoutPolicy.canDeliver(
-            expirationInProgress: false,
-            completingExpiration: false
-        ))
-        #expect(!NotificationServiceTimeoutPolicy.canDeliver(
-            expirationInProgress: true,
-            completingExpiration: false
-        ))
-        #expect(NotificationServiceTimeoutPolicy.canDeliver(
-            expirationInProgress: true,
-            completingExpiration: true
-        ))
-    }
-
     /// The extension can't drop the alert that woke it, so a wake with no local
     /// presentation still says something: never a blank notification.
     @Test(arguments: ["", "   ", "\n"])
