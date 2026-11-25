@@ -547,21 +547,29 @@ final class AppState {
     private func announceRetainedUndeliveredChange(client: MarmotClient, generation: Int) async {
         guard !checkedRetainedUndeliveredChanges else { return }
         var newest: (event: MarmotEventFfi, at: UInt64)?
+        var readEverything = true
         for account in accounts where !account.signedOut {
-            guard let rows = try? await client.chatList(accountRef: account.accountIdHex, includeArchived: true) else { continue }
+            guard let rows = try? await client.chatList(accountRef: account.accountIdHex, includeArchived: true) else {
+                readEverything = false
+                continue
+            }
             for row in rows {
                 guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
                 guard let records = try? await client.marmot.groupChangesNotDelivered(
-                          accountRef: account.accountIdHex, groupIdHex: row.groupIdHex
-                      ),
-                      let event = GroupChangeNotice.retainedNotDeliveredEvent(account: account, records: records),
+                    accountRef: account.accountIdHex, groupIdHex: row.groupIdHex
+                ) else {
+                    readEverything = false
+                    continue
+                }
+                guard let event = GroupChangeNotice.retainedNotDeliveredEvent(account: account, records: records),
                       let at = records.map(\.at).max(), newest.map({ at > $0.at }) ?? true else { continue }
                 newest = (event, at)
             }
         }
-        // An interrupted scan runs again with the next runtime.
+        // An interrupted scan, or one with a failed read, runs again with the
+        // next runtime; raising the newest acknowledges it, so it won't repeat.
         guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
-        checkedRetainedUndeliveredChanges = true
+        checkedRetainedUndeliveredChanges = readEverything
         if let newest { handleRuntimeEvent(newest.event, generation: generation) }
     }
 
