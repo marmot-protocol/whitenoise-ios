@@ -42,6 +42,7 @@ extension AppState {
     /// the suspension path uses.
     @MainActor
     func performNotificationAction(_ operation: NotificationActionOperation) async {
+        guard !blocksAccountWork else { return }
         switch operation {
         case .openChat(let route):
             presentNotification(route: route)
@@ -164,7 +165,7 @@ extension AppState {
         deadlineTask.cancel()
         backgroundTask.endIfNeeded()
 
-        if !succeeded {
+        if !succeeded, !blocksAccountWork {
             await notifications.presentNotificationActionFailure(
                 title: failureTitle,
                 body: L10n.string("Open the chat to try again."),
@@ -183,6 +184,9 @@ extension AppState {
         // racing it.
         if phase == .bootstrapping {
             await bootstrap()
+        }
+        guard !blocksAccountWork else {
+            return false
         }
         do {
             let lease = try await runtimeLifecycle.startRuntimeForNotificationAction()

@@ -276,6 +276,7 @@ final class AppState {
             await productAnalytics.record(.onboarding(.complete, .import, .success), ticket: productOnboardingTicket)?.value
             productOnboardingTicket = nil
             productOnboardingPath = nil
+            guard !blocksAccountWork else { return }
             await activateNewIdentity(summary)
             deviceLinks.noteSetupFinished(accountIdHex: id)
         } catch {
@@ -496,8 +497,18 @@ final class AppState {
     var isRuntimeWarmingUp: Bool { runtimeLifecycle.isRuntimeWarmingUp }
     var runtimeGeneration: Int { runtimeLifecycle.runtimeGeneration }
 
+    /// True while full app-data erasure is running or an unfinished erasure
+    /// must keep surviving accounts out of activation, routing, maintenance,
+    /// sign-up restoration, and notification actions until erasure completes.
+    var blocksAccountWork: Bool {
+        isErasingAppData || erasureState.blocksNormalAccountActivation
+    }
+
     var runtimeEventsGeneration: Int? {
-        guard phaseOwnsLiveRuntime, !runtimeSuspendedForBackground, !isRuntimeSuspending,
+        guard phaseOwnsLiveRuntime,
+              !runtimeSuspendedForBackground,
+              !isRuntimeSuspending,
+              !blocksAccountWork,
               client != nil else { return nil }
         return runtimeGeneration
     }
@@ -693,6 +704,8 @@ final class AppState {
             RuntimeLifecycle.defaultRuntimeClientFactory,
         runtimeStarter: @escaping RuntimeLifecycle.RuntimeStarter =
             RuntimeLifecycle.defaultRuntimeStarter,
+        runtimeCloser: @escaping RuntimeLifecycle.RuntimeCloser =
+            RuntimeLifecycle.defaultRuntimeCloser,
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = {
             delay in try await Task.sleep(for: delay)
         },
@@ -716,6 +729,7 @@ final class AppState {
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
             runtimeClientFactory: runtimeClientFactory,
             runtimeStarter: runtimeStarter,
+            runtimeCloser: runtimeCloser,
             retrySleeper: runtimeRetrySleeper,
             constructionRetryPolicy: runtimeConstructionRetryPolicy,
             mutationDrainSleeper: mutationDrainSleeper,
@@ -844,6 +858,7 @@ final class AppState {
     /// back the account-scoped maintenance once the runtime is ready.
     @MainActor
     func startReadyForegroundMaintenance(scheduleNativePushRegistration: Bool = true) {
+        guard !blocksAccountWork else { return }
         notificationCoordinator.startReadyForegroundMaintenance(
             host: self,
             scheduleNativePushRegistration: scheduleNativePushRegistration
@@ -855,6 +870,7 @@ final class AppState {
     /// restart the sweep loop once a `.ready` runtime is back online.
     @MainActor
     func startRetentionSweeps() {
+        guard !blocksAccountWork else { return }
         retentionSweeper.start(appState: self)
     }
 
@@ -874,6 +890,7 @@ final class AppState {
     /// the subscription once a `.ready` runtime is back online.
     @MainActor
     func startNotificationSubscription() {
+        guard !blocksAccountWork else { return }
         notificationCoordinator.startNotificationSubscription(host: self)
     }
 
@@ -944,7 +961,7 @@ final class AppState {
     /// locally signed out without wiping.
     @MainActor
     func activateAccount(_ accountRef: String) async {
-        guard !isSigningOut else { return }
+        guard !isSigningOut, !blocksAccountWork else { return }
         guard accountRef != activeAccountRef else { return }
         guard let account = accounts.first(where: { $0.label == accountRef }) else { return }
         guard activatingAccountRefs.insert(accountRef).inserted else { return }
@@ -972,6 +989,10 @@ final class AppState {
             }
         }
 
+        guard !blocksAccountWork else {
+            recordSwitch(.cancelled)
+            return
+        }
         guard accounts.contains(where: { $0.label == accountRef && !$0.signedOut }) else {
             recordSwitch(.unavailable)
             return
@@ -1344,6 +1365,20 @@ final class AppState {
         }
     }
 
+    @MainActor
+    var allowsAutomaticAttachmentPolicySync: Bool {
+        canUseLiveRuntime && isCurrentClientStarted && !blocksAccountWork
+    }
+
+    @MainActor
+    func synchronizeAutomaticAttachmentPolicyIfAllowed(
+        bridge: AttachmentPolicyBridge = .shared
+    ) async throws {
+        guard allowsAutomaticAttachmentPolicySync,
+              let client = try? currentMarmotClient() else { return }
+        try await bridge.synchronize(client)
+    }
+
     func eraseAppData() async throws {
         guard !isErasingAppData, !isSigningOut, phaseOwnsLiveRuntime,
               canUseRuntimeForLocalForegroundWork, let erasingClient = client else {
@@ -1352,6 +1387,9 @@ final class AppState {
         erasureState.begin()
         isErasingAppData = true
         isSigningOut = true
+        // Detach the attachment bridge synchronously before the first `await` so
+        // `NWPathMonitor` network changes cannot grant permissions mid-drain.
+        let attachmentPolicyTail = AttachmentPolicyBridge.shared.detach(client: erasingClient)
         AvatarCacheErasure.begin()
         defer {
             AvatarCacheErasure.end()
@@ -1365,6 +1403,8 @@ final class AppState {
             _ = try? await signUpRestorationTask?.value
             await appReviewDemo.resetForErasure()
             await runtimeLifecycle.prepareForAppErasure()
+            _ = try? await attachmentPolicyTail?.value
+            await AttachmentPolicyBridge.shared.revokeAndDetach(client: erasingClient)
             let stored = try await erasingClient.listAccounts()
             for account in stored {
                 _ = try? await erasingClient.marmot.clearPushRegistration(accountRef: account.label)
@@ -1437,13 +1477,10 @@ final class AppState {
             resetInMemoryStateForErasure()
             erasureState.complete()
             appDataErasureGeneration += 1
-            isErasingAppData = false
-            finishAccountExit()
-            await bootstrap()
+            phase = .onboarding
+            await finishErasureRuntimeTransition()
         } catch {
-            isErasingAppData = false
-            finishAccountExit()
-            await bootstrap()
+            await finishErasureRuntimeTransition()
             erasureState.failed()
             present(.error(L10n.string("Erasure didn’t finish. Some data may remain. Try again.")))
             throw error
@@ -1459,6 +1496,12 @@ final class AppState {
         latestAccountAttention = nil
         accountExitIntent = nil
         checkedRetainedUndeliveredChanges = false
+    }
+
+    private func finishErasureRuntimeTransition() async {
+        isErasingAppData = false
+        finishAccountExit()
+        await runtimeLifecycle.finishAppErasureRuntimeTransition()
     }
 
     @MainActor
@@ -1555,10 +1598,12 @@ final class AppState {
     }
 
     func syncNativePushRegistrationIfEnabled() async {
+        guard !blocksAccountWork else { return }
         await notificationCoordinator.syncNativePushRegistrationIfEnabled(host: self)
     }
 
     func scheduleNativePushRegistrationIfEnabled() {
+        guard !blocksAccountWork else { return }
         notificationCoordinator.scheduleNativePushRegistrationIfEnabled(host: self)
     }
 
@@ -1668,10 +1713,12 @@ final class AppState {
     /// `private`) so `RuntimeLifecycle`'s resume path can sequence it without
     /// duplicating the catch-up state.
     func catchUpAfterForegroundActivation() async {
+        guard !blocksAccountWork else { return }
         await notificationCoordinator.catchUpAfterForegroundActivation(host: self)
     }
 
     func scheduleConnectivityCatchUp(connectivityRestored: Bool = false) {
+        guard !blocksAccountWork else { return }
         notificationCoordinator.scheduleConnectivityCatchUp(
             host: self,
             connectivityRestored: connectivityRestored
@@ -1754,6 +1801,9 @@ final class AppState {
     /// lists that profile as unlinked (a notice for a copy since replaced).
     @MainActor
     func removeUnlinkedAccount(accountRef: String) async throws {
+        guard !blocksAccountWork else {
+            throw ForegroundRuntimeMutationError.runtimeUnavailable
+        }
         let account = accounts.first { $0.label == accountRef || $0.accountIdHex == accountRef }
         if let account, account.label == activeAccountRef {
             try await wipeActiveAccount(account.label, requiringUnlinked: true)
@@ -1795,6 +1845,7 @@ final class AppState {
     /// it the way a sign-out does: to another profile's chooser, or Welcome.
     @MainActor
     func leaveUnlinkedAccount(accountIdHex: String) async {
+        guard !blocksAccountWork else { return }
         do {
             try await refreshAccounts()
         } catch {
@@ -1863,7 +1914,9 @@ final class AppState {
         }
         accountSetupSnapshots = unfinished
         onboardingRecoveryAccounts = recoveryAccounts
-        deviceLinks.remindUnlinkedProfiles(readyAccounts)
+        if !blocksAccountWork {
+            deviceLinks.remindUnlinkedProfiles(readyAccounts)
+        }
         if let current = pendingAccountSetup {
             if let currentSetupSnapshot {
                 current.apply(currentSetupSnapshot)
@@ -1948,6 +2001,7 @@ final class AppState {
     /// goes stale.
     @MainActor
     func scheduleAccountUnreadSummaryRefresh() {
+        guard !blocksAccountWork else { return }
         let previous = unreadSummaryRefreshTask
         unreadSummaryRefreshTask = Task { @MainActor [weak self] in
             await previous?.value
@@ -1977,6 +2031,7 @@ final class AppState {
     /// older fetch can't overwrite fresher badge counts.
     @MainActor
     func refreshAccountUnreadSummaries(using leasedClient: MarmotClient? = nil) async {
+        guard !blocksAccountWork else { return }
         guard !accounts.isEmpty else {
             accountUnreadStore.refreshed(from: [], accounts: [])
             await synchronizeApplicationBadge()
@@ -2369,6 +2424,7 @@ final class AppState {
 
     @MainActor
     private func activateNewIdentity(_ summary: AccountSummaryFfi) async {
+        guard !blocksAccountWork else { return }
         cacheActivatedAccountSummaryIfNeeded(summary)
         activeAccountRef = summary.label
         updateProfileProjectionLocalAccountLabels()

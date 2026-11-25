@@ -60,7 +60,11 @@ struct RootView: View {
             if current != .onboarding { showSignIn = false }
         }
         .sheet(isPresented: Binding(
-            get: { appState.restoreSignUpPresentation && appState.phaseOwnsLiveRuntime },
+            get: {
+                appState.restoreSignUpPresentation
+                    && appState.phaseOwnsLiveRuntime
+                    && !appState.blocksAccountWork
+            },
             set: { presented in
                 appState.restoreSignUpPresentation = presented
                 if !presented { appState.closeSignUpDraft() }
@@ -81,7 +85,7 @@ struct RootView: View {
         .alert(
             "Device Unlinked",
             isPresented: Binding(
-                get: { appState.deviceLinks.unlinkedNotice != nil },
+                get: { appState.deviceLinks.unlinkedNotice != nil && !appState.blocksAccountWork },
                 set: { if !$0 { appState.deviceLinks.unlinkedNoticeDismissed() } }
             ),
             presenting: appState.deviceLinks.unlinkedNotice
@@ -113,10 +117,14 @@ struct RootView: View {
             set: { _ in }
         ), onDismiss: {
             visibleRootSheets.remove(.erasureRecovery)
+            appState.erasureState.noteRecoveryDismissed()
         }) {
             EraseAppDataView(isRecovery: true)
                 .appAppearance()
-                .onAppear { visibleRootSheets.insert(.erasureRecovery) }
+                .onAppear {
+                    visibleRootSheets.insert(.erasureRecovery)
+                    appState.erasureState.noteRecoveryPresented()
+                }
         }
         // Results precede profile selection in the same presenter, so the
         // chooser cannot race either the sign-out sheet or cleanup reporting.
@@ -149,8 +157,8 @@ struct RootView: View {
 
     private var shouldPresentErasureRecovery: Bool {
         appState.erasureState.shouldPresentRecovery(
-            activeAccountRef: appState.activeAccountRef,
-            runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork,
+            phaseOwnsLiveRuntime: appState.phaseOwnsLiveRuntime
         )
     }
 

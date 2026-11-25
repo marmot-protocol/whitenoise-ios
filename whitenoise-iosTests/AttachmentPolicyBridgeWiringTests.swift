@@ -34,6 +34,28 @@ struct AttachmentPolicyBridgeWiringTests {
         #expect(permissions.appliedCount == 1)
     }
 
+    @Test func revokeAndDetachRevokesEverySignedInAccountWithoutGranting() async throws {
+        let runtime = FakeAttachmentRuntime(accounts: [Self.alice, Self.bob, Self.carol])
+        let permissions = FakePermissionSource()
+        let bridge = AttachmentPolicyBridge(permissions: { permissions })
+
+        try await bridge.synchronize(runtime)
+        #expect(bridge.isAttached(to: runtime))
+        #expect(runtime.grants.count == 2)
+        #expect(runtime.begun.map(\.account) == [Self.alice.accountIdHex, Self.bob.accountIdHex])
+
+        await bridge.revokeAndDetach(client: runtime)
+
+        #expect(!bridge.isAttached(to: runtime))
+        #expect(runtime.begun.map(\.account) == [
+            Self.alice.accountIdHex,
+            Self.bob.accountIdHex,
+            Self.alice.accountIdHex,
+            Self.bob.accountIdHex,
+        ])
+        #expect(runtime.grants.count == 2)
+    }
+
     @Test func aNewerEventRevokesOnlyAfterTheEarlierRevocation() async throws {
         let runtime = FakeAttachmentRuntime(accounts: [Self.alice])
         let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })

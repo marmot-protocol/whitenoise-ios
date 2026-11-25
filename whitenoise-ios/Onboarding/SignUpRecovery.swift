@@ -3,7 +3,7 @@ import MarmotKit
 
 extension AppState {
     func restoreSignUpIfNeeded(accounts: [AccountSummaryFfi], client: MarmotClient) async throws {
-        guard !hasRestoredSignUp else { return }
+        guard !hasRestoredSignUp, !blocksAccountWork else { return }
         if let task = signUpRestorationTask { return try await task.value }
         let task = Task { try await restoreSignUp(accounts: accounts, client: client) }
         signUpRestorationTask = task
@@ -16,7 +16,7 @@ extension AppState {
         do {
             saved = try await signUpDraftStore.load()
             try Task.checkCancellation()
-            guard self.client === client else { throw CancellationError() }
+            guard self.client === client, !blocksAccountWork else { throw CancellationError() }
             guard var draft = saved else {
                 await signUpModel.configurePersistence(store: signUpDraftStore)
                 hasRestoredSignUp = true
@@ -30,7 +30,7 @@ extension AppState {
                 profile = try await client.userProfileForEditing(accountIdHex: identity.accountIdHex)
                 let readiness = try await client.accountSetupReadiness(accountRef: identity.label)
                 try Task.checkCancellation()
-                guard self.client === client else { throw CancellationError() }
+                guard self.client === client, !blocksAccountWork else { throw CancellationError() }
                 if readiness == .networkReady,
                    draft.stage == .completed || (draft.stage == .publishing && profile.map(draft.matchesPublishedProfile) == true) {
                     // Publication can finish just before the host records completion.

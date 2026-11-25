@@ -26,7 +26,6 @@ struct ChatsListView: View {
             chatsVisible: chatsVisible && path.isEmpty && !showSettings,
             anotherSheetVisible: showNewChat || secondarySheetVisible || showBulkLeaveConfirmation
                 || appState.erasureState.shouldPresentRecovery(
-                    activeAccountRef: appState.activeAccountRef,
                     runtimeReady: appState.canUseRuntimeForLocalForegroundWork
                 )
                 || appState.pendingWipeReport != nil || appState.restoreSignUpPresentation,

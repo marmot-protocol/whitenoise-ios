@@ -60,7 +60,11 @@ struct EraseAppDataView: View {
                     }
                     .wnPrimaryButtonStyle().controlSize(.large).tint(.red)
                     .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
-                    .disabled(busy || (!isRecovery && !ProfileExitConfirmation.matches(confirmation, expected: phrase)))
+                    .disabled(
+                        busy
+                            || !appState.canUseRuntimeForLocalForegroundWork
+                            || (!isRecovery && !ProfileExitConfirmation.matches(confirmation, expected: phrase))
+                    )
                 }
             }
             .disabled(busy)
