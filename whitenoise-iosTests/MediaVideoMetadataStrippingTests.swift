@@ -298,6 +298,7 @@ struct MediaVideoMetadataStrippingTests {
 
         let copyStarted = TestLatch()
         let cancelReady = DispatchSemaphore(value: 0)
+        defer { cancelReady.signal() }
         let cancelTask = Task {
             await MediaVideoMetadataStripper.copyRemainingSamples(
                 reader: cancelReader,
