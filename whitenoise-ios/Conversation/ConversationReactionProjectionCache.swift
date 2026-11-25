@@ -94,6 +94,16 @@ final class ConversationReactionProjectionCache {
         preparedCache[target] = nil
     }
 
+    func reconcileAfterAuthoritativeRead(_ reactions: [TimelineUserReactionFfi], target: String, me: String) {
+        summariesByTarget[target] = ConversationReactionPolicy.summary(from: reactions)
+        optimisticRemovals = ConversationReactionPolicy.removalsAfterAuthoritativeRead(
+            optimisticRemovals,
+            target: target,
+            me: me
+        )
+        preparedCache[target] = nil
+    }
+
     func installPrepared(_ value: ConversationReactionsFfi, target: String, me: String) {
         let mine = Set(value.items.filter(\.viewerReacted).map(\.emoji))
         optimisticRecords = optimisticRecords.filter { _, record in

@@ -67,4 +67,23 @@ enum ConversationReactionPolicy {
             return stillMineEmoji.contains(removal.emoji)
         }
     }
+
+    nonisolated static func summary(from reactions: [TimelineUserReactionFfi]) -> TimelineReactionSummaryFfi {
+        var sendersByEmoji: [String: [String]] = [:]
+        for reaction in reactions where !(sendersByEmoji[reaction.emoji]?.contains(reaction.sender) ?? false) {
+            sendersByEmoji[reaction.emoji, default: []].append(reaction.sender)
+        }
+        let byEmoji = sendersByEmoji
+            .map { TimelineReactionEmojiFfi(emoji: $0.key, count: UInt32($0.value.count), senders: $0.value) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.emoji < $1.emoji }
+        return TimelineReactionSummaryFfi(byEmoji: byEmoji, userReactions: reactions)
+    }
+
+    nonisolated static func removalsAfterAuthoritativeRead(
+        _ removals: Set<ReactionRemoval>,
+        target: String,
+        me: String
+    ) -> Set<ReactionRemoval> {
+        removals.filter { $0.targetMessageIdHex != target || $0.sender != me }
+    }
 }
