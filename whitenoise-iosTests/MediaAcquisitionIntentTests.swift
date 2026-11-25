@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 import MarmotKit
 import Synchronization
@@ -283,18 +284,36 @@ struct MediaAcquisitionIntentTests {
         }
     }
 
-    @Test func retainedReadsAboveThresholdStreamIntoUnlinkedMappedFile() async throws {
+    @Test nonisolated func retainedReadsAboveThresholdStreamIntoUnlinkedMappedFile() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("RetainedMappedReads-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        // Footprint is process-wide while other suites run concurrently, so use
-        // a 128 MiB payload (64 MiB margin) just like MediaFileUploadTests.
-        let size = 128 * 1024 * 1024
+        // Control: a small inline read (<= mappedReadThresholdBytes) stays in
+        // writable anonymous heap memory rather than a file-backed mapping.
+        let inlineSize = 64 * 1024
+        let inlineData = try await RetainedAttachmentReader.read(
+            byteCount: UInt64(inlineSize),
+            mappedDirectory: directory
+        ) { offset, _ in
+            AttachmentLocalBytesFfi(
+                available: true,
+                bytes: offset == 0 ? Data(repeating: 0x03, count: inlineSize) : Data()
+            )
+        }
+        let inlineRegion = try #require(Self.vmRegionInfo(for: inlineData))
+        #expect((inlineRegion.protection & VM_PROT_WRITE) != 0)
+        #expect(inlineRegion.externalPager == 0)
+
+        // Above the real 4 MiB threshold, RetainedAttachmentReader must stream
+        // into an unlinked file and return a read-only, file-backed (external
+        // pager) mapping rather than allocating resident heap memory.
+        // Inspecting the returned Data's Mach VM region avoids racing
+        // process-wide `phys_footprint` against parallel test suites.
+        let size = 5 * 1024 * 1024
         let chunkPattern = Data(repeating: 0x05, count: 1024 * 1024)
         let offsets = Mutex<[UInt64]>([])
         let sawPathnameDuringStream = Mutex(false)
-        let before = try #require(MediaFileUploadTests.physicalFootprint())
         let read = try await RetainedAttachmentReader.read(
             byteCount: UInt64(size),
             mappedDirectory: directory
@@ -314,10 +333,12 @@ struct MediaAcquisitionIntentTests {
         }
         #expect(!sawPathnameDuringStream.withLock { $0 })
         #expect(read.count == size)
+        let mappedRegion = try #require(Self.vmRegionInfo(for: read))
+        #expect(mappedRegion.protection == VM_PROT_READ)
+        #expect(mappedRegion.externalPager != 0)
+        #expect(mappedRegion.regionSize >= UInt64(size))
         let sum = read.withUnsafeBytes { $0.reduce(into: 0) { $0 &+= Int($1) } }
-        let after = try #require(MediaFileUploadTests.physicalFootprint())
         #expect(sum == size * 5)
-        #expect(Int64(after) - Int64(before) < Int64(size / 2))
         #expect(offsets.withLock { $0.first } == 0)
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
 
@@ -340,6 +361,73 @@ struct MediaAcquisitionIntentTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
     }
 
+    private nonisolated static func vmRegionInfo(
+        for data: Data
+    ) -> (protection: vm_prot_t, externalPager: UInt8, regionSize: UInt64)? {
+        data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress else { return nil }
+            let targetAddress = vm_address_t(UInt(bitPattern: base))
+
+            var basicAddress = targetAddress
+            var basicSize: vm_size_t = 0
+            var basicInfo = vm_region_basic_info_data_64_t()
+            var basicCount = mach_msg_type_number_t(
+                MemoryLayout<vm_region_basic_info_data_64_t>.size / MemoryLayout<natural_t>.size
+            )
+            var basicObject: mach_port_t = 0
+            let basicResult = withUnsafeMutablePointer(to: &basicInfo) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(basicCount)) {
+                    vm_region_64(
+                        mach_task_self_,
+                        &basicAddress,
+                        &basicSize,
+                        VM_REGION_BASIC_INFO_64,
+                        $0,
+                        &basicCount,
+                        &basicObject
+                    )
+                }
+            }
+            if basicObject != MACH_PORT_NULL {
+                mach_port_deallocate(mach_task_self_, basicObject)
+            }
+            guard basicResult == KERN_SUCCESS,
+                  basicAddress <= targetAddress,
+                  targetAddress < basicAddress + basicSize
+            else { return nil }
+
+            var extendedAddress = targetAddress
+            var extendedSize: vm_size_t = 0
+            var extendedInfo = vm_region_extended_info_data_t()
+            var extendedCount = mach_msg_type_number_t(
+                MemoryLayout<vm_region_extended_info_data_t>.size / MemoryLayout<natural_t>.size
+            )
+            var extendedObject: mach_port_t = 0
+            let extendedResult = withUnsafeMutablePointer(to: &extendedInfo) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(extendedCount)) {
+                    vm_region_64(
+                        mach_task_self_,
+                        &extendedAddress,
+                        &extendedSize,
+                        VM_REGION_EXTENDED_INFO,
+                        $0,
+                        &extendedCount,
+                        &extendedObject
+                    )
+                }
+            }
+            if extendedObject != MACH_PORT_NULL {
+                mach_port_deallocate(mach_task_self_, extendedObject)
+            }
+            guard extendedResult == KERN_SUCCESS,
+                  extendedAddress <= targetAddress,
+                  targetAddress < extendedAddress + extendedSize
+            else { return nil }
+
+            return (basicInfo.protection, extendedInfo.external_pager, UInt64(basicSize))
+        }
+    }
+
     @Test func streamingPlaybackCachePublishesVerifiedFileAndRejectsCorruptionOrStaleEpoch() async throws {
         let cachesDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("StreamPlaybackCache-\(UUID().uuidString)", isDirectory: true)
@@ -360,16 +448,17 @@ struct MediaAcquisitionIntentTests {
             dim: "1920x1080",
             thumbhash: nil
         )
-        let epoch = MessageMediaCache.currentProducerEpoch()
-        let url = try await MessageMediaCache.streamAndStore(
-            for: reference,
-            byteCount: UInt64(payload.count),
-            cachesDirectory: cachesDirectory,
-            producerGeneration: epoch
-        ) { offset, limit in
-            let start = Int(offset)
-            let end = min(payload.count, start + Int(limit))
-            return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+        let url = try await Self.withFreshProducerEpoch { epoch in
+            try await MessageMediaCache.streamAndStore(
+                for: reference,
+                byteCount: UInt64(payload.count),
+                cachesDirectory: cachesDirectory,
+                producerGeneration: epoch
+            ) { offset, limit in
+                let start = Int(offset)
+                let end = min(payload.count, start + Int(limit))
+                return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+            }
         }
         #expect(try Data(contentsOf: url) == payload)
         #expect(await MessageMediaCache.validCachedFileURL(for: reference, cachesDirectory: cachesDirectory) == url)
@@ -390,23 +479,26 @@ struct MediaAcquisitionIntentTests {
             thumbhash: nil
         )
         await #expect(throws: ConversationMediaDownloader.MediaDataError.plaintextHashMismatch) {
-            _ = try await MessageMediaCache.streamAndStore(
-                for: badReference,
-                byteCount: UInt64(payload.count),
-                cachesDirectory: cachesDirectory,
-                producerGeneration: epoch
-            ) { offset, limit in
-                let start = Int(offset)
-                let end = min(payload.count, start + Int(limit))
-                return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+            _ = try await Self.withFreshProducerEpoch { epoch in
+                try await MessageMediaCache.streamAndStore(
+                    for: badReference,
+                    byteCount: UInt64(payload.count),
+                    cachesDirectory: cachesDirectory,
+                    producerGeneration: epoch
+                ) { offset, limit in
+                    let start = Int(offset)
+                    let end = min(payload.count, start + Int(limit))
+                    return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+                }
             }
         }
+        let staleEpoch = MessageMediaCache.currentProducerEpoch() - 1
         await #expect(throws: CancellationError.self) {
             _ = try await MessageMediaCache.streamAndStore(
                 for: reference,
                 byteCount: UInt64(payload.count),
                 cachesDirectory: cachesDirectory,
-                producerGeneration: epoch - 1
+                producerGeneration: staleEpoch
             ) { offset, limit in
                 let start = Int(offset)
                 let end = min(payload.count, start + Int(limit))
@@ -415,6 +507,24 @@ struct MediaAcquisitionIntentTests {
         }
         let entries = try FileManager.default.contentsOfDirectory(atPath: encryptedDir.path)
         #expect(entries == [url.lastPathComponent])
+    }
+
+    /// Runs an async cache stream with a freshly read producer epoch. Other
+    /// parallel suites bump the process-global epoch via purges and sign-out
+    /// wipes; retry only when `CancellationError` coincides with an observed
+    /// epoch bump so a real failure while the epoch held still surfaces.
+    private static func withFreshProducerEpoch<Result>(
+        _ operation: (Int) async throws -> Result
+    ) async throws -> Result {
+        for _ in 0..<1_000 {
+            let epoch = MessageMediaCache.currentProducerEpoch()
+            do {
+                return try await operation(epoch)
+            } catch is CancellationError where MessageMediaCache.currentProducerEpoch() != epoch {
+                continue
+            }
+        }
+        throw CancellationError()
     }
 
     @Test(.marmotRuntimeConcurrencyLimit)
