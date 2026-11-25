@@ -99,6 +99,18 @@ final class AttachmentPolicyBridge {
         return tail
     }
 
+    /// Detaches `client` and revokes any already-granted automatic attachment
+    /// permissions across every signed-in account so surviving profiles cannot
+    /// continue automatic downloads while erasure or erasure recovery is active.
+    func revokeAndDetach(client: any AttachmentPolicyRuntime) async {
+        let tail = detach(client: client)
+        _ = try? await tail?.value
+        guard let accounts = try? await client.listAccounts() else { return }
+        for account in accounts where !account.signedOut {
+            _ = try? await client.beginAttachmentPermissionUpdate(accountRef: account.accountIdHex)
+        }
+    }
+
     func synchronize(_ client: any AttachmentPolicyRuntime, beforeStart: Bool = false,
                      updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)? = nil) async throws {
         guard client.cursorPersistence == .advance else { return }

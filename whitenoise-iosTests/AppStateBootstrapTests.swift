@@ -114,6 +114,1203 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func eraseAppDataWhenBackgroundedKeepsSQLCipherClosedAndRecoversOnForeground() async throws {
+        let rebuildCount = Mutex(0)
+        let factory: RuntimeLifecycle.RuntimeClientFactory = { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+            rebuildCount.withLock { $0 += 1 }
+            return try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                rootPath: rootPath,
+                relayUrls: relayUrls,
+                cursorPersistence: cursorPersistence,
+                telemetryConfig: telemetryConfig
+            )
+        }
+        let appState = try ownedAppState(
+            client: try ownedTestClient(),
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: factory
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        let account = try await appState.createIdentity()
+        #expect(appState.phase == .ready)
+        #expect(appState.activeAccountRef == account.label)
+
+        // Hold a foreground mutation lease so `eraseAppData()` pauses inside
+        // `prepareForAppErasure()`, letting us deliver a real background
+        // suspension mid-erasure before storage teardown finishes.
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+        let eraseTask = Task { @MainActor in
+            try await appState.eraseAppData()
+        }
+        try await eventually { appState.isErasingAppData }
+
+        let suspension = appState.startRuntimeSuspension()
+        try await eventually { appState.client == nil && appState.runtimeSuspendedForBackground }
+
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+        await #expect(throws: (any Error).self) {
+            try await eraseTask.value
+        }
+        await suspension.value
+
+        // SQLCipher must stay closed while backgrounded (no 0xdead10cc reopen).
+        #expect(rebuildCount.withLock { $0 } == 0)
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.erasureState.needsRecovery)
+
+        // Foreground return rebuilds cleanly straight into erasure recovery
+        // without activating the surviving account or starting maintenance.
+        await appState.startForegroundActivation().value
+        #expect(rebuildCount.withLock { $0 } == 1)
+        #expect(appState.client != nil)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.activeAccountRef == nil)
+        #expect(!appState.notificationSubscriptionActive)
+        #expect(appState.runtimeEventsGeneration == nil)
+        #expect(appState.erasureState.shouldPresentRecovery(
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+        ))
+
+        // Opening and closing Control Center (`.inactive` -> `.active` with the
+        // live client still open) must keep the surviving account out of
+        // foreground maintenance and event observation until recovery finishes.
+        appState.setAppSceneActive(false)
+        await appState.startForegroundActivation().value
+        #expect(rebuildCount.withLock { $0 } == 1)
+        #expect(appState.client != nil)
+        #expect(appState.activeAccountRef == nil)
+        #expect(!appState.notificationSubscriptionActive)
+        #expect(appState.runtimeEventsGeneration == nil)
+        #expect(appState.erasureState.shouldPresentRecovery(
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+        ))
+
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func closeForAppErasureDoesNotDeadlockWithBackgroundSuspension() async throws {
+        let closeEntered = TestLatch()
+        let closeRelease = TestLatch()
+        defer { closeRelease.signal() }
+        let shouldParkClose = Mutex(false)
+        let heldLockFD = Mutex<Int32?>(nil)
+        let initialClient = try ownedTestClient()
+        let initialMarmot = initialClient.marmot
+        let lockPath = URL(fileURLWithPath: initialClient.rootPath, isDirectory: true)
+            .appendingPathComponent(AppDataErasure.runtimeLockName)
+            .path
+        defer {
+            if let fd = heldLockFD.withLock({ fd -> Int32? in
+                defer { fd = nil }
+                return fd
+            }) {
+                flock(fd, LOCK_UN)
+                close(fd)
+            }
+        }
+        let appState = try ownedAppState(
+            client: initialClient,
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeCloser: { client in
+                if shouldParkClose.withLock({ $0 }) {
+                    shouldParkClose.withLock { $0 = false }
+                    closeEntered.signal()
+                    await closeRelease.hold()
+                    try await client.marmot.shutdownAndClose()
+                    // Hold `.marmot-runtime.lock` right after storage closes so
+                    // `eraseClosedRuntime` fails with EBUSY before
+                    // `clearContainerFiles()` touches shared `temporaryDirectory`.
+                    let fd = open(lockPath, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR)
+                    if fd >= 0, flock(fd, LOCK_EX | LOCK_NB) == 0 {
+                        heldLockFD.withLock { $0 = fd }
+                    } else if fd >= 0 {
+                        close(fd)
+                    }
+                    return
+                }
+                try await client.marmot.shutdownAndClose()
+            },
+            mutationDrainSleeper: { _ in }
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        #expect(appState.phase == .ready)
+
+        // Pause `eraseAppData()` in `prepareForAppErasure()`, then start
+        // background suspension so it claims the storage-close gate and parks
+        // BEFORE `shutdownAndClose()`. While `initialMarmot` is still open,
+        // release the mutation lease so erasure removes accounts and reaches
+        // `closeForAppErasure()` while suspension still owns the close gate.
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+        let eraseFinished = TestLatch()
+        let eraseTask = Task { @MainActor in
+            defer { eraseFinished.signal() }
+            try await appState.eraseAppData()
+        }
+        try await eventually { appState.isErasingAppData }
+
+        shouldParkClose.withLock { $0 = true }
+        let suspensionFinished = TestLatch()
+        let suspension = Task { @MainActor in
+            defer { suspensionFinished.signal() }
+            await appState.startRuntimeSuspension().value
+        }
+        try await closeEntered.wait()
+        #expect(appState.runtimeLifecycle.isRuntimeSuspendingNow)
+
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+        // Wait until `eraseAppData()` has removed all local accounts and reached
+        // `closeForAppErasure()` waiting on the suspension's close gate.
+        try await eventually { (try? await initialClient.listAccounts().isEmpty) == true }
+        #expect(appState.isErasingAppData)
+        #expect(appState.runtimeLifecycle.isRuntimeSuspendingNow)
+
+        // Release the suspension's close: `prepareForBackgroundSuspension` must
+        // release the storage-close gate before awaiting `waitForAccountExitToFinish()`,
+        // letting `closeForAppErasure()` return and both tasks finish cleanly.
+        closeRelease.signal()
+        try await eraseFinished.wait()
+        do {
+            try await eraseTask.value
+            Issue.record("Expected EBUSY from eraseClosedRuntime")
+        } catch let error as POSIXError {
+            #expect(error.code == .EBUSY)
+        }
+        try await suspensionFinished.wait()
+        await suspension.value
+
+        #expect(initialMarmot.storageIsClosed())
+        #expect(!appState.isErasingAppData)
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+    }
+
+    @Test(arguments: [false, true])
+    func inactiveErasureFailureParksStorageCloseBehindTrackedSuspension(
+        returnToForeground: Bool
+    ) async throws {
+        let rebuildCount = Mutex(0)
+        let rebuildEntered = TestLatch()
+        let closeEntered = TestLatch()
+        let closeRelease = TestLatch()
+        let initialClient = try ownedTestClient()
+        let initialMarmot = initialClient.marmot
+        let appState = try ownedAppState(
+            client: initialClient,
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+                rebuildCount.withLock { $0 += 1 }
+                rebuildEntered.signal()
+                return try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                    rootPath: rootPath,
+                    relayUrls: relayUrls,
+                    cursorPersistence: cursorPersistence,
+                    telemetryConfig: telemetryConfig
+                )
+            },
+            runtimeCloser: { client in
+                closeEntered.signal()
+                await closeRelease.hold()
+                try await client.marmot.shutdownAndClose()
+                throw URLError(.cannotCloseFile)
+            }
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        #expect(appState.phase == .ready)
+
+        // Hold a mutation lease so `eraseAppData()` pauses in `prepareForAppErasure()`,
+        // then move the scene to `.inactive` before letting `closeForAppErasure()`
+        // enter `runtimeCloser` under `isBackgroundStorageCloseInProgress`.
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+        let eraseTask = Task { @MainActor in
+            try await appState.eraseAppData()
+        }
+        try await eventually { appState.isErasingAppData }
+        appState.setAppSceneActive(false)
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+
+        try await closeEntered.wait()
+        #expect(!initialMarmot.storageIsClosed())
+        #expect(appState.runtimeLifecycle.isRuntimeSuspendingNow)
+
+        let suspensionWaitReached = TestLatch()
+        appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = { waitKind, isWaiting in
+            if waitKind == .runtimeWork, isWaiting {
+                suspensionWaitReached.signal()
+            }
+        }
+        defer { appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = nil }
+
+        let transitionCompleted = TestLatch()
+        let transitionTask: Task<Void, Never>
+        if returnToForeground {
+            // While `isErasingAppData` is true, foreground activation records
+            // `.active`; the actual rebuild runs in `finishAppErasureRuntimeTransition`
+            // only AFTER `closeForAppErasure()` releases the storage-close gate.
+            transitionTask = appState.startForegroundActivation()
+            await transitionTask.value
+            #expect(appState.isAppSceneActive)
+            #expect(!rebuildEntered.isSignalled)
+            #expect(rebuildCount.withLock { $0 } == 0)
+            #expect(!initialMarmot.storageIsClosed())
+        } else {
+            transitionTask = appState.startRuntimeSuspension()
+            let observer = Task { @MainActor in
+                await transitionTask.value
+                transitionCompleted.signal()
+            }
+            // Wait for the exact `prepareForBackgroundSuspension` wait boundary
+            // before asserting that suspension stays parked until `closeRelease`.
+            try await suspensionWaitReached.wait()
+            #expect(!transitionCompleted.isSignalled)
+            #expect(!initialMarmot.storageIsClosed())
+            closeRelease.signal()
+            do {
+                try await eraseTask.value
+                Issue.record("Expected injected close error")
+            } catch let error as URLError {
+                #expect(error.code == .cannotCloseFile)
+            }
+            await observer.value
+            #expect(transitionCompleted.isSignalled)
+            #expect(initialMarmot.storageIsClosed())
+            #expect(appState.erasureState.needsRecovery)
+            #expect(rebuildCount.withLock { $0 } == 0)
+            #expect(appState.client == nil)
+            #expect(appState.runtimeSuspendedForBackground)
+            return
+        }
+
+        closeRelease.signal()
+        do {
+            try await eraseTask.value
+            Issue.record("Expected injected close error")
+        } catch let error as URLError {
+            #expect(error.code == .cannotCloseFile)
+        }
+
+        #expect(initialMarmot.storageIsClosed())
+        #expect(rebuildEntered.isSignalled)
+        #expect(rebuildCount.withLock { $0 } == 1)
+        #expect(appState.client != nil)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.activeAccountRef == nil)
+        #expect(!appState.notificationSubscriptionActive)
+        #expect(appState.runtimeEventsGeneration == nil)
+        #expect(appState.erasureState.needsRecovery)
+        #expect(appState.erasureState.shouldPresentRecovery(
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+        ))
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test(arguments: [false, true])
+    func foregroundErasureRecoveryWaitsForInFlightBackgroundCloseBeforeRebuilding(
+        foregroundAfterErasureStartsWaiting: Bool
+    ) async throws {
+        let rebuildCount = Mutex(0)
+        let closeEntered = TestLatch()
+        let closeRelease = TestLatch()
+        defer { closeRelease.signal() }
+        let shouldParkClose = Mutex(false)
+        let initialClient = try ownedTestClient()
+        let initialMarmot = initialClient.marmot
+        let appState = try ownedAppState(
+            client: initialClient,
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+                rebuildCount.withLock { $0 += 1 }
+                return try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                    rootPath: rootPath,
+                    relayUrls: relayUrls,
+                    cursorPersistence: cursorPersistence,
+                    telemetryConfig: telemetryConfig
+                )
+            },
+            runtimeCloser: { client in
+                try await client.marmot.shutdownAndClose()
+                if shouldParkClose.withLock({ $0 }) {
+                    shouldParkClose.withLock { $0 = false }
+                    closeEntered.signal()
+                    await closeRelease.hold()
+                }
+            },
+            mutationDrainSleeper: { _ in }
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        #expect(appState.phase == .ready)
+
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+        let eraseTask = Task { @MainActor in
+            try await appState.eraseAppData()
+        }
+        try await eventually { appState.isErasingAppData }
+
+        shouldParkClose.withLock { $0 = true }
+        let suspension = appState.startRuntimeSuspension()
+        try await closeEntered.wait()
+        #expect(appState.isErasingAppData)
+        #expect(appState.runtimeLifecycle.isRuntimeSuspendingNow)
+
+        if !foregroundAfterErasureStartsWaiting {
+            await appState.startForegroundActivation().value
+            #expect(appState.isAppSceneActive)
+        }
+
+        // Release erasure: `erasingClient.listAccounts()` fails because storage is
+        // already closed, jumping into `finishErasureRuntimeTransition`.
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+        try await eventually { !appState.isErasingAppData }
+
+        // A concurrent scene foreground activation arriving after `isErasingAppData`
+        // clears must join the single startup owner (never build two runtimes).
+        let concurrentActivation = appState.startForegroundActivation()
+        #expect(rebuildCount.withLock { $0 } == 0)
+
+        closeRelease.signal()
+
+        await #expect(throws: (any Error).self) {
+            try await eraseTask.value
+        }
+        await suspension.value
+        await concurrentActivation.value
+
+        #expect(initialMarmot.storageIsClosed())
+        #expect(rebuildCount.withLock { $0 } == 1)
+        #expect(appState.client != nil)
+        #expect(appState.activeAccountRef == nil)
+        #expect(!appState.notificationSubscriptionActive)
+        #expect(appState.runtimeEventsGeneration == nil)
+        #expect(appState.erasureState.needsRecovery)
+        #expect(appState.erasureState.shouldPresentRecovery(
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+        ))
+
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func failedRecoveryRetryKeepsRecoverySheetLatchedDuringRuntimeRebuild() async throws {
+        let rebuildCount = Mutex(0)
+        let rebuildEntered = TestLatch()
+        let rebuildRelease = TestLatch()
+        defer { rebuildRelease.signal() }
+        let shouldFailClose = Mutex(true)
+        let initialClient = try ownedTestClient()
+        let initialMarmot = initialClient.marmot
+        let appState = try ownedAppState(
+            client: initialClient,
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+                rebuildCount.withLock { $0 += 1 }
+                rebuildEntered.signal()
+                await rebuildRelease.hold()
+                return try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                    rootPath: rootPath,
+                    relayUrls: relayUrls,
+                    cursorPersistence: cursorPersistence,
+                    telemetryConfig: telemetryConfig
+                )
+            },
+            runtimeCloser: { client in
+                // Model MDK's documented contract: `shutdownAndClose()` leaves
+                // every database closed even when it throws an error.
+                try await client.marmot.shutdownAndClose()
+                if shouldFailClose.withLock({ $0 }) {
+                    shouldFailClose.withLock { $0 = false }
+                    throw MarmotKitError.Io(details: "injected recovery close failure")
+                }
+            }
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        appState.erasureState.begin()
+        appState.erasureState.failed()
+        appState.erasureState.noteRecoveryPresented()
+        #expect(appState.erasureState.needsRecovery)
+
+        let retryTask = Task { @MainActor in
+            try await appState.eraseAppData()
+        }
+        try await rebuildEntered.wait()
+
+        #expect(initialMarmot.storageIsClosed())
+        #expect(appState.client == nil)
+        #expect(!appState.canUseRuntimeForLocalForegroundWork)
+        #expect(appState.erasureState.recoveryInProgress)
+        #expect(appState.erasureState.shouldPresentRecovery(
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork,
+            phaseOwnsLiveRuntime: appState.phaseOwnsLiveRuntime
+        ))
+
+        rebuildRelease.signal()
+
+        do {
+            try await retryTask.value
+            Issue.record("Expected injected close failure from runtimeCloser")
+        } catch let error as MarmotKitError {
+            guard case .Io = error else {
+                Issue.record("Unexpected MarmotKitError: \(error)")
+                return
+            }
+        }
+
+        // Foreground recovery must have replaced the closed handle with a fresh
+        // usable runtime rather than keeping the spent `StorageClosed` client.
+        #expect(rebuildCount.withLock { $0 } == 1)
+        let replacement = try #require(appState.client)
+        #expect(replacement !== initialClient)
+        #expect(!replacement.marmot.storageIsClosed())
+        #expect(try await replacement.listAccounts().isEmpty)
+        #expect(appState.canUseRuntimeForLocalForegroundWork)
+        #expect(!appState.erasureState.recoveryInProgress)
+        #expect(appState.erasureState.needsRecovery)
+        #expect(appState.erasureState.shouldPresentRecovery(
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork,
+            phaseOwnsLiveRuntime: appState.phaseOwnsLiveRuntime
+        ))
+
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func failedRecoveryRetryKeepsSheetMountedWhenSceneStaysInactive() async throws {
+        let rebuildEntered = TestLatch()
+        let rebuildRelease = TestLatch()
+        defer { rebuildRelease.signal() }
+        let shouldFailClose = Mutex(true)
+        let initialClient = try ownedTestClient()
+        let appState = try ownedAppState(
+            client: initialClient,
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+                rebuildEntered.signal()
+                await rebuildRelease.hold()
+                return try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                    rootPath: rootPath,
+                    relayUrls: relayUrls,
+                    cursorPersistence: cursorPersistence,
+                    telemetryConfig: telemetryConfig
+                )
+            },
+            runtimeCloser: { client in
+                try await client.marmot.shutdownAndClose()
+                if shouldFailClose.withLock({ $0 }) {
+                    shouldFailClose.withLock { $0 = false }
+                    throw MarmotKitError.Io(details: "injected inactive retry close failure")
+                }
+            }
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        appState.erasureState.begin()
+        appState.erasureState.failed()
+        appState.erasureState.noteRecoveryPresented()
+
+        let retryTask = Task { @MainActor in
+            try await appState.eraseAppData()
+        }
+        try await rebuildEntered.wait()
+
+        // Move the scene to `.inactive` (e.g. Control Center) during Retry's
+        // rebuild and keep it inactive until `eraseAppData()` returns.
+        appState.setAppSceneActive(false)
+        rebuildRelease.signal()
+
+        await #expect(throws: MarmotKitError.self) {
+            try await retryTask.value
+        }
+
+        // The rebuild tore down its handle because the scene stayed `.inactive`,
+        // yet the already-open recovery sheet must stay mounted (with Retry
+        // disabled while `!canUseRuntimeForLocalForegroundWork`) instead of
+        // dismissing and losing its inline error.
+        #expect(appState.client == nil)
+        #expect(!appState.canUseRuntimeForLocalForegroundWork)
+        #expect(appState.erasureState.needsRecovery)
+        #expect(appState.erasureState.shouldPresentRecovery(
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork,
+            phaseOwnsLiveRuntime: appState.phaseOwnsLiveRuntime
+        ))
+        // Explicit handoff to startup recovery if the phase transitions to `.failed`.
+        #expect(!appState.erasureState.shouldPresentRecovery(
+            runtimeReady: false,
+            phaseOwnsLiveRuntime: false
+        ))
+
+        // Returning to foreground rebuilds the runtime so Retry re-enables.
+        await appState.startForegroundActivation().value
+        #expect(appState.canUseRuntimeForLocalForegroundWork)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.erasureState.shouldPresentRecovery(
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork,
+            phaseOwnsLiveRuntime: appState.phaseOwnsLiveRuntime
+        ))
+
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func pendingErasureRecoveryBlocksAndRevokesAutomaticAttachmentPermissions() async throws {
+        @MainActor
+        final class AllEnabledPermissionSource: AttachmentPermissionSource {
+            private(set) var appliedCount = 0
+            func attachmentPermission(accountID: String) -> AttachmentAutomaticPermissionFfi {
+                AttachmentAutomaticPermissionFfi(images: true, videos: true, audio: true, files: true)
+            }
+            func didApplyAttachmentPermission() {
+                appliedCount += 1
+            }
+        }
+
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let rootPath = try #require(seeded.appState.client).rootPath
+        let relayUrls = try #require(seeded.appState.client).relayUrls
+        await stopReadyRuntime(seeded.appState)
+
+        let erasureSuite = "AttachmentPolicyErasure.\(UUID().uuidString)"
+        let erasureDefaults = try #require(UserDefaults(suiteName: erasureSuite))
+        defer { erasureDefaults.removePersistentDomain(forName: erasureSuite) }
+        AppDataErasureState(defaults: erasureDefaults).begin()
+
+        let relaunched = try ownedAppState(
+            client: try reopenedClient(rootPath: rootPath, relayUrls: relayUrls),
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            erasureDefaults: erasureDefaults
+        )
+        relaunched.setAppSceneActive(true)
+        await relaunched.bootstrap()
+
+        let client = try #require(relaunched.client)
+        let permissions = AllEnabledPermissionSource()
+        let bridge = AttachmentPolicyBridge(permissions: { permissions })
+
+        // Pending erasure recovery must block both post-start automatic
+        // attachment grants and relay profile refreshes even with a surviving
+        // signed-in profile.
+        #expect(!relaunched.allowsAutomaticAttachmentPolicySync)
+        #expect(!relaunched.canRefreshProfiles)
+        try await relaunched.synchronizeAutomaticAttachmentPolicyIfAllowed(bridge: bridge)
+        #expect(permissions.appliedCount == 0)
+        #expect(!bridge.isAttached(to: client))
+
+        // Completing recovery re-enables attachment policy sync and profile refreshes.
+        relaunched.erasureState.complete()
+        #expect(relaunched.allowsAutomaticAttachmentPolicySync)
+        #expect(relaunched.canRefreshProfiles)
+        try await relaunched.synchronizeAutomaticAttachmentPolicyIfAllowed(bridge: bridge)
+        #expect(permissions.appliedCount == 1)
+        #expect(bridge.isAttached(to: client))
+
+        // Revoking and detaching on erasure clears bridge attachment against the
+        // live client and revokes MDK's permission generation without granting.
+        await bridge.revokeAndDetach(client: client)
+        #expect(!bridge.isAttached(to: client))
+        #expect(permissions.appliedCount == 1)
+
+        await stopReadyRuntime(relaunched)
+    }
+
+    @Test func pendingErasureRecoveryBlocksSignInAndProfileCreationDuringAndAfterForegroundRebuild() async throws {
+        let rebuildEntered = TestLatch()
+        let rebuildRelease = TestLatch()
+        defer { rebuildRelease.signal() }
+        let initialClient = try ownedTestClient()
+        let appState = try ownedAppState(
+            client: initialClient,
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+                rebuildEntered.signal()
+                await rebuildRelease.hold()
+                return try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                    rootPath: rootPath,
+                    relayUrls: relayUrls,
+                    cursorPersistence: cursorPersistence,
+                    telemetryConfig: telemetryConfig
+                )
+            }
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        #expect(appState.phase == .onboarding)
+
+        appState.erasureState.begin()
+        appState.erasureState.failed()
+        await appState.startRuntimeSuspension().value
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+
+        // Start foreground rebuild under pending erasure recovery and park in
+        // `runtimeClientFactory`. A user-initiated sign-in attempt arriving mid-
+        // rebuild must be refused immediately without waiting on the rebuild.
+        let activation = appState.startForegroundActivation()
+        try await rebuildEntered.wait()
+
+        let importFinished = TestLatch()
+        let importTask = Task { @MainActor in
+            defer { importFinished.signal() }
+            try await appState.importIdentity(
+                "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5"
+            )
+        }
+        try await importFinished.wait()
+        await #expect(throws: ForegroundRuntimeMutationError.self) {
+            try await importTask.value
+        }
+        rebuildRelease.signal()
+        await activation.value
+
+        let rebuiltClient = try #require(appState.client)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.pendingAccountSetup == nil)
+        #expect(try await rebuiltClient.listAccounts().isEmpty)
+
+        // Even once the runtime is rebuilt for retry, sign-in and identity
+        // creation remain blocked until erasure recovery finishes.
+        await #expect(throws: ForegroundRuntimeMutationError.self) {
+            try await appState.importIdentity(
+                "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5"
+            )
+        }
+        await #expect(throws: ForegroundRuntimeMutationError.self) {
+            try await appState.createIdentity()
+        }
+        #expect(appState.activeAccountRef == nil)
+        #expect(try await rebuiltClient.listAccounts().isEmpty)
+
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func foregroundActivationRecoversWhenSceneReturnsActiveDuringInactiveTeardown() async throws {
+        let rebuildCount = Mutex(0)
+        let teardownEntered = TestLatch()
+        let teardownRelease = TestLatch()
+        defer { teardownRelease.signal() }
+        let shouldParkInactiveTeardown = Mutex(false)
+        let initialClient = try ownedTestClient()
+        let appState = try ownedAppState(
+            client: initialClient,
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+                rebuildCount.withLock { $0 += 1 }
+                return try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                    rootPath: rootPath,
+                    relayUrls: relayUrls,
+                    cursorPersistence: cursorPersistence,
+                    telemetryConfig: telemetryConfig
+                )
+            },
+            runtimeCloser: { client in
+                if shouldParkInactiveTeardown.withLock({ $0 }) {
+                    shouldParkInactiveTeardown.withLock { $0 = false }
+                    teardownEntered.signal()
+                    await teardownRelease.hold()
+                }
+                try await client.marmot.shutdownAndClose()
+            }
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        #expect(appState.phase == .ready)
+        await appState.startRuntimeSuspension().value
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+
+        // Simulate `.active` -> `.inactive` right after the first replacement
+        // handle is constructed, pausing its teardown while `.active` returns.
+        appState.runtimeLifecycle.afterForegroundRuntimeCreatedForTesting = {
+            guard rebuildCount.withLock({ $0 }) == 1 else { return }
+            shouldParkInactiveTeardown.withLock { $0 = true }
+            appState.setAppSceneActive(false)
+        }
+        defer { appState.runtimeLifecycle.afterForegroundRuntimeCreatedForTesting = nil }
+
+        let firstActivation = appState.startForegroundActivation()
+        try await teardownEntered.wait()
+
+        // Scene returns `.active` while the first activation is tearing down
+        // the discarded handle; it joins the in-flight task, which must loop
+        // and rebuild cleanly instead of leaving `client == nil`.
+        let secondActivation = appState.startForegroundActivation()
+        teardownRelease.signal()
+        await firstActivation.value
+        await secondActivation.value
+
+        #expect(rebuildCount.withLock { $0 } == 2)
+        #expect(appState.phase == .ready)
+        #expect(appState.client != nil)
+        #expect(!appState.runtimeSuspendedForBackground)
+
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func relaunchWithPendingErasureRecoverySkipsSignUpRestoration() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let rootPath = try #require(seeded.appState.client).rootPath
+        let relayUrls = try #require(seeded.appState.client).relayUrls
+        let surviving = seeded.accounts[0]
+        await stopReadyRuntime(seeded.appState)
+
+        let draftDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ErasureSignUpDraft-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: draftDir) }
+        let draftStore = SignUpDraftStore(directory: draftDir)
+        var draft = SignUpDraft()
+        draft.stage = .publishing
+        draft.accountID = surviving.accountIdHex
+        draft.accountRef = surviving.label
+        draft.displayName = "Interrupted Draft"
+        try await draftStore.save(draft)
+
+        let erasureSuite = "SignUpErasureRecovery.\(UUID().uuidString)"
+        let erasureDefaults = try #require(UserDefaults(suiteName: erasureSuite))
+        defer { erasureDefaults.removePersistentDomain(forName: erasureSuite) }
+        AppDataErasureState(defaults: erasureDefaults).begin()
+
+        let relaunched = try ownedAppState(
+            client: try reopenedClient(rootPath: rootPath, relayUrls: relayUrls),
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            signUpDraftStore: draftStore,
+            erasureDefaults: erasureDefaults
+        )
+        relaunched.setAppSceneActive(true)
+        await relaunched.bootstrap()
+
+        // Erasure recovery must keep sign-up restoration suppressed so neither a
+        // surviving identity is auto-selected nor the sign-up sheet competes
+        // with `EraseAppDataView(isRecovery: true)`.
+        #expect(relaunched.activeAccountRef == nil)
+        #expect(!relaunched.hasRestoredSignUp)
+        #expect(!relaunched.restoreSignUpPresentation)
+        #expect(relaunched.erasureState.needsRecovery)
+        #expect(relaunched.erasureState.shouldPresentRecovery(
+            runtimeReady: relaunched.canUseRuntimeForLocalForegroundWork
+        ))
+
+        await stopReadyRuntime(relaunched)
+    }
+
+    @Test func pendingErasureRecoveryBlocksNotificationRoutingAndSystemCallbacks() async throws {
+        let catchUp = NotificationCatchUpStub()
+        let seeded = try await readyAppStateWithCreatedIdentities(catchUp: catchUp)
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+
+        appState.erasureState.begin()
+        appState.erasureState.failed()
+        appState.activeAccountRef = nil
+        let stoppedTask = appState.stopNotificationSubscription()
+        await stoppedTask?.value
+        await appState.cancelRetentionSweeps()
+
+        let route = LocalNotificationRoute(
+            accountRef: account.label,
+            groupIdHex: hex("11"),
+            notificationKey: "pending-erasure-notif",
+            messageIdHex: "msg-1"
+        )
+        var catchUpCalls = 0
+        var connectivityRestoredCalls = 0
+        catchUp.onCatchUp = { catchUpCalls += 1 }
+        catchUp.onConnectivityRestored = { connectivityRestoredCalls += 1 }
+
+        appState.presentNotification(route: route)
+        appState.presentProfile(npub: "npub1recoveryblocked")
+        await appState.activateAccount(account.label)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.pendingChatId == nil)
+        #expect(appState.pendingProfile == nil)
+
+        var unreadRefreshEntered = false
+        appState.beforeUnreadSummaryRefreshForTesting = { unreadRefreshEntered = true }
+        defer { appState.beforeUnreadSummaryRefreshForTesting = nil }
+        appState.scheduleAccountUnreadSummaryRefresh()
+        await appState.refreshAccountUnreadSummaries()
+        #expect(!unreadRefreshEntered)
+        #expect(!appState.hasPendingUnreadSummaryRefreshForTesting)
+
+        appState.scheduleConnectivityCatchUp(connectivityRestored: true)
+        await appState.catchUpAfterForegroundActivation()
+        appState.scheduleNativePushRegistrationIfEnabled()
+        await appState.syncNativePushRegistrationIfEnabled()
+        appState.startReadyForegroundMaintenance()
+        #expect(catchUpCalls == 0)
+        #expect(connectivityRestoredCalls == 0)
+        #expect(!appState.notificationSubscriptionActive)
+
+        await #expect(throws: ForegroundRuntimeMutationError.self) {
+            try await appState.removeUnlinkedAccount(accountRef: account.accountIdHex)
+        }
+        #expect(appState.deviceLinks.unlinkedNotice == nil)
+
+        appState.erasureState.complete()
+        await appState.activateAccount(account.label)
+        #expect(appState.activeAccountRef == account.label)
+        appState.presentNotification(route: route)
+        #expect(appState.pendingChatId == hex("11"))
+
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func pendingErasureRecoveryBlocksNotificationActions() async throws {
+        let rebuildCount = Mutex(0)
+        let scheduledFailureNotifications = Mutex(0)
+        let closeEntered = TestLatch()
+        let closeRelease = TestLatch()
+        defer { closeRelease.signal() }
+        let shouldParkClose = Mutex(false)
+        let notifications = AppNotifications(
+            requestAuthorizationHandler: { false },
+            authorizationStatusProvider: { .denied },
+            notificationRequestScheduler: { _ in
+                scheduledFailureNotifications.withLock { $0 += 1 }
+            }
+        )
+        let appState = try ownedAppState(
+            client: try ownedTestClient(),
+            notifications: notifications,
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+                rebuildCount.withLock { $0 += 1 }
+                return try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                    rootPath: rootPath,
+                    relayUrls: relayUrls,
+                    cursorPersistence: cursorPersistence,
+                    telemetryConfig: telemetryConfig
+                )
+            },
+            runtimeCloser: { client in
+                if shouldParkClose.withLock({ $0 }) {
+                    shouldParkClose.withLock { $0 = false }
+                    closeEntered.signal()
+                    await closeRelease.hold()
+                }
+                try await client.marmot.shutdownAndClose()
+            }
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        let account = try await appState.createIdentity()
+        let route = LocalNotificationRoute(
+            accountRef: account.label,
+            groupIdHex: hex("22"),
+            notificationKey: "pending-erasure-action",
+            messageIdHex: "msg-2"
+        )
+
+        // 1. Mid-wait race: `startRuntimeForNotificationAction()` has no entry
+        // guard, so it awaits the parked background suspension first; erasure
+        // recovery begins while the suspension is still parked, and the
+        // post-wait guard rejects without constructing an ephemeral runtime.
+        shouldParkClose.withLock { $0 = true }
+        let suspension = appState.startRuntimeSuspension()
+        try await closeEntered.wait()
+
+        let leaseStarted = TestLatch()
+        let leaseFinished = TestLatch()
+        let waitingLeaseTask = Task { @MainActor () -> NotificationActionRuntimeLease in
+            defer { leaseFinished.signal() }
+            leaseStarted.signal()
+            return try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        }
+        try await leaseStarted.wait()
+        // `waitingLeaseTask` runs on the MainActor: once `leaseStarted` fires,
+        // `startRuntimeForNotificationAction()` has already entered its suspension
+        // wait before returning control to this test task.
+        appState.erasureState.begin()
+        appState.erasureState.failed()
+        #expect(!leaseFinished.isSignalled)
+
+        closeRelease.signal()
+        await suspension.value
+
+        await #expect(throws: NotificationActionError.runtimeUnavailable) {
+            _ = try await waitingLeaseTask.value
+        }
+        #expect(rebuildCount.withLock { $0 } == 0)
+
+        // 2. While suspended in background with recovery pending, Reply, Mark Read,
+        // rejectedReply, and direct lease requests must neither open an ephemeral
+        // runtime nor schedule a failure notification referencing the wiped route.
+        await appState.performNotificationAction(.reply(route, text: "stale"))
+        await appState.performNotificationAction(.markRead(route, messageIdHex: "msg-2"))
+        await appState.performNotificationAction(.rejectedReply(route))
+        await #expect(throws: NotificationActionError.runtimeUnavailable) {
+            _ = try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        }
+        #expect(rebuildCount.withLock { $0 } == 0)
+        #expect(scheduledFailureNotifications.withLock { $0 } == 0)
+
+        // 3. Even with a live foreground client open for recovery, Reply, Mark Read,
+        // and direct lease requests stay blocked until erasure completes.
+        await appState.startForegroundActivation().value
+        #expect(rebuildCount.withLock { $0 } == 1)
+        #expect(appState.client != nil)
+        await appState.performNotificationAction(.reply(route, text: "stale"))
+        await appState.performNotificationAction(.markRead(route, messageIdHex: "msg-2"))
+        await #expect(throws: NotificationActionError.runtimeUnavailable) {
+            _ = try await appState.runtimeLifecycle.startRuntimeForNotificationAction()
+        }
+        #expect(scheduledFailureNotifications.withLock { $0 } == 0)
+
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func bootstrapWithPendingErasureRecoverySkipsAutoSelectionAndMaintenance() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let rootPath = try #require(seeded.appState.client).rootPath
+        let relayUrls = try #require(seeded.appState.client).relayUrls
+        let surviving = seeded.accounts[0]
+        await stopReadyRuntime(seeded.appState)
+
+        let erasureSuite = "BootstrapErasureRecovery.\(UUID().uuidString)"
+        let erasureDefaults = try #require(UserDefaults(suiteName: erasureSuite))
+        defer { erasureDefaults.removePersistentDomain(forName: erasureSuite) }
+        AppDataErasureState(defaults: erasureDefaults).begin()
+
+        let relaunched = try ownedAppState(
+            client: try reopenedClient(rootPath: rootPath, relayUrls: relayUrls),
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            erasureDefaults: erasureDefaults
+        )
+        relaunched.setAppSceneActive(true)
+        await relaunched.bootstrap()
+
+        #expect(relaunched.accounts.contains { $0.accountIdHex == surviving.accountIdHex })
+        #expect(relaunched.activeAccountRef == nil)
+        #expect(!relaunched.notificationSubscriptionActive)
+        #expect(relaunched.erasureState.needsRecovery)
+        #expect(relaunched.erasureState.shouldPresentRecovery(
+            runtimeReady: relaunched.canUseRuntimeForLocalForegroundWork
+        ))
+
+        await stopReadyRuntime(relaunched)
+    }
+
+    @Test func bootstrapWhileSuspendedInBackgroundDoesNotReopenSQLCipher() async throws {
+        let rebuildCount = Mutex(0)
+        let factory: RuntimeLifecycle.RuntimeClientFactory = { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+            rebuildCount.withLock { $0 += 1 }
+            return try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                rootPath: rootPath,
+                relayUrls: relayUrls,
+                cursorPersistence: cursorPersistence,
+                telemetryConfig: telemetryConfig
+            )
+        }
+        let appState = try ownedAppState(
+            client: try ownedTestClient(),
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: factory
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        await appState.startRuntimeSuspension().value
+
+        #expect(!appState.isAppSceneActive)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.client == nil)
+
+        await appState.bootstrap()
+
+        #expect(rebuildCount.withLock { $0 } == 0)
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+    }
+
+    @Test func foregroundReturnDuringExplicitBootstrapTeardownRebuildsRuntime() async throws {
+        let pauseNextRefresh = Mutex(false)
+        let checkpoint = AsyncTestCheckpoint()
+        let reads = AccountRefreshReadsStub()
+        reads.beforeListAccounts = {
+            guard pauseNextRefresh.withLock({ $0 }) else { return }
+            pauseNextRefresh.withLock { $0 = false }
+            await checkpoint.pause()
+        }
+        let appState = try testAppState(refreshReads: reads)
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        #expect(appState.phase == .onboarding)
+
+        await appState.startRuntimeSuspension().value
+        #expect(appState.client == nil)
+        appState.setAppSceneActive(true)
+        pauseNextRefresh.withLock { $0 = true }
+
+        let restartTask = Task { @MainActor in
+            await appState.bootstrap()
+        }
+        await checkpoint.waitUntilPaused()
+
+        appState.setAppSceneActive(false)
+        await checkpoint.release()
+        await restartTask.value
+
+        #expect(appState.phase == .onboarding)
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+
+        await appState.startForegroundActivation().value
+
+        #expect(appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.client != nil)
+        #expect(appState.canUseRuntimeForLocalForegroundWork)
+
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func backgroundSuspensionDuringExplicitBootstrapAwaitsStartupAndClosesStorage() async throws {
+        let pauseReplacementMake = Mutex(false)
+        let makeEntered = TestLatch()
+        let makeRelease = TestLatch()
+        let replacementMarmot = Mutex<Marmot?>(nil)
+        let initialClient = try ownedTestClient()
+        let appState = try ownedAppState(
+            client: initialClient,
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+                let built = try await RuntimeLifecycle.defaultRuntimeClientFactory(
+                    rootPath: rootPath,
+                    relayUrls: relayUrls,
+                    cursorPersistence: cursorPersistence,
+                    telemetryConfig: telemetryConfig
+                )
+                if pauseReplacementMake.withLock({ $0 }) {
+                    pauseReplacementMake.withLock { $0 = false }
+                    replacementMarmot.withLock { $0 = built.marmot }
+                    makeEntered.signal()
+                    await makeRelease.hold()
+                }
+                return built
+            }
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        #expect(appState.phase == .onboarding)
+
+        await appState.startRuntimeSuspension().value
+        #expect(appState.phase == .onboarding)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.client == nil)
+
+        appState.setAppSceneActive(true)
+        pauseReplacementMake.withLock { $0 = true }
+        let restartTask = Task { @MainActor in
+            await appState.bootstrap()
+        }
+        try await makeEntered.wait()
+        let openedMarmot = try #require(replacementMarmot.withLock { $0 })
+        #expect(!openedMarmot.storageIsClosed())
+
+        let waitingForBootstrap = TestLatch()
+        appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = { waitKind, isWaiting in
+            if waitKind == .bootstrap, isWaiting {
+                waitingForBootstrap.signal()
+            }
+        }
+        defer { appState.runtimeLifecycle.backgroundSuspensionWaitForTesting = nil }
+
+        var suspensionFinished = false
+        let suspensionTask = Task { @MainActor in
+            await appState.startRuntimeSuspension().value
+            suspensionFinished = true
+        }
+        try await waitingForBootstrap.wait()
+        #expect(!suspensionFinished)
+
+        makeRelease.signal()
+        await suspensionTask.value
+        await restartTask.value
+
+        #expect(suspensionFinished)
+        #expect(openedMarmot.storageIsClosed())
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+    }
+
+    @Test func runtimeEventsGenerationIsSuppressedWhileErasureRecoveryIsPending() async throws {
+        let initialClient = try ownedTestClient()
+        let rootPath = initialClient.rootPath
+        let relayUrls = initialClient.relayUrls
+        let appState = try ownedAppState(
+            client: initialClient,
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults
+        )
+        appState.erasureState.begin()
+        appState.erasureState.failed()
+        #expect(appState.erasureState.blocksNormalAccountActivation)
+
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        #expect(appState.client != nil)
+        #expect(appState.runtimeEventsGeneration == nil)
+
+        appState.erasureState.complete()
+        #expect(appState.runtimeEventsGeneration == appState.runtimeGeneration)
+
+        // Seed a real account on disk, then relaunch into pending erasure
+        // recovery reporting that profile as unlinked: `refreshAccounts` must
+        // not queue the Device Unlinked alert and `removeUnlinkedAccount` must
+        // refuse while recovery is pending.
+        let surviving = try await appState.createIdentity()
+        await appState.startRuntimeSuspension().value
+
+        let unlinkedSummary = AccountSummaryFfi(
+            label: surviving.label,
+            accountIdHex: surviving.accountIdHex,
+            localSigning: true,
+            externalSigning: false,
+            signedOut: true,
+            running: false,
+            unlinked: true
+        )
+        let unlinkedReads = AccountRefreshReads(
+            listAccounts: { _ in [unlinkedSummary] },
+            onboardingSnapshot: { _, _ in nil }
+        )
+        let unlinkedAppState = try ownedAppState(
+            client: try reopenedClient(rootPath: rootPath, relayUrls: relayUrls),
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            accountRefreshReads: unlinkedReads
+        )
+        unlinkedAppState.erasureState.begin()
+        unlinkedAppState.erasureState.failed()
+        unlinkedAppState.setAppSceneActive(true)
+        await unlinkedAppState.bootstrap()
+        #expect(unlinkedAppState.deviceLinks.unlinkedNotice == nil)
+        await #expect(throws: ForegroundRuntimeMutationError.self) {
+            try await unlinkedAppState.removeUnlinkedAccount(accountRef: unlinkedSummary.accountIdHex)
+        }
+        unlinkedAppState.erasureState.complete()
+        try await unlinkedAppState.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(unlinkedAppState.deviceLinks.unlinkedNotice?.accountIdHex == unlinkedSummary.accountIdHex)
+
+        await unlinkedAppState.startRuntimeSuspension().value
+    }
+
     @Test func interruptedImportStaysGatedWithoutRestoringSetup() async throws {
         let appState = try testAppState()
         appState.setAppSceneActive(true)
@@ -2138,10 +3335,109 @@ struct AppStateBootstrapTests {
 
         #expect(appState.isAppSceneActive)
         #expect(!appState.runtimeSuspendedForBackground)
-        #expect(appState.client != nil)
+        let replacementClient = try #require(appState.client)
         #expect(appState.runtimeGeneration == generationBefore + 1)
 
+        // Backgrounding again while Suspension A's parked catch-up is STILL
+        // held must start a fresh suspension task and close the replacement
+        // runtime rather than joining Suspension B's already-closed drain.
+        let suspensionC = appState.startRuntimeSuspension()
+        try await eventually {
+            replacementClient.marmot.storageIsClosed()
+                && appState.client == nil
+                && appState.runtimeSuspendedForBackground
+        }
+
         await checkpoint.release()
+        await suspensionB.value
+        await suspensionC.value
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func backgroundErasureRecoveryBecomesActionableWhileEarlierCatchUpDrainIsStillHeld() async throws {
+        let catchUp = NotificationCatchUpStub()
+        let catchUpCheckpoint = AsyncTestCheckpoint()
+        let sleeperEntered = TestLatch()
+        let sleeperExited = TestLatch()
+        let failErasureClose = Mutex(false)
+        let closeEntered = TestLatch()
+        let closeRelease = TestLatch()
+        let appState = try ownedAppState(
+            client: try ownedTestClient(),
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            runtimeCloser: { client in
+                if failErasureClose.withLock({ $0 }) {
+                    failErasureClose.withLock { $0 = false }
+                    closeEntered.signal()
+                    await closeRelease.hold()
+                    try? await client.marmot.shutdownAndClose()
+                    throw MarmotKitError.Io(details: "simulated erasure close failure")
+                }
+                try await client.marmot.shutdownAndClose()
+            },
+            mutationDrainSleeper: { _ in
+                defer { sleeperExited.signal() }
+                sleeperEntered.signal()
+                try await parkUntilCancelled()
+            },
+            notificationCatchUpCalls: catchUp.calls
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+
+        // Park connectivity catch-up and abort Suspension A so an unrelated
+        // catch-up drain sits in `pendingMaintenanceDrains`.
+        catchUp.onCatchUp = { await catchUpCheckpoint.pause() }
+        appState.scheduleConnectivityCatchUp()
+        await catchUpCheckpoint.waitUntilPaused()
+        catchUp.onCatchUp = nil
+
+        let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+        let suspensionA = appState.startRuntimeSuspension()
+        try await sleeperEntered.wait()
+        let activationA = appState.startForegroundActivation()
+        try await sleeperExited.wait()
+        appState.runtimeLifecycle.endForegroundRuntimeMutation(lease)
+        await suspensionA.value
+        await activationA.value
+
+        // Start erasure, enter `closeForAppErasure()`, then background the app
+        // so Suspension B queues behind erasure's storage-close gate while
+        // Suspension A's parked catch-up is STILL held.
+        failErasureClose.withLock { $0 = true }
+        let erasureTask = Task { @MainActor () -> Bool in
+            do {
+                try await appState.eraseAppData()
+                return true
+            } catch {
+                return false
+            }
+        }
+        try await closeEntered.wait()
+        let suspensionB = appState.startRuntimeSuspension()
+        await Task.yield()
+
+        // Let erasure's close fail. `suspendAfterBackgroundErasure()` must join
+        // only Suspension B's storage-close slot (not `drainPendingMaintenanceDrains`)
+        // so `eraseAppData()` finishes and latches recovery while `catchUpCheckpoint`
+        // is still parked, and returning to foreground makes recovery actionable.
+        closeRelease.signal()
+        let succeeded = await erasureTask.value
+        #expect(!succeeded)
+        #expect(appState.erasureState.needsRecovery)
+        #expect(!appState.erasureState.recoveryInProgress)
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+
+        await appState.startForegroundActivation().value
+        #expect(appState.client != nil)
+        #expect(appState.erasureState.shouldPresentRecovery(
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+        ))
+
+        await catchUpCheckpoint.release()
         await suspensionB.value
         await stopReadyRuntime(appState)
     }
@@ -2893,7 +4189,12 @@ struct AppStateBootstrapTests {
         client: MarmotClient,
         notifications: AppNotifications,
         accountDefaults: UserDefaults,
+        signUpDraftStore: SignUpDraftStore? = nil,
+        erasureDefaults: UserDefaults? = nil,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = TelemetryBuildConfig.current(),
+        runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory =
+            RuntimeLifecycle.defaultRuntimeClientFactory,
+        runtimeCloser: @escaping RuntimeLifecycle.RuntimeCloser = RuntimeLifecycle.defaultRuntimeCloser,
         runtimeRetrySleeper: @escaping RuntimeLifecycle.RetrySleeper = AppStateTestResources.immediateRetry,
         runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy = .foreground,
         mutationDrainSleeper: @escaping RuntimeLifecycle.RetrySleeper = RuntimeLifecycle.defaultRetrySleeper,
@@ -2906,8 +4207,12 @@ struct AppStateBootstrapTests {
         try TestRuntimeScope.own(AppState.test(
             client: client,
             notifications: notifications,
+            signUpDraftStore: signUpDraftStore,
             accountDefaults: accountDefaults,
+            erasureDefaults: erasureDefaults,
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
+            runtimeClientFactory: runtimeClientFactory,
+            runtimeCloser: runtimeCloser,
             runtimeRetrySleeper: runtimeRetrySleeper,
             runtimeConstructionRetryPolicy: runtimeConstructionRetryPolicy,
             mutationDrainSleeper: mutationDrainSleeper,

@@ -11,6 +11,7 @@ extension AppState {
 
     @MainActor
     func presentProfile(npub: String) {
+        guard !blocksAccountWork else { return }
         navigation.presentProfile(npub: npub)
     }
 
@@ -22,6 +23,7 @@ extension AppState {
     /// Request navigation into a chat (e.g. just after creating one).
     @MainActor
     func presentChat(groupIdHex: String, accountRef: String? = nil, messageIdHex: String? = nil) {
+        guard !blocksAccountWork else { return }
         let requestedAccountRef = accountRef?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let requestedAccountRef, !requestedAccountRef.isEmpty {
             guard canRoute(toAccountRef: requestedAccountRef) else { return }

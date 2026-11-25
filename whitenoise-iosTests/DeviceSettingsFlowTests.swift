@@ -63,17 +63,25 @@ struct DeviceSettingsFlowTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let state = AppDataErasureState(defaults: defaults)
         state.begin()
-        #expect(!state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: false))
+        #expect(!state.shouldPresentRecovery(runtimeReady: false))
+        #expect(state.blocksNormalAccountActivation)
         state.failed()
-        #expect(state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: true))
+        #expect(state.shouldPresentRecovery(runtimeReady: true))
+        #expect(!state.shouldPresentRecovery(runtimeReady: false))
+        state.noteRecoveryPresented()
         state.begin()
         #expect(!state.needsRecovery)
-        #expect(state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: false))
-        #expect(state.shouldPresentRecovery(activeAccountRef: "restored-during-bootstrap", runtimeReady: false))
+        #expect(state.shouldPresentRecovery(runtimeReady: false))
         state.failed()
-        #expect(state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: true))
+        // Once opened, the recovery sheet stays mounted even if the runtime is
+        // temporarily unavailable (e.g. scene `.inactive`), handing off only
+        // when the phase transitions to `.failed` (`phaseOwnsLiveRuntime == false`).
+        #expect(state.shouldPresentRecovery(runtimeReady: true))
+        #expect(state.shouldPresentRecovery(runtimeReady: false))
+        #expect(!state.shouldPresentRecovery(runtimeReady: false, phaseOwnsLiveRuntime: false))
         state.complete()
-        #expect(!state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: true))
+        #expect(!state.blocksNormalAccountActivation)
+        #expect(!state.shouldPresentRecovery(runtimeReady: true))
     }
 
     @Test func interruptedSignInRequiresExplicitCompletionAcrossLaunches() throws {

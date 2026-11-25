@@ -140,11 +140,8 @@ struct whitenoise_iosApp: App {
                         )
                         await appState.bootstrap()
                     }
-                    .task(id: "\(appState.runtimeGeneration)/\(appState.canUseLiveRuntime && appState.isCurrentClientStarted)/\(appState.accounts.map { "\($0.accountIdHex):\($0.signedOut)" }.joined())") {
-                        guard appState.canUseLiveRuntime,
-                              appState.isCurrentClientStarted,
-                              let client = try? appState.currentMarmotClient() else { return }
-                        do { try await AttachmentPolicyBridge.shared.synchronize(client) }
+                    .task(id: "\(appState.runtimeGeneration)/\(appState.allowsAutomaticAttachmentPolicySync)/\(appState.accounts.map { "\($0.accountIdHex):\($0.signedOut)" }.joined())") {
+                        do { try await appState.synchronizeAutomaticAttachmentPolicyIfAllowed() }
                         catch is CancellationError { return }
                         catch { appState.present(UserFacingError.toast(title: L10n.string("Couldn't update download settings"), error: error)) }
                     }
