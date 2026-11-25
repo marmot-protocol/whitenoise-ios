@@ -331,9 +331,9 @@ final class AppState {
     /// Device-wide opt-in for MDK's native startup diagnostics. Applied to the
     /// running runtime immediately and to future runtimes before account reads.
     /// Disabling clears captured history.
-    var startupDiagnosticsEnabled: Bool = StartupDiagnosticsPreference.isEnabled() {
+    var startupDiagnosticsEnabled: Bool {
         didSet {
-            StartupDiagnosticsPreference.setEnabled(startupDiagnosticsEnabled)
+            StartupDiagnosticsPreference.setEnabled(startupDiagnosticsEnabled, preferenceDefaults)
             try? client?.marmot.setStartupDiagnosticsEnabled(enabled: startupDiagnosticsEnabled)
         }
     }
@@ -735,6 +735,7 @@ final class AppState {
         self.preferenceDefaults = preferenceDefaults
         self.developerMode = preferenceDefaults.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = preferenceDefaults.bool(forKey: Self.streamingDebugModeKey)
+        self.startupDiagnosticsEnabled = StartupDiagnosticsPreference.isEnabled(preferenceDefaults)
         self.blockScreenshots = preferenceDefaults.bool(forKey: Self.blockScreenshotsKey)
         self.recentReactions = preferenceDefaults.stringArray(forKey: Self.recentReactionsKey)
             ?? Self.defaultReactions
@@ -1095,6 +1096,17 @@ final class AppState {
         routesAway: Bool = true
     ) async -> [WipeFailureItem] {
         var localCleanupFailures: [WipeFailureItem] = []
+        // Hold the avatar-cache erasure gate across disk cleanup, account
+        // refresh, and routing so a still-displayed departing profile cannot
+        // repopulate the cleared avatar cache while `refreshAccounts()` awaits.
+        if destructive {
+            AvatarCacheErasure.begin()
+        }
+        defer {
+            if destructive {
+                AvatarCacheErasure.end()
+            }
+        }
         if destructive {
             conversationDraftStore.removeDrafts(accountRef: removedRef)
             await conversationDraftStore.flush()
@@ -1111,14 +1123,24 @@ final class AppState {
                 // the account either.
                 ChatMuteStore.clearAll(accountIdHex: removedAccountIdHex)
             }
-            if await !NotificationCommunicationDecorator.deleteAllDonatedInteractions() {
+            let clearedInteractions = await NotificationCommunicationDecorator.deleteAllDonatedInteractions()
+            let clearedNotificationAvatars = await Task.detached(priority: .utility) {
+                NotificationCommunicationDecorator.clearAvatarCache()
+            }.value
+            if !clearedInteractions || !clearedNotificationAvatars {
                 localCleanupFailures.append(WipeFailureItem(
                     subject: nil,
                     reason: L10n.string("Some notification previews may remain on this device."),
                     kind: .notificationPreviews
                 ))
             }
-            if await !MessageMediaCache.purgeAllDecryptedMedia() {
+            let clearedDecryptedMedia = await MessageMediaCache.purgeAllDecryptedMedia()
+            await RemoteAvatarImageLoader.clearCachesAndDrain()
+            await GroupAvatarImageLoader.clearCachesAndDrain()
+            let clearedProfileAvatars = await RemoteAvatarDiskCache.shared.removeAll()
+            let clearedGroupAvatars = await RemoteAvatarDiskCache.groupShared.removeAll()
+            let clearedGroupThumbnails = await RemoteAvatarDiskCache.groupThumbnailShared.removeAll()
+            if !clearedDecryptedMedia || !clearedProfileAvatars || !clearedGroupAvatars || !clearedGroupThumbnails {
                 localCleanupFailures.append(WipeFailureItem(
                     subject: nil,
                     reason: L10n.string("Some decrypted media may remain on this device."),
@@ -1341,6 +1363,7 @@ final class AppState {
             await pendingAccountSetup?.drain()
             signUpRestorationTask?.cancel()
             _ = try? await signUpRestorationTask?.value
+            await appReviewDemo.resetForErasure()
             await runtimeLifecycle.prepareForAppErasure()
             let stored = try await erasingClient.listAccounts()
             for account in stored {
@@ -1392,6 +1415,7 @@ final class AppState {
             scheduleApplicationBadgeSynchronization()
             developerMode = false
             streamingDebugMode = false
+            startupDiagnosticsEnabled = false
             blockScreenshots = false
             resetQuickReactions()
             await appLock.setEnabled(false)
@@ -1410,6 +1434,7 @@ final class AppState {
             signInAttempts.reset()
             nativePushRestoreIntents.reset()
             diagnosticsConsent.reset()
+            resetInMemoryStateForErasure()
             erasureState.complete()
             appDataErasureGeneration += 1
             isErasingAppData = false
@@ -1423,6 +1448,17 @@ final class AppState {
             present(.error(L10n.string("Erasure didn’t finish. Some data may remain. Try again.")))
             throw error
         }
+    }
+
+    func resetInMemoryStateForErasure() {
+        deviceLinks.resetForErasure()
+        historyNotices.clear()
+        recentDirectChatPeers = RecentDirectChatPeerStore()
+        recentCreatedChatRows = RecentCreatedChatRowStore()
+        pendingAccountSetupReadiness.removeAll()
+        latestAccountAttention = nil
+        accountExitIntent = nil
+        checkedRetainedUndeliveredChanges = false
     }
 
     @MainActor

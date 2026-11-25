@@ -36,18 +36,32 @@ nonisolated enum AppDataErasure {
         }
     }
 
-    static func clearContainerFiles() throws {
-        let manager = FileManager.default
+    static func clearContainerFiles(fileManager: FileManager = .default) throws {
         let directories = [FileManager.SearchPathDirectory.cachesDirectory, .applicationSupportDirectory, .documentDirectory]
-        for directory in directories {
-            guard let url = manager.urls(for: directory, in: .userDomainMask).first,
-                  manager.fileExists(atPath: url.path) else { continue }
-            for child in try manager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) {
-                try manager.removeItem(at: child)
+        var urlsToClear = directories.compactMap { fileManager.urls(for: $0, in: .userDomainMask).first }
+        urlsToClear.append(fileManager.temporaryDirectory)
+        guard let sharedBase = AppContainerConfig.sharedBase(fileManager: fileManager) else {
+            throw AppContainerError.appGroupContainerUnavailable
+        }
+        // Clears shared extension caches (such as NotificationAvatars) without
+        // touching `White Noise/Marmot/.marmot-runtime.lock`.
+        urlsToClear.append(sharedBase.appendingPathComponent("Library/Caches", isDirectory: true))
+        for url in urlsToClear {
+            let children: [URL]
+            do {
+                children = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
+            } catch let error as NSError where isNotFoundError(error) {
+                continue
+            }
+            for child in children {
+                try fileManager.removeItem(at: child)
             }
         }
-        for child in try manager.contentsOfDirectory(at: manager.temporaryDirectory, includingPropertiesForKeys: nil) {
-            try manager.removeItem(at: child)
-        }
+    }
+
+    private static func isNotFoundError(_ error: NSError) -> Bool {
+        (error.domain == NSCocoaErrorDomain
+            && (error.code == NSFileNoSuchFileError || error.code == NSFileReadNoSuchFileError))
+            || (error.domain == NSPOSIXErrorDomain && error.code == Int(ENOENT))
     }
 }

@@ -328,4 +328,71 @@ extension DeviceLinkPresentationTests {
         store.unlinkedNoticeDismissed()
         #expect(store.unlinkedNotice == nil)
     }
+
+    @MainActor @Test(.marmotRuntimeConcurrencyLimit)
+    func resetForErasureClearsAllCrossProfileUnlinkedAndOfferState() async throws {
+        let primary = accountSummary("primary", byte: "e1")
+        let secondary = accountSummary("secondary", byte: "e2")
+        let waitingPrompt = linkPrompt("other-profile-prompt", .comparing(code: linkCode()))
+        let otherRequest = OtherProfileLinkRequest(
+            accountIdHex: secondary.accountIdHex,
+            accountRef: secondary.label,
+            promptID: waitingPrompt.promptId
+        )
+
+        try await withTestClient { client in
+            let appState = AppState.test(client: client)
+            appState.setAppSceneActive(true)
+            appState.accountStore.accounts = [primary, secondary]
+            appState.activeAccountRef = primary.label
+
+            let store = DeviceLinkStore { _, accountRef in
+                DeviceLinkSnapshotFfi(
+                    newDevice: nil,
+                    prompts: accountRef == secondary.label ? [waitingPrompt] : [],
+                    moves: [],
+                    deviceGroupStalled: false,
+                    chatProgress: []
+                )
+            }
+            await store.refresh(using: appState)
+            #expect(store.otherProfilePrompts[secondary.accountIdHex]?.map(\.promptId) == [waitingPrompt.promptId])
+
+            store.dismissOtherProfileRequest(otherRequest)
+            store.noteSetupFinished(accountIdHex: primary.accountIdHex)
+            store.dismissNewDeviceOffer()
+            let unlinkedEventState = AppState.test()
+            store.observe(.deviceUnlinked(accountIdHex: hex("f1"), accountLabel: "gone-1"), using: unlinkedEventState)
+            store.observe(.deviceUnlinked(accountIdHex: hex("f2"), accountLabel: "gone-2"), using: unlinkedEventState)
+
+            #expect(!store.otherProfilePrompts.isEmpty)
+            #expect(store.otherProfileRequest(using: appState) == nil)
+            #expect(store.unlinkedNotice?.accountIdHex == hex("f1"))
+
+            // Ordinary clear() keeps cross-profile, unlinked, and offer state; resetForErasure() wipes all of it.
+            store.clear()
+            #expect(!store.otherProfilePrompts.isEmpty)
+            #expect(store.unlinkedNotice != nil)
+
+            store.resetForErasure()
+            #expect(store.otherProfilePrompts.isEmpty)
+            #expect(store.unlinkedNotice == nil)
+            // Dismissing after erasure does not dequeue any prior unlinked notice.
+            store.unlinkedNoticeDismissed()
+            await Task.yield()
+            #expect(store.unlinkedNotice == nil)
+
+            // Re-refreshing exposes the other-profile request again because dismissed IDs were cleared.
+            appState.accountStore.accounts = [primary, secondary]
+            appState.activeAccountRef = primary.label
+            await store.refresh(using: appState)
+            #expect(store.otherProfileRequest(using: appState) == otherRequest)
+
+            // An unlinked profile reminder can fire again because reminded IDs were cleared.
+            var unlinked = accountSummary("gone-1", byte: "f1", signedOut: true)
+            unlinked.unlinked = true
+            store.remindUnlinkedProfiles([unlinked])
+            #expect(store.unlinkedNotice?.accountIdHex == hex("f1"))
+        }
+    }
 }

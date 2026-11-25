@@ -213,4 +213,60 @@ struct NotificationContentDecoratorTests {
         #expect(content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
             == LocalNotificationProjection.quietDisposition)
     }
+
+    @Test func clearAvatarCacheRemovesLegacyAppGroupDirectoryAndHandlesAbsenceAndErrors() throws {
+        let container = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NotificationAvatarClearTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: container, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: container) }
+
+        let fileManager = NotificationAvatarStubFileManager(sharedContainerURL: container)
+        let avatarDir = container.appendingPathComponent("Library/Caches/NotificationAvatars", isDirectory: true)
+
+        // Missing App Group container reports incomplete cleanup rather than success.
+        let unavailableContainer = NotificationAvatarStubFileManager(sharedContainerURL: nil)
+        #expect(!NotificationCommunicationDecorator.clearAvatarCache(fileManager: unavailableContainer))
+
+        // Absent directory succeeds cleanly.
+        #expect(NotificationCommunicationDecorator.clearAvatarCache(fileManager: fileManager))
+
+        // Historical pre-upgrade cached avatar file is deleted on clear.
+        try FileManager.default.createDirectory(at: avatarDir, withIntermediateDirectories: true)
+        let cachedAvatar = avatarDir.appendingPathComponent("legacy-avatar")
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: cachedAvatar)
+        #expect(FileManager.default.fileExists(atPath: cachedAvatar.path))
+
+        #expect(NotificationCommunicationDecorator.clearAvatarCache(fileManager: fileManager))
+        #expect(!FileManager.default.fileExists(atPath: avatarDir.path))
+
+        // Removal error reports false so destructive wipes surface leftover data.
+        try FileManager.default.createDirectory(at: avatarDir, withIntermediateDirectories: true)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: cachedAvatar)
+        let failingManager = NotificationAvatarStubFileManager(
+            sharedContainerURL: container,
+            removeError: CocoaError(.fileWriteNoPermission)
+        )
+        #expect(!NotificationCommunicationDecorator.clearAvatarCache(fileManager: failingManager))
+        #expect(FileManager.default.fileExists(atPath: avatarDir.path))
+    }
+}
+
+private final class NotificationAvatarStubFileManager: FileManager {
+    private let sharedContainerURL: URL?
+    private let removeError: Error?
+
+    init(sharedContainerURL: URL?, removeError: Error? = nil) {
+        self.sharedContainerURL = sharedContainerURL
+        self.removeError = removeError
+        super.init()
+    }
+
+    override func containerURL(forSecurityApplicationGroupIdentifier groupIdentifier: String) -> URL? {
+        sharedContainerURL
+    }
+
+    override func removeItem(at URL: URL) throws {
+        if let removeError { throw removeError }
+        try super.removeItem(at: URL)
+    }
 }

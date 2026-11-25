@@ -56,6 +56,64 @@ struct AppStateBootstrapTests {
         #expect(remaining == [AppDataErasure.runtimeLockName])
     }
 
+    @Test(.sharedAvatarCacheAccess)
+    func destructiveWipeWithSurvivingProfileStillPurgesGroupAndProfileAvatarCaches() async throws {
+        let survivingAccountID = Mutex<String?>(nil)
+        let reads = AccountRefreshReads(
+            listAccounts: AccountRefreshReads.live.listAccounts,
+            onboardingSnapshot: { client, accountID in
+                if accountID == survivingAccountID.withLock({ $0 }) { return nil }
+                return try await AccountRefreshReads.live.onboardingSnapshot(client, accountID)
+            }
+        )
+        let appState = try ownedAppState(
+            client: try ownedTestClient(),
+            notifications: deniedNotifications(),
+            accountDefaults: accountDefaults,
+            accountRefreshReads: reads
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        let wipedAccount = try await appState.createIdentity()
+        let client = try #require(appState.client)
+        let importedSnapshot = try await client.marmot.beginOnboarding(
+            nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
+            options: AccountSetupOptions.importOptions(runtimeRelays: client.relayUrls)
+        )
+        survivingAccountID.withLock { $0 = importedSnapshot.accountIdHex }
+        try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        appState.activeAccountRef = wipedAccount.label
+
+        let avatarURL = try #require(URL(string: "https://example.com/wipe-surviving-\(UUID().uuidString).png"))
+        let png = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).pngData { context in
+            UIColor.systemOrange.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }
+        _ = try await RemoteAvatarImageLoader.image(for: avatarURL, maxPixelSize: 16, scale: 1) { _ in png }
+        let rawGroupKey = GroupAvatarCacheKey.rawData(accountRef: wipedAccount.label, imageHashHex: hex("77"))
+        let thumbGroupKey = GroupAvatarCacheKey.thumbnail(
+            accountRef: wipedAccount.label,
+            imageHashHex: hex("77"),
+            maxPixelSize: 16
+        )
+        await RemoteAvatarDiskCache.groupShared.store(png, forKey: rawGroupKey)
+        await RemoteAvatarDiskCache.groupThumbnailShared.store(png, forKey: thumbGroupKey)
+        #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: rawGroupKey) == png)
+        #expect(await RemoteAvatarDiskCache.groupThumbnailShared.data(forKey: thumbGroupKey) == png)
+
+        #expect(await appState.signOutAndWipeActiveAccount())
+
+        // Profile B remains signed in, yet profile A's cached avatars are purged.
+        #expect(appState.phase == .ready)
+        #expect(appState.accounts.contains { $0.accountIdHex == importedSnapshot.accountIdHex })
+        #expect(RemoteAvatarImageLoader.cachedImage(for: avatarURL, maxPixelSize: 16) == nil)
+        #expect(await RemoteAvatarDiskCache.shared.data(for: avatarURL) == nil)
+        #expect(await RemoteAvatarDiskCache.groupShared.data(forKey: rawGroupKey) == nil)
+        #expect(await RemoteAvatarDiskCache.groupThumbnailShared.data(forKey: thumbGroupKey) == nil)
+
+        await stopReadyRuntime(appState)
+    }
+
     @Test func interruptedImportStaysGatedWithoutRestoringSetup() async throws {
         let appState = try testAppState()
         appState.setAppSceneActive(true)
@@ -2438,14 +2496,25 @@ struct AppStateBootstrapTests {
         #expect(appState.profileStore.profileFetchQueueTask == nil)
     }
 
-    @Test func destructiveWipeClearsProfileProjectionState() async throws {
+    @Test(.sharedAvatarCacheAccess)
+    func destructiveWipeClearsProfileProjectionState() async throws {
         // A destructive wipe into onboarding is the one place a whole-map reset is
         // safe: with no active account `canRefreshProfiles` is false, so no
         // in-flight load can re-bump a token for the gone account ids or
         // repopulate the cache and race the reset. Signing out the last account
-        // must reclaim accumulated cached projections (#366) and version entries
-        // (#353).
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        // must reclaim accumulated cached projections (#366), version entries
+        // (#353), and shared avatar caches, while holding `AvatarCacheErasure`
+        // across `refreshAccounts()` and routing so a still-displayed profile
+        // cannot repopulate the cache mid-wipe.
+        let pauseNextRefresh = Mutex(false)
+        let refreshPaused = AsyncTestCheckpoint()
+        let reads = AccountRefreshReadsStub()
+        reads.beforeListAccounts = {
+            guard pauseNextRefresh.withLock({ $0 }) else { return }
+            pauseNextRefresh.withLock { $0 = false }
+            await refreshPaused.pause()
+        }
+        let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
         let appState = seeded.appState
         let account = seeded.accounts[0]
         appState.activeAccountRef = account.label
@@ -2455,12 +2524,57 @@ struct AppStateBootstrapTests {
         ]
         appState.profileStore.profileProjectionLoadVersions = [hex("aa"): 9, account.accountIdHex: 2]
 
-        await appState.signOutAndWipeActiveAccount()
+        let avatarURL = try #require(URL(string: "https://example.com/wipe-avatar-\(UUID().uuidString).png"))
+        let png = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).pngData { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }
+        _ = try await RemoteAvatarImageLoader.image(for: avatarURL, maxPixelSize: 16, scale: 1) { _ in png }
+        let groupRequest = GroupAvatarImageRequest(
+            accountRef: account.label,
+            groupIdHex: hex("44"),
+            imageHashHex: hex("55"),
+            maxPixelSize: 16
+        )
+        GroupAvatarImageLoader.seed(
+            data: png,
+            accountRef: groupRequest.accountRef,
+            groupIdHex: groupRequest.groupIdHex,
+            replacingImageHashHex: nil
+        )
+        _ = try await GroupAvatarImageLoader.image(
+            request: groupRequest,
+            scale: 1,
+            priority: .foreground,
+            client: try appState.currentMarmotClient()
+        )
+        #expect(RemoteAvatarImageLoader.cachedImage(for: avatarURL, maxPixelSize: 16) != nil)
+        #expect(GroupAvatarImageLoader.cachedImage(for: groupRequest) != nil)
+
+        pauseNextRefresh.withLock { $0 = true }
+        let wipeTask = Task { @MainActor in
+            await appState.signOutAndWipeActiveAccount()
+        }
+        await refreshPaused.waitUntilPaused()
+
+        // Disk cleanup already ran, while `refreshAccounts()` is still suspended
+        // and the departing profile has not routed away yet. Avatar loads must
+        // stay rejected so nothing writes back into the cleared cache.
+        await #expect(throws: CancellationError.self) {
+            _ = try await RemoteAvatarImageLoader.image(for: avatarURL, maxPixelSize: 16, scale: 1) { _ in png }
+        }
+        #expect(await RemoteAvatarDiskCache.shared.data(for: avatarURL) == nil)
+
+        await refreshPaused.release()
+        #expect(await wipeTask.value)
 
         #expect(appState.activeAccountRef == nil)
         #expect(appState.phase == .onboarding)
         #expect(appState.profileStore.profileProjectionCache.isEmpty)
         #expect(appState.profileStore.profileProjectionLoadVersions.isEmpty)
+        #expect(RemoteAvatarImageLoader.cachedImage(for: avatarURL, maxPixelSize: 16) == nil)
+        #expect(GroupAvatarImageLoader.cachedImage(for: groupRequest) == nil)
+        #expect(await RemoteAvatarDiskCache.shared.data(for: avatarURL) == nil)
     }
 
     @Test func signOutDisablesNativePushForTheDepartingAccount() async throws {
@@ -2559,7 +2673,7 @@ struct AppStateBootstrapTests {
     /// Suspension closes storage before draining account exit. Sign-out and
     /// wipe must therefore keep one captured client across awaits; re-reading
     /// the former non-optional AppState handle here was a fatal-error race.
-    @Test(arguments: [false, true])
+    @Test(.sharedAvatarCacheAccess, arguments: [false, true])
     func accountExitUsesCapturedClientWhenSuspensionWins(_ destructive: Bool) async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState

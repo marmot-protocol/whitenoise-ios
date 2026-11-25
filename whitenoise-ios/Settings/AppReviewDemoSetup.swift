@@ -159,6 +159,16 @@ final class AppReviewDemoCoordinator {
         status = .idle
     }
 
+    /// Cancels any running demo setup and resets persisted and in-memory state
+    /// during full app-data erasure.
+    func resetForErasure() async {
+        let running = task
+        task = nil
+        running?.cancel()
+        await running?.value
+        clearSavedSetup()
+    }
+
     private func run() async {
         guard let appState,
               appState.canUseRuntimeForForegroundWork,

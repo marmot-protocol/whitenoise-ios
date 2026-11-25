@@ -6,7 +6,7 @@ import MarmotKit
 
 @MainActor
 struct NativeAvatarImageCacheTests {
-    @Test func firstFrameUsesWarmPixelsWithoutWaitingForTheConversationOrRuntime() throws {
+    @Test(.sharedAvatarCacheAccess) func firstFrameUsesWarmPixelsWithoutWaitingForTheConversationOrRuntime() throws {
         let suite = "NativeAvatarImageCacheTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -76,7 +76,7 @@ struct NativeAvatarImageCacheTests {
         #expect(cache.image(account: "alice", generation: 1, reference: "visible", revision: 1) == nil)
     }
 
-    @Test func erasureInvalidatesDecodedPixelsAndInFlightRequestGeneration() {
+    @Test(.sharedAvatarCacheAccess) func erasureInvalidatesDecodedPixelsAndInFlightRequestGeneration() {
         let cache = NativeAvatarImageCache.shared
         cache.insert(UIImage(), account: "erasure-test", generation: 1, reference: "avatar", revision: 1)
         let generation = AvatarCacheErasure.generation
