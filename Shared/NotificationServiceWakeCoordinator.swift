@@ -125,7 +125,8 @@ nonisolated struct NotificationServiceWakeEnvironment: Sendable {
     var loadPolicySnapshot: @MainActor @Sendable () -> NotificationServiceWakePolicySnapshot
     var maxWaitMs: UInt32
     var proactiveBudget: Duration
-    var sleep: @Sendable (Duration) async throws -> Void
+    var now: @Sendable () -> ContinuousClock.Instant = { ContinuousClock.now }
+    var sleep: @MainActor @Sendable (Duration) async throws -> Void
     var submitAdditionalPresentation: @MainActor @Sendable (LocalNotificationPresentation, _ applicationBadgeCount: Int?) -> Void
 
     static let live = Self(
@@ -134,6 +135,7 @@ nonisolated struct NotificationServiceWakeEnvironment: Sendable {
         loadPolicySnapshot: { NotificationServiceWakePolicySnapshot.loadLive() },
         maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
         proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
+        now: { ContinuousClock.now },
         sleep: { duration in
             try await Task.sleep(for: duration)
         },
@@ -256,6 +258,7 @@ nonisolated final class NotificationServiceWakeCoordinator: Sendable {
     private struct PendingStart: Sendable {
         let content: UncheckedSendableBox<UNMutableNotificationContent>
         let delivery: NotificationWakeDelivery
+        let wakeStartedAt: ContinuousClock.Instant
     }
 
     private struct QueueState: Sendable {
@@ -264,11 +267,32 @@ nonisolated final class NotificationServiceWakeCoordinator: Sendable {
         var drainScheduled = false
     }
 
-    private let queue = Mutex<QueueState>(QueueState())
+    nonisolated private final class WakeQueue: Sendable {
+        private let storage = Mutex<QueueState>(QueueState())
+
+        func withLock<Result: ~Copyable>(
+            _ body: (inout QueueState) -> Result
+        ) -> Result {
+            storage.withLock(body)
+        }
+    }
+
+    private let now: @Sendable () -> ContinuousClock.Instant
+    private let queue: WakeQueue
     private let state: NotificationServiceWakeCoordinatorState
 
     init(environment: NotificationServiceWakeEnvironment) {
-        state = NotificationServiceWakeCoordinatorState(environment: environment)
+        now = environment.now
+        let queue = WakeQueue()
+        self.queue = queue
+        state = NotificationServiceWakeCoordinatorState(
+            environment: environment,
+            onDeliveryFinished: { deliveryID in
+                queue.withLock { queueState in
+                    queueState.pendingDeliveries.removeAll { $0.id == deliveryID || !$0.isPending }
+                }
+            }
+        )
     }
 
     func didReceive(
@@ -276,6 +300,7 @@ nonisolated final class NotificationServiceWakeCoordinator: Sendable {
         ownerID: UUID,
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
+        let wakeStartedAt = now()
         let delivery = NotificationWakeDelivery(
             ownerID: ownerID,
             initialContent: request.content,
@@ -285,7 +310,8 @@ nonisolated final class NotificationServiceWakeCoordinator: Sendable {
             ?? UNMutableNotificationContent()
         let pendingStart = PendingStart(
             content: UncheckedSendableBox(value: mutableContent),
-            delivery: delivery
+            delivery: delivery,
+            wakeStartedAt: wakeStartedAt
         )
         // Record registration and enqueue session start atomically under the
         // same lock, then drive a single MainActor drain in FIFO registration
@@ -321,7 +347,8 @@ nonisolated final class NotificationServiceWakeCoordinator: Sendable {
             for item in batch {
                 state.startSession(
                     content: item.content.value,
-                    delivery: item.delivery
+                    delivery: item.delivery,
+                    wakeStartedAt: item.wakeStartedAt
                 )
             }
         }
@@ -350,6 +377,52 @@ nonisolated final class NotificationServiceWakeCoordinator: Sendable {
     }
 }
 
+/// MainActor-isolated close barrier owned by a session that opened a runtime.
+/// Waiting successor wakes cancel their own wait immediately if replaced or
+/// expired without cancelling the prior runtime's `shutdownAndClose()` or
+/// allowing later wakes to bypass the barrier.
+@MainActor
+private final class RuntimeReleaseBarrier {
+    // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
+
+    private var released = false
+    private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+
+    func wait() async {
+        guard !released, !Task.isCancelled else { return }
+        let waiterID = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if released || Task.isCancelled {
+                    continuation.resume()
+                } else {
+                    waiters[waiterID] = continuation
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancelWaiter(id: waiterID)
+            }
+        }
+    }
+
+    func markReleased() {
+        guard !released else { return }
+        released = true
+        let pending = Array(waiters.values)
+        waiters.removeAll()
+        for waiter in pending {
+            waiter.resume()
+        }
+    }
+
+    private func cancelWaiter(id: UUID) {
+        waiters.removeValue(forKey: id)?.resume()
+    }
+}
+
 @MainActor
 private final class NotificationServiceWakeCoordinatorState: Sendable {
     // Avoid the task-local isolated-deinit crash on iOS 26.2 and older.
@@ -357,39 +430,59 @@ private final class NotificationServiceWakeCoordinatorState: Sendable {
     nonisolated deinit {}
 
     private let environment: NotificationServiceWakeEnvironment
+    private let onDeliveryFinished: @Sendable (UUID) -> Void
     private var activeSession: NotificationServiceWakeSession?
     private var sessions: [NotificationServiceWakeSession] = []
     /// Single coordinator-owned close barrier for the most recent session that
-    /// actually opened a runtime. Waiting wakes that expire before opening
-    /// storage never replace this barrier, so later wakes still wait for the
-    /// open runtime to finish closing.
-    private var activeRuntimeBarrier: Task<Void, Never>?
+    /// actually opened a runtime. Waiting wakes that expire or are replaced
+    /// before opening storage never replace this barrier, so later wakes still
+    /// wait for the open runtime to finish closing.
+    private var activeRuntimeBarrier: RuntimeReleaseBarrier?
 
-    nonisolated init(environment: NotificationServiceWakeEnvironment) {
+    nonisolated init(
+        environment: NotificationServiceWakeEnvironment,
+        onDeliveryFinished: @escaping @Sendable (UUID) -> Void
+    ) {
         self.environment = environment
+        self.onDeliveryFinished = onDeliveryFinished
     }
 
     func startSession(
         content: UNMutableNotificationContent,
-        delivery: NotificationWakeDelivery
+        delivery: NotificationWakeDelivery,
+        wakeStartedAt: ContinuousClock.Instant
     ) {
         sessions.removeAll { !$0.isRetainedInCoordinator }
         // Hard expiration may already have claimed and delivered this wake on
         // a background thread before this MainActor task ran.
-        guard delivery.isPending else { return }
+        guard delivery.isPending else {
+            onDeliveryFinished(delivery.id)
+            return
+        }
 
         if let previousSession = activeSession {
             previousSession.cancelForReplacement()
         }
+        sessions.removeAll { !$0.isRetainedInCoordinator }
 
         let priorRuntimeBarrier = activeRuntimeBarrier
         let session = NotificationServiceWakeSession(
             content: content,
             delivery: delivery,
-            environment: environment
-        ) { [weak self] barrier in
-            self?.activeRuntimeBarrier = barrier
-        }
+            wakeStartedAt: wakeStartedAt,
+            environment: environment,
+            onRuntimeOpened: { [weak self] barrier in
+                self?.activeRuntimeBarrier = barrier
+            },
+            onFinished: { [weak self, onDeliveryFinished] deliveryID in
+                onDeliveryFinished(deliveryID)
+                guard let self else { return }
+                if self.activeSession?.deliveryID == deliveryID {
+                    self.activeSession = nil
+                }
+                self.sessions.removeAll { !$0.isRetainedInCoordinator }
+            }
+        )
         activeSession = session
         sessions.append(session)
         session.start(afterDrainingPriorRuntime: priorRuntimeBarrier)
@@ -411,8 +504,9 @@ private final class NotificationServiceWakeSession {
 
     private let delivery: NotificationWakeDelivery
     private let environment: NotificationServiceWakeEnvironment
-    private let onRuntimeOpened: @MainActor (Task<Void, Never>) -> Void
-    private let wakeStartedAt = ContinuousClock.now
+    private let onRuntimeOpened: @MainActor (RuntimeReleaseBarrier) -> Void
+    private let onFinished: @MainActor (UUID) -> Void
+    private let wakeStartedAt: ContinuousClock.Instant
     private var bestAttemptContent: UNMutableNotificationContent?
     private var collectionTask: Task<Void, Never>?
     private var expirationWatchdogTask: Task<Void, Never>?
@@ -420,8 +514,7 @@ private final class NotificationServiceWakeSession {
     private var runtimeShutdownTask: Task<Void, Never>?
     /// Single storage-close barrier for successor wakes. Resolves once this
     /// session's opened runtime finishes `shutdownAndClose()`.
-    private var runtimeReleased = false
-    private var runtimeReleaseWaiters: [CheckedContinuation<Void, Never>] = []
+    private let runtimeReleaseBarrier = RuntimeReleaseBarrier()
     private var collectionInFlight = false
     private var proactiveBudgetElapsed = false
     private var replacementRequested = false
@@ -440,13 +533,17 @@ private final class NotificationServiceWakeSession {
     init(
         content: UNMutableNotificationContent,
         delivery: NotificationWakeDelivery,
+        wakeStartedAt: ContinuousClock.Instant,
         environment: NotificationServiceWakeEnvironment,
-        onRuntimeOpened: @escaping @MainActor (Task<Void, Never>) -> Void
+        onRuntimeOpened: @escaping @MainActor (RuntimeReleaseBarrier) -> Void,
+        onFinished: @escaping @MainActor (UUID) -> Void
     ) {
         self.bestAttemptContent = content
         self.delivery = delivery
+        self.wakeStartedAt = wakeStartedAt
         self.environment = environment
         self.onRuntimeOpened = onRuntimeOpened
+        self.onFinished = onFinished
     }
 
     var deliveryID: UUID {
@@ -461,14 +558,17 @@ private final class NotificationServiceWakeSession {
         bestAttemptContent != nil
     }
 
-    func start(afterDrainingPriorRuntime priorRuntimeDrain: Task<Void, Never>?) {
+    func start(afterDrainingPriorRuntime priorRuntimeDrain: RuntimeReleaseBarrier?) {
         collectionTask = Task {
             await self.collectAndDecorateNotification(priorRuntimeDrain: priorRuntimeDrain)
         }
         let sleep = environment.sleep
-        let proactiveBudget = environment.proactiveBudget
+        let remainingProactiveBudget = max(
+            .zero,
+            environment.proactiveBudget - wakeStartedAt.duration(to: environment.now())
+        )
         expirationWatchdogTask = Task { [weak self] in
-            try? await sleep(proactiveBudget)
+            try? await sleep(remainingProactiveBudget)
             guard !Task.isCancelled else { return }
             self?.handleProactiveWatchdogExpiration()
         }
@@ -534,31 +634,34 @@ private final class NotificationServiceWakeSession {
         expirationWatchdogTask = nil
         recordDiagnostic(outcome: outcome)
         collectionTask?.cancel()
-        let shutdownTask = beginRuntimeShutdown()
-        Task {
-            await shutdownTask?.value
-            self.finish()
+        if let shutdownTask = beginRuntimeShutdown() {
+            Task {
+                await shutdownTask.value
+                self.finish()
+            }
+        } else {
+            finish()
         }
     }
 
     private func collectAndDecorateNotification(
-        priorRuntimeDrain: Task<Void, Never>?
+        priorRuntimeDrain: RuntimeReleaseBarrier?
     ) async {
         defer {
             if activeRuntime != nil {
                 _ = beginRuntimeShutdown()
             }
             if runtimeShutdownTask == nil {
-                markRuntimeReleased()
+                runtimeReleaseBarrier.markReleased()
             }
         }
-        guard let content = bestAttemptContent, delivery.isPending else {
+        guard bestAttemptContent != nil, delivery.isPending else {
             finish()
             return
         }
 
-        await priorRuntimeDrain?.value
-        if Task.isCancelled || expirationInProgress || !delivery.isPending {
+        await priorRuntimeDrain?.wait()
+        guard !Task.isCancelled, !expirationInProgress, delivery.isPending, let content = bestAttemptContent else {
             finish()
             return
         }
@@ -566,7 +669,7 @@ private final class NotificationServiceWakeSession {
         do {
             let runtime = try environment.makeRuntime()
             activeRuntime = runtime
-            onRuntimeOpened(runtimeReleaseBarrierTask())
+            onRuntimeOpened(runtimeReleaseBarrier)
             // Before `start()` opens accounts, whose recorders keep the source they open with.
             _ = try? runtime.setAuditLogSource(source: environment.auditLogSource())
             diagnosticStage = .runtimeCreated
@@ -583,7 +686,7 @@ private final class NotificationServiceWakeSession {
                 let effectiveMaxWaitMs = NotificationServiceTimeoutPolicy.effectiveCollectionWaitMs(
                     configuredMaxWaitMs: environment.maxWaitMs,
                     proactiveBudget: environment.proactiveBudget,
-                    elapsed: wakeStartedAt.duration(to: ContinuousClock.now)
+                    elapsed: wakeStartedAt.duration(to: environment.now())
                 )
                 let result = try await runtime.collectNotificationsAfterWake(
                     maxWaitMs: effectiveMaxWaitMs,
@@ -616,7 +719,7 @@ private final class NotificationServiceWakeSession {
                 // waiting, so the synchronous aggregate unread scan does not
                 // start near the deadline and crowd terminal storage closure.
                 let remainingProactiveBudget = environment.proactiveBudget
-                    - wakeStartedAt.duration(to: ContinuousClock.now)
+                    - wakeStartedAt.duration(to: environment.now())
                 var applicationBadgeCount: Int?
                 if result.status != .failed,
                    !proactiveBudgetElapsed,
@@ -703,37 +806,10 @@ private final class NotificationServiceWakeSession {
         }
         let task = Task { @MainActor in
             _ = try? await runtime.shutdownAndClose()
-            self.markRuntimeReleased()
+            self.runtimeReleaseBarrier.markReleased()
         }
         runtimeShutdownTask = task
         return task
-    }
-
-    private func runtimeReleaseBarrierTask() -> Task<Void, Never> {
-        Task { @MainActor in
-            await self.waitForRuntimeRelease()
-        }
-    }
-
-    private func waitForRuntimeRelease() async {
-        guard !runtimeReleased else { return }
-        await withCheckedContinuation { continuation in
-            if runtimeReleased {
-                continuation.resume()
-            } else {
-                runtimeReleaseWaiters.append(continuation)
-            }
-        }
-    }
-
-    private func markRuntimeReleased() {
-        guard !runtimeReleased else { return }
-        runtimeReleased = true
-        let waiters = runtimeReleaseWaiters
-        runtimeReleaseWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
     }
 
     private func takeActiveRuntimeForShutdown(
@@ -800,5 +876,6 @@ private final class NotificationServiceWakeSession {
         expirationWatchdogTask?.cancel()
         expirationWatchdogTask = nil
         delivery.deliver()
+        onFinished(delivery.id)
     }
 }

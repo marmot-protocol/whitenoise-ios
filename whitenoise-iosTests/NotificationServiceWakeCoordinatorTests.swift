@@ -445,7 +445,10 @@ struct NotificationServiceWakeCoordinatorTests {
         #expect(shutdown1Done < created2)
     }
 
-    @Test func wakeCoordinatorPreservesBatchWhenProactiveWatchdogFiresDuringInFlightCollection() async throws {
+    @Test(arguments: [true, false])
+    func wakeCoordinatorPreservesBatchWhenProactiveWatchdogFiresDuringInFlightCollection(
+        watchdogFires: Bool
+    ) async throws {
         let events = WakeEventLog()
         let wake1CollectEntered = TestLatch()
         let wake1CollectRelease = TestLatch()
@@ -455,7 +458,6 @@ struct NotificationServiceWakeCoordinatorTests {
         let extraSubmitted = TestLatch()
         var wake1Contents: [UNNotificationContent] = []
         let additionalTitles = Mutex<[String]>([])
-        let observedMaxWaitMs = Mutex<UInt32?>(nil)
         let badgeCalls = Mutex(0)
         var runtimeIndex = 0
 
@@ -484,6 +486,10 @@ struct NotificationServiceWakeCoordinatorTests {
             timestampMs: 3_500
         )
 
+        // Use the full 18 s budget (well above the 6 s badge-scan threshold) so
+        // the control case (`watchdogFires == false`) performs the badge scan
+        // and the expiry case (`watchdogFires == true`) proves the watchdog
+        // branch itself suppressed the scan without dropping collected items.
         let environment = NotificationServiceWakeEnvironment(
             makeRuntime: {
                 runtimeIndex += 1
@@ -492,8 +498,7 @@ struct NotificationServiceWakeCoordinatorTests {
                 return FakeNotificationServiceWakeRuntime(
                     id: id,
                     events: events,
-                    onCollect: { maxWaitMs in
-                        observedMaxWaitMs.withLock { $0 = maxWaitMs }
+                    onCollect: { _ in
                         wake1CollectEntered.signal()
                         try await wake1CollectRelease.wait()
                         return BackgroundNotificationCollectionFfi(
@@ -517,7 +522,7 @@ struct NotificationServiceWakeCoordinatorTests {
             auditLogSource: { AuditLogSourceBuildConfig.current() },
             loadPolicySnapshot: Self.allVisiblePolicySnapshot,
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
-            proactiveBudget: .milliseconds(1_500),
+            proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
             sleep: { _ in
                 try await triggerWatchdog.wait()
                 watchdogFired.signal()
@@ -538,22 +543,17 @@ struct NotificationServiceWakeCoordinatorTests {
         }
         try await wake1CollectEntered.wait()
 
-        // Collection wait must be bounded by the wake's remaining proactive
-        // budget rather than blindly passing the full configured 8 s window.
-        let passedMaxWait = try #require(observedMaxWaitMs.withLock { $0 })
-        #expect(passedMaxWait <= 1_500)
-        #expect(passedMaxWait >= NotificationServiceTimeoutPolicy.minimumCollectionWaitMs)
+        if watchdogFires {
+            // Fire the proactive watchdog while `collectNotificationsAfterWake`
+            // is still in flight. Because `sleep` runs on `@MainActor`,
+            // returning from `sleep` executes `handleProactiveWatchdogExpiration`
+            // in the same MainActor turn before `watchdogFired.wait()` resumes.
+            triggerWatchdog.signal()
+            try await watchdogFired.wait()
 
-        // Fire the proactive watchdog while `collectNotificationsAfterWake` is
-        // still in flight: MDK may already have advanced its background cursor,
-        // so the wake must let collection return, apply privacy filtering, and
-        // deliver primary + extra notifications.
-        triggerWatchdog.signal()
-        try await watchdogFired.wait()
-        await Task.yield()
-
-        #expect(wake1Contents.isEmpty)
-        #expect(runtimeIndex == 1)
+            #expect(wake1Contents.isEmpty)
+            #expect(runtimeIndex == 1)
+        }
 
         wake1CollectRelease.signal()
         try await wake1Delivered.wait()
@@ -562,9 +562,85 @@ struct NotificationServiceWakeCoordinatorTests {
         #expect(wake1Contents.count == 1)
         #expect(wake1Contents.first?.title == "Alice")
         #expect(wake1Contents.first?.body == "Kept past watchdog")
-        #expect(wake1Contents.first?.badge == nil)
         #expect(additionalTitles.withLock { $0 } == ["Bob"])
+        if watchdogFires {
+            #expect(wake1Contents.first?.badge == nil)
+            #expect(badgeCalls.withLock { $0 } == 0)
+        } else {
+            #expect(wake1Contents.first?.badge == 9)
+            #expect(badgeCalls.withLock { $0 } == 1)
+        }
+    }
+
+    @Test func wakeCoordinatorCountsPreStartMainActorDelayAgainstProactiveBudget() async throws {
+        let events = WakeEventLog()
+        let clock = MutableContinuousClock(initial: ContinuousClock.now)
+        let observedMaxWaitMs = Mutex<UInt32?>(nil)
+        let observedWatchdogSleep = Mutex<Duration?>(nil)
+        let badgeCalls = Mutex(0)
+        let delivered = TestLatch()
+        var deliveredContents: [UNNotificationContent] = []
+
+        let update = notificationUpdate(
+            notificationKey: "prestart-delay-msg",
+            senderName: "Alice",
+            previewText: "Budget started at didReceive",
+            timestampMs: 5_000
+        )
+
+        let environment = NotificationServiceWakeEnvironment(
+            makeRuntime: {
+                events.append("created-1")
+                return FakeNotificationServiceWakeRuntime(
+                    id: 1,
+                    events: events,
+                    onCollect: { maxWaitMs in
+                        observedMaxWaitMs.withLock { $0 = maxWaitMs }
+                        return BackgroundNotificationCollectionFfi(
+                            status: .newData,
+                            notifications: [update],
+                            error: nil
+                        )
+                    },
+                    onApplicationBadgeCount: {
+                        badgeCalls.withLock { $0 += 1 }
+                        return 3
+                    }
+                )
+            },
+            auditLogSource: { AuditLogSourceBuildConfig.current() },
+            loadPolicySnapshot: Self.allVisiblePolicySnapshot,
+            maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
+            proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
+            now: { clock.now() },
+            sleep: { duration in
+                observedWatchdogSleep.withLock { $0 = duration }
+                try await parkUntilCancelled()
+            },
+            submitAdditionalPresentation: { _, _ in }
+        )
+
+        let coordinator = NotificationServiceWakeCoordinator(environment: environment)
+        let owner = UUID()
+        let request = UNNotificationRequest(identifier: "prestart-delay", content: UNNotificationContent(), trigger: nil)
+
+        // `didReceive` accepts the wake at T0 and queues the MainActor drain.
+        coordinator.didReceive(request, ownerID: owner) { content in
+            deliveredContents.append(content)
+            delivered.signal()
+        }
+        // Simulate 14 s of synchronous MainActor contention before the drain
+        // constructs the session: only 4 s remain out of the 18 s budget.
+        clock.advance(by: .seconds(14))
+
+        try await delivered.wait()
+
+        #expect(observedWatchdogSleep.withLock { $0 } == .seconds(4))
+        #expect(observedMaxWaitMs.withLock { $0 } == 4_000)
         #expect(badgeCalls.withLock { $0 } == 0)
+        #expect(deliveredContents.count == 1)
+        #expect(deliveredContents.first?.title == "Alice")
+        #expect(deliveredContents.first?.badge == nil)
     }
 
     @Test func effectiveCollectionWaitMsBoundsToRemainingProactiveBudget() {
@@ -1178,11 +1254,136 @@ struct NotificationServiceWakeCoordinatorTests {
         #expect(shutdown1Done < created2)
     }
 
+    @Test func wakeCoordinatorCancelsReplacedWaitingWakeWithoutWaitingForStalledPriorShutdown() async throws {
+        let events = WakeEventLog()
+        let wakeAStartEntered = TestLatch()
+        let wakeAStartRelease = TestLatch()
+        defer { wakeAStartRelease.signal() }
+        let wakeAShutdownEntered = TestLatch()
+        let wakeAShutdownRelease = TestLatch()
+        defer { wakeAShutdownRelease.signal() }
+        let wakeADelivered = TestLatch()
+        let wakeBDelivered = TestLatch()
+        let wakeBContentDeallocated = TestLatch()
+        let wakeCDelivered = TestLatch()
+        var wakeBDispositions: [String?] = []
+        var wakeCContents: [UNNotificationContent] = []
+        var runtimeIndex = 0
+
+        let wakeCUpdate = notificationUpdate(
+            notificationKey: "wake-c-after-replaced-b",
+            senderName: "Grace",
+            previewText: "Wake C still respected A's barrier",
+            timestampMs: 8_000
+        )
+
+        let environment = NotificationServiceWakeEnvironment(
+            makeRuntime: {
+                runtimeIndex += 1
+                let id = runtimeIndex
+                events.append("created-\(id)")
+                if id == 1 {
+                    return FakeNotificationServiceWakeRuntime(
+                        id: id,
+                        events: events,
+                        onStart: {
+                            wakeAStartEntered.signal()
+                            try await wakeAStartRelease.wait()
+                        },
+                        onCollect: { _ in
+                            BackgroundNotificationCollectionFfi(status: .noData, notifications: [], error: nil)
+                        },
+                        onShutdown: {
+                            wakeAShutdownEntered.signal()
+                            await wakeAShutdownRelease.hold()
+                            wakeAStartRelease.signal()
+                        }
+                    )
+                }
+                return FakeNotificationServiceWakeRuntime(
+                    id: id,
+                    events: events,
+                    onCollect: { _ in
+                        BackgroundNotificationCollectionFfi(
+                            status: .newData,
+                            notifications: [wakeCUpdate],
+                            error: nil
+                        )
+                    }
+                )
+            },
+            auditLogSource: { AuditLogSourceBuildConfig.current() },
+            loadPolicySnapshot: Self.allVisiblePolicySnapshot,
+            maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
+            proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
+            sleep: { _ in try await parkUntilCancelled() },
+            submitAdditionalPresentation: { _, _ in }
+        )
+
+        let coordinator = NotificationServiceWakeCoordinator(environment: environment)
+        let owner = UUID()
+        let reqA = UNNotificationRequest(identifier: "stall-a", content: UNNotificationContent(), trigger: nil)
+        let reqC = UNNotificationRequest(identifier: "stall-c", content: UNNotificationContent(), trigger: nil)
+
+        coordinator.didReceive(reqA, ownerID: owner) { _ in wakeADelivered.signal() }
+        try await wakeAStartEntered.wait()
+
+        // Wake B replaces wake A (putting A into a stalled shutdown) and parks
+        // on A's barrier. Scope `reqB` and its `DeinitProbe` locally so the
+        // coordinator/session/task are the only owners of wake B's content.
+        do {
+            let probe = DeinitProbe {
+                wakeBContentDeallocated.signal()
+            }
+            let trackedContent = TrackedNotificationContent(probe: probe)
+            let reqB = UNNotificationRequest(identifier: "stall-b", content: trackedContent, trigger: nil)
+            coordinator.didReceive(reqB, ownerID: owner) { content in
+                wakeBDispositions.append(
+                    content.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
+                )
+                wakeBDelivered.signal()
+            }
+        }
+        try await wakeAShutdownEntered.wait()
+
+        // Wake C replaces wake B while wake A's shutdown is STILL stalled.
+        // Wake B must immediately deliver fallback AND exit its barrier wait
+        // (releasing its waiting task, session, and content) without waiting
+        // for wake A or cancelling wake A's close barrier for wake C.
+        coordinator.didReceive(reqC, ownerID: owner) { content in
+            wakeCContents.append(content)
+            wakeCDelivered.signal()
+        }
+
+        try await wakeBDelivered.wait()
+        try await wakeBContentDeallocated.wait()
+
+        #expect(wakeBDispositions == [LocalNotificationProjection.fallbackDisposition])
+        #expect(runtimeIndex == 1)
+        #expect(wakeCContents.isEmpty)
+
+        // Now release wake A's shutdown: wake C proceeds strictly after A closes.
+        wakeAShutdownRelease.signal()
+        try await wakeADelivered.wait()
+        try await wakeCDelivered.wait()
+
+        #expect(wakeCContents.count == 1)
+        #expect(wakeCContents.first?.title == "Grace")
+        #expect(wakeCContents.first?.body == "Wake C still respected A's barrier")
+
+        let recordedEvents = events.snapshot()
+        let shutdown1Done = try #require(recordedEvents.firstIndex(of: "shutdown-done-1"))
+        let created2 = try #require(recordedEvents.firstIndex(of: "created-2"))
+        #expect(shutdown1Done < created2)
+    }
+
     @Test func wakeCoordinatorHardExpiryDuringFirstExtraSubmissionStillDeliversPreparedPrimary() async throws {
         let events = WakeEventLog()
         let deliveredTitles = Mutex<[String]>([])
         let deliveredBodies = Mutex<[String]>([])
         let deliveredBadges = Mutex<[Int?]>([])
+        let deliveredOffMainThread = Mutex(false)
+        let expiryRanOffMainThread = Mutex(false)
         let submittedExtras = Mutex<[String]>([])
         let expiryFinished = TestLatch()
 
@@ -1227,13 +1428,19 @@ struct NotificationServiceWakeCoordinatorTests {
             sleep: { _ in try await parkUntilCancelled() },
             submitAdditionalPresentation: { presentation, _ in
                 submittedExtras.withLock { $0.append(presentation.title) }
-                // Fire hard expiration from a background queue WHILE inside the
-                // first extra submission: the primary snapshot must already be
-                // frozen so the handler delivers the decorated primary, never fallback.
+                // Dispatch hard expiration asynchronously onto a background
+                // queue while keeping the first extra submission open until
+                // expiry returns (`DispatchQueue.global().sync` may execute on
+                // the calling main thread).
                 if let coordinator = coordinatorRef {
-                    DispatchQueue.global(qos: .userInitiated).sync {
+                    let semaphore = DispatchSemaphore(value: 0)
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        expiryRanOffMainThread.withLock { $0 = !Thread.isMainThread }
                         coordinator.serviceExtensionTimeWillExpire(ownerID: owner)
+                        semaphore.signal()
                     }
+                    let waited = semaphore.wait(timeout: .now() + .seconds(5))
+                    #expect(waited == .success)
                     expiryFinished.signal()
                 }
             }
@@ -1247,6 +1454,7 @@ struct NotificationServiceWakeCoordinatorTests {
         // nonisolated entry under Swift 6.2 default `@MainActor` isolation.
         DispatchQueue.global(qos: .userInitiated).async {
             coordinator.didReceive(request, ownerID: owner) { content in
+                deliveredOffMainThread.withLock { $0 = !Thread.isMainThread }
                 deliveredTitles.withLock { $0.append(content.title) }
                 deliveredBodies.withLock { $0.append(content.body) }
                 deliveredBadges.withLock { $0.append(content.badge?.intValue) }
@@ -1256,6 +1464,8 @@ struct NotificationServiceWakeCoordinatorTests {
         try await expiryFinished.wait()
         await Task.yield()
 
+        #expect(expiryRanOffMainThread.withLock { $0 })
+        #expect(deliveredOffMainThread.withLock { $0 })
         #expect(submittedExtras.withLock { $0 } == ["Bob"])
         #expect(deliveredTitles.withLock { $0 } == ["Alice"])
         #expect(deliveredBodies.withLock { $0 } == ["Frozen before extras"])
@@ -1269,6 +1479,60 @@ struct NotificationServiceWakeCoordinatorTests {
             nickname: { _, _ in nil },
             previewMode: .senderAndMessage
         )
+    }
+}
+
+nonisolated private final class MutableContinuousClock: Sendable {
+    private let current: Mutex<ContinuousClock.Instant>
+
+    init(initial: ContinuousClock.Instant) {
+        current = Mutex(initial)
+    }
+
+    func now() -> ContinuousClock.Instant {
+        current.withLock { $0 }
+    }
+
+    func advance(by duration: Duration) {
+        current.withLock { $0 = $0.advanced(by: duration) }
+    }
+}
+
+nonisolated private final class DeinitProbe: Sendable {
+    private let onDeinit: @Sendable () -> Void
+
+    init(onDeinit: @escaping @Sendable () -> Void) {
+        self.onDeinit = onDeinit
+    }
+
+    deinit {
+        onDeinit()
+    }
+}
+
+nonisolated private final class TrackedNotificationContent: UNMutableNotificationContent {
+    private let probe: DeinitProbe
+
+    init(probe: DeinitProbe) {
+        self.probe = probe
+        super.init()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func copy(with zone: NSZone? = nil) -> Any {
+        let copy = TrackedNotificationContent(probe: probe)
+        copy.title = title
+        copy.body = body
+        copy.userInfo = userInfo
+        return copy
+    }
+
+    override func mutableCopy(with zone: NSZone? = nil) -> Any {
+        copy(with: zone)
     }
 }
 
