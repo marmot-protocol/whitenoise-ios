@@ -289,8 +289,8 @@ struct MediaAcquisitionIntentTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         // Footprint is process-wide while other suites run concurrently, so use
-        // a 128 MiB payload (64 MiB margin) just like MediaFileUploadTests.
-        let size = 128 * 1024 * 1024
+        // a 256 MiB payload (128 MiB margin) just like MediaFileUploadTests.
+        let size = 256 * 1024 * 1024
         let chunkPattern = Data(repeating: 0x05, count: 1024 * 1024)
         let offsets = Mutex<[UInt64]>([])
         let sawPathnameDuringStream = Mutex(false)
@@ -360,16 +360,17 @@ struct MediaAcquisitionIntentTests {
             dim: "1920x1080",
             thumbhash: nil
         )
-        let epoch = MessageMediaCache.currentProducerEpoch()
-        let url = try await MessageMediaCache.streamAndStore(
-            for: reference,
-            byteCount: UInt64(payload.count),
-            cachesDirectory: cachesDirectory,
-            producerGeneration: epoch
-        ) { offset, limit in
-            let start = Int(offset)
-            let end = min(payload.count, start + Int(limit))
-            return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+        let url = try await Self.withFreshProducerEpoch { epoch in
+            try await MessageMediaCache.streamAndStore(
+                for: reference,
+                byteCount: UInt64(payload.count),
+                cachesDirectory: cachesDirectory,
+                producerGeneration: epoch
+            ) { offset, limit in
+                let start = Int(offset)
+                let end = min(payload.count, start + Int(limit))
+                return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+            }
         }
         #expect(try Data(contentsOf: url) == payload)
         #expect(await MessageMediaCache.validCachedFileURL(for: reference, cachesDirectory: cachesDirectory) == url)
@@ -390,23 +391,26 @@ struct MediaAcquisitionIntentTests {
             thumbhash: nil
         )
         await #expect(throws: ConversationMediaDownloader.MediaDataError.plaintextHashMismatch) {
-            _ = try await MessageMediaCache.streamAndStore(
-                for: badReference,
-                byteCount: UInt64(payload.count),
-                cachesDirectory: cachesDirectory,
-                producerGeneration: epoch
-            ) { offset, limit in
-                let start = Int(offset)
-                let end = min(payload.count, start + Int(limit))
-                return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+            _ = try await Self.withFreshProducerEpoch { epoch in
+                try await MessageMediaCache.streamAndStore(
+                    for: badReference,
+                    byteCount: UInt64(payload.count),
+                    cachesDirectory: cachesDirectory,
+                    producerGeneration: epoch
+                ) { offset, limit in
+                    let start = Int(offset)
+                    let end = min(payload.count, start + Int(limit))
+                    return AttachmentLocalBytesFfi(available: true, bytes: start < end ? payload[start..<end] : Data())
+                }
             }
         }
+        let staleEpoch = MessageMediaCache.currentProducerEpoch() - 1
         await #expect(throws: CancellationError.self) {
             _ = try await MessageMediaCache.streamAndStore(
                 for: reference,
                 byteCount: UInt64(payload.count),
                 cachesDirectory: cachesDirectory,
-                producerGeneration: epoch - 1
+                producerGeneration: staleEpoch
             ) { offset, limit in
                 let start = Int(offset)
                 let end = min(payload.count, start + Int(limit))
@@ -415,6 +419,24 @@ struct MediaAcquisitionIntentTests {
         }
         let entries = try FileManager.default.contentsOfDirectory(atPath: encryptedDir.path)
         #expect(entries == [url.lastPathComponent])
+    }
+
+    /// Runs an async cache stream with a freshly read producer epoch. Other
+    /// parallel suites bump the process-global epoch via purges and sign-out
+    /// wipes; retry only when `CancellationError` coincides with an observed
+    /// epoch bump so a real failure while the epoch held still surfaces.
+    private static func withFreshProducerEpoch<Result>(
+        _ operation: (Int) async throws -> Result
+    ) async throws -> Result {
+        for _ in 0..<1_000 {
+            let epoch = MessageMediaCache.currentProducerEpoch()
+            do {
+                return try await operation(epoch)
+            } catch is CancellationError where MessageMediaCache.currentProducerEpoch() != epoch {
+                continue
+            }
+        }
+        throw CancellationError()
     }
 
     @Test(.marmotRuntimeConcurrencyLimit)
