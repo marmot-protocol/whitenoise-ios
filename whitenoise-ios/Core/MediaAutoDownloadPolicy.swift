@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import MarmotKit
+import Synchronization
 
 /// The kinds of media a bubble can carry. Each call site already knows its
 /// own type (image bubble → `.image`, voice bubble → `.audio`), so the gate
@@ -176,10 +177,11 @@ final class MediaAutoDownloadStore {
     static let connectivityRestored = Notification.Name("MediaAutoDownloadStore.connectivityRestored")
 
     private(set) var matrix: MediaAutoDownloadMatrix
-    private(set) var activeNetworks: Set<MediaAutoDownloadNetwork> = []
+    private(set) var connectivity = MediaConnectivityState()
+    var activeNetworks: Set<MediaAutoDownloadNetwork> { connectivity.activeNetworks }
     /// Raw path satisfaction — distinct from `activeNetworks`, which is empty
     /// both when offline and on interface types the matrix doesn't model.
-    private(set) var isOnline = true
+    var isOnline: Bool { connectivity.isOnline }
     private(set) var permissionRevision: UInt64 = 0
     private let defaults: UserDefaults
     private let onPolicyChange: @MainActor () -> Void
@@ -207,25 +209,39 @@ final class MediaAutoDownloadStore {
         self.onPolicyChange = onPolicyChange
         self.matrix = MediaAutoDownloadMatrix.fromPreference(defaults.string(forKey: Self.storageKey))
             ?? .defaultMatrix
+        let generations = Mutex<UInt64>(0)
         monitor.pathUpdateHandler = { [weak self] path in
-            let networks = MediaAutoDownloadNetwork.matching(
-                usesWifi: path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet),
-                usesCellular: path.usesInterfaceType(.cellular),
-                isExpensive: path.isExpensive,
-                isConstrained: path.isConstrained
+            let generation = generations.withLock { value in
+                value &+= 1
+                return value
+            }
+            let reading = MediaConnectivityState.Reading(
+                generation: generation,
+                satisfied: path.status == .satisfied,
+                networks: MediaAutoDownloadNetwork.matching(
+                    usesWifi: path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet),
+                    usesCellular: path.usesInterfaceType(.cellular),
+                    isExpensive: path.isExpensive,
+                    isConstrained: path.isConstrained
+                )
             )
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                let satisfied = path.status == .satisfied
-                self.activeNetworks = satisfied ? networks : []
-                if satisfied, !self.isOnline {
-                    NotificationCenter.default.post(name: Self.connectivityRestored, object: nil)
-                }
-                self.isOnline = satisfied
-                self.onPolicyChange()
+                self?.apply(reading)
             }
         }
         monitor.start(queue: DispatchQueue(label: "media.autodownload.path"))
+    }
+
+    private func apply(_ reading: MediaConnectivityState.Reading) {
+        switch connectivity.apply(reading) {
+        case .stale:
+            return
+        case .applied:
+            break
+        case .restored:
+            NotificationCenter.default.post(name: Self.connectivityRestored, object: nil)
+        }
+        onPolicyChange()
     }
 
     func setLevel(_ level: MediaAutoDownloadLevel, for type: MediaAutoDownloadType) {
@@ -260,5 +276,35 @@ final class MediaAutoDownloadStore {
 
     func shouldAutoDownload(_ type: MediaAutoDownloadType) -> Bool {
         matrix.shouldAutoDownload(type, activeNetworks: activeNetworks)
+    }
+}
+
+nonisolated struct MediaConnectivityState: Equatable {
+    struct Reading: Equatable, Sendable {
+        let generation: UInt64
+        let satisfied: Bool
+        let networks: Set<MediaAutoDownloadNetwork>
+    }
+
+    enum Outcome: Equatable {
+        case stale
+        case applied
+        case restored
+    }
+
+    private(set) var latest: Reading?
+
+    var isOnline: Bool { latest?.satisfied == true }
+
+    var activeNetworks: Set<MediaAutoDownloadNetwork> {
+        guard let latest, latest.satisfied else { return [] }
+        return latest.networks
+    }
+
+    mutating func apply(_ reading: Reading) -> Outcome {
+        let previous = latest
+        if let previous, reading.generation <= previous.generation { return .stale }
+        latest = reading
+        return reading.satisfied && previous?.satisfied == false ? .restored : .applied
     }
 }

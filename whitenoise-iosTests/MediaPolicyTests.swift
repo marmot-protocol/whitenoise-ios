@@ -183,3 +183,70 @@ struct MediaVideoDimensionPolicyTests {
         ) == Int(MediaVideoDimensionPolicy.maximumPixelDimension))
     }
 }
+
+struct MediaConnectivityStateTests {
+    private func reading(
+        _ generation: UInt64,
+        satisfied: Bool,
+        networks: Set<MediaAutoDownloadNetwork> = [.wifi]
+    ) -> MediaConnectivityState.Reading {
+        .init(generation: generation, satisfied: satisfied, networks: networks)
+    }
+
+    @Test func coldStartIsOfflineUntilTheFirstPath() {
+        var state = MediaConnectivityState()
+        #expect(!state.isOnline)
+        #expect(state.activeNetworks.isEmpty)
+
+        #expect(state.apply(reading(1, satisfied: true)) == .applied)
+        #expect(state.isOnline)
+        #expect(state.activeNetworks == [.wifi])
+    }
+
+    @Test func firstSatisfiedPathIsNotARestoredTransition() {
+        var state = MediaConnectivityState()
+        #expect(state.apply(reading(1, satisfied: true)) != .restored)
+    }
+
+    @Test func restoredFiresOncePerUnsatisfiedToSatisfiedTransition() {
+        var state = MediaConnectivityState()
+        #expect(state.apply(reading(1, satisfied: false)) == .applied)
+        #expect(state.apply(reading(2, satisfied: true)) == .restored)
+        #expect(state.apply(reading(3, satisfied: true, networks: [.mobile])) == .applied)
+        #expect(state.apply(reading(4, satisfied: false)) == .applied)
+        #expect(state.apply(reading(5, satisfied: true)) == .restored)
+    }
+
+    @Test func unsatisfiedPathClearsActiveNetworks() {
+        var state = MediaConnectivityState()
+        _ = state.apply(reading(1, satisfied: true, networks: [.wifi]))
+        _ = state.apply(reading(2, satisfied: false, networks: [.wifi]))
+        #expect(!state.isOnline)
+        #expect(state.activeNetworks.isEmpty)
+    }
+
+    @Test func reorderedHandoffKeepsTheNewestPath() {
+        var state = MediaConnectivityState()
+        _ = state.apply(reading(1, satisfied: false))
+        #expect(state.apply(reading(3, satisfied: true, networks: [.mobile])) == .restored)
+        #expect(state.apply(reading(2, satisfied: false)) == .stale)
+        #expect(state.isOnline)
+        #expect(state.activeNetworks == [.mobile])
+    }
+
+    @Test func staleSatisfiedPathAfterNewerOfflineDoesNotRestore() {
+        var state = MediaConnectivityState()
+        _ = state.apply(reading(1, satisfied: false))
+        _ = state.apply(reading(3, satisfied: false))
+        #expect(state.apply(reading(2, satisfied: true)) == .stale)
+        #expect(!state.isOnline)
+        #expect(state.apply(reading(4, satisfied: true)) == .restored)
+    }
+
+    @Test func duplicateGenerationIsStale() {
+        var state = MediaConnectivityState()
+        _ = state.apply(reading(1, satisfied: false))
+        #expect(state.apply(reading(1, satisfied: true)) == .stale)
+        #expect(!state.isOnline)
+    }
+}
