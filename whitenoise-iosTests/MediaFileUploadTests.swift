@@ -305,27 +305,32 @@ struct MediaFileUploadTests {
         for _ in 0..<(size / chunk.count) { try handle.write(contentsOf: chunk) }
         try handle.close()
 
-        let before = try #require(Self.physicalFootprint())
         let data = try PickedMediaFile.mappedData(from: source, in: directory.appendingPathComponent("clones"))
         // Touch every page, as hashing or staging the attachment does.
         let sum = data.withUnsafeBytes { $0.reduce(into: 0) { $0 &+= Int($1) } }
-        let after = try #require(Self.physicalFootprint())
+        let region = try #require(data.withUnsafeBytes { Self.backingRegion(of: $0.baseAddress) })
 
         #expect(sum == size * 3)
-        // Footprint is process-wide and other suites run alongside, so the
-        // bound leaves room for their allocations; resident bytes would be all of it.
-        #expect(Int64(after) - Int64(before) < Int64(size / 2))
+        #expect(region.isFileBacked)
+        #expect(region.dirtiedPages == 0)
     }
 
-    static func physicalFootprint() -> UInt64? {
-        var info = task_vm_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+    static func backingRegion(of pointer: UnsafeRawPointer?) -> (isFileBacked: Bool, dirtiedPages: UInt32)? {
+        guard let pointer else { return nil }
+        var address = vm_address_t(UInt(bitPattern: pointer))
+        var size: vm_size_t = 0
+        var info = vm_region_extended_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<vm_region_extended_info_data_t>.size / MemoryLayout<natural_t>.size
+        )
+        var object: mach_port_t = 0
         let result = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+                vm_region_64(mach_task_self_, &address, &size, VM_REGION_EXTENDED_INFO, $0, &count, &object)
             }
         }
-        return result == KERN_SUCCESS ? info.phys_footprint : nil
+        guard result == KERN_SUCCESS, address <= vm_address_t(UInt(bitPattern: pointer)) else { return nil }
+        return (info.external_pager != 0, info.pages_dirtied)
     }
 
     // MARK: Runner
