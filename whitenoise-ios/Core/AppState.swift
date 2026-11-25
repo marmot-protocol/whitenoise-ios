@@ -1470,8 +1470,7 @@ final class AppState {
             startupDiagnosticsEnabled = false
             blockScreenshots = false
             resetQuickReactions()
-            await appLock.setEnabled(false)
-            appLock.gracePeriod = .immediate
+            appLock.reset()
             MediaAutoDownloadStore.shared.resetToDefaults()
             MediaQualityStore.setQuality(.standard)
             RemoteGIFLoadingStore.shared.setAutomaticallyLoads(false)

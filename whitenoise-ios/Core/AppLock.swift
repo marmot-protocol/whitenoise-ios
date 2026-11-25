@@ -83,7 +83,7 @@ final class AppLockController {
     private(set) var isLocked: Bool
     private(set) var isAuthenticating = false
 
-    var gracePeriod: AppLockGracePeriod {
+    private(set) var gracePeriod: AppLockGracePeriod {
         didSet {
             HostSettingsSaveTiming.measure { defaults.set(gracePeriod.rawValue, forKey: Self.gracePeriodKey) }
         }
@@ -133,9 +133,26 @@ final class AppLockController {
     /// the user can't lock themselves out behind a policy that never passes.
     func setEnabled(_ enabled: Bool) async {
         guard enabled != isEnabled, !isAuthenticating else { return }
-        if enabled {
+        if enabled || capabilityAvailable() {
             guard await runAuthentication() else { return }
         }
+        apply(enabled: enabled)
+    }
+
+    func setGracePeriod(_ period: AppLockGracePeriod) async {
+        guard period != gracePeriod, !isAuthenticating else { return }
+        if period.seconds > gracePeriod.seconds, capabilityAvailable() {
+            guard await runAuthentication() else { return }
+        }
+        gracePeriod = period
+    }
+
+    func reset() {
+        apply(enabled: false)
+        gracePeriod = .immediate
+    }
+
+    private func apply(enabled: Bool) {
         isEnabled = enabled
         HostSettingsSaveTiming.measure { defaults.set(enabled, forKey: Self.enabledKey) }
         if !enabled {
