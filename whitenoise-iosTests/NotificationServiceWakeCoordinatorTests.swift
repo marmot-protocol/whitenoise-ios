@@ -601,7 +601,7 @@ struct NotificationServiceWakeCoordinatorTests {
         ) == 100)
     }
 
-    @Test func wakeCoordinatorSubmitsBoundedExtrasBeforePrimaryAndShutdownEvenOnHardExpiry() async throws {
+    @Test func wakeCoordinatorSubmitsBoundedExtrasBeforeShutdownEvenOnHardExpiry() async throws {
         let events = WakeEventLog()
         let shutdownEntered = TestLatch()
         let shutdownRelease = TestLatch()
@@ -674,9 +674,9 @@ struct NotificationServiceWakeCoordinatorTests {
             deliveredBadges.withLock { $0.append(content.badge?.intValue) }
         }
 
-        // Wait until shutdown starts: bounded extras must ALREADY have been
-        // handed off synchronously before the prepared primary snapshot was
-        // published and before `shutdownAndClose()` started.
+        // Wait until shutdown starts: primary snapshot must already be frozen
+        // and bounded extras must ALREADY have been handed off synchronously
+        // before `shutdownAndClose()` started.
         try await shutdownEntered.wait()
         let extras = submittedExtras.withLock { $0 }
         #expect(Set(extras.map(\.title)) == ["Bob", "Carol"])

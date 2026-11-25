@@ -141,9 +141,10 @@ nonisolated struct NotificationServiceWakeEnvironment: Sendable {
             // A wake alerts once, through its primary. Caught-up records
             // and overflow summaries land quietly in Notification Center.
             // Submit via callback-based `add(_:withCompletionHandler:)`
-            // synchronously on MainActor before publishing the primary snapshot
-            // so hard expiration cannot complete the extension before these
-            // bounded requests are handed to Notification Center.
+            // synchronously on MainActor right after freezing the primary
+            // snapshot and before closing storage so hard expiration cannot
+            // complete the extension before these bounded requests are handed
+            // to Notification Center.
             let content = NotificationCommunicationDecorator.decorated(
                 NotificationContentDecorator.makeContent(
                     for: presentation,
@@ -252,7 +253,18 @@ nonisolated private final class NotificationWakeDelivery: Sendable {
 /// coordinator-owned storage-close barrier for the most recent runtime that
 /// actually opened.
 nonisolated final class NotificationServiceWakeCoordinator: Sendable {
-    private let pendingDeliveries = Mutex<[NotificationWakeDelivery]>([])
+    private struct PendingStart: Sendable {
+        let content: UncheckedSendableBox<UNMutableNotificationContent>
+        let delivery: NotificationWakeDelivery
+    }
+
+    private struct QueueState: Sendable {
+        var pendingDeliveries: [NotificationWakeDelivery] = []
+        var pendingStarts: [PendingStart] = []
+        var drainScheduled = false
+    }
+
+    private let queue = Mutex<QueueState>(QueueState())
     private let state: NotificationServiceWakeCoordinatorState
 
     init(environment: NotificationServiceWakeEnvironment) {
@@ -269,19 +281,49 @@ nonisolated final class NotificationServiceWakeCoordinator: Sendable {
             initialContent: request.content,
             handler: contentHandler
         )
-        pendingDeliveries.withLock { deliveries in
-            deliveries.removeAll { !$0.isPending }
-            deliveries.append(delivery)
-        }
         let mutableContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
             ?? UNMutableNotificationContent()
-        let contentBox = UncheckedSendableBox(value: mutableContent)
-        Task { @MainActor [state] in
-            state.startSession(
-                content: contentBox.value,
-                ownerID: ownerID,
-                delivery: delivery
-            )
+        let pendingStart = PendingStart(
+            content: UncheckedSendableBox(value: mutableContent),
+            delivery: delivery
+        )
+        // Record registration and enqueue session start atomically under the
+        // same lock, then drive a single MainActor drain in FIFO registration
+        // order so an earlier wake delayed on another thread can never overtake
+        // and replace a newer wake.
+        let shouldScheduleDrain = queue.withLock { queueState -> Bool in
+            queueState.pendingDeliveries.removeAll { !$0.isPending }
+            queueState.pendingDeliveries.append(delivery)
+            queueState.pendingStarts.append(pendingStart)
+            guard !queueState.drainScheduled else { return false }
+            queueState.drainScheduled = true
+            return true
+        }
+        guard shouldScheduleDrain else { return }
+        Task { @MainActor [self] in
+            self.drainPendingStartsOnMainActor()
+        }
+    }
+
+    @MainActor
+    private func drainPendingStartsOnMainActor() {
+        while true {
+            let batch = queue.withLock { queueState -> [PendingStart] in
+                if queueState.pendingStarts.isEmpty {
+                    queueState.drainScheduled = false
+                    return []
+                }
+                let items = queueState.pendingStarts
+                queueState.pendingStarts.removeAll(keepingCapacity: true)
+                return items
+            }
+            guard !batch.isEmpty else { return }
+            for item in batch {
+                state.startSession(
+                    content: item.content.value,
+                    delivery: item.delivery
+                )
+            }
         }
     }
 
@@ -292,9 +334,9 @@ nonisolated final class NotificationServiceWakeCoordinator: Sendable {
         // MainActor cleanup to the exact delivery IDs claimed here so a fresh
         // wake starting on a reused extension instance before MainActor drains
         // is never cancelled by an earlier wake's expiration.
-        let matching = pendingDeliveries.withLock { deliveries -> [NotificationWakeDelivery] in
-            let claimed = deliveries.filter { $0.ownerID == ownerID && $0.isPending }
-            deliveries.removeAll { $0.ownerID == ownerID || !$0.isPending }
+        let matching = queue.withLock { queueState -> [NotificationWakeDelivery] in
+            let claimed = queueState.pendingDeliveries.filter { $0.ownerID == ownerID && $0.isPending }
+            queueState.pendingDeliveries.removeAll { $0.ownerID == ownerID || !$0.isPending }
             return claimed
         }
         let expiredDeliveryIDs = Set(matching.map(\.id))
@@ -329,7 +371,6 @@ private final class NotificationServiceWakeCoordinatorState: Sendable {
 
     func startSession(
         content: UNMutableNotificationContent,
-        ownerID: UUID,
         delivery: NotificationWakeDelivery
     ) {
         sessions.removeAll { !$0.isRetainedInCoordinator }
@@ -436,18 +477,12 @@ private final class NotificationServiceWakeSession {
     private func handleProactiveWatchdogExpiration() {
         guard bestAttemptContent != nil, !expirationInProgress else { return }
         proactiveBudgetElapsed = true
-        if preparedDiagnosticOutcome != nil {
-            // Primary content is already frozen, bounded extras are already
-            // submitted, and `collectAndDecorateNotification` is already
-            // awaiting terminal storage closure before calling `finish()`.
-            return
-        }
         if collectionInFlight {
             // Once `collectNotificationsAfterWake` has started, MDK may already
             // have advanced the background notification cursor. Let collection
             // and mandatory privacy checks finish, skip the optional badge
-            // scan, and close storage promptly; iOS's hard expiry remains the
-            // cutoff.
+            // scan, freeze primary + submit extras, and close storage promptly;
+            // iOS's hard expiry remains the cutoff.
             return
         }
         beginExpirationCleanup(outcome: .expired)
@@ -467,7 +502,7 @@ private final class NotificationServiceWakeSession {
             return
         }
         replacementRequested = true
-        if preparedDiagnosticOutcome != nil || collectionInFlight {
+        if collectionInFlight {
             return
         }
         expirationWatchdogTask?.cancel()
@@ -614,10 +649,10 @@ private final class NotificationServiceWakeSession {
                 // wrong, so the fallback stays audible until the engine
                 // reports suppressed records explicitly.
                 //
-                // Submit bounded extras synchronously BEFORE publishing the
-                // immutable primary snapshot to the delivery gate and BEFORE
-                // closing storage, so neither a stalled shutdown nor hard
-                // expiration can drop already-projected notifications.
+                // Freeze the immutable primary snapshot to the delivery gate,
+                // then hand off bounded extras synchronously BEFORE closing
+                // storage, so neither a stalled shutdown nor hard expiration
+                // can drop already-projected notifications.
                 publishPreparedPresentations(
                     for: decision,
                     result: result,
