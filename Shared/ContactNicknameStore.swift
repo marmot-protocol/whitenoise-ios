@@ -22,7 +22,9 @@ nonisolated enum ContactNicknameStore {
     /// Composite storage key. Hex components are normalized so callers that
     /// disagree on case or stray whitespace still address the same contact,
     /// and blank components are rejected so a missing account can never read
-    /// (or write) another account's nicknames.
+    /// (or write) another account's nicknames. Components containing the `:`
+    /// separator are rejected too, so `("aa:bb", "cc")` and `("aa", "bb:cc")`
+    /// can never alias one key.
     static func key(ownerAccountIdHex: String, contactAccountIdHex: String) -> String? {
         guard let owner = normalizedComponent(ownerAccountIdHex),
               let contact = normalizedComponent(contactAccountIdHex)
@@ -86,7 +88,7 @@ nonisolated enum ContactNicknameStore {
     }
 
     /// Removes every nickname authored by one owner account (sign-out cleanup).
-    /// The owner hex cannot contain the separator, so the prefix match is exact.
+    /// `normalizedComponent` rejects the separator, so the prefix match is exact.
     static func clearAll(
         ownerAccountIdHex: String,
         defaults: UserDefaults? = ContactNicknameStore.defaults
@@ -104,6 +106,7 @@ nonisolated enum ContactNicknameStore {
 
     private static func normalizedComponent(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return trimmed.isEmpty ? nil : trimmed
+        guard !trimmed.isEmpty, !trimmed.contains(":") else { return nil }
+        return trimmed
     }
 }
