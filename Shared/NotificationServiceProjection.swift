@@ -48,6 +48,9 @@ nonisolated enum NotificationServiceTimeoutPolicy {
     /// runtime or starting up, so MDK can still drain already-queued local
     /// records (capped by `configuredMaxWaitMs`).
     static let minimumCollectionWaitMs: UInt32 = 250
+    /// Minimum remaining proactive budget required before starting the optional
+    /// aggregate SQLite badge scan, leaving margin for terminal storage closure.
+    static let minimumBadgeScanRemainingBudget: Duration = .seconds(6)
 
     /// Bounds `collectNotificationsAfterWake`'s wait window to what remains of
     /// `proactiveBudget` after prior-runtime draining and runtime startup,

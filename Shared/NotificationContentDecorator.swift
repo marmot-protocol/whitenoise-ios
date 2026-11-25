@@ -1,7 +1,7 @@
 import Foundation
 import UserNotifications
 
-enum NotificationContentDecorator {
+nonisolated enum NotificationContentDecorator {
     /// A quiet presentation lands in Notification Center, in its chat's stack,
     /// without a banner, sound, or lit screen.
     enum Alerting {

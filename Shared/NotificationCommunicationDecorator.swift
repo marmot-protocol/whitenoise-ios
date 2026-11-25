@@ -11,43 +11,9 @@ nonisolated enum NotificationCommunicationDecorator {
     static let maxAvatarBytes = 512 * 1024
     /// Hard wall-clock bound per avatar resolution.
     static let avatarDeadline: Duration = .seconds(3)
-    /// Aggregate wall-clock the NSE may spend across all avatar resolutions in
-    /// one wake; each resolution's deadline is clamped to what remains.
-    static let avatarAggregateBudget: Duration = .seconds(6)
     static let maxAvatarPixelDimension = 4_096
     static let maxAvatarPixelCount = 16_777_216
     static let maxAvatarFrames = 8
-    /// Distinct sender pictures resolved per wake, in arrival order.
-    static let maxAvatarFetchesPerWake = 3
-
-    /// The sender pictures one wake fetches: each distinct URL once, in the
-    /// order its presentation arrived, at most `limit` of them.
-    static func avatarURLs(
-        for presentations: [LocalNotificationPresentation],
-        limit: Int = maxAvatarFetchesPerWake
-    ) -> [String] {
-        var distinct: [String] = []
-        for presentation in presentations {
-            if let url = presentation.senderPictureUrl, !distinct.contains(url) {
-                distinct.append(url)
-            }
-        }
-        return Array(distinct.prefix(limit))
-    }
-
-    /// Per-fetch deadline under an aggregate budget, `nil` once the budget is
-    /// exhausted. Clamping to the remainder is what makes the budget a hard
-    /// bound — a loop that only checks elapsed time before each fetch can
-    /// overshoot by a full per-fetch deadline.
-    static func avatarFetchDeadline(
-        elapsed: Duration,
-        budget: Duration = avatarAggregateBudget,
-        perFetch: Duration = avatarDeadline
-    ) -> Duration? {
-        let remaining = budget - elapsed
-        guard remaining > .zero else { return nil }
-        return min(perFetch, remaining)
-    }
 
     static func decorated(
         _ content: UNNotificationContent,

@@ -7,7 +7,7 @@ import UserNotifications
 /// Minimal runtime surface owned by one Notification Service Extension wake.
 /// `LiveNotificationServiceWakeRuntime` wraps `Marmot` in production; unit tests
 /// inject a fake to verify per-wake isolation and shutdown ordering.
-protocol NotificationServiceWakeRuntime: AnyObject, Sendable {
+nonisolated protocol NotificationServiceWakeRuntime: AnyObject, Sendable {
     func setAuditLogSource(source: AuditLogSourceFfi) throws
     func start() async throws
     func collectNotificationsAfterWake(
@@ -20,7 +20,7 @@ protocol NotificationServiceWakeRuntime: AnyObject, Sendable {
     func shutdownAndClose() async throws
 }
 
-final class LiveNotificationServiceWakeRuntime: NotificationServiceWakeRuntime {
+nonisolated final class LiveNotificationServiceWakeRuntime: NotificationServiceWakeRuntime {
     private let marmot: Marmot
 
     init() throws {
@@ -41,7 +41,7 @@ final class LiveNotificationServiceWakeRuntime: NotificationServiceWakeRuntime {
     }
 
     func setAuditLogSource(source: AuditLogSourceFfi) throws {
-        try marmot.setAuditLogSource(source: source)
+        _ = try marmot.setAuditLogSource(source: source)
     }
 
     func start() async throws {
@@ -119,14 +119,14 @@ struct NotificationServiceWakePolicySnapshot {
     }
 }
 
-struct NotificationServiceWakeEnvironment: Sendable {
-    var makeRuntime: @MainActor () throws -> any NotificationServiceWakeRuntime
-    var auditLogSource: @MainActor () -> AuditLogSourceFfi
-    var loadPolicySnapshot: @MainActor () -> NotificationServiceWakePolicySnapshot
+nonisolated struct NotificationServiceWakeEnvironment: Sendable {
+    var makeRuntime: @MainActor @Sendable () throws -> any NotificationServiceWakeRuntime
+    var auditLogSource: @MainActor @Sendable () -> AuditLogSourceFfi
+    var loadPolicySnapshot: @MainActor @Sendable () -> NotificationServiceWakePolicySnapshot
     var maxWaitMs: UInt32
     var proactiveBudget: Duration
     var sleep: @Sendable (Duration) async throws -> Void
-    var submitAdditionalPresentation: @MainActor (LocalNotificationPresentation, _ applicationBadgeCount: Int?) -> Void
+    var submitAdditionalPresentation: @MainActor @Sendable (LocalNotificationPresentation, _ applicationBadgeCount: Int?) -> Void
 
     static let live = Self(
         makeRuntime: { try LiveNotificationServiceWakeRuntime() },
@@ -166,15 +166,16 @@ struct NotificationServiceWakeEnvironment: Sendable {
 /// Thread-safe box for transferring an unshared ObjC value across isolation
 /// boundaries after synchronously copying it on the sender's thread.
 // swiftlint:disable:next no_unchecked_sendable
-private struct UncheckedSendableBox<Value>: @unchecked Sendable {
+nonisolated private struct UncheckedSendableBox<Value>: @unchecked Sendable {
     let value: Value
 }
 
 /// Thread-safe one-shot delivery gate shared between `UNNotificationServiceExtension`'s
 /// arbitrary system callback threads (`didReceive` / `serviceExtensionTimeWillExpire`)
 /// and the coordinator's `@MainActor` session work. Never holds its lock across
-/// `contentHandler` invocation.
-private final class NotificationWakeDelivery: Sendable {
+/// `contentHandler` invocation. Explicitly `nonisolated` under Swift 6.2 default
+/// `@MainActor` isolation so background-thread calls never assert the main executor.
+nonisolated private final class NotificationWakeDelivery: Sendable {
     /// Holds Apple's non-`Sendable` ObjC `UNNotificationContent` snapshots and
     /// `UNNotificationServiceExtension` completion closure. Exclusively accessed
     /// under `NotificationWakeDelivery.state`'s `Mutex`, and every stored content
@@ -250,7 +251,7 @@ private final class NotificationWakeDelivery: Sendable {
 /// teardown. Consecutive wakes serialize runtime construction behind a single
 /// coordinator-owned storage-close barrier for the most recent runtime that
 /// actually opened.
-final class NotificationServiceWakeCoordinator: Sendable {
+nonisolated final class NotificationServiceWakeCoordinator: Sendable {
     private let pendingDeliveries = Mutex<[NotificationWakeDelivery]>([])
     private let state: NotificationServiceWakeCoordinatorState
 
@@ -342,7 +343,6 @@ private final class NotificationServiceWakeCoordinatorState: Sendable {
 
         let priorRuntimeBarrier = activeRuntimeBarrier
         let session = NotificationServiceWakeSession(
-            ownerID: ownerID,
             content: content,
             delivery: delivery,
             environment: environment
@@ -368,7 +368,6 @@ private final class NotificationServiceWakeSession {
     // https://github.com/swiftlang/swift/issues/88036
     nonisolated deinit {}
 
-    let ownerID: UUID
     private let delivery: NotificationWakeDelivery
     private let environment: NotificationServiceWakeEnvironment
     private let onRuntimeOpened: @MainActor (Task<Void, Never>) -> Void
@@ -376,7 +375,6 @@ private final class NotificationServiceWakeSession {
     private var bestAttemptContent: UNMutableNotificationContent?
     private var collectionTask: Task<Void, Never>?
     private var expirationWatchdogTask: Task<Void, Never>?
-    private var expirationCleanupTask: Task<Void, Never>?
     private var activeRuntime: (any NotificationServiceWakeRuntime)?
     private var runtimeShutdownTask: Task<Void, Never>?
     /// Single storage-close barrier for successor wakes. Resolves once this
@@ -399,13 +397,11 @@ private final class NotificationServiceWakeSession {
     )
 
     init(
-        ownerID: UUID,
         content: UNMutableNotificationContent,
         delivery: NotificationWakeDelivery,
         environment: NotificationServiceWakeEnvironment,
         onRuntimeOpened: @escaping @MainActor (Task<Void, Never>) -> Void
     ) {
-        self.ownerID = ownerID
         self.bestAttemptContent = content
         self.delivery = delivery
         self.environment = environment
@@ -441,10 +437,9 @@ private final class NotificationServiceWakeSession {
         guard bestAttemptContent != nil, !expirationInProgress else { return }
         proactiveBudgetElapsed = true
         if preparedDiagnosticOutcome != nil {
-            // Primary content is already prepared and bounded extras are
-            // already submitted to Notification Center. Close storage if still
-            // open and deliver the prepared primary once storage closes.
-            completePreparedPrimaryAfterShutdown()
+            // Primary content is already frozen, bounded extras are already
+            // submitted, and `collectAndDecorateNotification` is already
+            // awaiting terminal storage closure before calling `finish()`.
             return
         }
         if collectionInFlight {
@@ -462,7 +457,7 @@ private final class NotificationServiceWakeSession {
     /// `collectNotificationsAfterWake` has started, MDK may already have
     /// drained notifications from the background cursor, so ordinary
     /// replacement preserves the consumed batch (skipping the optional badge
-    /// scan and releasing the prepared primary once storage closes).
+    /// scan and letting the existing task close storage and deliver).
     func cancelForReplacement() {
         guard bestAttemptContent != nil, !expirationInProgress else { return }
         if !delivery.isPending {
@@ -472,11 +467,7 @@ private final class NotificationServiceWakeSession {
             return
         }
         replacementRequested = true
-        if preparedDiagnosticOutcome != nil {
-            completePreparedPrimaryAfterShutdown()
-            return
-        }
-        if collectionInFlight {
+        if preparedDiagnosticOutcome != nil || collectionInFlight {
             return
         }
         expirationWatchdogTask?.cancel()
@@ -501,22 +492,6 @@ private final class NotificationServiceWakeSession {
         finish()
     }
 
-    private func completePreparedPrimaryAfterShutdown() {
-        guard !expirationInProgress else { return }
-        expirationInProgress = true
-        expirationWatchdogTask?.cancel()
-        expirationWatchdogTask = nil
-        collectionTask?.cancel()
-        let shutdownTask = beginRuntimeShutdown()
-        let outcome = preparedDiagnosticOutcome ?? .fallback
-        let notificationCount = preparedNotificationCount
-        expirationCleanupTask = Task {
-            await shutdownTask?.value
-            self.recordDiagnostic(outcome: outcome, notificationCount: notificationCount)
-            self.finish()
-        }
-    }
-
     private func beginExpirationCleanup(outcome: NotificationServiceDiagnosticOutcome) {
         guard bestAttemptContent != nil, !expirationInProgress else { return }
         expirationInProgress = true
@@ -525,7 +500,7 @@ private final class NotificationServiceWakeSession {
         recordDiagnostic(outcome: outcome)
         collectionTask?.cancel()
         let shutdownTask = beginRuntimeShutdown()
-        expirationCleanupTask = Task {
+        Task {
             await shutdownTask?.value
             self.finish()
         }
@@ -601,14 +576,17 @@ private final class NotificationServiceWakeSession {
                     accountRefs: accountsRequiringArchivedLookup
                 )
                 guard await continueCollection(using: runtime) else { return }
-                // Refresh the SpringBoard badge count only while proactive
-                // budget remains and no successor wake is waiting, so an
-                // aggregate unread scan never crowds terminal storage closure.
+                // Refresh the SpringBoard badge count only while ample
+                // proactive budget margin remains and no successor wake is
+                // waiting, so the synchronous aggregate unread scan does not
+                // start near the deadline and crowd terminal storage closure.
+                let remainingProactiveBudget = environment.proactiveBudget
+                    - wakeStartedAt.duration(to: ContinuousClock.now)
                 var applicationBadgeCount: Int?
                 if result.status != .failed,
                    !proactiveBudgetElapsed,
                    !replacementRequested,
-                   wakeStartedAt.duration(to: ContinuousClock.now) < environment.proactiveBudget {
+                   remainingProactiveBudget >= NotificationServiceTimeoutPolicy.minimumBadgeScanRemainingBudget {
                     let count = await runtime.applicationBadgeCount()
                     guard await continueCollection(using: runtime) else { return }
                     applicationBadgeCount = count
@@ -758,16 +736,19 @@ private final class NotificationServiceWakeSession {
         }
         switch decision {
         case .decorate(let presentation, let additionalPresentations):
-            for extra in additionalPresentations {
-                environment.submitAdditionalPresentation(extra, applicationBadgeCount)
-            }
             NotificationContentDecorator.apply(presentation, to: content)
             let decorated = NotificationCommunicationDecorator.decorated(
                 content,
                 presentation: presentation,
                 avatarData: nil
             )
+            // Freeze the filtered primary snapshot BEFORE handing off bounded
+            // extras so a background hard-expiry interrupting the submission
+            // loop still delivers the prepared primary instead of fallback.
             delivery.setPreparedContent(decorated)
+            for extra in additionalPresentations {
+                environment.submitAdditionalPresentation(extra, applicationBadgeCount)
+            }
         case .deliverQuietly:
             NotificationContentDecorator.applyQuietDelivery(to: content)
             delivery.setPreparedContent(content)
@@ -783,7 +764,6 @@ private final class NotificationServiceWakeSession {
         collectionTask = nil
         expirationWatchdogTask?.cancel()
         expirationWatchdogTask = nil
-        expirationCleanupTask = nil
         delivery.deliver()
     }
 }

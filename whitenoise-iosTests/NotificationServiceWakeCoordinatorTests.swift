@@ -828,7 +828,9 @@ struct NotificationServiceWakeCoordinatorTests {
             auditLogSource: { AuditLogSourceBuildConfig.current() },
             loadPolicySnapshot: Self.allVisiblePolicySnapshot,
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
-            proactiveBudget: withinBudget ? NotificationServiceTimeoutPolicy.proactiveExpirationDelay : .zero,
+            proactiveBudget: withinBudget
+                ? NotificationServiceTimeoutPolicy.proactiveExpirationDelay
+                : .seconds(5),
             sleep: { _ in try await parkUntilCancelled() },
             submitAdditionalPresentation: { _, badgeCount in
                 extraBadges.withLock { $0.append(badgeCount) }
@@ -1174,6 +1176,90 @@ struct NotificationServiceWakeCoordinatorTests {
         let shutdown1Done = try #require(recordedEvents.firstIndex(of: "shutdown-done-1"))
         let created2 = try #require(recordedEvents.firstIndex(of: "created-2"))
         #expect(shutdown1Done < created2)
+    }
+
+    @Test func wakeCoordinatorHardExpiryDuringFirstExtraSubmissionStillDeliversPreparedPrimary() async throws {
+        let events = WakeEventLog()
+        let deliveredTitles = Mutex<[String]>([])
+        let deliveredBodies = Mutex<[String]>([])
+        let deliveredBadges = Mutex<[Int?]>([])
+        let submittedExtras = Mutex<[String]>([])
+        let expiryFinished = TestLatch()
+
+        let primary = notificationUpdate(
+            notificationKey: "mid-extra-primary",
+            groupIdHex: String(repeating: "11", count: 16),
+            senderName: "Alice",
+            previewText: "Frozen before extras",
+            timestampMs: 5_000
+        )
+        let extra1 = notificationUpdate(
+            notificationKey: "mid-extra-1",
+            groupIdHex: String(repeating: "22", count: 16),
+            senderName: "Bob",
+            previewText: "First extra triggers expiry",
+            timestampMs: 4_000
+        )
+
+        var coordinatorRef: NotificationServiceWakeCoordinator?
+        let owner = UUID()
+
+        let environment = NotificationServiceWakeEnvironment(
+            makeRuntime: {
+                events.append("created-1")
+                return FakeNotificationServiceWakeRuntime(
+                    id: 1,
+                    events: events,
+                    onCollect: { _ in
+                        BackgroundNotificationCollectionFfi(
+                            status: .newData,
+                            notifications: [extra1, primary],
+                            error: nil
+                        )
+                    },
+                    onApplicationBadgeCount: { 4 }
+                )
+            },
+            auditLogSource: { AuditLogSourceBuildConfig.current() },
+            loadPolicySnapshot: Self.allVisiblePolicySnapshot,
+            maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
+            proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
+            sleep: { _ in try await parkUntilCancelled() },
+            submitAdditionalPresentation: { presentation, _ in
+                submittedExtras.withLock { $0.append(presentation.title) }
+                // Fire hard expiration from a background queue WHILE inside the
+                // first extra submission: the primary snapshot must already be
+                // frozen so the handler delivers the decorated primary, never fallback.
+                if let coordinator = coordinatorRef {
+                    DispatchQueue.global(qos: .userInitiated).sync {
+                        coordinator.serviceExtensionTimeWillExpire(ownerID: owner)
+                    }
+                    expiryFinished.signal()
+                }
+            }
+        )
+
+        let coordinator = NotificationServiceWakeCoordinator(environment: environment)
+        coordinatorRef = coordinator
+        let request = UNNotificationRequest(identifier: "mid-extra-exp", content: UNNotificationContent(), trigger: nil)
+
+        // Dispatch `didReceive` itself from a background queue to verify
+        // nonisolated entry under Swift 6.2 default `@MainActor` isolation.
+        DispatchQueue.global(qos: .userInitiated).async {
+            coordinator.didReceive(request, ownerID: owner) { content in
+                deliveredTitles.withLock { $0.append(content.title) }
+                deliveredBodies.withLock { $0.append(content.body) }
+                deliveredBadges.withLock { $0.append(content.badge?.intValue) }
+            }
+        }
+
+        try await expiryFinished.wait()
+        await Task.yield()
+
+        #expect(submittedExtras.withLock { $0 } == ["Bob"])
+        #expect(deliveredTitles.withLock { $0 } == ["Alice"])
+        #expect(deliveredBodies.withLock { $0 } == ["Frozen before extras"])
+        #expect(deliveredBadges.withLock { $0 } == [4])
     }
 
     private static func allVisiblePolicySnapshot() -> NotificationServiceWakePolicySnapshot {

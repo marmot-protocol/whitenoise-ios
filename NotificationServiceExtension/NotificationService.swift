@@ -1,7 +1,7 @@
 import Foundation
 import UserNotifications
 
-final class NotificationService: UNNotificationServiceExtension {
+nonisolated final class NotificationService: UNNotificationServiceExtension {
     /// Shared across the extension process so consecutive pushes serialize
     /// runtime teardown even if iOS constructs a fresh extension instance.
     private static let coordinator = NotificationServiceWakeCoordinator(environment: .live)
