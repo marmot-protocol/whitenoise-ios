@@ -63,7 +63,7 @@ struct NotificationServiceWakeCoordinatorTests {
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
             sleep: { _ in try await parkUntilCancelled() },
-            enqueueAdditionalPresentation: { _ in }
+            submitAdditionalPresentation: { _, _ in }
         )
 
         let coordinator = NotificationServiceWakeCoordinator(environment: environment)
@@ -167,7 +167,7 @@ struct NotificationServiceWakeCoordinatorTests {
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
             sleep: { _ in try await parkUntilCancelled() },
-            enqueueAdditionalPresentation: { _ in }
+            submitAdditionalPresentation: { _, _ in }
         )
 
         let coordinator = NotificationServiceWakeCoordinator(environment: environment)
@@ -276,7 +276,7 @@ struct NotificationServiceWakeCoordinatorTests {
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
             sleep: { _ in try await parkUntilCancelled() },
-            enqueueAdditionalPresentation: { presentation in
+            submitAdditionalPresentation: { presentation, _ in
                 additionalTitles.withLock { $0.append(presentation.title) }
                 extraSubmitted.signal()
             }
@@ -398,7 +398,7 @@ struct NotificationServiceWakeCoordinatorTests {
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
             sleep: { _ in try await parkUntilCancelled() },
-            enqueueAdditionalPresentation: { presentation in
+            submitAdditionalPresentation: { presentation, _ in
                 additionalTitles.withLock { $0.append(presentation.title) }
                 extraSubmitted.signal()
             }
@@ -456,6 +456,7 @@ struct NotificationServiceWakeCoordinatorTests {
         var wake1Contents: [UNNotificationContent] = []
         let additionalTitles = Mutex<[String]>([])
         let observedMaxWaitMs = Mutex<UInt32?>(nil)
+        let badgeCalls = Mutex(0)
         var runtimeIndex = 0
 
         let wake1Primary = notificationUpdate(
@@ -501,6 +502,10 @@ struct NotificationServiceWakeCoordinatorTests {
                             error: nil
                         )
                     },
+                    onApplicationBadgeCount: {
+                        badgeCalls.withLock { $0 += 1 }
+                        return 9
+                    },
                     onLocalNotificationsEnabled: {
                         [
                             "enabled-account": true,
@@ -517,7 +522,7 @@ struct NotificationServiceWakeCoordinatorTests {
                 try await triggerWatchdog.wait()
                 watchdogFired.signal()
             },
-            enqueueAdditionalPresentation: { presentation in
+            submitAdditionalPresentation: { presentation, _ in
                 additionalTitles.withLock { $0.append(presentation.title) }
                 extraSubmitted.signal()
             }
@@ -557,7 +562,9 @@ struct NotificationServiceWakeCoordinatorTests {
         #expect(wake1Contents.count == 1)
         #expect(wake1Contents.first?.title == "Alice")
         #expect(wake1Contents.first?.body == "Kept past watchdog")
+        #expect(wake1Contents.first?.badge == nil)
         #expect(additionalTitles.withLock { $0 } == ["Bob"])
+        #expect(badgeCalls.withLock { $0 } == 0)
     }
 
     @Test func effectiveCollectionWaitMsBoundsToRemainingProactiveBudget() {
@@ -594,38 +601,35 @@ struct NotificationServiceWakeCoordinatorTests {
         ) == 100)
     }
 
-    @Test func wakeCoordinatorSubmitsBoundedExtrasConcurrentlyBeforeShutdownEvenOnHardExpiry() async throws {
+    @Test func wakeCoordinatorSubmitsBoundedExtrasBeforePrimaryAndShutdownEvenOnHardExpiry() async throws {
         let events = WakeEventLog()
-        let extra1Entered = TestLatch()
-        let extra1Release = TestLatch()
-        defer { extra1Release.signal() }
-        let extra2Submitted = TestLatch()
         let shutdownEntered = TestLatch()
         let shutdownRelease = TestLatch()
         defer { shutdownRelease.signal() }
         let deliveredTitles = Mutex<[String]>([])
         let deliveredBodies = Mutex<[String]>([])
-        let submittedExtras = Mutex<[String]>([])
+        let deliveredBadges = Mutex<[Int?]>([])
+        let submittedExtras = Mutex<[(title: String, badge: Int?)]>([])
 
         let primary = notificationUpdate(
-            notificationKey: "concurrent-primary",
+            notificationKey: "sync-extra-primary",
             groupIdHex: String(repeating: "11", count: 16),
             senderName: "Alice",
             previewText: "Primary prepared before shutdown",
             timestampMs: 5_000
         )
         let extra1 = notificationUpdate(
-            notificationKey: "concurrent-extra-1",
+            notificationKey: "sync-extra-1",
             groupIdHex: String(repeating: "22", count: 16),
             senderName: "Bob",
-            previewText: "First extra stalls",
+            previewText: "First extra",
             timestampMs: 4_000
         )
         let extra2 = notificationUpdate(
-            notificationKey: "concurrent-extra-2",
+            notificationKey: "sync-extra-2",
             groupIdHex: String(repeating: "33", count: 16),
             senderName: "Carol",
-            previewText: "Second extra still submits concurrently",
+            previewText: "Second extra",
             timestampMs: 3_000
         )
 
@@ -642,6 +646,7 @@ struct NotificationServiceWakeCoordinatorTests {
                             error: nil
                         )
                     },
+                    onApplicationBadgeCount: { 7 },
                     onShutdown: {
                         shutdownEntered.signal()
                         await shutdownRelease.hold()
@@ -653,44 +658,46 @@ struct NotificationServiceWakeCoordinatorTests {
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
             sleep: { _ in try await parkUntilCancelled() },
-            enqueueAdditionalPresentation: { presentation in
-                submittedExtras.withLock { $0.append(presentation.title) }
-                if presentation.title == "Bob" {
-                    extra1Entered.signal()
-                    await extra1Release.hold()
-                } else if presentation.title == "Carol" {
-                    extra2Submitted.signal()
-                }
+            submitAdditionalPresentation: { presentation, badgeCount in
+                events.append("extra-\(presentation.title)")
+                submittedExtras.withLock { $0.append((presentation.title, badgeCount)) }
             }
         )
 
         let coordinator = NotificationServiceWakeCoordinator(environment: environment)
         let owner = UUID()
-        let request = UNNotificationRequest(identifier: "concurrent-exp", content: UNNotificationContent(), trigger: nil)
+        let request = UNNotificationRequest(identifier: "sync-extra-exp", content: UNNotificationContent(), trigger: nil)
 
         coordinator.didReceive(request, ownerID: owner) { content in
             deliveredTitles.withLock { $0.append(content.title) }
             deliveredBodies.withLock { $0.append(content.body) }
+            deliveredBadges.withLock { $0.append(content.badge?.intValue) }
         }
 
-        // Wait for shutdown to start AND both extras to be handed off before
-        // `shutdownRelease` or `extra1Release` is ever signalled: proves extras
-        // are submitted immediately after projection and concurrently so a
-        // parked first extra never blocks later extras or waits for shutdown.
+        // Wait until shutdown starts: bounded extras must ALREADY have been
+        // handed off synchronously before the prepared primary snapshot was
+        // published and before `shutdownAndClose()` started.
         try await shutdownEntered.wait()
-        try await extra1Entered.wait()
-        try await extra2Submitted.wait()
-        #expect(Set(submittedExtras.withLock { $0 }) == ["Bob", "Carol"])
-        #expect(!events.snapshot().contains("shutdown-done-1"))
+        let extras = submittedExtras.withLock { $0 }
+        #expect(Set(extras.map(\.title)) == ["Bob", "Carol"])
+        #expect(extras.allSatisfy { $0.badge == 7 })
+        let snapshot = events.snapshot()
+        let extraBob = try #require(snapshot.firstIndex(of: "extra-Bob"))
+        let extraCarol = try #require(snapshot.firstIndex(of: "extra-Carol"))
+        let shutdownStart = try #require(snapshot.firstIndex(of: "shutdown-start-1"))
+        #expect(extraBob < shutdownStart)
+        #expect(extraCarol < shutdownStart)
+        #expect(!snapshot.contains("shutdown-done-1"))
 
         // Fire hard expiration from a background thread (matching Apple's
         // contract) while shutdown is still parked: primary must deliver
-        // synchronously with the prepared decorated snapshot.
+        // synchronously with the prepared decorated snapshot and badge.
         let bgExpiryDone = TestLatch()
         DispatchQueue.global(qos: .userInitiated).async {
             coordinator.serviceExtensionTimeWillExpire(ownerID: owner)
             #expect(deliveredTitles.withLock { $0 } == ["Alice"])
             #expect(deliveredBodies.withLock { $0 } == ["Primary prepared before shutdown"])
+            #expect(deliveredBadges.withLock { $0 } == [7])
             bgExpiryDone.signal()
         }
         try await bgExpiryDone.wait()
@@ -737,7 +744,7 @@ struct NotificationServiceWakeCoordinatorTests {
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
             sleep: { _ in try await parkUntilCancelled() },
-            enqueueAdditionalPresentation: { _ in }
+            submitAdditionalPresentation: { _, _ in }
         )
 
         let coordinator = NotificationServiceWakeCoordinator(environment: environment)
@@ -774,42 +781,100 @@ struct NotificationServiceWakeCoordinatorTests {
         #expect(deliveryCount.withLock { $0 } == 1)
     }
 
-    @Test(arguments: [false, true])
-    func wakeCoordinatorDeliversPreparedPrimaryWhileAdditionalEnqueueIsParked(
-        replacedByNextWake: Bool
+    @Test(arguments: [true, false])
+    func wakeCoordinatorAppliesBadgeCountOnlyWhileProactiveBudgetRemains(
+        withinBudget: Bool
     ) async throws {
         let events = WakeEventLog()
-        let enqueueEntered = TestLatch()
-        let enqueueRelease = TestLatch()
-        defer { enqueueRelease.signal() }
-        let shutdownDone = TestLatch()
-        let triggerWatchdog = TestLatch()
-        let sleepCallCount = Mutex(0)
-        let wakeADelivered = TestLatch()
-        let wakeBDelivered = TestLatch()
-        let wakeAContents = Mutex<[String]>([])
-        let wakeBContents = Mutex<[String]>([])
-        var runtimeIndex = 0
+        let badgeCalls = Mutex(0)
+        let delivered = TestLatch()
+        var deliveredContents: [UNNotificationContent] = []
+        let extraBadges = Mutex<[Int?]>([])
 
-        let wakeAPrimary = notificationUpdate(
-            notificationKey: "parked-enqueue-primary",
+        let primary = notificationUpdate(
+            notificationKey: "badge-primary",
             groupIdHex: String(repeating: "11", count: 16),
             senderName: "Alice",
-            previewText: "Primary delivered while enqueue parked",
+            previewText: "Primary badge check",
             timestampMs: 5_000
         )
-        let wakeAExtra = notificationUpdate(
-            notificationKey: "parked-enqueue-extra",
+        let extra = notificationUpdate(
+            notificationKey: "badge-extra",
             groupIdHex: String(repeating: "22", count: 16),
             senderName: "Bob",
-            previewText: "Parked extra",
+            previewText: "Extra badge check",
             timestampMs: 4_000
         )
+
+        let environment = NotificationServiceWakeEnvironment(
+            makeRuntime: {
+                events.append("created-1")
+                return FakeNotificationServiceWakeRuntime(
+                    id: 1,
+                    events: events,
+                    onCollect: { _ in
+                        BackgroundNotificationCollectionFfi(
+                            status: .newData,
+                            notifications: [extra, primary],
+                            error: nil
+                        )
+                    },
+                    onApplicationBadgeCount: {
+                        badgeCalls.withLock { $0 += 1 }
+                        return 5
+                    }
+                )
+            },
+            auditLogSource: { AuditLogSourceBuildConfig.current() },
+            loadPolicySnapshot: Self.allVisiblePolicySnapshot,
+            maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
+            proactiveBudget: withinBudget ? NotificationServiceTimeoutPolicy.proactiveExpirationDelay : .zero,
+            sleep: { _ in try await parkUntilCancelled() },
+            submitAdditionalPresentation: { _, badgeCount in
+                extraBadges.withLock { $0.append(badgeCount) }
+            }
+        )
+
+        let coordinator = NotificationServiceWakeCoordinator(environment: environment)
+        let owner = UUID()
+        let request = UNNotificationRequest(identifier: "badge-check", content: UNNotificationContent(), trigger: nil)
+
+        coordinator.didReceive(request, ownerID: owner) { content in
+            deliveredContents.append(content)
+            delivered.signal()
+        }
+        try await delivered.wait()
+
+        #expect(deliveredContents.count == 1)
+        #expect(deliveredContents.first?.title == "Alice")
+        if withinBudget {
+            #expect(badgeCalls.withLock { $0 } == 1)
+            #expect(deliveredContents.first?.badge == 5)
+            #expect(extraBadges.withLock { $0 } == [5])
+        } else {
+            #expect(badgeCalls.withLock { $0 } == 0)
+            #expect(deliveredContents.first?.badge == nil)
+            #expect(extraBadges.withLock { $0 } == [nil])
+        }
+    }
+
+    @Test func wakeCoordinatorHardExpirationOfWakeADoesNotCancelWakeBStartingOnSameInstance() async throws {
+        let events = WakeEventLog()
+        let wakeACollectEntered = TestLatch()
+        let wakeACollectRelease = TestLatch()
+        defer { wakeACollectRelease.signal() }
+        let wakeAShutdownEntered = TestLatch()
+        let wakeAShutdownRelease = TestLatch()
+        defer { wakeAShutdownRelease.signal() }
+        let wakeBDelivered = TestLatch()
+        var wakeAContents: [UNNotificationContent] = []
+        var wakeBContents: [UNNotificationContent] = []
+        var runtimeIndex = 0
+
         let wakeBUpdate = notificationUpdate(
-            notificationKey: "unblocked-wake-b",
-            groupIdHex: String(repeating: "33", count: 16),
+            notificationKey: "same-owner-wake-b",
             senderName: "Eve",
-            previewText: "Wake B unblocked after shutdown",
+            previewText: "Wake B survived wake A expiration on same owner",
             timestampMs: 6_000
         )
 
@@ -823,14 +888,14 @@ struct NotificationServiceWakeCoordinatorTests {
                         id: id,
                         events: events,
                         onCollect: { _ in
-                            BackgroundNotificationCollectionFfi(
-                                status: .newData,
-                                notifications: [wakeAExtra, wakeAPrimary],
-                                error: nil
-                            )
+                            wakeACollectEntered.signal()
+                            try await wakeACollectRelease.wait()
+                            return BackgroundNotificationCollectionFfi(status: .noData, notifications: [], error: nil)
                         },
                         onShutdown: {
-                            shutdownDone.signal()
+                            wakeAShutdownEntered.signal()
+                            await wakeAShutdownRelease.hold()
+                            wakeACollectRelease.signal()
                         }
                     )
                 }
@@ -850,62 +915,45 @@ struct NotificationServiceWakeCoordinatorTests {
             loadPolicySnapshot: Self.allVisiblePolicySnapshot,
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
-            sleep: { _ in
-                let call = sleepCallCount.withLock { count -> Int in
-                    count += 1
-                    return count
-                }
-                if call == 1 {
-                    try await triggerWatchdog.wait()
-                } else {
-                    try await parkUntilCancelled()
-                }
-            },
-            enqueueAdditionalPresentation: { _ in
-                enqueueEntered.signal()
-                await enqueueRelease.hold()
-            }
+            sleep: { _ in try await parkUntilCancelled() },
+            submitAdditionalPresentation: { _, _ in }
         )
 
         let coordinator = NotificationServiceWakeCoordinator(environment: environment)
-        let ownerA = UUID()
-        let ownerB = UUID()
-        let reqA = UNNotificationRequest(identifier: "enqueue-a", content: UNNotificationContent(), trigger: nil)
-        let reqB = UNNotificationRequest(identifier: "enqueue-b", content: UNNotificationContent(), trigger: nil)
+        let reusedOwner = UUID()
+        let reqA = UNNotificationRequest(identifier: "same-owner-a", content: UNNotificationContent(), trigger: nil)
+        let reqB = UNNotificationRequest(identifier: "same-owner-b", content: UNNotificationContent(), trigger: nil)
 
-        coordinator.didReceive(reqA, ownerID: ownerA) { content in
-            wakeAContents.withLock { $0.append("\(content.title): \(content.body)") }
-            wakeADelivered.signal()
+        coordinator.didReceive(reqA, ownerID: reusedOwner) { content in
+            wakeAContents.append(content)
         }
-        try await enqueueEntered.wait()
-        try await shutdownDone.wait()
+        try await wakeACollectEntered.wait()
 
-        if replacedByNextWake {
-            // Late replacement after runtime #1 closed must promptly deliver
-            // wake A's prepared primary without waiting for the watchdog, while
-            // wake B opens runtime #2 and delivers before `enqueueRelease`.
-            coordinator.didReceive(reqB, ownerID: ownerB) { content in
-                wakeBContents.withLock { $0.append("\(content.title): \(content.body)") }
-                wakeBDelivered.signal()
-            }
-            try await wakeADelivered.wait()
-            try await wakeBDelivered.wait()
-        } else {
-            // Fire ONLY the proactive watchdog (not hard expiration): wake A
-            // must deliver its prepared primary BEFORE `enqueueRelease`, and
-            // wake B must then open runtime #2 and deliver before `enqueueRelease`.
-            triggerWatchdog.signal()
-            try await wakeADelivered.wait()
-            coordinator.didReceive(reqB, ownerID: ownerB) { content in
-                wakeBContents.withLock { $0.append("\(content.title): \(content.body)") }
-                wakeBDelivered.signal()
-            }
-            try await wakeBDelivered.wait()
+        // Expire wake A synchronously AND immediately register wake B on the
+        // SAME `ownerID` before wake A's asynchronous MainActor cleanup runs.
+        // Wake A's cleanup is scoped to wake A's delivery ID and must never
+        // cancel wake B or drop wake A's runtime shutdown barrier.
+        coordinator.serviceExtensionTimeWillExpire(ownerID: reusedOwner)
+        coordinator.didReceive(reqB, ownerID: reusedOwner) { content in
+            wakeBContents.append(content)
+            wakeBDelivered.signal()
         }
 
-        #expect(wakeAContents.withLock { $0 } == ["Alice: Primary delivered while enqueue parked"])
-        #expect(runtimeIndex == 2)
-        #expect(wakeBContents.withLock { $0 } == ["Eve: Wake B unblocked after shutdown"])
+        #expect(wakeAContents.count == 1)
+        #expect(wakeAContents.first?.userInfo[LocalNotificationProjection.deliveryDispositionKey] as? String
+            == LocalNotificationProjection.fallbackDisposition)
+        try await wakeAShutdownEntered.wait()
+        await Task.yield()
+        #expect(runtimeIndex == 1)
+        #expect(wakeBContents.isEmpty)
+
+        wakeAShutdownRelease.signal()
+        try await wakeBDelivered.wait()
+
+        #expect(wakeAContents.count == 1)
+        #expect(wakeBContents.count == 1)
+        #expect(wakeBContents.first?.title == "Eve")
+        #expect(wakeBContents.first?.body == "Wake B survived wake A expiration on same owner")
 
         let recordedEvents = events.snapshot()
         let shutdown1Done = try #require(recordedEvents.firstIndex(of: "shutdown-done-1"))
@@ -969,7 +1017,7 @@ struct NotificationServiceWakeCoordinatorTests {
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
             sleep: { _ in try await parkUntilCancelled() },
-            enqueueAdditionalPresentation: { _ in }
+            submitAdditionalPresentation: { _, _ in }
         )
 
         let coordinator = NotificationServiceWakeCoordinator(environment: environment)
@@ -1079,7 +1127,7 @@ struct NotificationServiceWakeCoordinatorTests {
             maxWaitMs: NotificationServiceProjection.maxWakeWaitMs,
             proactiveBudget: NotificationServiceTimeoutPolicy.proactiveExpirationDelay,
             sleep: { _ in try await parkUntilCancelled() },
-            enqueueAdditionalPresentation: { _ in }
+            submitAdditionalPresentation: { _, _ in }
         )
 
         let coordinator = NotificationServiceWakeCoordinator(environment: environment)
@@ -1155,6 +1203,7 @@ private final class FakeNotificationServiceWakeRuntime: NotificationServiceWakeR
     let events: WakeEventLog
     let onStart: @Sendable () async throws -> Void
     let onCollect: @Sendable (UInt32) async throws -> BackgroundNotificationCollectionFfi
+    let onApplicationBadgeCount: @Sendable () async -> Int?
     let onLocalNotificationsEnabled: @Sendable () async -> [String: Bool]
     let onShutdown: @Sendable () async throws -> Void
 
@@ -1163,6 +1212,7 @@ private final class FakeNotificationServiceWakeRuntime: NotificationServiceWakeR
         events: WakeEventLog,
         onStart: @escaping @Sendable () async throws -> Void = {},
         onCollect: @escaping @Sendable (UInt32) async throws -> BackgroundNotificationCollectionFfi,
+        onApplicationBadgeCount: @escaping @Sendable () async -> Int? = { nil },
         onLocalNotificationsEnabled: @escaping @Sendable () async -> [String: Bool] = { [:] },
         onShutdown: @escaping @Sendable () async throws -> Void = {}
     ) {
@@ -1170,6 +1220,7 @@ private final class FakeNotificationServiceWakeRuntime: NotificationServiceWakeR
         self.events = events
         self.onStart = onStart
         self.onCollect = onCollect
+        self.onApplicationBadgeCount = onApplicationBadgeCount
         self.onLocalNotificationsEnabled = onLocalNotificationsEnabled
         self.onShutdown = onShutdown
     }
@@ -1185,6 +1236,10 @@ private final class FakeNotificationServiceWakeRuntime: NotificationServiceWakeR
         source: NotificationWakeSourceFfi
     ) async throws -> BackgroundNotificationCollectionFfi {
         try await onCollect(maxWaitMs)
+    }
+
+    func applicationBadgeCount() async -> Int? {
+        await onApplicationBadgeCount()
     }
 
     func localNotificationsEnabled(accountRefs: Set<String>) async -> [String: Bool] {

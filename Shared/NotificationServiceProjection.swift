@@ -64,20 +64,6 @@ nonisolated enum NotificationServiceTimeoutPolicy {
         )
         return min(configuredMaxWaitMs, boundedRemaining)
     }
-
-    static func shouldApplyTimeoutFallback(
-        applyingFallbackForTimeout: Bool,
-        didApplyRenderDecision: Bool
-    ) -> Bool {
-        applyingFallbackForTimeout && !didApplyRenderDecision
-    }
-
-    static func canDeliver(
-        expirationInProgress: Bool,
-        completingExpiration: Bool
-    ) -> Bool {
-        !expirationInProgress || completingExpiration
-    }
 }
 
 nonisolated enum NotificationServiceSettingsReadPolicy {

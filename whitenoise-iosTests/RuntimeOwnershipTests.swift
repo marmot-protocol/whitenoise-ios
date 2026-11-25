@@ -499,19 +499,4 @@ struct RuntimeOwnershipTests {
         #expect(appState.client == nil)
         #expect(appState.runtimeSuspendedForBackground)
     }
-
-    @Test func notificationDeliveryGateWinsAnExpirationRaceExactlyOnce() {
-        let gate = OneShotNotificationDelivery()
-        var delivered: [String] = []
-        gate.reset { delivered.append($0.title) }
-
-        let timeoutFallback = UNMutableNotificationContent()
-        timeoutFallback.title = "timeout fallback"
-        let lateCollectionResult = UNMutableNotificationContent()
-        lateCollectionResult.title = "late collection result"
-
-        #expect(gate.deliver(timeoutFallback))
-        #expect(!gate.deliver(lateCollectionResult))
-        #expect(delivered == ["timeout fallback"])
-    }
 }
