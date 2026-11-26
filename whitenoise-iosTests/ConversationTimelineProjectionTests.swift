@@ -121,6 +121,18 @@ struct ConversationTimelineProjectionTests {
         #expect(!TimelineStore.ownSendAwaitsDelivery(received))
     }
 
+    @MainActor
+    private func readMarkerAppState(client: MarmotClient) -> AppState {
+        AppState.test(
+            client: client,
+            notifications: AppNotifications(
+                deliveredNotificationDescriptorsProvider: { [] },
+                pendingNotificationRequestsRemover: { _ in },
+                deliveredNotificationIdentifiersRemover: { _ in }
+            )
+        )
+    }
+
     private func orderKey(
         _ messageIdHex: String,
         epoch: UInt64 = 1,
@@ -442,7 +454,7 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func readWatermarkRemainsMonotonicAfterFlushedMessageIsEvictedFromWindow() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let appState = readMarkerAppState(client: client)
             appState.activeAccountRef = "acct-1"
             let sleeper = ControlledSleeper()
             let older = message(id: hex("10"), kind: MessageSemantics.kindChat)
@@ -490,7 +502,7 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func seedFlushedWatermarkRatchetsForwardWhenAnotherDeviceReadsAhead() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let appState = readMarkerAppState(client: client)
             appState.activeAccountRef = "acct-1"
             let older = message(id: hex("11"), kind: MessageSemantics.kindChat)
             let mid = message(id: hex("22"), kind: MessageSemantics.kindChat)
@@ -544,7 +556,7 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func offWindowSavedMarkerArrivingDuringCoalescingBlocksQueuedCandidate() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let appState = readMarkerAppState(client: client)
             appState.activeAccountRef = "acct-1"
             let msgA = message(id: hex("d1"), kind: MessageSemantics.kindChat)
             let msgB = message(id: hex("d2"), kind: MessageSemantics.kindChat)
@@ -823,7 +835,7 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func readMarkerExitsSleepLoopWhenBackgroundedAndFlushesOnResume() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let appState = readMarkerAppState(client: client)
             appState.activeAccountRef = "acct-1"
             let first = message(id: hex("11"), kind: MessageSemantics.kindChat)
             let second = message(id: hex("22"), kind: MessageSemantics.kindChat)
@@ -875,7 +887,7 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func exhaustedReadMarkFailuresDoNotPresentUserFacingToast() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let appState = readMarkerAppState(client: client)
             appState.activeAccountRef = "acct-1"
             let candidate = message(id: hex("55"), kind: MessageSemantics.kindChat)
             let key = orderKey(candidate.messageIdHex, epoch: 1, timelineAt: 50)
@@ -917,7 +929,7 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func optimisticUnresolvedOwnSendDoesNotBlockNewerInboundReadMarks() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let appState = readMarkerAppState(client: client)
             appState.activeAccountRef = "acct-1"
             let ownSend = message(id: hex("a1"), kind: MessageSemantics.kindChat)
             let inboundReply = message(id: hex("a2"), kind: MessageSemantics.kindChat)
@@ -1008,7 +1020,7 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func inFlightReadMarkBlocksOlderRowsFromQueuingDuringFlush() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let appState = readMarkerAppState(client: client)
             appState.activeAccountRef = "acct-1"
             let older = message(id: hex("b1"), kind: MessageSemantics.kindChat)
             let newer = message(id: hex("b2"), kind: MessageSemantics.kindChat)
@@ -1053,7 +1065,7 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func retiredFlushAfterSuspensionCannotClobberResumedFlushState() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let appState = readMarkerAppState(client: client)
             appState.activeAccountRef = "acct-1"
             let older = message(id: hex("e1"), kind: MessageSemantics.kindChat)
             let first = message(id: hex("e2"), kind: MessageSemantics.kindChat)
@@ -1130,7 +1142,7 @@ struct ConversationTimelineProjectionTests {
     @Test(.marmotRuntimeConcurrencyLimit)
     func historicalPageExcludingPersistedMarkerDoesNotRegressReadMark() async throws {
         try await withTestClient { client in
-            let appState = AppState.test(client: client)
+            let appState = readMarkerAppState(client: client)
             appState.activeAccountRef = "acct-1"
             let older = message(id: hex("c1"), kind: MessageSemantics.kindChat)
             let firstUnread = message(id: hex("c3"), kind: MessageSemantics.kindChat)
