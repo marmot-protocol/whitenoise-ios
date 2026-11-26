@@ -901,6 +901,7 @@ open func next()async throws  -> AccountAttentionSnapshotFfi?  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeAccountAttentionSnapshotFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -1305,6 +1306,7 @@ open func next()async throws  -> AttachmentTransferSnapshotFfi?  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeAttachmentTransferSnapshotFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -2076,6 +2078,7 @@ open func next()async throws  -> ChatListWindowSnapshotFfi?  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeChatListWindowSnapshotFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -2097,6 +2100,7 @@ open func page(sequence: UInt64, direction: ChatListPageDirectionFfi, count: UIn
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeChatListWindowSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -2114,6 +2118,7 @@ open func returnToTop(sequence: UInt64)async throws  -> ChatListWindowSnapshotFf
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeChatListWindowSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -2134,6 +2139,7 @@ open func setVisibleAnchor(sequence: UInt64, groupIdHex: String)async throws  ->
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeChatListWindowSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -2599,6 +2605,7 @@ open func jumpToMessage(revision: ConversationWindowRevisionFfi, messageIdHex: S
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeConversationWindowSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -2620,6 +2627,7 @@ open func next()async throws  -> ConversationWindowSnapshotFfi?  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeConversationWindowSnapshotFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -2642,6 +2650,7 @@ open func page(revision: ConversationWindowRevisionFfi, direction: ConversationP
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeConversationWindowSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -2662,6 +2671,7 @@ open func returnToLatest(revision: ConversationWindowRevisionFfi, timeoutMs: UIn
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeConversationWindowSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -2682,6 +2692,7 @@ open func setVisibleAnchor(revision: ConversationWindowRevisionFfi, messageIdHex
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeConversationWindowSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -3675,6 +3686,14 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * The recovery runner supplies the catching-up groups and inbox.
      */
     func accountRecoveryStatus(accountRef: String) async throws  -> AccountRecoveryStatusFfi
+
+    /**
+     * The account's relay health from its held lists and the relay policy:
+     * one row per relay its inbox and NIP-65 lists name, and warnings about
+     * invitations sent through its published inbox list. Local read; never
+     * dials. Re-read on `RelayHealthChanged`.
+     */
+    func accountRelayHealth(accountRef: String) async throws  -> AccountRelayHealthFfi
 
     /**
      * Per-account relay lists: the NIP-65 and inbox lists the account has
@@ -4687,6 +4706,18 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func installedCustomEmoji(accountRef: String) async throws  -> [InstalledCustomEmojiFfi]
 
     /**
+     * Whether each of this account's invites reached the invited account's
+     * inbox relays (mdk#1706): one answer per group and invited account, for
+     * `group_id_hex` or, when `None`, every group. `RelayAccepted` means a
+     * relay stored the Welcome, not that the recipient received it or joined.
+     * Read from durable records, so it answers after a restart and for a group
+     * not loaded yet; `InviteDeliveryChanged` reports changes. Only invites
+     * sent after this device upgraded are listed; an older Welcome stays in
+     * `pending_welcome_deliveries`. Local read; no network I/O.
+     */
+    func inviteDeliveries(accountRef: String, groupIdHex: String?) async throws  -> [InviteDeliveryFfi]
+
+    /**
      * Invite eligible accounts from `member_refs` and report each account's
      * resolution outcome. A nonempty request with no eligible account creates
      * no operation or Commit. Empty requests and native membership-edit
@@ -4803,6 +4834,9 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      *
      * `inbox_relays` (default empty) sets the kind-10050 inbox list
      * separately; empty declares `default_relays` in both lists.
+     *
+     * It keeps running when the call is cancelled, so an interrupted setup
+     * still completes or rolls back.
      */
     func login(identity: String, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String]) async throws  -> AccountSummaryFfi
 
@@ -4817,6 +4851,10 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      *
      * `inbox_relays` (default empty) sets the kind-10050 inbox list
      * separately; empty declares `default_relays` in both lists.
+     *
+     * It keeps running when the call is cancelled, so an interrupted setup
+     * still completes or rolls back. It can then still ask the signer to sign;
+     * declining rolls the setup back.
      */
     func loginExternalSigner(publicKey: String, signer: ExternalAccountSignerFfi, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String]) async throws  -> AccountSummaryFfi
 
@@ -4828,6 +4866,9 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      *
      * `inbox_relays` (default empty) sets the kind-10050 inbox list
      * separately; empty declares `default_relays` in both lists.
+     *
+     * It keeps running when the call is cancelled, so an interrupted setup
+     * still completes or rolls back.
      */
     func loginRecoveringIncompleteSetup(nsec: String, defaultRelays: [String], bootstrapRelays: [String], acknowledgePossibleKeyPackageOrphan: Bool, inboxRelays: [String]) async throws  -> AccountSummaryFfi
 
@@ -4913,6 +4954,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
 
     /**
      * Remove the account-scoped signer credentials and detach the shared session.
+     * It keeps running when the call is cancelled, so the account worker always
+     * stops using the removed signer.
      */
     func nip46Remove(accountRef: String) async throws
 
@@ -5074,7 +5117,7 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     /**
      * Resolve the current composition roster before Create is tapped. The
      * result is aggregate-only; no package is reserved or consumed, and the
-     * later create call revalidates cached packages before MLS mutation.
+     * later create call discovers routes and fetches packages again.
      */
     func prewarmGroupMemberKeyPackages(accountRef: String, memberRefs: [String]) async throws  -> MemberKeyPackagePrewarmSummaryFfi
 
@@ -5303,7 +5346,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func releaseAttachmentHandoff(lease: String) async throws
 
     /**
-     * Remove a local-signing account from this device.
+     * Remove a local-signing account from this device. It keeps running when
+     * the call is cancelled, so the account is either removed or left intact.
      */
     func removeAccount(accountRef: String) async throws
 
@@ -5608,6 +5652,13 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func sendCustomEvent(accountRef: String, groupIdHex: String, kind: UInt64, tags: [[String]], content: String) async throws  -> SendSummaryFfi
 
     /**
+     * Durably admit an app-defined event under [`Marmot::send_custom_event`]'s
+     * rules, such as an answer or a control for an agent (kind 1202). The
+     * same token after a restart returns the same event and sends nothing.
+     */
+    func sendCustomEventWithClientToken(accountRef: String, groupIdHex: String, kind: UInt64, tags: [[String]], content: String, clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
      * Send already-uploaded encrypted media attachments as a kind-9 chat
      * carrying ordered NIP-92 `imeta` tags. Preserve each upload's local
      * `source_epoch_identity`; references without provenance need a fresh upload.
@@ -5731,7 +5782,9 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      *
      * Async because toggling the switch is applied to any already-running
      * account sessions in place: enabling starts a live recorder, disabling
-     * stops it and closes the file — no session reopen required.
+     * stops it and closes the file — no session reopen required. It keeps
+     * running when the call is cancelled, so running sessions always follow
+     * the stored switch.
      */
     func setAuditLogSettings(settings: AuditLogSettingsFfi) async throws  -> AuditLogSettingsFfi
 
@@ -5873,7 +5926,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Re-activate a non-destructively signed-out local account. This clears
      * the durable signed-out marker and starts the account worker again; relay
      * list/key-package repair can still be driven by the existing publish
-     * commands after sign-in.
+     * commands after sign-in. It keeps running when the call is cancelled, so
+     * a setup the sign-out paused always carries on.
      */
     func signInAccount(accountRef: String) async throws  -> AccountSummaryFfi
 
@@ -5893,7 +5947,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * after this returns. The returned `SignOutOutcomeFfi` surfaces per-relay
      * KeyPackage cleanup failures. These are the final best-effort results for
      * this call; the runtime does not persist a remote-deletion retry queue
-     * (mdk#477).
+     * (mdk#477). It keeps running when the call is cancelled, so a withdrawn
+     * KeyPackage slot is always followed by local deactivation.
      */
     func signOut(accountRef: String, deleteKeyPackages: Bool) async throws  -> SignOutOutcomeFfi
 
@@ -6035,6 +6090,26 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * NIP-59 gift-wrapped). Additive to `report_message`, which is unchanged.
      */
     func submitModerationReport(accountRef: String, reportedPubkey: String, reason: ReportReasonFfi, explanation: String, origin: ModerationReportOriginFfi) async throws  -> ModerationReportOutcomeFfi
+
+    /**
+     * Durably admit a kind-9 reply with application tags. MDK owns the reply's `e` and `q` tags.
+     */
+    func submitTaggedReply(accountRef: String, groupIdHex: String, targetMessageId: String, text: String, tags: [[String]], clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
+     * Durably admit an authorized pack sticker with context tags under [`Marmot::send_tagged_sticker`]'s rules.
+     */
+    func submitTaggedSticker(accountRef: String, groupIdHex: String, stickerRef: StickerRefFfi, tags: [[String]], clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
+     * Durably admit kind-9 text with application tags under [`Marmot::send_tagged_text`]'s rules.
+     */
+    func submitTaggedText(accountRef: String, groupIdHex: String, text: String, tags: [[String]], clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
+     * Durably admit a NIP-22 thread message using [`Marmot::send_thread_message`]'s input rules.
+     */
+    func submitThreadMessage(accountRef: String, groupIdHex: String, parentMessageId: String, text: String, attachments: [MediaAttachmentReferenceFfi], tags: [[String]], clientToken: String) async throws  -> LocalSendAcceptanceFfi
 
     /**
      * Signed-in local/external accounts, independent of any list or active worker.
@@ -6614,6 +6689,7 @@ open func acceptGroupInvite(accountRef: String, groupIdHex: String)async throws 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAppGroupRecordFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6635,6 +6711,7 @@ open func accountAttachmentHistoryPage(accountRef: String, query: AccountAttachm
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAccountAttachmentPageReadFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6655,6 +6732,7 @@ open func accountAttachmentHistoryVersion(accountRef: String)async throws  -> Ac
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeAccountAttachmentVersion_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6679,6 +6757,7 @@ open func accountDevicesActivation(accountRef: String, groupIdHex: String)async 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAccountDevicesActivationFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6744,6 +6823,7 @@ open func accountKeyPackageRelayEvents(accountRef: String, bootstrapRelays: [Str
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAccountKeyPackageRelayEventFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6766,6 +6846,7 @@ open func accountKeyPackages(accountRef: String, bootstrapRelays: [String])async
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAccountKeyPackageFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6797,7 +6878,32 @@ open func accountRecoveryStatus(accountRef: String)async throws  -> AccountRecov
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAccountRecoveryStatusFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * The account's relay health from its held lists and the relay policy:
+     * one row per relay its inbox and NIP-65 lists name, and warnings about
+     * invitations sent through its published inbox list. Local read; never
+     * dials. Re-read on `RelayHealthChanged`.
+     */
+open func accountRelayHealth(accountRef: String)async throws  -> AccountRelayHealthFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_account_relay_health(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeAccountRelayHealthFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -6829,6 +6935,7 @@ open func accountRelayLiveness(accountRef: String)async throws  -> [RelayLivenes
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeRelayLivenessFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6880,6 +6987,7 @@ open func acknowledgeChangeNotDelivered(accountRef: String, groupIdHex: String, 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6897,6 +7005,7 @@ open func acknowledgeDisbandFailure(accountRef: String, groupIdHex: String)async
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6922,6 +7031,7 @@ open func acknowledgeGroupCatchingUp(accountRef: String, groupIdHex: String)asyn
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6949,6 +7059,7 @@ open func acknowledgeGroupCommitUndelivered(accountRef: String, groupIdHex: Stri
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6969,6 +7080,7 @@ open func acknowledgeOnboardingSingleDevice(accountRef: String, revision: UInt64
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -6989,6 +7101,7 @@ open func acknowledgeOnboardingSingleDeviceInEpoch(accountRef: String, revision:
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7011,6 +7124,7 @@ open func answerSignIn(accountRef: String, slotIdHex: String, response: SignInRe
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7043,6 +7157,7 @@ open func approveOnboardingRepair(accountRef: String, revision: UInt64)async thr
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7063,6 +7178,7 @@ open func approveOnboardingRepairInEpoch(accountRef: String, revision: UInt64, r
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7080,6 +7196,7 @@ open func attachmentDownloadPolicy(accountRef: String)async throws  -> Attachmen
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAttachmentDownloadPolicyFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7103,6 +7220,7 @@ open func attachmentHistoryPage(accountRef: String, groupIdHex: String, limit: U
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAttachmentPageReadFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7125,6 +7243,7 @@ open func attachmentHistoryVersion(accountRef: String, groupIdHex: String)async 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeAttachmentHistoryVersion_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7146,6 +7265,7 @@ open func attachmentKeepMedia(accountRef: String)async throws  -> AttachmentKeep
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAttachmentKeepMediaFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7168,6 +7288,7 @@ open func attachmentLocalAssets(accountRef: String, groupIdHex: String, targets:
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAttachmentLocalAssetFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7192,6 +7313,7 @@ open func attachmentRemovals(accountRef: String, cursor: String?, limit: UInt32)
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAttachmentBodyRemovalPageFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7213,6 +7335,7 @@ open func attachmentStorageByChat(accountRef: String, limit: UInt32, cursor: Cha
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeChatStoragePageFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7236,6 +7359,7 @@ open func attachmentStorageUsage(accountRef: String)async throws  -> AttachmentS
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAttachmentStorageUsageFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7253,6 +7377,7 @@ open func attachmentTransferSnapshot(accountRef: String, groupIdHex: String, tar
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAttachmentTransferSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7320,6 +7445,7 @@ open func backupHistoryAvailability(accountRef: String, groupIdHex: String)async
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeBackupHistoryAvailabilityFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7340,6 +7466,7 @@ open func backupRestoreStatus(accountRef: String)async throws  -> BackupRestoreS
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeBackupRestoreStatusFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7360,6 +7487,7 @@ open func backupSettings(accountRef: String)async throws  -> BackupSettingsFfi  
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeBackupSettingsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7380,6 +7508,7 @@ open func beginAttachmentPermissionUpdate(accountRef: String)async throws  -> St
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7402,6 +7531,7 @@ open func beginBackupRestore(accountRef: String, words: String)async throws  -> 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeBackupRestoreStatusFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7419,6 +7549,7 @@ open func beginExternalSignerOnboarding(publicKey: String, signer: ExternalAccou
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7439,6 +7570,7 @@ open func beginOnboarding(nsec: String, options: OnboardingOptionsFfi)async thro
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7460,6 +7592,7 @@ open func beginRecoveryWords(accountRef: String)async throws  -> RecoveryWordsFf
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeRecoveryWordsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7477,6 +7610,7 @@ open func blockUser(accountRef: String, userAccountIdHex: String)async throws   
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7501,6 +7635,7 @@ open func buildMediaImetaTag(accountRef: String, groupIdHex: String, reference: 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeMessageTagFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7557,6 +7692,7 @@ open func cancelBackupRestore(accountRef: String, operation: String)async throws
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7577,6 +7713,7 @@ open func cancelDeviceLink(accountRef: String)async throws  -> DeviceLinkSnapsho
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7615,6 +7752,7 @@ open func cancelLeave(accountRef: String, groupIdHex: String)async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7640,6 +7778,7 @@ open func cancelOnboarding(accountRef: String)async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7657,6 +7796,7 @@ open func cancelOnboardingRepair(accountRef: String)async throws  -> OnboardingS
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7677,6 +7817,7 @@ open func cancelRecoveryWords(accountRef: String)async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7697,6 +7838,7 @@ open func castPollVote(accountRef: String, groupIdHex: String, pollEventId: Stri
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7714,6 +7856,7 @@ open func catchUpAccounts()async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7741,6 +7884,7 @@ open func chatHistoryImports(accountRef: String)async throws  -> [ChatHistoryImp
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeChatHistoryImportFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7775,6 +7919,7 @@ open func chatListIds(accountRef: String, view: ChatListViewFfi)async throws  ->
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7800,6 +7945,7 @@ open func chatListQueryIds(accountRef: String, query: ChatListViewQueryFfi)async
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7863,6 +8009,7 @@ open func chatsClosedToLinkedDevices(accountRef: String)async throws  -> UInt32 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_u32,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u32,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u32,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u32,
             liftFunc: FfiConverterUInt32.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7884,6 +8031,7 @@ open func checkSignIns(accountRef: String)async throws  -> [UnrecognizedSignInFf
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeUnrecognizedSignInFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7915,6 +8063,7 @@ open func clearAvatarCache(accountRef: String)async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7948,6 +8097,7 @@ open func clearGroupImage(accountRef: String, groupIdHex: String)async throws  -
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7974,6 +8124,7 @@ open func clearPushRegistration(accountRef: String)async throws  -> PushRegistra
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypePushRegistrationShareOutcomeFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -7991,6 +8142,7 @@ open func collectNotificationsAfterWake(maxWaitMs: UInt32, source: NotificationW
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeBackgroundNotificationCollectionFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8016,6 +8168,7 @@ open func compromiseWarning(accountRef: String)async throws  -> [CompromiseWarni
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeCompromiseWarningItemFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8047,6 +8200,7 @@ open func confirmDeviceLinkMatch(accountRef: String)async throws  -> DeviceLinkS
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8068,6 +8222,7 @@ open func confirmGroupRejoin(accountRef: String, welcomeIdHex: String, localStat
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupRecoveryStatusFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8089,6 +8244,7 @@ open func confirmRecoveryWords(accountRef: String, answers: [String])async throw
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8118,6 +8274,7 @@ open func continueOnboardingWithout(accountRef: String, step: OnboardingStepFfi)
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8139,6 +8296,7 @@ open func controlAttachment(accountRef: String, reference: String, control: Atta
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8166,6 +8324,7 @@ open func createGroup(accountRef: String, name: String, memberRefs: [String], de
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupCreationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8187,6 +8346,7 @@ open func createGroupDetailed(accountRef: String, name: String, memberRefs: [Str
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDetailedGroupCreationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8209,6 +8369,7 @@ open func createGroupWithInitialImage(accountRef: String, name: String, memberRe
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupCreationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8226,6 +8387,7 @@ open func createGroupWithInitialImageDetailed(accountRef: String, name: String, 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDetailedGroupCreationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8248,6 +8410,7 @@ open func createGroupWithOptions(accountRef: String, name: String, memberRefs: [
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupCreationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8269,6 +8432,7 @@ open func createGroupWithOptionsDetailed(accountRef: String, name: String, membe
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDetailedGroupCreationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8294,6 +8458,7 @@ open func createGroupWithPreparedInitialImage(accountRef: String, name: String, 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupCreationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8323,6 +8488,7 @@ open func createIdentity(defaultRelays: [String], bootstrapRelays: [String], inb
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAccountSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8350,6 +8516,7 @@ open func createIdentityWithInitialProfile(profile: UserProfileMetadataFfi, defa
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeIdentityCreationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8377,6 +8544,7 @@ open func createIdentityWithProfile(defaultRelays: [String], bootstrapRelays: [S
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeIdentityCreationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8398,6 +8566,7 @@ open func createPoll(accountRef: String, groupIdHex: String, question: String, o
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8420,6 +8589,7 @@ open func createTaggedPoll(accountRef: String, groupIdHex: String, question: Str
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8440,6 +8610,7 @@ open func declineDeviceLink(accountRef: String, promptId: String)async throws  -
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8457,6 +8628,7 @@ open func declineGroupInvite(accountRef: String, groupIdHex: String)async throws
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupInviteDeclineResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8474,6 +8646,7 @@ open func declineGroupRejoin(accountRef: String, welcomeIdHex: String)async thro
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8509,6 +8682,7 @@ open func deleteAccountKeyPackage(accountRef: String, eventIdHex: String, relays
             pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u64,
             liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8536,6 +8710,7 @@ open func deleteAuditLogFile(path: String)async throws  -> AuditLogDeleteResultF
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAuditLogDeleteResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8563,6 +8738,7 @@ open func deleteGroupLocal(accountRef: String, groupIdHex: String)async throws  
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8585,6 +8761,7 @@ open func deleteMessage(accountRef: String, groupIdHex: String, targetMessageId:
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8616,6 +8793,7 @@ open func demoteAdmin(accountRef: String, groupIdHex: String, memberRef: String)
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8633,6 +8811,7 @@ open func demoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef:
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupMutationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8655,6 +8834,7 @@ open func deviceLinkSnapshot(accountRef: String)async throws  -> DeviceLinkSnaps
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8676,6 +8856,7 @@ open func disbandGroup(accountRef: String, groupIdHex: String)async throws  -> D
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDisbandRequestFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8702,6 +8883,7 @@ open func discardFailedSend(accountRef: String, groupIdHex: String, messageIdHex
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDiscardFailedSendResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8724,6 +8906,7 @@ open func dismissCompromiseWarning(accountRef: String)async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8745,6 +8928,7 @@ open func dismissDeviceGroupMoveSibling(accountRef: String, moveId: String, slot
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8768,6 +8952,7 @@ open func dismissHistoryNotice(accountRef: String, noticeId: String)async throws
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8785,6 +8970,7 @@ open func dismissReports(accountRef: String, groupIdHex: String, reportIds: [Str
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8816,6 +9002,7 @@ open func downloadAttachmentAgain(accountRef: String, groupIdHex: String, target
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8841,6 +9028,7 @@ open func downloadGroupBlossomImage(accountRef: String, groupIdHex: String)async
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterData.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8869,6 +9057,7 @@ open func downloadMedia(accountRef: String, groupIdHex: String, reference: Media
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeMediaDownloadResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8890,6 +9079,7 @@ open func downloadProfileImage(url: String, maxBytes: UInt64)async throws  -> Da
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterData.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8912,6 +9102,7 @@ open func editLocalMessageWithClientToken(accountRef: String, groupIdHex: String
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8943,6 +9134,7 @@ open func editMessage(accountRef: String, groupIdHex: String, targetMessageId: S
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8964,6 +9156,7 @@ open func emojiSet(accountRef: String, coordinate: String)async throws  -> Emoji
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeEmojiSetFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -8986,6 +9179,7 @@ open func emojiSets(accountRef: String, installedOnly: Bool, search: String?, li
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeEmojiSetFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9009,6 +9203,7 @@ open func enableAccountDevices(accountRef: String, groupIdHex: String)async thro
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupMutationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9029,6 +9224,7 @@ open func enableGroupDisbanding(accountRef: String, groupIdHex: String)async thr
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupMutationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9069,6 +9265,7 @@ open func existingDirectConversation(accountRef: String, peerAccountId: String)a
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeExistingDirectConversationFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9111,6 +9308,7 @@ open func fetchEmojiSet(accountRef: String, input: String)async throws  -> Emoji
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeEmojiSetFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9135,6 +9333,7 @@ open func fetchEmojiSetAsset(accountRef: String, coordinate: String, expectedEve
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeEmojiSetAssetFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9160,6 +9359,7 @@ open func fetchEmojiSetCover(accountRef: String, coordinate: String, expectedEve
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeEmojiSetCoverFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9177,6 +9377,7 @@ open func fetchStickerAsset(accountRef: String, stickerRef: StickerRefFfi)async 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeStickerAssetFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9194,6 +9395,7 @@ open func fetchStickerPack(accountRef: String, input: String)async throws  -> St
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeStickerPackFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9211,6 +9413,7 @@ open func flushProductAnalytics()async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9267,6 +9470,7 @@ open func followUser(accountRef: String, userRef: String)async throws  -> [Strin
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9294,6 +9498,7 @@ open func forgetGroupLocal(accountRef: String, groupIdHex: String)async throws  
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9325,6 +9530,7 @@ open func groupAppComponent(accountRef: String, groupIdHex: String, componentId:
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeGroupAppComponentFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9353,6 +9559,7 @@ open func groupChangesNotDelivered(accountRef: String, groupIdHex: String)async 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeGroupChangeNotDeliveredFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9384,6 +9591,7 @@ open func groupCommitDelivery(accountRef: String, groupIdHex: String)async throw
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeGroupCommitDeliveryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9407,6 +9615,7 @@ open func groupConversationSnapshot(accountRef: String, groupIdHex: String)async
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupConversationSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9428,6 +9637,7 @@ open func groupDetails(accountRef: String, groupIdHex: String)async throws  -> G
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupDetailsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9445,6 +9655,7 @@ open func groupMaintenanceStatus(accountRef: String, groupIdHex: String)async th
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupMaintenanceStatusFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9465,6 +9676,7 @@ open func groupManagementState(accountRef: String, groupIdHex: String)async thro
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupManagementStateFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9491,6 +9703,7 @@ open func groupMemberIdsPage(accountRef: String, groupIdsHex: [String])async thr
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAppGroupMemberIdsFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9512,6 +9725,7 @@ open func groupMembers(accountRef: String, groupIdHex: String)async throws  -> [
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAppGroupMemberRecordFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9533,6 +9747,7 @@ open func groupMlsState(accountRef: String, groupIdHex: String)async throws  -> 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAppGroupMlsStateFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9560,6 +9775,7 @@ open func groupPendingCommit(accountRef: String, groupIdHex: String)async throws
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeGroupPendingCommitFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9577,6 +9793,7 @@ open func groupPushDebugInfo(accountRef: String, groupIdHex: String)async throws
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupPushDebugInfoFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9599,6 +9816,7 @@ open func groupRecoveryStatus(accountRef: String, groupIdHex: String)async throw
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupRecoveryStatusFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9620,6 +9838,7 @@ open func groupRoster(accountRef: String, groupIdHex: String)async throws  -> Gr
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupRosterFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9642,6 +9861,7 @@ open func historyNotices(accountRef: String)async throws  -> [HistoryNoticeFfi] 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeHistoryNoticeFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9665,6 +9885,7 @@ open func importSignalStickerPack(accountRef: String, signalLink: String, blosso
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeStickerImportResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9708,6 +9929,7 @@ open func installEmojiSet(accountRef: String, coordinate: String, expectedEventI
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeEmojiSetInstallResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9725,6 +9947,7 @@ open func installStickerPack(accountRef: String, input: String)async throws  -> 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeStickerPackFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9747,7 +9970,36 @@ open func installedCustomEmoji(accountRef: String)async throws  -> [InstalledCus
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeInstalledCustomEmojiFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Whether each of this account's invites reached the invited account's
+     * inbox relays (mdk#1706): one answer per group and invited account, for
+     * `group_id_hex` or, when `None`, every group. `RelayAccepted` means a
+     * relay stored the Welcome, not that the recipient received it or joined.
+     * Read from durable records, so it answers after a restart and for a group
+     * not loaded yet; `InviteDeliveryChanged` reports changes. Only invites
+     * sent after this device upgraded are listed; an older Welcome stays in
+     * `pending_welcome_deliveries`. Local read; no network I/O.
+     */
+open func inviteDeliveries(accountRef: String, groupIdHex: String?)async throws  -> [InviteDeliveryFfi]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_invite_deliveries(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterOptionString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeInviteDeliveryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -9770,6 +10022,7 @@ open func inviteMembers(accountRef: String, groupIdHex: String, memberRefs: [Str
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeInviteMembersResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9791,6 +10044,7 @@ open func inviteMembersDetailed(accountRef: String, groupIdHex: String, memberRe
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupInviteResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9812,6 +10066,7 @@ open func inviteMembersDetailedWithInitialAdmins(accountRef: String, groupIdHex:
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupInviteResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9835,6 +10090,7 @@ open func inviteMembersWithInitialAdmins(accountRef: String, groupIdHex: String,
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeInviteMembersResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9887,6 +10143,7 @@ open func keyPackageMaintenanceStatus(accountRef: String)async throws  -> KeyPac
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeKeyPackageMaintenanceStatusFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9911,6 +10168,7 @@ open func keyPackageRefreshOverdue(accountRef: String)async throws  -> Bool  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9933,6 +10191,7 @@ open func largestRetainedAttachments(accountRef: String, groupIdHex: String?, li
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeRetainedAttachmentsPageFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9950,6 +10209,7 @@ open func leaveGroup(accountRef: String, groupIdHex: String)async throws  -> Sen
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9973,6 +10233,7 @@ open func linkDevice(accountRef: String, promptId: String, label: String, addToA
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -9995,6 +10256,7 @@ open func linkedDevices(accountRef: String)async throws  -> [LinkedDeviceFfi]  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeLinkedDeviceFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10065,6 +10327,9 @@ open func localSendStatus(accountRef: String, groupIdHex: String, clientToken: S
      *
      * `inbox_relays` (default empty) sets the kind-10050 inbox list
      * separately; empty declares `default_relays` in both lists.
+     *
+     * It keeps running when the call is cancelled, so an interrupted setup
+     * still completes or rolls back.
      */
 open func login(identity: String, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String] = [])async throws  -> AccountSummaryFfi  {
     return
@@ -10094,6 +10359,10 @@ open func login(identity: String, defaultRelays: [String], bootstrapRelays: [Str
      *
      * `inbox_relays` (default empty) sets the kind-10050 inbox list
      * separately; empty declares `default_relays` in both lists.
+     *
+     * It keeps running when the call is cancelled, so an interrupted setup
+     * still completes or rolls back. It can then still ask the signer to sign;
+     * declining rolls the setup back.
      */
 open func loginExternalSigner(publicKey: String, signer: ExternalAccountSignerFfi, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String] = [])async throws  -> AccountSummaryFfi  {
     return
@@ -10120,6 +10389,9 @@ open func loginExternalSigner(publicKey: String, signer: ExternalAccountSignerFf
      *
      * `inbox_relays` (default empty) sets the kind-10050 inbox list
      * separately; empty declares `default_relays` in both lists.
+     *
+     * It keeps running when the call is cancelled, so an interrupted setup
+     * still completes or rolls back.
      */
 open func loginRecoveringIncompleteSetup(nsec: String, defaultRelays: [String], bootstrapRelays: [String], acknowledgePossibleKeyPackageOrphan: Bool, inboxRelays: [String] = [])async throws  -> AccountSummaryFfi  {
     return
@@ -10280,6 +10552,7 @@ open func nip46Login(session: Nip46SessionFfi, defaultRelays: [String], bootstra
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAccountSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10311,6 +10584,7 @@ open func nip46Register(accountRef: String, session: Nip46SessionFfi)async throw
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10318,6 +10592,8 @@ open func nip46Register(accountRef: String, session: Nip46SessionFfi)async throw
 
     /**
      * Remove the account-scoped signer credentials and detach the shared session.
+     * It keeps running when the call is cancelled, so the account worker always
+     * stops using the removed signer.
      */
 open func nip46Remove(accountRef: String)async throws   {
     return
@@ -10351,6 +10627,7 @@ open func nip46Resume(accountRef: String)async throws  -> Nip46SessionFfi  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeNip46SessionFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10399,6 +10676,7 @@ open func notifyConnectivityRestored()async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10464,6 +10742,7 @@ open func openAttachmentHandoff(accountRef: String, groupIdHex: String, target: 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeAttachmentHandoffFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10490,6 +10769,7 @@ open func openChatListQueryWindow(accountRef: String, query: ChatListViewQueryFf
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeChatListWindowSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10511,6 +10791,7 @@ open func openChatListWindow(accountRef: String, view: ChatListViewFfi, initialR
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeChatListWindowSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10533,6 +10814,7 @@ open func openConversationWindow(accountRef: String, groupIdHex: String, mode: C
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeConversationWindowSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10558,6 +10840,7 @@ open func openMessageDraftAttachmentHandoff(accountRef: String, revision: Messag
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeAttachmentHandoffFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10579,6 +10862,7 @@ open func openPresentedChatList(accountRef: String, includeArchived: Bool)async 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypePresentedChatListSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10609,6 +10893,7 @@ open func pauseMaintenance(accountRef: String)async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10633,6 +10918,7 @@ open func pendingWelcomeDeliveries(accountRef: String)async throws  -> [PendingW
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypePendingWelcomeDeliveryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10650,6 +10936,7 @@ open func periodicMaintenancePolicy(accountRef: String)async throws  -> Periodic
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypePeriodicMaintenancePolicyFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10699,6 +10986,7 @@ open func postAuditLogTrackerUpdateV5()async throws  -> AuditLogTrackerUpdateRes
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAuditLogTrackerUpdateResultV5Ffi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10716,6 +11004,7 @@ open func preparedGroupImageStatus(accountRef: String, uploadId: String)async th
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypePreparedGroupImageUploadFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10733,6 +11022,7 @@ open func preparedGroupImages(accountRef: String)async throws  -> [PreparedGroup
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypePreparedGroupImageUploadFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10753,6 +11043,7 @@ open func presentedChatList(accountRef: String, includeArchived: Bool)async thro
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypePresentedChatListSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10773,6 +11064,7 @@ open func presentedChatListRow(accountRef: String, groupIdHex: String)async thro
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypePresentedChatRowFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10781,7 +11073,7 @@ open func presentedChatListRow(accountRef: String, groupIdHex: String)async thro
     /**
      * Resolve the current composition roster before Create is tapped. The
      * result is aggregate-only; no package is reserved or consumed, and the
-     * later create call revalidates cached packages before MLS mutation.
+     * later create call discovers routes and fetches packages again.
      */
 open func prewarmGroupMemberKeyPackages(accountRef: String, memberRefs: [String])async throws  -> MemberKeyPackagePrewarmSummaryFfi  {
     return
@@ -10795,6 +11087,7 @@ open func prewarmGroupMemberKeyPackages(accountRef: String, memberRefs: [String]
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeMemberKeyPackagePrewarmSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10816,6 +11109,7 @@ open func promoteAdmin(accountRef: String, groupIdHex: String, memberRef: String
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10833,6 +11127,7 @@ open func promoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupMutationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10850,6 +11145,7 @@ open func proposeOnboardingFollows(accountRef: String, follows: [String])async t
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10867,6 +11163,7 @@ open func proposeOnboardingProfile(accountRef: String, profile: UserProfileMetad
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10884,6 +11181,7 @@ open func proposeOnboardingRecommendedRelays(accountRef: String, step: Onboardin
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10905,6 +11203,7 @@ open func proposeOnboardingRelayRepair(accountRef: String, step: OnboardingStepF
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10922,6 +11221,7 @@ open func proposeOnboardingRelays(accountRef: String, step: OnboardingStepFfi, r
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10942,6 +11242,7 @@ open func publishNewKeyPackage(accountRef: String)async throws  -> UInt64  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u64,
             liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10969,6 +11270,7 @@ open func publishRelayLists(accountRef: String, defaultRelays: [String], bootstr
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -10997,6 +11299,7 @@ open func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeUserProfileMetadataFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11026,6 +11329,7 @@ open func publishUserProfileUsingAccountRelays(accountRef: String, profile: User
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeUserProfileMetadataFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11060,6 +11364,7 @@ open func quarantinedGroups(accountRef: String)async throws  -> [AppQuarantinedG
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAppQuarantinedGroupFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11093,6 +11398,7 @@ open func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11115,6 +11421,7 @@ open func reactWithMedia(accountRef: String, groupIdHex: String, targetMessageId
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11137,6 +11444,7 @@ open func reactionAttachment(accountRef: String, groupIdHex: String, reactionMes
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeAttachmentEntryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11160,6 +11468,7 @@ open func readAttachmentAsset(accountRef: String, reference: String, offset: UIn
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAttachmentLocalBytesFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11181,6 +11490,7 @@ open func readAvatarAssets(accountRef: String, references: [String], maxBytes: U
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAvatarBytesFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11203,6 +11513,7 @@ open func readInstalledCustomEmoji(accountRef: String, coordinate: String, short
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeInstalledCustomEmojiAssetFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11225,6 +11536,7 @@ open func readMessageDraftAttachment(accountRef: String, revision: MessageDraftR
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionData.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11245,6 +11557,7 @@ open func reconnectRelay(accountRef: String, url: String)async throws  -> RelayL
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeRelayLivenessFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11306,6 +11619,7 @@ open func recoverOnboarding(accountRef: String, acknowledgeLatestOnlyEvidence: B
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11328,6 +11642,7 @@ open func refreshAccountKeyPackages(accountRef: String, bootstrapRelays: [String
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAccountKeyPackageInventoryEntryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11351,6 +11666,7 @@ open func refreshFollowAvailability(accountRef: String)async throws  -> FollowAv
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeFollowAvailabilityRefreshStatusFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11373,6 +11689,7 @@ open func refreshProfile(accountIdHex: String, relays: [String])async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11395,6 +11712,7 @@ open func refreshUserRelayLists(accountIdHex: String, relays: [String])async thr
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAccountRelayListsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11419,6 +11737,7 @@ open func registerExternalSigner(accountRef: String, signer: ExternalAccountSign
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11483,7 +11802,8 @@ open func releaseAttachmentHandoff(lease: String)async throws   {
 }
 
     /**
-     * Remove a local-signing account from this device.
+     * Remove a local-signing account from this device. It keeps running when
+     * the call is cancelled, so the account is either removed or left intact.
      */
 open func removeAccount(accountRef: String)async throws   {
     return
@@ -11519,6 +11839,7 @@ open func removeAttachmentsOlderThan(accountRef: String, receivedBefore: UInt64,
             pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u64,
             liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11542,6 +11863,7 @@ open func removeChatAttachments(accountRef: String, groupIdHex: String)async thr
             pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u64,
             liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11571,6 +11893,7 @@ open func removeLinkedDevice(accountRef: String, slotIdHex: String)async throws 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11588,6 +11911,7 @@ open func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [Str
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11605,6 +11929,7 @@ open func removeMembersDetailed(accountRef: String, groupIdHex: String, memberRe
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupMutationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11630,6 +11955,7 @@ open func removedDeviceLeftoverChats(accountRef: String)async throws  -> UInt32 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_u32,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u32,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u32,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u32,
             liftFunc: FfiConverterUInt32.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11659,6 +11985,7 @@ open func renameLinkedDevice(accountRef: String, slotIdHex: String, label: Strin
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11681,6 +12008,7 @@ open func replaceEncryptedMediaBlobEndpoints(accountRef: String, groupIdHex: Str
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11701,6 +12029,7 @@ open func replyToMessage(accountRef: String, groupIdHex: String, targetMessageId
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11721,6 +12050,7 @@ open func replyToMessageWithClientToken(accountRef: String, groupIdHex: String, 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11750,6 +12080,7 @@ open func reportMessage(accountRef: String, groupIdHex: String, messageId: Strin
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11781,6 +12112,7 @@ open func republishKeyPackage(accountRef: String)async throws  -> UInt64  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u64,
             liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11802,6 +12134,7 @@ open func requestAutomaticAttachment(accountRef: String, groupIdHex: String, tar
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAutomaticAttachmentRequestFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11822,6 +12155,7 @@ open func requestAvatarAssets(accountRef: String, targets: [String])async throws
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAvatarAssetFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11844,6 +12178,7 @@ open func requestExplicitAttachment(accountRef: String, groupIdHex: String, targ
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11868,6 +12203,7 @@ open func resetDeviceGroupForRepair(accountRef: String)async throws  -> DeviceLi
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11891,6 +12227,7 @@ open func resetIncompleteAccountSetup(nsec: String, acknowledgePossibleKeyPackag
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11916,6 +12253,7 @@ open func resolvePublicEventPreview(accountRef: String, reference: String)async 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypePublicEventPreviewFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11933,6 +12271,7 @@ open func resumeMaintenance(accountRef: String)async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -11981,6 +12320,7 @@ open func retryGroupConvergence(accountRef: String, groupIdHex: String)async thr
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12008,6 +12348,7 @@ open func retryHydrateQuarantinedGroup(accountRef: String, groupIdHex: String)as
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12025,6 +12366,7 @@ open func retryOnboardingStep(accountRef: String, step: OnboardingStepFfi)async 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12046,6 +12388,7 @@ open func revalidateChatListIds(accountRef: String, view: ChatListViewFfi, group
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12069,6 +12412,7 @@ open func revalidateChatListQueryIds(accountRef: String, query: ChatListViewQuer
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12114,6 +12458,7 @@ open func rotateKeyPackage(accountRef: String)async throws  -> UInt64  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u64,
             liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12137,6 +12482,7 @@ open func runDueBackupPass(accountRef: String)async throws  -> BackgroundBackupO
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeBackgroundBackupOutcomeFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12154,6 +12500,7 @@ open func runDueMaintenance(accountRef: String)async throws  -> MaintenanceRunSu
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeMaintenanceRunSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12171,6 +12518,7 @@ open func runOnboarding(accountRef: String)async throws  -> OnboardingSnapshotFf
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12238,6 +12586,7 @@ open func scheduleGroupSelfUpdate(accountRef: String, groupIdHex: String)async t
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12284,6 +12633,7 @@ open func searchUsers(accountIdHex: String, query: String, radiusStart: UInt8, r
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeUserSearchSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12307,6 +12657,7 @@ open func secureDeleteExpired(accountRef: String, groupIdHex: String)async throw
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSecureDeleteExpiredResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12339,6 +12690,7 @@ open func selfDemoteAdmin(accountRef: String, groupIdHex: String)async throws  -
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12356,6 +12708,7 @@ open func selfDemoteAdminDetailed(accountRef: String, groupIdHex: String)async t
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeGroupMutationResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12381,7 +12734,31 @@ open func sendCustomEvent(accountRef: String, groupIdHex: String, kind: UInt64, 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Durably admit an app-defined event under [`Marmot::send_custom_event`]'s
+     * rules, such as an answer or a control for an agent (kind 1202). The
+     * same token after a restart returns the same event and sends nothing.
+     */
+open func sendCustomEventWithClientToken(accountRef: String, groupIdHex: String, kind: UInt64, tags: [[String]], content: String, clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_send_custom_event_with_client_token(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterUInt64.lower(kind),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(content),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -12403,6 +12780,7 @@ open func sendMediaAttachments(accountRef: String, groupIdHex: String, attachmen
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12425,6 +12803,7 @@ open func sendMediaReference(accountRef: String, groupIdHex: String, reference: 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12446,6 +12825,7 @@ open func sendMessageDraft(accountRef: String, revision: MessageDraftRevisionFfi
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12466,6 +12846,7 @@ open func sendMessageDraftWithClientToken(accountRef: String, revision: MessageD
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12487,6 +12868,7 @@ open func sendPreparedMediaWithClientToken(accountRef: String, groupIdHex: Strin
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12509,6 +12891,7 @@ open func sendSticker(accountRef: String, groupIdHex: String, stickerRef: Sticke
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12531,6 +12914,7 @@ open func sendTaggedMedia(accountRef: String, groupIdHex: String, attachments: [
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12552,6 +12936,7 @@ open func sendTaggedSticker(accountRef: String, groupIdHex: String, stickerRef: 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12574,6 +12959,7 @@ open func sendTaggedText(accountRef: String, groupIdHex: String, text: String, t
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12595,6 +12981,7 @@ open func sendText(accountRef: String, groupIdHex: String, text: String)async th
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12616,6 +13003,7 @@ open func sendTextWithClientToken(accountRef: String, groupIdHex: String, text: 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12642,6 +13030,7 @@ open func sendThreadMessage(accountRef: String, groupIdHex: String, parentMessag
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12662,6 +13051,7 @@ open func setAccountInboxRelays(accountRef: String, relays: [String], bootstrapR
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAccountRelayListsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12682,6 +13072,7 @@ open func setAccountNip65Relays(accountRef: String, relays: [String], bootstrapR
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAccountRelayListsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12702,6 +13093,7 @@ open func setAttachmentAutomaticPermission(accountRef: String, generation: Strin
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12719,6 +13111,7 @@ open func setAttachmentDownloadPolicy(accountRef: String, policy: AttachmentDown
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12746,6 +13139,7 @@ open func setAttachmentKeepMedia(accountRef: String, keep: AttachmentKeepMediaFf
             pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
             freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u64,
             liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12771,7 +13165,9 @@ open func setAuditLogRetention(retention: AuditLogRetentionFfi)throws  -> AuditL
      *
      * Async because toggling the switch is applied to any already-running
      * account sessions in place: enabling starts a live recorder, disabling
-     * stops it and closes the file — no session reopen required.
+     * stops it and closes the file — no session reopen required. It keeps
+     * running when the call is cancelled, so running sessions always follow
+     * the stored switch.
      */
 open func setAuditLogSettings(settings: AuditLogSettingsFfi)async throws  -> AuditLogSettingsFfi  {
     return
@@ -12832,6 +13228,7 @@ open func setBackupBackgroundConditions(accountRef: String, wifi: Bool, charging
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12896,6 +13293,7 @@ open func setGroupArchived(accountRef: String, groupIdHex: String, archived: Boo
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAppGroupRecordFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12922,6 +13320,7 @@ open func setNativePushEnabled(accountRef: String, enabled: Bool)async throws  -
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeNotificationSettingsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12939,6 +13338,7 @@ open func setOnboardingDiscoveryRelays(accountRef: String, discoveryRelays: [Str
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12956,6 +13356,7 @@ open func setPeriodicMaintenancePolicy(accountRef: String, policy: PeriodicMaint
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -12986,6 +13387,7 @@ open func setProductAnalyticsActivity(activity: ProductAnalyticsActivityFfi)asyn
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13015,6 +13417,7 @@ open func setRelayTelemetryRuntimeConfig(config: RelayTelemetryRuntimeConfigFfi)
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13037,6 +13440,7 @@ open func setRelayTelemetrySettings(settings: RelayTelemetrySettingsFfi)async th
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeRelayTelemetrySettingsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13059,6 +13463,7 @@ open func setRuntimeBackupBackgroundConditions(wifi: Bool, charging: Bool)async 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13160,7 +13565,8 @@ open func shutdownAndClose()async throws   {
      * Re-activate a non-destructively signed-out local account. This clears
      * the durable signed-out marker and starts the account worker again; relay
      * list/key-package repair can still be driven by the existing publish
-     * commands after sign-in.
+     * commands after sign-in. It keeps running when the call is cancelled, so
+     * a setup the sign-out paused always carries on.
      */
 open func signInAccount(accountRef: String)async throws  -> AccountSummaryFfi  {
     return
@@ -13195,7 +13601,8 @@ open func signInAccount(accountRef: String)async throws  -> AccountSummaryFfi  {
      * after this returns. The returned `SignOutOutcomeFfi` surfaces per-relay
      * KeyPackage cleanup failures. These are the final best-effort results for
      * this call; the runtime does not persist a remote-deletion retry queue
-     * (mdk#477).
+     * (mdk#477). It keeps running when the call is cancelled, so a withdrawn
+     * KeyPackage slot is always followed by local deactivation.
      */
 open func signOut(accountRef: String, deleteKeyPackages: Bool)async throws  -> SignOutOutcomeFfi  {
     return
@@ -13276,6 +13683,7 @@ open func stageMessageDraftAttachmentFile(accountRef: String, revision: MessageD
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSelectedMessageDraftFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13298,6 +13706,7 @@ open func stagePreparedGroupImage(accountRef: String, plaintext: Data, mediaType
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypePreparedGroupImageUploadFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13335,6 +13744,7 @@ open func start()async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13359,6 +13769,7 @@ open func startDeviceLink(accountRef: String)async throws  -> DeviceLinkSnapshot
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeDeviceLinkSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13431,6 +13842,7 @@ open func startFresh(accountRef: String)async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13453,6 +13865,7 @@ open func startedFresh(accountRef: String)async throws  -> Bool  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13531,7 +13944,92 @@ open func submitModerationReport(accountRef: String, reportedPubkey: String, rea
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeModerationReportOutcomeFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Durably admit a kind-9 reply with application tags. MDK owns the reply's `e` and `q` tags.
+     */
+open func submitTaggedReply(accountRef: String, groupIdHex: String, targetMessageId: String, text: String, tags: [[String]], clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_submit_tagged_reply(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(targetMessageId),FfiConverterString.lower(text),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Durably admit an authorized pack sticker with context tags under [`Marmot::send_tagged_sticker`]'s rules.
+     */
+open func submitTaggedSticker(accountRef: String, groupIdHex: String, stickerRef: StickerRefFfi, tags: [[String]], clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_submit_tagged_sticker(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterTypeStickerRefFfi_lower(stickerRef),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Durably admit kind-9 text with application tags under [`Marmot::send_tagged_text`]'s rules.
+     */
+open func submitTaggedText(accountRef: String, groupIdHex: String, text: String, tags: [[String]], clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_submit_tagged_text(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(text),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Durably admit a NIP-22 thread message using [`Marmot::send_thread_message`]'s input rules.
+     */
+open func submitThreadMessage(accountRef: String, groupIdHex: String, parentMessageId: String, text: String, attachments: [MediaAttachmentReferenceFfi], tags: [[String]], clientToken: String)async throws  -> LocalSendAcceptanceFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_submit_thread_message(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(parentMessageId),FfiConverterString.lower(text),FfiConverterSequenceTypeMediaAttachmentReferenceFfi.lower(attachments),FfiConverterSequenceSequenceString.lower(tags),FfiConverterString.lower(clientToken)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -13551,6 +14049,7 @@ open func subscribeAccountAttention()async throws  -> AccountAttentionSubscripti
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeAccountAttentionSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13568,6 +14067,7 @@ open func subscribeAttachmentTransfers(accountRef: String, groupIdHex: String, t
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeAttachmentTransferSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13597,6 +14097,7 @@ open func subscribeChatList(accountRef: String, includeArchived: Bool)async thro
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeChatListSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13622,6 +14123,7 @@ open func subscribeChats(accountRef: String, includeArchived: Bool)async throws 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeChatsSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13655,6 +14157,7 @@ open func subscribeGroupState(accountRef: String, groupIdHex: String)async throw
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeGroupStateSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13680,6 +14183,7 @@ open func subscribeMessages(accountRef: String, groupIdHex: String?, limit: UInt
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeMessagesSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13697,6 +14201,7 @@ open func subscribeNotifications()async throws  -> NotificationsSubscription  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeNotificationsSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13725,6 +14230,7 @@ open func subscribeRelayLiveness(accountRef: String)async throws  -> RelayLivene
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeRelayLivenessSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13746,6 +14252,7 @@ open func subscribeTimelineMessages(accountRef: String, groupIdHex: String?, lim
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeTimelineMessagesSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13768,6 +14275,7 @@ open func sweepExpiredRetention(accountRef: String, nowMs: UInt64)async throws  
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeRetentionSweepReportFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13790,6 +14298,7 @@ open func syncEmojiSets(accountRef: String, search: String?)async throws  -> Emo
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeEmojiSetSyncResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13807,6 +14316,7 @@ open func syncStickerPacks(accountRef: String)async throws  -> StickerSyncResult
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeStickerSyncResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13927,6 +14437,7 @@ open func turnOffBackups(accountRef: String)async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13944,6 +14455,7 @@ open func unblockUser(accountRef: String, userAccountIdHex: String)async throws 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13969,6 +14481,7 @@ open func unfollowUser(accountRef: String, userRef: String)async throws  -> [Str
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -13990,6 +14503,7 @@ open func uninstallEmojiSet(accountRef: String, coordinate: String)async throws 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
             freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14007,6 +14521,7 @@ open func uninstallStickerPack(accountRef: String, input: String)async throws   
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14027,6 +14542,7 @@ open func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessa
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14051,6 +14567,7 @@ open func unreactFromMessageMatching(accountRef: String, groupIdHex: String, tar
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14075,6 +14592,7 @@ open func unrecognizedSignIns(accountRef: String)async throws  -> [UnrecognizedS
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeUnrecognizedSignInFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14099,6 +14617,7 @@ open func updateAppComponent(accountRef: String, groupIdHex: String, componentId
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14121,6 +14640,7 @@ open func updateGroupAvatarUrl(accountRef: String, groupIdHex: String, url: Stri
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14144,6 +14664,7 @@ open func updateGroupImage(accountRef: String, groupIdHex: String, plaintext: Da
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14161,6 +14682,7 @@ open func updateGroupProfile(accountRef: String, groupIdHex: String, name: Strin
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14188,6 +14710,7 @@ open func updateLinkedDeviceSettings(accountRef: String, slotIdHex: String, addT
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14211,6 +14734,7 @@ open func updateMessageRetention(accountRef: String, groupIdHex: String, disappe
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14235,6 +14759,7 @@ open func uploadMedia(accountRef: String, groupIdHex: String, request: MediaUplo
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeMediaUploadResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14266,6 +14791,7 @@ open func uploadMediaFiles(accountRef: String, groupIdHex: String, request: Medi
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeMediaUploadResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14290,6 +14816,7 @@ open func uploadMediaFilesWithClientToken(accountRef: String, groupIdHex: String
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeMediaUploadSubmissionFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14311,6 +14838,7 @@ open func uploadMediaWithClientToken(accountRef: String, groupIdHex: String, req
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeMediaUploadSubmissionFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14336,6 +14864,7 @@ open func uploadMessageDraftAttachments(accountRef: String, revision: MessageDra
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeMediaUploadResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14359,6 +14888,7 @@ open func uploadPreparedGroupImage(accountRef: String, uploadId: String)async th
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypePreparedGroupImageUploadFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14380,6 +14910,7 @@ open func uploadProfileImage(accountRef: String, data: Data, mediaType: String, 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14397,6 +14928,7 @@ open func upsertPushRegistration(accountRef: String, platform: PushPlatformFfi, 
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypePushRegistrationSyncResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14432,6 +14964,7 @@ open func userEmojiList(accountRef: String)async throws  -> UserEmojiListFfi  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeUserEmojiListFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -14503,6 +15036,7 @@ open func watchBackupRestore(accountRef: String)async throws  -> BackupRestoreSu
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_pointer,
             liftFunc: FfiConverterTypeBackupRestoreSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -15211,6 +15745,7 @@ open func connect()async throws  -> String  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeNip46ErrorFfi_lift
         )
@@ -15272,6 +15807,7 @@ open func pairingOffer()async throws  -> String  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeNip46ErrorFfi_lift
         )
@@ -15302,6 +15838,7 @@ open func ping()async throws   {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeNip46ErrorFfi_lift
         )
@@ -15762,6 +16299,7 @@ open func next()async throws  -> PresentedChatListUpdateFfi?  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypePresentedChatListUpdateFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -15935,6 +16473,7 @@ open func next()async throws  -> [RelayLivenessFfi]?  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionSequenceTypeRelayLivenessFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -16685,6 +17224,7 @@ open func paginateBackwards(count: UInt32)async throws  -> TimelinePageFfi  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeTimelinePageFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -16708,6 +17248,7 @@ open func paginateForwards(count: UInt32)async throws  -> TimelinePageFfi  {
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeTimelinePageFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
@@ -17851,6 +18392,139 @@ public func FfiConverterTypeAccountRecoveryStatusFfi_lower(_ value: AccountRecov
 }
 
 
+/**
+ * The account's relay health from its held lists and the relay policy.
+ */
+public struct AccountRelayHealthFfi {
+    /**
+     * Inbox warnings need a published inbox list; `Unknown` raises none.
+     */
+    public var inboxList: RelayListPresenceFfi
+    /**
+     * One per relay, ordered by URL.
+     */
+    public var rows: [RelayHealthRowFfi]
+    /**
+     * Ordered from the most severe.
+     */
+    public var warnings: [AccountRelayWarningFfi]
+    /**
+     * `None` without warnings.
+     */
+    public var highestSeverity: RelayWarningSeverityFfi?
+    /**
+     * The inbox route MDK builds from the held lists is the configured
+     * defaults, because no inbox relay it holds is allowed. Also true while
+     * `inbox_list` is `Unknown`, so on its own it says nothing about
+     * invitations; the warnings do.
+     */
+    public var fallsBackToDefaults: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Inbox warnings need a published inbox list; `Unknown` raises none.
+         */inboxList: RelayListPresenceFfi,
+        /**
+         * One per relay, ordered by URL.
+         */rows: [RelayHealthRowFfi],
+        /**
+         * Ordered from the most severe.
+         */warnings: [AccountRelayWarningFfi],
+        /**
+         * `None` without warnings.
+         */highestSeverity: RelayWarningSeverityFfi?,
+        /**
+         * The inbox route MDK builds from the held lists is the configured
+         * defaults, because no inbox relay it holds is allowed. Also true while
+         * `inbox_list` is `Unknown`, so on its own it says nothing about
+         * invitations; the warnings do.
+         */fallsBackToDefaults: Bool) {
+        self.inboxList = inboxList
+        self.rows = rows
+        self.warnings = warnings
+        self.highestSeverity = highestSeverity
+        self.fallsBackToDefaults = fallsBackToDefaults
+    }
+}
+
+#if compiler(>=6)
+extension AccountRelayHealthFfi: Sendable {}
+#endif
+
+
+extension AccountRelayHealthFfi: Equatable, Hashable {
+    public static func ==(lhs: AccountRelayHealthFfi, rhs: AccountRelayHealthFfi) -> Bool {
+        if lhs.inboxList != rhs.inboxList {
+            return false
+        }
+        if lhs.rows != rhs.rows {
+            return false
+        }
+        if lhs.warnings != rhs.warnings {
+            return false
+        }
+        if lhs.highestSeverity != rhs.highestSeverity {
+            return false
+        }
+        if lhs.fallsBackToDefaults != rhs.fallsBackToDefaults {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(inboxList)
+        hasher.combine(rows)
+        hasher.combine(warnings)
+        hasher.combine(highestSeverity)
+        hasher.combine(fallsBackToDefaults)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAccountRelayHealthFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AccountRelayHealthFfi {
+        return
+            try AccountRelayHealthFfi(
+                inboxList: FfiConverterTypeRelayListPresenceFfi.read(from: &buf),
+                rows: FfiConverterSequenceTypeRelayHealthRowFfi.read(from: &buf),
+                warnings: FfiConverterSequenceTypeAccountRelayWarningFfi.read(from: &buf),
+                highestSeverity: FfiConverterOptionTypeRelayWarningSeverityFfi.read(from: &buf),
+                fallsBackToDefaults: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AccountRelayHealthFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeRelayListPresenceFfi.write(value.inboxList, into: &buf)
+        FfiConverterSequenceTypeRelayHealthRowFfi.write(value.rows, into: &buf)
+        FfiConverterSequenceTypeAccountRelayWarningFfi.write(value.warnings, into: &buf)
+        FfiConverterOptionTypeRelayWarningSeverityFfi.write(value.highestSeverity, into: &buf)
+        FfiConverterBool.write(value.fallsBackToDefaults, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountRelayHealthFfi_lift(_ buf: RustBuffer) throws -> AccountRelayHealthFfi {
+    return try FfiConverterTypeAccountRelayHealthFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountRelayHealthFfi_lower(_ value: AccountRelayHealthFfi) -> RustBuffer {
+    return FfiConverterTypeAccountRelayHealthFfi.lower(value)
+}
+
+
 public struct AccountRelayListsFfi {
     public var complete: Bool
     public var missing: [MissingRelayListKindFfi]
@@ -17950,6 +18624,107 @@ public func FfiConverterTypeAccountRelayListsFfi_lift(_ buf: RustBuffer) throws 
 #endif
 public func FfiConverterTypeAccountRelayListsFfi_lower(_ value: AccountRelayListsFfi) -> RustBuffer {
     return FfiConverterTypeAccountRelayListsFfi.lower(value)
+}
+
+
+/**
+ * A problem with the account's relay setup.
+ */
+public struct AccountRelayWarningFfi {
+    public var kind: RelayWarningKindFfi
+    public var severity: RelayWarningSeverityFfi
+    /**
+     * The relays it is about, as row URLs.
+     */
+    public var relays: [String]
+    /**
+     * What would fix it, in order.
+     */
+    public var actions: [RelayRepairActionFfi]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(kind: RelayWarningKindFfi, severity: RelayWarningSeverityFfi,
+        /**
+         * The relays it is about, as row URLs.
+         */relays: [String],
+        /**
+         * What would fix it, in order.
+         */actions: [RelayRepairActionFfi]) {
+        self.kind = kind
+        self.severity = severity
+        self.relays = relays
+        self.actions = actions
+    }
+}
+
+#if compiler(>=6)
+extension AccountRelayWarningFfi: Sendable {}
+#endif
+
+
+extension AccountRelayWarningFfi: Equatable, Hashable {
+    public static func ==(lhs: AccountRelayWarningFfi, rhs: AccountRelayWarningFfi) -> Bool {
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.severity != rhs.severity {
+            return false
+        }
+        if lhs.relays != rhs.relays {
+            return false
+        }
+        if lhs.actions != rhs.actions {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(kind)
+        hasher.combine(severity)
+        hasher.combine(relays)
+        hasher.combine(actions)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAccountRelayWarningFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AccountRelayWarningFfi {
+        return
+            try AccountRelayWarningFfi(
+                kind: FfiConverterTypeRelayWarningKindFfi.read(from: &buf),
+                severity: FfiConverterTypeRelayWarningSeverityFfi.read(from: &buf),
+                relays: FfiConverterSequenceString.read(from: &buf),
+                actions: FfiConverterSequenceTypeRelayRepairActionFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AccountRelayWarningFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeRelayWarningKindFfi.write(value.kind, into: &buf)
+        FfiConverterTypeRelayWarningSeverityFfi.write(value.severity, into: &buf)
+        FfiConverterSequenceString.write(value.relays, into: &buf)
+        FfiConverterSequenceTypeRelayRepairActionFfi.write(value.actions, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountRelayWarningFfi_lift(_ buf: RustBuffer) throws -> AccountRelayWarningFfi {
+    return try FfiConverterTypeAccountRelayWarningFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountRelayWarningFfi_lower(_ value: AccountRelayWarningFfi) -> RustBuffer {
+    return FfiConverterTypeAccountRelayWarningFfi.lower(value)
 }
 
 
@@ -18202,6 +18977,239 @@ public func FfiConverterTypeAccountUnreadFfi_lift(_ buf: RustBuffer) throws -> A
 #endif
 public func FfiConverterTypeAccountUnreadFfi_lower(_ value: AccountUnreadFfi) -> RustBuffer {
     return FfiConverterTypeAccountUnreadFfi.lower(value)
+}
+
+
+/**
+ * The latest version of an agent item (kind 1201) on its timeline row: the
+ * highest `v` MDK holds, from the item's first event or a later edit. The
+ * row's `plaintext` is the item's plain rendering and its `tags` are that
+ * version's tags, including the ones MDK passes on unread (`native`,
+ * `left_out`, `cut`). Render the item from `item_type` and `fields_json`.
+ */
+public struct AgentItemFfi {
+    /**
+     * The item's version, from 1.
+     */
+    public var version: UInt64
+    public var state: AgentItemStateFfi
+    /**
+     * A few words: "Allow this command?".
+     */
+    public var title: String
+    /**
+     * The harness's name, such as `codex`.
+     */
+    public var harness: String
+    /**
+     * The harness's own id for the item.
+     */
+    public var itemId: String
+    /**
+     * This version's place among its session's events. The row is ordered by
+     * the first event's.
+     */
+    public var seq: UInt64
+    /**
+     * `turn`, `message`, `reasoning`, `tool`, `approval`, `question`, `plan`,
+     * `task`, `notice`, `error` or `session`.
+     */
+    public var itemType: String
+    /**
+     * The item type and its own fields, as JSON: `{"type": ..., "body": ...}`.
+     */
+    public var fieldsJson: String
+    public var session: String?
+    public var turn: String?
+    /**
+     * On a turn: the chat message that started it.
+     */
+    public var startedByMessageIdHex: String?
+    /**
+     * The answers and controls (kind 1202) whose effect this version shows.
+     * A pressed answer stays pending until an item's version settles it.
+     */
+    public var settles: [String]
+    /**
+     * Whether this version alerts: an approval or a question while it is
+     * waiting, or a turn that ended failed.
+     */
+    public var alerts: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The item's version, from 1.
+         */version: UInt64, state: AgentItemStateFfi,
+        /**
+         * A few words: "Allow this command?".
+         */title: String,
+        /**
+         * The harness's name, such as `codex`.
+         */harness: String,
+        /**
+         * The harness's own id for the item.
+         */itemId: String,
+        /**
+         * This version's place among its session's events. The row is ordered by
+         * the first event's.
+         */seq: UInt64,
+        /**
+         * `turn`, `message`, `reasoning`, `tool`, `approval`, `question`, `plan`,
+         * `task`, `notice`, `error` or `session`.
+         */itemType: String,
+        /**
+         * The item type and its own fields, as JSON: `{"type": ..., "body": ...}`.
+         */fieldsJson: String, session: String?, turn: String?,
+        /**
+         * On a turn: the chat message that started it.
+         */startedByMessageIdHex: String?,
+        /**
+         * The answers and controls (kind 1202) whose effect this version shows.
+         * A pressed answer stays pending until an item's version settles it.
+         */settles: [String],
+        /**
+         * Whether this version alerts: an approval or a question while it is
+         * waiting, or a turn that ended failed.
+         */alerts: Bool) {
+        self.version = version
+        self.state = state
+        self.title = title
+        self.harness = harness
+        self.itemId = itemId
+        self.seq = seq
+        self.itemType = itemType
+        self.fieldsJson = fieldsJson
+        self.session = session
+        self.turn = turn
+        self.startedByMessageIdHex = startedByMessageIdHex
+        self.settles = settles
+        self.alerts = alerts
+    }
+}
+
+#if compiler(>=6)
+extension AgentItemFfi: Sendable {}
+#endif
+
+
+extension AgentItemFfi: Equatable, Hashable {
+    public static func ==(lhs: AgentItemFfi, rhs: AgentItemFfi) -> Bool {
+        if lhs.version != rhs.version {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.harness != rhs.harness {
+            return false
+        }
+        if lhs.itemId != rhs.itemId {
+            return false
+        }
+        if lhs.seq != rhs.seq {
+            return false
+        }
+        if lhs.itemType != rhs.itemType {
+            return false
+        }
+        if lhs.fieldsJson != rhs.fieldsJson {
+            return false
+        }
+        if lhs.session != rhs.session {
+            return false
+        }
+        if lhs.turn != rhs.turn {
+            return false
+        }
+        if lhs.startedByMessageIdHex != rhs.startedByMessageIdHex {
+            return false
+        }
+        if lhs.settles != rhs.settles {
+            return false
+        }
+        if lhs.alerts != rhs.alerts {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(version)
+        hasher.combine(state)
+        hasher.combine(title)
+        hasher.combine(harness)
+        hasher.combine(itemId)
+        hasher.combine(seq)
+        hasher.combine(itemType)
+        hasher.combine(fieldsJson)
+        hasher.combine(session)
+        hasher.combine(turn)
+        hasher.combine(startedByMessageIdHex)
+        hasher.combine(settles)
+        hasher.combine(alerts)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAgentItemFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentItemFfi {
+        return
+            try AgentItemFfi(
+                version: FfiConverterUInt64.read(from: &buf),
+                state: FfiConverterTypeAgentItemStateFfi.read(from: &buf),
+                title: FfiConverterString.read(from: &buf),
+                harness: FfiConverterString.read(from: &buf),
+                itemId: FfiConverterString.read(from: &buf),
+                seq: FfiConverterUInt64.read(from: &buf),
+                itemType: FfiConverterString.read(from: &buf),
+                fieldsJson: FfiConverterString.read(from: &buf),
+                session: FfiConverterOptionString.read(from: &buf),
+                turn: FfiConverterOptionString.read(from: &buf),
+                startedByMessageIdHex: FfiConverterOptionString.read(from: &buf),
+                settles: FfiConverterSequenceString.read(from: &buf),
+                alerts: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AgentItemFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.version, into: &buf)
+        FfiConverterTypeAgentItemStateFfi.write(value.state, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterString.write(value.harness, into: &buf)
+        FfiConverterString.write(value.itemId, into: &buf)
+        FfiConverterUInt64.write(value.seq, into: &buf)
+        FfiConverterString.write(value.itemType, into: &buf)
+        FfiConverterString.write(value.fieldsJson, into: &buf)
+        FfiConverterOptionString.write(value.session, into: &buf)
+        FfiConverterOptionString.write(value.turn, into: &buf)
+        FfiConverterOptionString.write(value.startedByMessageIdHex, into: &buf)
+        FfiConverterSequenceString.write(value.settles, into: &buf)
+        FfiConverterBool.write(value.alerts, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentItemFfi_lift(_ buf: RustBuffer) throws -> AgentItemFfi {
+    return try FfiConverterTypeAgentItemFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentItemFfi_lower(_ value: AgentItemFfi) -> RustBuffer {
+    return FfiConverterTypeAgentItemFfi.lower(value)
 }
 
 
@@ -32268,6 +33276,291 @@ public func FfiConverterTypeInstalledEmojiSetStateFfi_lower(_ value: InstalledEm
 }
 
 
+/**
+ * Whether an invite reached the invited account's inbox relays (mdk#1706):
+ * one answer per group and invited account, as its newest invite left it.
+ * Each invited device gets its own Welcome; `state` is `RelayAccepted` once
+ * a relay stored any device's Welcome, else the first still-sending device's
+ * `Sending`, else `Waiting` while one waits for its commit, else the first
+ * device's settled state. Show it with the device counts ("1 of 2 devices").
+ * An account invited and then refused before its commit reached anyone shows
+ * as `Cancelled { Withdrawn }`; check the roster for who is a member.
+ */
+public struct InviteDeliveryFfi {
+    public var groupIdHex: String
+    /**
+     * The invited account.
+     */
+    public var recipientHex: String
+    /**
+     * The commit that added the account, hex; `None` for a group's founding
+     * members.
+     */
+    public var inviteIdHex: String?
+    public var state: InviteDeliveryStateFfi
+    public var deviceCount: UInt32
+    /**
+     * Devices whose Welcome a relay stored.
+     */
+    public var acceptedDeviceCount: UInt32
+    public var devices: [InviteDeviceDeliveryFfi]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(groupIdHex: String,
+        /**
+         * The invited account.
+         */recipientHex: String,
+        /**
+         * The commit that added the account, hex; `None` for a group's founding
+         * members.
+         */inviteIdHex: String?, state: InviteDeliveryStateFfi, deviceCount: UInt32,
+        /**
+         * Devices whose Welcome a relay stored.
+         */acceptedDeviceCount: UInt32, devices: [InviteDeviceDeliveryFfi]) {
+        self.groupIdHex = groupIdHex
+        self.recipientHex = recipientHex
+        self.inviteIdHex = inviteIdHex
+        self.state = state
+        self.deviceCount = deviceCount
+        self.acceptedDeviceCount = acceptedDeviceCount
+        self.devices = devices
+    }
+}
+
+#if compiler(>=6)
+extension InviteDeliveryFfi: Sendable {}
+#endif
+
+
+extension InviteDeliveryFfi: Equatable, Hashable {
+    public static func ==(lhs: InviteDeliveryFfi, rhs: InviteDeliveryFfi) -> Bool {
+        if lhs.groupIdHex != rhs.groupIdHex {
+            return false
+        }
+        if lhs.recipientHex != rhs.recipientHex {
+            return false
+        }
+        if lhs.inviteIdHex != rhs.inviteIdHex {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        if lhs.deviceCount != rhs.deviceCount {
+            return false
+        }
+        if lhs.acceptedDeviceCount != rhs.acceptedDeviceCount {
+            return false
+        }
+        if lhs.devices != rhs.devices {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(groupIdHex)
+        hasher.combine(recipientHex)
+        hasher.combine(inviteIdHex)
+        hasher.combine(state)
+        hasher.combine(deviceCount)
+        hasher.combine(acceptedDeviceCount)
+        hasher.combine(devices)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInviteDeliveryFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InviteDeliveryFfi {
+        return
+            try InviteDeliveryFfi(
+                groupIdHex: FfiConverterString.read(from: &buf),
+                recipientHex: FfiConverterString.read(from: &buf),
+                inviteIdHex: FfiConverterOptionString.read(from: &buf),
+                state: FfiConverterTypeInviteDeliveryStateFfi.read(from: &buf),
+                deviceCount: FfiConverterUInt32.read(from: &buf),
+                acceptedDeviceCount: FfiConverterUInt32.read(from: &buf),
+                devices: FfiConverterSequenceTypeInviteDeviceDeliveryFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InviteDeliveryFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.groupIdHex, into: &buf)
+        FfiConverterString.write(value.recipientHex, into: &buf)
+        FfiConverterOptionString.write(value.inviteIdHex, into: &buf)
+        FfiConverterTypeInviteDeliveryStateFfi.write(value.state, into: &buf)
+        FfiConverterUInt32.write(value.deviceCount, into: &buf)
+        FfiConverterUInt32.write(value.acceptedDeviceCount, into: &buf)
+        FfiConverterSequenceTypeInviteDeviceDeliveryFfi.write(value.devices, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteDeliveryFfi_lift(_ buf: RustBuffer) throws -> InviteDeliveryFfi {
+    return try FfiConverterTypeInviteDeliveryFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteDeliveryFfi_lower(_ value: InviteDeliveryFfi) -> RustBuffer {
+    return FfiConverterTypeInviteDeliveryFfi.lower(value)
+}
+
+
+/**
+ * One invited device's Welcome. Times are Unix seconds.
+ */
+public struct InviteDeviceDeliveryFfi {
+    /**
+     * The Welcome's id.
+     */
+    public var deliveryIdHex: String
+    public var state: InviteDeliveryStateFfi
+    public var createdAt: UInt64
+    /**
+     * When MDK stops sending it; `None` when it has no deadline.
+     */
+    public var deliverUntil: UInt64?
+    /**
+     * Publish attempts, including those that found no inbox relay.
+     */
+    public var attemptCount: UInt32
+    public var lastAttemptAt: UInt64?
+    /**
+     * When a relay first stored it.
+     */
+    public var acceptedAt: UInt64?
+    public var relays: InviteRelayCountsFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The Welcome's id.
+         */deliveryIdHex: String, state: InviteDeliveryStateFfi, createdAt: UInt64,
+        /**
+         * When MDK stops sending it; `None` when it has no deadline.
+         */deliverUntil: UInt64?,
+        /**
+         * Publish attempts, including those that found no inbox relay.
+         */attemptCount: UInt32, lastAttemptAt: UInt64?,
+        /**
+         * When a relay first stored it.
+         */acceptedAt: UInt64?, relays: InviteRelayCountsFfi) {
+        self.deliveryIdHex = deliveryIdHex
+        self.state = state
+        self.createdAt = createdAt
+        self.deliverUntil = deliverUntil
+        self.attemptCount = attemptCount
+        self.lastAttemptAt = lastAttemptAt
+        self.acceptedAt = acceptedAt
+        self.relays = relays
+    }
+}
+
+#if compiler(>=6)
+extension InviteDeviceDeliveryFfi: Sendable {}
+#endif
+
+
+extension InviteDeviceDeliveryFfi: Equatable, Hashable {
+    public static func ==(lhs: InviteDeviceDeliveryFfi, rhs: InviteDeviceDeliveryFfi) -> Bool {
+        if lhs.deliveryIdHex != rhs.deliveryIdHex {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        if lhs.createdAt != rhs.createdAt {
+            return false
+        }
+        if lhs.deliverUntil != rhs.deliverUntil {
+            return false
+        }
+        if lhs.attemptCount != rhs.attemptCount {
+            return false
+        }
+        if lhs.lastAttemptAt != rhs.lastAttemptAt {
+            return false
+        }
+        if lhs.acceptedAt != rhs.acceptedAt {
+            return false
+        }
+        if lhs.relays != rhs.relays {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(deliveryIdHex)
+        hasher.combine(state)
+        hasher.combine(createdAt)
+        hasher.combine(deliverUntil)
+        hasher.combine(attemptCount)
+        hasher.combine(lastAttemptAt)
+        hasher.combine(acceptedAt)
+        hasher.combine(relays)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInviteDeviceDeliveryFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InviteDeviceDeliveryFfi {
+        return
+            try InviteDeviceDeliveryFfi(
+                deliveryIdHex: FfiConverterString.read(from: &buf),
+                state: FfiConverterTypeInviteDeliveryStateFfi.read(from: &buf),
+                createdAt: FfiConverterUInt64.read(from: &buf),
+                deliverUntil: FfiConverterOptionUInt64.read(from: &buf),
+                attemptCount: FfiConverterUInt32.read(from: &buf),
+                lastAttemptAt: FfiConverterOptionUInt64.read(from: &buf),
+                acceptedAt: FfiConverterOptionUInt64.read(from: &buf),
+                relays: FfiConverterTypeInviteRelayCountsFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InviteDeviceDeliveryFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.deliveryIdHex, into: &buf)
+        FfiConverterTypeInviteDeliveryStateFfi.write(value.state, into: &buf)
+        FfiConverterUInt64.write(value.createdAt, into: &buf)
+        FfiConverterOptionUInt64.write(value.deliverUntil, into: &buf)
+        FfiConverterUInt32.write(value.attemptCount, into: &buf)
+        FfiConverterOptionUInt64.write(value.lastAttemptAt, into: &buf)
+        FfiConverterOptionUInt64.write(value.acceptedAt, into: &buf)
+        FfiConverterTypeInviteRelayCountsFfi.write(value.relays, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteDeviceDeliveryFfi_lift(_ buf: RustBuffer) throws -> InviteDeviceDeliveryFfi {
+    return try FfiConverterTypeInviteDeviceDeliveryFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteDeviceDeliveryFfi_lower(_ value: InviteDeviceDeliveryFfi) -> RustBuffer {
+    return FfiConverterTypeInviteDeviceDeliveryFfi.lower(value)
+}
+
+
 public struct InviteMembersResultFfi {
     public var summary: SendSummaryFfi?
     public var memberOutcomes: [MemberResolutionOutcomeFfi]
@@ -32335,6 +33628,107 @@ public func FfiConverterTypeInviteMembersResultFfi_lift(_ buf: RustBuffer) throw
 #endif
 public func FfiConverterTypeInviteMembersResultFfi_lower(_ value: InviteMembersResultFfi) -> RustBuffer {
     return FfiConverterTypeInviteMembersResultFfi.lower(value)
+}
+
+
+/**
+ * How the Welcome's inbox relays answered, as counts, never names: `total`
+ * relays it is sent to and `accepted` that stored it; of the rest, by the
+ * latest attempt, `refused` answered and said no for any reason (including
+ * rate-limited and auth-required), `unreachable` gave no answer, `untried`
+ * were not tried.
+ */
+public struct InviteRelayCountsFfi {
+    public var total: UInt32
+    public var accepted: UInt32
+    public var refused: UInt32
+    public var unreachable: UInt32
+    public var untried: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(total: UInt32, accepted: UInt32, refused: UInt32, unreachable: UInt32, untried: UInt32) {
+        self.total = total
+        self.accepted = accepted
+        self.refused = refused
+        self.unreachable = unreachable
+        self.untried = untried
+    }
+}
+
+#if compiler(>=6)
+extension InviteRelayCountsFfi: Sendable {}
+#endif
+
+
+extension InviteRelayCountsFfi: Equatable, Hashable {
+    public static func ==(lhs: InviteRelayCountsFfi, rhs: InviteRelayCountsFfi) -> Bool {
+        if lhs.total != rhs.total {
+            return false
+        }
+        if lhs.accepted != rhs.accepted {
+            return false
+        }
+        if lhs.refused != rhs.refused {
+            return false
+        }
+        if lhs.unreachable != rhs.unreachable {
+            return false
+        }
+        if lhs.untried != rhs.untried {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(total)
+        hasher.combine(accepted)
+        hasher.combine(refused)
+        hasher.combine(unreachable)
+        hasher.combine(untried)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInviteRelayCountsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InviteRelayCountsFfi {
+        return
+            try InviteRelayCountsFfi(
+                total: FfiConverterUInt32.read(from: &buf),
+                accepted: FfiConverterUInt32.read(from: &buf),
+                refused: FfiConverterUInt32.read(from: &buf),
+                unreachable: FfiConverterUInt32.read(from: &buf),
+                untried: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InviteRelayCountsFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.total, into: &buf)
+        FfiConverterUInt32.write(value.accepted, into: &buf)
+        FfiConverterUInt32.write(value.refused, into: &buf)
+        FfiConverterUInt32.write(value.unreachable, into: &buf)
+        FfiConverterUInt32.write(value.untried, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteRelayCountsFfi_lift(_ buf: RustBuffer) throws -> InviteRelayCountsFfi {
+    return try FfiConverterTypeInviteRelayCountsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteRelayCountsFfi_lower(_ value: InviteRelayCountsFfi) -> RustBuffer {
+    return FfiConverterTypeInviteRelayCountsFfi.lower(value)
 }
 
 
@@ -40505,6 +41899,129 @@ public func FfiConverterTypeRelayHealthFfi_lower(_ value: RelayHealthFfi) -> Rus
 }
 
 
+/**
+ * One relay the account's inbox and NIP-65 lists name.
+ */
+public struct RelayHealthRowFfi {
+    /**
+     * Canonical URL, matching `account_relay_liveness` rows; an entry that
+     * does not parse appears as published.
+     */
+    public var url: String
+    /**
+     * In the order Inbox, Write, Read.
+     */
+    public var roles: [RelayRoleFfi]
+    public var state: RelayHealthStateFfi
+    /**
+     * Set exactly when `state` is `NotAllowed`.
+     */
+    public var fault: RelayHealthFaultFfi?
+    /**
+     * The connection state `account_relay_liveness` reports.
+     */
+    public var liveness: RelayStatusFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Canonical URL, matching `account_relay_liveness` rows; an entry that
+         * does not parse appears as published.
+         */url: String,
+        /**
+         * In the order Inbox, Write, Read.
+         */roles: [RelayRoleFfi], state: RelayHealthStateFfi,
+        /**
+         * Set exactly when `state` is `NotAllowed`.
+         */fault: RelayHealthFaultFfi?,
+        /**
+         * The connection state `account_relay_liveness` reports.
+         */liveness: RelayStatusFfi) {
+        self.url = url
+        self.roles = roles
+        self.state = state
+        self.fault = fault
+        self.liveness = liveness
+    }
+}
+
+#if compiler(>=6)
+extension RelayHealthRowFfi: Sendable {}
+#endif
+
+
+extension RelayHealthRowFfi: Equatable, Hashable {
+    public static func ==(lhs: RelayHealthRowFfi, rhs: RelayHealthRowFfi) -> Bool {
+        if lhs.url != rhs.url {
+            return false
+        }
+        if lhs.roles != rhs.roles {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        if lhs.fault != rhs.fault {
+            return false
+        }
+        if lhs.liveness != rhs.liveness {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(url)
+        hasher.combine(roles)
+        hasher.combine(state)
+        hasher.combine(fault)
+        hasher.combine(liveness)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayHealthRowFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayHealthRowFfi {
+        return
+            try RelayHealthRowFfi(
+                url: FfiConverterString.read(from: &buf),
+                roles: FfiConverterSequenceTypeRelayRoleFfi.read(from: &buf),
+                state: FfiConverterTypeRelayHealthStateFfi.read(from: &buf),
+                fault: FfiConverterOptionTypeRelayHealthFaultFfi.read(from: &buf),
+                liveness: FfiConverterTypeRelayStatusFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RelayHealthRowFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.url, into: &buf)
+        FfiConverterSequenceTypeRelayRoleFfi.write(value.roles, into: &buf)
+        FfiConverterTypeRelayHealthStateFfi.write(value.state, into: &buf)
+        FfiConverterOptionTypeRelayHealthFaultFfi.write(value.fault, into: &buf)
+        FfiConverterTypeRelayStatusFfi.write(value.liveness, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayHealthRowFfi_lift(_ buf: RustBuffer) throws -> RelayHealthRowFfi {
+    return try FfiConverterTypeRelayHealthRowFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayHealthRowFfi_lower(_ value: RelayHealthRowFfi) -> RustBuffer {
+    return FfiConverterTypeRelayHealthRowFfi.lower(value)
+}
+
+
 public struct RelayListFfi {
     public var kind: UInt64
     public var relays: [String]
@@ -43331,7 +44848,8 @@ public struct TimelineMessageRecordFfi {
     public var receivedAt: UInt64
     /**
      * What a client without a thread view quotes: the inline-reply target,
-     * or a thread message's parent.
+     * a thread message's parent, or an agent item's `started_by`, else its
+     * thread parent.
      */
     public var replyToMessageIdHex: String?
     public var replyPreview: TimelineReplyPreviewFfi?
@@ -43356,6 +44874,20 @@ public struct TimelineMessageRecordFfi {
      * and malformed/free-text kind-1210 assertions.
      */
     public var groupSystem: GroupSystemEventFfi?
+    /**
+     * The latest version of an agent item (kind 1201). `None` for every other
+     * kind; a kind-1201 row with `None` here is an item MDK cannot read, such
+     * as the old shape an outdated connector sends: render it as an
+     * unreadable agent item.
+     */
+    public var agentItem: AgentItemFfi?
+    /**
+     * True for an agent item whose first event this device does not hold,
+     * such as one that began before this member joined: the row is its
+     * earliest edit, at that edit's place, showing the latest version. Say
+     * the item started earlier. False once the first event arrives.
+     */
+    public var agentItemFirstEventMissing: Bool
     public var reactions: TimelineReactionSummaryFfi
     public var edit: TimelineEditSummaryFfi?
     public var deleted: Bool
@@ -43434,7 +44966,8 @@ public struct TimelineMessageRecordFfi {
          */receivedAt: UInt64,
         /**
          * What a client without a thread view quotes: the inline-reply target,
-         * or a thread message's parent.
+         * a thread message's parent, or an agent item's `started_by`, else its
+         * thread parent.
          */replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?,
         /**
          * Where this row sits in a NIP-22 thread; `None` outside threads.
@@ -43452,7 +44985,19 @@ public struct TimelineMessageRecordFfi {
         /**
          * Parsed view of kind-1210 group system rows. `None` for chat, reactions,
          * and malformed/free-text kind-1210 assertions.
-         */groupSystem: GroupSystemEventFfi?, reactions: TimelineReactionSummaryFfi, edit: TimelineEditSummaryFfi?, deleted: Bool, deletionSource: DeletionSourceFfi, deletedByMessageIdHex: String?,
+         */groupSystem: GroupSystemEventFfi?,
+        /**
+         * The latest version of an agent item (kind 1201). `None` for every other
+         * kind; a kind-1201 row with `None` here is an item MDK cannot read, such
+         * as the old shape an outdated connector sends: render it as an
+         * unreadable agent item.
+         */agentItem: AgentItemFfi?,
+        /**
+         * True for an agent item whose first event this device does not hold,
+         * such as one that began before this member joined: the row is its
+         * earliest edit, at that edit's place, showing the latest version. Say
+         * the item started earlier. False once the first event arrives.
+         */agentItemFirstEventMissing: Bool, reactions: TimelineReactionSummaryFfi, edit: TimelineEditSummaryFfi?, deleted: Bool, deletionSource: DeletionSourceFfi, deletedByMessageIdHex: String?,
         /**
          * Set when convergence invalidated this message (it landed on a losing
          * branch). The message is kept as a "did not reach the group" tombstone
@@ -43502,6 +45047,8 @@ public struct TimelineMessageRecordFfi {
         self.mediaJson = mediaJson
         self.media = media
         self.groupSystem = groupSystem
+        self.agentItem = agentItem
+        self.agentItemFirstEventMissing = agentItemFirstEventMissing
         self.reactions = reactions
         self.edit = edit
         self.deleted = deleted
@@ -43593,6 +45140,12 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         if lhs.groupSystem != rhs.groupSystem {
             return false
         }
+        if lhs.agentItem != rhs.agentItem {
+            return false
+        }
+        if lhs.agentItemFirstEventMissing != rhs.agentItemFirstEventMissing {
+            return false
+        }
         if lhs.reactions != rhs.reactions {
             return false
         }
@@ -43648,6 +45201,8 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         hasher.combine(mediaJson)
         hasher.combine(media)
         hasher.combine(groupSystem)
+        hasher.combine(agentItem)
+        hasher.combine(agentItemFirstEventMissing)
         hasher.combine(reactions)
         hasher.combine(edit)
         hasher.combine(deleted)
@@ -43693,6 +45248,8 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
                 mediaJson: FfiConverterOptionString.read(from: &buf),
                 media: FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.read(from: &buf),
                 groupSystem: FfiConverterOptionTypeGroupSystemEventFfi.read(from: &buf),
+                agentItem: FfiConverterOptionTypeAgentItemFfi.read(from: &buf),
+                agentItemFirstEventMissing: FfiConverterBool.read(from: &buf),
                 reactions: FfiConverterTypeTimelineReactionSummaryFfi.read(from: &buf),
                 edit: FfiConverterOptionTypeTimelineEditSummaryFfi.read(from: &buf),
                 deleted: FfiConverterBool.read(from: &buf),
@@ -43730,6 +45287,8 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.mediaJson, into: &buf)
         FfiConverterSequenceTypeMediaAttachmentOutcomeFfi.write(value.media, into: &buf)
         FfiConverterOptionTypeGroupSystemEventFfi.write(value.groupSystem, into: &buf)
+        FfiConverterOptionTypeAgentItemFfi.write(value.agentItem, into: &buf)
+        FfiConverterBool.write(value.agentItemFirstEventMissing, into: &buf)
         FfiConverterTypeTimelineReactionSummaryFfi.write(value.reactions, into: &buf)
         FfiConverterOptionTypeTimelineEditSummaryFfi.write(value.edit, into: &buf)
         FfiConverterBool.write(value.deleted, into: &buf)
@@ -44294,8 +45853,9 @@ public func FfiConverterTypeTimelineReplyPreviewFfi_lower(_ value: TimelineReply
 
 /**
  * A row's place in a NIP-22 thread: set for every thread message (kind
- * 1111), and for a chat, sticker or poll that joined a thread. A client
- * without a thread view ignores it and quotes `reply_to_message_id_hex`.
+ * 1111), and for a chat, sticker, poll or agent item (kind 1201) that joined
+ * a thread. A client without a thread view ignores it and quotes
+ * `reply_to_message_id_hex`.
  */
 public struct TimelineThreadRefFfi {
     /**
@@ -46206,6 +47766,107 @@ public func FfiConverterTypeAccountSetupReadinessFfi_lower(_ value: AccountSetup
 
 
 extension AccountSetupReadinessFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * An agent item's state (kind 1201).
+ */
+
+public enum AgentItemStateFfi {
+
+    case running
+    case waiting
+    case done
+    case failed
+    case declined
+    case cancelled
+}
+
+
+#if compiler(>=6)
+extension AgentItemStateFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAgentItemStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AgentItemStateFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentItemStateFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .running
+
+        case 2: return .waiting
+
+        case 3: return .done
+
+        case 4: return .failed
+
+        case 5: return .declined
+
+        case 6: return .cancelled
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AgentItemStateFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .running:
+            writeInt(&buf, Int32(1))
+
+
+        case .waiting:
+            writeInt(&buf, Int32(2))
+
+
+        case .done:
+            writeInt(&buf, Int32(3))
+
+
+        case .failed:
+            writeInt(&buf, Int32(4))
+
+
+        case .declined:
+            writeInt(&buf, Int32(5))
+
+
+        case .cancelled:
+            writeInt(&buf, Int32(6))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentItemStateFfi_lift(_ buf: RustBuffer) throws -> AgentItemStateFfi {
+    return try FfiConverterTypeAgentItemStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentItemStateFfi_lower(_ value: AgentItemStateFfi) -> RustBuffer {
+    return FfiConverterTypeAgentItemStateFfi.lower(value)
+}
+
+
+extension AgentItemStateFfi: Equatable, Hashable {}
 
 
 
@@ -52631,6 +54292,335 @@ extension HostPerformanceOutcomeFfi: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why an invite is no longer owed.
+ */
+
+public enum InviteCancelReasonFfi {
+
+    /**
+     * The group change that added the recipient lost to another change.
+     */
+    case supersededByGroupChange
+    /**
+     * Withdrawn, or retired with a group change that was rolled back before
+     * it reached anyone.
+     */
+    case withdrawn
+}
+
+
+#if compiler(>=6)
+extension InviteCancelReasonFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInviteCancelReasonFfi: FfiConverterRustBuffer {
+    typealias SwiftType = InviteCancelReasonFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InviteCancelReasonFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .supersededByGroupChange
+
+        case 2: return .withdrawn
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: InviteCancelReasonFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .supersededByGroupChange:
+            writeInt(&buf, Int32(1))
+
+
+        case .withdrawn:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteCancelReasonFfi_lift(_ buf: RustBuffer) throws -> InviteCancelReasonFfi {
+    return try FfiConverterTypeInviteCancelReasonFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteCancelReasonFfi_lower(_ value: InviteCancelReasonFfi) -> RustBuffer {
+    return FfiConverterTypeInviteCancelReasonFfi.lower(value)
+}
+
+
+extension InviteCancelReasonFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why an invite has not reached a relay.
+ */
+
+public enum InviteDeliveryProblemFfi {
+
+    /**
+     * No usable inbox relay is known for the recipient.
+     */
+    case noInboxRelays
+    /**
+     * Every relay tried answered and said no, for any reason. As a
+     * `Sending` problem it may be temporary (rate-limited, auth-required).
+     */
+    case refusedByRelays
+    /**
+     * No relay tried gave an answer: unreachable, timed out or unknown.
+     */
+    case relaysUnreachable
+    /**
+     * Some relays refused it and the others could not be reached.
+     */
+    case mixed
+    /**
+     * It fits none of the recipient's inbox relays. Not yet produced.
+     */
+    case tooLarge
+    /**
+     * The recipient no longer holds the KeyPackage it answers. Not yet
+     * produced.
+     */
+    case keyPackageRetired
+}
+
+
+#if compiler(>=6)
+extension InviteDeliveryProblemFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInviteDeliveryProblemFfi: FfiConverterRustBuffer {
+    typealias SwiftType = InviteDeliveryProblemFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InviteDeliveryProblemFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .noInboxRelays
+
+        case 2: return .refusedByRelays
+
+        case 3: return .relaysUnreachable
+
+        case 4: return .mixed
+
+        case 5: return .tooLarge
+
+        case 6: return .keyPackageRetired
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: InviteDeliveryProblemFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .noInboxRelays:
+            writeInt(&buf, Int32(1))
+
+
+        case .refusedByRelays:
+            writeInt(&buf, Int32(2))
+
+
+        case .relaysUnreachable:
+            writeInt(&buf, Int32(3))
+
+
+        case .mixed:
+            writeInt(&buf, Int32(4))
+
+
+        case .tooLarge:
+            writeInt(&buf, Int32(5))
+
+
+        case .keyPackageRetired:
+            writeInt(&buf, Int32(6))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteDeliveryProblemFfi_lift(_ buf: RustBuffer) throws -> InviteDeliveryProblemFfi {
+    return try FfiConverterTypeInviteDeliveryProblemFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteDeliveryProblemFfi_lower(_ value: InviteDeliveryProblemFfi) -> RustBuffer {
+    return FfiConverterTypeInviteDeliveryProblemFfi.lower(value)
+}
+
+
+extension InviteDeliveryProblemFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Where an invite's delivery stands.
+ */
+
+public enum InviteDeliveryStateFfi {
+
+    /**
+     * Its commit is not confirmed yet, so nothing sends it.
+     */
+    case waiting
+    /**
+     * Being sent; `last_problem` is why the latest attempt did not reach a
+     * relay, `None` before any attempt finished. It can briefly show an
+     * accepted relay: a relay's acceptance is saved before MDK marks the
+     * Welcome delivered, and until that mark (the same pass, or the next
+     * maintenance pass if it failed) MDK may still send it.
+     */
+    case sending(lastProblem: InviteDeliveryProblemFfi?
+    )
+    /**
+     * A relay stored the Welcome: it met its configured acknowledgement
+     * count (one relay today) and MDK recorded it delivered. This is not
+     * proof that the recipient received it or joined.
+     */
+    case relayAccepted
+    /**
+     * It will not be sent again: no relay stored it by its delivery
+     * deadline, 7 days after the invite or its KeyPackage's expiry if
+     * sooner. `cause` is what the latest attempt found
+     * (`RelaysUnreachable` when none finished); `RefusedByRelays` here means
+     * every relay that attempt tried said no, possibly only for now.
+     */
+    case undeliverable(cause: InviteDeliveryProblemFfi
+    )
+    /**
+     * No longer owed.
+     */
+    case cancelled(reason: InviteCancelReasonFfi
+    )
+}
+
+
+#if compiler(>=6)
+extension InviteDeliveryStateFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInviteDeliveryStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = InviteDeliveryStateFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InviteDeliveryStateFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .waiting
+
+        case 2: return .sending(lastProblem: try FfiConverterOptionTypeInviteDeliveryProblemFfi.read(from: &buf)
+        )
+
+        case 3: return .relayAccepted
+
+        case 4: return .undeliverable(cause: try FfiConverterTypeInviteDeliveryProblemFfi.read(from: &buf)
+        )
+
+        case 5: return .cancelled(reason: try FfiConverterTypeInviteCancelReasonFfi.read(from: &buf)
+        )
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: InviteDeliveryStateFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .waiting:
+            writeInt(&buf, Int32(1))
+
+
+        case let .sending(lastProblem):
+            writeInt(&buf, Int32(2))
+            FfiConverterOptionTypeInviteDeliveryProblemFfi.write(lastProblem, into: &buf)
+
+
+        case .relayAccepted:
+            writeInt(&buf, Int32(3))
+
+
+        case let .undeliverable(cause):
+            writeInt(&buf, Int32(4))
+            FfiConverterTypeInviteDeliveryProblemFfi.write(cause, into: &buf)
+
+
+        case let .cancelled(reason):
+            writeInt(&buf, Int32(5))
+            FfiConverterTypeInviteCancelReasonFfi.write(reason, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteDeliveryStateFfi_lift(_ buf: RustBuffer) throws -> InviteDeliveryStateFfi {
+    return try FfiConverterTypeInviteDeliveryStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInviteDeliveryStateFfi_lower(_ value: InviteDeliveryStateFfi) -> RustBuffer {
+    return FfiConverterTypeInviteDeliveryStateFfi.lower(value)
+}
+
+
+extension InviteDeliveryStateFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum LinkedDeviceStatusFfi {
 
@@ -52727,11 +54717,24 @@ extension LinkedDeviceStatusFfi: Equatable, Hashable {}
 
 public enum LocalSendStatusFfi {
 
-    case queued
-    case engineOwned
+    /**
+     * Admitted, not yet handed to the engine. Names the send's event.
+     */
+    case queued(messageIdHex: String
+    )
+    /**
+     * Held by the engine, which may still be publishing it. Names its event.
+     */
+    case engineOwned(messageIdHex: String
+    )
     case completed(summary: SendSummaryFfi
     )
     case rejected
+    /**
+     * Not sent: the group gained a member account the send's member list
+     * leaves out. Final.
+     */
+    case refusedNewMembers
 }
 
 
@@ -52749,14 +54752,18 @@ public struct FfiConverterTypeLocalSendStatusFfi: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
 
-        case 1: return .queued
+        case 1: return .queued(messageIdHex: try FfiConverterString.read(from: &buf)
+        )
 
-        case 2: return .engineOwned
+        case 2: return .engineOwned(messageIdHex: try FfiConverterString.read(from: &buf)
+        )
 
         case 3: return .completed(summary: try FfiConverterTypeSendSummaryFfi.read(from: &buf)
         )
 
         case 4: return .rejected
+
+        case 5: return .refusedNewMembers
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -52766,12 +54773,14 @@ public struct FfiConverterTypeLocalSendStatusFfi: FfiConverterRustBuffer {
         switch value {
 
 
-        case .queued:
+        case let .queued(messageIdHex):
             writeInt(&buf, Int32(1))
+            FfiConverterString.write(messageIdHex, into: &buf)
 
 
-        case .engineOwned:
+        case let .engineOwned(messageIdHex):
             writeInt(&buf, Int32(2))
+            FfiConverterString.write(messageIdHex, into: &buf)
 
 
         case let .completed(summary):
@@ -52781,6 +54790,10 @@ public struct FfiConverterTypeLocalSendStatusFfi: FfiConverterRustBuffer {
 
         case .rejected:
             writeInt(&buf, Int32(4))
+
+
+        case .refusedNewMembers:
+            writeInt(&buf, Int32(5))
 
         }
     }
@@ -54114,6 +56127,16 @@ public enum MarmotEventFfi {
          */sizeClass: EventSizeClassFfi?
     )
     /**
+     * The delivery state of an invite of this account changed (mdk#1706).
+     * `delivery` is the invited account's answer for its group now, as
+     * `invite_deliveries` reads it; `RelayAccepted` means a relay stored the
+     * Welcome, not that the recipient received it or joined. The query is
+     * the source of truth: a missed, late or repeated event is harmless,
+     * since a host can always read `invite_deliveries` again.
+     */
+    case inviteDeliveryChanged(accountIdHex: String, accountLabel: String, delivery: InviteDeliveryFfi
+    )
+    /**
      * This device armed `arms` epoch-gap history backfills for the group with
      * no sign in between that it caught up: it is still at `stalled_epoch`.
      * Surface it as "this group cannot catch up; re-syncing is recommended";
@@ -54156,6 +56179,20 @@ public enum MarmotEventFfi {
      * account's worker opens or reconnects, and may fire with no change.
      */
     case keyPackageRefreshOverdueChanged(accountIdHex: String, accountLabel: String
+    )
+    /**
+     * The account's relay health changed: re-read `account_relay_health`.
+     * Fires when its answer, apart from each row's liveness, differs from
+     * the one last announced, which only a change to the account's held
+     * relay lists causes, and once each time the account's worker starts;
+     * never for a relay connecting or disconnecting (see
+     * `subscribe_relay_liveness`). Carries no relays.
+     * Only a running account worker sends it: a list that changes while
+     * none runs (an external-signer account whose signer is not registered,
+     * say) announces nothing, so read the query when the account starts and
+     * when the relay screen opens.
+     */
+    case relayHealthChanged(accountIdHex: String, accountLabel: String
     )
     /**
      * The account's unrecognized sign-ins may have changed: re-read
@@ -54246,37 +56283,43 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
         case 7: return .welcomeDeliveryPending(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), messageIdHex: try FfiConverterString.read(from: &buf), recipientHex: try FfiConverterString.read(from: &buf), sizeClass: try FfiConverterOptionTypeEventSizeClassFfi.read(from: &buf)
         )
 
-        case 8: return .epochStallEscalated(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), stalledEpoch: try FfiConverterUInt64.read(from: &buf), arms: try FfiConverterUInt32.read(from: &buf)
+        case 8: return .inviteDeliveryChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), delivery: try FfiConverterTypeInviteDeliveryFfi.read(from: &buf)
         )
 
-        case 9: return .groupChangeSuperseded(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), commitIdHex: try FfiConverterString.read(from: &buf), kind: try FfiConverterString.read(from: &buf), outcome: try FfiConverterString.read(from: &buf), reason: try FfiConverterString.read(from: &buf)
+        case 9: return .epochStallEscalated(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), stalledEpoch: try FfiConverterUInt64.read(from: &buf), arms: try FfiConverterUInt32.read(from: &buf)
         )
 
-        case 10: return .historyNoticesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 10: return .groupChangeSuperseded(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), commitIdHex: try FfiConverterString.read(from: &buf), kind: try FfiConverterString.read(from: &buf), outcome: try FfiConverterString.read(from: &buf), reason: try FfiConverterString.read(from: &buf)
         )
 
-        case 11: return .linkedDevicesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 11: return .historyNoticesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 12: return .keyPackageRefreshOverdueChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 12: return .linkedDevicesChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 13: return .unrecognizedSignInsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 13: return .keyPackageRefreshOverdueChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 14: return .compromiseWarningChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 14: return .relayHealthChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 15: return .deviceLinkChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 15: return .unrecognizedSignInsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 16: return .chatHistoryImportsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 16: return .compromiseWarningChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 17: return .recoveryStatusChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 17: return .deviceLinkChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
-        case 18: return .deviceUnlinked(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 18: return .chatHistoryImportsChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 19: return .recoveryStatusChanged(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        )
+
+        case 20: return .deviceUnlinked(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
         )
 
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -54336,8 +56379,15 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
             FfiConverterOptionTypeEventSizeClassFfi.write(sizeClass, into: &buf)
 
 
-        case let .epochStallEscalated(accountIdHex,accountLabel,groupIdHex,stalledEpoch,arms):
+        case let .inviteDeliveryChanged(accountIdHex,accountLabel,delivery):
             writeInt(&buf, Int32(8))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+            FfiConverterTypeInviteDeliveryFfi.write(delivery, into: &buf)
+
+
+        case let .epochStallEscalated(accountIdHex,accountLabel,groupIdHex,stalledEpoch,arms):
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
             FfiConverterString.write(groupIdHex, into: &buf)
@@ -54346,7 +56396,7 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
 
 
         case let .groupChangeSuperseded(accountIdHex,accountLabel,groupIdHex,commitIdHex,kind,outcome,reason):
-            writeInt(&buf, Int32(9))
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
             FfiConverterString.write(groupIdHex, into: &buf)
@@ -54357,55 +56407,61 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
 
 
         case let .historyNoticesChanged(accountIdHex,accountLabel):
-            writeInt(&buf, Int32(10))
-            FfiConverterString.write(accountIdHex, into: &buf)
-            FfiConverterString.write(accountLabel, into: &buf)
-
-
-        case let .linkedDevicesChanged(accountIdHex,accountLabel):
             writeInt(&buf, Int32(11))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
-        case let .keyPackageRefreshOverdueChanged(accountIdHex,accountLabel):
+        case let .linkedDevicesChanged(accountIdHex,accountLabel):
             writeInt(&buf, Int32(12))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
-        case let .unrecognizedSignInsChanged(accountIdHex,accountLabel):
+        case let .keyPackageRefreshOverdueChanged(accountIdHex,accountLabel):
             writeInt(&buf, Int32(13))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
-        case let .compromiseWarningChanged(accountIdHex,accountLabel):
+        case let .relayHealthChanged(accountIdHex,accountLabel):
             writeInt(&buf, Int32(14))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
-        case let .deviceLinkChanged(accountIdHex,accountLabel):
+        case let .unrecognizedSignInsChanged(accountIdHex,accountLabel):
             writeInt(&buf, Int32(15))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
-        case let .chatHistoryImportsChanged(accountIdHex,accountLabel):
+        case let .compromiseWarningChanged(accountIdHex,accountLabel):
             writeInt(&buf, Int32(16))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
-        case let .recoveryStatusChanged(accountIdHex,accountLabel):
+        case let .deviceLinkChanged(accountIdHex,accountLabel):
             writeInt(&buf, Int32(17))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
 
-        case let .deviceUnlinked(accountIdHex,accountLabel):
+        case let .chatHistoryImportsChanged(accountIdHex,accountLabel):
             writeInt(&buf, Int32(18))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .recoveryStatusChanged(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(19))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+
+
+        case let .deviceUnlinked(accountIdHex,accountLabel):
+            writeInt(&buf, Int32(20))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
 
@@ -54939,6 +56995,10 @@ public enum MarmotKitError: Swift.Error {
      * This result does not establish that other devices have caught up.
      */
     case ReactionNotFound
+    /**
+     * Ask the recipient to update their client and publish a compatible KeyPackage.
+     */
+    case IncompatibleKeyPackage
 }
 
 
@@ -55233,6 +57293,7 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
             details: try FfiConverterString.read(from: &buf)
             )
         case 125: return .ReactionNotFound
+        case 126: return .IncompatibleKeyPackage
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -55824,6 +57885,10 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
 
         case .ReactionNotFound:
             writeInt(&buf, Int32(125))
+
+
+        case .IncompatibleKeyPackage:
+            writeInt(&buf, Int32(126))
 
         }
     }
@@ -57531,8 +59596,11 @@ extension NotificationCollectionStatusFfi: Equatable, Hashable {}
 
 public enum NotificationTrafficClassFfi {
 
+    /**
+     * Every notification. An agent item notifies only while a person is
+     * needed (a waiting approval or question) or when its turn failed.
+     */
     case standard
-    case agentActivity
 }
 
 
@@ -57552,8 +59620,6 @@ public struct FfiConverterTypeNotificationTrafficClassFfi: FfiConverterRustBuffe
 
         case 1: return .standard
 
-        case 2: return .agentActivity
-
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -57564,10 +59630,6 @@ public struct FfiConverterTypeNotificationTrafficClassFfi: FfiConverterRustBuffe
 
         case .standard:
             writeInt(&buf, Int32(1))
-
-
-        case .agentActivity:
-            writeInt(&buf, Int32(2))
 
         }
     }
@@ -60373,6 +62435,287 @@ extension RelayEndpointPolicyFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * Why a relay is not allowed. Later versions may add faults: keep a default
+ * branch.
+ */
+
+public enum RelayHealthFaultFfi {
+
+    /**
+     * On the retired-relay list.
+     */
+    case retired
+    /**
+     * Not a relay URL.
+     */
+    case invalid
+    /**
+     * A host this device refuses to dial: plaintext, a private address,
+     * localhost or onion.
+     */
+    case unsafe
+}
+
+
+#if compiler(>=6)
+extension RelayHealthFaultFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayHealthFaultFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayHealthFaultFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayHealthFaultFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .retired
+
+        case 2: return .invalid
+
+        case 3: return .unsafe
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RelayHealthFaultFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .retired:
+            writeInt(&buf, Int32(1))
+
+
+        case .invalid:
+            writeInt(&buf, Int32(2))
+
+
+        case .unsafe:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayHealthFaultFfi_lift(_ buf: RustBuffer) throws -> RelayHealthFaultFfi {
+    return try FfiConverterTypeRelayHealthFaultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayHealthFaultFfi_lower(_ value: RelayHealthFaultFfi) -> RustBuffer {
+    return FfiConverterTypeRelayHealthFaultFfi.lower(value)
+}
+
+
+extension RelayHealthFaultFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What MDK knows of a relay. Only `Unchecked` and `NotAllowed` are produced
+ * yet; `Healthy`, `Suspected` and `Failing` are reserved for relay checks.
+ */
+
+public enum RelayHealthStateFfi {
+
+    /**
+     * Allowed, and not checked.
+     */
+    case unchecked
+    /**
+     * Not produced yet.
+     */
+    case healthy
+    /**
+     * Not produced yet.
+     */
+    case suspected
+    /**
+     * Not produced yet.
+     */
+    case failing
+    /**
+     * The relay policy refuses it: this device never dials it.
+     */
+    case notAllowed
+}
+
+
+#if compiler(>=6)
+extension RelayHealthStateFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayHealthStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayHealthStateFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayHealthStateFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .unchecked
+
+        case 2: return .healthy
+
+        case 3: return .suspected
+
+        case 4: return .failing
+
+        case 5: return .notAllowed
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RelayHealthStateFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .unchecked:
+            writeInt(&buf, Int32(1))
+
+
+        case .healthy:
+            writeInt(&buf, Int32(2))
+
+
+        case .suspected:
+            writeInt(&buf, Int32(3))
+
+
+        case .failing:
+            writeInt(&buf, Int32(4))
+
+
+        case .notAllowed:
+            writeInt(&buf, Int32(5))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayHealthStateFfi_lift(_ buf: RustBuffer) throws -> RelayHealthStateFfi {
+    return try FfiConverterTypeRelayHealthStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayHealthStateFfi_lower(_ value: RelayHealthStateFfi) -> RustBuffer {
+    return FfiConverterTypeRelayHealthStateFfi.lower(value)
+}
+
+
+extension RelayHealthStateFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Whether MDK holds one of the account's relay lists.
+ */
+
+public enum RelayListPresenceFfi {
+
+    /**
+     * No copy is held: not loaded yet, or none was published. MDK cannot
+     * tell which, so it raises no warning for it.
+     */
+    case unknown
+    /**
+     * A published list is held, possibly an empty one.
+     */
+    case published
+}
+
+
+#if compiler(>=6)
+extension RelayListPresenceFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayListPresenceFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayListPresenceFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayListPresenceFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .unknown
+
+        case 2: return .published
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RelayListPresenceFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .unknown:
+            writeInt(&buf, Int32(1))
+
+
+        case .published:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayListPresenceFfi_lift(_ buf: RustBuffer) throws -> RelayListPresenceFfi {
+    return try FfiConverterTypeRelayListPresenceFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayListPresenceFfi_lower(_ value: RelayListPresenceFfi) -> RustBuffer {
+    return FfiConverterTypeRelayListPresenceFfi.lower(value)
+}
+
+
+extension RelayListPresenceFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * Relay endpoint policy. Loopback is an explicit local-test opt-in;
  * private, link-local, and public plaintext endpoints remain rejected.
  */
@@ -60448,6 +62791,179 @@ public func FfiConverterTypeRelayPolicyFfi_lower(_ value: RelayPolicyFfi) -> Rus
 
 
 extension RelayPolicyFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * A change to the account's relay lists that would fix a warning; the user
+ * makes it. When a warning lists both actions, make them one list edit: removing every
+ * entry first would save an empty inbox list, which `set_account_inbox_relays`
+ * rejects.
+ * Later versions may add actions: keep a default branch.
+ */
+
+public enum RelayRepairActionFfi {
+
+    /**
+     * Add an allowed relay to the inbox list.
+     */
+    case addInboxRelay
+    /**
+     * Remove the warning's relays from the inbox list.
+     */
+    case removeInboxRelay
+}
+
+
+#if compiler(>=6)
+extension RelayRepairActionFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayRepairActionFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayRepairActionFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayRepairActionFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .addInboxRelay
+
+        case 2: return .removeInboxRelay
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RelayRepairActionFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .addInboxRelay:
+            writeInt(&buf, Int32(1))
+
+
+        case .removeInboxRelay:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayRepairActionFfi_lift(_ buf: RustBuffer) throws -> RelayRepairActionFfi {
+    return try FfiConverterTypeRelayRepairActionFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayRepairActionFfi_lower(_ value: RelayRepairActionFfi) -> RustBuffer {
+    return FfiConverterTypeRelayRepairActionFfi.lower(value)
+}
+
+
+extension RelayRepairActionFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * A list that names a relay. Later versions may add roles: keep a default
+ * branch.
+ */
+
+public enum RelayRoleFfi {
+
+    /**
+     * The inbox list (kind 10050), where senders send invitations.
+     */
+    case inbox
+    /**
+     * A NIP-65 (kind 10002) write relay, marked write or unmarked.
+     */
+    case write
+    /**
+     * A NIP-65 read relay, marked read or unmarked.
+     */
+    case read
+}
+
+
+#if compiler(>=6)
+extension RelayRoleFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayRoleFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayRoleFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayRoleFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .inbox
+
+        case 2: return .write
+
+        case 3: return .read
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RelayRoleFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .inbox:
+            writeInt(&buf, Int32(1))
+
+
+        case .write:
+            writeInt(&buf, Int32(2))
+
+
+        case .read:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayRoleFfi_lift(_ buf: RustBuffer) throws -> RelayRoleFfi {
+    return try FfiConverterTypeRelayRoleFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayRoleFfi_lower(_ value: RelayRoleFfi) -> RustBuffer {
+    return FfiConverterTypeRelayRoleFfi.lower(value)
+}
+
+
+extension RelayRoleFfi: Equatable, Hashable {}
 
 
 
@@ -60535,6 +63051,198 @@ public func FfiConverterTypeRelayStatusFfi_lower(_ value: RelayStatusFfi) -> Rus
 
 
 extension RelayStatusFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * The problem a relay warning reports. Each needs a published inbox list.
+ * Later versions may add kinds: keep a default branch.
+ */
+
+public enum RelayWarningKindFfi {
+
+    /**
+     * Critical: the published inbox list names no relay, so an invitation
+     * sent through it has nowhere to go. A sender on this same install
+     * (another local account, or this account linking a new device) resolves
+     * the route through the same fallback to the defaults and may still get
+     * through. `relays` is empty.
+     */
+    case inboxListEmpty
+    /**
+     * Critical: the published inbox list names relays but the policy allows
+     * none, so an invitation sent through the list cannot reach this device.
+     * A sender on this same install (another local account, or this account
+     * linking a new device) resolves the route through the same fallback to
+     * the defaults and may still get through. `relays` are the refused
+     * entries.
+     */
+    case noAllowedInboxRelay
+    /**
+     * Warning: some entries are refused beside at least one allowed; an
+     * invitation sent only to the refused ones does not reach this device.
+     * `relays` are the refused entries.
+     */
+    case inboxRelaysNotAllowed
+    /**
+     * Notice: exactly one entry is allowed, so an invitation sent through the
+     * list reaches this device only there. `relays` is that relay.
+     */
+    case singleInboxRelay
+}
+
+
+#if compiler(>=6)
+extension RelayWarningKindFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayWarningKindFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayWarningKindFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayWarningKindFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .inboxListEmpty
+
+        case 2: return .noAllowedInboxRelay
+
+        case 3: return .inboxRelaysNotAllowed
+
+        case 4: return .singleInboxRelay
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RelayWarningKindFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .inboxListEmpty:
+            writeInt(&buf, Int32(1))
+
+
+        case .noAllowedInboxRelay:
+            writeInt(&buf, Int32(2))
+
+
+        case .inboxRelaysNotAllowed:
+            writeInt(&buf, Int32(3))
+
+
+        case .singleInboxRelay:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayWarningKindFfi_lift(_ buf: RustBuffer) throws -> RelayWarningKindFfi {
+    return try FfiConverterTypeRelayWarningKindFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayWarningKindFfi_lower(_ value: RelayWarningKindFfi) -> RustBuffer {
+    return FfiConverterTypeRelayWarningKindFfi.lower(value)
+}
+
+
+extension RelayWarningKindFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * How loudly to present a relay warning, from the least severe.
+ */
+
+public enum RelayWarningSeverityFfi {
+
+    case notice
+    case warning
+    case critical
+}
+
+
+#if compiler(>=6)
+extension RelayWarningSeverityFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayWarningSeverityFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayWarningSeverityFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayWarningSeverityFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .notice
+
+        case 2: return .warning
+
+        case 3: return .critical
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RelayWarningSeverityFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .notice:
+            writeInt(&buf, Int32(1))
+
+
+        case .warning:
+            writeInt(&buf, Int32(2))
+
+
+        case .critical:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayWarningSeverityFfi_lift(_ buf: RustBuffer) throws -> RelayWarningSeverityFfi {
+    return try FfiConverterTypeRelayWarningSeverityFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayWarningSeverityFfi_lower(_ value: RelayWarningSeverityFfi) -> RustBuffer {
+    return FfiConverterTypeRelayWarningSeverityFfi.lower(value)
+}
+
+
+extension RelayWarningSeverityFfi: Equatable, Hashable {}
 
 
 
@@ -61663,8 +64371,11 @@ public enum TimelineUpdateTriggerFfi {
     case reactionRemoved
     case messageDeleted
     case replyPreviewChanged
-    case agentActivity
-    case agentOperation
+    /**
+     * An agent item's row was added; its later versions arrive as
+     * `MessageEditedOrReprojected`.
+     */
+    case agentItem
     case groupSystem
     case customEvent
     case deliveryOrSendStateChanged
@@ -61699,19 +64410,17 @@ public struct FfiConverterTypeTimelineUpdateTriggerFfi: FfiConverterRustBuffer {
 
         case 6: return .replyPreviewChanged
 
-        case 7: return .agentActivity
+        case 7: return .agentItem
 
-        case 8: return .agentOperation
+        case 8: return .groupSystem
 
-        case 9: return .groupSystem
+        case 9: return .customEvent
 
-        case 10: return .customEvent
+        case 10: return .deliveryOrSendStateChanged
 
-        case 11: return .deliveryOrSendStateChanged
+        case 11: return .receiptChanged
 
-        case 12: return .receiptChanged
-
-        case 13: return .snapshotRefresh
+        case 12: return .snapshotRefresh
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -61745,32 +64454,28 @@ public struct FfiConverterTypeTimelineUpdateTriggerFfi: FfiConverterRustBuffer {
             writeInt(&buf, Int32(6))
 
 
-        case .agentActivity:
+        case .agentItem:
             writeInt(&buf, Int32(7))
 
 
-        case .agentOperation:
+        case .groupSystem:
             writeInt(&buf, Int32(8))
 
 
-        case .groupSystem:
+        case .customEvent:
             writeInt(&buf, Int32(9))
 
 
-        case .customEvent:
+        case .deliveryOrSendStateChanged:
             writeInt(&buf, Int32(10))
 
 
-        case .deliveryOrSendStateChanged:
+        case .receiptChanged:
             writeInt(&buf, Int32(11))
 
 
-        case .receiptChanged:
-            writeInt(&buf, Int32(12))
-
-
         case .snapshotRefresh:
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(12))
 
         }
     }
@@ -62353,6 +65058,30 @@ fileprivate struct FfiConverterOptionTypeAccountAttentionSnapshotFfi: FfiConvert
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeAccountAttentionSnapshotFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeAgentItemFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AgentItemFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeAgentItemFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeAgentItemFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -63849,6 +66578,30 @@ fileprivate struct FfiConverterOptionTypeHistoryImportProvenanceFfi: FfiConverte
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeInviteDeliveryProblemFfi: FfiConverterRustBuffer {
+    typealias SwiftType = InviteDeliveryProblemFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeInviteDeliveryProblemFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeInviteDeliveryProblemFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeLocalSendStatusFfi: FfiConverterRustBuffer {
     typealias SwiftType = LocalSendStatusFfi?
 
@@ -63993,6 +66746,30 @@ fileprivate struct FfiConverterOptionTypeOversizedArtifactFfi: FfiConverterRustB
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeRelayHealthFaultFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayHealthFaultFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeRelayHealthFaultFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeRelayHealthFaultFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeRelayPolicyFfi: FfiConverterRustBuffer {
     typealias SwiftType = RelayPolicyFfi?
 
@@ -64009,6 +66786,30 @@ fileprivate struct FfiConverterOptionTypeRelayPolicyFfi: FfiConverterRustBuffer 
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeRelayPolicyFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeRelayWarningSeverityFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayWarningSeverityFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeRelayWarningSeverityFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeRelayWarningSeverityFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -64355,6 +67156,31 @@ fileprivate struct FfiConverterSequenceTypeAccountKeyPackageRelayEventFfi: FfiCo
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeAccountKeyPackageRelayEventFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeAccountRelayWarningFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [AccountRelayWarningFfi]
+
+    public static func write(_ value: [AccountRelayWarningFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeAccountRelayWarningFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [AccountRelayWarningFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [AccountRelayWarningFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeAccountRelayWarningFfi.read(from: &buf))
         }
         return seq
     }
@@ -65538,6 +68364,56 @@ fileprivate struct FfiConverterSequenceTypeInstalledCustomEmojiFfi: FfiConverter
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeInviteDeliveryFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [InviteDeliveryFfi]
+
+    public static func write(_ value: [InviteDeliveryFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeInviteDeliveryFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [InviteDeliveryFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [InviteDeliveryFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeInviteDeliveryFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeInviteDeviceDeliveryFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [InviteDeviceDeliveryFfi]
+
+    public static func write(_ value: [InviteDeviceDeliveryFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeInviteDeviceDeliveryFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [InviteDeviceDeliveryFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [InviteDeviceDeliveryFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeInviteDeviceDeliveryFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeLinkChatProgressFfi: FfiConverterRustBuffer {
     typealias SwiftType = [LinkChatProgressFfi]
 
@@ -66413,6 +69289,31 @@ fileprivate struct FfiConverterSequenceTypeRelayFailureFfi: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeRelayHealthRowFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [RelayHealthRowFfi]
+
+    public static func write(_ value: [RelayHealthRowFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRelayHealthRowFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RelayHealthRowFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RelayHealthRowFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRelayHealthRowFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeRelayLivenessFfi: FfiConverterRustBuffer {
     typealias SwiftType = [RelayLivenessFfi]
 
@@ -66988,6 +69889,56 @@ fileprivate struct FfiConverterSequenceTypeOnboardingActionFfi: FfiConverterRust
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeRelayRepairActionFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [RelayRepairActionFfi]
+
+    public static func write(_ value: [RelayRepairActionFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRelayRepairActionFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RelayRepairActionFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RelayRepairActionFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRelayRepairActionFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeRelayRoleFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [RelayRoleFfi]
+
+    public static func write(_ value: [RelayRoleFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRelayRoleFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RelayRoleFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RelayRoleFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRelayRoleFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeTimelineMessageChangeFfi: FfiConverterRustBuffer {
     typealias SwiftType = [TimelineMessageChangeFfi]
 
@@ -67064,11 +70015,16 @@ private let UNIFFI_RUST_FUTURE_POLL_MAYBE_READY: Int8 = 1
 
 fileprivate let uniffiContinuationHandleMap = UniffiHandleMap<UnsafeContinuation<Int8, Never>>()
 
+// MarmotKit: with `cancelFunc`, cancelling the awaiting Task cancels the native
+// future and the call throws CancellationError. A result that completed first is
+// returned instead, so nothing it owns is dropped. The future is freed either
+// way, which releases the native references it holds.
 fileprivate func uniffiRustCallAsync<F, T>(
     rustFutureFunc: () -> UInt64,
     pollFunc: (UInt64, @escaping UniffiRustFutureContinuationCallback, UInt64) -> (),
     completeFunc: (UInt64, UnsafeMutablePointer<RustCallStatus>) -> F,
     freeFunc: (UInt64) -> (),
+    cancelFunc: ((UInt64) -> ())? = nil,
     liftFunc: (F) throws -> T,
     errorHandler: ((RustBuffer) throws -> Swift.Error)?
 ) async throws -> T {
@@ -67076,24 +70032,59 @@ fileprivate func uniffiRustCallAsync<F, T>(
     // RustCallStatus param, so doesn't use makeRustCall()
     uniffiEnsureMarmotUniffiInitialized()
     let rustFuture = rustFutureFunc()
+    let cancellation = UniffiRustFutureCancellation(rustFuture, cancelFunc)
     defer {
+        cancellation.retire()
         freeFunc(rustFuture)
     }
-    var pollResult: Int8;
-    repeat {
-        pollResult = await withUnsafeContinuation {
-            pollFunc(
-                rustFuture,
-                uniffiFutureContinuationCallback,
-                uniffiContinuationHandleMap.insert(obj: $0)
-            )
-        }
-    } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
+    await withTaskCancellationHandler {
+        var pollResult: Int8
+        repeat {
+            pollResult = await withUnsafeContinuation {
+                pollFunc(
+                    rustFuture,
+                    uniffiFutureContinuationCallback,
+                    uniffiContinuationHandleMap.insert(obj: $0)
+                )
+            }
+        } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
+    } onCancel: {
+        cancellation.cancel()
+    }
 
-    return try liftFunc(makeRustCall(
-        { completeFunc(rustFuture, $0) },
-        errorHandler: errorHandler
-    ))
+    var callStatus = RustCallStatus.init()
+    let returnedVal = completeFunc(rustFuture, &callStatus)
+    if callStatus.code == CALL_CANCELLED {
+        throw CancellationError()
+    }
+    try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: errorHandler)
+    return try liftFunc(returnedVal)
+}
+
+// The lock keeps a late cancellation from using the handle after it is freed.
+fileprivate final class UniffiRustFutureCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var rustFuture: UInt64?
+    private let cancelFunc: ((UInt64) -> ())?
+
+    init(_ rustFuture: UInt64, _ cancelFunc: ((UInt64) -> ())?) {
+        self.rustFuture = rustFuture
+        self.cancelFunc = cancelFunc
+    }
+
+    func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        if let rustFuture, let cancelFunc {
+            cancelFunc(rustFuture)
+        }
+    }
+
+    func retire() {
+        lock.lock()
+        defer { lock.unlock() }
+        rustFuture = nil
+    }
 }
 
 // Callback handlers for an async calls.  These are invoked by Rust when the future is ready.  They
@@ -67351,6 +70342,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_recovery_status() != 28753) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_health() != 20866) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_lists() != 47794) {
@@ -67788,6 +70782,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_installed_custom_emoji() != 43458) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_invite_deliveries() != 15380) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_invite_members() != 5727) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -67839,13 +70836,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_local_send_status() != 62132) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_login() != 10007) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_login() != 50281) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_login_external_signer() != 48495) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_login_external_signer() != 48873) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_login_recovering_incomplete_setup() != 3221) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_login_recovering_incomplete_setup() != 30731) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_mark_timeline_message_read() != 32522) {
@@ -67881,7 +70878,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_nip46_register() != 15708) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_nip46_remove() != 3882) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_nip46_remove() != 50651) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_nip46_resume() != 57920) {
@@ -67953,7 +70950,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_presented_chat_list_row() != 21638) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_prewarm_group_member_key_packages() != 23209) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_prewarm_group_member_key_packages() != 57275) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_promote_admin() != 43119) {
@@ -68058,7 +71055,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_release_attachment_handoff() != 63595) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_remove_account() != 37396) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_remove_account() != 64453) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_attachments_older_than() != 45882) {
@@ -68190,6 +71187,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_custom_event() != 39139) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_custom_event_with_client_token() != 56176) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_media_attachments() != 49746) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -68244,7 +71244,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_retention() != 39965) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_settings() != 36141) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_settings() != 14797) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_source() != 48415) {
@@ -68310,10 +71310,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_shutdown_and_close() != 12346) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_in_account() != 63258) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_in_account() != 35461) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out() != 55469) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out() != 5216) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out_and_wipe() != 20394) {
@@ -68359,6 +71359,18 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_submit_moderation_report() != 50855) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_submit_tagged_reply() != 20459) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_submit_tagged_sticker() != 17870) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_submit_tagged_text() != 29615) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_submit_thread_message() != 9741) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_account_attention() != 57261) {
@@ -68669,160 +71681,148 @@ public func uniffiEnsureMarmotUniffiInitialized() {
 import Foundation
 import marmot_uniffiFFI
 
-// UniFFI 0.29.4 does not forward Swift Task cancellation to native futures.
-extension PresentedChatListSubscription {
-  public func nextCancellable() async throws -> PresentedChatListUpdateFfi? {
-    try Task.checkCancellation()
-    return try await cancellableProjectionNext(
-      uniffi_marmot_uniffi_fn_method_presentedchatlistsubscription_next(uniffiClonePointer()),
-      read: FfiConverterTypePresentedChatListUpdateFfi.read
-    )
-  }
-}
+// MarmotKit's binding generator makes every throwing async call forward Swift Task
+// cancellation to its native future (src/bin/uniffi-bindgen.rs). These receives
+// are generated non-throwing, so they cannot report cancellation: each adapter
+// below is its throwing, cancellable form.
 
-extension ChatListWindowSubscription {
-  public func nextCancellable() async throws -> ChatListWindowSnapshotFfi? {
-    try Task.checkCancellation()
-    return try await cancellableProjectionNext(
-      uniffi_marmot_uniffi_fn_method_chatlistwindowsubscription_next(uniffiClonePointer()),
-      read: FfiConverterTypeChatListWindowSnapshotFfi.read
-    )
-  }
-}
-
-extension AccountAttentionSubscription {
-  public func nextCancellable() async throws -> AccountAttentionSnapshotFfi? {
-    try Task.checkCancellation()
-    return try await cancellableProjectionNext(
-      uniffi_marmot_uniffi_fn_method_accountattentionsubscription_next(uniffiClonePointer()),
-      read: FfiConverterTypeAccountAttentionSnapshotFfi.read
-    )
-  }
-}
-
-extension ConversationWindowSubscription {
-  public func nextCancellable() async throws -> ConversationWindowSnapshotFfi? {
-    try Task.checkCancellation()
-    return try await cancellableProjectionNext(
-      uniffi_marmot_uniffi_fn_method_conversationwindowsubscription_next(uniffiClonePointer()),
-      read: FfiConverterTypeConversationWindowSnapshotFfi.read
-    )
+extension BackupRestoreSubscription {
+  public func nextCancellable() async throws -> BackupRestoreStatusFfi? {
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_backuprestoresubscription_next(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeBackupRestoreStatusFfi.lift)
   }
 }
 
 extension BlockListSubscription {
   public func nextCancellable() async throws -> BlockListSnapshotFfi? {
-    try Task.checkCancellation()
-    return try await cancellableProjectionNext(
-      uniffi_marmot_uniffi_fn_method_blocklistsubscription_next(uniffiClonePointer()),
-      read: FfiConverterTypeBlockListSnapshotFfi.read
-    )
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_blocklistsubscription_next(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeBlockListSnapshotFfi.lift)
   }
 }
 
-private func cancellableProjectionNext<Value>(
-  _ handle: UInt64,
-  read: (inout (data: Data, offset: Data.Index)) throws -> Value
-) async throws -> Value? {
-  let future = CancellableSubscriptionNativeFuture(handle)
-  defer { future.free() }
-  // The handle is already owned here. Even a pre-cancelled task must cancel and free it.
-  return try await withTaskCancellationHandler {
-    var ready: Int8 = 1
-    repeat {
-      ready = await withCheckedContinuation { continuation in
-        let box = Unmanaged.passRetained(CancellableSubscriptionPoll(continuation))
-        ffi_marmot_uniffi_rust_future_poll_rust_buffer(
-          future.handle,
-          { raw, result in
-            let box = Unmanaged<CancellableSubscriptionPoll>.fromOpaque(
-              UnsafeRawPointer(bitPattern: UInt(raw))!)
-            box.takeRetainedValue().continuation.resume(returning: result)
-          },
-          UInt64(UInt(bitPattern: box.toOpaque()))
-        )
-      }
-    } while ready != 0
-    var status = RustCallStatus(code: 0, errorBuf: .init(capacity: 0, len: 0, data: nil))
-    let buffer = ffi_marmot_uniffi_rust_future_complete_rust_buffer(future.handle, &status)
-    defer {
-      freeSubscriptionBuffer(buffer)
-      freeSubscriptionBuffer(status.errorBuf)
-    }
-    switch status.code {
-    case 0:
-      var reader = try cancellableSubscriptionReader(buffer)
-      let value: Value?
-      switch try readInt(&reader) as UInt8 {
-      case 0: value = nil
-      case 1: value = try read(&reader)
-      default: throw UniffiInternalError.unexpectedOptionalTag
-      }
-      guard !hasRemaining(reader) else { throw UniffiInternalError.incompleteData }
-      try Task.checkCancellation()
-      return value
-    case 1:
-      // Read rather than lift: the defer owns this buffer even when decoding throws.
-      var reader = try cancellableSubscriptionReader(status.errorBuf)
-      let error = try FfiConverterTypeMarmotKitError.read(from: &reader)
-      guard !hasRemaining(reader) else { throw UniffiInternalError.incompleteData }
-      try Task.checkCancellation()
-      throw error
-    case 2:
-      let message: String
-      if let bytes = status.errorBuf.data, status.errorBuf.len > 0 {
-        message = String(
-          decoding: UnsafeBufferPointer(start: bytes, count: Int(status.errorBuf.len)),
-          as: UTF8.self)
-      } else {
-        message = "Rust panic"
-      }
-      throw UniffiInternalError.rustPanic(message)
-    case 3:
-      throw CancellationError()
-    default:
-      throw UniffiInternalError.unexpectedRustCallStatusCode
-    }
-  } onCancel: {
-    future.cancel()
+extension ChatListSubscription {
+  public func nextCancellable() async throws -> ChatListRowFfi? {
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_chatlistsubscription_next(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeChatListRowFfi.lift)
+  }
+
+  public func nextUpdateCancellable() async throws -> ChatListSubscriptionUpdateFfi? {
+    try await cancellableReceive(
+      {
+        uniffi_marmot_uniffi_fn_method_chatlistsubscription_next_update(self.uniffiClonePointer())
+      },
+      FfiConverterOptionTypeChatListSubscriptionUpdateFfi.lift)
   }
 }
 
-private func cancellableSubscriptionReader(_ buffer: RustBuffer) throws -> (
-  data: Data, offset: Data.Index
-) {
-  guard let bytes = buffer.data, buffer.len > 0 else { throw UniffiInternalError.bufferOverflow }
-  return (Data(bytesNoCopy: bytes, count: Int(buffer.len), deallocator: .none), 0)
-}
-
-private final class CancellableSubscriptionPoll {
-  let continuation: CheckedContinuation<Int8, Never>
-  init(_ continuation: CheckedContinuation<Int8, Never>) { self.continuation = continuation }
-}
-
-// The lock prevents cancellation from using a handle after free, including late cancellation.
-private final class CancellableSubscriptionNativeFuture: @unchecked Sendable {
-  let handle: UInt64
-  private let lock = NSLock()
-  private var freed = false
-  init(_ handle: UInt64) { self.handle = handle }
-
-  func cancel() {
-    lock.lock()
-    defer { lock.unlock() }
-    if !freed { ffi_marmot_uniffi_rust_future_cancel_rust_buffer(handle) }
-  }
-
-  func free() {
-    lock.lock()
-    defer { lock.unlock() }
-    guard !freed else { return }
-    freed = true
-    ffi_marmot_uniffi_rust_future_free_rust_buffer(handle)
+extension ChatsSubscription {
+  public func nextCancellable() async throws -> AppGroupRecordFfi? {
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_chatssubscription_next(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeAppGroupRecordFfi.lift)
   }
 }
 
-private func freeSubscriptionBuffer(_ buffer: RustBuffer) {
-  guard buffer.capacity > 0 || buffer.data != nil else { return }
-  buffer.deallocate()
+extension EventsSubscription {
+  public func nextCancellable() async throws -> MarmotEventFfi? {
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_eventssubscription_next(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeMarmotEventFfi.lift)
+  }
+}
+
+extension GroupStateSubscription {
+  public func nextCancellable() async throws -> AppGroupRecordFfi? {
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_groupstatesubscription_next(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeAppGroupRecordFfi.lift)
+  }
+}
+
+extension MessagesSubscription {
+  public func nextCancellable() async throws -> MessageUpdateFfi? {
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_messagessubscription_next(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeMessageUpdateFfi.lift)
+  }
+}
+
+extension NotificationsSubscription {
+  public func nextCancellable() async throws -> NotificationUpdateFfi? {
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_notificationssubscription_next(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeNotificationUpdateFfi.lift)
+  }
+}
+
+extension OnboardingSubscription {
+  public func nextCancellable() async throws -> OnboardingSnapshotFfi? {
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_onboardingsubscription_next(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeOnboardingSnapshotFfi.lift)
+  }
+}
+
+extension TimelineMessagesSubscription {
+  public func nextCancellable() async throws -> TimelinePageFfi? {
+    try await cancellableReceive(
+      {
+        uniffi_marmot_uniffi_fn_method_timelinemessagessubscription_next(self.uniffiClonePointer())
+      },
+      FfiConverterOptionTypeTimelinePageFfi.lift)
+  }
+
+  public func nextUpdateCancellable() async throws -> TimelineSubscriptionUpdateFfi? {
+    try await cancellableReceive(
+      {
+        uniffi_marmot_uniffi_fn_method_timelinemessagessubscription_next_update(
+          self.uniffiClonePointer())
+      },
+      FfiConverterOptionTypeTimelineSubscriptionUpdateFfi.lift)
+  }
+}
+
+extension UserSearchSubscription {
+  public func nextUpdateCancellable() async throws -> UserSearchUpdateFfi? {
+    try await cancellableReceive(
+      { uniffi_marmot_uniffi_fn_method_usersearchsubscription_next_update(self.uniffiClonePointer()) },
+      FfiConverterOptionTypeUserSearchUpdateFfi.lift)
+  }
+}
+
+// These generated `next()` methods throw, so they already forward cancellation.
+// The adapters remain for hosts written against them.
+
+extension PresentedChatListSubscription {
+  public func nextCancellable() async throws -> PresentedChatListUpdateFfi? { try await next() }
+}
+
+extension ChatListWindowSubscription {
+  public func nextCancellable() async throws -> ChatListWindowSnapshotFfi? { try await next() }
+}
+
+extension AccountAttentionSubscription {
+  public func nextCancellable() async throws -> AccountAttentionSnapshotFfi? { try await next() }
+}
+
+extension ConversationWindowSubscription {
+  public func nextCancellable() async throws -> ConversationWindowSnapshotFfi? { try await next() }
+}
+
+private func cancellableReceive<Value>(
+  _ makeFuture: () -> UInt64,
+  _ lift: (RustBuffer) throws -> Value
+) async throws -> Value {
+  try await uniffiRustCallAsync(
+    rustFutureFunc: makeFuture,
+    pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+    completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+    freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+    cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
+    liftFunc: lift,
+    errorHandler: nil
+  )
 }

@@ -379,6 +379,7 @@ extension MessageBubble: Equatable {
             && lhs.hasReports == rhs.hasReports
             && lhs.usesReviewLayout == rhs.usesReviewLayout
             && lhs.agentActivity == rhs.agentActivity
+            && lhs.isAgentCommentary == rhs.isAgentCommentary
             && lhs.voiceTranscript == rhs.voiceTranscript
             && lhs.readingSpeech === rhs.readingSpeech
             && lhs.displaysReader == rhs.displaysReader
@@ -466,6 +467,7 @@ struct MessageBubble: View {
     var hasReports: Bool = false
     var usesReviewLayout: Bool = false
     var agentActivity: AgentEventPresentation.Display?
+    var isAgentCommentary: Bool = false
     var clusterPresentation: MessageClusterPresentation = .none
     var showsSenderIdentity = true
     var replyPreview: ConversationReplyPreview? = nil
@@ -1217,9 +1219,10 @@ struct MessageBubble: View {
                 }
             }
         }
-        .font(.body)
+        .font(isAgentCommentary ? .subheadline : .body)
         .background { bubbleBackground }
         .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
+        .opacity(isAgentCommentary ? 0.82 : 1)
         .overlay {
             if let debugStyle {
                 RoundedRectangle(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous)

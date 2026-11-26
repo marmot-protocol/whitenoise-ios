@@ -21,6 +21,7 @@ struct ConversationHeaderBar<Title: View>: View {
     let isSelectingMessages: Bool
     let onBack: () -> Void
     let onClose: () -> Void
+    var onAgentControls: (() -> Void)? = nil
     @ViewBuilder var title: Title
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -53,6 +54,12 @@ struct ConversationHeaderBar<Title: View>: View {
 
                 if isSelectingMessages {
                     WNIconButton(title: "Close", systemImage: "xmark", action: onClose)
+                } else if let onAgentControls {
+                    WNIconButton(
+                        title: "Agent controls",
+                        systemImage: "slider.horizontal.3",
+                        action: onAgentControls
+                    )
                 }
             }
         }

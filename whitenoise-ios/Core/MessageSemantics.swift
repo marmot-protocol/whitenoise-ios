@@ -161,6 +161,21 @@ nonisolated enum MessageSemantics {
             || kind == kindGroupSystem
     }
 
+    /// True for an agent's in-progress commentary remark (`["phase", "commentary"]`)
+    /// carried on a kind-9 or kind-1111 message. Rendered quieter and never alerts.
+    static func isAgentCommentary(tags: [MessageTagFfi]) -> Bool {
+        firstValue(of: "phase", in: tags) == "commentary"
+    }
+
+    static func agentSettlesEventIds(in tags: [MessageTagFfi]) -> [String] {
+        allValues(of: "settles", in: tags).filter { !$0.isEmpty }
+    }
+
+    static func agentSubagentTaskId(in tags: [MessageTagFfi]) -> String? {
+        guard let value = firstValue(of: "subagent", in: tags), !value.isEmpty else { return nil }
+        return value
+    }
+
     // MARK: - Tag helpers
 
     /// First value following a named tag (`tag.values[0] == name` → `tag.values[1]`).

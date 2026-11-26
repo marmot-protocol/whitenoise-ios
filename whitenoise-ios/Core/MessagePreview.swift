@@ -51,7 +51,14 @@ enum MessagePreview {
                 )
             }
             return mediaFallback(attachments)
-        case .agentActivity, .agentOperation:
+        case .agentActivity:
+            return AgentEventPresentation.previewText(from: record.plaintext)
+                ?? ContentSanitizer.compactSingleLine(
+                    record.plaintext,
+                    maxLength: AgentEventPresentation.maxPrimaryTextLength
+                )
+                ?? ""
+        case .agentOperation:
             return AgentEventPresentation.previewText(from: record.plaintext) ?? ""
         case .poll:
             return pollPreview(question: record.plaintext)
@@ -145,7 +152,16 @@ enum MessagePreview {
                 ) ?? ""
             }
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
-                return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
+                if let parsed = AgentEventPresentation.previewText(from: preview.plaintext) {
+                    return parsed
+                }
+                if preview.kind == MessageSemantics.kindAgentActivity {
+                    return ContentSanitizer.compactSingleLine(
+                        preview.plaintext,
+                        maxLength: AgentEventPresentation.maxPrimaryTextLength
+                    ) ?? ""
+                }
+                return ""
             }
             if preview.kind == MessageSemantics.kindPoll {
                 return pollPreview(question: preview.plaintext)
@@ -186,7 +202,16 @@ enum MessagePreview {
                 ) ?? ""
             }
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
-                return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
+                if let parsed = AgentEventPresentation.previewText(from: preview.plaintext) {
+                    return parsed
+                }
+                if preview.kind == MessageSemantics.kindAgentActivity {
+                    return ContentSanitizer.compactSingleLine(
+                        preview.plaintext,
+                        maxLength: AgentEventPresentation.maxPrimaryTextLength
+                    ) ?? ""
+                }
+                return ""
             }
             if preview.kind == MessageSemantics.kindPoll {
                 return pollPreview(question: preview.plaintext)

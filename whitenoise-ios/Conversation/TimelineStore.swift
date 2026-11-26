@@ -219,6 +219,14 @@ final class TimelineStore {
     @ObservationIgnored private var replyPreviewsByMessageId: [String: TimelineReplyPreviewFfi] = [:]
     @ObservationIgnored private var replyPreviewDisplayCache: [String: ReplyPreviewDisplayCacheEntry] = [:]
     @ObservationIgnored private var groupSystemByMessageId: [String: GroupSystemEventFfi] = [:]
+    /// Parsed structured agent items (kind 1201 with `agent_item`), by first-event message id.
+    @ObservationIgnored private var agentItemProjectionByMessageId: [String: AgentItemProjection] = [:]
+    /// NIP-22 thread references mirrored from `TimelineMessageRecordFfi.thread`.
+    @ObservationIgnored private var threadRefByMessageId: [String: TimelineThreadRefFfi] = [:]
+    /// Subagent thread partition rebuilt alongside the timeline.
+    @ObservationIgnored private(set) var subagentThreadIndex: AgentSubagentThreadIndex = .empty
+    /// All event IDs named in `settles` across loaded agent items and agent messages.
+    @ObservationIgnored private(set) var settledAgentEventIds: Set<String> = []
     /// MDK's validated tally for kind-1068 rows; absent means not a valid poll.
     @ObservationIgnored private var pollByMessageId: [String: PollProjectionFfi] = [:]
     /// Last applied kind-1068 record and a counter bumped whenever MDK
@@ -338,9 +346,15 @@ final class TimelineStore {
         let agentOperation: String?
         let agentOperationName: String?
         let invalidated: Bool
+        let agentItemVersion: UInt64?
+        let agentItemState: AgentItemStateFfi?
+        let agentItemFirstEventMissing: Bool
 
-        init(_ record: AppMessageRecordFfi) {
+        init(_ record: AppMessageRecordFfi, agentItem: AgentItemProjection? = nil) {
             invalidated = record.invalidated
+            agentItemVersion = agentItem?.item.version
+            agentItemState = agentItem?.item.state
+            agentItemFirstEventMissing = agentItem?.firstEventMissing ?? false
             messageIdHex = record.messageIdHex
             direction = record.direction
             sender = record.sender
@@ -379,12 +393,12 @@ final class TimelineStore {
         let timestamp: UInt64
         let kind: TimelineItemSignatureKind
 
-        init(_ item: TimelineItem) {
+        init(_ item: TimelineItem, agentItem: AgentItemProjection? = nil) {
             id = item.id
             timestamp = item.timestamp
             switch item.kind {
             case .message(let record, let status):
-                kind = .message(MessageTimelineSignature(record), status)
+                kind = .message(MessageTimelineSignature(record, agentItem: agentItem), status)
             case .systemEvent(let event):
                 kind = .systemEvent(event)
             }
@@ -842,6 +856,12 @@ final class TimelineStore {
 
     func agentEventDisplay(for item: TimelineItem) -> AgentEventPresentation.Display? {
         _ = timelineProjectionGeneration
+        // Structured agent items (MarmotKit 0.20+ `agentItem`) render via `AgentItemRow`,
+        // not the legacy JSON `AgentEventRow`.
+        if case .message(let record, _) = item.kind,
+           agentItemProjectionByMessageId[record.messageIdHex] != nil {
+            return nil
+        }
         guard var display = agentEventProjections.display(for: item) else { return nil }
         if display.reportsWorkInProgress, answeredActivityRows.contains(item.id) {
             display.iconName = AgentEventPresentation.completedIcon
@@ -854,6 +874,97 @@ final class TimelineStore {
             display.secondaryText = nil
         }
         return display
+    }
+
+    func agentItemProjection(forMessageId messageIdHex: String) -> AgentItemProjection? {
+        _ = timelineProjectionGeneration
+        return agentItemProjectionByMessageId[messageIdHex]
+    }
+
+    func allAgentItemProjections() -> [AgentItemProjection] {
+        _ = timelineProjectionGeneration
+        return Array(agentItemProjectionByMessageId.values)
+    }
+
+    func subagentThreadSummary(forTaskMessageId taskMessageIdHex: String) -> AgentSubagentThreadSummary? {
+        _ = timelineProjectionGeneration
+        return subagentThreadIndex.summariesByTaskMessageId[taskMessageIdHex]
+    }
+
+    /// Ordered timeline rows belonging to one subagent's thread view.
+    func subagentThreadItems(forTaskMessageId taskMessageIdHex: String) -> [TimelineItem] {
+        _ = timelineProjectionGeneration
+        guard let summary = subagentThreadIndex.summariesByTaskMessageId[taskMessageIdHex] else { return [] }
+        return summary.directChildMessageIds.compactMap { messageId in
+            guard let record = messageById[messageId], !isBlockedAuthor(record.sender) else { return nil }
+            if let normalized = Hex.normalized32Bytes(record.messageIdHex), hiddenMessageIds.contains(normalized) {
+                return nil
+            }
+            let displayed = record.kind == MessageSemantics.kindAgentActivity
+                ? record
+                : editProjections.displayRecord(for: record)
+            let item = TimelineItem.message(displayed, status: messageStatusById[messageId])
+            return TimelineItem(id: displayID(for: messageId), kind: item.kind, timestamp: item.timestamp)
+        }
+    }
+
+    /// Active running main-chat turns, newest last (one per agent pubkey when running).
+    func activeRunningTurns() -> [AgentItemProjection] {
+        _ = timelineProjectionGeneration
+        let order = preparedOrder ?? Array(messageById.keys)
+        var latestByAgent: [String: AgentItemProjection] = [:]
+        var agentOrder: [String] = []
+        for id in order {
+            guard let projection = agentItemProjectionByMessageId[id],
+                  case .turn = projection.body,
+                  !subagentThreadIndex.hiddenFromMainTimeline.contains(id)
+            else { continue }
+            if latestByAgent[projection.sender] == nil {
+                agentOrder.append(projection.sender)
+            }
+            latestByAgent[projection.sender] = projection
+        }
+        return agentOrder.compactMap { sender in
+            guard let latest = latestByAgent[sender], latest.item.state == .running else { return nil }
+            return latest
+        }
+    }
+
+    /// Main-chat subagent task rows whose thread currently holds a waiting
+    /// approval or question, so the running bar can keep them one tap away even
+    /// while the parent agent posts more rows below.
+    func waitingSubagentTasks() -> [(task: AgentItemProjection, waiting: AgentItemProjection)] {
+        _ = timelineProjectionGeneration
+        let order = preparedOrder ?? Array(messageById.keys)
+        var results: [(task: AgentItemProjection, waiting: AgentItemProjection)] = []
+        for id in order {
+            guard let task = agentItemProjectionByMessageId[id],
+                  task.isSubagentTask,
+                  !subagentThreadIndex.hiddenFromMainTimeline.contains(id),
+                  let summary = subagentThreadIndex.summariesByTaskMessageId[id],
+                  let waiting = summary.waitingInteractions.last
+            else { continue }
+            results.append((task: task, waiting: waiting))
+        }
+        return results
+    }
+
+    /// Latest `session` item per agent in this chat, newest last.
+    func latestAgentSessions() -> [AgentItemProjection] {
+        _ = timelineProjectionGeneration
+        let order = preparedOrder ?? Array(messageById.keys)
+        var latestByAgent: [String: AgentItemProjection] = [:]
+        var agentOrder: [String] = []
+        for id in order {
+            guard let projection = agentItemProjectionByMessageId[id],
+                  case .session = projection.body
+            else { continue }
+            if latestByAgent[projection.sender] == nil {
+                agentOrder.append(projection.sender)
+            }
+            latestByAgent[projection.sender] = projection
+        }
+        return agentOrder.compactMap { latestByAgent[$0] }
     }
 
     // MARK: - Page application (driven by the view model's IO)
@@ -1099,6 +1210,20 @@ final class TimelineStore {
         replyPreviewDisplayCache[appRecord.messageIdHex] = nil
         groupSystemDisplayCache[appRecord.messageIdHex] = nil
         groupSystemByMessageId[appRecord.messageIdHex] = record.groupSystem
+        threadRefByMessageId[appRecord.messageIdHex] = record.thread
+        if let agentItem = record.agentItem {
+            agentItemProjectionByMessageId[appRecord.messageIdHex] = AgentItemProjection.parse(
+                messageIdHex: appRecord.messageIdHex,
+                sender: appRecord.sender,
+                item: agentItem,
+                firstEventMissing: record.agentItemFirstEventMissing,
+                thread: record.thread,
+                plaintext: record.plaintext,
+                tags: record.tags
+            )
+        } else {
+            agentItemProjectionByMessageId[appRecord.messageIdHex] = nil
+        }
         pollByMessageId[appRecord.messageIdHex] = record.poll
         if record.kind == MessageSemantics.kindPoll {
             notePollRowReprojection(record, messageIdHex: appRecord.messageIdHex, live: trigger != nil)
@@ -1172,7 +1297,9 @@ final class TimelineStore {
         )
 
         if updateTimeline {
-            if let item = visibleTimelineItem(
+            if rebuildAgentProjections() {
+                projectionChanged = rebuildTimeline() || projectionChanged
+            } else if let item = visibleTimelineItem(
                 for: appRecord,
                 status: messageStatusById[appRecord.messageIdHex]
             ) {
@@ -1209,6 +1336,8 @@ final class TimelineStore {
         replyPreviewDisplayCache[messageIdHex] = nil
         groupSystemDisplayCache[messageIdHex] = nil
         groupSystemByMessageId[messageIdHex] = nil
+        agentItemProjectionByMessageId[messageIdHex] = nil
+        threadRefByMessageId[messageIdHex] = nil
         notePollRowReprojection(nil, messageIdHex: messageIdHex, live: true)
         mediaProjections.removeReferences(forMessageId: messageIdHex)
         reactionProjections.removeSummary(forMessageId: messageIdHex)
@@ -1243,12 +1372,52 @@ final class TimelineStore {
         } else {
             changed = recomputeReactions() || changed
         }
-        if shouldRebuildTimeline {
+        let agentIndexChanged = rebuildAgentProjections()
+        changed = agentIndexChanged || changed
+        if shouldRebuildTimeline || agentIndexChanged {
             changed = rebuildTimeline() || changed
         }
         if changed {
             noteProjectionChanged()
         }
+    }
+
+    @discardableResult
+    private func rebuildAgentProjections() -> Bool {
+        let orderedIds: [String]
+        if let preparedOrder {
+            orderedIds = preparedOrder
+        } else {
+            orderedIds = messageById.values
+                .sorted { lhs, rhs in
+                    let lts = TimelineItem.sortTimestamp(for: lhs)
+                    let rts = TimelineItem.sortTimestamp(for: rhs)
+                    return lts == rts ? lhs.messageIdHex < rhs.messageIdHex : lts < rts
+                }
+                .map(\.messageIdHex)
+        }
+        let senderById = messageById.mapValues(\.sender)
+        let nextIndex = AgentSubagentThreadIndex.build(
+            orderedMessageIds: orderedIds,
+            agentItemsByMessageId: agentItemProjectionByMessageId,
+            threadRefByMessageId: threadRefByMessageId,
+            senderByMessageId: senderById
+        )
+        var nextSettled: Set<String> = []
+        for projection in agentItemProjectionByMessageId.values {
+            nextSettled.formUnion(projection.item.settles)
+        }
+        for record in messageById.values where record.kind == MessageSemantics.kindChat || record.kind == MessageSemantics.kindComment {
+            let settles = MessageSemantics.agentSettlesEventIds(in: record.tags)
+            if !settles.isEmpty {
+                nextSettled.formUnion(settles)
+            }
+        }
+        let indexChanged = nextIndex != subagentThreadIndex
+        let settledChanged = nextSettled != settledAgentEventIds
+        subagentThreadIndex = nextIndex
+        settledAgentEventIds = nextSettled
+        return indexChanged || settledChanged
     }
 
     @discardableResult
@@ -1342,10 +1511,22 @@ final class TimelineStore {
         if isBlockedAuthor(record.sender) {
             return nil
         }
+        if subagentThreadIndex.hiddenFromMainTimeline.contains(record.messageIdHex) {
+            return nil
+        }
         switch MessageSemantics.classify(record) {
         case .chat, .reply, .media:
             return row(editProjections.displayRecord(for: record))
-        case .agentActivity, .agentOperation:
+        case .agentActivity:
+            let item = row(record)
+            // Structured agent item (kind 1201 with `agent_item`) always renders.
+            if agentItemProjectionByMessageId[record.messageIdHex] != nil {
+                return item
+            }
+            // Legacy JSON activity OR plain-text fallback (e.g. older Hermes plugin):
+            // kind-1201 rows with no `agent_item` must still show as a simple row, never disappear.
+            return item
+        case .agentOperation:
             let item = row(record)
             guard agentEventProjections.display(for: item) != nil else { return nil }
             return item
@@ -1396,12 +1577,19 @@ final class TimelineStore {
         return assignTimeline(next) || markdownChanged || mediaChanged
     }
 
+    private func signature(for item: TimelineItem) -> TimelineItemSignature {
+        if case .message(let record, _) = item.kind {
+            return TimelineItemSignature(item, agentItem: agentItemProjectionByMessageId[record.messageIdHex])
+        }
+        return TimelineItemSignature(item)
+    }
+
     @discardableResult
     private func assignTimeline(_ next: [TimelineItem]) -> Bool {
         let signpost = Self.performanceSignposter.beginInterval("TimelineStore.assignTimeline")
         defer { Self.performanceSignposter.endInterval("TimelineStore.assignTimeline", signpost) }
 
-        let nextSignature = next.map(TimelineItemSignature.init)
+        let nextSignature = next.map { signature(for: $0) }
         messageByRowFrameKey = Self.messageRowsByFrameKey(next)
         timelineIndexByMessageId = Self.timelineIndexesByMessageId(next)
         // MDK's projected reply target can change independently of the visible record.
@@ -1416,7 +1604,7 @@ final class TimelineStore {
     }
 
     private func replaceTimelineItem(_ item: TimelineItem, at index: Int) -> Bool {
-        let signature = TimelineItemSignature(item)
+        let signature = signature(for: item)
         if index < timelineSignature.count, timelineSignature[index] == signature {
             return false
         }
@@ -1437,7 +1625,7 @@ final class TimelineStore {
         if timelineSignature.count == timeline.count {
             timelineSignature[index] = signature
         } else {
-            timelineSignature = timeline.map(TimelineItemSignature.init)
+            timelineSignature = timeline.map { self.signature(for: $0) }
         }
         rebuildHistoryImportBoundariesAndInvalidateClusters()
         if affectsActivityCompletion(previous) || affectsActivityCompletion(item) {
@@ -1539,8 +1727,11 @@ final class TimelineStore {
         }
     }
 
+    @ObservationIgnored var onAgentProjectionUpdated: (() -> Void)?
+
     func noteProjectionChanged() {
         timelineProjectionGeneration += 1
+        onAgentProjectionUpdated?()
         relativeTimestampRefresh.reschedule()
     }
 

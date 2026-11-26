@@ -204,6 +204,11 @@ final class ConversationViewModel {
     /// window, current-match cursor, and the budgeted older-history step.
     @ObservationIgnored let search: ConversationSearchModel
 
+    /// Tracks pending kind-1202 answers/controls until settled by an agent item,
+    /// and resolves who answered settled items.
+    let agentInteractions = AgentInteractionStore()
+    @ObservationIgnored private var agentRequestSenderLoadTask: Task<Void, Never>?
+
     // Timeline surface forwarded from `timelineStore` (observation propagates
     // through these computed reads because `timelineStore` is `@Observable`).
     var timeline: [TimelineItem] { timelineStore.timeline }
@@ -1198,6 +1203,9 @@ final class ConversationViewModel {
         composer.canSendMediaAttachments = { [weak self] in self?.canSendMediaAttachments ?? false }
         composer.currentGroupEpoch = { [weak self] in self?.conversationWindow?.header.epoch }
         composer.onError = { [weak self] message in self?.error = message }
+        timelineStore.onAgentProjectionUpdated = { [weak self] in
+            self?.reconcileAgentInteractions()
+        }
     }
 
     isolated deinit {
@@ -1207,6 +1215,7 @@ final class ConversationViewModel {
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
         tailRefreshTask.cancel()
+        agentRequestSenderLoadTask?.cancel()
         composer.cancelDraftMediaUploads()
     }
 
@@ -2439,6 +2448,206 @@ final class ConversationViewModel {
 
     func agentEventDisplay(for item: TimelineItem) -> AgentEventPresentation.Display? {
         timelineStore.agentEventDisplay(for: item)
+    }
+
+    func agentItemProjection(forMessageId messageIdHex: String) -> AgentItemProjection? {
+        timelineStore.agentItemProjection(forMessageId: messageIdHex)
+    }
+
+    func subagentThreadSummary(forTaskMessageId taskMessageIdHex: String) -> AgentSubagentThreadSummary? {
+        timelineStore.subagentThreadSummary(forTaskMessageId: taskMessageIdHex)
+    }
+
+    func subagentThreadItems(forTaskMessageId taskMessageIdHex: String) -> [TimelineItem] {
+        timelineStore.subagentThreadItems(forTaskMessageId: taskMessageIdHex)
+    }
+
+    var activeRunningAgentTurns: [AgentItemProjection] {
+        timelineStore.activeRunningTurns()
+    }
+
+    var waitingAgentSubagents: [(task: AgentItemProjection, waiting: AgentItemProjection)] {
+        timelineStore.waitingSubagentTasks()
+    }
+
+    var latestAgentSessions: [AgentItemProjection] {
+        timelineStore.latestAgentSessions()
+    }
+
+    /// D-041: a secret question may only be answered from the chat when there are
+    /// exactly two members (the person and the agent).
+    var isTwoPersonChat: Bool {
+        AgentQuestionPrivacyPolicy.canAnswerSecretQuestionInChat(memberCount: displayMemberCount)
+    }
+
+    func answeredByDisplayName(for projection: AgentItemProjection) -> String? {
+        guard let senderHex = agentInteractions.settledByAccountId(for: projection) else { return nil }
+        if let me = myAccountId, senderHex.caseInsensitiveCompare(me) == .orderedSame {
+            return L10n.string("You")
+        }
+        return windowDisplayName(for: senderHex)
+    }
+
+    func reconcileAgentInteractions() {
+        agentInteractions.reconcile(settledEventIds: timelineStore.settledAgentEventIds)
+        let missing = agentInteractions.unknownSettledEventIds(in: timelineStore.allAgentItemProjections())
+        guard !missing.isEmpty else { return }
+        agentInteractions.markSettledIdsQueried(missing)
+        loadKind1202RequestSenders()
+    }
+
+    private func loadKind1202RequestSenders() {
+        guard let appState, let accountRef = appState.activeAccountRef,
+              let client = appState.client else { return }
+        let groupIdHex = group.groupIdHex
+        agentRequestSenderLoadTask?.cancel()
+        agentRequestSenderLoadTask = Task { @MainActor [weak self] in
+            guard let records = try? await client.groupMessages(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                limit: 200,
+                kinds: [MessageSemantics.kindAgentOperation]
+            ), !Task.isCancelled else { return }
+            self?.agentInteractions.recordRequestSenders(records)
+        }
+    }
+
+    func sendAgentApprovalChoice(
+        _ choice: AgentItemBody.ApprovalChoice,
+        for projection: AgentItemProjection
+    ) async {
+        let payload = AgentRequestBuilder.approvalChoice(
+            agentPubkeyHex: projection.sender,
+            targetEventIdHex: projection.messageIdHex,
+            choiceId: choice.id,
+            choiceLabel: choice.label
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.itemKey(targetEventIdHex: projection.messageIdHex),
+            targetEventIdHex: projection.messageIdHex,
+            summary: choice.label,
+            payload: payload
+        )
+    }
+
+    func sendAgentQuestionAnswers(
+        _ answers: [AgentQuestionReplyPayload],
+        for projection: AgentItemProjection,
+        containsSecret: Bool,
+        summary: String
+    ) async {
+        if containsSecret && !isTwoPersonChat {
+            appState?.present(.error(
+                L10n.string("Secret answer"),
+                message: L10n.string("Answer it at the terminal.")
+            ))
+            return
+        }
+        let payload = AgentRequestBuilder.questionAnswers(
+            agentPubkeyHex: projection.sender,
+            targetEventIdHex: projection.messageIdHex,
+            answers: answers,
+            containsSecret: containsSecret,
+            nonSecretSummary: containsSecret ? nil : summary
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.itemKey(targetEventIdHex: projection.messageIdHex),
+            targetEventIdHex: projection.messageIdHex,
+            summary: containsSecret ? L10n.string("Answer sent") : summary,
+            payload: payload
+        )
+    }
+
+    func sendAgentInterrupt(agentPubkeyHex: String, targetEventIdHex: String?) async {
+        let payload = AgentRequestBuilder.interrupt(
+            agentPubkeyHex: agentPubkeyHex,
+            targetEventIdHex: targetEventIdHex
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.stopKey(agentPubkeyHex: agentPubkeyHex, targetEventIdHex: targetEventIdHex),
+            targetEventIdHex: targetEventIdHex,
+            summary: L10n.string("Stop"),
+            payload: payload
+        )
+    }
+
+    func sendAgentNewSession(agentPubkeyHex: String) async {
+        let payload = AgentRequestBuilder.newSession(agentPubkeyHex: agentPubkeyHex)
+        await sendAgentRequest(
+            key: AgentInteractionStore.newSessionKey(agentPubkeyHex: agentPubkeyHex),
+            targetEventIdHex: nil,
+            summary: L10n.string("New session"),
+            payload: payload
+        )
+    }
+
+    func sendAgentSetSetting(
+        agentPubkeyHex: String,
+        setting: AgentItemBody.SessionSetting,
+        value: String
+    ) async {
+        let payload = AgentRequestBuilder.setSetting(
+            agentPubkeyHex: agentPubkeyHex,
+            settingId: setting.id,
+            value: value,
+            label: setting.label
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.setSettingKey(agentPubkeyHex: agentPubkeyHex, settingId: setting.id),
+            targetEventIdHex: nil,
+            summary: "\(setting.label): \(value)",
+            payload: payload
+        )
+    }
+
+    func sendAgentOwnAction(
+        agentPubkeyHex: String,
+        action: AgentItemBody.SessionAction
+    ) async {
+        let payload = AgentRequestBuilder.ownAction(
+            agentPubkeyHex: agentPubkeyHex,
+            actionId: action.id,
+            label: action.label
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.ownActionKey(agentPubkeyHex: agentPubkeyHex, actionId: action.id),
+            targetEventIdHex: nil,
+            summary: action.label,
+            payload: payload
+        )
+    }
+
+    private func sendAgentRequest(
+        key: String,
+        targetEventIdHex: String?,
+        summary: String,
+        payload: AgentRequestPayload
+    ) async {
+        guard let appState,
+              let accountRef = appState.activeAccountRef,
+              let senderId = myAccountId else { return }
+        let groupIdHex = group.groupIdHex
+        do {
+            let client = try appState.currentMarmotClient()
+            _ = try await agentInteractions.submit(
+                key: key,
+                targetEventIdHex: targetEventIdHex,
+                summary: summary,
+                senderAccountIdHex: senderId,
+                payload: payload
+            ) { request, token in
+                try await client.sendCustomEventWithClientToken(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    kind: request.kind,
+                    tags: request.tags,
+                    content: request.content,
+                    clientToken: token
+                )
+            }
+        } catch {
+            appState.present(UserFacingError.toast(title: L10n.string("Couldn't send action"), error: error))
+        }
     }
 
     /// Index only the visible timeline's bounded text, sender, and attachment labels.

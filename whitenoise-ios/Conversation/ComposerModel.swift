@@ -640,7 +640,7 @@ final class ComposerModel {
             case .queued, .engineOwned, .completed:
                 timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: staged.clientToken)
                 return true
-            case .rejected: return false
+            case .rejected, .refusedNewMembers: return false
             case nil:
                 return MediaSubmissionRecovery.isAmbiguousWithoutStatus(error)
             }

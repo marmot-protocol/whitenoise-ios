@@ -40,4 +40,33 @@ extension MarmotClient {
             try marmot.localSendStatus(accountRef: accountRef, groupIdHex: groupIdHex, clientToken: clientToken)
         }.value
     }
+
+    func sendCustomEventWithClientToken(
+        accountRef: String,
+        groupIdHex: String,
+        kind: UInt64,
+        tags: [[String]],
+        content: String,
+        clientToken: String
+    ) async throws -> LocalSendAcceptanceFfi {
+        try await marmot.sendCustomEventWithClientToken(
+            accountRef: accountRef,
+            groupIdHex: groupIdHex,
+            kind: kind,
+            tags: tags,
+            content: content,
+            clientToken: clientToken
+        )
+    }
+
+    func groupMessages(
+        accountRef: String,
+        groupIdHex: String,
+        limit: UInt32? = nil,
+        kinds: [UInt64]? = nil
+    ) async throws -> [AppMessageRecordFfi] {
+        try await Task.detached(priority: .utility) { [marmot, accountRef, groupIdHex, limit, kinds] in
+            try marmot.messages(accountRef: accountRef, groupIdHex: groupIdHex, limit: limit, kinds: kinds)
+        }.value
+    }
 }

@@ -1048,6 +1048,16 @@ struct ConversationView: View {
     @State private var reactionDetailsTarget: ReactionDetailsTarget?
     @State private var pollVotesTarget: PollVotesTarget?
     @State private var forwardTarget: ActionsTarget?
+    private struct AgentSessionControlsTarget: Identifiable {
+        let agentPubkeyHex: String?
+        let id = UUID()
+    }
+    private struct AgentSubagentThreadTarget: Identifiable {
+        let taskMessageIdHex: String
+        var id: String { taskMessageIdHex }
+    }
+    @State private var agentSessionControlsTarget: AgentSessionControlsTarget?
+    @State private var agentSubagentThreadTarget: AgentSubagentThreadTarget?
     @State private var forwardSelectionTarget: ForwardSelectionTarget?
     private static let selectionIndicatorSize: CGFloat = 44
     // With the 16 pt timeline margin, received bubbles begin at 56 pt in selection.
@@ -1501,6 +1511,34 @@ struct ConversationView: View {
                     .appAppearance()
                 }
             }
+            .sheet(item: $agentSessionControlsTarget) { target in
+                if let viewModel {
+                    AgentSessionControlsSheet(
+                        viewModel: viewModel,
+                        initialAgentPubkeyHex: target.agentPubkeyHex
+                    ) { text in
+                        composer.draft = text
+                    }
+                    .appAppearance()
+                }
+            }
+            .sheet(item: $agentSubagentThreadTarget) { target in
+                if let viewModel {
+                    AgentSubagentThreadView(
+                        viewModel: viewModel,
+                        rootTaskMessageIdHex: target.taskMessageIdHex,
+                        onOpenSessionControls: { session in
+                            agentSubagentThreadTarget = nil
+                            agentSessionControlsTarget = AgentSessionControlsTarget(agentPubkeyHex: session.sender)
+                        },
+                        onInsertDraftText: { text in
+                            agentSubagentThreadTarget = nil
+                            composer.draft = text
+                        }
+                    )
+                    .appAppearance()
+                }
+            }
             .sheet(item: $forwardTarget) { target in
                 if let viewModel {
                     ForwardMessageSheet(
@@ -1897,37 +1935,70 @@ struct ConversationView: View {
                 onUnblock: unblockConversationPeer
             )
         } else {
-            ConversationComposerInputView(
-                composer: composer,
-                voiceRecorder: composer.voiceRecorder,
-                viewModel: viewModel,
-                replyCloseIconSize: replyCloseIconSize,
-                replyCloseHitSize: replyCloseHitSize,
-                makeReplyPreview: composerReplyPreview(viewModel:),
-                makeDisabledAction: blockedLeaveComposerAction(viewModel:),
-                makeDictationBinding: { composerDictationBinding },
-                isEditSubmissionEnabled: { editSubmissionEnabled },
-                hasSavedDraft: { composerHasSavedDraft },
-                onCancelEdit: cancelEdit,
-                onCreatePoll: openPollComposer,
-                onCustomEmoji: openComposerCustomEmojiPicker,
-                onStickers: { composer.showStickerPicker = true },
-                onTakePhoto: takePhoto,
-                onPhotoLibrary: openPhotoLibrary,
-                onAttachFile: openFileImporter,
-                onShareLocation: openLocationPicker,
-                onShareContact: openContactPicker,
-                onSearchGIFs: openGiphySearch,
-                onPasteImage: pasteImage,
-                onRemoveMediaDraft: removeMediaDraft,
-                onPreviewPreparedMedia: previewPreparedMedia,
-                onCancelVoiceRecording: cancelVoiceRecording,
-                onStopVoiceRecording: stopLockedVoiceRecording,
-                onVoicePressBegan: beginVoicePress,
-                onVoiceDragChanged: updateVoiceDrag,
-                onVoicePressEnded: endVoicePress,
-                onSend: send
-            )
+            VStack(spacing: 0) {
+                if let viewModel, viewModel.canSendMessages {
+                    let runningTurns = viewModel.activeRunningAgentTurns
+                    let waitingSubagents = viewModel.waitingAgentSubagents
+                    if !runningTurns.isEmpty || !waitingSubagents.isEmpty {
+                        AgentRunningControlBar(
+                            runningTurns: runningTurns,
+                            waitingSubagents: waitingSubagents,
+                            showsAgentName: !viewModel.groupDisplay.isDirectMessage,
+                            agentDisplayName: { viewModel.windowDisplayName(for: $0) },
+                            isStopPending: { turn in
+                                viewModel.agentInteractions.isPending(
+                                    key: AgentInteractionStore.stopKey(
+                                        agentPubkeyHex: turn.sender,
+                                        targetEventIdHex: turn.messageIdHex
+                                    )
+                                )
+                            },
+                            onStop: { turn in
+                                Task {
+                                    await viewModel.sendAgentInterrupt(
+                                        agentPubkeyHex: turn.sender,
+                                        targetEventIdHex: turn.messageIdHex
+                                    )
+                                }
+                            },
+                            onOpenSubagentThread: { task in
+                                agentSubagentThreadTarget = AgentSubagentThreadTarget(taskMessageIdHex: task.messageIdHex)
+                            }
+                        )
+                    }
+                }
+                ConversationComposerInputView(
+                    composer: composer,
+                    voiceRecorder: composer.voiceRecorder,
+                    viewModel: viewModel,
+                    replyCloseIconSize: replyCloseIconSize,
+                    replyCloseHitSize: replyCloseHitSize,
+                    makeReplyPreview: composerReplyPreview(viewModel:),
+                    makeDisabledAction: blockedLeaveComposerAction(viewModel:),
+                    makeDictationBinding: { composerDictationBinding },
+                    isEditSubmissionEnabled: { editSubmissionEnabled },
+                    hasSavedDraft: { composerHasSavedDraft },
+                    onCancelEdit: cancelEdit,
+                    onCreatePoll: openPollComposer,
+                    onCustomEmoji: openComposerCustomEmojiPicker,
+                    onStickers: { composer.showStickerPicker = true },
+                    onTakePhoto: takePhoto,
+                    onPhotoLibrary: openPhotoLibrary,
+                    onAttachFile: openFileImporter,
+                    onShareLocation: openLocationPicker,
+                    onShareContact: openContactPicker,
+                    onSearchGIFs: openGiphySearch,
+                    onPasteImage: pasteImage,
+                    onRemoveMediaDraft: removeMediaDraft,
+                    onPreviewPreparedMedia: previewPreparedMedia,
+                    onCancelVoiceRecording: cancelVoiceRecording,
+                    onStopVoiceRecording: stopLockedVoiceRecording,
+                    onVoicePressBegan: beginVoicePress,
+                    onVoiceDragChanged: updateVoiceDrag,
+                    onVoicePressEnded: endVoicePress,
+                    onSend: send
+                )
+            }
         }
     }
 
@@ -2079,10 +2150,15 @@ struct ConversationView: View {
     /// is the single way into the details page for
     /// both direct messages and groups.
     private var conversationHeaderBar: some View {
-        ConversationHeaderBar(
+        let hasAgentSession = viewModel.map { !$0.latestAgentSessions.isEmpty } ?? false
+        return ConversationHeaderBar(
             isSelectingMessages: isSelectingMessages,
             onBack: navigateBack,
-            onClose: { exitMessageSelection() }
+            onClose: { exitMessageSelection() },
+            onAgentControls: hasAgentSession ? {
+                dismissKeyboard()
+                agentSessionControlsTarget = AgentSessionControlsTarget(agentPubkeyHex: nil)
+            } : nil
         ) {
             conversationTitle
         }
@@ -2630,6 +2706,61 @@ struct ConversationView: View {
         case .message(let record, let status):
             if let groupSystemText = viewModel.groupSystemDisplayText(for: record) {
                 GroupSystemEventRow(text: groupSystemText)
+            } else if let agentProjection = viewModel.agentItemProjection(forMessageId: record.messageIdHex) {
+                AgentItemRow(
+                    projection: agentProjection,
+                    senderName: viewModel.windowDisplayName(for: record.sender),
+                    showsSenderName: showsSenderIdentity,
+                    isTwoPersonChat: viewModel.isTwoPersonChat,
+                    canInteract: viewModel.canSendMessages && !isSelectingMessages,
+                    pendingRequest: viewModel.agentInteractions.pendingRequest(forItemEventId: agentProjection.messageIdHex),
+                    stopPending: viewModel.agentInteractions.isPending(
+                        key: AgentInteractionStore.stopKey(
+                            agentPubkeyHex: agentProjection.sender,
+                            targetEventIdHex: agentProjection.messageIdHex
+                        )
+                    ),
+                    answeredByName: viewModel.answeredByDisplayName(for: agentProjection),
+                    subagentSummary: agentProjection.isSubagentTask
+                        ? viewModel.subagentThreadSummary(forTaskMessageId: agentProjection.messageIdHex)
+                        : nil,
+                    pendingForSubagentItem: { id in
+                        viewModel.agentInteractions.pendingRequest(forItemEventId: id)
+                    },
+                    onApproveChoice: { choice, target in
+                        Task { await viewModel.sendAgentApprovalChoice(choice, for: target) }
+                    },
+                    onAnswerQuestion: { answers, target, secret, summary in
+                        Task {
+                            await viewModel.sendAgentQuestionAnswers(
+                                answers,
+                                for: target,
+                                containsSecret: secret,
+                                summary: summary
+                            )
+                        }
+                    },
+                    onStop: { target in
+                        Task {
+                            await viewModel.sendAgentInterrupt(
+                                agentPubkeyHex: target.sender,
+                                targetEventIdHex: target.messageIdHex
+                            )
+                        }
+                    },
+                    onOpenSessionControls: { session in
+                        dismissKeyboard()
+                        agentSessionControlsTarget = AgentSessionControlsTarget(agentPubkeyHex: session.sender)
+                    },
+                    onOpenSubagentThread: { task in
+                        dismissKeyboard()
+                        agentSubagentThreadTarget = AgentSubagentThreadTarget(taskMessageIdHex: task.messageIdHex)
+                    },
+                    onInsertDraftText: { text in
+                        composer.draft = text
+                    },
+                    debugStyle: appState.streamingDebugEnabled ? MessageSemantics.debugStyle(for: record) : nil
+                )
             } else if let agentDisplay = viewModel.agentEventDisplay(for: item) {
                 if agentDisplay.kind == .activity {
                     messageBubble(for: item, record: record, status: status, viewModel: viewModel,
@@ -2642,6 +2773,12 @@ struct ConversationView: View {
                         debugStyle: appState.streamingDebugEnabled ? MessageSemantics.debugStyle(for: record) : nil
                     )
                 }
+            } else if record.kind == MessageSemantics.kindAgentActivity {
+                AgentEventRow(
+                    senderName: viewModel.windowDisplayName(for: record.sender),
+                    display: AgentEventPresentation.plainFallbackDisplay(for: record),
+                    debugStyle: appState.streamingDebugEnabled ? MessageSemantics.debugStyle(for: record) : nil
+                )
             } else {
                 agentMessageBubbleRow(
                     for: item,
@@ -2855,6 +2992,7 @@ struct ConversationView: View {
             isEdited: viewModel.isEdited(record.messageIdHex),
             hasReports: viewModel.hasReports(record.messageIdHex),
             agentActivity: agentActivity,
+            isAgentCommentary: MessageSemantics.isAgentCommentary(tags: record.tags),
             clusterPresentation: cluster,
             showsSenderIdentity: showsSenderIdentity,
             replyPreview: viewModel.replyPreview(for: record),
