@@ -3764,6 +3764,19 @@ final class ConversationViewModel {
         await performReaction(.removeAll, on: message)
     }
 
+    private func reconcileReactions(on messageIdHex: String, accountRef: String, me: String) async {
+        guard let client = try? appState?.currentMarmotClient(),
+              let reactions = try? await client.messageReactions(
+                  accountRef: accountRef, groupIdHex: group.groupIdHex, messageIdHex: messageIdHex
+              ),
+              appState?.activeAccountRef == accountRef
+        else { return }
+        timelineStore.reactionProjections.reconcileAfterAuthoritativeRead(reactions, target: messageIdHex, me: me)
+        if timelineStore.recomputeReactions(for: [messageIdHex]) {
+            timelineStore.noteProjectionChanged()
+        }
+    }
+
     private func performReaction(_ operation: PendingReaction, on message: AppMessageRecordFfi) async {
         guard canSendMessages,
               let appState, let accountRef = appState.activeAccountRef,
@@ -3868,7 +3881,10 @@ final class ConversationViewModel {
             }
         } catch {
             // Nothing to remove: the reaction is already gone, as the optimistic change shows.
-            if operation == .removeAll, case .ReactionNotFound = error as? MarmotKitError { return }
+            if operation == .removeAll, case .ReactionNotFound = error as? MarmotKitError {
+                await reconcileReactions(on: message.messageIdHex, accountRef: accountRef, me: me)
+                return
+            }
             // Revert the optimistic change.
             if let addedKey { timelineStore.reactionProjections.removeRecord(forKey: addedKey) }
             for removal in removals {

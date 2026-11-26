@@ -501,3 +501,70 @@ struct ReactionTargetTallyTests {
         )
     }
 }
+
+@MainActor
+struct ReactionNotFoundReconcileTests {
+    private let me = String(repeating: "1", count: 64)
+    private let other = String(repeating: "2", count: 64)
+    private let target = String(repeating: "a", count: 64)
+
+    private func reaction(_ emoji: String, by sender: String, id: String, on target: String? = nil) -> TimelineUserReactionFfi {
+        TimelineUserReactionFfi(reactionMessageIdHex: id, targetMessageIdHex: target ?? self.target,
+                                sender: sender, emoji: emoji, reactedAt: 1)
+    }
+
+    private func tally(_ cache: ConversationReactionProjectionCache, _ emoji: String) -> ConversationViewModel.ReactionTally? {
+        cache.tallies(forMessageId: target).first { $0.emoji == emoji }
+    }
+
+    @Test func sameEmojiAddedLaterOnAnotherDeviceIsNotMasked() {
+        let cache = ConversationReactionProjectionCache()
+        cache.insertRemoval(ReactionRemoval(targetMessageIdHex: target, emoji: "❤️", sender: me))
+        cache.reconcileAfterAuthoritativeRead([], target: target, me: me)
+
+        let later = ConversationReactionPolicy.summary(from: [reaction("❤️", by: me, id: "linked")])
+        cache.setSummary(later, forMessageId: target)
+        cache.pruneConfirmedOptimistic(target: target, summary: later, me: me)
+        _ = cache.recompute(targets: [target], deletedMessageIds: [], me: me)
+
+        #expect(tally(cache, "❤️")?.mine == true)
+        #expect(!cache.hasOptimistic)
+    }
+
+    @Test func authoritativeReadReplacesAStaleSummary() {
+        let cache = ConversationReactionProjectionCache()
+        let stale = ConversationReactionPolicy.summary(from: [reaction("❤️", by: me, id: "old"), reaction("❤️", by: other, id: "o")])
+        cache.setSummary(stale, forMessageId: target)
+        cache.insertRemoval(ReactionRemoval(targetMessageIdHex: target, emoji: "❤️", sender: me))
+
+        cache.reconcileAfterAuthoritativeRead([reaction("❤️", by: other, id: "o")], target: target, me: me)
+        _ = cache.recompute(targets: [target], deletedMessageIds: [], me: me)
+
+        #expect(tally(cache, "❤️")?.mine == false)
+        #expect(tally(cache, "❤️")?.count == 1)
+        #expect(!cache.hasOptimistic)
+    }
+
+    @Test func readKeepsRemovalsForOtherTargetsAndSenders() {
+        let otherTarget = String(repeating: "b", count: 64)
+        let kept: Set<ReactionRemoval> = [
+            ReactionRemoval(targetMessageIdHex: otherTarget, emoji: "❤️", sender: me),
+            ReactionRemoval(targetMessageIdHex: target, emoji: "❤️", sender: other),
+        ]
+        let removals = kept.union([ReactionRemoval(targetMessageIdHex: target, emoji: "👍", sender: me)])
+
+        #expect(ConversationReactionPolicy.removalsAfterAuthoritativeRead(removals, target: target, me: me) == kept)
+    }
+
+    @Test func summaryCountsEachSenderOncePerEmojiInTallyOrder() {
+        let summary = ConversationReactionPolicy.summary(from: [
+            reaction("👍", by: me, id: "1"),
+            reaction("👍", by: me, id: "2"),
+            reaction("❤️", by: me, id: "3"),
+            reaction("❤️", by: other, id: "4"),
+        ])
+
+        #expect(summary.byEmoji.map(\.emoji) == ["❤️", "👍"])
+        #expect(summary.byEmoji.allSatisfy { Int($0.count) == Set($0.senders).count })
+    }
+}
