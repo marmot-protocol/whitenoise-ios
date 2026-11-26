@@ -92,7 +92,7 @@ struct AppLockTests {
         let clock = Clock()
         let appLock = makeController(clock: clock)
         await appLock.setEnabled(true)
-        appLock.gracePeriod = .oneMinute
+        await appLock.setGracePeriod(.oneMinute)
 
         appLock.handleScenePhaseBackground()
         clock.advance(30)
@@ -106,7 +106,7 @@ struct AppLockTests {
         let clock = Clock()
         let appLock = makeController(clock: clock)
         await appLock.setEnabled(true)
-        appLock.gracePeriod = .oneMinute
+        await appLock.setGracePeriod(.oneMinute)
 
         appLock.handleScenePhaseBackground()
         clock.advance(45)
@@ -122,7 +122,7 @@ struct AppLockTests {
         let clock = Clock()
         let appLock = makeController(clock: clock)
         await appLock.setEnabled(true)
-        appLock.gracePeriod = .oneMinute
+        await appLock.setGracePeriod(.oneMinute)
 
         appLock.handleScenePhaseBackground()
         clock.advance(61)
@@ -135,7 +135,7 @@ struct AppLockTests {
         let clock = Clock()
         let appLock = makeController(clock: clock)
         await appLock.setEnabled(true)
-        appLock.gracePeriod = .oneMinute
+        await appLock.setGracePeriod(.oneMinute)
 
         appLock.handleScenePhaseBackground()
         clock.advance(30)
@@ -229,14 +229,104 @@ struct AppLockTests {
         #expect(!defaults.bool(forKey: AppLockController.enabledKey))
     }
 
-    @Test func gracePeriodPersistsAndResolves() {
+    @Test func disablingRequiresSuccessfulAuthentication() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: AppLockController.enabledKey)
+        let appLock = makeController(defaults: defaults, authenticate: { false })
+
+        await appLock.setEnabled(false)
+
+        #expect(appLock.isEnabled)
+        #expect(appLock.isLocked)
+        #expect(defaults.bool(forKey: AppLockController.enabledKey))
+    }
+
+    @Test func disablingFailsOpenWithoutDeviceAuthCapability() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: AppLockController.enabledKey)
+        let appLock = makeController(
+            defaults: defaults,
+            authenticate: { false },
+            capabilityAvailable: { false }
+        )
+
+        await appLock.setEnabled(false)
+
+        #expect(!appLock.isEnabled)
+        #expect(!appLock.isLocked)
+        #expect(!defaults.bool(forKey: AppLockController.enabledKey))
+    }
+
+    @Test func resetDisablesWithoutAuthentication() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: AppLockController.enabledKey)
+        defaults.set(AppLockGracePeriod.fiveMinutes.rawValue, forKey: AppLockController.gracePeriodKey)
+        var authenticated = false
+        let appLock = makeController(defaults: defaults, authenticate: {
+            authenticated = true
+            return false
+        })
+        #expect(appLock.gracePeriod == .fiveMinutes)
+
+        appLock.reset()
+
+        #expect(!authenticated)
+        #expect(!appLock.isEnabled)
+        #expect(!appLock.isLocked)
+        #expect(appLock.shield == .hidden)
+        #expect(!defaults.bool(forKey: AppLockController.enabledKey))
+        #expect(makeController(defaults: defaults).gracePeriod == .immediate)
+    }
+
+    @Test func gracePeriodPersistsAndResolves() async {
         let defaults = makeDefaults()
         let appLock = makeController(defaults: defaults)
 
-        appLock.gracePeriod = .fiveMinutes
+        await appLock.setGracePeriod(.fiveMinutes)
 
         let reloaded = makeController(defaults: defaults)
         #expect(reloaded.gracePeriod == .fiveMinutes)
+    }
+
+    @Test func lengtheningGracePeriodKeepsTheOldValueWhenAuthenticationFails() async {
+        let defaults = makeDefaults()
+        let appLock = makeController(defaults: defaults, authenticate: { false })
+
+        await appLock.setGracePeriod(.fifteenMinutes)
+
+        #expect(appLock.gracePeriod == .immediate)
+        #expect(makeController(defaults: defaults).gracePeriod == .immediate)
+    }
+
+    @Test func shorteningGracePeriodDoesNotPrompt() async {
+        let defaults = makeDefaults()
+        defaults.set(AppLockGracePeriod.fifteenMinutes.rawValue, forKey: AppLockController.gracePeriodKey)
+        var authenticated = false
+        let appLock = makeController(defaults: defaults, authenticate: {
+            authenticated = true
+            return false
+        })
+
+        await appLock.setGracePeriod(.oneMinute)
+
+        #expect(!authenticated)
+        #expect(appLock.gracePeriod == .oneMinute)
+    }
+
+    @Test func lengtheningGracePeriodFailsOpenWithoutDeviceAuthCapability() async {
+        var authenticated = false
+        let appLock = makeController(
+            authenticate: {
+                authenticated = true
+                return false
+            },
+            capabilityAvailable: { false }
+        )
+
+        await appLock.setGracePeriod(.fiveMinutes)
+
+        #expect(!authenticated)
+        #expect(appLock.gracePeriod == .fiveMinutes)
     }
 
     @Test func unknownPersistedGracePeriodFallsBackToImmediate() {

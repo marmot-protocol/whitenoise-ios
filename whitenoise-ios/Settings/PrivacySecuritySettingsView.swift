@@ -6,6 +6,8 @@ struct PrivacySecuritySettingsView: View {
     @State private var diagnostics = PrivacySecuritySettingsViewModel()
     @State private var showEraseData = false
     @State private var appLockCapability = AppLockCapability(available: false, biometryType: .none)
+    @State private var appLockToggle = false
+    @State private var appLockGracePeriod = AppLockGracePeriod.immediate
     private let privacyPolicyURL = URL(string: "https://www.whitenoise.chat/privacy")
 
     var body: some View {
@@ -22,23 +24,17 @@ struct PrivacySecuritySettingsView: View {
                     }
                 }
 
-                WNToggle(isOn: Binding(
-                    get: { appState.appLock.isEnabled },
-                    set: { enabled in Task { await appState.appLock.setEnabled(enabled) } }
-                )) {
+                WNToggle(isOn: $appLockToggle) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(appLockToggleTitle)
                         Text(appLockFooter)
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                .disabled(!appLockCapability.available)
+                .disabled(!appLockCapability.available && !appState.appLock.isEnabled)
 
                 if appState.appLock.isEnabled && appLockCapability.available {
-                    Picker("Auto-Lock", selection: Binding(
-                        get: { appState.appLock.gracePeriod },
-                        set: { appState.appLock.gracePeriod = $0 }
-                    )) {
+                    Picker("Auto-Lock", selection: $appLockGracePeriod) {
                         ForEach(AppLockGracePeriod.allCases, id: \.self) { period in
                             Text(period.displayName).tag(period)
                         }
@@ -89,7 +85,23 @@ struct PrivacySecuritySettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             appLockCapability = AppLockCapability.current()
+            appLockToggle = appState.appLock.isEnabled
+            appLockGracePeriod = appState.appLock.gracePeriod
             await diagnostics.reload(using: appState)
+        }
+        .onChange(of: appState.appLock.isEnabled) { _, enabled in appLockToggle = enabled }
+        .onChange(of: appState.appLock.gracePeriod) { _, period in appLockGracePeriod = period }
+        .onChange(of: appLockToggle) { _, enabled in
+            Task {
+                await appState.appLock.setEnabled(enabled)
+                appLockToggle = appState.appLock.isEnabled
+            }
+        }
+        .onChange(of: appLockGracePeriod) { _, period in
+            Task {
+                await appState.appLock.setGracePeriod(period)
+                appLockGracePeriod = appState.appLock.gracePeriod
+            }
         }
         .sheet(isPresented: $showEraseData) { EraseAppDataView().appAppearance() }
     }
