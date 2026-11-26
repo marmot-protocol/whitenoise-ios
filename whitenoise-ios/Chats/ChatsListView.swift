@@ -34,6 +34,19 @@ struct ChatsListView: View {
         )
     }
 
+    private var newDeviceOfferPresented: Bool {
+        let offered: Bool = appState.deviceLinks.offersNewDeviceLink
+        let visible: Bool = chatsVisible && !showDiagnosticsPrompt && !secondarySheetVisible
+        return offered && visible
+    }
+
+    private var otherProfileRequestPresented: Bool {
+        let hasRequest: Bool = appState.deviceLinks.otherProfileRequest(using: appState) != nil
+        let noSheet: Bool = appState.deviceLinks.sheet == nil
+        let visible: Bool = chatsVisible && !showDiagnosticsPrompt && !secondarySheetVisible
+        return hasRequest && noSheet && visible
+    }
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.appDensity) private var density
     @ScaledMetric(relativeTo: .title3) private var selectionIndicatorWidth = 24.0
@@ -342,11 +355,10 @@ struct ChatsListView: View {
             .alert(
                 "Signed in on another device?",
                 isPresented: Binding(
-                    get: {
-                        appState.deviceLinks.offersNewDeviceLink && chatsVisible
-                            && !showDiagnosticsPrompt && !secondarySheetVisible
-                    },
-                    set: { if !$0 { appState.deviceLinks.dismissNewDeviceOffer() } }
+                    get: { newDeviceOfferPresented },
+                    set: { (isOn: Bool) in
+                        if !isOn { appState.deviceLinks.dismissNewDeviceOffer() }
+                    }
                 )
             ) {
                 Button("Not Now", role: .cancel) {}
@@ -358,11 +370,7 @@ struct ChatsListView: View {
             .alert(
                 "Link a New Device?",
                 isPresented: Binding(
-                    get: {
-                        appState.deviceLinks.otherProfileRequest(using: appState) != nil
-                            && appState.deviceLinks.sheet == nil && chatsVisible
-                            && !showDiagnosticsPrompt && !secondarySheetVisible
-                    },
+                    get: { otherProfileRequestPresented },
                     // Each button puts away its own request; deriving one here
                     // could put away the next request instead.
                     set: { _ in }
