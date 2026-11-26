@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// Hold-to-dictate on the message field while the keyboard is down.
 struct ComposerDictationGesture {
@@ -394,10 +395,73 @@ final class ImagePasteTextView: UITextView {
     }
 
     override func paste(_ sender: Any?) {
-        if let image = UIPasteboard.general.image {
+        let pasteboard = UIPasteboard.general
+        if let image = pasteboard.image {
             onPasteImage?(image)
+            if let text = ComposerImagePasteText.text(string: pasteboard.string, url: pasteboard.url) {
+                insertText(text)
+            }
             return
         }
-        super.paste(sender)
+        let rtfd = ComposerRichTextPaste.pasteboardTypes.lazy
+            .compactMap { pasteboard.data(forPasteboardType: $0) }
+            .first
+        guard let rtfd,
+              let content = ComposerRichTextPaste.content(
+                rtfd: rtfd,
+                maxImageBytes: MediaDraftProcessor.maxImageSourceBytes
+              )
+        else {
+            super.paste(sender)
+            return
+        }
+        content.images.forEach { onPasteImage?($0) }
+        if let text = content.text {
+            insertText(text)
+        }
+    }
+}
+
+enum ComposerRichTextPaste {
+    struct Content {
+        let images: [UIImage]
+        let text: String?
+    }
+
+    static let pasteboardTypes = [UTType.flatRTFD.identifier, UTType.rtfd.identifier]
+
+    static func content(rtfd: Data, maxImageBytes: Int) -> Content? {
+        guard let string = try? NSAttributedString(
+            data: rtfd,
+            options: [.documentType: NSAttributedString.DocumentType.rtfd],
+            documentAttributes: nil
+        ) else { return nil }
+        var images: [UIImage] = []
+        string.enumerateAttribute(.attachment, in: NSRange(location: 0, length: string.length)) { value, _, _ in
+            guard let attachment = value as? NSTextAttachment,
+                  let data = attachmentData(attachment),
+                  data.count <= maxImageBytes,
+                  let image = UIImage(data: data)
+            else { return }
+            images.append(image)
+        }
+        guard !images.isEmpty else { return nil }
+        return Content(images: images, text: ComposerImagePasteText.text(string: string.string, url: nil))
+    }
+
+    private static func attachmentData(_ attachment: NSTextAttachment) -> Data? {
+        if let contents = attachment.contents { return contents }
+        guard let wrapper = attachment.fileWrapper, wrapper.isRegularFile else { return nil }
+        return wrapper.regularFileContents
+    }
+}
+
+enum ComposerImagePasteText {
+    static func text(string: String?, url: URL?) -> String? {
+        guard let string else { return nil }
+        let text = string.replacingOccurrences(of: "\u{FFFC}", with: "")
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != url?.absoluteString else { return nil }
+        return trimmed
     }
 }
