@@ -26,6 +26,24 @@ struct ContactNicknameStoreTests {
         #expect(ContactNicknameStore.key(ownerAccountIdHex: "abcd", contactAccountIdHex: " \n") == nil)
     }
 
+    @Test func keyRejectsComponentsContainingTheSeparator() {
+        #expect(ContactNicknameStore.key(ownerAccountIdHex: "aa:bb", contactAccountIdHex: "cc") == nil)
+        #expect(ContactNicknameStore.key(ownerAccountIdHex: "aa", contactAccountIdHex: "bb:cc") == nil)
+    }
+
+    @Test func separatorComponentsNeitherWriteNorClearAnotherOwnersNicknames() throws {
+        let (defaults, suiteName) = try isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        ContactNicknameStore.setNickname("Kept", ownerAccountIdHex: "aa", contactAccountIdHex: "bb", defaults: defaults)
+        ContactNicknameStore.setNickname("Aliased", ownerAccountIdHex: "aa:bb", contactAccountIdHex: "cc", defaults: defaults)
+        ContactNicknameStore.setNickname("Aliased", ownerAccountIdHex: "aa", contactAccountIdHex: "bb:cc", defaults: defaults)
+        ContactNicknameStore.clearAll(ownerAccountIdHex: "aa:bb", defaults: defaults)
+
+        #expect(ContactNicknameStore.nicknamesByKey(defaults: defaults).count == 1)
+        #expect(ContactNicknameStore.nickname(ownerAccountIdHex: "aa", contactAccountIdHex: "bb", defaults: defaults) == "Kept")
+    }
+
     @Test func keySeparatesOwnersAndContacts() {
         #expect(
             ContactNicknameStore.key(ownerAccountIdHex: "owner-1", contactAccountIdHex: "contact-a")
