@@ -414,6 +414,21 @@ struct MessageDeletionTests {
         ) == [hex("22")])
     }
 
+    @Test func localHideWithoutSharedSuiteStoresNothingAndReportsFailure() {
+        #expect(MessageHideStore.hideMessage(
+            accountRef: "account:a",
+            groupIdHex: hex("aa"),
+            messageIdHex: hex("11"),
+            defaults: nil
+        ).isEmpty)
+        #expect(MessageHideStore.hiddenMessageIds(
+            accountRef: "account:a",
+            groupIdHex: hex("aa"),
+            defaults: nil
+        ).isEmpty)
+        MessageHideStore.clearAll(accountRef: "account:a", defaults: nil)
+    }
+
     @Test func concurrentLocalHidesDoNotLoseUpdates() async throws {
         let suiteName = "MessageDeletionConcurrencyTests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

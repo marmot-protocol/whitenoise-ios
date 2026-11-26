@@ -101,8 +101,8 @@ struct AppearanceSettingsView: View {
         Binding {
             languageRawValue
         } set: { newValue in
-            languageRawValue = newValue
             AppLanguage.setCurrentRawValue(newValue)
+            languageRawValue = AppLanguage.currentRawValue
         }
     }
 }

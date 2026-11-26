@@ -64,6 +64,42 @@ struct AppearancePreferencesTests {
         #expect(notification.userInfo?[AppLanguage.didChangeLanguageUserInfoKey] as? String == "fr")
     }
 
+    @Test func languageWithoutSharedSuiteReadsSystemAndWritesNothing() {
+        let notificationCenter = NotificationCenter()
+        var notified = false
+        let observer = notificationCenter.addObserver(
+            forName: AppLanguage.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { _ in
+            notified = true
+        }
+        defer { notificationCenter.removeObserver(observer) }
+
+        AppLanguage.setCurrentRawValue(
+            AppLanguage.french.rawValue,
+            defaults: nil,
+            notificationCenter: notificationCenter
+        )
+
+        #expect(!notified)
+        #expect(AppLanguage.storedRawValue(in: nil) == AppLanguage.system.rawValue)
+    }
+
+    @Test func storedLanguageReadsTheGivenSuite() throws {
+        let suiteName = "dev.ipf.WhiteNoise.language-read-test.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        #expect(AppLanguage.storedRawValue(in: defaults) == AppLanguage.system.rawValue)
+        AppLanguage.setCurrentRawValue(
+            AppLanguage.german.rawValue,
+            defaults: defaults,
+            notificationCenter: NotificationCenter()
+        )
+        #expect(AppLanguage.storedRawValue(in: defaults) == AppLanguage.german.rawValue)
+    }
+
     @Test func appAppearanceSelectionResolvesThemeAndLanguageTogether() {
         let selected = AppAppearanceSelection(themeRawValue: "dark", languageRawValue: "fr")
         let fallback = AppAppearanceSelection(themeRawValue: "unknown", languageRawValue: "unknown")
