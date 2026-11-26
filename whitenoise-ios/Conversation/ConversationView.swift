@@ -4277,6 +4277,8 @@ struct ConversationView: View {
         composer.voiceBaseline = composerHoldSnapshot
         composer.voiceRecorder.beginPress { error in
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't record audio"), error: error))
+        } onLimitReached: { result in
+            addVoiceRecording(result)
         }
     }
 

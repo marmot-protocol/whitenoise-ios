@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Synchronization
 
 /// The microphone behind a voice recording. Production asks iOS for record
 /// permission and records AAC with `AVAudioRecorder`.
@@ -31,18 +32,36 @@ nonisolated struct VoiceRecordingMicrophone: Sendable {
                 AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
             ]
             let recorder = try AVAudioRecorder(url: url, settings: settings)
+            let completion = VoiceRecorderCompletion()
+            recorder.delegate = completion
             recorder.isMeteringEnabled = true
-            guard recorder.record() else { throw VoiceMessageRecorder.Failure.startFailed }
+            guard recorder.record(forDuration: VoiceRecordingLimit.maxDurationSeconds) else {
+                throw VoiceMessageRecorder.Failure.startFailed
+            }
+            let elapsed = {
+                completion.finished ? VoiceRecordingLimit.maxDurationSeconds : recorder.currentTime
+            }
             return VoiceRecordingTake(
                 meter: {
                     recorder.updateMeters()
-                    return (recorder.currentTime, recorder.averagePower(forChannel: 0))
+                    return (elapsed(), recorder.averagePower(forChannel: 0))
                 },
-                currentTime: { recorder.currentTime },
+                currentTime: elapsed,
                 stop: { recorder.stop() }
             )
         }
     )
+}
+
+private nonisolated final class VoiceRecorderCompletion: NSObject, AVAudioRecorderDelegate, Sendable {
+    private let didFinish = Mutex(false)
+
+    var finished: Bool { didFinish.withLock { $0 } }
+
+    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        guard flag else { return }
+        didFinish.withLock { $0 = true }
+    }
 }
 
 /// A voice recording in progress.

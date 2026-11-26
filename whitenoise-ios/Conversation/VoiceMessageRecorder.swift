@@ -49,6 +49,10 @@ nonisolated enum VoiceRecordingFileProtection {
     static let completedRecording = FileProtectionType.complete
 }
 
+nonisolated enum VoiceRecordingLimit {
+    static let maxDurationSeconds: TimeInterval = 600
+}
+
 nonisolated struct VoiceRecordingWaveformAccumulator: Sendable {
     private var samples: [CGFloat] = []
 
@@ -124,6 +128,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
     private var audioSessionLease: VoiceAudioSession.Lease?
     private var currentDragTranslation: CGSize = .zero
     private var holdTask: Task<Void, Never>?
+    private var onLimitReached: ((VoiceRecordingResult) -> Void)?
     private var meterTask: Task<Void, Never>?
     private var waveformAccumulator = VoiceRecordingWaveformAccumulator()
 
@@ -146,9 +151,13 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         }
     }
 
-    func beginPress(onError: @escaping (Error) -> Void) {
+    func beginPress(
+        onError: @escaping (Error) -> Void,
+        onLimitReached: @escaping (VoiceRecordingResult) -> Void = { _ in }
+    ) {
         guard state == .idle else { return }
         state = .pressing
+        self.onLimitReached = onLimitReached
         currentDragTranslation = .zero
         durationSeconds = 0
         waveformSamples = []
@@ -289,7 +298,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
                 }
                 guard !Task.isCancelled, let self, let take = self.take else { return }
                 let level = take.meter()
-                self.durationSeconds = level.seconds
+                self.durationSeconds = min(level.seconds, VoiceRecordingLimit.maxDurationSeconds)
                 let power = level.averagePower
                 let normalized = max(0.05, min(1, CGFloat(pow(10, power / 36))))
                 self.waveformAccumulator.append(normalized)
@@ -297,17 +306,33 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
                 if self.waveformSamples.count > MediaWaveformAnalyzer.sampleCount {
                     self.waveformSamples.removeFirst(self.waveformSamples.count - MediaWaveformAnalyzer.sampleCount)
                 }
+                if level.seconds >= VoiceRecordingLimit.maxDurationSeconds {
+                    self.finishAtLimit()
+                    return
+                }
             }
         }
     }
 
+    private func finishAtLimit() {
+        meterTask = nil
+        let handler = onLimitReached
+        guard let result = finishRecording() else { return }
+        Haptics.tap()
+        handler?(result)
+    }
+
     private func finishRecording() -> VoiceRecordingResult? {
-        guard let take, let url = recordingURL else {
+        guard let url = recordingURL else {
             reset(deleteFile: true)
             return nil
         }
-        let duration = max(durationSeconds, take.currentTime())
-        take.stop()
+        let duration = min(
+            max(durationSeconds, take?.currentTime() ?? 0),
+            VoiceRecordingLimit.maxDurationSeconds
+        )
+        take?.stop()
+        take = nil
         try? FileManager.default.setAttributes(
             [.protectionKey: VoiceRecordingFileProtection.completedRecording],
             ofItemAtPath: url.path
@@ -325,6 +350,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
     private func reset(deleteFile: Bool) {
         holdTask?.cancel()
         holdTask = nil
+        onLimitReached = nil
         meterTask?.cancel()
         meterTask = nil
         take?.stop()
