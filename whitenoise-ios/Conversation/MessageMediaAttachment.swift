@@ -871,22 +871,24 @@ nonisolated enum MediaDraftProcessor {
     }
 
     @MainActor
-    /// Off the MainActor, as the picker prepares: a video's thumbnail writes
-    /// its bytes to a temporary file, and a file-backed one can be 512 MiB.
+    /// Off the MainActor, as the picker prepares: a video's thumbnail reads
+    /// its bytes, and a file-backed one can be 512 MiB.
     static func restoredDraftAttachments(
         from stored: [MessageDraftAttachmentFfi]
-    ) async -> [MediaDraftAttachment] {
-        await Task.detached(priority: .userInitiated) {
-            await restoredDraftAttachmentsValue(from: stored)
-        }.value
+    ) async throws -> [MediaDraftAttachment] {
+        let restore = Task.detached(priority: .userInitiated) {
+            try await restoredDraftAttachmentsValue(from: stored)
+        }
+        return try await withTaskCancellationHandler { try await restore.value } onCancel: { restore.cancel() }
     }
 
     private static func restoredDraftAttachmentsValue(
         from stored: [MessageDraftAttachmentFfi]
-    ) async -> [MediaDraftAttachment] {
+    ) async throws -> [MediaDraftAttachment] {
         var restored: [MediaDraftAttachment] = []
         var ids = Set<UUID>()
         for attachment in stored.prefix(maxAttachmentCount) {
+            try Task.checkCancellation()
             let id = UUID(uuidString: attachment.id) ?? UUID()
             guard ids.insert(id).inserted else { continue }
             let kind = MediaAttachmentKind.classify(
@@ -914,6 +916,7 @@ nonisolated enum MediaDraftProcessor {
                     from: attachment.plaintext,
                     mediaType: attachment.mediaType
                 )
+                try Task.checkCancellation()
                 thumbnail = videoMetadata.thumbnail
                 restoredDim = attachment.dim ?? videoMetadata.dim
             case .audio, .document, .unsupported:
@@ -933,6 +936,7 @@ nonisolated enum MediaDraftProcessor {
                 waveformSamples: attachment.waveformSamples.map { CGFloat($0) }
             ))
         }
+        try Task.checkCancellation()
         return restored
     }
 
@@ -1632,9 +1636,11 @@ nonisolated private enum MediaVideoMetadata {
     }
 
     static func metadata(from data: Data, mediaType: String) async -> Metadata {
-        await TemporaryMediaFile.withURL(data: data, fileExtension: MediaAttachmentPolicy.fileExtension(for: mediaType)) { url in
-            await metadata(for: AVURLAsset(url: url))
-        }
+        let loader = InMemoryVideoResourceLoader(data: data, mediaType: mediaType)
+        let asset = loader.makeAsset()
+        let metadata = await metadata(for: asset)
+        withExtendedLifetime(loader) {}
+        return metadata
     }
 
     static func metadata(for asset: AVURLAsset) async -> Metadata {
@@ -1662,21 +1668,93 @@ nonisolated private enum MediaVideoMetadata {
     }
 
     private static func thumbnail(for asset: AVURLAsset) async -> UIImage? {
-        await withCheckedContinuation { continuation in
-            let generator = AVAssetImageGenerator(asset: asset)
-            generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(
-                width: MediaDraftProcessor.draftThumbnailPixelSize,
-                height: MediaDraftProcessor.draftThumbnailPixelSize
-            )
-            generator.generateCGImageAsynchronously(for: .zero) { image, _, error in
-                guard let image, error == nil else {
-                    continuation.resume(returning: nil)
-                    return
+        guard !Task.isCancelled else { return nil }
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(
+            width: MediaDraftProcessor.draftThumbnailPixelSize,
+            height: MediaDraftProcessor.draftThumbnailPixelSize
+        )
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                generator.generateCGImageAsynchronously(for: .zero) { image, _, error in
+                    guard let image, error == nil else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    continuation.resume(returning: UIImage(cgImage: image))
                 }
-                continuation.resume(returning: UIImage(cgImage: image))
+            }
+        } onCancel: {
+            generator.cancelAllCGImageGeneration()
+        }
+    }
+}
+
+nonisolated final class InMemoryVideoResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
+    private static let scheme = "wn-memory-video"
+    private static let responseChunkBytes = 1024 * 1024
+
+    private let data: Data
+    private let contentType: String
+    private let fileExtension: String
+    private let queue = DispatchQueue(label: "dev.ipf.whitenoise.in-memory-video")
+
+    init(data: Data, mediaType: String) {
+        self.data = data
+        let fileExtension = MediaAttachmentPolicy.fileExtension(for: mediaType)
+        self.fileExtension = fileExtension
+        self.contentType = UTType(mimeType: mediaType)?.identifier
+            ?? UTType(filenameExtension: fileExtension)?.identifier
+            ?? UTType.movie.identifier
+    }
+
+    func makeAsset() -> AVURLAsset {
+        var components = URLComponents()
+        components.scheme = Self.scheme
+        components.host = "draft"
+        components.path = "/video.\(fileExtension)"
+        let asset = AVURLAsset(url: components.url ?? URL(fileURLWithPath: "/dev/null"))
+        asset.resourceLoader.setDelegate(self, queue: queue)
+        return asset
+    }
+
+    func resourceLoader(
+        _ resourceLoader: AVAssetResourceLoader,
+        shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest
+    ) -> Bool {
+        if let info = loadingRequest.contentInformationRequest {
+            info.contentType = contentType
+            info.contentLength = Int64(data.count)
+            info.isByteRangeAccessSupported = true
+        }
+        if let request = loadingRequest.dataRequest {
+            guard let range = Self.byteRange(
+                offset: request.requestedOffset,
+                length: request.requestedLength,
+                toEnd: request.requestsAllDataToEndOfResource,
+                count: data.count
+            ) else {
+                loadingRequest.finishLoading(with: CocoaError(.fileReadCorruptFile))
+                return true
+            }
+            var offset = range.lowerBound
+            while offset < range.upperBound {
+                guard !loadingRequest.isCancelled else { return true }
+                let end = min(range.upperBound, offset + Self.responseChunkBytes)
+                request.respond(with: data.subdata(in: (data.startIndex + offset)..<(data.startIndex + end)))
+                offset = end
             }
         }
+        loadingRequest.finishLoading()
+        return true
+    }
+
+    static func byteRange(offset: Int64, length: Int, toEnd: Bool, count: Int) -> Range<Int>? {
+        guard offset >= 0, offset <= Int64(count), length >= 0 else { return nil }
+        let start = Int(offset)
+        let end = toEnd ? count : start + min(length, count - start)
+        return start..<end
     }
 }
 
@@ -2230,22 +2308,6 @@ nonisolated private enum TemporaryMediaFile {
         try? data.write(to: url, options: [.atomic, .completeFileProtection])
         defer { try? FileManager.default.removeItem(at: url) }
         return work(url)
-    }
-
-    static func withURL<T>(data: Data, fileExtension: String, _ work: (URL) async -> T) async -> T {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("WhiteNoiseMediaWork", isDirectory: true)
-        try? FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true,
-            attributes: [.protectionKey: FileProtectionType.complete]
-        )
-        let url = directory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(fileExtension)
-        try? data.write(to: url, options: [.atomic, .completeFileProtection])
-        defer { try? FileManager.default.removeItem(at: url) }
-        return await work(url)
     }
 }
 

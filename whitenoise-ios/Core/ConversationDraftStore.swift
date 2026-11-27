@@ -840,7 +840,7 @@ final class ConversationDraftStore {
             } else {
                 loaded = try await persistence.loadMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
             }
-            let attachments = await MediaDraftProcessor.restoredDraftAttachments(
+            let attachments = try await MediaDraftProcessor.restoredDraftAttachments(
                 from: loaded?.mediaAttachments ?? []
             )
             guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }

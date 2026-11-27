@@ -202,6 +202,83 @@ struct MediaVideoMetadataStrippingTests {
         #expect(persistence.lastSavedSnapshot == nil)
     }
 
+    @MainActor
+    @Test func restoredVideoDraftReadsItsThumbnailAndSizeFromTheBytes() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VideoDraftThumbnailTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        for (fileType, fileName, mediaType) in [
+            (AVFileType.mov, "clip.mov", "video/quicktime"),
+            (AVFileType.mp4, "clip.mp4", "video/mp4"),
+        ] {
+            let sourceURL = directory.appendingPathComponent(fileName)
+            try await synthesizeTaggedVideo(
+                at: sourceURL,
+                fileType: fileType,
+                width: 160,
+                height: 120,
+                transform: CGAffineTransform(rotationAngle: .pi / 2)
+            )
+            let restored = try await MediaDraftProcessor.restoredDraftAttachments(from: [
+                MessageDraftAttachmentFfi(
+                    id: UUID().uuidString,
+                    fileName: fileName,
+                    mediaType: mediaType,
+                    plaintext: try Data(contentsOf: sourceURL),
+                    dim: nil,
+                    thumbhash: nil,
+                    durationSeconds: nil,
+                    waveformSamples: []
+                ),
+            ])
+            let attachment = try #require(restored.first)
+            #expect(attachment.thumbnail != nil)
+            #expect(attachment.dim == "120x160")
+        }
+    }
+
+    @MainActor
+    @Test func cancelledDraftRestoreThrowsInsteadOfDroppingAttachments() async throws {
+        let stored = MessageDraftAttachmentFfi(
+            id: UUID().uuidString,
+            fileName: "clip.mov",
+            mediaType: "video/quicktime",
+            plaintext: Data("not a video".utf8),
+            dim: nil,
+            thumbhash: nil,
+            durationSeconds: nil,
+            waveformSamples: []
+        )
+        let restore = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await MediaDraftProcessor.restoredDraftAttachments(from: [stored])
+        }
+        await #expect(throws: CancellationError.self) { _ = try await restore.value }
+    }
+
+    @Test func inMemoryVideoRangesStayInsideTheBody() {
+        let count = 10
+        for offset in Int64(0)...Int64(count) {
+            for length in [0, 1, 4, count, Int.max] {
+                for toEnd in [false, true] {
+                    guard let range = InMemoryVideoResourceLoader.byteRange(
+                        offset: offset, length: length, toEnd: toEnd, count: count)
+                    else {
+                        Issue.record("No range for offset \(offset), length \(length)")
+                        continue
+                    }
+                    #expect(range.lowerBound == Int(offset))
+                    #expect(range.upperBound <= count)
+                    #expect(toEnd ? range.upperBound == count : range.count == min(length, count - Int(offset)))
+                }
+            }
+        }
+        #expect(InMemoryVideoResourceLoader.byteRange(offset: -1, length: 1, toEnd: false, count: count) == nil)
+        #expect(InMemoryVideoResourceLoader.byteRange(offset: 11, length: 1, toEnd: false, count: count) == nil)
+    }
+
     @Test func allowsAudioOnlyMovieContainersWhileStrippingMetadata() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("AudioOnlyMovieStripTest-\(UUID().uuidString)", isDirectory: true)
