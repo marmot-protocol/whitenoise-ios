@@ -1,4 +1,6 @@
-import AVFoundation
+// AVAudioConverter's input block is a synchronous @Sendable callback that
+// returns the caller's buffer during `convert`; AVFAudio is not yet Sendable.
+@preconcurrency import AVFoundation
 import Foundation
 import Observation
 import OSLog

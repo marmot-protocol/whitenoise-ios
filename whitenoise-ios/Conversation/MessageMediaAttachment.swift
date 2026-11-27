@@ -2029,6 +2029,14 @@ nonisolated enum MediaVideoMetadataStripper {
         case cancelled
     }
 
+    /// The AVFoundation objects for one sample copy. Only the copy's serial queue
+    /// touches them, so its closures capture this box rather than the objects.
+    nonisolated private struct SampleCopyMedia: @unchecked Sendable {
+        let reader: AVAssetReader
+        let writer: AVAssetWriter
+        let pairs: [(output: AVAssetReaderTrackOutput, input: AVAssetWriterInput)]
+    }
+
     private struct SampleCopyState {
         var remaining: Int
         var finishedTracks: [Bool]
@@ -2046,6 +2054,7 @@ nonisolated enum MediaVideoMetadataStripper {
         }
     ) async -> SampleCopyOutcome {
         guard !pairs.isEmpty else { return Task.isCancelled ? .cancelled : .completed }
+        let media = SampleCopyMedia(reader: reader, writer: writer, pairs: pairs)
         let queue = DispatchQueue(
             label: "dev.ipf.whitenoise.video-strip.copy",
             qos: .userInitiated
@@ -2068,8 +2077,8 @@ nonisolated enum MediaVideoMetadataStripper {
             }
             guard continuation != nil || finalOutcome != .completed else { return }
             if finalOutcome != .completed {
-                reader.cancelReading()
-                writer.cancelWriting()
+                media.reader.cancelReading()
+                media.writer.cancelWriting()
             }
             continuation?.resume(returning: finalOutcome)
         }
@@ -2090,17 +2099,17 @@ nonisolated enum MediaVideoMetadataStripper {
                     }
                     if let earlyOutcome {
                         if earlyOutcome != .completed {
-                            reader.cancelReading()
-                            writer.cancelWriting()
+                            media.reader.cancelReading()
+                            media.writer.cancelWriting()
                         }
                         continuation.resume(returning: earlyOutcome)
                         return
                     }
 
-                    for (index, pair) in pairs.enumerated() {
-                        let output = pair.output
-                        let input = pair.input
-                        input.requestMediaDataWhenReady(on: queue) {
+                    for index in media.pairs.indices {
+                        media.pairs[index].input.requestMediaDataWhenReady(on: queue) {
+                            let output = media.pairs[index].output
+                            let input = media.pairs[index].input
                             while input.isReadyForMoreMediaData {
                                 let status = state.withLock { (outcome: $0.outcome, cancelled: $0.cancelRequested) }
                                 if status.outcome != nil { return }
@@ -2108,7 +2117,7 @@ nonisolated enum MediaVideoMetadataStripper {
                                     finishOnQueue(.cancelled)
                                     return
                                 }
-                                if writer.status != .writing {
+                                if media.writer.status != .writing {
                                     finishOnQueue(.failed)
                                     return
                                 }
@@ -2125,7 +2134,7 @@ nonisolated enum MediaVideoMetadataStripper {
                                     let shouldComplete: Bool = state.withLock { current in
                                         guard current.outcome == nil, !current.cancelRequested, !current.finishedTracks[index] else { return false }
                                         current.finishedTracks[index] = true
-                                        if writer.status == .writing {
+                                        if media.writer.status == .writing {
                                             input.markAsFinished()
                                         }
                                         current.remaining -= 1
