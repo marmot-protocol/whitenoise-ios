@@ -92,7 +92,7 @@ final class ProfileStore {
 
     typealias ProjectionLoader = @MainActor (AppState, [ProfileProjectionRequest]) async -> [String: ProfileDisplayProjection]
 
-    struct RelayRefreshTransport {
+    nonisolated struct RelayRefreshTransport: Sendable {
         var bootstrapRelays: @MainActor (AppState, String?) async -> [String]
         var classifyRelayEndpoints: @MainActor (AppState, [String]) async -> [RelayEndpointClassificationFfi]?
         var cachedTargetRelays: @MainActor (AppState, String) async throws -> [String]
@@ -128,7 +128,7 @@ final class ProfileStore {
         )
     }
 
-    static let defaultLoadProjections: ProjectionLoader = { appState, requests in
+    nonisolated static let defaultLoadProjections: ProjectionLoader = { appState, requests in
         guard let client = try? appState.currentMarmotClient() else { return [:] }
         // host_profile_read is per profile, so only single reads are timed.
         let timing = requests.count == 1 ? appState.productAnalytics.beginTiming() : nil
