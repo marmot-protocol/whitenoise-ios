@@ -2859,6 +2859,7 @@ struct AppStateBootstrapTests {
         appState.setAppSceneActive(true)
         let marmot = try #require(appState.client?.marmot)
         let checkpoint = AsyncTestCheckpoint()
+        let operationReturned = TestLatch()
         let route = LocalNotificationRoute(
             accountRef: seeded.accounts[0].label,
             groupIdHex: "deadline-group",
@@ -2872,7 +2873,8 @@ struct AppStateBootstrapTests {
                 failureTitle: "Action expired",
                 deadline: .milliseconds(100)
             ) { _, _ in
-                await checkpoint.pause()
+                await checkpoint.pause(timeout: .seconds(600))
+                operationReturned.signal()
                 try Task.checkCancellation()
             }
         }
@@ -2882,6 +2884,7 @@ struct AppStateBootstrapTests {
         await action.value
         await suspension.value
 
+        #expect(!operationReturned.isSignalled)
         #expect(marmot.storageIsClosed())
         #expect(appState.client == nil)
         #expect(appState.runtimeSuspendedForBackground)
