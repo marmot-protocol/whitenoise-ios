@@ -102,6 +102,13 @@ nonisolated enum AccountSetupPresentation {
         return step.step
     }
 
+    static func opensProfileAutomatically(_ snapshot: OnboardingSnapshotFfi, isBusy: Bool, isConnected: Bool) -> Bool {
+        guard stepToReview(snapshot, isBusy: isBusy, isConnected: isConnected) == .profile,
+              snapshot.steps.first(where: { $0.step == .profile })?.actions.contains(.editProfile) == true
+        else { return false }
+        return snapshot.proposal?.step != .profile
+    }
+
     static func header(
         _ snapshot: OnboardingSnapshotFfi, reviewStep: OnboardingStepFfi?, errorMessage: String?,
         isOpeningChats: Bool, closeFailed: Bool, isCancelled: Bool = false

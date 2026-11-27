@@ -333,6 +333,45 @@ struct AccountSetupTests {
         #expect(AccountSetupPresentation.stepToReview(snapshot(cancellationPending: true), isBusy: false, isConnected: true) == nil)
     }
 
+    @Test func aMissingProfileOpensTheNameFormOnlyWhenItIsTheCurrentEditableDecision() {
+        var current = snapshot()
+        var profile = current.steps[0]
+        profile.step = .profile
+        profile.status = .needsInput
+        profile.actions = [.editProfile, .continueWithout]
+        current.steps.insert(profile, at: 0)
+        let opens: (OnboardingSnapshotFfi, Bool, Bool) -> Bool = {
+            AccountSetupPresentation.opensProfileAutomatically($0, isBusy: $1, isConnected: $2)
+        }
+        #expect(opens(current, false, true))
+        #expect(!opens(current, true, true))
+        #expect(!opens(current, false, false))
+
+        var reviewing = current
+        reviewing.proposal = proposalSnapshot(step: .profile).proposal
+        reviewing.proposal?.profile = UserProfileMetadataFfi(
+            name: "Alex", displayName: nil, about: nil, picture: nil, nip05: nil, lud16: nil
+        )
+        #expect(!opens(reviewing, false, true))
+
+        var withoutEdit = current
+        withoutEdit.steps[0].actions = [.retry, .continueWithout]
+        withoutEdit.steps[0].status = .retryableFailure
+        #expect(!opens(withoutEdit, false, true))
+
+        var finished = current
+        finished.steps[0].status = .skipped
+        finished.steps[0].actions = []
+        #expect(AccountSetupPresentation.stepToReview(finished, isBusy: false, isConnected: true) == .singleDevice)
+        #expect(!opens(finished, false, true))
+
+        for step in [OnboardingStepFfi.follows, .relays, .inboxRelays, .singleDevice, .keyPackage] {
+            var other = current
+            other.steps[0].step = step
+            #expect(!opens(other, false, true))
+        }
+    }
+
     @Test func finishedRunLeavingAQueuedCheckOffersCheckAgain() {
         var current = snapshot()
         current.steps[0].status = .checking
