@@ -2340,7 +2340,12 @@ struct ConversationView: View {
                             // the keyboard resizes the safe-area bar.
                             .frame(minHeight: max(0, outer.size.height), alignment: .bottom)
                             .background {
-                                TimelineKeyboardDismissInstaller(onTap: dismissKeyboard)
+                                TimelineScrollViewInstaller(onTap: dismissKeyboard) { scroll in
+                                    conversationViewport.attachScrollView(scroll)
+                                    if measuredTimelineTail.isPastEnd {
+                                        maintainInitialTimelinePosition(viewModel: viewModel)
+                                    }
+                                }
                                     .frame(width: 0, height: 0)
                             }
                         }
@@ -2376,7 +2381,14 @@ struct ConversationView: View {
                             guard !Task.isCancelled,
                                   let target = pendingInitialPositionTarget
                             else { return }
-                            scrollToInitialTimelineTarget(target, proxy: proxy)
+                            if measuredTimelineTail.isPastEnd,
+                               conversationViewport.clampOpeningOverscroll() {
+                                // The clamp lands at the bottom. Re-aim a message target after
+                                // the corrected geometry arrives and the lazy rows have moved.
+                                guard target.isBottom else { return }
+                            } else {
+                                scrollToInitialTimelineTarget(target, proxy: proxy)
+                            }
                             appliedInitialPositionGeneration = initialTimelinePositionRequestGeneration
                             settleInitialTimelinePositionIfTargetVisible(viewModel: viewModel)
                         }
@@ -2407,7 +2419,7 @@ struct ConversationView: View {
                                 cancelPendingBottomScroll()
                                 finishTimelineJump()
                             }
-                            if phase == .idle {
+                            if phase == .idle, pendingInitialPositionTarget?.isBottom != false {
                                 viewModel.reportConversationViewport(atTail: isMeasuredConversationTail(viewModel),
                                     visibleRowID: conversationViewport.visibleAnchor())
                                 if isMeasuredConversationTail(viewModel) { userMovedAwayFromTimelineBottom = false }
@@ -2421,31 +2433,29 @@ struct ConversationView: View {
                             threshold: TimelineViewportVisibility.minimumVisibleFraction
                         ) { visibleIDs in
                             timelineTargetVisibility.replace(with: Set(visibleIDs))
-                            settleInitialTimelinePositionIfTargetVisible(viewModel: viewModel)
-                            if !isInitialTimelinePositioning {
+                            if isInitialTimelinePositioning {
+                                settleInitialTimelinePositionIfTargetVisible(viewModel: viewModel)
+                            } else {
                                 reconcileTimelineTailVisibility(viewModel: viewModel)
                             }
                         }
                         .onScrollGeometryChange(for: TimelineTailMeasurement.self) { geometry in
-                            TimelineTailMeasurement(
-                                lastRowID: renderedTailID,
-                                distanceToBottom: TimelineBottom.distanceToBottom(
-                                    contentHeight: geometry.contentSize.height,
-                                    visibleBottomY: geometry.visibleRect.maxY,
-                                    bottomContentInset: geometry.contentInsets.bottom
-                                )
-                            )
-                        } action: { _, measurement in
+                            TimelineTailMeasurement(lastRowID: renderedTailID, geometry: geometry,
+                                                    isOpening: !isInitialTimelinePositionSettled)
+                        } action: { previous, measurement in
                             measuredTimelineTail = measurement
                             let atTail = isMeasuredConversationTail(viewModel)
-                            if atTail { settleInitialTimelinePositionIfTargetVisible(viewModel: viewModel) }
+                            if measurement.isPastEnd || previous.isPastEnd {
+                                maintainInitialTimelinePosition(viewModel: viewModel)
+                            } else {
+                                settleInitialTimelinePositionIfTargetVisible(viewModel: viewModel)
+                            }
+                            // A bottom clamp on the way to an unread/message target is not
+                            // the reader choosing to follow the live tail.
+                            guard pendingInitialPositionTarget?.isBottom != false else { return }
                             isAtTimelineBottom = atTail
                             if atTail, isInitialTimelinePositionSettled {
-                                viewModel.markConversationReadThroughTail()
-                                if !isUserScrollingTimeline {
-                                    viewModel.reportConversationViewport(atTail: true,
-                                        visibleRowID: conversationViewport.visibleAnchor())
-                                }
+                                reportSettledTimelineTail(viewModel: viewModel)
                             }
                             userMovedAwayFromTimelineBottom = TimelineBottom.userMovedAwayState(
                                 previous: userMovedAwayFromTimelineBottom,
@@ -3290,7 +3300,8 @@ struct ConversationView: View {
     }
 
     private func onScreenInitialTargetIDs(viewModel: ConversationViewModel) -> Set<String> {
-        TimelineInitialTargetScrollPolicy.onScreenTargetIDs(
+        guard measuredTimelineTail.permitsOpeningConfirmation(lastRowID: viewModel.timeline.last?.id) else { return [] }
+        return TimelineInitialTargetScrollPolicy.onScreenTargetIDs(
             scrollTargetIDs: timelineTargetVisibility.visibleTargetIDs,
             visibleRowKeys: timelineVisibility.visibleRowKeys,
             isMeasuredTail: isMeasuredConversationTail(viewModel),
@@ -3348,6 +3359,7 @@ struct ConversationView: View {
 
     private func settleInitialTimelinePosition(viewModel: ConversationViewModel) {
         guard !isInitialTimelinePositionSettled else { return }
+        let openedAtTail = isMeasuredConversationTail(viewModel)
         isInitialTimelinePositionSettled = true
         pendingInitialPositionTarget = nil
         viewModel.suppressesInitialUnreadDivider = TimelineUnreadDivider.shouldSuppressForVisibleFirstUnread(
@@ -3361,11 +3373,31 @@ struct ConversationView: View {
         noteFirstUnreadPlacement(downArrowStops(viewModel: viewModel).firstUnread)
         markCurrentlyVisibleMessagesRead(viewModel: viewModel)
         prefetchNearbyMedia(viewModel: viewModel)
-        reconcileTimelineTailVisibility(viewModel: viewModel)
+        // The requested target is on screen. Its final layout can reach the tail
+        // without a new visibility callback for the bottom sentinel.
+        if openedAtTail {
+            isAtTimelineBottom = true
+            userMovedAwayFromTimelineBottom = false
+            reportSettledTimelineTail(viewModel: viewModel)
+        }
+    }
+
+    private func reportSettledTimelineTail(viewModel: ConversationViewModel) {
+        viewModel.markConversationReadThroughTail()
+        if !isUserScrollingTimeline {
+            viewModel.reportConversationViewport(atTail: true, visibleRowID: nil)
+        }
     }
 
     private func isMeasuredConversationTail(_ viewModel: ConversationViewModel) -> Bool {
-        measuredTimelineTail.isConversationTail(
+        if !isInitialTimelinePositionSettled, measuredTimelineTail.isPastEnd { return false }
+        // An item can report visibility before geometry updates after the intermediate clamp.
+        if pendingInitialPositionTarget?.isBottom == false {
+            guard let distance = conversationViewport.distanceToBottom,
+                  distance >= -TimelineBottomScrollCoordinator.overscrollTolerance,
+                  distance <= TimelineBottom.pinnedThreshold else { return false }
+        }
+        return measuredTimelineTail.isConversationTail(
             currentLastRowID: viewModel.timeline.last?.id,
             hasMoreAfter: viewModel.hasMoreAfter,
             isPaging: viewModel.isAwaitingPageCompletion || viewModel.isLoadingNewer || viewModel.isLoadingOlder
@@ -5560,8 +5592,9 @@ final class TimelineKeyboardDismissController: NSObject, UIGestureRecognizerDele
     }
 }
 
-private struct TimelineKeyboardDismissInstaller: UIViewRepresentable {
+private struct TimelineScrollViewInstaller: UIViewRepresentable {
     let onTap: () -> Void
+    let onScrollViewReady: (UIScrollView) -> Void
 
     func makeCoordinator() -> TimelineKeyboardDismissController {
         TimelineKeyboardDismissController(onTap: onTap)
@@ -5576,6 +5609,7 @@ private struct TimelineKeyboardDismissInstaller: UIViewRepresentable {
     func updateUIView(_ uiView: TimelineKeyboardDismissAttachmentView, context: Context) {
         context.coordinator.onTap = onTap
         uiView.controller = context.coordinator
+        uiView.onScrollViewReady = onScrollViewReady
         uiView.resolveScrollView()
     }
 
@@ -5583,6 +5617,7 @@ private struct TimelineKeyboardDismissInstaller: UIViewRepresentable {
         _ uiView: TimelineKeyboardDismissAttachmentView,
         coordinator: TimelineKeyboardDismissController
     ) {
+        uiView.onScrollViewReady = nil
         uiView.controller = nil
         coordinator.uninstall()
     }
@@ -5590,6 +5625,8 @@ private struct TimelineKeyboardDismissInstaller: UIViewRepresentable {
 
 final class TimelineKeyboardDismissAttachmentView: UIView {
     weak var controller: TimelineKeyboardDismissController?
+    var onScrollViewReady: ((UIScrollView) -> Void)?
+    private weak var reportedScrollView: UIScrollView?
 
     override func didMoveToSuperview() {
         super.didMoveToSuperview()
@@ -5605,7 +5642,16 @@ final class TimelineKeyboardDismissAttachmentView: UIView {
     }
 
     func resolveScrollView() {
-        controller?.install(on: enclosingScrollView())
+        let scroll = enclosingScrollView()
+        controller?.install(on: scroll)
+        guard let scroll, scroll.window != nil, reportedScrollView !== scroll, onScrollViewReady != nil else { return }
+        // Notify outside updateUIView. No lazy message row has to exist yet.
+        Task { @MainActor [weak self, weak scroll] in
+            guard let self, let scroll, scroll.window != nil, enclosingScrollView() === scroll,
+                  reportedScrollView !== scroll, let onScrollViewReady else { return }
+            reportedScrollView = scroll
+            onScrollViewReady(scroll)
+        }
     }
 
     private func enclosingScrollView() -> UIScrollView? {
